@@ -2,7 +2,7 @@
 description: "A comic app."
 publish_to: 'none'
 homepage: https://github.com/CyrilPeng/venera-next
-version: 1.8.0+180
+version: 1.8.1+181
 
 environment:
   sdk: '>=3.8.0 <4.0.0'

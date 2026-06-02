@@ -131,9 +131,9 @@ jobs:
           hdiutil create -volname "venera" -srcfolder dist/dmg_contents -ov -format UDZO "dist/venera.dmg"
       - name: Add version to filename
         run: |
-          APP_VERSION=$(grep "version:" pubspec.yaml | cut -d':' -f2 | tr -d ' ')
+          APP_VERSION=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | tr -d '\r\n')
           mkdir -p result
-          mv dist/venera.dmg result/venera-$APP_VERSION.dmg
+          mv dist/venera.dmg "result/venera-$APP_VERSION.dmg"
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
