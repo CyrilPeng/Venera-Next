@@ -667,35 +667,6 @@ class _ContinuousMode extends StatefulWidget {
   State<_ContinuousMode> createState() => _ContinuousModeState();
 }
 
-class _ContinuousImageRef {
-  final int chapter;
-  final int page;
-  final String eid;
-  final String imageKey;
-  final bool isFirstInSegment;
-
-  const _ContinuousImageRef({
-    required this.chapter,
-    required this.page,
-    required this.eid,
-    required this.imageKey,
-    this.isFirstInSegment = false,
-  });
-}
-
-class _ContinuousChapterSegment {
-  final int chapter;
-  final String eid;
-  final List<String> images;
-  final Set<int> cached = {};
-
-  _ContinuousChapterSegment({
-    required this.chapter,
-    required this.eid,
-    required this.images,
-  });
-}
-
 class _ContinuousModeState extends State<_ContinuousMode>
     implements _ImageViewController {
   late _ReaderState reader;
@@ -714,7 +685,7 @@ class _ContinuousModeState extends State<_ContinuousMode>
 
   late List<bool> cached;
 
-  final _segments = <_ContinuousChapterSegment>[];
+  final _waterfallFlow = WaterfallChapterFlow();
 
   bool _isLoadingNextSegment = false;
 
@@ -748,16 +719,17 @@ class _ContinuousModeState extends State<_ContinuousMode>
 
   bool get crossChapter => widget.crossChapter;
 
-  int get _flowImageCount => crossChapter
-      ? _segments.fold(0, (value, segment) => value + segment.images.length)
-      : reader.maxPage;
+  int get _flowImageCount =>
+      crossChapter ? _waterfallFlow.imageCount : reader.maxPage;
 
   int get _flowItemCount => _flowImageCount + 2;
 
   void _initSegments() {
-    if (!crossChapter || _segments.isNotEmpty || reader.images == null) return;
-    _segments.add(
-      _ContinuousChapterSegment(
+    if (!crossChapter || !_waterfallFlow.isEmpty || reader.images == null) {
+      return;
+    }
+    _waterfallFlow.addAfter(
+      WaterfallChapterSegment(
         chapter: reader.chapter,
         eid: reader.eid,
         images: reader.images!,
@@ -765,14 +737,14 @@ class _ContinuousModeState extends State<_ContinuousMode>
     );
   }
 
-  _ContinuousChapterSegment? _segmentOfChapter(int chapter) {
-    return _segments.firstWhereOrNull((segment) => segment.chapter == chapter);
+  WaterfallChapterSegment? _segmentOfChapter(int chapter) {
+    return _waterfallFlow.segmentOfChapter(chapter);
   }
 
-  _ContinuousImageRef? _imageRefAt(int index) {
+  WaterfallImageRef? _imageRefAt(int index) {
     if (!crossChapter) {
       if (index <= 0 || index > reader.images!.length) return null;
-      return _ContinuousImageRef(
+      return WaterfallImageRef(
         chapter: reader.chapter,
         page: index,
         eid: reader.eid,
@@ -780,21 +752,7 @@ class _ContinuousModeState extends State<_ContinuousMode>
         isFirstInSegment: index == 1,
       );
     }
-    if (index <= 0) return null;
-    var remaining = index;
-    for (var segment in _segments) {
-      if (remaining <= segment.images.length) {
-        return _ContinuousImageRef(
-          chapter: segment.chapter,
-          page: remaining,
-          eid: segment.eid,
-          imageKey: segment.images[remaining - 1],
-          isFirstInSegment: remaining == 1,
-        );
-      }
-      remaining -= segment.images.length;
-    }
-    return null;
+    return _waterfallFlow.imageRefAt(index);
   }
 
   Future<List<String>> _loadChapterImages(int chapter) async {
@@ -821,7 +779,10 @@ class _ContinuousModeState extends State<_ContinuousMode>
     var threshold = math.max(preCacheCount, 1);
     if (_flowImageCount - current >= threshold) return;
     var nextChapter =
-        (_segments.isEmpty ? reader.chapter : _segments.last.chapter) + 1;
+        (_waterfallFlow.isEmpty
+            ? reader.chapter
+            : _waterfallFlow.lastChapter!) +
+        1;
     if (nextChapter > reader.maxChapter) return;
     setState(() => _isLoadingNextSegment = true);
     var loaded = false;
@@ -829,8 +790,8 @@ class _ContinuousModeState extends State<_ContinuousMode>
       var images = await _loadChapterImages(nextChapter);
       if (!mounted) return;
       setState(() {
-        _segments.add(
-          _ContinuousChapterSegment(
+        _waterfallFlow.addAfter(
+          WaterfallChapterSegment(
             chapter: nextChapter,
             eid:
                 reader.widget.chapters?.ids.elementAtOrNull(nextChapter - 1) ??
@@ -858,7 +819,10 @@ class _ContinuousModeState extends State<_ContinuousMode>
     var threshold = math.max(preCacheCount, 1);
     if (current > threshold) return;
     var prevChapter =
-        (_segments.isEmpty ? reader.chapter : _segments.first.chapter) - 1;
+        (_waterfallFlow.isEmpty
+            ? reader.chapter
+            : _waterfallFlow.firstChapter!) -
+        1;
     if (prevChapter < 1) return;
     _isLoadingPrevSegment = true;
     var loadedCount = 0;
@@ -867,9 +831,8 @@ class _ContinuousModeState extends State<_ContinuousMode>
       loadedCount = images.length;
       if (!mounted) return;
       setState(() {
-        _segments.insert(
-          0,
-          _ContinuousChapterSegment(
+        _waterfallFlow.addBefore(
+          WaterfallChapterSegment(
             chapter: prevChapter,
             eid:
                 reader.widget.chapters?.ids.elementAtOrNull(prevChapter - 1) ??
@@ -896,7 +859,7 @@ class _ContinuousModeState extends State<_ContinuousMode>
     }
   }
 
-  void _setReaderLocation(_ContinuousImageRef imageRef) {
+  void _setReaderLocation(WaterfallImageRef imageRef) {
     var segment = _segmentOfChapter(imageRef.chapter);
     var chapterChanged = reader.chapter != imageRef.chapter;
     if (segment != null && chapterChanged) {
@@ -1063,8 +1026,8 @@ class _ContinuousModeState extends State<_ContinuousMode>
         ),
       );
     }
-    var lastChapter = _segments.isNotEmpty
-        ? _segments.last.chapter
+    var lastChapter = !_waterfallFlow.isEmpty
+        ? _waterfallFlow.lastChapter!
         : reader.chapter;
     if (lastChapter >= reader.maxChapter) {
       return SizedBox(
@@ -1082,12 +1045,12 @@ class _ContinuousModeState extends State<_ContinuousMode>
 
   Widget _buildChapterDivider(
     BuildContext context,
-    _ContinuousImageRef imageRef,
+    WaterfallImageRef imageRef,
   ) {
     if (!crossChapter || !imageRef.isFirstInSegment) {
       return const SizedBox();
     }
-    var isInitialChapter = imageRef.chapter == _segments.firstOrNull?.chapter;
+    var isInitialChapter = imageRef.chapter == _waterfallFlow.firstChapter;
     if (isInitialChapter) return const SizedBox();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -1566,7 +1529,7 @@ ImageProvider _createImageProviderFromKey(
 }
 
 ImageProvider _createImageProviderFromRef(
-  _ContinuousImageRef imageRef,
+  WaterfallImageRef imageRef,
   BuildContext context,
 ) {
   var reader = context.reader;
@@ -1613,7 +1576,7 @@ void _preDownloadImage(int page, BuildContext context) {
   ImageDownloader.loadComicImage(imageKey, sourceKey, cid, eid);
 }
 
-void _preDownloadImageRef(_ContinuousImageRef imageRef, BuildContext context) {
+void _preDownloadImageRef(WaterfallImageRef imageRef, BuildContext context) {
   if (imageRef.imageKey.startsWith("file://")) {
     return;
   }
