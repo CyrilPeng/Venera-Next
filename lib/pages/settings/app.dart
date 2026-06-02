@@ -545,6 +545,18 @@ class _WebdavSettingState extends State<_WebdavSetting> {
                   : const SizedBox.shrink(),
             ),
             const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Button.outlined(
+                    isLoading: isTesting,
+                    onPressed: testConnection,
+                    child: Text("Test Connection".tl),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             Center(
               child: Button.filled(
                 isLoading: isTesting,
@@ -605,6 +617,26 @@ class _WebdavSettingState extends State<_WebdavSetting> {
         ).paddingHorizontal(16),
       ),
     );
+  }
+
+  BackupConfig get currentConfig =>
+      BackupConfig(url: url, user: user, pass: pass, remotePath: '/');
+
+  Future<void> testConnection() async {
+    if (isTesting) return;
+    setState(() {
+      isTesting = true;
+    });
+    final result = await ComicBackupManager.testConnection(currentConfig);
+    if (!mounted) return;
+    setState(() {
+      isTesting = false;
+    });
+    if (result.error) {
+      context.showMessage(message: result.errorMessage!.tl);
+    } else {
+      context.showMessage(message: "Connection successful".tl);
+    }
   }
 }
 
@@ -771,7 +803,7 @@ class _BackupWebdavSettingState extends State<_BackupWebdavSetting> {
       isTesting = false;
     });
     if (result.error) {
-      context.showMessage(message: result.errorMessage!);
+      context.showMessage(message: result.errorMessage!.tl);
     } else {
       context.showMessage(message: "Connection successful".tl);
     }
