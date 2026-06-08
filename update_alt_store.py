@@ -1,5 +1,4 @@
 import json
-import plistlib
 import re
 import requests
 import os
@@ -18,31 +17,60 @@ def fetch_latest_release(repo_url):
     api_url = f"https://api.github.com/repos/{repo_url}/releases"
     headers = {
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
     }
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     try:
-        response = requests.get(api_url, headers=headers)
+        response = requests.get(api_url, headers=headers, timeout=30)
         response.raise_for_status()
-        release = response.json()
-        return release
+        releases = response.json()
+        for release in releases:
+            if not release.get("draft") and not release.get("prerelease"):
+                return release
+        raise RuntimeError("No published release found.")
     except requests.RequestException as e:
         print(f"Error fetching releases: {e}")
         raise
 
-def get_file_size(url):
-    try:
-        response = requests.head(url)
-        response.raise_for_status()
-        return int(response.headers.get('Content-Length', 0))
-    except requests.RequestException as e:
-        print(f"Error getting file size: {e}")
-        return 194586
+def extract_version(tag_name):
+    version_match = re.search(r"(\d+\.\d+\.\d+)", tag_name)
+    if not version_match:
+        raise RuntimeError(f"Could not parse version from tag_name: {tag_name}")
+    return version_match.group(1)
+
+def find_ipa_asset(assets, version):
+    ipa_assets = [
+        asset for asset in assets
+        if asset.get("name", "").lower().endswith(".ipa")
+    ]
+
+    expected_name = re.compile(
+        rf"^venera-ios-{re.escape(version)}(?:\+\d+)?\.ipa$",
+        re.IGNORECASE,
+    )
+    for asset in ipa_assets:
+        if expected_name.match(asset["name"]):
+            return asset
+
+    for asset in ipa_assets:
+        name = asset["name"].lower()
+        if name.startswith("venera-ios-") and version in name:
+            return asset
+
+    if len(ipa_assets) == 1:
+        return ipa_assets[0]
+
+    available = ", ".join(asset.get("name", "<unnamed>") for asset in assets)
+    raise RuntimeError(
+        "IPA file not found in release assets. "
+        f"Available assets: {available or '<none>'}"
+    )
 
 def update_json_file_release(json_file, latest_release):
-    if isinstance(latest_release, list) and latest_release:
-        latest_release = latest_release[0]
-    else:
-        print("Error getting latest release")
-        return
+    if not isinstance(latest_release, dict):
+        raise RuntimeError("Error getting latest release")
 
     try:
         with open(json_file, "r", encoding="utf-8-sig") as file:
@@ -56,33 +84,18 @@ def update_json_file_release(json_file, latest_release):
 
     full_version = latest_release["tag_name"]
     tag = latest_release["tag_name"]
-    # Extract version like 1.4.5 from tag, which may be like 'v1.4.5'
-    version_match = re.search(r"(\d+\.\d+\.\d+)", full_version)
-    if version_match:
-        version = version_match.group(1)
-    else:
-        print("Error: Could not parse version from tag_name.")
-        return
+    version = extract_version(full_version)
     version_date = latest_release["published_at"]
     date_obj = datetime.strptime(version_date, "%Y-%m-%dT%H:%M:%SZ")
     version_date = date_obj.strftime("%Y-%m-%d")
 
-    description = latest_release["body"]
+    description = latest_release.get("body") or ""
     description = prepare_description(description)
 
     assets = latest_release.get("assets", [])
-    download_url = None
-    size = None
-    for asset in assets:
-        # venera-ios-1.4.5+145.ipa
-        if asset["name"] == f"venera-ios-{version}+{version.replace('.', '')}.ipa":
-            download_url = asset["browser_download_url"]
-            size = asset["size"]
-            break
-
-    if download_url is None or size is None:
-        print("Error: IPA file not found in release assets.")
-        return
+    asset = find_ipa_asset(assets, version)
+    download_url = asset["browser_download_url"]
+    size = asset["size"]
 
     version_entry = {
         "version": version,
@@ -92,9 +105,10 @@ def update_json_file_release(json_file, latest_release):
         "size": size
     }
 
-    duplicate_entries = [item for item in app["versions"] if item["version"] == version]
-    if duplicate_entries:
-        app["versions"].remove(duplicate_entries[0])
+    app["versions"] = [
+        item for item in app.setdefault("versions", [])
+        if item.get("version") != version
+    ]
 
     app["versions"].insert(0, version_entry)
 
@@ -122,7 +136,9 @@ def update_json_file_release(json_file, latest_release):
         "url": f"https://github.com/CyrilPeng/venera-next/releases/tag/{tag}"
     }
 
-    news_entry_exists = any(item["identifier"] == news_identifier for item in data["news"])
+    news_entry_exists = any(
+        item.get("identifier") == news_identifier for item in data["news"]
+    )
     if not news_entry_exists:
         data["news"].append(news_entry)
 
