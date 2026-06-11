@@ -210,24 +210,53 @@ class ComicSource {
     }
   }
 
-  bool _isSaving = false;
-  bool _haveWaitingTask = false;
+  Future<void>? _activeSave;
+  Future<void>? _pendingSave;
 
   Future<void> saveData() async {
-    if (_haveWaitingTask) return;
-    while (_isSaving) {
-      _haveWaitingTask = true;
-      await Future.delayed(const Duration(milliseconds: 20));
-      _haveWaitingTask = false;
+    if (_activeSave != null) {
+      return _schedulePendingSave();
     }
-    _isSaving = true;
+    return _startSave();
+  }
+
+  Future<void> _schedulePendingSave() {
+    if (_pendingSave != null) {
+      return Future.value();
+    }
+    var activeSave = _activeSave!;
+    var pendingSave = activeSave.then(
+      (_) {
+        _pendingSave = null;
+        return _startSave();
+      },
+      onError: (_) {
+        _pendingSave = null;
+        return _startSave();
+      },
+    );
+    _pendingSave = pendingSave;
+    return pendingSave;
+  }
+
+  Future<void> _startSave() {
+    late Future<void> activeSave;
+    activeSave = _writeData().whenComplete(() {
+      if (identical(_activeSave, activeSave)) {
+        _activeSave = null;
+      }
+    });
+    _activeSave = activeSave;
+    return activeSave;
+  }
+
+  Future<void> _writeData() async {
     var file = File("${App.dataPath}/comic_source/$key.data");
     if (!await file.exists()) {
       await file.create(recursive: true);
     }
     await file.writeAsString(jsonEncode(data));
-    _isSaving = false;
-    DataSync().uploadData();
+    unawaited(DataSync().uploadData());
   }
 
   Future<bool> reLogin() async {
