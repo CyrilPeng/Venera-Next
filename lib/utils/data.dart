@@ -47,6 +47,19 @@ Future<File> exportAppData([bool sync = true]) async {
 Future<void> importAppData(File file, [bool checkVersion = false]) async {
   var cacheDirPath = FilePath.join(App.cachePath, 'temp_data');
   var cacheDir = Directory(cacheDirPath);
+  var backupDir = Directory(
+    FilePath.join(
+      App.dataPath,
+      '.import_backup_${DateTime.now().microsecondsSinceEpoch}',
+    ),
+  );
+  var replacements = <_ImportReplacement>[];
+  var reloadHistory = false;
+  var reloadLocalFavorites = false;
+  var reloadCookies = false;
+  var reloadComicSources = false;
+  var success = false;
+  var rolledBack = false;
   if (cacheDir.existsSync()) {
     cacheDir.deleteSync(recursive: true);
   }
@@ -59,57 +72,293 @@ Future<void> importAppData(File file, [bool checkVersion = false]) async {
     var localFavoriteFile = cacheDir.joinFile("local_favorite.db");
     var appdataFile = cacheDir.joinFile("appdata.json");
     var cookieFile = cacheDir.joinFile("cookie.db");
-    if (checkVersion && appdataFile.existsSync()) {
-      var data = jsonDecode(await appdataFile.readAsString());
-      var version = data["settings"]["dataVersion"];
+
+    Map<String, dynamic>? importedAppdata;
+    if (appdataFile.existsSync()) {
+      importedAppdata = _decodeImportAppdata(await appdataFile.readAsString());
+    }
+    if (checkVersion && importedAppdata != null) {
+      var importedSettings = importedAppdata["settings"];
+      var version = importedSettings is Map
+          ? importedSettings["dataVersion"]
+          : null;
       if (version is int && version <= appdata.settings["dataVersion"]) {
         return;
       }
     }
+
+    backupDir.createSync();
+
     if (await historyFile.exists()) {
-      HistoryManager().close();
-      File(FilePath.join(App.dataPath, "history.db")).deleteIfExistsSync();
-      historyFile.renameSync(FilePath.join(App.dataPath, "history.db"));
-      HistoryManager().init();
+      _closeHistoryManagerForImport();
+      reloadHistory = true;
+      await _replaceFileForImport(
+        source: historyFile,
+        targetPath: FilePath.join(App.dataPath, "history.db"),
+        backupDir: backupDir,
+        backupName: "history.db",
+        replacements: replacements,
+      );
     }
     if (await localFavoriteFile.exists()) {
-      LocalFavoritesManager().close();
-      File(FilePath.join(App.dataPath, "local_favorite.db"))
-          .deleteIfExistsSync();
-      localFavoriteFile
-          .renameSync(FilePath.join(App.dataPath, "local_favorite.db"));
-      LocalFavoritesManager().init();
-    }
-    if (await appdataFile.exists()) {
-      var content = await appdataFile.readAsString();
-      var data = jsonDecode(content);
-      appdata.syncData(data);
+      _closeLocalFavoritesManagerForImport();
+      reloadLocalFavorites = true;
+      await _replaceFileForImport(
+        source: localFavoriteFile,
+        targetPath: FilePath.join(App.dataPath, "local_favorite.db"),
+        backupDir: backupDir,
+        backupName: "local_favorite.db",
+        replacements: replacements,
+      );
     }
     if (await cookieFile.exists()) {
-      SingleInstanceCookieJar.instance?.dispose();
-      File(FilePath.join(App.dataPath, "cookie.db")).deleteIfExistsSync();
-      cookieFile.renameSync(FilePath.join(App.dataPath, "cookie.db"));
-      SingleInstanceCookieJar.instance =
-          SingleInstanceCookieJar(FilePath.join(App.dataPath, "cookie.db"))
-            ..init();
+      _closeCookieJarForImport();
+      reloadCookies = true;
+      await _replaceFileForImport(
+        source: cookieFile,
+        targetPath: FilePath.join(App.dataPath, "cookie.db"),
+        backupDir: backupDir,
+        backupName: "cookie.db",
+        replacements: replacements,
+      );
     }
     var comicSourceDir = FilePath.join(cacheDirPath, "comic_source");
     if (Directory(comicSourceDir).existsSync()) {
-      Directory(FilePath.join(App.dataPath, "comic_source"))
-          .deleteIfExistsSync(recursive: true);
-      Directory(FilePath.join(App.dataPath, "comic_source")).createSync();
-      for (var file in Directory(comicSourceDir).listSync()) {
-        if (file is File) {
-          var targetFile =
-              FilePath.join(App.dataPath, "comic_source", file.name);
-          await file.copy(targetFile);
-        }
-      }
+      reloadComicSources = true;
+      await _replaceDirectoryForImport(
+        source: Directory(comicSourceDir),
+        targetPath: FilePath.join(App.dataPath, "comic_source"),
+        backupDir: backupDir,
+        backupName: "comic_source",
+        replacements: replacements,
+      );
+    }
+
+    if (reloadHistory) {
+      await HistoryManager().init();
+    }
+    if (reloadLocalFavorites) {
+      await LocalFavoritesManager().init();
+    }
+    if (reloadCookies) {
+      _openCookieJarForImport();
+    }
+    if (reloadComicSources) {
       await ComicSourceManager().reload();
     }
+
+    if (importedAppdata != null) {
+      appdata.syncData(importedAppdata);
+    }
+    success = true;
+  } catch (error, stackTrace) {
+    try {
+      await _rollbackImport(
+        replacements: replacements,
+        reloadHistory: reloadHistory,
+        reloadLocalFavorites: reloadLocalFavorites,
+        reloadCookies: reloadCookies,
+        reloadComicSources: reloadComicSources,
+      );
+      rolledBack = true;
+    } catch (rollbackError, rollbackStackTrace) {
+      Log.error(
+        "Import Data",
+        "Failed to rollback app data import: $rollbackError",
+        rollbackStackTrace,
+      );
+    }
+    Error.throwWithStackTrace(error, stackTrace);
   } finally {
     cacheDir.deleteIgnoreError(recursive: true);
+    if (success || rolledBack) {
+      backupDir.deleteIgnoreError(recursive: true);
+    }
   }
+}
+
+Map<String, dynamic> _decodeImportAppdata(String content) {
+  var data = jsonDecode(content);
+  if (data is! Map) {
+    throw const FormatException("Invalid appdata.json root");
+  }
+  var result = Map<String, dynamic>.from(data);
+  var settings = result["settings"];
+  if (settings != null) {
+    if (settings is! Map) {
+      throw const FormatException("Invalid appdata.json settings");
+    }
+    result["settings"] = Map<String, dynamic>.from(settings);
+  }
+  var searchHistory = result["searchHistory"];
+  if (searchHistory != null) {
+    if (searchHistory is! List ||
+        searchHistory.any((element) => element is! String)) {
+      throw const FormatException("Invalid appdata.json searchHistory");
+    }
+    result["searchHistory"] = List<String>.from(searchHistory);
+  }
+  return result;
+}
+
+class _ImportReplacement {
+  const _ImportReplacement._({
+    required this.targetPath,
+    required this.backupPath,
+    required this.wasExisting,
+    required this.isDirectory,
+  });
+
+  factory _ImportReplacement.file(
+    String targetPath,
+    Directory backupDir,
+    String backupName,
+  ) {
+    return _ImportReplacement._(
+      targetPath: targetPath,
+      backupPath: FilePath.join(backupDir.path, backupName),
+      wasExisting: File(targetPath).existsSync(),
+      isDirectory: false,
+    );
+  }
+
+  factory _ImportReplacement.directory(
+    String targetPath,
+    Directory backupDir,
+    String backupName,
+  ) {
+    return _ImportReplacement._(
+      targetPath: targetPath,
+      backupPath: FilePath.join(backupDir.path, backupName),
+      wasExisting: Directory(targetPath).existsSync(),
+      isDirectory: true,
+    );
+  }
+
+  final String targetPath;
+  final String backupPath;
+  final bool wasExisting;
+  final bool isDirectory;
+
+  void backup() {
+    if (!wasExisting) return;
+    if (isDirectory) {
+      Directory(targetPath).renameSync(backupPath);
+    } else {
+      File(targetPath).renameSync(backupPath);
+    }
+  }
+
+  void restore() {
+    if (isDirectory) {
+      Directory(targetPath).deleteIfExistsSync(recursive: true);
+      if (wasExisting && Directory(backupPath).existsSync()) {
+        Directory(backupPath).renameSync(targetPath);
+      }
+    } else {
+      File(targetPath).deleteIfExistsSync();
+      if (wasExisting && File(backupPath).existsSync()) {
+        File(backupPath).renameSync(targetPath);
+      }
+    }
+  }
+}
+
+Future<void> _replaceFileForImport({
+  required File source,
+  required String targetPath,
+  required Directory backupDir,
+  required String backupName,
+  required List<_ImportReplacement> replacements,
+}) async {
+  var replacement = _ImportReplacement.file(targetPath, backupDir, backupName);
+  replacement.backup();
+  replacements.add(replacement);
+  await source.copy(targetPath);
+}
+
+Future<void> _replaceDirectoryForImport({
+  required Directory source,
+  required String targetPath,
+  required Directory backupDir,
+  required String backupName,
+  required List<_ImportReplacement> replacements,
+}) async {
+  var replacement = _ImportReplacement.directory(
+    targetPath,
+    backupDir,
+    backupName,
+  );
+  replacement.backup();
+  replacements.add(replacement);
+  await copyDirectory(source, Directory(targetPath));
+}
+
+Future<void> _rollbackImport({
+  required List<_ImportReplacement> replacements,
+  required bool reloadHistory,
+  required bool reloadLocalFavorites,
+  required bool reloadCookies,
+  required bool reloadComicSources,
+}) async {
+  if (reloadHistory) {
+    _closeHistoryManagerForImport();
+  }
+  if (reloadLocalFavorites) {
+    _closeLocalFavoritesManagerForImport();
+  }
+  if (reloadCookies) {
+    _closeCookieJarForImport();
+  }
+
+  for (var replacement in replacements.reversed) {
+    replacement.restore();
+  }
+
+  if (reloadHistory) {
+    await HistoryManager().init();
+  }
+  if (reloadLocalFavorites) {
+    await LocalFavoritesManager().init();
+  }
+  if (reloadCookies) {
+    _openCookieJarForImport();
+  }
+  if (reloadComicSources) {
+    await ComicSourceManager().reload();
+  }
+}
+
+void _closeHistoryManagerForImport() {
+  try {
+    HistoryManager.cache?.close();
+  } catch (_) {
+    // ignore partially initialized managers
+  }
+}
+
+void _closeLocalFavoritesManagerForImport() {
+  try {
+    LocalFavoritesManager.cache?.close();
+  } catch (_) {
+    // ignore partially initialized managers
+  }
+}
+
+void _closeCookieJarForImport() {
+  try {
+    SingleInstanceCookieJar.instance?.dispose();
+  } catch (_) {
+    // ignore partially initialized cookie jars
+  } finally {
+    SingleInstanceCookieJar.instance = null;
+  }
+}
+
+void _openCookieJarForImport() {
+  SingleInstanceCookieJar.instance = SingleInstanceCookieJar(
+    FilePath.join(App.dataPath, "cookie.db"),
+  );
 }
 
 Future<void> importPicaData(File file) async {
