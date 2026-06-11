@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -16,38 +17,12 @@ class Appdata with Init {
 
   var searchHistory = <String>[];
 
-  bool _isSavingData = false;
+  Future<void> _writeQueue = Future.value();
 
   Future<void> saveData([bool sync = true]) async {
-    while (_isSavingData) {
-      await Future.delayed(const Duration(milliseconds: 20));
-    }
-    _isSavingData = true;
-    try {
-      var futures = <Future>[];
-      var json = toJson();
-      var data = jsonEncode(json);
-      var file = File(FilePath.join(App.dataPath, 'appdata.json'));
-      futures.add(file.writeAsString(data));
-
-      var disableSyncFields = json["settings"]["disableSyncFields"] as String;
-      if (disableSyncFields.isNotEmpty) {
-        var json4sync = jsonDecode(data);
-        List<String> customDisableSync = splitField(disableSyncFields);
-        for (var field in customDisableSync) {
-          json4sync["settings"].remove(field);
-        }
-        var data4sync = jsonEncode(json4sync);
-        var file4sync = File(FilePath.join(App.dataPath, 'syncdata.json'));
-        futures.add(file4sync.writeAsString(data4sync));
-      }
-
-      await Future.wait(futures);
-    } finally {
-      _isSavingData = false;
-    }
+    await _enqueueWrite(_writeAppData);
     if (sync) {
-      DataSync().uploadData();
+      unawaited(DataSync().uploadData());
     }
   }
 
@@ -130,17 +105,43 @@ class Appdata with Init {
 
   var implicitData = <String, dynamic>{};
 
-  void writeImplicitData() async {
-    while (_isSavingData) {
-      await Future.delayed(const Duration(milliseconds: 20));
+  Future<void> _enqueueWrite(Future<void> Function() write) {
+    var next = _writeQueue.then((_) => write(), onError: (_) => write());
+    _writeQueue = next.catchError((Object error, StackTrace stackTrace) {
+      Log.error("Appdata", error, stackTrace);
+    });
+    return next;
+  }
+
+  Future<void> _writeAppData() async {
+    var futures = <Future>[];
+    var json = toJson();
+    var data = jsonEncode(json);
+    var file = File(FilePath.join(App.dataPath, 'appdata.json'));
+    futures.add(file.writeAsString(data));
+
+    var disableSyncFields = json["settings"]["disableSyncFields"] as String;
+    if (disableSyncFields.isNotEmpty) {
+      var json4sync = jsonDecode(data);
+      List<String> customDisableSync = splitField(disableSyncFields);
+      for (var field in customDisableSync) {
+        json4sync["settings"].remove(field);
+      }
+      var data4sync = jsonEncode(json4sync);
+      var file4sync = File(FilePath.join(App.dataPath, 'syncdata.json'));
+      futures.add(file4sync.writeAsString(data4sync));
     }
-    _isSavingData = true;
-    try {
-      var file = File(FilePath.join(App.dataPath, 'implicitData.json'));
-      await file.writeAsString(jsonEncode(implicitData));
-    } finally {
-      _isSavingData = false;
-    }
+
+    await Future.wait(futures);
+  }
+
+  void writeImplicitData() {
+    unawaited(
+      _enqueueWrite(() async {
+        var file = File(FilePath.join(App.dataPath, 'implicitData.json'));
+        await file.writeAsString(jsonEncode(implicitData));
+      }),
+    );
   }
 
   @override
