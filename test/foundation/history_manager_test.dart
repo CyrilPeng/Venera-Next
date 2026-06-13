@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera/foundation/app.dart';
+import 'package:venera/foundation/comic_source/comic_source.dart';
 import 'package:venera/foundation/comic_type.dart';
 import 'package:venera/foundation/history.dart';
+import 'package:venera/foundation/res.dart';
 
 History _history(String id) {
   return History.fromMap({
@@ -32,6 +34,48 @@ bool _sqliteAvailable() {
 }
 
 void main() {
+  test('refreshHistoryInfo does not wait after final retry failure', () async {
+    const sourceKey = 'history_refresh_test_source';
+    var attempts = 0;
+    final retryDelays = <Duration>[];
+    final source = _source(
+      sourceKey,
+      loadComicInfo: (id) async {
+        attempts++;
+        return const Res.error('network unavailable');
+      },
+    );
+    ComicSourceManager().add(source);
+    addTearDown(() {
+      ComicSourceManager().remove(sourceKey);
+    });
+
+    final history = History.fromMap({
+      'type': ComicType.fromKey(sourceKey).value,
+      'time': DateTime(2026, 1, 1).millisecondsSinceEpoch,
+      'title': 'Remote Comic',
+      'subtitle': 'Author',
+      'cover': 'cover.jpg',
+      'ep': 1,
+      'page': 2,
+      'id': 'comic-1',
+      'readEpisode': ['1'],
+      'max_page': 10,
+    });
+
+    final result = await HistoryManager.create().refreshHistoryInfo(
+      history,
+      retryDelay: (duration) {
+        retryDelays.add(duration);
+        return Future.value();
+      },
+    );
+
+    expect(result, isFalse);
+    expect(attempts, 3);
+    expect(retryDelays, const [Duration(seconds: 2), Duration(seconds: 2)]);
+  });
+
   test(
     'addHistoryAsync writes through an isolate-owned sqlite connection',
     () async {
@@ -118,5 +162,43 @@ void main() {
       }
     },
     skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+  );
+}
+
+ComicSource _source(String key, {LoadComicFunc? loadComicInfo}) {
+  return ComicSource(
+    'Test Source',
+    key,
+    null,
+    null,
+    null,
+    null,
+    const [],
+    null,
+    null,
+    loadComicInfo,
+    null,
+    null,
+    null,
+    null,
+    'test.js',
+    '',
+    '1.0.0',
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    false,
+    false,
+    null,
+    null,
   );
 }

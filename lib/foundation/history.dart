@@ -478,33 +478,40 @@ class HistoryManager with ChangeNotifier {
   /// Refresh history info from comic source.
   /// Fetches the latest cover, title and subtitle from the source.
   /// Keeps the reading progress (ep, page, etc.).
-  Future<bool> refreshHistoryInfo(History history) async {
+  Future<bool> refreshHistoryInfo(
+    History history, {
+    Future<void> Function(Duration duration)? retryDelay,
+  }) async {
     if (history.sourceKey == 'local') {
       // Local comics don't need refresh
       return false;
     }
 
-    return await _refreshSingleHistory(history);
+    return await _refreshSingleHistory(history, retryDelay: retryDelay);
   }
 
   /// Internal method to refresh a single history
   /// Retries up to 3 times on failure with 2 second delay between retries
-  Future<bool> _refreshSingleHistory(History history) async {
+  Future<bool> _refreshSingleHistory(
+    History history, {
+    Future<void> Function(Duration duration)? retryDelay,
+  }) async {
     var comicSource = ComicSource.find(history.sourceKey);
     if (comicSource == null || comicSource.loadComicInfo == null) {
       return false;
     }
 
+    final waitRetry = retryDelay ?? Future<void>.delayed;
     int retries = 3;
     while (true) {
       try {
         var res = await comicSource.loadComicInfo!(history.id);
         if (res.error) {
-          await Future.delayed(const Duration(seconds: 2));
           retries--;
           if (retries == 0) {
             return false;
           }
+          await waitRetry(const Duration(seconds: 2));
           continue;
         }
 
@@ -528,11 +535,11 @@ class HistoryManager with ChangeNotifier {
         return true;
       } catch (e, s) {
         Log.error("History", "Exception while refreshing history info: $e\n$s");
-        await Future.delayed(const Duration(seconds: 2));
         retries--;
         if (retries == 0) {
           return false;
         }
+        await waitRetry(const Duration(seconds: 2));
       }
     }
   }
