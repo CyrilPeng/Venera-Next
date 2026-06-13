@@ -5,7 +5,6 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart' show ChangeNotifier;
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera/foundation/appdata.dart';
 import 'package:venera/foundation/comic_source/comic_source.dart';
@@ -14,7 +13,6 @@ import 'package:venera/foundation/favorites.dart';
 import 'package:venera/foundation/image_provider/image_favorites_provider.dart';
 import 'package:venera/foundation/log.dart';
 import 'package:venera/foundation/sqlite_connection.dart';
-import 'package:venera/utils/channel.dart';
 import 'package:venera/utils/ext.dart';
 import 'package:venera/utils/translations.dart';
 
@@ -542,6 +540,90 @@ class HistoryManager with ChangeNotifier {
   /// Refresh all histories from comic sources.
   /// Returns a stream with progress updates.
   /// From e0ea449c.
+  static const _refreshConcurrency = 5;
+  static const _refreshThrottleEvery = 5;
+
+  @visibleForTesting
+  static Future<void> debugRunThrottledRefreshTasks<T>(
+    List<T> tasks, {
+    int concurrency = _refreshConcurrency,
+    int throttleEvery = _refreshThrottleEvery,
+    Future<void> Function(Duration duration)? delay,
+    required Future<void> Function(T task) run,
+  }) {
+    return _runThrottledRefreshTasks(
+      tasks,
+      concurrency: concurrency,
+      throttleEvery: throttleEvery,
+      delay: delay,
+      run: run,
+    );
+  }
+
+  static Future<void> _runThrottledRefreshTasks<T>(
+    List<T> tasks, {
+    required int concurrency,
+    required int throttleEvery,
+    Future<void> Function(Duration duration)? delay,
+    required Future<void> Function(T task) run,
+  }) async {
+    if (tasks.isEmpty || concurrency <= 0) {
+      return;
+    }
+    final wait = delay ?? _waitRefreshThrottle;
+    var nextIndex = 0;
+    var throttleGate = Future<void>.value();
+    var schedulingLock = Future<void>.value();
+
+    Future<T?> takeNext() {
+      final previousSchedule = schedulingLock;
+      final releaseSchedule = Completer<void>();
+      schedulingLock = releaseSchedule.future;
+      return () async {
+        await previousSchedule;
+        try {
+          await throttleGate;
+          if (nextIndex >= tasks.length) {
+            return null;
+          }
+          final task = tasks[nextIndex];
+          nextIndex++;
+          if (throttleEvery > 0 && nextIndex % throttleEvery == 0) {
+            throttleGate = wait(_refreshThrottleDelay(nextIndex));
+          }
+          return task;
+        } finally {
+          releaseSchedule.complete();
+        }
+      }();
+    }
+
+    Future<void> worker() async {
+      while (true) {
+        final task = await takeNext();
+        if (task == null) {
+          return;
+        }
+        await run(task);
+      }
+    }
+
+    final workerCount = min(concurrency, tasks.length);
+    await Future.wait(List.generate(workerCount, (_) => worker()));
+  }
+
+  static Future<void> _waitRefreshThrottle(Duration duration) {
+    return Future.delayed(duration);
+  }
+
+  static Duration _refreshThrottleDelay(int scheduledCount) {
+    var delay = scheduledCount % 100 + 1;
+    if (delay > 10) {
+      delay = 10;
+    }
+    return Duration(seconds: delay);
+  }
+
   Stream<RefreshProgress> refreshAllHistoriesStream() {
     var controller = StreamController<RefreshProgress>();
     _refreshAllHistoriesBase(controller);
@@ -577,48 +659,23 @@ class HistoryManager with ChangeNotifier {
     current = 0;
     controller.add(RefreshProgress(total, current, success, failed, skipped));
 
-    var channel = Channel<History>(10);
-
-    () async {
-      var c = 0;
-      for (var history in historiesToRefresh) {
-        await channel.push(history);
-        c++;
-        if (c % 5 == 0) {
-          var delay = c % 100 + 1;
-          if (delay > 10) {
-            delay = 10;
-          }
-          await Future.delayed(Duration(seconds: delay));
+    await _runThrottledRefreshTasks(
+      historiesToRefresh,
+      concurrency: _refreshConcurrency,
+      throttleEvery: _refreshThrottleEvery,
+      run: (history) async {
+        var result = await _refreshSingleHistory(history);
+        current++;
+        if (result) {
+          success++;
+        } else {
+          failed++;
         }
-      }
-      channel.close();
-    }();
-
-    var updateFutures = <Future>[];
-    for (var i = 0; i < 5; i++) {
-      var f = () async {
-        while (true) {
-          var history = await channel.pop();
-          if (history == null) {
-            break;
-          }
-          var result = await _refreshSingleHistory(history);
-          current++;
-          if (result) {
-            success++;
-          } else {
-            failed++;
-          }
-          controller.add(
-            RefreshProgress(total, current, success, failed, skipped),
-          );
-        }
-      }();
-      updateFutures.add(f);
-    }
-
-    await Future.wait(updateFutures);
+        controller.add(
+          RefreshProgress(total, current, success, failed, skipped),
+        );
+      },
+    );
 
     notifyListeners();
     controller.close();
