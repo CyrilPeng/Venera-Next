@@ -31,6 +31,8 @@ class FileDownloader {
 
   final _dio = Dio();
 
+  final _cancelToken = CancelToken();
+
   RandomAccessFile? _file;
 
   Future<void> _writeQueue = Future.value();
@@ -40,6 +42,13 @@ class FileDownloader {
   bool _canceled = false;
 
   late List<_DownloadBlock> _blocks;
+
+  void _cancelActiveRequests([String reason = 'Download canceled']) {
+    if (!_cancelToken.isCancelled) {
+      _cancelToken.cancel(reason);
+    }
+    _dio.close(force: true);
+  }
 
   Future<void> _writeStatus() async {
     var file = File("$savePath.download");
@@ -75,7 +84,7 @@ class FileDownloader {
   }
 
   Future<void> _createTasks() async {
-    var res = await _dio.head(url);
+    var res = await _dio.head(url, cancelToken: _cancelToken);
     var length = res.headers["content-length"]?.first;
     _fileSize = length == null ? 0 : int.parse(length);
 
@@ -187,10 +196,18 @@ class FileDownloader {
       resultStream.add(DownloadingStatus(_currentBytes, _fileSize, 0, true));
       resultStream.close();
     } catch (e, s) {
+      final wasCanceled = _canceled;
       _canceled = true;
+      _cancelActiveRequests();
       await _writeQueue.catchError((_) {});
       await _file?.close();
       _file = null;
+      if (wasCanceled &&
+          e is DioException &&
+          e.type == DioExceptionType.cancel) {
+        resultStream.close();
+        return;
+      }
       resultStream.addError(e, s);
       resultStream.close();
     }
@@ -198,8 +215,18 @@ class FileDownloader {
 
   Future<void> _scheduleDownload() async {
     final tasks = <Future<void>>[];
+    Object? firstError;
+    StackTrace? firstStackTrace;
+
+    void captureError(Object error, StackTrace stackTrace) {
+      firstError ??= error;
+      firstStackTrace ??= stackTrace;
+      _canceled = true;
+      _cancelActiveRequests('Download block failed');
+    }
+
     while (true) {
-      if (_canceled) return;
+      if (_canceled) break;
       if (tasks.length >= maxConcurrent) {
         await Future.any(tasks);
         continue;
@@ -214,13 +241,27 @@ class FileDownloader {
       }
       block.downloading = true;
       late final Future<void> task;
-      task = _fetchBlock(block).whenComplete(() {
-        block.downloading = false;
-        tasks.remove(task);
-      });
+      task = _fetchBlock(block)
+          .catchError((Object error, StackTrace stackTrace) {
+            if (_canceled &&
+                error is DioException &&
+                error.type == DioExceptionType.cancel) {
+              return;
+            }
+            captureError(error, stackTrace);
+          })
+          .whenComplete(() {
+            block.downloading = false;
+            tasks.remove(task);
+          });
       tasks.add(task);
     }
-    await Future.wait(tasks);
+    if (!_canceled) {
+      await Future.wait(tasks);
+    }
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError!, firstStackTrace!);
+    }
   }
 
   Future<void> _fetchBlock(_DownloadBlock block) async {
@@ -240,7 +281,11 @@ class FileDownloader {
       },
       preserveHeaderCase: true,
     );
-    var res = await _dio.get<ResponseBody>(url, options: options);
+    var res = await _dio.get<ResponseBody>(
+      url,
+      options: options,
+      cancelToken: _cancelToken,
+    );
     if (_canceled) return;
     if (res.data == null) {
       throw Exception("Failed to block $start-$end");
@@ -286,6 +331,7 @@ class FileDownloader {
 
   Future<void> stop() async {
     _canceled = true;
+    _cancelActiveRequests();
     await _writeQueue.catchError((_) {});
     await _file?.close();
     _file = null;

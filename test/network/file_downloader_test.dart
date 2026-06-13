@@ -110,17 +110,72 @@ void main() {
     }
     expect(File(savePath).existsSync(), isFalse);
   });
+
+  test(
+    'FileDownloader closes stream when stopped during active block',
+    () async {
+      final dir = Directory.systemTemp.createTempSync('venera-downloader-');
+      final bytes = List<int>.generate(16 * 1024, (index) => index % 251);
+      final rangePaused = Completer<void>();
+      final rangeGate = Completer<void>();
+      final server = await _serveBytes(
+        bytes,
+        pausedRangeStarts: {0},
+        onPausedRangeStart: () {
+          if (!rangePaused.isCompleted) {
+            rangePaused.complete();
+          }
+        },
+        beforePausedRangeFinish: rangeGate.future,
+      );
+      addTearDown(() async {
+        if (!rangeGate.isCompleted) {
+          rangeGate.complete();
+        }
+        await server.close(force: true);
+        if (dir.existsSync()) {
+          dir.deleteSync(recursive: true);
+        }
+      });
+
+      final savePath = '${dir.path}/download.bin';
+      final downloader = FileDownloader(
+        'http://127.0.0.1:${server.port}/download.bin',
+        savePath,
+        maxConcurrent: 1,
+        chunkSize: 8 * 1024,
+      );
+
+      final done = downloader.start().drain<void>();
+
+      await rangePaused.future.timeout(const Duration(seconds: 1));
+      await downloader.stop();
+
+      await done.timeout(const Duration(seconds: 1));
+    },
+  );
 }
 
 Future<HttpServer> _serveBytes(
   List<int> data, {
   Set<int> failRangeStarts = const {},
   Future<void>? beforeHeadResponse,
+  Set<int> pausedRangeStarts = const {},
+  void Function()? onPausedRangeStart,
+  Future<void>? beforePausedRangeFinish,
 }) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   unawaited(() async {
     await for (final request in server) {
-      await _handleRequest(request, data, failRangeStarts, beforeHeadResponse);
+      await _handleRequest(
+        request,
+        data,
+        failRangeStarts,
+        beforeHeadResponse,
+        pausedRangeStarts,
+        onPausedRangeStart,
+        beforePausedRangeFinish,
+      );
     }
   }());
   return server;
@@ -131,6 +186,9 @@ Future<void> _handleRequest(
   List<int> data,
   Set<int> failRangeStarts,
   Future<void>? beforeHeadResponse,
+  Set<int> pausedRangeStarts,
+  void Function()? onPausedRangeStart,
+  Future<void>? beforePausedRangeFinish,
 ) async {
   if (request.method == 'HEAD') {
     await beforeHeadResponse;
@@ -161,8 +219,24 @@ Future<void> _handleRequest(
     return;
   }
 
+  var responseStarted = false;
+  if (pausedRangeStarts.contains(start)) {
+    var firstChunkEnd = start + 1024;
+    if (firstChunkEnd > end + 1) {
+      firstChunkEnd = end + 1;
+    }
+    request.response.add(data.sublist(start, firstChunkEnd));
+    await request.response.flush();
+    responseStarted = true;
+    onPausedRangeStart?.call();
+    await beforePausedRangeFinish;
+    start = firstChunkEnd;
+  }
+
   final body = data.sublist(start, end + 1);
-  request.response.headers.contentLength = body.length;
+  if (!responseStarted) {
+    request.response.headers.contentLength = body.length;
+  }
   request.response.add(body);
   await request.response.close();
 }
