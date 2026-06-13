@@ -1,4 +1,4 @@
-import 'dart:async' show Future, StreamController, scheduleMicrotask;
+import 'dart:async' show Completer, Future, StreamController, scheduleMicrotask;
 import 'dart:convert';
 import 'dart:math';
 import 'dart:ui' as ui show Codec;
@@ -11,6 +11,14 @@ import 'package:venera/foundation/log.dart';
 abstract class BaseImageProvider<T extends BaseImageProvider<T>>
     extends ImageProvider<T> {
   const BaseImageProvider();
+
+  static final Expando<Future<void>> _cancelSignals = Expando<Future<void>>();
+
+  static final Future<void> _neverCancelSignal = Completer<void>().future;
+
+  static Future<void> cancelSignalOf(void Function() checkStop) {
+    return _cancelSignals[checkStop] ?? _neverCancelSignal;
+  }
 
   static const int maxImagePixel = 2560 * 1440;
 
@@ -58,20 +66,28 @@ abstract class BaseImageProvider<T extends BaseImageProvider<T>>
       int retryTime = 1;
 
       bool stop = false;
+      final stopCompleter = Completer<void>();
 
       chunkEvents.onCancel = () {
         stop = true;
+        if (!stopCompleter.isCompleted) {
+          stopCompleter.complete();
+        }
       };
+
+      void checkStop() {
+        if (stop) {
+          throw const _ImageLoadingStopException();
+        }
+      }
+
+      BaseImageProvider._cancelSignals[checkStop] = stopCompleter.future;
 
       Uint8List? data;
 
       while (data == null && !stop) {
         try {
-          data = await load(chunkEvents, () {
-            if (stop) {
-              throw const _ImageLoadingStopException();
-            }
-          });
+          data = await load(chunkEvents, checkStop);
         } on _ImageLoadingStopException {
           rethrow;
         } catch (e) {

@@ -9,6 +9,42 @@ import 'base_image_provider.dart';
 import 'reader_image.dart' as image_provider;
 import 'package:venera/foundation/appdata.dart';
 
+final Object _imageProcessingCanceled = Object();
+
+@visibleForTesting
+Future<dynamic> debugWaitForReaderImageProcessingResult(
+  Future<dynamic> image,
+  void Function() onCancel,
+  void Function() checkStop, {
+  Future<void>? cancelSignal,
+}) {
+  return _waitForReaderImageProcessingResult(
+    image,
+    onCancel,
+    checkStop,
+    cancelSignal: cancelSignal,
+  );
+}
+
+Future<dynamic> _waitForReaderImageProcessingResult(
+  Future<dynamic> image,
+  void Function() onCancel,
+  void Function() checkStop, {
+  Future<void>? cancelSignal,
+}) async {
+  final result = await Future.any<dynamic>([
+    image,
+    (cancelSignal ?? BaseImageProvider.cancelSignalOf(checkStop)).then(
+      (_) => _imageProcessingCanceled,
+    ),
+  ]);
+  if (identical(result, _imageProcessingCanceled)) {
+    onCancel();
+    checkStop();
+  }
+  return result ?? Uint8List(0);
+}
+
 class ReaderImageProvider
     extends BaseImageProvider<image_provider.ReaderImageProvider> {
   /// Image provider for normal image.
@@ -90,21 +126,12 @@ class ReaderImageProvider
                 imageBytes = futureImage;
               }
             } else {
-              dynamic futureImage;
-              image.then((value) {
-                futureImage = value;
-                futureImage ??= Uint8List(0);
-              });
-              while (futureImage == null) {
-                try {
-                  checkStop();
-                }
-                catch(e) {
-                  onCancel([]);
-                  rethrow;
-                }
-                await Future.delayed(Duration(milliseconds: 50));
-              }
+              final cancelImageProcessing = onCancel;
+              final futureImage = await _waitForReaderImageProcessingResult(
+                image,
+                () => cancelImageProcessing([]),
+                checkStop,
+              );
               if (futureImage is Uint8List) {
                 imageBytes = futureImage;
               }
@@ -113,7 +140,7 @@ class ReaderImageProvider
         }
       }
     }
-    return imageBytes!;
+    return imageBytes;
   }
 
   @override
