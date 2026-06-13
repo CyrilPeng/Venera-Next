@@ -90,6 +90,43 @@ void main() {
     expect(sync.isDownloading, isFalse);
   });
 
+  test('waitForDownload waits for a pending download task', () async {
+    final upload = Completer<Res<bool>>();
+    final download = Completer<Res<bool>>();
+    var downloadStarted = false;
+    DataSync.debugUploadOverride = () => upload.future;
+    DataSync.debugDownloadOverride = () {
+      downloadStarted = true;
+      return download.future;
+    };
+
+    final sync = DataSync();
+    final uploadFuture = sync.uploadData();
+    final downloadFuture = sync.downloadData();
+    var waitCompleted = false;
+    final waitFuture = sync.waitForDownload().then((_) {
+      waitCompleted = true;
+    });
+
+    expect(sync.isUploading, isTrue);
+    expect(sync.isDownloading, isFalse);
+    expect(downloadStarted, isFalse);
+    expect(waitCompleted, isFalse);
+
+    upload.complete(const Res(true));
+    await pumpEventQueue();
+
+    expect(downloadStarted, isTrue);
+    expect(sync.isDownloading, isTrue);
+    expect(waitCompleted, isFalse);
+
+    download.complete(const Res(true));
+    await Future.wait([uploadFuture, downloadFuture, waitFuture]);
+
+    expect(waitCompleted, isTrue);
+    expect(sync.isDownloading, isFalse);
+  });
+
   test('uploadData records failed results in status snapshot', () async {
     DataSync.debugUploadOverride = () async {
       return const Res.error('upload failed');

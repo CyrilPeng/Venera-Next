@@ -556,12 +556,12 @@ abstract class FollowUpdatesService {
 
     _isChecking = true;
 
-    while (DataSync().isDownloading) {
-      await Future.delayed(const Duration(milliseconds: 100));
-    }
-
     int updated = 0;
     try {
+      await DataSync().waitForDownload();
+      if (isCanceled) {
+        return;
+      }
       await for (var progress in updateFolder(folder, false)) {
         if (isCanceled) {
           return;

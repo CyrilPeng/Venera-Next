@@ -93,17 +93,25 @@ class DataSync with ChangeNotifier {
   }
 
   Future<void> _waitForUploadBeforeClose() async {
+    return _waitForTask(_DataSyncTask.upload);
+  }
+
+  Future<void> waitForDownload() async {
+    return _waitForTask(_DataSyncTask.download);
+  }
+
+  Future<void> _waitForTask(_DataSyncTask task) async {
     while (true) {
-      Future<Res<bool>>? uploadTask;
-      if (_pendingTaskType == _DataSyncTask.upload) {
-        uploadTask = _pendingTask;
-      } else if (_activeTaskType == _DataSyncTask.upload) {
-        uploadTask = _activeTask;
+      Future<Res<bool>>? taskFuture;
+      if (_pendingTaskType == task) {
+        taskFuture = _pendingTask;
+      } else if (_activeTaskType == task) {
+        taskFuture = _activeTask;
       }
-      if (uploadTask == null) {
+      if (taskFuture == null) {
         return;
       }
-      await uploadTask;
+      await taskFuture;
       await Future<void>.delayed(Duration.zero);
     }
   }
