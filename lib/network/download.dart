@@ -104,6 +104,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
   @override
   void cancel() {
     _isRunning = false;
+    _wakeRetryDelay();
     LocalManager().removeTask(this);
     var local = LocalManager().find(id, comicType);
     if (path != null) {
@@ -148,6 +149,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     _isRunning = false;
     _message = "Paused";
     _currentSpeed = 0;
+    _wakeRetryDelay();
     var shouldMove = <int>[];
     for (var entry in tasks.entries) {
       if (!entry.value.isComplete) {
@@ -197,6 +199,36 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
 
   @visibleForTesting
   Future<void>? get debugResumeFuture => _resumeFuture;
+
+  Completer<void>? _retryDelayWakeup;
+
+  void _wakeRetryDelay() {
+    final wakeup = _retryDelayWakeup;
+    if (wakeup != null && !wakeup.isCompleted) {
+      wakeup.complete();
+    }
+  }
+
+  Future<void> _waitRetryDelay(Duration duration) {
+    final wakeup = Completer<void>();
+    _retryDelayWakeup = wakeup;
+    return Future.any<void>([
+      Future<void>.delayed(duration),
+      wakeup.future,
+    ]).whenComplete(() {
+      if (identical(_retryDelayWakeup, wakeup)) {
+        _retryDelayWakeup = null;
+      }
+    });
+  }
+
+  Future<Res<T>> _runDownloadStepWithRetry<T>(Future<T> Function() task) {
+    return _runWithRetry(
+      task,
+      delay: _waitRetryDelay,
+      shouldContinue: () => _isRunning,
+    );
+  }
 
   void _scheduleTasks() {
     var images = _images![_images!.keys.elementAt(_chapter)]!;
@@ -260,7 +292,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     if (comic == null) {
       _message = "Fetching comic info...";
       notifyListeners();
-      var res = await _runWithRetry(() async {
+      var res = await _runDownloadStepWithRetry(() async {
         var r = await source.loadComicInfo!(comicId);
         if (r.error) {
           throw r.errorMessage!;
@@ -302,7 +334,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     if (_cover == null) {
       _message = "Downloading cover...";
       notifyListeners();
-      var res = await _runWithRetry(() async {
+      var res = await _runDownloadStepWithRetry(() async {
         Uint8List? data;
         await for (var progress
             in ImageDownloader.loadThumbnail(comic!.cover, source.key)) {
@@ -318,6 +350,9 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
         file.writeAsBytesSync(data);
         return "file://${file.path}";
       });
+      if (!_isRunning) {
+        return;
+      }
       if (res.error) {
         Log.error("Download", res.errorMessage!);
         _setError("Error: ${res.errorMessage}");
@@ -333,7 +368,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
       if (comic!.chapters == null) {
         _message = "Fetching image list...";
         notifyListeners();
-        var res = await _runWithRetry(() async {
+        var res = await _runDownloadStepWithRetry(() async {
           var r = await source.loadComicPages!(comicId, null);
           if (r.error) {
             throw r.errorMessage!;
@@ -368,7 +403,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
           }
           _message = "Fetching image list ($cpCount/$totalCpCount)...";
           notifyListeners();
-          var res = await _runWithRetry(() async {
+          var res = await _runDownloadStepWithRetry(() async {
             var r = await source.loadComicPages!(comicId, i);
             if (r.error) {
               throw r.errorMessage!;
@@ -525,16 +560,24 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
   int get hashCode => Object.hash(comicId, source.key);
 }
 
-Future<Res<T>> _runWithRetry<T>(Future<T> Function() task,
-    {int retry = 3}) async {
+Future<Res<T>> _runWithRetry<T>(
+  Future<T> Function() task, {
+  int retry = 3,
+  Future<void> Function(Duration duration)? delay,
+  bool Function()? shouldContinue,
+}) async {
+  final wait = delay ?? Future<void>.delayed;
   for (var i = 0; i < retry; i++) {
+    if (shouldContinue?.call() == false) {
+      return Res.error("Canceled");
+    }
     try {
       return Res(await task());
     } catch (e) {
-      if (i == retry - 1) {
+      if (i == retry - 1 || shouldContinue?.call() == false) {
         return Res.error(e.toString());
       }
-      await Future.delayed(Duration(seconds: i + 1));
+      await wait(Duration(seconds: i + 1));
     }
   }
   throw UnimplementedError();

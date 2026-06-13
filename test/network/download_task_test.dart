@@ -115,9 +115,31 @@ void main() {
     expect(task.isPaused, isTrue);
     expect(task.isError, isFalse);
   });
+
+  test('ImagesDownloadTask pause wakes retry delay', () async {
+    final source = _testSource(
+      sourceKey,
+      loadComicInfo: (id) async {
+        throw 'network unavailable';
+      },
+    );
+    ComicSourceManager().remove(sourceKey);
+    ComicSourceManager().add(source);
+
+    final task = ImagesDownloadTask(source: source, comicId: 'comic-1');
+
+    task.resume();
+    await pumpEventQueue();
+
+    task.pause();
+
+    await task.debugResumeFuture!.timeout(const Duration(milliseconds: 500));
+    expect(task.isPaused, isTrue);
+    expect(task.isError, isFalse);
+  });
 }
 
-ComicSource _testSource(String key) {
+ComicSource _testSource(String key, {LoadComicFunc? loadComicInfo}) {
   return ComicSource(
     'Test Source',
     key,
@@ -128,7 +150,7 @@ ComicSource _testSource(String key) {
     const [],
     null,
     null,
-    null,
+    loadComicInfo,
     null,
     null,
     null,
