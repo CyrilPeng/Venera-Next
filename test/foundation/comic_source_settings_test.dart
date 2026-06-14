@@ -51,4 +51,29 @@ void main() {
     expect(debugNormalizeComicSourceSettings(null), isNull);
     expect(debugNormalizeComicSourceSettings('bad'), isNull);
   });
+
+  test('normalize loading config accepts dynamically typed map', () {
+    final config = debugNormalizeComicSourceLoadingConfig(
+      <dynamic, dynamic>{
+        'url': 'https://example.com/image.jpg',
+        'headers': {'referer': 'https://example.com'},
+      },
+    );
+
+    expect(config, {
+      'url': 'https://example.com/image.jpg',
+      'headers': {'referer': 'https://example.com'},
+    });
+  });
+
+  test('normalize loading config rejects invalid values', () {
+    expect(debugNormalizeComicSourceLoadingConfig(null), isNull);
+    expect(debugNormalizeComicSourceLoadingConfig('bad'), isNull);
+    expect(
+      debugNormalizeComicSourceLoadingConfig(<dynamic, dynamic>{
+        1: 'bad-key',
+      }),
+      isNull,
+    );
+  });
 }

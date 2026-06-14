@@ -1070,9 +1070,14 @@ class ComicSourceParser {
             ${jsonEncode(imageKey)}, ${jsonEncode(comicId)}, ${jsonEncode(ep)})
         """);
       if (res is Future) {
-        return await res;
+        res = await res;
       }
-      return res;
+      final config = _normalizeComicSourceLoadingConfig(res);
+      if (config == null) {
+        Log.error("Network", "function onImageLoad return invalid data");
+        throw "function onImageLoad return invalid data";
+      }
+      return config;
     };
   }
 
@@ -1084,11 +1089,12 @@ class ComicSourceParser {
       var res = JsEngine().runCode("""
           ComicSource.sources.$_key.comic.onThumbnailLoad(${jsonEncode(imageKey)})
         """);
-      if (res is! Map) {
+      final config = _normalizeComicSourceLoadingConfig(res);
+      if (config == null) {
         Log.error("Network", "function onThumbnailLoad return invalid data");
         throw "function onThumbnailLoad return invalid data";
       }
-      return res as Map<String, dynamic>;
+      return config;
     };
   }
 

@@ -39,6 +39,28 @@ Map<String, Map<String, dynamic>>? debugNormalizeComicSourceSettings(
   return _normalizeComicSourceSettings(value);
 }
 
+@visibleForTesting
+Map<String, dynamic>? debugNormalizeComicSourceLoadingConfig(
+  dynamic value,
+) {
+  return _normalizeComicSourceLoadingConfig(value);
+}
+
+Map<String, dynamic>? _normalizeComicSourceLoadingConfig(dynamic value) {
+  if (value is! Map) {
+    return null;
+  }
+  var config = <String, dynamic>{};
+  for (var entry in value.entries) {
+    final key = entry.key;
+    if (key is! String) {
+      return null;
+    }
+    config[key] = entry.value;
+  }
+  return config;
+}
+
 Map<String, Map<String, dynamic>>? _normalizeComicSourceSettings(
   dynamic value,
 ) {
