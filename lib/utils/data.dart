@@ -90,7 +90,7 @@ Future<void> importAppData(File file, [bool checkVersion = false]) async {
     backupDir.createSync();
 
     if (await historyFile.exists()) {
-      _closeHistoryManagerForImport();
+      await _closeHistoryManagerForImport();
       reloadHistory = true;
       await _replaceFileForImport(
         source: historyFile,
@@ -302,7 +302,7 @@ Future<void> _rollbackImport({
   required bool reloadComicSources,
 }) async {
   if (reloadHistory) {
-    _closeHistoryManagerForImport();
+    await _closeHistoryManagerForImport();
   }
   if (reloadLocalFavorites) {
     _closeLocalFavoritesManagerForImport();
@@ -329,9 +329,14 @@ Future<void> _rollbackImport({
   }
 }
 
-void _closeHistoryManagerForImport() {
+Future<void> _closeHistoryManagerForImport() async {
   try {
-    HistoryManager.cache?.close();
+    final manager = HistoryManager.cache;
+    if (manager == null) {
+      return;
+    }
+    await manager.waitForAsyncWrites();
+    manager.close();
   } catch (_) {
     // ignore partially initialized managers
   }

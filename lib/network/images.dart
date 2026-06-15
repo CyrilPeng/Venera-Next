@@ -194,15 +194,21 @@ abstract class ImageDownloader {
   static Stream<ImageDownloadProgress> loadComicImage(
       String imageKey, String? sourceKey, String cid, String eid) {
     final cacheKey = "$imageKey@$sourceKey@$cid@$eid";
-    if (_loadingImages.containsKey(cacheKey)) {
-      return _loadingImages[cacheKey]!.stream;
+    final activeStream = _loadingImages[cacheKey];
+    if (activeStream != null) {
+      if (!activeStream.isClosed) {
+        return activeStream.stream;
+      }
+      _loadingImages.remove(cacheKey);
     }
     final debugLoader = debugLoadComicImageUnwrapped;
     final stream = _StreamWrapper<ImageDownloadProgress>(
       debugLoader?.call(imageKey, sourceKey, cid, eid) ??
           _loadComicImage(imageKey, sourceKey, cid, eid),
       (wrapper) {
-        _loadingImages.remove(cacheKey);
+        if (identical(_loadingImages[cacheKey], wrapper)) {
+          _loadingImages.remove(cacheKey);
+        }
       },
     );
     _loadingImages[cacheKey] = stream;
@@ -421,11 +427,11 @@ class _StreamWrapper<T> {
     controllers.clear();
     final subscription = _subscription;
     _subscription = null;
+    onClosed(this);
     if (subscription == null) {
-      onClosed(this);
-    } else {
-      unawaited(subscription.cancel().whenComplete(() => onClosed(this)));
+      return;
     }
+    unawaited(subscription.cancel());
   }
 }
 

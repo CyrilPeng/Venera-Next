@@ -163,6 +163,60 @@ void main() {
     },
     skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
   );
+
+  test(
+    'waitForAsyncWrites drains queued history writes before close',
+    () async {
+      final dataDir = Directory.systemTemp.createTempSync(
+        'venera-history-data-',
+      );
+      final cacheDir = Directory.systemTemp.createTempSync(
+        'venera-history-cache-',
+      );
+      addTearDown(() {
+        try {
+          HistoryManager().close();
+        } catch (_) {
+          // ignore cleanup failures in partially initialized tests
+        }
+        HistoryManager.cache = null;
+        if (dataDir.existsSync()) {
+          dataDir.deleteSync(recursive: true);
+        }
+        if (cacheDir.existsSync()) {
+          cacheDir.deleteSync(recursive: true);
+        }
+      });
+
+      App.dataPath = dataDir.path;
+      App.cachePath = cacheDir.path;
+      HistoryManager.cache = null;
+
+      final manager = HistoryManager();
+      await manager.init();
+
+      final write = manager.addHistoryAsync(_history('comic-drained'));
+      await manager.waitForAsyncWrites();
+      await write;
+      manager.close();
+      HistoryManager.cache = null;
+
+      final db = sqlite3.open('${dataDir.path}/history.db');
+      try {
+        final rows = db.select(
+          'select page, max_page from history where id = ?',
+          ['comic-drained'],
+        );
+
+        expect(rows, hasLength(1));
+        expect(rows.first['page'], 2);
+        expect(rows.first['max_page'], 10);
+      } finally {
+        db.dispose();
+      }
+    },
+    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+  );
 }
 
 ComicSource _source(String key, {LoadComicFunc? loadComicInfo}) {

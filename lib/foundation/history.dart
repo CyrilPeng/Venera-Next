@@ -283,6 +283,10 @@ class HistoryManager with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> waitForAsyncWrites() {
+    return _asyncHistoryQueue;
+  }
+
   void _cacheHistory(History newItem) {
     if (_cachedHistoryIds == null) {
       updateCache();

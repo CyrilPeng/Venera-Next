@@ -209,6 +209,78 @@ void main() {
     },
   );
 
+  test(
+    'loadComicImage recreates stream immediately after listener cancels',
+    () async {
+      final firstCancelGate = Completer<void>();
+      final firstCanceled = Completer<void>();
+      final firstSource = StreamController<ImageDownloadProgress>(
+        onCancel: () {
+          if (!firstCanceled.isCompleted) {
+            firstCanceled.complete();
+          }
+          return firstCancelGate.future;
+        },
+      );
+      final secondSource = StreamController<ImageDownloadProgress>();
+      addTearDown(() async {
+        if (!firstCancelGate.isCompleted) {
+          firstCancelGate.complete();
+        }
+        if (!firstSource.isClosed) {
+          await firstSource.close();
+        }
+        if (!secondSource.isClosed) {
+          await secondSource.close();
+        }
+      });
+
+      var loadCount = 0;
+      ImageDownloader.debugLoadComicImageUnwrapped =
+          (imageKey, sourceKey, cid, eid) {
+            loadCount++;
+            return loadCount == 1 ? firstSource.stream : secondSource.stream;
+          };
+
+      final firstSubscription = ImageDownloader.loadComicImage(
+        'image-reload',
+        'source',
+        'comic',
+        'chapter',
+      ).listen((_) {});
+      await pumpEventQueue();
+
+      final firstCancel = firstSubscription.cancel();
+      await firstCanceled.future.timeout(const Duration(seconds: 1));
+
+      final events = <ImageDownloadProgress>[];
+      final secondSubscription = ImageDownloader.loadComicImage(
+        'image-reload',
+        'source',
+        'comic',
+        'chapter',
+      ).listen(events.add);
+      await pumpEventQueue();
+
+      expect(loadCount, 2);
+
+      secondSource.add(
+        ImageDownloadProgress(
+          currentBytes: 1,
+          totalBytes: 1,
+          imageBytes: Uint8List(1),
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(events, hasLength(1));
+
+      await secondSubscription.cancel();
+      firstCancelGate.complete();
+      await firstCancel.timeout(const Duration(seconds: 1));
+    },
+  );
+
   test('cancelAllLoadingImages cancels active source streams', () async {
     final sourceCanceled = Completer<void>();
     final source = StreamController<ImageDownloadProgress>(

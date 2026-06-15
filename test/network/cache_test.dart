@@ -36,4 +36,25 @@ void main() {
     expect(manager.getCache(uri), isNotNull);
     expect(manager.size, 2048);
   });
+
+  test('setCache skips entries larger than memory limit', () {
+    final manager = NetworkCacheManager()..clear();
+    final uri = Uri.parse('https://example.com/large-image');
+
+    manager.setCache(cache(uri, 11 * 1024 * 1024));
+
+    expect(manager.getCache(uri), isNull);
+    expect(manager.size, 0);
+  });
+
+  test('setCache removes old entry when replacement is too large', () {
+    final manager = NetworkCacheManager()..clear();
+    final uri = Uri.parse('https://example.com/image');
+
+    manager.setCache(cache(uri, 1024));
+    manager.setCache(cache(uri, 11 * 1024 * 1024));
+
+    expect(manager.getCache(uri), isNull);
+    expect(manager.size, 0);
+  });
 }
