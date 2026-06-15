@@ -940,10 +940,9 @@ class ComicSourceParser {
           ComicSource.sources.$_key.comic.loadComments(
             ${jsonEncode(id)}, ${jsonEncode(subId)}, ${jsonEncode(page)}, ${jsonEncode(replyTo)})
         """);
-        return Res(
-          (res["comments"] as List).map((e) => Comment.fromJson(e)).toList(),
-          subData: res["maxPage"],
-        );
+        final result = _normalizeComicSourceCommentsResult(res);
+        if (result == null) throw "Invalid data";
+        return Res(result.comments, subData: result.data["maxPage"]);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
         return Res.error(e.toString());
@@ -988,10 +987,9 @@ class ComicSourceParser {
           ComicSource.sources.$_key.comic.loadChapterComments(
             ${jsonEncode(comicId)}, ${jsonEncode(epId)}, ${jsonEncode(page)}, ${jsonEncode(replyTo)})
         """);
-        return Res(
-          (res["comments"] as List).map((e) => Comment.fromJson(e)).toList(),
-          subData: res["maxPage"],
-        );
+        final result = _normalizeComicSourceCommentsResult(res);
+        if (result == null) throw "Invalid data";
+        return Res(result.comments, subData: result.data["maxPage"]);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
         return Res.error(e.toString());

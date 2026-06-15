@@ -204,4 +204,41 @@ void main() {
       isNull,
     );
   });
+
+  test('normalize comments result accepts dynamic comment maps', () {
+    final result = debugNormalizeComicSourceCommentsResult(<dynamic, dynamic>{
+      'comments': [
+        <dynamic, dynamic>{
+          'userName': 'reader',
+          'content': 'nice',
+          'id': 12,
+          'time': 1000,
+        },
+      ],
+      'maxPage': 2,
+    });
+
+    expect(result!.data['maxPage'], 2);
+    expect(result.comments, hasLength(1));
+    expect(result.comments.single.userName, 'reader');
+    expect(result.comments.single.id, '12');
+  });
+
+  test('normalize comments result rejects invalid data', () {
+    expect(debugNormalizeComicSourceCommentsResult(null), isNull);
+    expect(
+      debugNormalizeComicSourceCommentsResult(<dynamic, dynamic>{
+        'comments': 'bad',
+      }),
+      isNull,
+    );
+    expect(
+      debugNormalizeComicSourceCommentsResult(<dynamic, dynamic>{
+        'comments': [
+          <dynamic, dynamic>{1: 'bad-key'},
+        ],
+      }),
+      isNull,
+    );
+  });
 }

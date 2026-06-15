@@ -71,6 +71,12 @@ Map<String, dynamic>? debugNormalizeComicSourceComicDetails(
   return _normalizeComicSourceComicDetails(value, sourceKey, comicId);
 }
 
+@visibleForTesting
+({Map<String, dynamic> data, List<Comment> comments})?
+debugNormalizeComicSourceCommentsResult(dynamic value) {
+  return _normalizeComicSourceCommentsResult(value);
+}
+
 Map<String, dynamic>? _normalizeComicSourceLoadingConfig(dynamic value) {
   return _normalizeComicSourceStringKeyedMap(value);
 }
@@ -189,6 +195,22 @@ Map<String, dynamic>? _normalizeComicSourceComicDetails(
   data["sourceKey"] = sourceKey;
   data["comicId"] = comicId;
   return data;
+}
+
+List<Comment>? _normalizeComicSourceCommentList(dynamic value) {
+  final items = _normalizeComicSourceStringKeyedMapList(value);
+  if (items == null) return null;
+  return items.map(Comment.fromJson).toList();
+}
+
+({Map<String, dynamic> data, List<Comment> comments})?
+_normalizeComicSourceCommentsResult(dynamic value) {
+  final data = _normalizeComicSourceStringKeyedMap(value);
+  final comments = _normalizeComicSourceCommentList(data?["comments"]);
+  if (data == null || comments == null) {
+    return null;
+  }
+  return (data: data, comments: comments);
 }
 
 ({Map<String, dynamic> data, List<String> items})?
