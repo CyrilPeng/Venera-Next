@@ -68,8 +68,6 @@ jobs:
               }
           }
           EOF
-      - name: Check rust-toolchain.toml
-        run: rustup show
       - run: flutter pub get --enforce-lockfile
       - run: flutter build apk --release
       - name: Upload APK (armeabi-v7a)
@@ -146,8 +144,6 @@ jobs:
           architecture: x64
       - run: sudo xcode-select --switch /Applications/Xcode_16.4.app
       - run: flutter pub get --enforce-lockfile
-      - name: Check rust-toolchain.toml
-        run: rustup show
       - name: Build Flutter macOS App
         run: flutter build macos --release
       - name: Create DMG

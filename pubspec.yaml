@@ -58,7 +58,6 @@ dependencies:
     git:
       url: https://github.com/venera-app/lodepng_flutter
       ref: ac7d05dde32e8d728102a9ff66e6b55f05d94ba1
-  rhttp: ^0.15.1
   webdav_client:
     git:
       url: https://github.com/venera-app/webdav_client
@@ -94,9 +93,6 @@ dev_dependencies:
     git:
       url: https://github.com/venera-app/flutter_to_debian.git
   archive: any
-
-dependency_overrides:
-  flutter_rust_bridge: 2.11.1
 
 flutter:
   uses-material-design: true

@@ -127,7 +127,7 @@ class _WebDavComicBackupOps implements ComicBackupWebDavOps {
       config.url,
       user: config.user,
       password: config.pass,
-      adapter: RHttpAdapter(),
+      adapter: AppHttpClientAdapter(),
     );
   }
 

@@ -40,18 +40,6 @@ def validate_pubspec_version(tag: str) -> None:
         fail("pubspec.yaml must be listed in flutter assets so App.version can read it")
 
 
-def validate_flutter_rust_bridge_lock() -> None:
-    text = read_text("pubspec.lock")
-    pattern = (
-        r"flutter_rust_bridge:\s*\n"
-        r"\s+dependency:\s+\"?direct overridden\"?\s*\n"
-        r"(?:.*\n){0,8}?"
-        r"\s+version:\s+\"2\.11\.1\""
-    )
-    if not re.search(pattern, text):
-        fail("pubspec.lock must lock flutter_rust_bridge as direct overridden version 2.11.1")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", default=os.environ.get("GITHUB_REF_NAME", ""))
@@ -63,7 +51,6 @@ def main() -> None:
         fail(f"Release tag must look like v1.2.3 or v1.2.3-rc.1, got {tag!r}")
 
     validate_pubspec_version(tag)
-    validate_flutter_rust_bridge_lock()
     notes = extract_release_notes(tag)
 
     if args.write_notes:

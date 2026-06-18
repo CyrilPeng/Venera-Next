@@ -305,7 +305,7 @@ class DataSync with ChangeNotifier {
       url,
       user: user,
       password: pass,
-      adapter: RHttpAdapter(),
+      adapter: AppHttpClientAdapter(),
     );
 
     try {
@@ -363,7 +363,7 @@ class DataSync with ChangeNotifier {
       url,
       user: user,
       password: pass,
-      adapter: RHttpAdapter(),
+      adapter: AppHttpClientAdapter(),
     );
 
     try {

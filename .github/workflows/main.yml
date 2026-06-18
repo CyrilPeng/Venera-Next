@@ -22,9 +22,6 @@ jobs:
       - run: sudo xcode-select --switch /Applications/Xcode_16.4.app
       - run: flutter pub get --enforce-lockfile
 
-      - name: Check rust-toolchain.toml
-        run: rustup show
-
       # Step 2: Build the Flutter macOS app
       - name: Build Flutter macOS App
         run: flutter build macos --release
@@ -109,8 +106,6 @@ jobs:
               }
           }
           EOF
-      - name: Check rust-toolchain.toml
-        run: rustup show
       - run: flutter pub get --enforce-lockfile
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4

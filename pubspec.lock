@@ -795,14 +795,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.0.3"
-  rhttp:
-    dependency: "direct main"
-    description:
-      name: rhttp
-      sha256: b111638045b730f825a85cb045017b5bd3dfb47b38e98eb293b0519ee6050f2e
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.15.1"
   screen_retriever:
     dependency: transitive
     description:
