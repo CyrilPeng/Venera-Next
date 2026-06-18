@@ -155,7 +155,16 @@ jobs:
           sudo apt-get install -y ninja-build libgtk-3-dev webkit2gtk-4.1
           dart pub global activate -s git https://github.com/venera-app/flutter_to_debian.git
       - run: python3 debian/build.py x64
-      - run: dart run flutter_to_arch
+      - name: Build Arch package
+        run: |
+          APP_VERSION=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | tr -d '\r\n')
+          ARCH_VERSION="${APP_VERSION%%+*}"
+          ARCH_BUILD="${APP_VERSION#*+}"
+          ARCH_VERSION="${ARCH_VERSION//-/_}"
+          cp pubspec.yaml pubspec.yaml.release
+          trap 'mv pubspec.yaml.release pubspec.yaml' EXIT
+          sed -i "s/^version:.*/version: ${ARCH_VERSION}+${ARCH_BUILD}/" pubspec.yaml
+          dart run flutter_to_arch
       - run: |
           sudo rm -rf build/linux/arch/app.tar.gz
           sudo rm -rf build/linux/arch/pkg
