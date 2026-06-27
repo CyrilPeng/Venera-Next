@@ -216,8 +216,10 @@ class AppHttpClientAdapter implements HttpClientAdapter {
         appdata.settings['ignoreBadCertificate'] == true;
     var enableDnsOverrides = appdata.settings['enableDnsOverrides'] == true;
     var sni = appdata.settings['sni'] != false;
-    var dnsOverrides = _getDnsOverrides();
+    var dnsOverrides =
+        enableDnsOverrides ? _getDnsOverrides() : <String, String>{};
     if (_adapter == null ||
+        _proxy != proxy ||
         _ignoreBadCertificate != ignoreBadCertificate ||
         _enableDnsOverrides != enableDnsOverrides ||
         _sni != sni ||
@@ -229,8 +231,6 @@ class AppHttpClientAdapter implements HttpClientAdapter {
       _sni = sni;
       _dnsOverrides = dnsOverrides;
       _adapter = _createAdapter();
-    } else {
-      _proxy = proxy;
     }
   }
 
@@ -256,7 +256,10 @@ class AppHttpClientAdapter implements HttpClientAdapter {
     String? proxyHost,
     int? proxyPort,
   ) async {
-    final host = proxyHost ?? _dnsOverrides[uri.host] ?? uri.host;
+    final host =
+        proxyHost ??
+        (_enableDnsOverrides == true ? _dnsOverrides[uri.host] : null) ??
+        uri.host;
     final port = proxyPort ?? uri.port;
     final connectTask = await Socket.startConnect(host, port);
     if (uri.scheme != 'https' || proxyHost != null) {

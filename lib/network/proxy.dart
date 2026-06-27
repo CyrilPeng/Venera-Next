@@ -7,6 +7,11 @@ String? _cachedProxy;
 
 DateTime? _cachedProxyTime;
 
+void invalidateProxyCache() {
+  _cachedProxy = null;
+  _cachedProxyTime = null;
+}
+
 Future<String?> getProxy() async {
   if (_cachedProxyTime != null &&
       DateTime.now().difference(_cachedProxyTime!).inSeconds < 1) {
