@@ -77,12 +77,11 @@ class FlyoutState extends State<Flyout> {
   @override
   Widget build(BuildContext context) {
     if (widget.withInkWell) {
-      return InkWell(
+      return ClickInkWell(
         borderRadius: BorderRadius.circular(widget.borderRadius),
         onTap: widget.enableTap ? show : null,
         onDoubleTap: widget.enableDoubleTap ? show : null,
         onLongPress: widget.enableLongPress ? show : null,
-        onSecondaryTap: widget.enableSecondaryTap ? show : null,
         child: widget.child,
       );
     }

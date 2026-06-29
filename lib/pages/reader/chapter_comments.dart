@@ -392,7 +392,7 @@ class _ChapterCommentTileState extends State<_ChapterCommentTile> {
         ),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: InkWell(
+      child: ClickInkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
           // Get the parent page's widget to access comicTitle and chapterTitle
@@ -436,7 +436,7 @@ class _ChapterCommentTileState extends State<_ChapterCommentTile> {
         ),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: InkWell(
+      child: ClickInkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () async {
           if (isLiking) return;

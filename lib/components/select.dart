@@ -24,7 +24,7 @@ class Select extends StatelessWidget {
         border: Border.all(color: context.colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: InkWell(
+      child: ClickInkWell(
         onTap: () {
           var renderBox = context.findRenderObject() as RenderBox;
           var offset = renderBox.localToGlobal(Offset.zero);
@@ -121,7 +121,7 @@ class _FilterChipFixedWidthState extends State<FilterChipFixedWidth> {
   Widget build(BuildContext context) {
     return Material(
       textStyle: Theme.of(context).textTheme.labelLarge,
-      child: InkWell(
+      child: ClickInkWell(
         onTap: () => widget.onSelected(true),
         borderRadius: const BorderRadius.all(Radius.circular(8)),
         child: AnimatedContainer(
@@ -280,7 +280,7 @@ class OptionChip extends StatelessWidget {
       ),
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
+        child: ClickInkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: onTap,
           child: Padding(

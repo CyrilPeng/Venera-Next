@@ -160,7 +160,7 @@ class _ImageFavoritesGalleryPageState extends State<ImageFavoritesGalleryPage> {
           ? '@a Cover'.tlParams({"a": image.epName})
           : '@a - @b'.tlParams({"a": image.epName, "b": curPage.toString()});
 
-      return InkWell(
+      return ClickInkWell(
         onTap: () {
           if (multiSelectMode) {
             toggleSelect(image);

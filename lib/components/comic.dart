@@ -241,7 +241,7 @@ class ComicTile extends StatelessWidget {
         );
       }
 
-      return InkWell(
+      return ClickInkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: _onTap,
         onLongPress: enableLongPressed ? () => _onLongPressed(context) : null,
@@ -303,7 +303,7 @@ class ComicTile extends StatelessWidget {
           );
         }
 
-        return InkWell(
+        return ClickInkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: _onTap,
           onLongPress: enableLongPressed ? () => _onLongPressed(context) : null,
@@ -1061,7 +1061,7 @@ class ComicListState extends State<ComicList> {
             child: Material(
               color: Theme.of(context).colorScheme.surfaceContainer,
               borderRadius: BorderRadius.circular(8),
-              child: InkWell(
+              child: ClickInkWell(
                 borderRadius: BorderRadius.circular(8),
                 onTap: () {
                   String value = '';

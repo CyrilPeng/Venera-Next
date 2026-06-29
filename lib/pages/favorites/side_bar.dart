@@ -204,7 +204,7 @@ class _LeftBarState extends State<_LeftBar> implements FolderList {
     var folderName = name == _localAllFolderLabel
         ? "All".tl
         : getFavoriteDataOrNull(name)?.title ?? name;
-    return InkWell(
+    return ClickInkWell(
       onTap: () {
         if (isSelected) {
           return;
@@ -257,7 +257,7 @@ class _LeftBarState extends State<_LeftBar> implements FolderList {
       return const SizedBox();
     }
     bool isSelected = key == favPage.folder && favPage.isNetwork;
-    return InkWell(
+    return ClickInkWell(
       onTap: () {
         if (isSelected) {
           return;

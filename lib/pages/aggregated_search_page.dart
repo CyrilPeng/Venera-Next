@@ -163,7 +163,7 @@ class _SliverSearchResultState extends State<_SliverSearchResult>
       error = "Cloudflare verification required".tl;
     }
     super.build(context);
-    return InkWell(
+    return ClickInkWell(
       onTap: () {
         context.to(
           () => SearchResultPage(

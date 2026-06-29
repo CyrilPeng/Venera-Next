@@ -1010,7 +1010,7 @@ class _ContinuousModeState extends State<_ContinuousMode>
       );
     }
     if (_nextSegmentError != null) {
-      return InkWell(
+      return ClickInkWell(
         onTap: () {
           setState(() => _nextSegmentError = null);
           _ensureWaterfallImagesAfter(_flowImageCount);

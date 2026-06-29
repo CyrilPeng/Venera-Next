@@ -395,7 +395,7 @@ class _FolderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      child: InkWell(
+      child: ClickInkWell(
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),

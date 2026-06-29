@@ -200,7 +200,7 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: enableTwoViews
             ? const EdgeInsets.fromLTRB(8, 0, 8, 0)
             : EdgeInsets.zero,
-        child: InkWell(
+        child: ClickInkWell(
           onTap: () {
             if (enableTwoViews) {
               setState(() => currentPage = id);

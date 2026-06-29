@@ -564,7 +564,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
         return Material(
           color: color,
           borderRadius: borderRadius,
-          child: InkWell(
+          child: ClickInkWell(
             borderRadius: borderRadius,
             onTap: onTap,
             onLongPress: () {
@@ -819,7 +819,7 @@ class _ActionButton extends StatelessWidget {
           width: 0.6,
         ),
       ),
-      child: InkWell(
+      child: ClickInkWell(
         onTap: () {
           if (!(isLoading ?? false)) {
             onPressed();

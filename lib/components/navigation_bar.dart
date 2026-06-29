@@ -394,7 +394,7 @@ class _SideNaviWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final icon = Icon(enabled ? entry.activeIcon : entry.icon);
-    return InkWell(
+    return ClickInkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: AnimatedContainer(
@@ -429,7 +429,7 @@ class _PaneActionWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final icon = Icon(entry.icon);
-    return InkWell(
+    return ClickInkWell(
       onTap: entry.onTap,
       borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(

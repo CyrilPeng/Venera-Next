@@ -110,7 +110,7 @@ class _NormalComicChaptersState extends State<_NormalComicChapters> {
                     child: Material(
                       color: context.colorScheme.surfaceContainer,
                       borderRadius: BorderRadius.circular(16),
-                      child: InkWell(
+                      child: ClickInkWell(
                         onTap: () => state.read(i + 1),
                         borderRadius: BorderRadius.circular(16),
                         child: Padding(
@@ -306,7 +306,7 @@ class _GroupedComicChaptersState extends State<_GroupedComicChapters>
                     child: Material(
                       color: context.colorScheme.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
+                      child: ClickInkWell(
                         onTap: () => state.read(chapterIndex + 1),
                         borderRadius: BorderRadius.circular(12),
                         child: Padding(

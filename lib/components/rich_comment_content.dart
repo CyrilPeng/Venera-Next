@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+import 'package:venera/components/components.dart';
 import 'package:venera/foundation/app.dart';
 import 'package:venera/foundation/image_provider/cached_image.dart';
 import 'package:venera/utils/app_links.dart';
@@ -305,7 +306,7 @@ class _RichCommentContentState extends State<RichCommentContent> {
                 ),
               );
               if (e.link != null) {
-                image = InkWell(
+                image = ClickInkWell(
                   onTap: () {
                     _Tag.handleLink(e.link!);
                   },

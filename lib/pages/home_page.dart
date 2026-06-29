@@ -60,7 +60,7 @@ class _SearchBar extends StatelessWidget {
         child: Material(
           color: context.colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(32),
-          child: InkWell(
+          child: ClickInkWell(
             borderRadius: BorderRadius.circular(32),
             onTap: () {
               context.to(() => const SearchPage());
@@ -166,7 +166,7 @@ class _SyncDataWidgetState extends State<_SyncDataWidget>
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (syncStatus.lastError != null)
-                  InkWell(
+                  ClickInkWell(
                     borderRadius: BorderRadius.circular(16),
                     onTap: () {
                       showDialogMessage(
@@ -286,7 +286,7 @@ class _HistoryState extends State<_History> {
           ),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: InkWell(
+        child: ClickInkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: () {
             context.to(() => const HistoryPage());
@@ -394,7 +394,7 @@ class _LocalState extends State<_Local> {
           ),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: InkWell(
+        child: ClickInkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: () {
             context.to(() => const LocalComicsPage());
@@ -725,7 +725,7 @@ class _ComicSourceWidgetState extends State<_ComicSourceWidget> {
           ),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: InkWell(
+        child: ClickInkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: () {
             context.to(() => const ComicSourcePage());
@@ -931,7 +931,7 @@ class _ImageFavoritesState extends State<ImageFavorites> {
           ),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: InkWell(
+        child: ClickInkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: () {
             context.to(() => const ImageFavoritesPage());
@@ -996,7 +996,7 @@ class _ImageFavoritesState extends State<ImageFavorites> {
 
   Widget buildTypeButton(int type, String text) {
     const radius = 24.0;
-    return InkWell(
+    return ClickInkWell(
       borderRadius: BorderRadius.circular(radius),
       onTap: () async {
         setState(() {
@@ -1112,7 +1112,7 @@ class __ChartLineState extends State<_ChartLine>
     }
     return Row(
       children: [
-        InkWell(
+        ClickInkWell(
           borderRadius: BorderRadius.circular(4),
           onTap: () {
             widget.onTap?.call(widget.text);

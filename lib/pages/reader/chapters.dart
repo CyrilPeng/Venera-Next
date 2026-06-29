@@ -206,7 +206,7 @@ class _ChapterListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return ClickInkWell(
       onTap: onTap,
       child: Container(
         height: 48,

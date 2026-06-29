@@ -82,7 +82,7 @@ class _MenuRoute<T> extends PopupRoute<T> {
   }
 
   Widget buildEntry(MenuEntry entry, BuildContext context) {
-    return InkWell(
+    return ClickInkWell(
       borderRadius: BorderRadius.circular(4),
       onTap: () {
         Navigator.of(context).pop();

@@ -672,7 +672,7 @@ class _SearchHistoryState extends State<_SearchHistory> {
     }
 
     return Builder(builder: (context) {
-      return InkWell(
+      return ClickInkWell(
         onTap: () {
           widget.search(appdata.searchHistory[index]);
         },

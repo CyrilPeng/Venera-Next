@@ -812,7 +812,7 @@ class _ReaderScaffoldState extends State<_ReaderScaffold> {
             color: Theme.of(context).colorScheme.primaryContainer,
             borderRadius: BorderRadius.circular(16),
             elevation: 2,
-            child: InkWell(
+            child: ClickInkWell(
               onTap: () {
                 if (showFloatingButtonValue == 1) {
                   context.reader.toNextChapter();

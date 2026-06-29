@@ -63,7 +63,7 @@ class _FollowUpdatesWidgetState
           ),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: InkWell(
+        child: ClickInkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: () {
             context.to(() => FollowUpdatesPage());

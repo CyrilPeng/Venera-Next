@@ -384,7 +384,7 @@ class _CommentTileState extends State<_CommentTile> {
         ),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: InkWell(
+      child: ClickInkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
           showSideBar(
@@ -425,7 +425,7 @@ class _CommentTileState extends State<_CommentTile> {
         ),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: InkWell(
+      child: ClickInkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () async {
           if (isLiking) return;

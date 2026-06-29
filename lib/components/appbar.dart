@@ -454,7 +454,7 @@ class _AppTabBarState extends State<AppTabBar> {
   }
 
   Widget buildTab(int i) {
-    return InkWell(
+    return ClickInkWell(
       onTap: () => onTabClicked(i),
       borderRadius: BorderRadius.circular(tabRadius),
       child: KeyedSubtree(
@@ -939,7 +939,7 @@ class TabActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return ClickInkWell(
       onTap: onPressed,
       borderRadius: BorderRadius.circular(8),
       child: Container(

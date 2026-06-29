@@ -1,5 +1,38 @@
 part of 'components.dart';
 
+class ClickInkWell extends InkWell {
+  const ClickInkWell({
+    super.key,
+    super.child,
+    super.onTap,
+    super.onDoubleTap,
+    super.onLongPress,
+    super.onTapDown,
+    super.onTapUp,
+    super.onTapCancel,
+    super.onSecondaryTapDown,
+    super.onSecondaryTapUp,
+    super.onSecondaryTapCancel,
+    super.onHighlightChanged,
+    super.onHover,
+    MouseCursor mouseCursor = SystemMouseCursors.click,
+    super.focusNode,
+    super.autofocus,
+    super.canRequestFocus,
+    super.focusColor,
+    super.hoverColor,
+    super.highlightColor,
+    super.overlayColor,
+    super.splashColor,
+    super.splashFactory,
+    super.radius,
+    super.borderRadius,
+    super.customBorder,
+    super.enableFeedback,
+    super.excludeFromSemantics,
+  }) : super(mouseCursor: mouseCursor);
+}
+
 class MouseBackDetector extends StatelessWidget {
   const MouseBackDetector(
       {super.key, required this.onTapDown, required this.child});

@@ -123,7 +123,7 @@ class _ImageFavoritesItemState extends State<_ImageFavoritesItem> {
         ),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: InkWell(
+      child: ClickInkWell(
         borderRadius: BorderRadius.circular(8),
         onSecondaryTapDown: onSecondaryTap,
         onLongPress: onLongPress,
@@ -164,7 +164,7 @@ class _ImageFavoritesItemState extends State<_ImageFavoritesItem> {
         ? '@a Cover'.tlParams({"a": image.epName})
         : curPage.toString();
 
-    return InkWell(
+    return ClickInkWell(
       onTap: () {
         // 单击去阅读页面, 跳转到当前点击的page
         if (widget.multiSelectMode) {
