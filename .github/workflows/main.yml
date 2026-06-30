@@ -269,3 +269,7 @@ jobs:
             outputs/*.AppImage
         env:
           GITHUB_TOKEN: ${{ github.token }}
+      - name: Purge jsdelivr CDN cache
+        run: |
+          curl -s "https://purge.jsdelivr.net/gh/CyrilPeng/venera-next@main/pubspec.yaml" | jq '.status'
+          curl -s "https://purge.jsdelivr.net/gh/CyrilPeng/venera-next@main/CHANGELOG.md" | jq '.status'

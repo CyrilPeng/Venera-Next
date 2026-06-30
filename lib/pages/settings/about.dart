@@ -262,9 +262,14 @@ class _ChangelogMarkdownBlock extends StatelessWidget {
 }
 
 Future<String?> checkUpdate() async {
-  var remoteVersion =
-      await _fetchUpdateVersion(_fetchPubspecVersion, "Update Pubspec") ??
-      await _fetchUpdateVersion(_fetchLatestReleaseVersion, "Latest Release");
+  var versions = await Future.wait([
+    _fetchUpdateVersion(_fetchPubspecVersion, "Update Pubspec"),
+    _fetchUpdateVersion(_fetchLatestReleaseVersion, "Latest Release"),
+  ]);
+  var remoteVersion = versions
+      .where((v) => v != null)
+      .cast<String>()
+      .fold<String?>(null, (max, v) => max == null ? v : (_compareVersion(v, max) ? v : max));
   if (remoteVersion == null) return null;
   if (_compareVersion(remoteVersion, App.version)) {
     return remoteVersion;

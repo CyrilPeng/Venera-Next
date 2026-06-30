@@ -2,6 +2,12 @@
 
 本项目遵循语义化版本，记录 fork 后的主要变更。
 
+## Unreleased
+
+### 修复
+
+- 修复检查更新因 jsdelivr CDN 缓存旧版本号导致已发布版本检测不到新版本的问题：改为并行请求 CDN 与 GitHub Release 并取最大版本号，并在发布流程中自动 purge jsdelivr 缓存。
+
 ## v1.9.2
 
 ### 修复
