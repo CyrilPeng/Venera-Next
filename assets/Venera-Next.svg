@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="256" height="256">
+  <defs>
+    <!-- 幽蓝渐变 -->
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#06B6D4" />
+    </linearGradient>
+    <filter id="softShadowBlue" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="15" flood-color="#1E3A8A" flood-opacity="0.5"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    <!-- 背景 -->
+    <radialGradient id="bgGradBlue" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#172133" />
+      <stop offset="100%" stop-color="#0A0F1A" />
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="115" fill="url(#bgGradBlue)"/>
+  
+  <path d="M120,150 L200,130 L250,380 L170,380 Z" fill="url(#blueGrad)"
+        stroke="url(#blueGrad)" stroke-width="2" stroke-linejoin="round"/>
+  
+  <path d="M392,150 L312,130 L262,380 L342,380 Z" fill="url(#blueGrad)" fill-opacity="0.45"
+        stroke="url(#blueGrad)" stroke-opacity="0.8" stroke-width="3" stroke-linejoin="round"/>
+  
+  <path d="M220,180 L320,256 L220,332 L260,256 Z" fill="#FFFFFF"
+        stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round" filter="url(#softShadowBlue)"/>
+  
+  <path d="M380,120 Q380,150 410,150 Q380,150 380,180 Q380,150 350,150 Q380,150 380,120 Z" 
+        fill="#38BDF8" filter="url(#glow)"/>
+</svg>
