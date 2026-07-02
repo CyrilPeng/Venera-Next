@@ -250,8 +250,9 @@ class LocalFavoritesManager with ChangeNotifier {
       );
     """);
     var folderNames = _getFolderNamesWithDB();
-    _ensureTrackingFolder(folderNames);
-    for (var folder in folderNames) {
+    final foldersToMigrate = List<String>.from(folderNames);
+    folderNames = _ensureTrackingFolder(folderNames);
+    for (var folder in foldersToMigrate) {
       var columns = _db.select("""
         pragma table_info("$folder");
       """);
@@ -279,18 +280,11 @@ class LocalFavoritesManager with ChangeNotifier {
     if (App.isInitialized) {
       await appdata.ensureInit();
     }
-    // Make sure the follow updates folder is ready
-    // If not set, default to "追更" folder
-    var followUpdateFolder = appdata.settings['followUpdatesFolder'];
-    if (followUpdateFolder is String &&
-        folderNames.contains(followUpdateFolder)) {
-      prepareTableForFollowUpdates(followUpdateFolder, false);
-    } else if (folderNames.contains(trackingFolderName)) {
-      // Default to tracking folder if user hasn't configured one
-      appdata.settings['followUpdatesFolder'] = trackingFolderName;
-      prepareTableForFollowUpdates(trackingFolderName, false);
-    } else {
-      appdata.settings['followUpdatesFolder'] = null;
+    appdata.settings['followUpdatesFolder'] = trackingFolderName;
+    prepareTableForFollowUpdates(trackingFolderName, false);
+    final quickFavorite = appdata.settings['quickFavorite'];
+    if (quickFavorite is! String || !folderNames.contains(quickFavorite)) {
+      appdata.settings['quickFavorite'] = trackingFolderName;
     }
     initCounts();
   }
@@ -308,10 +302,12 @@ class LocalFavoritesManager with ChangeNotifier {
 
   static const String trackingFolderName = "追更";
 
-  void _ensureTrackingFolder(List<String> folderNames) {
+  List<String> _ensureTrackingFolder(List<String> folderNames) {
     if (!folderNames.contains(trackingFolderName)) {
       createFolder(trackingFolderName);
+      return _getFolderNamesWithDB();
     }
+    return folderNames;
   }
 
   void _refreshHashedIds(List<String> folders) {
