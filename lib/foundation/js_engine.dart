@@ -88,7 +88,7 @@ class JsEngine with _JSEngineApi, JsUiApi, Init {
     }
     try {
       if (App.isInitialized) {
-        _cookieJar ??= await SingleInstanceCookieJar.createInstance();
+        await SingleInstanceCookieJar.createInstance();
       }
       _dio ??= AppDio(
         BaseOptions(
@@ -247,7 +247,7 @@ class JsEngine with _JSEngineApi, JsUiApi, Init {
           },
         );
         dio.interceptors.add(
-          CookieManagerSql(SingleInstanceCookieJar.instance!),
+          CookieManagerSql.dynamic(() => SingleInstanceCookieJar.instance),
         );
         dio.interceptors.add(LogInterceptor());
       }
@@ -299,8 +299,6 @@ class JsEngine with _JSEngineApi, JsUiApi, Init {
 }
 
 mixin class _JSEngineApi {
-  CookieJarSql? _cookieJar;
-
   final _documents = <int, DocumentWrapper>{};
 
   Object? handleHtmlCallback(Map<String, dynamic> data) {
@@ -375,7 +373,7 @@ mixin class _JSEngineApi {
   dynamic handleCookieCallback(Map<String, dynamic> data) {
     switch (data["function"]) {
       case "set":
-        _cookieJar!.saveFromResponse(
+        SingleInstanceCookieJar.instance?.saveFromResponse(
           Uri.parse(data["url"]),
           (data["cookies"] as List).map((e) {
             var c = Cookie(e["name"], e["value"]);
@@ -387,7 +385,11 @@ mixin class _JSEngineApi {
         );
         return null;
       case "get":
-        var cookies = _cookieJar!.loadForRequest(Uri.parse(data["url"]));
+        var cookies =
+            SingleInstanceCookieJar.instance?.loadForRequest(
+              Uri.parse(data["url"]),
+            ) ??
+            [];
         return cookies
             .map(
               (e) => {
@@ -413,7 +415,7 @@ mixin class _JSEngineApi {
     for (var domain in domains) {
       var uri = Uri.tryParse(domain);
       if (uri == null) continue;
-      _cookieJar!.deleteUri(uri);
+      SingleInstanceCookieJar.instance?.deleteUri(uri);
     }
   }
 

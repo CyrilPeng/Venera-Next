@@ -130,7 +130,9 @@ class AppDio with DioMixin {
     this.options = options ?? BaseOptions();
     httpClientAdapter = RHttpAdapter();
     if (App.isInitialized) {
-      interceptors.add(CookieManagerSql(SingleInstanceCookieJar.instance!));
+      interceptors.add(
+        CookieManagerSql.dynamic(() => SingleInstanceCookieJar.instance),
+      );
       interceptors.add(NetworkCacheManager());
       interceptors.add(CloudflareInterceptor());
       interceptors.add(MyLogInterceptor());

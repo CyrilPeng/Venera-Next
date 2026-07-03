@@ -213,26 +213,39 @@ class SingleInstanceCookieJar extends CookieJarSql {
 }
 
 class CookieManagerSql extends Interceptor {
-  final CookieJarSql cookieJar;
+  CookieManagerSql(CookieJarSql cookieJar) : this.dynamic(() => cookieJar);
 
-  CookieManagerSql(this.cookieJar);
+  CookieManagerSql.dynamic(this._cookieJarProvider);
+
+  final CookieJarSql? Function() _cookieJarProvider;
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    var cookies = cookieJar.loadForRequestCookieHeader(options.uri);
-    if (cookies.isNotEmpty) {
-      if(options.headers["cookie"] != null) {
-        cookies = "${options.headers["cookie"]}; $cookies";
+    try {
+      final cookieJar = _cookieJarProvider();
+      var cookies = cookieJar?.loadForRequestCookieHeader(options.uri) ?? "";
+      if (cookies.isNotEmpty) {
+        if (options.headers["cookie"] != null) {
+          cookies = "${options.headers["cookie"]}; $cookies";
+        }
+        options.headers["cookie"] = cookies;
       }
-      options.headers["cookie"] = cookies;
+    } catch (e, s) {
+      Log.error("Network", "Failed to load cookies: $e", s);
     }
     handler.next(options);
   }
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    cookieJar.saveFromResponseCookieHeader(
-        response.requestOptions.uri, response.headers["set-cookie"] ?? []);
+    try {
+      _cookieJarProvider()?.saveFromResponseCookieHeader(
+        response.requestOptions.uri,
+        response.headers["set-cookie"] ?? [],
+      );
+    } catch (e, s) {
+      Log.error("Network", "Failed to save cookies: $e", s);
+    }
     handler.next(response);
   }
 
