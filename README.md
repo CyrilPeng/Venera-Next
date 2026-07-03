@@ -182,6 +182,24 @@ flutter build ios --release --no-codesign
 
 仓库内包含自动构建与发布工作流。
 
+发布版本号统一维护在 `release.json`：
+
+```json
+{
+  "version": "1.2.3",
+  "build": 123
+}
+```
+
+准备发布时先更新 `release.json`，再同步并校验相关文件：
+
+```bash
+python .github/scripts/release_version.py --write
+python .github/scripts/release_version.py --check --tag v1.2.3
+```
+
+`pubspec.yaml`、发布 tag 和 `CHANGELOG.md` 版本章节必须与 `release.json` 一致。`alt_store.json` 不是版本源，它会在正式版 GitHub Release 成功后根据发布资产自动更新；RC 预发布不会更新 AltStore 源。
+
 Android release 构建需要在仓库 Secrets 中配置：
 
 - `ANDROID_KEYSTORE`

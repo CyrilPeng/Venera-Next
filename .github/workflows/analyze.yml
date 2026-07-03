@@ -15,6 +15,7 @@ jobs:
           channel: "stable"
           flutter-version-file: pubspec.yaml
           architecture: x64
+      - run: python3 .github/scripts/release_version.py --check
       - run: flutter pub get --enforce-lockfile
       - run: flutter test
       - uses: invertase/github-action-dart-analyzer@v1

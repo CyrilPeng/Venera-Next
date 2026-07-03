@@ -4,6 +4,8 @@ import re
 import sys
 from pathlib import Path
 
+from release_version import ReleaseVersionError, check_release_files
+
 
 def fail(message: str) -> None:
     print(f"::error::{message}")
@@ -27,17 +29,10 @@ def extract_release_notes(tag: str) -> str:
 
 
 def validate_pubspec_version(tag: str) -> None:
-    text = read_text("pubspec.yaml")
-    match = re.search(r"^version:\s*([^+\s]+)(?:\+\S+)?\s*$", text, re.MULTILINE)
-    if not match:
-        fail("pubspec.yaml does not contain a valid version field")
-    pubspec_version = match.group(1)
-    expected = tag[1:] if tag.startswith("v") else tag
-    if pubspec_version != expected:
-        fail(f"pubspec.yaml version {pubspec_version} does not match tag {tag}")
-
-    if not re.search(r"^\s+-\s+pubspec\.yaml\s*$", text, re.MULTILINE):
-        fail("pubspec.yaml must be listed in flutter assets so App.version can read it")
+    try:
+        check_release_files(tag)
+    except ReleaseVersionError as error:
+        fail(str(error))
 
 
 def validate_flutter_rust_bridge_lock() -> None:

@@ -10,8 +10,16 @@ permissions:
   contents: write
 
 jobs:
+  Release_Metadata:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate release metadata
+        run: python3 .github/scripts/validate_release.py
+
   Build_MacOS:
     runs-on: macos-15
+    needs: Release_Metadata
     steps:
       - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
@@ -52,6 +60,7 @@ jobs:
           path: result/
   Build_IOS:
     runs-on: macos-15
+    needs: Release_Metadata
     steps:
       - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
@@ -78,6 +87,7 @@ jobs:
           path: result/
   Build_Android:
     runs-on: ubuntu-22.04
+    needs: Release_Metadata
     steps:
       - uses: actions/checkout@v5
       - run: rm -rf /opt/hostedtoolcache
@@ -119,6 +129,7 @@ jobs:
           path: build/app/outputs/apk/release
   Build_Windows:
     runs-on: windows-latest
+    needs: Release_Metadata
     steps:
       - uses: actions/checkout@v5
       - name: install dependencies
@@ -158,6 +169,7 @@ jobs:
           if-no-files-found: error
   Build_Linux:
     runs-on: ubuntu-22.04
+    needs: Release_Metadata
     steps:
       - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
@@ -197,6 +209,7 @@ jobs:
           path: build/linux/arch/
   Build_Linux_ARM64:
     runs-on: ubuntu-22.04-arm
+    needs: Release_Metadata
     steps:
       - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
@@ -219,7 +232,7 @@ jobs:
 
   Release:
     runs-on: ubuntu-22.04
-    needs: [Build_MacOS, Build_IOS, Build_Android, Build_Windows, Build_Linux, Build_Linux_ARM64]
+    needs: [Release_Metadata, Build_MacOS, Build_IOS, Build_Android, Build_Windows, Build_Linux, Build_Linux_ARM64]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v5
