@@ -35,7 +35,7 @@
 - 修复桌面平台（Linux/Windows）按钮悬停时鼠标光标不显示点击样式的问题。
 - 升级 Gradle 版本到 8.14，解决 Flutter 废弃警告。
 - 修复 AltStore 源更新工作流在无法自动创建 PR 时标记失败的问题。
-- 更新 AltStore 源到 v1.9.1 正式版。
+- 更新 AltStore 源到 v1.9.2 正式版。
 - 升级 GitHub Actions（checkout、upload/download-artifact、setup-java、setup-python）至 v5，消除 Node.js 20 弃用警告。
 - 调整阅读模式选项顺序，将瀑布流模式置于列表顶部并设为默认阅读模式。
 - 调整 Toast 弹窗位置，移动端上移至屏幕下方 1/4 处，避免被设备导航栏遮挡；桌面端保持原位。
