@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:crypto/crypto.dart';
 import 'package:dio/io.dart';
 import 'package:enough_convert/enough_convert.dart';
-import 'package:flutter/foundation.dart' show protected;
+import 'package:flutter/foundation.dart' show protected, visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:html/parser.dart' as html;
 import 'package:html/dom.dart' as dom;
@@ -22,15 +22,13 @@ import 'package:pointycastle/block/modes/cfb.dart';
 import 'package:pointycastle/block/modes/ecb.dart';
 import 'package:pointycastle/block/modes/ofb.dart';
 import 'package:uuid/uuid.dart';
-import 'package:venera/components/js_ui.dart';
-import 'package:venera/foundation/app.dart';
-import 'package:venera/foundation/js_pool.dart';
-import 'package:venera/network/app_dio.dart';
-import 'package:venera/network/cookie_jar.dart';
-import 'package:venera/network/proxy.dart';
-import 'package:venera/utils/init.dart';
+import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/js_pool.dart';
+import 'package:venera_next/network/app_dio.dart';
+import 'package:venera_next/network/cookie_jar.dart';
+import 'package:venera_next/network/proxy.dart';
+import 'package:venera_next/foundation/init.dart';
 
-import 'comic_source/comic_source.dart';
 import 'consts.dart';
 import 'log.dart';
 
@@ -45,7 +43,31 @@ class JavaScriptRuntimeException implements Exception {
   }
 }
 
-class JsEngine with _JSEngineApi, JsUiApi, Init {
+class JsSourceDataBridge {
+  final Object? Function(String key, String dataKey) loadData;
+
+  final void Function(String key, String dataKey, Object? data) saveData;
+
+  final void Function(String key, String dataKey) deleteData;
+
+  final Object? Function(String key, String settingKey) loadSetting;
+
+  final bool Function(String key) isLogged;
+
+  const JsSourceDataBridge({
+    required this.loadData,
+    required this.saveData,
+    required this.deleteData,
+    required this.loadSetting,
+    required this.isLogged,
+  });
+}
+
+abstract interface class JsUiMessageHandler {
+  Object? handleUIMessage(Map<String, dynamic> message);
+}
+
+class JsEngine with _JSEngineApi, Init {
   factory JsEngine() => _cache ?? (_cache = JsEngine._create());
 
   static JsEngine? _cache;
@@ -57,6 +79,34 @@ class JsEngine with _JSEngineApi, JsUiApi, Init {
   bool _closed = true;
 
   Dio? _dio;
+
+  static JsSourceDataBridge? _sourceDataBridge;
+
+  static JsUiMessageHandler? _uiMessageHandler;
+
+  static void configureSourceDataBridge(JsSourceDataBridge? bridge) {
+    _sourceDataBridge = bridge;
+  }
+
+  static void configureUiMessageHandler(JsUiMessageHandler? handler) {
+    _uiMessageHandler = handler;
+  }
+
+  @visibleForTesting
+  static void debugResetSourceDataBridge() {
+    configureSourceDataBridge(null);
+  }
+
+  @visibleForTesting
+  static void debugResetUiMessageHandler() {
+    configureUiMessageHandler(null);
+  }
+
+  JsSourceDataBridge get _sourceBridge =>
+      _sourceDataBridge ?? (throw "JS source data bridge is not configured.");
+
+  JsUiMessageHandler get _uiMessageBridge =>
+      _uiMessageHandler ?? (throw "JS UI message handler is not configured.");
 
   static void reset() {
     final oldEngine = _cache;
@@ -139,7 +189,7 @@ class JsEngine with _JSEngineApi, JsUiApi, Init {
           case 'load_data':
             String key = message["key"];
             String dataKey = message["data_key"];
-            return ComicSource.find(key)?.data[dataKey];
+            return _sourceBridge.loadData(key, dataKey);
           case 'save_data':
             String key = message["key"];
             String dataKey = message["data_key"];
@@ -147,15 +197,11 @@ class JsEngine with _JSEngineApi, JsUiApi, Init {
               throw "setting is not allowed to be saved";
             }
             var data = message["data"];
-            var source = ComicSource.find(key)!;
-            source.data[dataKey] = data;
-            source.saveData();
+            _sourceBridge.saveData(key, dataKey, data);
           case 'delete_data':
             String key = message["key"];
             String dataKey = message["data_key"];
-            var source = ComicSource.find(key);
-            source?.data.remove(dataKey);
-            source?.saveData();
+            _sourceBridge.deleteData(key, dataKey);
           case 'http':
             return _http(Map.from(message));
           case 'html':
@@ -175,18 +221,15 @@ class JsEngine with _JSEngineApi, JsUiApi, Init {
           case "load_setting":
             String key = message["key"];
             String settingKey = message["setting_key"];
-            var source = ComicSource.find(key)!;
-            return source.data["settings"]?[settingKey] ??
-                source.settings?[settingKey]!['default'] ??
-                (throw "Setting not found: $settingKey");
+            return _sourceBridge.loadSetting(key, settingKey);
           case "isLogged":
-            return ComicSource.find(message["key"])!.isLogged;
+            return _sourceBridge.isLogged(message["key"]);
           // temporary solution for [setTimeout] function
           // TODO: implement [setTimeout] in quickjs project
           case "delay":
             return Future.delayed(Duration(milliseconds: message["time"]));
           case "UI":
-            return handleUIMessage(Map.from(message));
+            return _uiMessageBridge.handleUIMessage(Map.from(message));
           case "getLocale":
             return "${App.locale.languageCode}_${App.locale.countryCode}";
           case "getPlatform":

@@ -1,4 +1,8 @@
-part of 'components.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:venera_next/foundation/app.dart';
+
+import 'consts.dart';
 
 class ClickInkWell extends InkWell {
   const ClickInkWell({
@@ -34,8 +38,11 @@ class ClickInkWell extends InkWell {
 }
 
 class MouseBackDetector extends StatelessWidget {
-  const MouseBackDetector(
-      {super.key, required this.onTapDown, required this.child});
+  const MouseBackDetector({
+    super.key,
+    required this.onTapDown,
+    required this.child,
+  });
 
   final Widget child;
 
@@ -92,7 +99,7 @@ class _AnimatedTapRegionState extends State<AnimatedTapRegion> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedPhysicalModel(
-          duration: _fastAnimationDuration,
+          duration: fastAnimationDuration,
           elevation: isHovered ? 3 : 1,
           color: context.colorScheme.surface,
           shadowColor: context.colorScheme.shadow,

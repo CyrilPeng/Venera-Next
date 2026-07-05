@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-import 'package:venera/network/app_dio.dart';
+import 'package:venera_next/network/app_dio.dart';
 
 class NetworkCache {
   final Uri uri;

@@ -1,11 +1,9 @@
-import 'dart:async' show Completer, Future;
+import 'dart:async' show Completer, Future, FutureOr;
 import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:venera/foundation/comic_type.dart';
-import 'package:venera/foundation/local.dart';
-import 'package:venera/network/images.dart';
-import 'package:venera/utils/io.dart';
+import 'package:venera_next/foundation/file_system.dart';
+import 'package:venera_next/network/images.dart';
 import 'base_image_provider.dart';
 import 'cached_image.dart' as image_provider;
 
@@ -14,11 +12,12 @@ class CachedImageProvider
   /// Image provider for normal image.
   ///
   /// [url] is the url of the image. Local file path is also supported.
-  const CachedImageProvider(this.url, {
+  const CachedImageProvider(
+    this.url, {
     this.headers,
     this.sourceKey,
     this.cid,
-    this.fallbackToLocalCover = false,
+    this.fallback,
   });
 
   final String url;
@@ -29,8 +28,7 @@ class CachedImageProvider
 
   final String? cid;
 
-  // Use local cover if network image fails to load.
-  final bool fallbackToLocalCover;
+  final FutureOr<Uint8List?> Function()? fallback;
 
   static int loadingCount = 0;
 
@@ -71,36 +69,32 @@ class CachedImageProvider
 
   Future<Uint8List> _loadImage(chunkEvents, checkStop) async {
     try {
-      if(url.startsWith("file://")) {
+      if (url.startsWith("file://")) {
         var file = File(url.substring(7));
-        return file.readAsBytes();
+        return await file.readAsBytes();
       }
-      await for (var progress in ImageDownloader.loadThumbnail(url, sourceKey, cid)) {
+      await for (var progress in ImageDownloader.loadThumbnail(
+        url,
+        sourceKey,
+        cid,
+      )) {
         checkStop();
-        chunkEvents.add(ImageChunkEvent(
-          cumulativeBytesLoaded: progress.currentBytes,
-          expectedTotalBytes: progress.totalBytes,
-        ));
-        if(progress.imageBytes != null) {
+        chunkEvents.add(
+          ImageChunkEvent(
+            cumulativeBytesLoaded: progress.currentBytes,
+            expectedTotalBytes: progress.totalBytes,
+          ),
+        );
+        if (progress.imageBytes != null) {
           return progress.imageBytes!;
         }
       }
       throw "Error: Empty response body.";
-    }
-    catch(e) {
-      if (fallbackToLocalCover && sourceKey != null && cid != null) {
-        final localComic = LocalManager().find(
-          cid!,
-          ComicType.fromKey(sourceKey!),
-        );
-        if (localComic != null) {
-          var file = localComic.coverFile;
-          if (await file.exists()) {
-            var data = await file.readAsBytes();
-            if (data.isNotEmpty) {
-              return data;
-            }
-          }
+    } catch (e) {
+      final fallbackImage = await fallback?.call();
+      if (fallbackImage != null) {
+        if (fallbackImage.isNotEmpty) {
+          return fallbackImage;
         }
       }
       rethrow;

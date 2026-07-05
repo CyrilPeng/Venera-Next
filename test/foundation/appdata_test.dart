@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:venera/foundation/app.dart';
-import 'package:venera/foundation/appdata.dart';
+import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/appdata.dart';
 
 void main() {
   test(

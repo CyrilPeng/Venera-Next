@@ -1,4 +1,14 @@
-part of 'components.dart';
+import 'dart:collection';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_page_route.dart';
+import 'package:venera_next/foundation/consts.dart';
+
+import 'consts.dart';
+import 'gesture.dart';
 
 class PaneItemEntry {
   String label;
@@ -212,10 +222,7 @@ class NaviPaneState extends State<NaviPane>
             ],
           );
           if (sideInsets != EdgeInsets.zero) {
-            content = Padding(
-              padding: sideInsets,
-              child: content,
-            );
+            content = Padding(padding: sideInsets, child: content);
           }
           return content;
         },
@@ -495,7 +502,7 @@ class _SingleBottomNaviWidgetState extends State<_SingleBottomNaviWidget>
     controller = AnimationController(
       value: widget.enabled ? 1 : 0,
       vsync: this,
-      duration: _fastAnimationDuration,
+      duration: fastAnimationDuration,
     );
   }
 
@@ -679,7 +686,7 @@ class _NaviMainViewState extends State<_NaviMainView> {
             context: context,
             removeTop: shouldShowAppBar,
             child: AnimatedSwitcher(
-              duration: _fastAnimationDuration,
+              duration: fastAnimationDuration,
               child: state.buildMainViewContent(),
             ),
           ),

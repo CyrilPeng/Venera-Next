@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera/foundation/js_pool.dart';
+import 'package:venera_next/foundation/js_pool.dart';
 
 void main() {
   setUp(() async {

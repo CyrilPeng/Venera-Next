@@ -1,4 +1,17 @@
-part of 'components.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/res.dart';
+import 'package:venera_next/network/cloudflare.dart';
+import 'package:venera_next/routing/cloudflare.dart';
+import 'package:venera_next/foundation/file_interaction.dart';
+import 'package:venera_next/foundation/translations.dart';
+
+import 'appbar.dart';
 
 class NetworkError extends StatelessWidget {
   const NetworkError({
@@ -73,8 +86,7 @@ class NetworkError extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (action != null)
-                    action!.paddingRight(8),
+                  if (action != null) action!.paddingRight(8),
                   FilledButton(
                     onPressed: retry,
                     child: Text(buttonText ?? 'Retry'.tl),

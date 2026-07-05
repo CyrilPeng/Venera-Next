@@ -16,6 +16,7 @@ jobs:
           flutter-version-file: pubspec.yaml
           architecture: x64
       - run: python3 .github/scripts/release_version.py --check
+      - run: python3 .github/scripts/check_structure_imports.py
       - run: flutter pub get --enforce-lockfile
       - run: flutter test
       - uses: invertase/github-action-dart-analyzer@v1

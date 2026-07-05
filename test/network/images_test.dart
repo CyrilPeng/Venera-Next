@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera/network/images.dart';
+import 'package:venera_next/network/images.dart';
 
 class _FakeJSInvokable extends JSInvokable {
   _FakeJSInvokable(this.callback);
@@ -26,6 +26,7 @@ class _FakeJSInvokable extends JSInvokable {
 void main() {
   tearDown(() {
     ImageDownloader.debugLoadComicImageUnwrapped = null;
+    ImageDownloader.debugResetSourceImageLoading();
     ImageDownloader.cancelAllLoadingImages();
   });
 

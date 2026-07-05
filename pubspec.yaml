@@ -1,4 +1,4 @@
-﻿name: venera
+name: venera_next
 description: "A comic app."
 publish_to: 'none'
 homepage: https://github.com/CyrilPeng/venera-next
@@ -66,7 +66,7 @@ dependencies:
   battery_plus: ^7.0.0
   local_auth: ^3.0.1
   flutter_saf:
-    git: 
+    git:
       url: https://github.com/venera-app/flutter_saf
       ref: fe182cdf40e5fa6230f451bc1d643b860f610d13
   dynamic_color: ^1.8.1

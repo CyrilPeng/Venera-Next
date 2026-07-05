@@ -3,8 +3,8 @@ import 'dart:isolate';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart';
-import 'package:venera/foundation/sqlite_connection.dart';
-import 'package:venera/utils/io.dart';
+import 'package:venera_next/foundation/file_system.dart';
+import 'package:venera_next/foundation/sqlite_connection.dart';
 
 import 'app.dart';
 

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera/network/cache.dart';
+import 'package:venera_next/network/cache.dart';
 
 void main() {
   NetworkCache cache(Uri uri, int size) {

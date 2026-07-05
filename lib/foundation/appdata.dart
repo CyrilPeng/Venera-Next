@@ -4,11 +4,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
-import 'package:venera/foundation/app.dart';
-import 'package:venera/foundation/log.dart';
-import 'package:venera/utils/data_sync.dart';
-import 'package:venera/utils/init.dart';
-import 'package:venera/utils/io.dart';
+import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/file_system.dart';
+import 'package:venera_next/foundation/init.dart';
+import 'package:venera_next/foundation/log.dart';
 
 class Appdata with Init {
   Appdata._create();
@@ -19,10 +18,17 @@ class Appdata with Init {
 
   Future<void> _writeQueue = Future.value();
 
+  FutureOr<void> Function()? _syncDataRequestHandler;
+
+  void registerSyncDataRequestHandler(FutureOr<void> Function()? handler) {
+    _syncDataRequestHandler = handler;
+  }
+
   Future<void> saveData([bool sync = true]) async {
     await _enqueueWrite(_writeAppData);
-    if (sync) {
-      unawaited(DataSync().uploadData());
+    final handler = _syncDataRequestHandler;
+    if (sync && handler != null) {
+      unawaited(Future.sync(handler));
     }
   }
 

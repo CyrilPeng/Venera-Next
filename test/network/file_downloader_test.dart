@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera/foundation/appdata.dart';
-import 'package:venera/network/file_downloader.dart';
+import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/network/file_downloader.dart';
 
 void main() {
   setUp(() {

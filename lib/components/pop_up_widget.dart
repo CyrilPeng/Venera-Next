@@ -1,4 +1,9 @@
-part of 'components.dart';
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_page_route.dart';
+import 'package:venera_next/foundation/translations.dart';
 
 class PopUpWidget<T> extends PopupRoute<T> {
   PopUpWidget(this.widget);
@@ -15,8 +20,11 @@ class PopUpWidget<T> extends PopupRoute<T> {
   String? get barrierLabel => "exit";
 
   @override
-  Widget buildPage(BuildContext context, Animation<double> animation,
-      Animation<double> secondaryAnimation) {
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
     var height = MediaQuery.of(context).size.height * 0.9;
     bool showPopUp = MediaQuery.of(context).size.width > 500;
     Widget body = PopupIndicatorWidget(
@@ -24,13 +32,15 @@ class PopUpWidget<T> extends PopupRoute<T> {
         decoration: showPopUp
             ? BoxDecoration(
                 borderRadius: BorderRadius.all(Radius.circular(12)),
-                boxShadow: context.brightness == ui.Brightness.dark ? [
-                  BoxShadow(
-                    color: Colors.white.withAlpha(50),
-                    blurRadius: 10,
-                    offset: Offset(0, 2),
-                  ),
-                ] : null,
+                boxShadow: context.brightness == ui.Brightness.dark
+                    ? [
+                        BoxShadow(
+                          color: Colors.white.withAlpha(50),
+                          blurRadius: 10,
+                          offset: Offset(0, 2),
+                        ),
+                      ]
+                    : null,
               )
             : null,
         clipBehavior: showPopUp ? Clip.antiAlias : Clip.none,
@@ -38,9 +48,8 @@ class PopUpWidget<T> extends PopupRoute<T> {
         height: showPopUp ? height : double.infinity,
         child: ClipRect(
           child: Navigator(
-            onGenerateRoute: (settings) => MaterialPageRoute(
-              builder: (context) => widget,
-            ),
+            onGenerateRoute: (settings) =>
+                MaterialPageRoute(builder: (context) => widget),
           ),
         ),
       ),
@@ -58,9 +67,7 @@ class PopUpWidget<T> extends PopupRoute<T> {
       return MediaQuery.removePadding(
         removeTop: true,
         context: context,
-        child: Center(
-          child: body,
-        ),
+        child: Center(child: body),
       );
     }
     return body;
@@ -70,8 +77,12 @@ class PopUpWidget<T> extends PopupRoute<T> {
   Duration get transitionDuration => const Duration(milliseconds: 350);
 
   @override
-  Widget buildTransitions(BuildContext context, Animation<double> animation,
-      Animation<double> secondaryAnimation, Widget child) {
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
     return FadeTransition(
       opacity: animation.drive(
         Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.ease)),
@@ -93,13 +104,19 @@ class PopupIndicatorWidget extends InheritedWidget {
 }
 
 Future<T> showPopUpWidget<T>(BuildContext context, Widget widget) async {
-  return await Navigator.of(context, rootNavigator: true)
-      .push(PopUpWidget(widget));
+  return await Navigator.of(
+    context,
+    rootNavigator: true,
+  ).push(PopUpWidget(widget));
 }
 
 class PopUpWidgetScaffold extends StatefulWidget {
-  const PopUpWidgetScaffold(
-      {required this.title, required this.body, this.tailing, super.key});
+  const PopUpWidgetScaffold({
+    required this.title,
+    required this.body,
+    this.tailing,
+    super.key,
+  });
 
   final Widget body;
   final List<Widget>? tailing;
@@ -128,9 +145,7 @@ class _PopUpWidgetScaffoldState extends State<PopUpWidgetScaffold> {
             ),
             child: Row(
               children: [
-                const SizedBox(
-                  width: 8,
-                ),
+                const SizedBox(width: 8),
                 Tooltip(
                   message: "Back".tl,
                   child: IconButton(
@@ -139,13 +154,13 @@ class _PopUpWidgetScaffoldState extends State<PopUpWidgetScaffold> {
                         context.canPop() ? context.pop() : App.pop(),
                   ),
                 ),
-                const SizedBox(
-                  width: 16,
-                ),
+                const SizedBox(width: 16),
                 Text(
                   widget.title,
                   style: const TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.w500),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const Spacer(),
                 if (widget.tailing != null) ...widget.tailing!,
@@ -180,13 +195,14 @@ class _PopUpWidgetScaffoldState extends State<PopUpWidgetScaffold> {
             ),
           ),
           SizedBox(
-            height: MediaQuery.of(context).viewInsets.bottom -
+            height:
+                MediaQuery.of(context).viewInsets.bottom -
                         0.05 * MediaQuery.of(context).size.height >
                     0
                 ? MediaQuery.of(context).viewInsets.bottom -
-                    0.05 * MediaQuery.of(context).size.height
+                      0.05 * MediaQuery.of(context).size.height
                 : 0,
-          )
+          ),
         ],
       ),
     );

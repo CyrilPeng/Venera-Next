@@ -3,14 +3,48 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_qjs/flutter_qjs.dart';
-import 'package:venera/foundation/cache_manager.dart';
-import 'package:venera/foundation/comic_source/comic_source.dart';
-import 'package:venera/foundation/consts.dart';
-import 'package:venera/utils/image.dart';
+import 'package:venera_next/foundation/cache_manager.dart';
+import 'package:venera_next/foundation/consts.dart';
+import 'package:venera_next/foundation/image_processing.dart';
 
 import 'app_dio.dart';
 
+typedef ThumbnailLoadingConfigResolver =
+    FutureOr<Map<String, dynamic>> Function(String sourceKey, String url);
+
+typedef ThumbnailCoverResolver =
+    FutureOr<String?> Function(String sourceKey, String cid);
+
+typedef ComicImageLoadingConfigResolver =
+    FutureOr<Map<String, dynamic>> Function(
+      String sourceKey,
+      String imageKey,
+      String cid,
+      String eid,
+    );
+
 abstract class ImageDownloader {
+  static ThumbnailLoadingConfigResolver? _thumbnailLoadingConfigResolver;
+
+  static ThumbnailCoverResolver? _thumbnailCoverResolver;
+
+  static ComicImageLoadingConfigResolver? _comicImageLoadingConfigResolver;
+
+  static void configureSourceImageLoading({
+    ThumbnailLoadingConfigResolver? thumbnailLoadingConfig,
+    ThumbnailCoverResolver? thumbnailCover,
+    ComicImageLoadingConfigResolver? comicImageLoadingConfig,
+  }) {
+    _thumbnailLoadingConfigResolver = thumbnailLoadingConfig;
+    _thumbnailCoverResolver = thumbnailCover;
+    _comicImageLoadingConfigResolver = comicImageLoadingConfig;
+  }
+
+  @visibleForTesting
+  static void debugResetSourceImageLoading() {
+    configureSourceImageLoading();
+  }
+
   @visibleForTesting
   static Stream<ImageDownloadProgress> Function(
     String imageKey,
@@ -101,8 +135,10 @@ abstract class ImageDownloader {
   }
 
   static Stream<ImageDownloadProgress> loadThumbnail(
-      String url, String? sourceKey,
-      [String? cid]) async* {
+    String url,
+    String? sourceKey, [
+    String? cid,
+  ]) async* {
     final cacheKey = "$url@$sourceKey${cid != null ? '@$cid' : ''}";
     final cache = await CacheManager().findCache(cacheKey);
 
@@ -117,8 +153,8 @@ abstract class ImageDownloader {
 
     var configs = <String, dynamic>{};
     if (sourceKey != null) {
-      var comicSource = ComicSource.find(sourceKey);
-      configs = comicSource?.getThumbnailLoadingConfig?.call(url) ?? {};
+      configs =
+          await _thumbnailLoadingConfigResolver?.call(sourceKey, url) ?? {};
     }
     configs['headers'] ??= {};
     if (configs['headers']['user-agent'] == null &&
@@ -127,27 +163,31 @@ abstract class ImageDownloader {
     }
 
     if (((configs['url'] as String?) ?? url).startsWith('cover.') &&
-        sourceKey != null) {
-      var comicSource = ComicSource.find(sourceKey);
-      if(comicSource != null) {
-        var comicInfo = await comicSource.loadComicInfo!(cid!);
-        yield* loadThumbnail(comicInfo.data.cover, sourceKey);
+        sourceKey != null &&
+        cid != null) {
+      final coverUrl = await _thumbnailCoverResolver?.call(sourceKey, cid);
+      if (coverUrl != null) {
+        yield* loadThumbnail(coverUrl, sourceKey);
         return;
       }
     }
 
-    var dio = AppDio(BaseOptions(
-      headers: Map<String, dynamic>.from(configs['headers']),
-      method: configs['method'] ?? 'GET',
-      responseType: ResponseType.stream,
-    ));
+    var dio = AppDio(
+      BaseOptions(
+        headers: Map<String, dynamic>.from(configs['headers']),
+        method: configs['method'] ?? 'GET',
+        responseType: ResponseType.stream,
+      ),
+    );
 
     String requestUrl = configs['url'] ?? url;
     if (requestUrl.startsWith('//')) {
       requestUrl = 'https:$requestUrl';
     }
-    var req = await dio.request<ResponseBody>(requestUrl,
-        data: configs['data']);
+    var req = await dio.request<ResponseBody>(
+      requestUrl,
+      data: configs['data'],
+    );
     var stream = req.data?.stream ?? (throw "Error: Empty response body.");
     int? expectedBytes = req.data!.contentLength;
     if (expectedBytes == -1) {
@@ -179,7 +219,8 @@ abstract class ImageDownloader {
     );
   }
 
-  static final _loadingImages = <String, _StreamWrapper<ImageDownloadProgress>>{};
+  static final _loadingImages =
+      <String, _StreamWrapper<ImageDownloadProgress>>{};
 
   /// Cancel all loading images.
   static void cancelAllLoadingImages() {
@@ -192,7 +233,11 @@ abstract class ImageDownloader {
   /// Load a comic image from the network or cache.
   /// The function will prevent multiple requests for the same image.
   static Stream<ImageDownloadProgress> loadComicImage(
-      String imageKey, String? sourceKey, String cid, String eid) {
+    String imageKey,
+    String? sourceKey,
+    String cid,
+    String eid,
+  ) {
     final cacheKey = "$imageKey@$sourceKey@$cid@$eid";
     final activeStream = _loadingImages[cacheKey];
     if (activeStream != null) {
@@ -229,7 +274,11 @@ abstract class ImageDownloader {
   }
 
   static Stream<ImageDownloadProgress> _loadComicImage(
-      String imageKey, String? sourceKey, String cid, String eid) async* {
+    String imageKey,
+    String? sourceKey,
+    String cid,
+    String eid,
+  ) async* {
     final cacheKey = "$imageKey@$sourceKey@$cid@$eid";
     final cache = await CacheManager().findCache(cacheKey);
 
@@ -246,30 +295,37 @@ abstract class ImageDownloader {
 
     var configs = <String, dynamic>{};
     if (sourceKey != null) {
-      var comicSource = ComicSource.find(sourceKey);
-      configs = (await comicSource!.getImageLoadingConfig
-              ?.call(imageKey, cid, eid)) ??
+      configs =
+          await _comicImageLoadingConfigResolver?.call(
+            sourceKey,
+            imageKey,
+            cid,
+            eid,
+          ) ??
           {};
     }
     var retriesRemaining = 5;
     while (true) {
       try {
-        configs['headers'] ??= {
-          'user-agent': webUA,
-        };
+        configs['headers'] ??= {'user-agent': webUA};
 
         final onLoadFailedConfig = configs['onLoadFailed'];
-        onLoadFailed =
-            onLoadFailedConfig is JSInvokable ? onLoadFailedConfig : null;
+        onLoadFailed = onLoadFailedConfig is JSInvokable
+            ? onLoadFailedConfig
+            : null;
 
-        var dio = AppDio(BaseOptions(
-          headers: configs['headers'],
-          method: configs['method'] ?? 'GET',
-          responseType: ResponseType.stream,
-        ));
+        var dio = AppDio(
+          BaseOptions(
+            headers: configs['headers'],
+            method: configs['method'] ?? 'GET',
+            responseType: ResponseType.stream,
+          ),
+        );
 
-        var req = await dio.request<ResponseBody>(configs['url'] ?? imageKey,
-            data: configs['data']);
+        var req = await dio.request<ResponseBody>(
+          configs['url'] ?? imageKey,
+          data: configs['data'],
+        );
         var stream = req.data?.stream ?? (throw "Error: Empty response body.");
         int? expectedBytes = req.data!.contentLength;
         if (expectedBytes == -1) {

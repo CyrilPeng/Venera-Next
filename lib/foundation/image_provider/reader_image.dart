@@ -2,12 +2,12 @@ import 'dart:async' show Future;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
-import 'package:venera/foundation/js_engine.dart';
-import 'package:venera/network/images.dart';
-import 'package:venera/utils/io.dart';
+import 'package:venera_next/foundation/file_system.dart';
+import 'package:venera_next/foundation/js_engine.dart';
+import 'package:venera_next/network/images.dart';
 import 'base_image_provider.dart';
 import 'reader_image.dart' as image_provider;
-import 'package:venera/foundation/appdata.dart';
+import 'package:venera_next/foundation/appdata.dart';
 
 final Object _imageProcessingCanceled = Object();
 
@@ -48,7 +48,14 @@ Future<dynamic> _waitForReaderImageProcessingResult(
 class ReaderImageProvider
     extends BaseImageProvider<image_provider.ReaderImageProvider> {
   /// Image provider for normal image.
-  const ReaderImageProvider(this.imageKey, this.sourceKey, this.cid, this.eid, this.page, {this.enableResize = false});
+  const ReaderImageProvider(
+    this.imageKey,
+    this.sourceKey,
+    this.cid,
+    this.eid,
+    this.page, {
+    this.enableResize = false,
+  });
 
   final String imageKey;
 
@@ -74,13 +81,19 @@ class ReaderImageProvider
         throw "Error: File not found.";
       }
     } else {
-      await for (var event
-        in ImageDownloader.loadComicImage(imageKey, sourceKey, cid, eid)) {
+      await for (var event in ImageDownloader.loadComicImage(
+        imageKey,
+        sourceKey,
+        cid,
+        eid,
+      )) {
         checkStop();
-        chunkEvents.add(ImageChunkEvent(
-          cumulativeBytesLoaded: event.currentBytes,
-          expectedTotalBytes: event.totalBytes,
-        ));
+        chunkEvents.add(
+          ImageChunkEvent(
+            cumulativeBytesLoaded: event.currentBytes,
+            expectedTotalBytes: event.totalBytes,
+          ),
+        );
         if (event.imageBytes != null) {
           imageBytes = event.imageBytes;
           break;

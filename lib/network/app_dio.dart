@@ -4,10 +4,10 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:rhttp/rhttp.dart' as rhttp;
-import 'package:venera/foundation/appdata.dart';
-import 'package:venera/foundation/log.dart';
-import 'package:venera/network/cache.dart';
-import 'package:venera/network/proxy.dart';
+import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/network/cache.dart';
+import 'package:venera_next/network/proxy.dart';
 
 import '../foundation/app.dart';
 import 'cloudflare.dart';

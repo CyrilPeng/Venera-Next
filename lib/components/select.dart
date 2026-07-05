@@ -1,4 +1,11 @@
-part of 'components.dart';
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:venera_next/foundation/app.dart';
+
+import 'consts.dart';
+import 'gesture.dart';
 
 class Select extends StatelessWidget {
   const Select({
@@ -47,11 +54,13 @@ class Select extends StatelessWidget {
               offset.dy,
             ),
             items: values
-                .map((e) => PopupMenuItem(
-                      height: App.isMobile ? 46 : 40,
-                      value: e,
-                      child: Text(e),
-                    ))
+                .map(
+                  (e) => PopupMenuItem(
+                    height: App.isMobile ? 46 : 40,
+                    value: e,
+                    child: Text(e),
+                  ),
+                )
                 .toList(),
           ).then((value) {
             if (value != null) {
@@ -78,11 +87,12 @@ class Select extends StatelessWidget {
 }
 
 class FilterChipFixedWidth extends StatefulWidget {
-  const FilterChipFixedWidth(
-      {required this.label,
-      required this.selected,
-      required this.onSelected,
-      super.key});
+  const FilterChipFixedWidth({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+    super.key,
+  });
 
   final Widget label;
 
@@ -125,7 +135,7 @@ class _FilterChipFixedWidthState extends State<FilterChipFixedWidth> {
         onTap: () => widget.onSelected(true),
         borderRadius: const BorderRadius.all(Radius.circular(8)),
         child: AnimatedContainer(
-          duration: _fastAnimationDuration,
+          duration: fastAnimationDuration,
           decoration: BoxDecoration(
             border: Border.all(color: Theme.of(context).colorScheme.outline),
             borderRadius: const BorderRadius.all(Radius.circular(8)),
@@ -142,10 +152,7 @@ class _FilterChipFixedWidthState extends State<FilterChipFixedWidth> {
 
   Widget firstBuild() {
     return Center(
-      child: SizedBox(
-        key: key,
-        child: widget.label,
-      ),
+      child: SizedBox(key: key, child: widget.label),
     );
   }
 
@@ -158,7 +165,7 @@ class _FilterChipFixedWidthState extends State<FilterChipFixedWidth> {
       child: Stack(
         children: [
           AnimatedPositioned(
-            duration: _fastAnimationDuration,
+            duration: fastAnimationDuration,
             left: selected ? (iconSize + gap) : (iconSize + gap) / 2,
             child: widget.label,
           ),
@@ -169,7 +176,7 @@ class _FilterChipFixedWidthState extends State<FilterChipFixedWidth> {
               bottom: 0,
               right: labelWidth! + gap,
               child: const AnimatedCheckIcon(size: iconSize).toCenter(),
-            )
+            ),
         ],
       ),
     );
@@ -227,7 +234,7 @@ class _AnimatedCheckIconState extends State<AnimatedCheckIcon>
   void initState() {
     controller = AnimationController(
       vsync: this,
-      duration: _fastAnimationDuration,
+      duration: fastAnimationDuration,
     );
     animation = Tween<double>(begin: 0, end: 1).animate(controller)
       ..addListener(() {
@@ -245,19 +252,17 @@ class _AnimatedCheckIconState extends State<AnimatedCheckIcon>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedCheckWidget(
-      animation: animation,
-      size: widget.size,
-    );
+    return AnimatedCheckWidget(animation: animation, size: widget.size);
   }
 }
 
 class OptionChip extends StatelessWidget {
-  const OptionChip(
-      {super.key,
-      required this.text,
-      required this.isSelected,
-      required this.onTap});
+  const OptionChip({
+    super.key,
+    required this.text,
+    required this.isSelected,
+    required this.onTap,
+  });
 
   final String text;
 
@@ -268,7 +273,7 @@ class OptionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: _fastAnimationDuration,
+      duration: fastAnimationDuration,
       decoration: BoxDecoration(
         color: isSelected
             ? context.colorScheme.secondaryContainer

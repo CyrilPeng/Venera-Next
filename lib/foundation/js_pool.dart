@@ -4,8 +4,8 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
-import 'package:venera/foundation/js_engine.dart';
-import 'package:venera/foundation/log.dart';
+import 'package:venera_next/foundation/js_engine.dart';
+import 'package:venera_next/foundation/log.dart';
 
 abstract class JsPoolEngine {
   int get pendingTasks;

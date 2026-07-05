@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera/foundation/image_provider/cached_image.dart';
+import 'package:venera_next/foundation/image_provider/cached_image.dart';
 
 void main() {
   test('cached image provider limits concurrent thumbnail loads', () async {
@@ -87,5 +89,19 @@ void main() {
     await Future.wait(holders);
 
     expect(CachedImageProvider.loadingCount, 0);
+  });
+
+  test('cached image provider uses fallback after primary load fails', () async {
+    final chunkEvents = StreamController<ImageChunkEvent>.broadcast();
+    addTearDown(chunkEvents.close);
+
+    final provider = CachedImageProvider(
+      'file://missing-cover.jpg',
+      fallback: () => Uint8List.fromList([1, 2, 3]),
+    );
+
+    final data = await provider.load(chunkEvents, () {});
+
+    expect(data, [1, 2, 3]);
   });
 }

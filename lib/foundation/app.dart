@@ -5,12 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:venera/foundation/history.dart';
 import 'package:yaml/yaml.dart';
 
 import 'appdata.dart';
-import 'favorites.dart';
-import 'local.dart';
 
 export "widget_utils.dart";
 export "context.dart";
@@ -63,12 +60,6 @@ class _App {
   BuildContext get rootContext => rootNavigatorKey.currentContext!;
 
   final Appdata data = appdata;
-
-  final HistoryManager history = HistoryManager();
-
-  final LocalFavoritesManager favorites = LocalFavoritesManager();
-
-  final LocalManager local = LocalManager();
 
   static const _legacyWindowsCompanyDirectory = 'CyrilPeng_venera-next';
   static const _windowsCompanyDirectory = 'com.github.cyrilpeng';
@@ -164,12 +155,12 @@ class _App {
     version = data["version"].toString().split('+').first;
   }
 
-  Future<void> initComponents() async {
+  Future<void> initComponents([
+    Iterable<Future<void> Function()> featureInitializers = const [],
+  ]) async {
     await Future.wait([
       data.init(),
-      history.init(),
-      favorites.init(),
-      local.init(),
+      for (final initializer in featureInitializers) initializer(),
     ]);
   }
 

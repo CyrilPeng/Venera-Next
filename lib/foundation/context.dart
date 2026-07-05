@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:venera/components/components.dart';
 
 import 'app_page_route.dart';
 
+void Function(BuildContext context, String message)? _showMessageHandler;
+
+void registerShowMessageHandler(
+  void Function(BuildContext context, String message) handler,
+) {
+  _showMessageHandler = handler;
+}
+
 extension Navigation on BuildContext {
   void pop<T>([T? result]) {
-    if(mounted) {
+    if (mounted) {
       Navigator.of(this).pop(result);
     }
   }
@@ -14,14 +21,16 @@ extension Navigation on BuildContext {
     return Navigator.of(this).canPop();
   }
 
-  Future<T?> to<T>(Widget Function() builder,) {
-    return Navigator.of(this).push<T>(AppPageRoute(
-        builder: (context) => builder()));
+  Future<T?> to<T>(Widget Function() builder) {
+    return Navigator.of(
+      this,
+    ).push<T>(AppPageRoute(builder: (context) => builder()));
   }
 
   Future<void> toReplacement<T>(Widget Function() builder) {
-    return Navigator.of(this).pushReplacement(AppPageRoute(
-        builder: (context) => builder()));
+    return Navigator.of(
+      this,
+    ).pushReplacement(AppPageRoute(builder: (context) => builder()));
   }
 
   double get width => MediaQuery.of(this).size.width;
@@ -39,7 +48,7 @@ extension Navigation on BuildContext {
   bool get isDarkMode => brightness == Brightness.dark;
 
   void showMessage({required String message}) {
-    showToast(message: message, context: this);
+    _showMessageHandler?.call(this, message);
   }
 
   Color useBackgroundColor(MaterialColor color) {

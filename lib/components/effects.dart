@@ -1,4 +1,6 @@
-part of 'components.dart';
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
 
 class BlurEffect extends StatelessWidget {
   final Widget child;
@@ -22,7 +24,7 @@ class BlurEffect extends StatelessWidget {
         filter: ui.ImageFilter.blur(
           sigmaX: blur,
           sigmaY: blur,
-          tileMode: TileMode.mirror,
+          tileMode: ui.TileMode.mirror,
         ),
         child: child,
       ),

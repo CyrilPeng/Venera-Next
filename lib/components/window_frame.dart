@@ -4,8 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:venera/foundation/app.dart';
-import 'package:venera/foundation/comic_source/comic_source.dart';
+import 'package:venera_next/foundation/app.dart';
 import 'package:window_manager/window_manager.dart';
 
 const _kTitleBarHeight = 36.0;
@@ -39,9 +38,11 @@ class WindowFrameController extends InheritedWidget {
 }
 
 class WindowFrame extends StatefulWidget {
-  const WindowFrame(this.child, {super.key});
+  const WindowFrame(this.child, {this.debugAction, super.key});
 
   final Widget child;
+
+  final VoidCallback? debugAction;
 
   @override
   State<WindowFrame> createState() => _WindowFrameState();
@@ -109,55 +110,57 @@ class _WindowFrameState extends State<WindowFrame> {
             child: Material(
               color: Colors.transparent,
               child: Theme(
-                data: Theme.of(context).copyWith(
-                  brightness: useDarkTheme ? Brightness.dark : null,
-                ),
-                child: Builder(builder: (context) {
-                  return SizedBox(
-                    height: _kTitleBarHeight,
-                    child: Row(
-                      children: [
-                        if (App.isMacOS)
-                          const DragToMoveArea(
-                            child: SizedBox(
-                              height: double.infinity,
-                              width: 16,
-                            ),
-                          ).paddingRight(52)
-                        else
-                          const SizedBox(width: 12),
-                        Expanded(
-                          child: DragToMoveArea(
-                            child: Text(
-                              'VeneraNext',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: (useDarkTheme ||
-                                        context.brightness == Brightness.dark)
-                                    ? Colors.white
-                                    : Colors.black,
+                data: Theme.of(
+                  context,
+                ).copyWith(brightness: useDarkTheme ? Brightness.dark : null),
+                child: Builder(
+                  builder: (context) {
+                    return SizedBox(
+                      height: _kTitleBarHeight,
+                      child: Row(
+                        children: [
+                          if (App.isMacOS)
+                            const DragToMoveArea(
+                              child: SizedBox(
+                                height: double.infinity,
+                                width: 16,
                               ),
-                            )
-                                .toAlign(Alignment.centerLeft)
-                                .paddingLeft(4 + (App.isMacOS ? 25 : 0)),
+                            ).paddingRight(52)
+                          else
+                            const SizedBox(width: 12),
+                          Expanded(
+                            child: DragToMoveArea(
+                              child:
+                                  Text(
+                                        'VeneraNext',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color:
+                                              (useDarkTheme ||
+                                                  context.brightness ==
+                                                      Brightness.dark)
+                                              ? Colors.white
+                                              : Colors.black,
+                                        ),
+                                      )
+                                      .toAlign(Alignment.centerLeft)
+                                      .paddingLeft(4 + (App.isMacOS ? 25 : 0)),
+                            ),
                           ),
-                        ),
-                        if (kDebugMode)
-                          const TextButton(
-                            onPressed: debug,
-                            child: Text('Debug'),
-                          ),
-                        if (!App.isMacOS)
-                          _WindowButtons(
-                            onClose: _onClose,
-                          )
-                      ],
-                    ),
-                  );
-                }),
+                          if (kDebugMode && widget.debugAction != null)
+                            TextButton(
+                              onPressed: widget.debugAction,
+                              child: Text('Debug'),
+                            ),
+                          if (!App.isMacOS) _WindowButtons(onClose: _onClose),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
-          )
+          ),
       ],
     );
 
@@ -247,9 +250,7 @@ class _WindowButtonsState extends State<_WindowButtons> with WindowListener {
           ),
           if (isMaximized)
             WindowButton(
-              icon: RestoreIcon(
-                color: color,
-              ),
+              icon: RestoreIcon(color: color),
               hoverColor: hoverColor,
               onPressed: () {
                 windowManager.unmaximize();
@@ -257,24 +258,18 @@ class _WindowButtonsState extends State<_WindowButtons> with WindowListener {
             )
           else
             WindowButton(
-              icon: MaximizeIcon(
-                color: color,
-              ),
+              icon: MaximizeIcon(color: color),
               hoverColor: hoverColor,
               onPressed: () {
                 windowManager.maximize();
               },
             ),
           WindowButton(
-            icon: CloseIcon(
-              color: color,
-            ),
-            hoverIcon: CloseIcon(
-              color: !dark ? Colors.white : Colors.black,
-            ),
+            icon: CloseIcon(color: color),
+            hoverIcon: CloseIcon(color: !dark ? Colors.white : Colors.black),
             hoverColor: Colors.red,
             onPressed: widget.onClose,
-          )
+          ),
         ],
       ),
     );
@@ -282,12 +277,13 @@ class _WindowButtonsState extends State<_WindowButtons> with WindowListener {
 }
 
 class WindowButton extends StatefulWidget {
-  const WindowButton(
-      {required this.icon,
-      required this.onPressed,
-      required this.hoverColor,
-      this.hoverIcon,
-      super.key});
+  const WindowButton({
+    required this.icon,
+    required this.onPressed,
+    required this.hoverColor,
+    this.hoverIcon,
+    super.key,
+  });
 
   final Widget icon;
 
@@ -318,8 +314,9 @@ class _WindowButtonState extends State<WindowButton> {
         child: Container(
           width: 46,
           height: double.infinity,
-          decoration:
-              BoxDecoration(color: isHovering ? widget.hoverColor : null),
+          decoration: BoxDecoration(
+            color: isHovering ? widget.hoverColor : null,
+          ),
           child: isHovering ? widget.hoverIcon ?? widget.icon : widget.icon,
         ),
       ),
@@ -372,10 +369,7 @@ class _MaximizePainter extends _IconPainter {
 class RestoreIcon extends StatelessWidget {
   final Color color;
 
-  const RestoreIcon({
-    super.key,
-    required this.color,
-  });
+  const RestoreIcon({super.key, required this.color});
 
   @override
   Widget build(BuildContext context) => _AlignedPaint(_RestorePainter(color));
@@ -391,9 +385,15 @@ class _RestorePainter extends _IconPainter {
     canvas.drawLine(const Offset(2, 2), const Offset(2, 0), p);
     canvas.drawLine(const Offset(2, 0), Offset(size.width, 0), p);
     canvas.drawLine(
-        Offset(size.width, 0), Offset(size.width, size.height - 2), p);
-    canvas.drawLine(Offset(size.width, size.height - 2),
-        Offset(size.width - 2, size.height - 2), p);
+      Offset(size.width, 0),
+      Offset(size.width, size.height - 2),
+      p,
+    );
+    canvas.drawLine(
+      Offset(size.width, size.height - 2),
+      Offset(size.width - 2, size.height - 2),
+      p,
+    );
   }
 }
 
@@ -414,7 +414,10 @@ class _MinimizePainter extends _IconPainter {
   void paint(Canvas canvas, Size size) {
     Paint p = getPaint(color);
     canvas.drawLine(
-        Offset(0, size.height / 2), Offset(size.width, size.height / 2), p);
+      Offset(0, size.height / 2),
+      Offset(size.width, size.height / 2),
+      p,
+    );
   }
 }
 
@@ -436,8 +439,9 @@ class _AlignedPaint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Align(
-        alignment: Alignment.center,
-        child: CustomPaint(size: const Size(10, 10), painter: painter));
+      alignment: Alignment.center,
+      child: CustomPaint(size: const Size(10, 10), painter: painter),
+    );
   }
 }
 
@@ -468,13 +472,15 @@ class WindowPlacement {
 
   Future<void> writeToFile() async {
     var file = File("${App.dataPath}/window_placement");
-    await file.writeAsString(jsonEncode({
-      'width': rect.width,
-      'height': rect.height,
-      'x': rect.topLeft.dx,
-      'y': rect.topLeft.dy,
-      'isMaximized': isMaximized
-    }));
+    await file.writeAsString(
+      jsonEncode({
+        'width': rect.width,
+        'height': rect.height,
+        'x': rect.topLeft.dx,
+        'y': rect.topLeft.dy,
+        'isMaximized': isMaximized,
+      }),
+    );
   }
 
   static Future<WindowPlacement> loadFromFile() async {
@@ -484,8 +490,12 @@ class WindowPlacement {
         return defaultPlacement;
       }
       var json = jsonDecode(await file.readAsString());
-      var rect =
-          Rect.fromLTWH(json['x'], json['y'], json['width'], json['height']);
+      var rect = Rect.fromLTWH(
+        json['x'],
+        json['y'],
+        json['width'],
+        json['height'],
+      );
       return WindowPlacement(rect, json['isMaximized']);
     } catch (e) {
       return defaultPlacement;
@@ -505,8 +515,10 @@ class WindowPlacement {
     return WindowPlacement(rect, isMaximized);
   }
 
-  static const defaultPlacement =
-      WindowPlacement(Rect.fromLTWH(10, 10, 900, 600), false);
+  static const defaultPlacement = WindowPlacement(
+    Rect.fromLTWH(10, 10, 900, 600),
+    false,
+  );
 
   static WindowPlacement cache = defaultPlacement;
 
@@ -529,10 +541,7 @@ class WindowPlacement {
 }
 
 class VirtualWindowFrame extends StatefulWidget {
-  const VirtualWindowFrame({
-    super.key,
-    required this.child,
-  });
+  const VirtualWindowFrame({super.key, required this.child});
 
   /// The [child] contained by the VirtualWindowFrame.
   final Widget child;
@@ -568,7 +577,7 @@ class _VirtualWindowFrameState extends State<VirtualWindowFrame>
           BoxShadow(
             color: Colors.black.toOpacity(_isFocused ? 0.4 : 0.2),
             blurRadius: 4,
-          )
+          ),
         ],
       ),
       clipBehavior: Clip.antiAlias,
@@ -633,12 +642,6 @@ class _VirtualWindowFrameState extends State<VirtualWindowFrame>
 // ignore: non_constant_identifier_names
 TransitionBuilder VirtualWindowFrameInit() {
   return (_, Widget? child) {
-    return VirtualWindowFrame(
-      child: child!,
-    );
+    return VirtualWindowFrame(child: child!);
   };
-}
-
-void debug() {
-  ComicSourceManager().reload();
 }

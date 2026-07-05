@@ -1,7 +1,14 @@
-part of "components.dart";
+import 'package:flutter/material.dart';
+import 'package:venera_next/foundation/app.dart';
+
+import 'effects.dart';
+import 'gesture.dart';
 
 void showMenuX(BuildContext context, Offset location, List<MenuEntry> entries) {
-  Navigator.of(context, rootNavigator: true).push(_MenuRoute(entries, location));
+  Navigator.of(
+    context,
+    rootNavigator: true,
+  ).push(_MenuRoute(entries, location));
 }
 
 class _MenuRoute<T> extends PopupRoute<T> {
@@ -23,14 +30,17 @@ class _MenuRoute<T> extends PopupRoute<T> {
   double get entryHeight => App.isMobile ? 42 : 36;
 
   @override
-  Widget buildPage(BuildContext context, Animation<double> animation,
-      Animation<double> secondaryAnimation) {
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
     var width = entries.first.icon == null ? 216.0 : 242.0;
     final size = MediaQuery.of(context).size;
     var left = location.dx;
     if (left < 10) {
       left = 10;
-    } 
+    }
     if (left + width > size.width - 10) {
       left = size.width - width - 10;
     }
@@ -65,18 +75,21 @@ class _MenuRoute<T> extends PopupRoute<T> {
                 borderRadius: BorderRadius.circular(4),
                 child: Container(
                   width: width,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 6,
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children:
-                        entries.map((e) => buildEntry(e, context)).toList(),
+                    children: entries
+                        .map((e) => buildEntry(e, context))
+                        .toList(),
                   ),
                 ),
               ),
             ),
           ),
-        )
+        ),
       ],
     );
   }
@@ -95,16 +108,9 @@ class _MenuRoute<T> extends PopupRoute<T> {
           child: Row(
             children: [
               if (entry.icon != null)
-                Icon(
-                  entry.icon,
-                  size: 18,
-                  color: entry.color
-                ),
+                Icon(entry.icon, size: 18, color: entry.color),
               const SizedBox(width: 12),
-              Text(
-                  entry.text,
-                  style: TextStyle(color: entry.color)
-              ),
+              Text(entry.text, style: TextStyle(color: entry.color)),
             ],
           ),
         ),
@@ -116,11 +122,16 @@ class _MenuRoute<T> extends PopupRoute<T> {
   Duration get transitionDuration => const Duration(milliseconds: 200);
 
   @override
-  Widget buildTransitions(BuildContext context, Animation<double> animation,
-      Animation<double> secondaryAnimation, Widget child) {
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
     return FadeTransition(
-      opacity: animation.drive(Tween<double>(begin: 0, end: 1)
-          .chain(CurveTween(curve: Curves.ease))),
+      opacity: animation.drive(
+        Tween<double>(begin: 0, end: 1).chain(CurveTween(curve: Curves.ease)),
+      ),
       child: child,
     );
   }

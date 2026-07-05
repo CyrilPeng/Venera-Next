@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera/foundation/image_provider/base_image_provider.dart';
+import 'package:venera_next/foundation/image_provider/base_image_provider.dart';
 
 void main() {
   test('retry delay completes when cancel signal fires', () async {
