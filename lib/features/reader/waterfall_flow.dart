@@ -72,6 +72,19 @@ class WaterfallChapterFlow {
     return null;
   }
 
+  int? imageIndexOf({required int chapter, required int page}) {
+    if (page <= 0) return null;
+    var index = 1;
+    for (var segment in _segments) {
+      if (segment.chapter == chapter) {
+        if (page > segment.images.length) return null;
+        return index + page - 1;
+      }
+      index += segment.images.length;
+    }
+    return null;
+  }
+
   bool shouldLoadAfter({
     required int current,
     required int threshold,
@@ -99,5 +112,11 @@ class WaterfallChapterFlow {
     _segments.add(segment);
     _segments.sort((a, b) => a.chapter.compareTo(b.chapter));
     return segment.images.length;
+  }
+
+  void reset(WaterfallChapterSegment segment) {
+    _segments
+      ..clear()
+      ..add(segment);
   }
 }

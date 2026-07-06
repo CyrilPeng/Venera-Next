@@ -531,6 +531,11 @@ class GalleryModeState extends State<_GalleryMode>
   }
 
   @override
+  bool toChapter(int chapter, {bool toLastPage = false}) {
+    return false;
+  }
+
+  @override
   void handleDoubleTap(Offset location) {
     if (appdata.settings['quickCollectImage'] == 'DoubleTap') {
       context.readerScaffold.addImageFavorite();
@@ -719,6 +724,8 @@ class ContinuousModeState extends State<_ContinuousMode>
   bool _isLoadingPrevSegment = false;
 
   bool _isRestoringPrependedSegmentPosition = false;
+
+  bool _isNavigatingWaterfallLocation = false;
 
   String? _nextSegmentError;
 
@@ -909,6 +916,69 @@ class ContinuousModeState extends State<_ContinuousMode>
     }
   }
 
+  int? _waterfallIndexOfChapterPage(int chapter, int page) {
+    if (!crossChapter) return page;
+    return _waterfallFlow.imageIndexOf(chapter: chapter, page: page);
+  }
+
+  Future<bool> _loadWaterfallNavigationChapter(int chapter) async {
+    if (_segmentOfChapter(chapter) != null) return true;
+    try {
+      var images = await _loadChapterImages(chapter);
+      if (!mounted) return false;
+      setState(() {
+        _waterfallFlow.reset(
+          WaterfallChapterSegment(
+            chapter: chapter,
+            eid:
+                reader.widget.chapters?.ids.elementAtOrNull(chapter - 1) ?? '0',
+            images: images,
+          ),
+        );
+        _nextSegmentError = null;
+      });
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      Log.error("Reader", "Failed to load chapter $chapter", e);
+      context.showMessage(message: e.toString());
+      return false;
+    }
+  }
+
+  Future<void> _navigateToWaterfallChapter(
+    int chapter, {
+    required bool toLastPage,
+  }) async {
+    if (!await _loadWaterfallNavigationChapter(chapter) || !mounted) {
+      return;
+    }
+    var segment = _segmentOfChapter(chapter);
+    if (segment == null || segment.images.isEmpty) return;
+    var page = toLastPage ? segment.images.length : 1;
+    var index = _waterfallIndexOfChapterPage(chapter, page);
+    if (index == null) return;
+    var imageRef = _imageRefAt(index);
+    if (imageRef == null) return;
+    _isNavigatingWaterfallLocation = true;
+    setState(() {
+      _setReaderLocation(imageRef);
+      reader.jumpToLastPageOnLoad = false;
+    });
+    context.readerScaffold.update();
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      itemScrollController.jumpTo(index: index);
+      _futurePosition = null;
+      cacheImages(index);
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _isNavigatingWaterfallLocation = false;
+        }
+      });
+    });
+  }
+
   @override
   void initState() {
     reader = context.reader;
@@ -938,7 +1008,10 @@ class ContinuousModeState extends State<_ContinuousMode>
     var imageRef = _imageRefAt(page);
     if (imageRef == null) return;
     if (crossChapter) {
-      if (_isRestoringPrependedSegmentPosition) return;
+      if (_isRestoringPrependedSegmentPosition ||
+          _isNavigatingWaterfallLocation) {
+        return;
+      }
       _setReaderLocation(imageRef);
       context.readerScaffold.update();
     } else if (page != reader.page) {
@@ -1400,8 +1473,9 @@ class ContinuousModeState extends State<_ContinuousMode>
 
   @override
   Future<void> animateToPage(int page) {
+    var index = _waterfallIndexOfChapterPage(reader.chapter, page) ?? page;
     return itemScrollController.scrollTo(
-      index: page,
+      index: index,
       duration: const Duration(milliseconds: 200),
       curve: Curves.ease,
     );
@@ -1462,8 +1536,16 @@ class ContinuousModeState extends State<_ContinuousMode>
 
   @override
   void toPage(int page) {
-    itemScrollController.jumpTo(index: page);
+    var index = _waterfallIndexOfChapterPage(reader.chapter, page) ?? page;
+    itemScrollController.jumpTo(index: index);
     _futurePosition = null;
+  }
+
+  @override
+  bool toChapter(int chapter, {bool toLastPage = false}) {
+    if (!crossChapter) return false;
+    _navigateToWaterfallChapter(chapter, toLastPage: toLastPage);
+    return true;
   }
 
   @override

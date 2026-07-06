@@ -675,6 +675,9 @@ abstract mixin class ReaderLocation {
 
   bool toChapter(int c, {bool toLastPage = false}) {
     if (_validateChapter(c) && !isLoading) {
+      if (imageViewController?.toChapter(c, toLastPage: toLastPage) ?? false) {
+        return true;
+      }
       chapter = c;
       page = 1;
       jumpToLastPageOnLoad = toLastPage;
@@ -782,6 +785,8 @@ abstract interface class ReaderImageViewController {
   void toPage(int page);
 
   Future<void> animateToPage(int page);
+
+  bool toChapter(int chapter, {bool toLastPage = false});
 
   void handleDoubleTap(Offset location);
 

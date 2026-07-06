@@ -27,6 +27,12 @@ void main() {
       expect(flow.imageRefAt(4)!.isFirstInSegment, isTrue);
       expect(flow.imageRefAt(5)!.imageKey, 'c3-p2');
       expect(flow.imageRefAt(6), isNull);
+      expect(flow.imageIndexOf(chapter: 2, page: 1), 1);
+      expect(flow.imageIndexOf(chapter: 2, page: 3), 3);
+      expect(flow.imageIndexOf(chapter: 3, page: 1), 4);
+      expect(flow.imageIndexOf(chapter: 3, page: 2), 5);
+      expect(flow.imageIndexOf(chapter: 3, page: 3), isNull);
+      expect(flow.imageIndexOf(chapter: 4, page: 1), isNull);
     });
 
     test('detects when next chapter should be loaded', () {
@@ -81,8 +87,23 @@ void main() {
 
         expect(flow.imageRefAt(shiftedCurrentIndex)!.chapter, 98);
         expect(flow.imageRefAt(shiftedCurrentIndex)!.page, 1);
+        expect(flow.imageIndexOf(chapter: 98, page: 1), shiftedCurrentIndex);
       },
     );
+
+    test('resets to an explicit navigation chapter', () {
+      final flow = WaterfallChapterFlow(
+        segments: [segment(97, 2), segment(98, 3)],
+      );
+
+      flow.reset(segment(120, 4));
+
+      expect(flow.segments, hasLength(1));
+      expect(flow.firstChapter, 120);
+      expect(flow.lastChapter, 120);
+      expect(flow.imageIndexOf(chapter: 120, page: 4), 4);
+      expect(flow.imageIndexOf(chapter: 98, page: 1), isNull);
+    });
 
     test('ignores duplicate chapters', () {
       final flow = WaterfallChapterFlow(segments: [segment(2, 2)]);
