@@ -8,6 +8,10 @@
 
 - 为 Winget manifest 手动 workflow 增加可选 PR 提交能力，可通过 `WINGET_PKGS_TOKEN` 自动向 `microsoft/winget-pkgs` 创建更新 PR。
 
+### 修复
+
+- 修复生成的 Winget manifest 缺少 schema header，导致 `winget-pkgs` 服务端校验失败的问题。
+
 ## v1.10.2
 
 ### 新增

@@ -12,6 +12,21 @@ PACKAGE_PUBLISHER = "CyrilPeng/venera-next"
 PACKAGE_NAME = "VeneraNext"
 PACKAGE_MONIKER = "venera-next"
 MANIFEST_VERSION = "1.10.0"
+SCHEMA_BASE_URL = "https://aka.ms"
+SCHEMA_HEADERS = {
+    "version": (
+        f"# yaml-language-server: $schema="
+        f"{SCHEMA_BASE_URL}/winget-manifest.version.{MANIFEST_VERSION}.schema.json"
+    ),
+    "installer": (
+        f"# yaml-language-server: $schema="
+        f"{SCHEMA_BASE_URL}/winget-manifest.installer.{MANIFEST_VERSION}.schema.json"
+    ),
+    "defaultLocale": (
+        f"# yaml-language-server: $schema="
+        f"{SCHEMA_BASE_URL}/winget-manifest.defaultLocale.{MANIFEST_VERSION}.schema.json"
+    ),
+}
 APP_ID = "{C6B7E69A-0FD6-4F2A-AC64-7D1AE8A40FB8}_is1"
 REPOSITORY_URL = "https://github.com/CyrilPeng/venera-next"
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:-rc\.\d+)?$")
@@ -78,7 +93,8 @@ def clean_output(path: Path) -> None:
 
 
 def version_manifest(version: str) -> str:
-    return f"""PackageIdentifier: {PACKAGE_IDENTIFIER}
+    return f"""{SCHEMA_HEADERS["version"]}
+PackageIdentifier: {PACKAGE_IDENTIFIER}
 PackageVersion: {version}
 DefaultLocale: en-US
 ManifestType: version
@@ -93,7 +109,8 @@ def installer_manifest(
     release_date: str | None,
 ) -> str:
     release_date_block = f"    ReleaseDate: {release_date}\n" if release_date else ""
-    return f"""PackageIdentifier: {PACKAGE_IDENTIFIER}
+    return f"""{SCHEMA_HEADERS["installer"]}
+PackageIdentifier: {PACKAGE_IDENTIFIER}
 PackageVersion: {version}
 InstallerType: inno
 Scope: machine
@@ -122,7 +139,8 @@ ManifestVersion: {MANIFEST_VERSION}
 
 
 def locale_manifest(version: str) -> str:
-    return f"""PackageIdentifier: {PACKAGE_IDENTIFIER}
+    return f"""{SCHEMA_HEADERS["defaultLocale"]}
+PackageIdentifier: {PACKAGE_IDENTIFIER}
 PackageVersion: {version}
 PackageLocale: en-US
 Publisher: {PACKAGE_PUBLISHER}
