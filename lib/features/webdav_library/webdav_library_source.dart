@@ -1,9 +1,12 @@
 import 'dart:convert';
 
 import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/local_comics/import_export/comic_metadata.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/extensions.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
+import 'package:venera_next/foundation/throttled_task_runner.dart';
 import 'package:venera_next/network/app_dio.dart';
 import 'package:webdav_client/webdav_client.dart' hide File;
 
@@ -124,6 +127,8 @@ abstract class WebDavLibraryOps {
     WebDavLibraryConfig config,
     String remotePath,
   );
+
+  Future<String> readText(WebDavLibraryConfig config, String remotePath);
 }
 
 class _WebDavLibraryOps implements WebDavLibraryOps {
@@ -157,6 +162,12 @@ class _WebDavLibraryOps implements WebDavLibraryOps {
         )
         .toList();
   }
+
+  @override
+  Future<String> readText(WebDavLibraryConfig config, String remotePath) async {
+    final bytes = await _client(config).read(remotePath);
+    return utf8.decode(bytes, allowMalformed: false);
+  }
 }
 
 class WebDavLibrarySource {
@@ -166,13 +177,24 @@ class WebDavLibrarySource {
   static const explorePageTitle = 'WebDAV Library';
   static const rootChapterId = '__root__';
   static const rootChapterTitle = 'Images';
+  static const _metadataFileName = 'metadata.json';
+  static const _metadataChapterPrefix = '__cbz_range_';
   static const _imageExtensions = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'jpe'};
   static const _archiveExtensions = {'cbz', 'zip', '7z', 'cb7'};
 
-  static WebDavLibraryOps ops = _WebDavLibraryOps();
+  static final _snapshotCache = <String, _WebDavComicSnapshot>{};
+  static WebDavLibraryOps _ops = _WebDavLibraryOps();
+
+  static WebDavLibraryOps get ops => _ops;
+
+  static set ops(WebDavLibraryOps value) {
+    _ops = value;
+    _snapshotCache.clear();
+  }
 
   static void resetOps() {
-    ops = _WebDavLibraryOps();
+    _ops = _WebDavLibraryOps();
+    _snapshotCache.clear();
   }
 
   static ComicSource create() {
@@ -243,28 +265,46 @@ class WebDavLibrarySource {
       return const Res.error('Invalid WebDAV comic library configuration');
     }
     try {
+      _snapshotCache.clear();
       final entries = List<WebDavLibraryEntry>.from(
         await ops.readDir(config, config.remotePath),
       );
-      final comics =
+      final directories =
           entries
               .where((entry) => entry.isDirectory)
               .where((entry) => !_isIgnoredEntry(entry.name))
-              .map(
-                (entry) => Comic(
-                  entry.name,
-                  '',
-                  entry.name,
-                  null,
-                  const ['WebDAV'],
-                  '',
-                  sourceKey,
-                  null,
-                  null,
-                ),
-              )
               .toList()
-            ..sort((a, b) => _compareNames(a.title, b.title));
+            ..sort((a, b) => _compareNames(a.name, b.name));
+      final snapshots = <String, _WebDavComicSnapshot>{};
+      await runThrottledTasks(
+        directories,
+        concurrency: 4,
+        throttleEvery: 0,
+        run: (entry) async {
+          try {
+            snapshots[entry.name] = await _loadSnapshot(config, entry.name);
+          } catch (e) {
+            Log.warning(
+              'WebDAV Library',
+              'Failed to inspect ${entry.name}: $e',
+            );
+          }
+        },
+      );
+      final comics = directories.map((entry) {
+        final snapshot = snapshots[entry.name];
+        return Comic(
+          snapshot?.title ?? entry.name,
+          snapshot?.cover ?? '',
+          entry.name,
+          snapshot?.author,
+          snapshot?.listTags ?? const ['WebDAV'],
+          '',
+          sourceKey,
+          null,
+          null,
+        );
+      }).toList();
       return Res(comics, subData: 1);
     } catch (e) {
       return Res.error(e.toString());
@@ -277,48 +317,19 @@ class WebDavLibrarySource {
       return const Res.error('Invalid WebDAV comic library configuration');
     }
     try {
-      final comicPath = config.childDirectoryPath(id);
-      final entries = List<WebDavLibraryEntry>.from(
-        await ops.readDir(config, comicPath),
-      );
-      final rootImages = _imageEntries(
-        entries,
-      ).where((entry) => !_isNamedCover(entry.name)).toList();
-      final cover = _findNamedCover(entries);
-      String? coverPath = cover == null
-          ? null
-          : config.childFilePath(comicPath, cover.name);
-      final directories =
-          entries
-              .where((entry) => entry.isDirectory)
-              .where((entry) => !_isIgnoredEntry(entry.name))
-              .toList()
-            ..sort((a, b) => _compareNames(a.name, b.name));
-      final chapterMap = {
-        for (final directory in directories) directory.name: directory.name,
-      };
-      if (rootImages.isNotEmpty) {
-        coverPath ??= config.childFilePath(comicPath, rootImages.first.name);
-      }
-      if (chapterMap.isEmpty && rootImages.isNotEmpty) {
-        chapterMap[rootChapterId] = rootChapterTitle;
-      }
-      if (chapterMap.isEmpty) {
-        return const Res.error('No images found in the WebDAV comic directory');
-      }
+      final snapshot = await _loadSnapshot(config, id);
       return Res(
         ComicDetails.fromJson({
-          'title': id,
-          'subtitle': '',
-          'cover': coverPath ?? '',
+          'title': snapshot.title,
+          'subtitle': snapshot.author,
+          'cover': snapshot.cover,
           'description': '',
-          'tags': {
-            'Source': ['WebDAV'],
-          },
+          'tags': snapshot.detailTags,
           'chapters':
-              chapterMap.length == 1 && chapterMap.containsKey(rootChapterId)
+              snapshot.chapters.length == 1 &&
+                  snapshot.chapters.containsKey(rootChapterId)
               ? null
-              : chapterMap,
+              : snapshot.chapters,
           'sourceKey': sourceKey,
           'comicId': id,
           'thumbnails': null,
@@ -346,22 +357,191 @@ class WebDavLibrarySource {
       return const Res.error('Invalid WebDAV comic library configuration');
     }
     try {
-      final path = ep == null || ep == rootChapterId
-          ? config.childDirectoryPath(id)
-          : config.childDirectoryPath('$id/$ep');
-      final entries = List<WebDavLibraryEntry>.from(
-        await ops.readDir(config, path),
-      );
-      final files = _imageEntries(entries)
-          .where((entry) => !_isNamedCover(entry.name))
-          .map((entry) => config.childFilePath(path, entry.name))
-          .toList();
-      if (files.isEmpty) {
-        return const Res.error('No images found in the WebDAV chapter');
+      final comicPath = config.childDirectoryPath(id);
+      if (ep != null &&
+          ep != rootChapterId &&
+          !ep.startsWith(_metadataChapterPrefix)) {
+        final path = config.childDirectoryPathFrom(comicPath, ep);
+        final entries = List<WebDavLibraryEntry>.from(
+          await ops.readDir(config, path),
+        );
+        final files = _imageEntries(entries)
+            .where((entry) => !_isNamedCover(entry.name))
+            .map((entry) => config.childFilePath(path, entry.name))
+            .toList();
+        if (files.isEmpty) {
+          return const Res.error('No images found in the WebDAV chapter');
+        }
+        return Res(files);
       }
-      return Res(files);
+
+      final snapshot = await _loadSnapshot(config, id);
+      final metadataChapter = ep == null ? null : snapshot.metadataChapters[ep];
+      if (metadataChapter != null) {
+        final files = snapshot.rootImages
+            .sublist(metadataChapter.start - 1, metadataChapter.end)
+            .map((entry) => config.childFilePath(comicPath, entry.name))
+            .toList();
+        return Res(files);
+      }
+      if (ep?.startsWith(_metadataChapterPrefix) == true) {
+        return const Res.error('Invalid WebDAV metadata chapter');
+      }
+      if (ep == null || ep == rootChapterId) {
+        final files = snapshot.rootImages
+            .map((entry) => config.childFilePath(comicPath, entry.name))
+            .toList();
+        if (files.isEmpty) {
+          return const Res.error('No images found in the WebDAV chapter');
+        }
+        return Res(files);
+      }
+      return const Res.error('No images found in the WebDAV chapter');
     } catch (e) {
       return Res.error(e.toString());
+    }
+  }
+
+  static Future<_WebDavComicSnapshot> _loadSnapshot(
+    WebDavLibraryConfig config,
+    String id,
+  ) async {
+    final cacheKey = jsonEncode([
+      config.url,
+      config.user,
+      config.remotePath,
+      id,
+    ]);
+    final cached = _snapshotCache[cacheKey];
+    if (cached != null) return cached;
+    final snapshot = await _buildSnapshot(config, id);
+    _snapshotCache[cacheKey] = snapshot;
+    return snapshot;
+  }
+
+  static Future<_WebDavComicSnapshot> _buildSnapshot(
+    WebDavLibraryConfig config,
+    String id,
+  ) async {
+    final comicPath = config.childDirectoryPath(id);
+    final entries = List<WebDavLibraryEntry>.from(
+      await ops.readDir(config, comicPath),
+    );
+    final rootImages = _imageEntries(
+      entries,
+    ).where((entry) => !_isNamedCover(entry.name)).toList();
+    final directories =
+        entries
+            .where((entry) => entry.isDirectory)
+            .where((entry) => !_isIgnoredEntry(entry.name))
+            .toList()
+          ..sort((a, b) => _compareNames(a.name, b.name));
+    final metadata = await _readMetadata(
+      config,
+      comicPath,
+      entries,
+      pageCount: rootImages.length,
+    );
+
+    final metadataChapters = <String, ComicChapter>{};
+    final chapterMap = <String, String>{};
+    if (metadata?.chapters?.isNotEmpty == true) {
+      for (var index = 0; index < metadata!.chapters!.length; index++) {
+        final chapter = metadata.chapters![index];
+        final chapterId = '$_metadataChapterPrefix$index';
+        metadataChapters[chapterId] = chapter;
+        chapterMap[chapterId] = chapter.title;
+      }
+    } else {
+      for (final directory in directories) {
+        chapterMap[directory.name] = directory.name;
+      }
+      if (chapterMap.isEmpty && rootImages.isNotEmpty) {
+        chapterMap[rootChapterId] = rootChapterTitle;
+      }
+    }
+    if (chapterMap.isEmpty) {
+      throw const FormatException(
+        'No images found in the WebDAV comic directory',
+      );
+    }
+
+    final namedCover = _findNamedCover(entries);
+    String? coverPath = namedCover == null
+        ? null
+        : config.childFilePath(comicPath, namedCover.name);
+    if (rootImages.isNotEmpty) {
+      coverPath ??= config.childFilePath(comicPath, rootImages.first.name);
+    }
+    if (coverPath == null) {
+      for (final directory in directories) {
+        final chapterPath = config.childDirectoryPathFrom(
+          comicPath,
+          directory.name,
+        );
+        try {
+          final chapterEntries = List<WebDavLibraryEntry>.from(
+            await ops.readDir(config, chapterPath),
+          );
+          final chapterCover = _findNamedCover(chapterEntries);
+          final chapterPages = _imageEntries(
+            chapterEntries,
+          ).where((entry) => !_isNamedCover(entry.name)).toList();
+          final coverEntry = chapterCover ?? chapterPages.firstOrNull;
+          if (coverEntry != null) {
+            coverPath = config.childFilePath(chapterPath, coverEntry.name);
+            break;
+          }
+        } catch (e) {
+          Log.warning(
+            'WebDAV Library',
+            'Failed to inspect chapter cover at $chapterPath: $e',
+          );
+        }
+      }
+    }
+
+    final metadataTitle = metadata?.title.trim() ?? '';
+    return _WebDavComicSnapshot(
+      title: metadataTitle.isEmpty ? id : metadataTitle,
+      author: metadata?.author ?? '',
+      tags: metadata?.tags ?? const [],
+      cover: coverPath ?? '',
+      chapters: chapterMap,
+      metadataChapters: metadataChapters,
+      rootImages: rootImages,
+    );
+  }
+
+  static Future<ComicMetaData?> _readMetadata(
+    WebDavLibraryConfig config,
+    String comicPath,
+    List<WebDavLibraryEntry> entries, {
+    required int pageCount,
+  }) async {
+    final metadataEntry = entries.firstWhereOrNull(
+      (entry) =>
+          !entry.isDirectory && entry.name.toLowerCase() == _metadataFileName,
+    );
+    if (metadataEntry == null) return null;
+
+    final metadataPath = config.childFilePath(comicPath, metadataEntry.name);
+    try {
+      final decoded = jsonDecode(await ops.readText(config, metadataPath));
+      if (decoded is! Map) {
+        throw const FormatException('metadata.json must contain an object');
+      }
+      final metadata = ComicMetaData.fromJson(
+        Map<String, dynamic>.from(decoded),
+      );
+      metadata.validateChapterRanges(pageCount: pageCount);
+      return metadata;
+    } catch (e) {
+      Log.warning(
+        'WebDAV Library',
+        'Ignoring invalid metadata at $metadataPath: $e',
+      );
+      return null;
     }
   }
 
@@ -437,4 +617,31 @@ class WebDavLibrarySource {
     }
     return a.compareTo(b);
   }
+}
+
+class _WebDavComicSnapshot {
+  const _WebDavComicSnapshot({
+    required this.title,
+    required this.author,
+    required this.tags,
+    required this.cover,
+    required this.chapters,
+    required this.metadataChapters,
+    required this.rootImages,
+  });
+
+  final String title;
+  final String author;
+  final List<String> tags;
+  final String cover;
+  final Map<String, String> chapters;
+  final Map<String, ComicChapter> metadataChapters;
+  final List<WebDavLibraryEntry> rootImages;
+
+  List<String> get listTags => <String>{'WebDAV', ...tags}.toList();
+
+  Map<String, List<String>> get detailTags => {
+    'Source': const ['WebDAV'],
+    if (tags.isNotEmpty) 'Tags': tags,
+  };
 }

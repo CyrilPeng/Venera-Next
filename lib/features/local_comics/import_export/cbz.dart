@@ -12,56 +12,9 @@ import 'package:venera_next/foundation/file_type.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:zip_flutter/zip_flutter.dart';
 
-class ComicMetaData {
-  final String title;
+import 'comic_metadata.dart';
 
-  final String author;
-
-  final List<String> tags;
-
-  final List<ComicChapter>? chapters;
-
-  Map<String, dynamic> toJson() => {
-    'title': title,
-    'author': author,
-    'tags': tags,
-    'chapters': chapters?.map((e) => e.toJson()).toList(),
-  };
-
-  ComicMetaData.fromJson(Map<String, dynamic> json)
-    : title = json['title'],
-      author = json['author'],
-      tags = List<String>.from(json['tags']),
-      chapters = json['chapters'] == null
-          ? null
-          : List<ComicChapter>.from(
-              json['chapters'].map((e) => ComicChapter.fromJson(e)),
-            );
-
-  ComicMetaData({
-    required this.title,
-    required this.author,
-    required this.tags,
-    this.chapters,
-  });
-}
-
-class ComicChapter {
-  final String title;
-
-  final int start;
-
-  final int end;
-
-  Map<String, dynamic> toJson() => {'title': title, 'start': start, 'end': end};
-
-  ComicChapter.fromJson(Map<String, dynamic> json)
-    : title = json['title'],
-      start = json['start'],
-      end = json['end'];
-
-  ComicChapter({required this.title, required this.start, required this.end});
-}
+export 'comic_metadata.dart';
 
 class _CbzChapterDirectory {
   const _CbzChapterDirectory({required this.title, required this.files});
