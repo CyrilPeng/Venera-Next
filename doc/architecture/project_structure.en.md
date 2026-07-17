@@ -19,6 +19,7 @@ This document is the English companion for the repository structure rules. The C
 `lib/features` is the main home for business code. Current domains include:
 
 - `comic_source/`: comic source models, parsing, categories, home summaries, favorites mapping, tag translation, and source translation.
+- `comic_storage/`: archive metadata, image file rules, and local filesystem layout detection shared by local directories, CBZ, and WebDAV.
 - `comic_widgets/`: cross-domain comic display widgets such as cards, lists, and rating controls.
 - `comic_details/`: comic detail page and its chapters, comments, favorites, cover, and thumbnail modules.
 - `discovery/`: explore, category, category comic list, and ranking pages.
@@ -44,7 +45,7 @@ test/features/<domain>/
   <domain>_test.dart
 ```
 
-External modules should prefer stable feature entry files instead of importing implementation files directly. For example, external code should use `features/reader/reader.dart` for reader capabilities, `features/comic_source/comic_source.dart` for comic source capabilities, and `features/webdav_library/webdav_library.dart` for the WebDAV online comic library source.
+External modules should prefer stable feature entry files instead of importing implementation files directly. For example, external code should use `features/reader/reader.dart` for reader capabilities, `features/comic_source/comic_source.dart` for comic source capabilities, `features/comic_storage/comic_storage.dart` for archive metadata and file rules, and `features/webdav_library/webdav_library.dart` for the WebDAV online comic library source.
 
 ## App Shell And Runtime
 

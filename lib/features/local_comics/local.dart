@@ -6,6 +6,7 @@ import 'package:flutter_saf/flutter_saf.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -447,26 +448,15 @@ class LocalManager with ChangeNotifier {
     var files = <File>[];
     await for (var entity in directory.list()) {
       if (entity is File) {
-        // Do not exclude comic.cover, since it may be the first page of the chapter.
-        // A file with name starting with 'cover.' is not a comic page.
-        if (entity.name.startsWith('cover.')) {
-          continue;
-        }
-        //Hidden file in some file system
-        if (entity.name.startsWith('.')) {
+        if (isIgnoredComicStorageEntry(entity.name) ||
+            !isComicImageFileName(entity.name) ||
+            isNamedComicCover(entity.name)) {
           continue;
         }
         files.add(entity);
       }
     }
-    files.sort((a, b) {
-      var ai = int.tryParse(a.name.split('.').first);
-      var bi = int.tryParse(b.name.split('.').first);
-      if (ai != null && bi != null) {
-        return ai.compareTo(bi);
-      }
-      return a.name.compareTo(b.name);
-    });
+    files.sort((a, b) => compareComicFileNames(a.name, b.name));
     return files.map((e) => "file://${e.path}").toList();
   }
 

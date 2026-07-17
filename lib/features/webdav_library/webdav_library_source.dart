@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/local_comics/import_export/comic_metadata.dart';
+import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -179,8 +179,6 @@ class WebDavLibrarySource {
   static const rootChapterTitle = 'Images';
   static const _metadataFileName = 'metadata.json';
   static const _metadataChapterPrefix = '__cbz_range_';
-  static const _imageExtensions = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'jpe'};
-  static const _archiveExtensions = {'cbz', 'zip', '7z', 'cb7'};
 
   static final _snapshotCache = <String, _WebDavComicSnapshot>{};
   static WebDavLibraryOps _ops = _WebDavLibraryOps();
@@ -274,7 +272,7 @@ class WebDavLibrarySource {
               .where((entry) => entry.isDirectory)
               .where((entry) => !_isIgnoredEntry(entry.name))
               .toList()
-            ..sort((a, b) => _compareNames(a.name, b.name));
+            ..sort((a, b) => compareComicFileNames(a.name, b.name));
       final snapshots = <String, _WebDavComicSnapshot>{};
       await runThrottledTasks(
         directories,
@@ -366,7 +364,7 @@ class WebDavLibrarySource {
           await ops.readDir(config, path),
         );
         final files = _imageEntries(entries)
-            .where((entry) => !_isNamedCover(entry.name))
+            .where((entry) => !isNamedComicCover(entry.name))
             .map((entry) => config.childFilePath(path, entry.name))
             .toList();
         if (files.isEmpty) {
@@ -429,13 +427,13 @@ class WebDavLibrarySource {
     );
     final rootImages = _imageEntries(
       entries,
-    ).where((entry) => !_isNamedCover(entry.name)).toList();
+    ).where((entry) => !isNamedComicCover(entry.name)).toList();
     final directories =
         entries
             .where((entry) => entry.isDirectory)
             .where((entry) => !_isIgnoredEntry(entry.name))
             .toList()
-          ..sort((a, b) => _compareNames(a.name, b.name));
+          ..sort((a, b) => compareComicFileNames(a.name, b.name));
     final metadata = await _readMetadata(
       config,
       comicPath,
@@ -486,7 +484,7 @@ class WebDavLibrarySource {
           final chapterCover = _findNamedCover(chapterEntries);
           final chapterPages = _imageEntries(
             chapterEntries,
-          ).where((entry) => !_isNamedCover(entry.name)).toList();
+          ).where((entry) => !isNamedComicCover(entry.name)).toList();
           final coverEntry = chapterCover ?? chapterPages.firstOrNull;
           if (coverEntry != null) {
             coverPath = config.childFilePath(chapterPath, coverEntry.name);
@@ -565,57 +563,21 @@ class WebDavLibrarySource {
   static List<WebDavLibraryEntry> _imageEntries(
     List<WebDavLibraryEntry> entries,
   ) {
-    final result = entries
-        .where((entry) => !entry.isDirectory)
-        .where((entry) => !_isIgnoredEntry(entry.name))
-        .where((entry) => _isImageFile(entry.name))
-        .toList();
-    result.sort((a, b) => _compareNames(a.name, b.name));
-    return result;
+    return sortedComicImageEntries(
+      entries.where((entry) => !entry.isDirectory),
+      nameOf: (entry) => entry.name,
+    );
   }
 
   static WebDavLibraryEntry? _findNamedCover(List<WebDavLibraryEntry> entries) {
-    return _imageEntries(
-      entries,
-    ).firstWhereOrNull((entry) => _isNamedCover(entry.name));
-  }
-
-  static bool _isImageFile(String name) {
-    final extension = _extension(name);
-    return _imageExtensions.contains(extension);
-  }
-
-  static bool _isNamedCover(String name) {
-    final lower = name.toLowerCase();
-    final extension = _extension(lower);
-    if (!_imageExtensions.contains(extension)) return false;
-    return lower.substring(0, lower.length - extension.length - 1) == 'cover';
+    return findNamedComicCover(
+      _imageEntries(entries),
+      nameOf: (entry) => entry.name,
+    );
   }
 
   static bool _isIgnoredEntry(String name) {
-    final lower = name.toLowerCase();
-    return name == '__MACOSX' ||
-        name == '.DS_Store' ||
-        name.startsWith('._') ||
-        name.startsWith('.') ||
-        _archiveExtensions.contains(_extension(lower));
-  }
-
-  static String _extension(String name) {
-    final index = name.lastIndexOf('.');
-    if (index < 0 || index == name.length - 1) return '';
-    return name.substring(index + 1).toLowerCase();
-  }
-
-  static int _compareNames(String a, String b) {
-    final aBase = a.split('.').first;
-    final bBase = b.split('.').first;
-    final aIndex = int.tryParse(aBase);
-    final bIndex = int.tryParse(bBase);
-    if (aIndex != null && bIndex != null) {
-      return aIndex.compareTo(bIndex);
-    }
-    return a.compareTo(b);
+    return isIgnoredComicStorageEntry(name) || isComicArchiveFileName(name);
   }
 }
 

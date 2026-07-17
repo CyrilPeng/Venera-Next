@@ -4,6 +4,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/widgets.dart' show ChangeNotifier;
 import 'package:flutter_saf/flutter_saf.dart';
+import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -962,16 +963,12 @@ class ArchiveDownloadTask extends DownloadTask {
   }
 
   String _findCover() {
-    var files = Directory(path!).listSync();
-    for (var f in files) {
-      if (f.name.startsWith('cover')) {
-        return f.name;
-      }
-    }
-    files.sort((a, b) {
-      return a.name.compareTo(b.name);
-    });
-    return files.first.name;
+    final files = sortedComicImageEntries(
+      Directory(path!).listSync().whereType<File>(),
+      nameOf: (file) => file.name,
+    );
+    final cover = findNamedComicCover(files, nameOf: (file) => file.name);
+    return (cover ?? files.first).name;
   }
 
   @override

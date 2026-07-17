@@ -4,13 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:sqlite3/sqlite3.dart' as sql;
-import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'cbz.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
@@ -44,8 +44,7 @@ class ImportComic {
     var dir = await picker.pickDirectory(directAccess: true);
     if (dir != null) {
       var files = (await dir.list().toList()).whereType<File>().toList();
-      const supportedExtensions = ['cbz', 'zip', '7z', 'cb7'];
-      files.removeWhere((e) => !supportedExtensions.contains(e.extension));
+      files.removeWhere((file) => !isComicArchiveFileName(file.name));
       Map<String?, List<LocalComic>> imported = {};
       var controller = showLoadingDialog(App.rootContext, allowCancel: false);
       var comics = <LocalComic>[];
@@ -271,55 +270,24 @@ class ImportComic {
       Log.info("Import Comic", "Comic already exists: $name");
       return null;
     }
-    bool hasChapters = false;
-    var chapters = <String>[];
-    var coverPath = ''; // relative path to the cover image
-    var fileList = <String>[];
-    await for (var entry in directory.list()) {
-      if (entry is Directory) {
-        hasChapters = true;
-        chapters.add(entry.name);
-        await for (var file in entry.list()) {
-          if (file is Directory) {
-            Log.info(
-              "Import Comic",
-              "Invalid Chapter: ${entry.name}\nA directory is found in the chapter directory.",
-            );
-            return null;
-          }
-        }
-      } else if (entry is File) {
-        const imageExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'jpe'];
-        if (imageExtensions.contains(entry.extension)) {
-          fileList.add(entry.name);
-        }
-      }
-    }
-
-    if (fileList.isEmpty) {
+    final layout = await ComicFileSystemLayout.inspectAsync(directory);
+    if (layout.nestedDirectories.isNotEmpty) {
+      final nested = layout.nestedDirectories.first;
+      Log.info(
+        "Import Comic",
+        "Invalid Chapter: ${nested.parent.name}\nA directory is found in the chapter directory.",
+      );
       return null;
     }
-
-    fileList.sort();
-    coverPath =
-        fileList.firstWhereOrNull((l) => l.startsWith('cover')) ??
-        fileList.first;
-
-    chapters.sort();
-    if (hasChapters && coverPath == '') {
-      // use the first image in the first chapter as the cover
-      var firstChapter = Directory('${directory.path}/${chapters.first}');
-      await for (var entry in firstChapter.list()) {
-        if (entry is File) {
-          coverPath = entry.name;
-          break;
-        }
-      }
-    }
-    if (coverPath == '') {
+    final cover = layout.inferredCover;
+    if (!layout.hasImages || cover == null) {
       Log.info("Import Comic", "Invalid Comic: $name\nNo cover image found.");
       return null;
     }
+    final chapters = layout.useChapterDirectories
+        ? layout.chapters.map((chapter) => chapter.title).toList()
+        : const <String>[];
+    final coverPath = layout.relativePath(cover);
     var directoryPath = useRelativePath ? directory.name : directory.path;
     return LocalComic(
       id: id ?? '0',
@@ -327,7 +295,7 @@ class ImportComic {
       subtitle: subtitle ?? '',
       tags: tags ?? [],
       directory: directoryPath,
-      chapters: hasChapters
+      chapters: layout.useChapterDirectories
           ? ComicChapters(Map.fromIterables(chapters, chapters))
           : null,
       cover: coverPath,

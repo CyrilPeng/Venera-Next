@@ -35,6 +35,57 @@ bool _sqliteAvailable() {
 
 void main() {
   test(
+    'getImages filters non-images and sorts numeric page names',
+    () async {
+      final dataDir = Directory.systemTemp.createTempSync('venera-local-data-');
+      final cacheDir = Directory.systemTemp.createTempSync(
+        'venera-local-cache-',
+      );
+      addTearDown(() {
+        LocalManager.resetForTesting();
+        if (dataDir.existsSync()) dataDir.deleteSync(recursive: true);
+        if (cacheDir.existsSync()) cacheDir.deleteSync(recursive: true);
+      });
+
+      App.dataPath = dataDir.path;
+      App.cachePath = cacheDir.path;
+      LocalManager.resetForTesting();
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+
+      final comic = _localComic('pages');
+      final directory = Directory(
+        '${manager.path}${Platform.pathSeparator}pages',
+      )..createSync(recursive: true);
+      File(
+        '${directory.path}${Platform.pathSeparator}cover.jpg',
+      ).writeAsBytesSync([1]);
+      File(
+        '${directory.path}${Platform.pathSeparator}10.JPG',
+      ).writeAsBytesSync([1]);
+      File(
+        '${directory.path}${Platform.pathSeparator}2.jpg',
+      ).writeAsBytesSync([1]);
+      File(
+        '${directory.path}${Platform.pathSeparator}metadata.json',
+      ).writeAsStringSync('{}');
+      File(
+        '${directory.path}${Platform.pathSeparator}.hidden.png',
+      ).writeAsBytesSync([1]);
+      await manager.add(comic);
+
+      final images = await manager.getImages(comic.id, comic.comicType, 1);
+
+      expect(images.map((image) => image.split(RegExp(r'[/\\]')).last), [
+        '2.jpg',
+        '10.JPG',
+      ]);
+    },
+    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+  );
+
+  test(
     'single local comic deletes notify once',
     () async {
       final dataDir = Directory.systemTemp.createTempSync('venera-local-data-');

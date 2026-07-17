@@ -2,31 +2,18 @@ import 'dart:convert';
 import 'package:archive/archive_io.dart' as archive_io;
 import 'package:enough_convert/enough_convert.dart';
 import 'package:flutter_7zip/flutter_7zip.dart';
+import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/file_type.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:zip_flutter/zip_flutter.dart';
 
-import 'comic_metadata.dart';
-
-export 'comic_metadata.dart';
-
-class _CbzChapterDirectory {
-  const _CbzChapterDirectory({required this.title, required this.files});
-
-  final String title;
-  final List<File> files;
-}
-
 /// Comic Book Archive. Currently supports CBZ, ZIP and 7Z formats.
 abstract class CBZ {
-  static const _imageExtensions = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'jpe'};
-
   static Future<FileType> checkType(File file) async {
     var header = <int>[];
     await for (var bytes in file.openRead()) {
@@ -185,7 +172,11 @@ abstract class CBZ {
     if (cache.existsSync()) cache.deleteSync(recursive: true);
     cache.createSync();
     await extractArchive(file, cache);
-    cache = _normalizeArchiveRoot(cache);
+    final layout = ComicFileSystemLayout.inspect(
+      cache,
+      unwrapSingleDirectory: true,
+    );
+    cache = layout.root;
     var metaDataFile = File(FilePath.join(cache.path, 'metadata.json'));
     ComicMetaData? metaData;
     if (metaDataFile.existsSync()) {
@@ -206,9 +197,9 @@ abstract class CBZ {
     if (old != null) {
       throw Exception('Comic with name ${metaData.title} already exists');
     }
-    final files = _imageFilesIn(cache);
-    final chapterDirectories = _chapterDirectoriesIn(cache);
-    if (files.isEmpty && chapterDirectories.isEmpty) {
+    final files = List<File>.from(layout.rootPages);
+    final chapterDirectories = layout.chapters;
+    if (!layout.hasImages) {
       cache.deleteSync(recursive: true);
       throw Exception('No images found in the archive');
     }
@@ -221,10 +212,8 @@ abstract class CBZ {
     );
     dest.createSync();
     File coverFile;
-    if (metaData.chapters == null &&
-        _shouldUseChapterDirectories(files, chapterDirectories)) {
-      coverFile =
-          _findNamedCover(files) ?? chapterDirectories.first.files.first;
+    if (metaData.chapters == null && layout.useChapterDirectories) {
+      coverFile = layout.inferredCover!;
       coverFile.copyMem(
         FilePath.join(dest.path, 'cover.${coverFile.extension}'),
       );
@@ -235,8 +224,8 @@ abstract class CBZ {
         cpMap[chapterKey] = chapter.title;
         final chapterDir = Directory(FilePath.join(dest.path, chapterKey));
         chapterDir.createSync();
-        for (var j = 0; j < chapter.files.length; j++) {
-          final src = chapter.files[j];
+        for (var j = 0; j < chapter.pages.length; j++) {
+          final src = chapter.pages[j];
           final dst = File(
             FilePath.join(
               chapterDir.path,
@@ -251,10 +240,7 @@ abstract class CBZ {
         cache.deleteSync(recursive: true);
         throw Exception('No images found in the archive');
       }
-      coverFile = _findNamedCover(files) ?? files.first;
-      if (_isNamedCoverFile(coverFile)) {
-        files.remove(coverFile);
-      }
+      coverFile = layout.inferredCover!;
       coverFile.copyMem(
         FilePath.join(dest.path, 'cover.${coverFile.extension}'),
       );
@@ -314,24 +300,19 @@ abstract class CBZ {
   static Map<String, Object?> inspectImportLayoutForTesting(
     Directory directory,
   ) {
-    final root = _normalizeArchiveRoot(directory);
-    final files = _imageFilesIn(root);
-    final chapterDirectories = _chapterDirectoriesIn(root);
+    final layout = ComicFileSystemLayout.inspect(
+      directory,
+      unwrapSingleDirectory: true,
+    );
     return {
-      'root': root.name,
-      'rootImages': files.map((file) => file.name).toList(),
-      'cover':
-          (_findNamedCover(files) ??
-                  chapterDirectories.firstOrNull?.files.first)
-              ?.name,
+      'root': layout.root.name,
+      'rootImages': layout.rootPages.map((file) => file.name).toList(),
+      'cover': layout.inferredCover?.name,
       'chapters': {
-        for (final chapter in chapterDirectories)
-          chapter.title: chapter.files.map((file) => file.name).toList(),
+        for (final chapter in layout.chapters)
+          chapter.title: chapter.pages.map((file) => file.name).toList(),
       },
-      'useChapterDirectories': _shouldUseChapterDirectories(
-        files,
-        chapterDirectories,
-      ),
+      'useChapterDirectories': layout.useChapterDirectories,
     };
   }
 
@@ -412,82 +393,6 @@ abstract class CBZ {
 
   static String _localFilePathFromImageUri(String imageUri) {
     return imageUri.replaceFirst('file://', '');
-  }
-
-  static Directory _normalizeArchiveRoot(Directory directory) {
-    final entries = directory
-        .listSync()
-        .where((entry) => !_isIgnoredArchiveEntry(entry))
-        .toList();
-    if (entries.length == 1 && entries.first is Directory) {
-      return entries.first as Directory;
-    }
-    return directory;
-  }
-
-  static bool _isIgnoredArchiveEntry(FileSystemEntity entry) {
-    final name = entry.name;
-    return name == '__MACOSX' || name == '.DS_Store' || name.startsWith('._');
-  }
-
-  static List<File> _imageFilesIn(Directory directory) {
-    final files = directory
-        .listSync()
-        .where((entry) => !_isIgnoredArchiveEntry(entry))
-        .whereType<File>()
-        .where(_isImageFile)
-        .toList();
-    files.sort(_compareFiles);
-    return files;
-  }
-
-  static bool _isImageFile(File file) {
-    return _imageExtensions.contains(file.extension.toLowerCase());
-  }
-
-  static List<_CbzChapterDirectory> _chapterDirectoriesIn(Directory directory) {
-    final directories = directory
-        .listSync()
-        .whereType<Directory>()
-        .where((entry) => !_isIgnoredArchiveEntry(entry))
-        .toList();
-    directories.sort((a, b) => a.path.compareTo(b.path));
-    final chapters = <_CbzChapterDirectory>[];
-    for (final directory in directories) {
-      final files = _imageFilesIn(directory);
-      if (files.isNotEmpty) {
-        chapters.add(_CbzChapterDirectory(title: directory.name, files: files));
-      }
-    }
-    return chapters;
-  }
-
-  static bool _shouldUseChapterDirectories(
-    List<File> rootFiles,
-    List<_CbzChapterDirectory> chapterDirectories,
-  ) {
-    if (chapterDirectories.isEmpty) return false;
-    return rootFiles.every(_isNamedCoverFile);
-  }
-
-  static File? _findNamedCover(List<File> files) {
-    return files.firstWhereOrNull(_isNamedCoverFile);
-  }
-
-  static bool _isNamedCoverFile(File file) {
-    return file.basenameWithoutExt.toLowerCase() == 'cover';
-  }
-
-  static int _compareFiles(File a, File b) {
-    var aName = a.basenameWithoutExt;
-    var bName = b.basenameWithoutExt;
-    var aIndex = int.tryParse(aName);
-    var bIndex = int.tryParse(bName);
-    if (aIndex != null && bIndex != null) {
-      return aIndex.compareTo(bIndex);
-    } else {
-      return a.path.compareTo(b.path);
-    }
   }
 
   static List<ComicChapter> buildChapterRangesForTesting(

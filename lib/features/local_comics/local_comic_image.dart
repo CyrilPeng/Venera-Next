@@ -1,6 +1,7 @@
 import 'dart:async' show Future;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/image_provider/base_image_provider.dart';
 import 'package:venera_next/foundation/file_system.dart';
@@ -20,47 +21,11 @@ class LocalComicImageProvider
     File? file = comic.coverFile;
     if (!await file.exists()) {
       file = null;
-      var dir = Directory(comic.directory);
+      var dir = Directory(comic.baseDir);
       if (!await dir.exists()) {
         throw "Error: Comic not found.";
       }
-      Directory? firstDir;
-      await for (var entity in dir.list()) {
-        if (entity is File) {
-          if ([
-            "jpg",
-            "jpeg",
-            "png",
-            "webp",
-            "gif",
-            "jpe",
-            "jpeg",
-          ].contains(entity.extension)) {
-            file = entity;
-            break;
-          }
-        } else if (entity is Directory) {
-          firstDir ??= entity;
-        }
-      }
-      if (file == null && firstDir != null) {
-        await for (var entity in firstDir.list()) {
-          if (entity is File) {
-            if ([
-              "jpg",
-              "jpeg",
-              "png",
-              "webp",
-              "gif",
-              "jpe",
-              "jpeg",
-            ].contains(entity.extension)) {
-              file = entity;
-              break;
-            }
-          }
-        }
-      }
+      file = await _inferCover(dir);
     }
     if (file == null) {
       throw "Error: Cover not found.";
@@ -80,4 +45,38 @@ class LocalComicImageProvider
 
   @override
   String get key => "local${comic.id}${comic.comicType.value}";
+}
+
+Future<File?> _inferCover(Directory directory) async {
+  final entries = await directory.list().toList();
+  final rootImages = sortedComicImageEntries(
+    entries.whereType<File>(),
+    nameOf: (file) => file.name,
+  );
+  final rootCover = findNamedComicCover(
+    rootImages,
+    nameOf: (file) => file.name,
+  );
+  if (rootCover != null) return rootCover;
+  if (rootImages.isNotEmpty) return rootImages.first;
+
+  final directories =
+      entries
+          .whereType<Directory>()
+          .where((entry) => !isIgnoredComicStorageEntry(entry.name))
+          .toList()
+        ..sort((a, b) => compareComicFileNames(a.name, b.name));
+  for (final chapter in directories) {
+    final images = sortedComicImageEntries(
+      (await chapter.list().toList()).whereType<File>(),
+      nameOf: (file) => file.name,
+    );
+    final chapterCover = findNamedComicCover(
+      images,
+      nameOf: (file) => file.name,
+    );
+    if (chapterCover != null) return chapterCover;
+    if (images.isNotEmpty) return images.first;
+  }
+  return null;
 }

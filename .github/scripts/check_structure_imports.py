@@ -657,6 +657,18 @@ FEATURE_ENTRYPOINT_TARGETS = {
         "image_favorites",
         "image_favorites.dart",
     ),
+    _feature_path("comic_storage", "archive_metadata.dart"): _feature_path(
+        "comic_storage",
+        "comic_storage.dart",
+    ),
+    _feature_path("comic_storage", "comic_file_rules.dart"): _feature_path(
+        "comic_storage",
+        "comic_storage.dart",
+    ),
+    _feature_path("comic_storage", "file_system_layout.dart"): _feature_path(
+        "comic_storage",
+        "comic_storage.dart",
+    ),
     _feature_path("local_comics", "import_export", "cbz.dart"): _feature_path(
         "local_comics",
         "import_export",
