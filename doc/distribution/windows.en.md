@@ -9,16 +9,23 @@ Windows stable releases are built by `.github/workflows/main.yml` through the `�
 - `VeneraNext-<version>-windows-installer.exe`: Inno Setup installer, suitable for winget.
 - `VeneraNext-<version>-windows.zip`: portable package, suitable for manual download and extraction.
 
-winget uses the installer by default, not the portable package. After the package is accepted by winget, users can install or upgrade with:
+VeneraNext is officially available through winget with package ID `CyrilPeng.VeneraNext`. winget uses the installer and does not manage the portable zip package.
+
+## Install And Upgrade With Winget
 
 ```powershell
-winget install CyrilPeng.VeneraNext
-winget upgrade CyrilPeng.VeneraNext
+winget install --id CyrilPeng.VeneraNext --exact
+winget upgrade --id CyrilPeng.VeneraNext --exact
+winget show --id CyrilPeng.VeneraNext --exact
 ```
+
+After a GitHub Release is published, its new winget manifest still needs to pass review and the publishing pipeline in `microsoft/winget-pkgs`, so the version shown by winget may temporarily lag behind. Once publishing finishes, run `winget source update` before trying the upgrade again.
+
+Portable zip installations are not registered as winget-managed applications and must still be updated manually. Installer builds use a stable `AppId`, which lets winget identify the installed application and its upgrade relationship.
 
 ## Generate Winget Manifest
 
-When a stable release tag is published, the main release workflow generates the `winget_manifest` artifact. You can also manually run the `准备 Winget Manifest` workflow and input an existing stable tag, for example `v1.10.2`.
+When a stable release tag is published, the main release workflow generates the `winget_manifest` artifact. You can also manually run the `准备 Winget Manifest` workflow and input an existing stable tag.
 
 The manual workflow only generates the manifest artifact by default. To also create a PR to `microsoft/winget-pkgs`:
 
@@ -30,9 +37,10 @@ The workflow uses `.github/scripts/submit_winget_manifest_pr.py` to update the m
 Local generation command:
 
 ```powershell
+$version = "1.13.0"
 python .github\scripts\generate_winget_manifest.py `
-  --version 1.10.2 `
-  --installer build\windows\VeneraNext-1.10.2-windows-installer.exe `
+  --version $version `
+  --installer "build\windows\VeneraNext-$version-windows-installer.exe" `
   --output build\winget `
   --print-path
 ```
@@ -45,19 +53,22 @@ build/winget/manifests/c/CyrilPeng/VeneraNext/<version>/
 
 ## Submit To winget-pkgs
 
-For the first winget submission, submit the generated directory to the matching path in `microsoft/winget-pkgs` and create a PR. If `WINGET_PKGS_TOKEN` is configured, the `submit_pr` option of the `准备 Winget Manifest` workflow can do this directly.
+The initial package submission has already been accepted. Each later stable release should create a PR with a new version directory. If `WINGET_PKGS_TOKEN` is configured, the `submit_pr` option of the `准备 Winget Manifest` workflow can do this directly.
 
 After the package is already accepted, WingetCreate can be used for updates:
 
 ```powershell
+$version = "1.13.0"
 wingetcreate update CyrilPeng.VeneraNext `
-  -u https://github.com/CyrilPeng/venera-next/releases/download/v1.10.2/VeneraNext-1.10.2-windows-installer.exe `
-  -v 1.10.2 `
+  -u "https://github.com/CyrilPeng/Venera-Next/releases/download/v$version/VeneraNext-$version-windows-installer.exe" `
+  -v $version `
   -t <GitHub PAT> `
   --submit
 ```
 
 Do not submit winget manifests for `-rc` prerelease versions. winget should follow stable releases only.
+
+A merged PR is not immediately visible to clients; the winget publishing pipeline must also finish. After the PR reports `Publish-Pipeline-Succeeded`, maintainers should verify the public source with `winget search --id CyrilPeng.VeneraNext --exact`.
 
 ## Notes
 

@@ -54,7 +54,7 @@ VeneraNext 的定位是偏日常使用的漫画阅读器：打开漫画后尽量
 
 - Android、iOS、Windows、Linux、macOS
 - Releases 提供多平台构建产物
-- Windows 分发流程包含 winget manifest，收录后可使用包管理器安装和更新
+- Windows 已正式接入 winget，可使用包管理器安装和更新
 
 完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -80,14 +80,14 @@ VeneraNext 的定位是偏日常使用的漫画阅读器：打开漫画后尽量
 
 ### Windows
 
-从 Releases 下载 `VeneraNext-xxx-windows-installer.exe` 安装包或者 zip 便携版。
-
-如果 `CyrilPeng.VeneraNext` 已被 winget 收录，也可以使用：
+推荐通过 winget 安装，后续可以直接使用同一包 ID 升级：
 
 ```powershell
-winget install CyrilPeng.VeneraNext
-winget upgrade CyrilPeng.VeneraNext
+winget install --id CyrilPeng.VeneraNext --exact
+winget upgrade --id CyrilPeng.VeneraNext --exact
 ```
+
+也可以从 Releases 下载 `VeneraNext-xxx-windows-installer.exe` 安装包或 zip 便携版。便携版不受 winget 管理，需要手动下载新版本并覆盖更新。新版本发布后，winget 公共源可能需要等待 Microsoft 审核；可先执行 `winget source update` 刷新本地索引。
 
 Windows 安装器、便携包和 winget manifest 维护说明见 [doc/distribution/windows.zh.md](doc/distribution/windows.zh.md)。
 
@@ -269,13 +269,14 @@ VeneraNext 有三类 WebDAV 能力，配置入口和用途不同：
 
 ### 5. Windows 能不能一键更新？
 
-正式收录到 winget 后，可以使用：
+可以。推荐使用 winget 安装和升级：
 
 ```powershell
-winget upgrade CyrilPeng.VeneraNext
+winget install --id CyrilPeng.VeneraNext --exact
+winget upgrade --id CyrilPeng.VeneraNext --exact
 ```
 
-在此之前，Windows 仍以 Releases 安装包或便携包为主。
+如果刚发布的新版本尚未显示，请先运行 `winget source update`。winget 版本更新需要经过 Microsoft 审核，通常会晚于 GitHub Release；zip 便携版无法通过 winget 自动升级。
 
 ---
 
