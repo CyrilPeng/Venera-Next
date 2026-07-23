@@ -1,4 +1,7 @@
 <div align="center">
+  <strong>简体中文</strong> | <a href="README.en.md">English</a>
+
+  <br>
   <img src="assets/readme_logo.png" alt="VeneraNext" width="200" />
 
   # VeneraNext
@@ -42,6 +45,15 @@
 
 > [!IMPORTANT]
 > **重要声明**：本仓库只维护漫画阅读器本体，不提供、内置、托管或推荐任何漫画源。漫画源需要由用户自行合法配置，请不要在本仓库反馈源站内容、具体作品可用性或漫画源本身的问题。
+
+<div align="center">
+  <a href="https://github.com/CyrilPeng/Venera-Next">
+    <img alt="GitHub 主仓库" src="https://img.shields.io/badge/GitHub-主仓库-181717?style=for-the-badge&logo=github&logoColor=white" />
+  </a>
+  <a href="https://gitee.com/CyrilPeng/venera-next">
+    <img alt="Gitee 国内镜像" src="https://img.shields.io/badge/Gitee-国内镜像-C71D23?style=for-the-badge&logo=gitee&logoColor=white" />
+  </a>
+</div>
 
 ---
 

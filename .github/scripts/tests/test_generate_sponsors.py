@@ -149,10 +149,13 @@ class GenerateSponsorsTest(unittest.TestCase):
             "after\n"
         )
         featured = sponsors.render_readme_featured(sections)
+        featured_en = sponsors.render_readme_featured(sections, "Featured sponsors")
         first = sponsors.replace_marked_block(readme, featured)
         second = sponsors.replace_marked_block(first, featured)
         self.assertEqual(first, second)
         self.assertEqual(first.count("Featured Studio"), 1)
+        self.assertIn("<sub>置顶赞助</sub>", featured)
+        self.assertIn("<sub>Featured sponsors</sub>", featured_en)
 
 
 if __name__ == "__main__":

@@ -33,6 +33,7 @@ SOURCE_PATH = ROOT / ".github" / "data" / "sponsors.json"
 JSON_OUTPUT_PATH = ROOT / "sponsors.json"
 MARKDOWN_OUTPUT_PATH = ROOT / "SPONSORS.md"
 README_PATH = ROOT / "README.md"
+README_EN_PATH = ROOT / "README.en.md"
 
 README_START = "<!-- featured-sponsors:start -->"
 README_END = "<!-- featured-sponsors:end -->"
@@ -373,14 +374,17 @@ def _featured_html(sponsor: Sponsor) -> str:
     return content
 
 
-def render_readme_featured(sections: SponsorSections) -> str:
+def render_readme_featured(
+    sections: SponsorSections,
+    label: str = "置顶赞助",
+) -> str:
     if not sections.featured:
         return ""
     sponsors = "\n  &nbsp;&nbsp;\n  ".join(
         _featured_html(sponsor) for sponsor in sections.featured
     )
     return f"""<div align="center">
-  <sub>置顶赞助</sub><br><br>
+  <sub>{html.escape(label)}</sub><br><br>
   {sponsors}
 </div>"""
 
@@ -402,11 +406,18 @@ def replace_marked_block(content: str, replacement: str) -> str:
 
 def generated_outputs() -> dict[Path, str]:
     sections = build_sections(load_source())
-    readme = replace_marked_block(_read_text(README_PATH), render_readme_featured(sections))
+    readme = replace_marked_block(
+        _read_text(README_PATH), render_readme_featured(sections)
+    )
+    readme_en = replace_marked_block(
+        _read_text(README_EN_PATH),
+        render_readme_featured(sections, "Featured sponsors"),
+    )
     return {
         JSON_OUTPUT_PATH: render_public_json(sections),
         MARKDOWN_OUTPUT_PATH: render_sponsors_markdown(sections),
         README_PATH: readme,
+        README_EN_PATH: readme_en,
     }
 
 

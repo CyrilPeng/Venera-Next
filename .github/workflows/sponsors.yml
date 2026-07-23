@@ -80,13 +80,14 @@ jobs:
             sponsors.json
             SPONSORS.md
             README.md
+            README.en.md
 
       - name: 提交赞助者公开文件
         if: github.event_name != 'workflow_dispatch' || inputs.dry_run == false
         run: |
           git config --global user.name 'GitHub Action'
           git config --global user.email 'action@github.com'
-          git add .github/data/sponsors.json sponsors.json SPONSORS.md README.md
+          git add .github/data/sponsors.json sponsors.json SPONSORS.md README.md README.en.md
           if git diff --staged --quiet; then
             echo "赞助者公开文件无变化，跳过提交。"
           else
