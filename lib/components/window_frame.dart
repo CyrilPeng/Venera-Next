@@ -199,20 +199,17 @@ class _WindowBrand extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: Semantics(
         label: 'VeneraNext',
-        child: Tooltip(
-          message: 'VeneraNext',
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 32),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                logo,
-                if (showTitle) ...[
-                  const SizedBox(width: 8),
-                  Flexible(child: title),
-                ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 32),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              logo,
+              if (showTitle) ...[
+                const SizedBox(width: 8),
+                Flexible(child: title),
               ],
-            ),
+            ],
           ),
         ),
       ),
