@@ -6,6 +6,7 @@ void main() {
   group('comic file rules', () {
     test('recognizes images, archives, covers, and ignored entries', () {
       expect(isComicImageFileName('PAGE.JPEG'), isTrue);
+      expect(isComicImageFileName('PAGE.AVIF'), isTrue);
       expect(isComicImageFileName('metadata.json'), isFalse);
       expect(isComicArchiveFileName('book.CBZ'), isTrue);
       expect(isNamedComicCover('COVER.WebP'), isTrue);

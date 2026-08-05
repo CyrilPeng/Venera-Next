@@ -1,4 +1,12 @@
-const comicImageExtensions = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'jpe'};
+const comicImageExtensions = {
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'gif',
+  'jpe',
+  'avif',
+};
 
 const comicArchiveExtensions = {'cbz', 'zip', '7z', 'cb7'};
 

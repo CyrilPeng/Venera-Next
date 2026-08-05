@@ -650,6 +650,7 @@ class _ImageDownloadWrapper {
 
   void start() async {
     int lastBytes = 0;
+    String? unsupportedMime;
     final imageIterator = StreamIterator(
       ImageDownloader.loadComicImageUnwrapped(
         image,
@@ -669,7 +670,12 @@ class _ImageDownloadWrapper {
         lastBytes = p.currentBytes;
         if (p.imageBytes != null) {
           var fileType = detectFileType(p.imageBytes!);
-          var file = saveTo.joinFile("$index${fileType.ext}");
+          var fileName = "$index${fileType.ext}";
+          if (!isComicImageFileName(fileName)) {
+            unsupportedMime = fileType.mime;
+            continue;
+          }
+          var file = saveTo.joinFile(fileName);
           final activeWrite = file
               .writeAsBytes(p.imageBytes!)
               .then<void>((_) {});
@@ -691,6 +697,9 @@ class _ImageDownloadWrapper {
         }
       }
       if (!isComplete && !isCancelled) {
+        if (unsupportedMime != null) {
+          throw "Unsupported image data: $unsupportedMime";
+        }
         throw "Failed to download image";
       }
     } catch (e, s) {

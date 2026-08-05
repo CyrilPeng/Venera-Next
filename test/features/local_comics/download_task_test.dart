@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -136,6 +137,76 @@ void main() {
     await task.debugResumeFuture!.timeout(const Duration(milliseconds: 500));
     expect(task.isPaused, isTrue);
     expect(task.isError, isFalse);
+  });
+
+  test('ImagesDownloadTask rejects unsupported image data', () async {
+    final dataDir = Directory.systemTemp.createTempSync(
+      'venera-download-data-',
+    );
+    final cacheDir = Directory.systemTemp.createTempSync(
+      'venera-download-cache-',
+    );
+    final downloadDir = Directory.systemTemp.createTempSync(
+      'venera-download-task-',
+    );
+    addTearDown(() {
+      if (dataDir.existsSync()) {
+        dataDir.deleteSync(recursive: true);
+      }
+      if (cacheDir.existsSync()) {
+        cacheDir.deleteSync(recursive: true);
+      }
+      if (downloadDir.existsSync()) {
+        downloadDir.deleteSync(recursive: true);
+      }
+    });
+
+    App.dataPath = dataDir.path;
+    App.cachePath = cacheDir.path;
+    ImageDownloader.debugLoadComicImageUnwrapped =
+        (imageKey, sourceKey, cid, eid) => Stream.value(
+          ImageDownloadProgress(
+            currentBytes: 1,
+            totalBytes: 1,
+            imageBytes: Uint8List.fromList([1]),
+          ),
+        );
+
+    final task = ImagesDownloadTask.fromJson({
+      'type': 'ImagesDownloadTask',
+      'source': sourceKey,
+      'comicId': 'comic-1',
+      'comic': {
+        'title': 'Test Comic',
+        'subtitle': '',
+        'cover': 'cover.jpg',
+        'description': '',
+        'tags': <String, List<String>>{},
+        'chapters': null,
+        'sourceKey': sourceKey,
+        'comicId': 'comic-1',
+      },
+      'chapters': null,
+      'path': downloadDir.path,
+      'cover': 'cover.jpg',
+      'images': {
+        '': ['image-1'],
+      },
+      'downloadedCount': 0,
+      'totalCount': 1,
+      'index': 0,
+      'chapter': 0,
+    })!;
+
+    task.resume();
+    await task.debugResumeFuture!.timeout(const Duration(seconds: 1));
+
+    expect(task.isError, isTrue);
+    expect(task.message, contains('Unsupported image data'));
+    expect(
+      File('${downloadDir.path}${Platform.pathSeparator}0.').existsSync(),
+      isFalse,
+    );
   });
 
   test('ImagesDownloadTask cancel before path stops speed recorder', () async {

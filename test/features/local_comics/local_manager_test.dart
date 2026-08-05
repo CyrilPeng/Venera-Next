@@ -68,6 +68,9 @@ void main() {
         '${directory.path}${Platform.pathSeparator}2.jpg',
       ).writeAsBytesSync([1]);
       File(
+        '${directory.path}${Platform.pathSeparator}3.avif',
+      ).writeAsBytesSync([1]);
+      File(
         '${directory.path}${Platform.pathSeparator}metadata.json',
       ).writeAsStringSync('{}');
       File(
@@ -79,6 +82,7 @@ void main() {
 
       expect(images.map((image) => image.split(RegExp(r'[/\\]')).last), [
         '2.jpg',
+        '3.avif',
         '10.JPG',
       ]);
     },
