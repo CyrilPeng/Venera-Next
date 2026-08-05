@@ -66,6 +66,9 @@ class History implements Comic {
   @override
   int? maxPage;
 
+  /// Cumulative foreground reading time for this comic.
+  int readDurationMs;
+
   History.fromModel({
     required HistoryMixin model,
     required this.ep,
@@ -73,6 +76,7 @@ class History implements Comic {
     this.group,
     Set<String>? readChapters,
     DateTime? time,
+    this.readDurationMs = 0,
   }) : type = model.historyType,
        title = model.title,
        subtitle = model.subTitle ?? '',
@@ -93,7 +97,8 @@ class History implements Comic {
       readEpisode = Set<String>.from(
         (map["readEpisode"] as List<dynamic>?)?.toSet() ?? const <String>{},
       ),
-      maxPage = map["max_page"];
+      maxPage = map["max_page"],
+      readDurationMs = (map["read_duration_ms"] as num?)?.round() ?? 0;
 
   @override
   String toString() {
@@ -115,7 +120,8 @@ class History implements Comic {
             .where((element) => element != ""),
       ),
       maxPage = row["max_page"],
-      group = row["chapter_group"];
+      group = row["chapter_group"],
+      readDurationMs = (row["read_duration_ms"] as num).round();
 
   @override
   bool operator ==(Object other) {
@@ -209,13 +215,19 @@ class HistoryManager with ChangeNotifier {
           page int,
           readEpisode text,
           max_page int,
-          chapter_group int
+          chapter_group int,
+          read_duration_ms integer not null default 0
         );
       """);
 
     var columns = _db.select("PRAGMA table_info(history);");
     if (!columns.any((element) => element["name"] == "chapter_group")) {
       _db.execute("alter table history add column chapter_group int;");
+    }
+    if (!columns.any((element) => element["name"] == "read_duration_ms")) {
+      _db.execute(
+        "alter table history add column read_duration_ms integer not null default 0;",
+      );
     }
 
     notifyListeners();
@@ -226,16 +238,34 @@ class HistoryManager with ChangeNotifier {
     isInitialized = true;
   }
 
-  static const _insertHistorySql = """
-        insert or replace into history (id, title, subtitle, cover, time, type, ep, page, readEpisode, max_page, chapter_group)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+  static const _upsertHistorySql = """
+        insert into history (id, title, subtitle, cover, time, type, ep, page, readEpisode, max_page, chapter_group)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict(id) do update set
+          title = excluded.title,
+          subtitle = excluded.subtitle,
+          cover = excluded.cover,
+          time = excluded.time,
+          type = excluded.type,
+          ep = excluded.ep,
+          page = excluded.page,
+          readEpisode = excluded.readEpisode,
+          max_page = excluded.max_page,
+          chapter_group = excluded.chapter_group;
+      """;
+
+  static const _addReadDurationSql = """
+        insert into history (id, title, subtitle, cover, time, type, ep, page, readEpisode, max_page, chapter_group, read_duration_ms)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict(id) do update set
+          read_duration_ms = history.read_duration_ms + excluded.read_duration_ms;
       """;
 
   static Future<void> _addHistoryAsync(String dbPath, History newItem) {
     return Isolate.run(() {
       var db = openSqliteDatabase(dbPath);
       try {
-        db.execute(_insertHistorySql, [
+        db.execute(_upsertHistorySql, [
           newItem.id,
           newItem.title,
           newItem.subtitle,
@@ -254,17 +284,45 @@ class HistoryManager with ChangeNotifier {
     });
   }
 
+  static Future<void> _addReadDurationAsync(
+    String dbPath,
+    History item,
+    int durationMs,
+  ) {
+    return Isolate.run(() {
+      var db = openSqliteDatabase(dbPath);
+      try {
+        db.execute(_addReadDurationSql, [
+          item.id,
+          item.title,
+          item.subtitle,
+          item.cover,
+          item.time.millisecondsSinceEpoch,
+          item.type.value,
+          item.ep,
+          item.page,
+          item.readEpisode.join(','),
+          item.maxPage,
+          item.group,
+          durationMs,
+        ]);
+      } finally {
+        db.dispose();
+      }
+    });
+  }
+
   Future<void> _asyncHistoryQueue = Future.value();
 
   /// Create a isolate to add history to prevent blocking the UI thread.
   Future<void> addHistoryAsync(History newItem) {
-    return _enqueueAsyncHistoryWrite(newItem);
+    return _enqueueAsyncWrite(() => _writeHistoryAsync(newItem));
   }
 
-  Future<void> _enqueueAsyncHistoryWrite(History newItem) {
+  Future<void> _enqueueAsyncWrite(Future<void> Function() write) {
     final next = _asyncHistoryQueue.then(
-      (_) => _writeHistoryAsync(newItem),
-      onError: (_) => _writeHistoryAsync(newItem),
+      (_) => write(),
+      onError: (_) => write(),
     );
     _asyncHistoryQueue = next.catchError((Object error, StackTrace stackTrace) {
       Log.error("History", error, stackTrace);
@@ -276,6 +334,18 @@ class HistoryManager with ChangeNotifier {
     await _addHistoryAsync(_dbPath, newItem);
     _cacheHistory(newItem);
     notifyListeners();
+  }
+
+  /// Atomically adds foreground reading time without replacing progress data.
+  Future<void> addReadDuration(History item, Duration duration) {
+    final durationMs = duration.inMilliseconds;
+    if (durationMs <= 0) return Future.value();
+    return _enqueueAsyncWrite(() async {
+      await _addReadDurationAsync(_dbPath, item, durationMs);
+      item.readDurationMs += durationMs;
+      _cacheHistory(item);
+      notifyListeners();
+    });
   }
 
   Future<void> waitForAsyncWrites() {
@@ -298,7 +368,7 @@ class HistoryManager with ChangeNotifier {
   ///
   /// This function would be called when user start reading.
   void addHistory(History newItem) {
-    _db.execute(_insertHistorySql, [
+    _db.execute(_upsertHistorySql, [
       newItem.id,
       newItem.title,
       newItem.subtitle,
@@ -442,6 +512,29 @@ class HistoryManager with ChangeNotifier {
     return res.first[0] as int;
   }
 
+  int getTotalReadDurationMs() {
+    var res = _db.select("""
+      select coalesce(sum(read_duration_ms), 0) from history;
+    """);
+    return (res.first[0] as num).round();
+  }
+
+  int countWithReadDuration() {
+    var res = _db.select("""
+      select count(*) from history where read_duration_ms > 0;
+    """);
+    return (res.first[0] as num).round();
+  }
+
+  List<History> getAllByReadDuration() {
+    var res = _db.select("""
+      select * from history
+      where read_duration_ms > 0
+      order by read_duration_ms desc, time desc;
+    """);
+    return res.map(History.fromRow).toList();
+  }
+
   void close() {
     isInitialized = false;
     _db.dispose();
@@ -527,6 +620,7 @@ class HistoryManager with ChangeNotifier {
           'id': history.id,
           'readEpisode': history.readEpisode.toList(),
           'max_page': history.maxPage,
+          'read_duration_ms': history.readDurationMs,
         });
         updatedHistory.group = history.group;
 

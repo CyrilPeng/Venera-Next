@@ -9,6 +9,7 @@ import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/reader/gesture.dart';
 import 'package:venera_next/features/reader/images.dart';
+import 'package:venera_next/features/reader/reading_session.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/features/reader/volume.dart';
 import 'package:venera_next/features/sync/sync.dart';
@@ -72,7 +73,8 @@ class ReaderState extends State<Reader>
         ReaderLocation,
         ReaderWindow,
         ReaderVolumeListener,
-        ReaderImagePerPageHandler {
+        ReaderImagePerPageHandler,
+        WidgetsBindingObserver {
   @override
   void update() {
     setState(() {});
@@ -144,6 +146,9 @@ class ReaderState extends State<Reader>
 
   History? history;
 
+  late final ReadingSessionTracker _readingSession;
+  bool _readerContentReady = false;
+
   @override
   bool isLoading = false;
 
@@ -175,6 +180,17 @@ class ReaderState extends State<Reader>
       appdata.settings.getReaderSetting(cid, type.sourceKey, 'readerMode'),
     );
     history = widget.history;
+    _readingSession = ReadingSessionTracker(
+      onDuration: (duration) =>
+          HistoryManager().addReadDuration(widget.history, duration),
+      onError: (error, stackTrace) {
+        Log.error(
+          "Reader",
+          "Failed to save reading duration: $error",
+          stackTrace,
+        );
+      },
+    );
     if (!appdata.settings.getReaderSetting(
       cid,
       type.sourceKey,
@@ -194,6 +210,7 @@ class ReaderState extends State<Reader>
       LocalFavoritesManager().onRead(cid, type);
     });
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
   }
 
   bool _isInitialized = false;
@@ -233,20 +250,52 @@ class ReaderState extends State<Reader>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (isFullscreen) {
       fullscreen();
     }
     autoPageTurningTimer?.cancel();
     _flushPendingHistoryUpdate();
+    unawaited(
+      _readingSession.dispose().whenComplete(() {
+        DataSync().onDataChanged();
+      }),
+    );
     focusNode.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     stopVolumeEvent();
-    Future.microtask(() {
-      DataSync().onDataChanged();
-    });
     PaintingBinding.instance.imageCache.maximumSizeBytes = 100 << 20;
     disposeReaderWindow();
     super.dispose();
+  }
+
+  void onReaderContentLoading() {
+    _readerContentReady = false;
+    unawaited(_readingSession.pause());
+  }
+
+  void onReaderContentReady() {
+    _readerContentReady = true;
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    if (lifecycleState == null || lifecycleState == AppLifecycleState.resumed) {
+      _readingSession.start();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        if (_readerContentReady) {
+          _readingSession.start();
+        }
+        return;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        unawaited(_readingSession.pause());
+    }
   }
 
   @override

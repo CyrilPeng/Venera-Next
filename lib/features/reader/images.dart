@@ -44,6 +44,7 @@ class ReaderImagesState extends State<ReaderImages> {
   @override
   void initState() {
     reader = context.reader;
+    reader.onReaderContentLoading();
     reader.isLoading = true;
     super.initState();
   }
@@ -85,6 +86,7 @@ class ReaderImagesState extends State<ReaderImages> {
           _handleJumpToLastPage();
           Future.microtask(() {
             reader.updateHistory();
+            reader.onReaderContentReady();
           });
         });
       } catch (e) {
@@ -114,6 +116,7 @@ class ReaderImagesState extends State<ReaderImages> {
           _handleJumpToLastPage();
           Future.microtask(() {
             reader.updateHistory();
+            reader.onReaderContentReady();
           });
         });
       }
@@ -978,8 +981,14 @@ class ContinuousModeState extends State<_ContinuousMode>
     int chapter, {
     required bool toLastPage,
   }) async {
-    if (!await _loadWaterfallNavigationChapter(chapter) || !mounted) {
-      return;
+    final needsLoading = _segmentOfChapter(chapter) == null;
+    if (needsLoading) reader.onReaderContentLoading();
+    try {
+      if (!await _loadWaterfallNavigationChapter(chapter) || !mounted) {
+        return;
+      }
+    } finally {
+      if (needsLoading && mounted) reader.onReaderContentReady();
     }
     var segment = _segmentOfChapter(chapter);
     if (segment == null || segment.images.isEmpty) return;
