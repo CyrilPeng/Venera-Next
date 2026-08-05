@@ -1,6 +1,9 @@
 export 'cbz.dart';
 export 'comic_export.dart';
 export 'comic_import.dart';
+export 'document_import.dart';
 export 'epub.dart';
+export 'epub_import.dart';
 export 'import_comic.dart';
 export 'pdf.dart';
+export 'pdf_import.dart';

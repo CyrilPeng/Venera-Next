@@ -208,6 +208,9 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
       "Select a directory which contains the comic directories.".tl,
       "Select an archive file (cbz, zip, 7z, cb7)".tl,
       "Select a directory which contains multiple archive files.".tl,
+      "Select a PDF comic file. Pages are imported as local images.".tl,
+      "Select an image-based EPUB file. Text-based EPUB files are not supported."
+          .tl,
       "Select an EhViewer database and a download folder.".tl,
       "Scan the current local path and restore the local database.".tl,
     ][type];
@@ -216,6 +219,8 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
       "Multiple Comics".tl,
       "An archive file".tl,
       "Multiple archive files".tl,
+      "A PDF comic file".tl,
+      "An image EPUB file".tl,
       "EhViewer downloads".tl,
       "Restore local downloads".tl,
     ];
@@ -234,7 +239,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
               onChanged: (value) {
                 setState(() {
                   type = value ?? type;
-                  if (type == 5) {
+                  if (type == 7) {
                     selectedFolder = null;
                   }
                 });
@@ -250,7 +255,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
                       value: index,
                     );
                   }),
-                  if (type != 4 && type != 5)
+                  if (type != 6 && type != 7)
                     ListTile(
                       title: Text("Add to favorites".tl),
                       trailing: Select(
@@ -266,9 +271,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
                     ).paddingHorizontal(8),
                   if (!App.isIOS &&
                       !App.isMacOS &&
-                      type != 2 &&
-                      type != 3 &&
-                      type != 5)
+                      ![2, 3, 4, 5, 7].contains(type))
                     CheckboxListTile(
                       enabled: true,
                       title: Text("Copy to app local path".tl),
@@ -299,7 +302,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
           ),
           onPressed: () {
             launchUrlString(
-              "https://github.com/CyrilPeng/venera-next/blob/main/doc/import_comic.md",
+              "https://github.com/CyrilPeng/venera-next/blob/main/doc/user/import_comic.zh.md",
             );
           },
         ).fixWidth(90).paddingRight(8),
@@ -327,8 +330,10 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
       1 => await importer.directory(false),
       2 => await importer.cbz(),
       3 => await importer.multipleCbz(),
-      4 => await importer.ehViewer(),
-      5 => await importer.localDownloads(),
+      4 => await importer.pdf(),
+      5 => await importer.epub(),
+      6 => await importer.ehViewer(),
+      7 => await importer.localDownloads(),
       int() => true,
     };
     if (result) {

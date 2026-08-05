@@ -80,7 +80,7 @@ Future<File> createEpubComic(
       images.add('images/img$imgIndex.$ext');
       var mime = FileType.fromExtension(ext).mime;
       manifestStrBuilder.writeln(
-        '        <item id="img$imgIndex" href="OEBPS/images/img$imgIndex$ext" media-type="$mime"/>',
+        '        <item id="img$imgIndex" href="OEBPS/images/img$imgIndex.$ext" media-type="$mime"/>',
       );
       imgIndex++;
     }
@@ -92,7 +92,7 @@ Future<File> createEpubComic(
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-    <title>$chapter</title>
+    <title>${_escapeEpubXml(chapter)}</title>
     <style type="text/css">
         img { 
             max-width: 100%;
@@ -105,7 +105,7 @@ Future<File> createEpubComic(
     </style>
 </head>
 <body>
-    <h1>$chapter</h1>
+    <h1>${_escapeEpubXml(chapter)}</h1>
     <div>
 ${images.map((e) => '        <img src="$e" alt="$e"/>').join('\n')}
     </div>
@@ -132,8 +132,8 @@ ${images.map((e) => '        <img src="$e" alt="$e"/>').join('\n')}
     xmlns="http://www.idpf.org/2007/opf"
     xmlns:dc="http://purl.org/dc/elements/1.1/">
     <metadata>
-        <dc:title>${data.title}</dc:title>
-        <dc:creator>${data.author}</dc:creator>
+        <dc:title>${_escapeEpubXml(data.title)}</dc:title>
+        <dc:creator>${_escapeEpubXml(data.author)}</dc:creator>
         <dc:identifier id="book_id">urn:uuid:$uuid</dc:identifier>
         <meta name="cover" content="cover_image"/>
     </metadata>
@@ -156,7 +156,7 @@ ${spineStrBuilder.toString()}
       '        <navPoint id="chapter$i" playOrder="$playOrder">',
     );
     navMapStrBuilder.writeln(
-      '            <navLabel><text>${chapterNames[i]}</text></navLabel>',
+      '            <navLabel><text>${_escapeEpubXml(chapterNames[i])}</text></navLabel>',
     );
     navMapStrBuilder.writeln('            <content src="OEBPS/$i.html"/>');
     navMapStrBuilder.writeln('        </navPoint>');
@@ -174,7 +174,7 @@ ${spineStrBuilder.toString()}
         <meta name="dtb:maxPageNumber" content="0"/>
     </head>
     <docTitle>
-        <text>${data.title}</text>
+        <text>${_escapeEpubXml(data.title)}</text>
     </docTitle>
     <navMap>
 ${navMapStrBuilder.toString()}
@@ -187,6 +187,15 @@ ${navMapStrBuilder.toString()}
   workingDir.deleteSync(recursive: true);
 
   return File(outFilePath);
+}
+
+String _escapeEpubXml(String value) {
+  return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&apos;');
 }
 
 Future<File> createEpubWithLocalComic(

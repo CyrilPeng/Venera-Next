@@ -85,6 +85,9 @@ dependencies:
   display_mode: ^0.0.2
   flutter_staggered_grid_view: ^0.7.0
   archive: any
+  image: ^4.8.0
+  pdfrx: ^2.4.7
+  xml: ^6.6.1
 
 dev_dependencies:
   flutter_test:

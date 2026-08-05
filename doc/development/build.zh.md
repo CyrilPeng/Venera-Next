@@ -11,6 +11,7 @@ English version: [build.en.md](build.en.md)
 - JDK `17`，用于 Android 构建
 - Rust 工具链；Android 构建需要安装对应 Android targets
 - 目标平台原生构建环境，例如 Android SDK / NDK、Xcode、Visual Studio 或 Linux GTK/WebKit 依赖
+- Windows 本地构建需要开启系统“开发者模式”；PDF 导入依赖的 `pdfrx` native assets 会在构建时创建符号链接
 
 先检查 Flutter 环境：
 

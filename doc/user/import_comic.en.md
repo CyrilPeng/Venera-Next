@@ -2,8 +2,13 @@
 
 ## Introduction
 
-VeneraNext supports importing comics from local files.
-However, the comic files must be in a specific format.
+VeneraNext can import comics from local directories, comic archives, PDF files,
+and image-based EPUB files. Imported content is normalized into the existing
+local image-comic layout so all reader modes, progress tracking, and split-spread
+features continue to work.
+
+Supported comic image extensions are `jpg`, `jpeg`, `jpe`, `png`, `webp`,
+`gif`, and `avif`.
 
 ## Restore Local Downloads
 
@@ -92,6 +97,33 @@ Cat's Eye.cbz
 If there is no `cover.[ext]` in the root folder, the first image from the first
 chapter is used as the cover.
 
+## PDF and Image-based EPUB
+
+Open `Local` -> `Import` and select either a PDF comic file or an image-based
+EPUB file. Both formats are converted into app-managed local image comics during
+import; the original document is not streamed by the reader.
+
+### PDF
+
+- Each PDF page is rendered to JPEG in order, and the first page is also used as the cover.
+- The result is a flat comic without chapters. Its title defaults to the PDF file name.
+- Pages are rendered at roughly three times their PDF point size with a 3000-pixel longest-edge limit to balance clarity, memory, and storage use.
+- Encrypted or password-protected PDF files are not currently supported.
+- Import creates a new image copy, so additional local storage is required.
+
+### Image-based EPUB
+
+- Fixed-layout EPUB files may use direct raster-image spine items or XHTML/SVG wrappers containing `img` or SVG `image` references.
+- Page order follows the EPUB spine. Title, author, and cover metadata are preserved when available.
+- Multiple valid navigation entries are preserved as chapters. Files without meaningful chapter navigation are imported as flat comics.
+- Original raster images are copied without recompression.
+- Text-based EPUB files, directly rendered SVG pages, external image references, and paths outside the EPUB root are rejected instead of silently dropping content.
+
+MOBI, AZW, and AZW3 are not supported. Convert them externally to an image-based
+EPUB, PDF, or CBZ before importing.
+
+Document import never overwrites an existing comic with the same title.
+
 ## WebDAV Online Library
 
 The WebDAV comic library is an online reading channel. It is separate from local import/export and WebDAV CBZ archive backup.
@@ -119,7 +151,7 @@ Plain directory rules:
 - The comic title defaults to the comic folder name.
 - Child directories are chapters. Root-level images can also form a single-chapter comic.
 - Pages and chapters are sorted by file name. Zero-padded names such as `0001.jpg` and `0002.jpg` are recommended.
-- The preferred cover is a root image whose base name is `cover`. Supported extensions are `jpg`, `jpeg`, `png`, `webp`, `gif`, and `jpe`. Without one, the app tries the first root page, then `cover.*` or the first page in the first readable chapter.
+- The preferred cover is a root image whose base name is `cover`. Supported extensions are `jpg`, `jpeg`, `png`, `webp`, `gif`, `jpe`, and `avif`. Without one, the app tries the first root page, then `cover.*` or the first page in the first readable chapter.
 - Neither `metadata.json` nor `ComicInfo.xml` is required.
 
 ### Extracted CBZ Enhanced Mode

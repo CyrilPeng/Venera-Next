@@ -13,6 +13,8 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:sqlite3/sqlite3.dart' as sql;
 import 'package:venera_next/foundation/translations.dart';
 import 'cbz.dart';
+import 'epub_import.dart';
+import 'pdf_import.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 
 class ImportComic {
@@ -64,6 +66,79 @@ class ImportComic {
       return registerComics(imported, false);
     }
     return false;
+  }
+
+  Future<bool> pdf() async {
+    final selected = await selectFile(ext: ['pdf']);
+    if (selected == null) return false;
+    final controller = showLoadingDialog(
+      App.rootContext,
+      allowCancel: false,
+      withProgress: true,
+      message: 'Importing PDF'.tl,
+    );
+    LocalComic? comic;
+    try {
+      comic = await PdfComicImporter.import(
+        File(selected.path),
+        onProgress: (current, total) {
+          controller
+            ..setProgress(current / total)
+            ..setMessage(
+              'Importing PDF (@a/@b)'.tlParams({'a': current, 'b': total}),
+            );
+        },
+      );
+    } catch (e, s) {
+      Log.error('Import PDF', e.toString(), s);
+      App.rootContext.showMessage(message: _documentImportError(e));
+    } finally {
+      controller.close();
+    }
+    if (comic == null) return false;
+    return registerComics({
+      selectedFolder: [comic],
+    }, false);
+  }
+
+  Future<bool> epub() async {
+    final selected = await selectFile(ext: ['epub']);
+    if (selected == null) return false;
+    final controller = showLoadingDialog(
+      App.rootContext,
+      allowCancel: false,
+      withProgress: true,
+      message: 'Importing EPUB'.tl,
+    );
+    LocalComic? comic;
+    try {
+      comic = await EpubComicImporter.import(
+        File(selected.path),
+        onProgress: (current, total) {
+          controller
+            ..setProgress(current / total)
+            ..setMessage(
+              'Importing EPUB (@a/@b)'.tlParams({'a': current, 'b': total}),
+            );
+        },
+      );
+    } catch (e, s) {
+      Log.error('Import EPUB', e.toString(), s);
+      App.rootContext.showMessage(message: _documentImportError(e));
+    } finally {
+      controller.close();
+    }
+    if (comic == null) return false;
+    return registerComics({
+      selectedFolder: [comic],
+    }, false);
+  }
+
+  static String _documentImportError(Object error) {
+    final message = error is FormatException
+        ? error.message.toString()
+        : error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+    return message.tl;
   }
 
   Future<bool> ehViewer() async {

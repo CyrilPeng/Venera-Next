@@ -64,12 +64,12 @@ Long series can be read continuously across chapters in waterfall mode. Frequent
 - **Cross-chapter waterfall reading**: the default reading mode preloads the next chapter near the end of the current chapter, making long series and collected volumes easier to read continuously.
 - **Split double-page spreads in vertical modes**: landscape spreads can be split into vertically stacked halves in vertical continuous and waterfall modes. The split order can be reversed for titles with a different reading direction.
 - **Persistent chapter order preference**: ascending and descending chapter order is controlled by a segmented selector and stored as a global preference.
-- **Local and remote libraries**: local comics can be imported from directories, CBZ, ZIP, or 7Z archives. A WebDAV comic library can read regular image directories and extracted VeneraNext CBZ directories online.
+- **Local and remote libraries**: local comics can be imported from directories, CBZ, ZIP, or 7Z archives, PDF files, and image-based EPUB files. A WebDAV comic library can read regular image directories and extracted VeneraNext CBZ directories online.
 - **Reader and sources remain separate**: this repository maintains the reader itself and does not bundle, recommend, or maintain source-site configurations.
 
 ### Comic channels
 
-- **Local comics**: read image directories and archives already available on the device. Single-title directories, parent directories containing multiple titles, CBZ, ZIP, 7Z, and CB7 imports are supported.
+- **Local comics**: read image directories, archives, and image documents already available on the device. Single-title directories, parent directories containing multiple titles, CBZ, ZIP, 7Z, CB7, PDF, and image-based EPUB imports are supported.
 - **Network comic extensions**: compatible JavaScript extension APIs can provide search, categories, rankings, discovery, favorites, and downloads.
 - **WebDAV comic library**: use a NAS, Nextcloud, ownCloud, or another WebDAV server as an online image library. Regular image directories and enhanced extracted CBZ directories are supported; compressed archives are not streamed directly.
 - **Downloaded chapters**: chapters from a network extension can be saved into the local comic library for offline reading.
@@ -135,7 +135,7 @@ Download `VeneraNext-xxx.dmg` from GitHub Releases.
 
 1. Download the package for your platform from [GitHub Releases](https://github.com/CyrilPeng/Venera-Next/releases).
 2. Choose a comic channel:
-   - For an existing image directory or CBZ file, open `Local` -> `Import`.
+   - For an existing image directory, comic archive, PDF, or image-based EPUB, open `Local` -> `Import`.
    - For a network comic extension, open comic source management and add an extension compatible with the JavaScript API.
    - For online NAS or WebDAV reading, open `Settings` -> `App` -> `WebDAV Comic Library` and configure the remote directory.
 3. Select a reading mode under `Settings` -> `Reader`. Waterfall is recommended for long series; Gallery provides traditional page turning; Continuous scrolls within the current chapter only.
@@ -203,6 +203,14 @@ Comic.cbz
 
 - Large archives must be extracted and copied into the local library before reading. They are best suited to download-first reading, backup, and distribution rather than online streaming.
 - Imported local comics can be exported as CBZ files for backup or transfer between devices.
+
+### PDF and image-based EPUB import
+
+- PDF pages are rendered to local JPEG images during import, with the first page used as the cover. The result is a flat comic without chapters.
+- Image-based EPUB files are read in spine order. Title, author, cover, and meaningful chapter navigation are preserved when possible, while raster images are copied without recompression.
+- Text-based EPUB files, directly rendered SVG pages, encrypted PDF files, and MOBI/AZW/AZW3 are not supported.
+- PDF and EPUB imports require additional local storage. The reader uses the converted images and does not depend on the original document afterward.
+- See [Local Comic Import](doc/user/import_comic.en.md#pdf-and-image-based-epub) for the full compatibility rules.
 
 ### Network comic extensions
 

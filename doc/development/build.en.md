@@ -11,6 +11,7 @@ This guide is for developers building, testing, or maintaining VeneraNext from s
 - JDK `17` for Android builds
 - A Rust toolchain; Android builds require the corresponding Android targets
 - Native tooling for the target platform, such as Android SDK / NDK, Xcode, Visual Studio, or Linux GTK/WebKit dependencies
+- Windows local builds require Developer Mode because the `pdfrx` native assets used by PDF import create symbolic links during the build
 
 Check the Flutter environment first:
 
