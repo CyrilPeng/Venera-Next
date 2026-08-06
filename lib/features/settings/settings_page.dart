@@ -3,6 +3,7 @@ import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
+import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/settings/about.dart';
 import 'package:venera_next/features/settings/appearance.dart';
 import 'package:venera_next/features/settings/local_favorites.dart';
@@ -31,6 +32,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final categories = <String>[
     "Explore",
     "Reading",
+    "Reading statistics",
     "Appearance",
     "Local Favorites",
     "APP",
@@ -42,6 +44,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final icons = <IconData>[
     Icons.explore,
     Icons.book,
+    Icons.query_stats,
     Icons.color_lens,
     Icons.collections_bookmark_rounded,
     Icons.apps,
@@ -220,12 +223,13 @@ class _SettingsPageState extends State<SettingsPage> {
     return switch (pageIndex) {
       0 => const ExploreSettings(),
       1 => const ReaderSettings(),
-      2 => const AppearanceSettings(),
-      3 => const LocalFavoritesSettings(),
-      4 => const AppSettings(),
-      5 => const NetworkSettings(),
-      6 => const AboutSettings(),
-      7 => const DebugPage(),
+      2 => const ReadingStatsPage(),
+      3 => const AppearanceSettings(),
+      4 => const LocalFavoritesSettings(),
+      5 => const AppSettings(),
+      6 => const NetworkSettings(),
+      7 => const AboutSettings(),
+      8 => const DebugPage(),
       _ => throw UnimplementedError(),
     };
   }
@@ -245,12 +249,13 @@ class _SettingsDetailPage extends StatelessWidget {
     return switch (pageIndex) {
       0 => const ExploreSettings(),
       1 => const ReaderSettings(),
-      2 => const AppearanceSettings(),
-      3 => const LocalFavoritesSettings(),
-      4 => const AppSettings(),
-      5 => const NetworkSettings(),
-      6 => const AboutSettings(),
-      7 => const DebugPage(),
+      2 => const ReadingStatsPage(),
+      3 => const AppearanceSettings(),
+      4 => const LocalFavoritesSettings(),
+      5 => const AppSettings(),
+      6 => const NetworkSettings(),
+      7 => const AboutSettings(),
+      8 => const DebugPage(),
       _ => throw UnimplementedError(),
     };
   }

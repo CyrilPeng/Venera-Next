@@ -41,58 +41,12 @@ class _ReadingStatsPageState extends State<ReadingStatsPage> {
     return Scaffold(
       body: SmoothCustomScrollView(
         slivers: [
-          SliverAppbar(
-            leading: IconButton(
-              tooltip: 'Back'.tl,
-              onPressed: context.pop,
-              icon: const Icon(Icons.arrow_back),
-            ),
-            title: Text('Reading statistics'.tl),
-          ),
+          SliverAppbar(title: Text('Reading statistics'.tl)),
           SliverToBoxAdapter(
-            child: Container(
-              width: double.infinity,
-              color: context.colorScheme.surfaceContainerLow,
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    formatReadingDuration(totalDuration),
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Total reading time'.tl,
-                    style: TextStyle(
-                      color: context.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _SummaryMetric(
-                          label: 'Comics with reading time'.tl,
-                          value: manager.countWithReadDuration().toString(),
-                        ),
-                      ),
-                      const SizedBox(width: 24),
-                      Expanded(
-                        flex: 2,
-                        child: _SummaryMetric(
-                          label: 'Most-read comic'.tl,
-                          value:
-                              longestReadTitle ?? 'No reading time recorded'.tl,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            child: ReadingStatsSummary(
+              totalDuration: totalDuration,
+              comicCount: manager.countWithReadDuration(),
+              mostReadTitle: longestReadTitle,
             ),
           ),
           SliverToBoxAdapter(
@@ -108,36 +62,55 @@ class _ReadingStatsPageState extends State<ReadingStatsPage> {
               itemCount: histories.length,
               itemBuilder: (context, index) {
                 final history = histories[index];
-                return ListTile(
-                  leading: SizedBox(
-                    width: 32,
-                    child: Text(
-                      '${index + 1}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: context.colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  title: Text(
-                    history.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: history.subtitle.isEmpty
-                      ? null
-                      : Text(
-                          history.subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                final duration = formatReadingDuration(
+                  Duration(milliseconds: history.readDurationMs),
+                );
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 520;
+                    final compactSubtitle = history.subtitle.isEmpty
+                        ? duration
+                        : '${history.subtitle} - $duration';
+                    return ListTile(
+                      leading: SizedBox(
+                        width: 32,
+                        child: Text(
+                          '${index + 1}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: context.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                  trailing: Text(
-                    formatReadingDuration(
-                      Duration(milliseconds: history.readDurationMs),
-                    ),
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                      ),
+                      title: Text(
+                        history.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: compact
+                          ? Text(
+                              compactSubtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            )
+                          : history.subtitle.isEmpty
+                          ? null
+                          : Text(
+                              history.subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                      trailing: compact
+                          ? null
+                          : Text(
+                              duration,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                    );
+                  },
                 );
               },
             ),
@@ -148,14 +121,119 @@ class _ReadingStatsPageState extends State<ReadingStatsPage> {
   }
 }
 
-class _SummaryMetric extends StatelessWidget {
-  const _SummaryMetric({required this.label, required this.value});
+class ReadingStatsSummary extends StatelessWidget {
+  const ReadingStatsSummary({
+    super.key,
+    required this.totalDuration,
+    required this.comicCount,
+    required this.mostReadTitle,
+  });
 
-  final String label;
-  final String value;
+  final Duration totalDuration;
+  final int comicCount;
+  final String? mostReadTitle;
 
   @override
   Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: context.colorScheme.surfaceContainerLow,
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            formatReadingDuration(totalDuration),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Total reading time'.tl,
+            style: TextStyle(color: context.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 20),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 560;
+              final trackedComics = _SummaryMetric(
+                label: 'Comics tracked'.tl,
+                value: comicCount.toString(),
+                compact: compact,
+              );
+              final mostRead = _SummaryMetric(
+                label: 'Most-read comic'.tl,
+                value: mostReadTitle ?? 'No reading time recorded'.tl,
+                compact: compact,
+              );
+              if (compact) {
+                return Column(
+                  children: [
+                    trackedComics,
+                    Divider(
+                      height: 1,
+                      color: context.colorScheme.outlineVariant,
+                    ),
+                    mostRead,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: trackedComics),
+                  const SizedBox(width: 32),
+                  Expanded(child: mostRead),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  const _SummaryMetric({
+    required this.label,
+    required this.value,
+    required this.compact,
+  });
+
+  final String label;
+  final String value;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(color: context.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: Text(
+                value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
