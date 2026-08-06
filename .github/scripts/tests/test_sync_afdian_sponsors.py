@@ -1,8 +1,10 @@
+import json
 import sys
 import unittest
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -85,6 +87,35 @@ class AfdianSponsorSyncTest(unittest.TestCase):
 
         self.assertEqual(payload["params"], '{"a":333}')
         self.assertEqual(payload["sign"], "a4acc28b81598b7e5d84ebdc3e91710c")
+
+    def test_ping_uses_non_empty_json_params(self) -> None:
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self) -> bytes:
+                return b'{"ec":200,"data":{}}'
+
+        captured = []
+
+        def fake_urlopen(request, timeout):
+            captured.append((request, timeout))
+            return FakeResponse()
+
+        client = afdian.AfdianClient(
+            "abc",
+            "123",
+            clock=lambda: 1624339905,
+        )
+        with patch.object(afdian, "urlopen", fake_urlopen):
+            client.ping()
+
+        self.assertEqual(len(captured), 1)
+        payload = json.loads(captured[0][0].data.decode("utf-8"))
+        self.assertEqual(payload["params"], '{"a":333}')
 
     def test_remark_requires_an_explicit_safe_public_name(self) -> None:
         strict = _config(allow_plain_remark=False)

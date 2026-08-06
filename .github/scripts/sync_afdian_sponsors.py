@@ -219,7 +219,9 @@ class AfdianClient:
         raise AfdianApiError(f"Afdian {endpoint} request failed") from last_error
 
     def ping(self) -> None:
-        self.request("ping", {})
+        # Afdian's ping endpoint requires a non-empty JSON object. This is
+        # the parameter used by the official signature validation example.
+        self.request("ping", {"a": 333})
 
     def query_all(self, endpoint: str) -> list[dict[str, object]]:
         items: list[dict[str, object]] = []
