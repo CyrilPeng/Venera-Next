@@ -810,6 +810,7 @@ class _SliverSearchBarDelegate extends SliverPersistentHeaderDelegate {
                       onPressed: () {
                         editingController.clear();
                         onChanged?.call("");
+                        focusNode?.requestFocus();
                       },
                     );
             },
@@ -837,11 +838,18 @@ class _SliverSearchBarDelegate extends SliverPersistentHeaderDelegate {
 }
 
 class AppSearchBar extends StatefulWidget {
-  const AppSearchBar({super.key, required this.controller, this.action});
+  const AppSearchBar({
+    super.key,
+    required this.controller,
+    this.action,
+    this.focusNode,
+  });
 
   final SearchBarController controller;
 
   final Widget? action;
+
+  final FocusNode? focusNode;
 
   @override
   State<AppSearchBar> createState() => _SearchBarState();
@@ -893,6 +901,7 @@ class _SearchBarState extends State<AppSearchBar> with _SearchBarMixin {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: TextField(
                 controller: _editingController,
+                focusNode: widget.focusNode,
                 decoration: InputDecoration(
                   hintText: "Search".tl,
                   border: InputBorder.none,
@@ -913,6 +922,7 @@ class _SearchBarState extends State<AppSearchBar> with _SearchBarMixin {
                       icon: const Icon(Icons.clear),
                       onPressed: () {
                         _editingController.clear();
+                        widget.focusNode?.requestFocus();
                       },
                     );
             },

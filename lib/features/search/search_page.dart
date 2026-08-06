@@ -162,6 +162,7 @@ class _SearchPageState extends State<SearchPage> {
     }
     controller = SearchBarController(onSearch: search);
     appdata.settings.addListener(updateSearchSourcesIfNeeded);
+    WidgetsBinding.instance.addPostFrameCallback((_) => focusNode.requestFocus());
     super.initState();
   }
 
