@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/loading.dart';
@@ -254,6 +256,12 @@ class _SingleExplorePageState extends AutomaticGlobalState<_SingleExplorePage>
 
   VoidCallback? refreshHandler;
 
+  VoidCallback? reloadHandler;
+
+  void onDataChanged() {
+    reloadHandler?.call();
+  }
+
   void onSettingsChanged() {
     var explorePages = appdata.settings["explore_pages"];
     if (!explorePages.contains(widget.title)) {
@@ -270,17 +278,19 @@ class _SingleExplorePageState extends AutomaticGlobalState<_SingleExplorePage>
         if (d.title == widget.title) {
           data = d;
           comicSourceKey = source.key;
+          appdata.settings.addListener(onSettingsChanged);
+          data.changeListenable?.addListener(onDataChanged);
           return;
         }
       }
     }
-    appdata.settings.addListener(onSettingsChanged);
     throw "Explore Page ${widget.title} Not Found!";
   }
 
   @override
   void dispose() {
     appdata.settings.removeListener(onSettingsChanged);
+    data.changeListenable?.removeListener(onDataChanged);
     super.dispose();
   }
 
@@ -307,6 +317,9 @@ class _SingleExplorePageState extends AutomaticGlobalState<_SingleExplorePage>
         refreshHandlerCallback: (c) {
           refreshHandler = c;
         },
+        reloadHandlerCallback: (c) {
+          reloadHandler = c;
+        },
       );
     } else if (data.loadMixed != null) {
       return _MixedExplorePage(
@@ -328,7 +341,16 @@ class _SingleExplorePageState extends AutomaticGlobalState<_SingleExplorePage>
 
   @override
   void refresh() {
-    refreshHandler?.call();
+    final onRefresh = data.onRefresh;
+    if (onRefresh == null) {
+      refreshHandler?.call();
+      return;
+    }
+    unawaited(
+      onRefresh().whenComplete(() {
+        reloadHandler?.call();
+      }),
+    );
   }
 
   @override

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
@@ -691,6 +693,9 @@ class _WebDavComicLibrarySettingState
     extends State<_WebDavComicLibrarySetting> {
   late final WebDavConnectionControllers _connectionControllers;
   bool isTesting = false;
+  bool isSyncing = false;
+  late bool autoSyncEnabled;
+  late int syncIntervalMinutes;
 
   @override
   void initState() {
@@ -702,6 +707,13 @@ class _WebDavComicLibrarySettingState
       password: config.pass,
       remotePath: config.remotePath,
     );
+    WebDavLibrarySource.updateSyncStatusFromCache();
+    autoSyncEnabled =
+        appdata.settings['webdavComicLibraryAutoSync'] as bool? ?? true;
+    syncIntervalMinutes =
+        (appdata.settings['webdavComicLibrarySyncIntervalMinutes'] as num?)
+            ?.round() ??
+        360;
   }
 
   @override
@@ -743,6 +755,80 @@ class _WebDavComicLibrarySettingState
               ),
             ),
             const SizedBox(height: 16),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('Automatic library updates'.tl),
+              subtitle: Text(
+                'Refresh the cached WebDAV library while the app is running.'
+                    .tl,
+              ),
+              value: autoSyncEnabled,
+              onChanged: (value) {
+                setState(() {
+                  autoSyncEnabled = value;
+                });
+              },
+            ),
+            if (autoSyncEnabled) ...[
+              const SizedBox(height: 8),
+              DropdownButtonFormField<int>(
+                initialValue: syncIntervalMinutes,
+                decoration: InputDecoration(
+                  labelText: 'Update interval'.tl,
+                  border: const OutlineInputBorder(),
+                ),
+                items: [
+                  DropdownMenuItem(
+                    value: 15,
+                    child: Text('Every 15 minutes'.tl),
+                  ),
+                  DropdownMenuItem(value: 60, child: Text('Every hour'.tl)),
+                  DropdownMenuItem(value: 360, child: Text('Every 6 hours'.tl)),
+                  DropdownMenuItem(value: 1440, child: Text('Every day'.tl)),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      syncIntervalMinutes = value;
+                    });
+                  }
+                },
+              ),
+            ],
+            const SizedBox(height: 16),
+            ValueListenableBuilder<WebDavLibrarySyncStatus>(
+              valueListenable: WebDavLibrarySource.syncStatus,
+              builder: (context, status, _) {
+                final text = switch (status) {
+                  WebDavLibrarySyncStatus(isSyncing: true, total: > 0) =>
+                    'Updating WebDAV library: @current/@total'.tlParams({
+                      'current': status.processed,
+                      'total': status.total,
+                    }),
+                  WebDavLibrarySyncStatus(isSyncing: true) =>
+                    'Updating WebDAV library'.tl,
+                  WebDavLibrarySyncStatus(errorMessage: != null) =>
+                    'Last sync failed'.tl,
+                  WebDavLibrarySyncStatus(lastSuccessfulSync: > 0) =>
+                    '${'Last synced'.tl}: '
+                        '${status.formattedLastSuccessfulSync}',
+                  _ => 'Not synced yet'.tl,
+                };
+                return Row(
+                  children: [
+                    Icon(
+                      status.errorMessage == null
+                          ? Icons.sync_outlined
+                          : Icons.sync_problem_outlined,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(text)),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -755,13 +841,35 @@ class _WebDavComicLibrarySettingState
               ],
             ),
             const SizedBox(height: 12),
+            if (WebDavLibraryConfig.fromSettings().isValid) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: Button.outlined(
+                      isLoading: isSyncing,
+                      onPressed: syncNow,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.sync, size: 18),
+                          const SizedBox(width: 8),
+                          Text('Sync now'.tl),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
             Row(
               children: [
                 Expanded(
                   child: Button.filled(
-                    isLoading: isTesting,
+                    isLoading: isTesting && !isSyncing,
                     onPressed: save,
-                    child: Text("Continue".tl),
+                    child: Text('Save and sync'.tl),
                   ),
                 ),
               ],
@@ -780,7 +888,7 @@ class _WebDavComicLibrarySettingState
   );
 
   Future<void> testConnection() async {
-    if (isTesting) return;
+    if (isTesting || isSyncing) return;
     setState(() {
       isTesting = true;
     });
@@ -797,33 +905,62 @@ class _WebDavComicLibrarySettingState
   }
 
   Future<void> save() async {
-    if (isTesting) return;
+    if (isTesting || isSyncing) return;
+    if (!await _persistConfiguration()) return;
+    final config = WebDavLibraryConfig.fromSettings();
+    if (config.isValid) {
+      unawaited(WebDavLibrarySource.synchronize(force: true));
+    }
+    if (!mounted) return;
+    context.showMessage(message: 'Saved'.tl);
+    App.rootPop();
+  }
+
+  Future<void> syncNow() async {
+    if (isTesting || isSyncing) return;
+    if (!await _persistConfiguration()) return;
+    if (!WebDavLibraryConfig.fromSettings().isValid) return;
+    setState(() {
+      isSyncing = true;
+    });
+    final result = await WebDavLibrarySource.synchronize(force: true);
+    if (!mounted) return;
+    setState(() {
+      isSyncing = false;
+    });
+    if (result.error) {
+      context.showMessage(message: result.errorMessage!);
+    } else {
+      context.showMessage(message: 'WebDAV library updated'.tl);
+    }
+  }
+
+  Future<bool> _persistConfiguration() async {
     final config = currentConfig;
+    appdata.settings['webdavComicLibraryAutoSync'] = autoSyncEnabled;
+    appdata.settings['webdavComicLibrarySyncIntervalMinutes'] =
+        syncIntervalMinutes;
     if (!config.isValid && config.user.isEmpty && config.pass.isEmpty) {
       await WebDavLibraryConfig.saveToSettings(config);
       _refreshWebDavLibrarySource(enabled: false);
-      if (!mounted) return;
-      context.showMessage(message: "Saved".tl);
-      App.rootPop();
-      return;
+      return true;
     }
     setState(() {
       isTesting = true;
     });
     final result = await WebDavLibrarySource.testConnection(config);
-    if (!mounted) return;
+    if (!mounted) return false;
     setState(() {
       isTesting = false;
     });
     if (result.error) {
       context.showMessage(message: result.errorMessage!);
       context.showMessage(message: "Saved Failed".tl);
+      return false;
     } else {
       await WebDavLibraryConfig.saveToSettings(config);
       _refreshWebDavLibrarySource(enabled: true);
-      if (!mounted) return;
-      context.showMessage(message: "Saved".tl);
-      App.rootPop();
+      return true;
     }
   }
 

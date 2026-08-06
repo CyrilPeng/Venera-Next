@@ -242,6 +242,7 @@ class ComicList extends StatefulWidget {
     this.menuBuilder,
     this.controller,
     this.refreshHandlerCallback,
+    this.reloadHandlerCallback,
     this.enablePageStorage = false,
   });
 
@@ -261,6 +262,8 @@ class ComicList extends StatefulWidget {
 
   final void Function(VoidCallback c)? refreshHandlerCallback;
 
+  final void Function(VoidCallback c)? reloadHandlerCallback;
+
   final bool enablePageStorage;
 
   @override
@@ -277,6 +280,8 @@ class ComicListState extends State<ComicList> {
   String? _error;
 
   final Map<int, bool> _loading = {};
+
+  bool _isReloading = false;
 
   String? _nextUrl;
 
@@ -338,11 +343,47 @@ class ComicListState extends State<ComicList> {
     setState(() {});
   }
 
+  Future<void> reload() async {
+    if (_isReloading) return;
+    if (widget.loadPage == null || _data.isEmpty) {
+      refresh();
+      return;
+    }
+    _isReloading = true;
+    final pages = _data.keys.toList()..sort();
+    try {
+      final results = await Future.wait([
+        for (final page in pages) widget.loadPage!(page),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        for (var index = 0; index < pages.length; index++) {
+          final result = results[index];
+          if (!result.success) continue;
+          _data[pages[index]] = List<Comic>.from(result.data);
+          if (result.subData is int) {
+            _maxPage = result.subData as int;
+          }
+        }
+        final maxPage = _maxPage;
+        if (maxPage != null) {
+          _data.removeWhere((page, _) => page > maxPage);
+        }
+      });
+      storeState();
+    } finally {
+      _isReloading = false;
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     restoreState(PageStorage.of(context).readState(context));
     widget.refreshHandlerCallback?.call(refresh);
+    widget.reloadHandlerCallback?.call(() {
+      unawaited(reload());
+    });
   }
 
   void remove(Comic c) {

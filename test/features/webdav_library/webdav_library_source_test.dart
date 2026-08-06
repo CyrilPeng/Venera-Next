@@ -1,13 +1,20 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/webdav_library/webdav_library.dart';
+import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
 void main() {
   late _FakeWebDavLibraryOps ops;
+  late Directory dataDir;
 
   setUp(() {
+    dataDir = Directory.systemTemp.createTempSync('venera-webdav-library-');
+    App.dataPath = dataDir.path;
+    WebDavLibrarySource.resetCacheForTesting();
     ops = _FakeWebDavLibraryOps();
     WebDavLibrarySource.ops = ops;
     appdata.settings['webdavComicLibrary'] = [
@@ -16,12 +23,19 @@ void main() {
       'pass',
     ];
     appdata.settings['webdavComicLibraryPath'] = '/manga/';
+    appdata.settings['webdavComicLibraryAutoSync'] = false;
   });
 
-  tearDown(() {
+  tearDown(() async {
+    if (WebDavLibrarySource.syncStatus.value.isSyncing) {
+      await WebDavLibrarySource.synchronize();
+    }
     WebDavLibrarySource.resetOps();
+    WebDavLibrarySource.resetCacheForTesting();
     appdata.settings['webdavComicLibrary'] = [];
     appdata.settings['webdavComicLibraryPath'] = '/venera_comics/';
+    appdata.settings['webdavComicLibraryAutoSync'] = true;
+    dataDir.deleteSync(recursive: true);
   });
 
   test('loadComics lists directories and ignores archives', () async {
@@ -35,6 +49,8 @@ void main() {
       WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
     ];
 
+    await WebDavLibrarySource.loadComics(1);
+    await WebDavLibrarySource.synchronize();
     final result = await WebDavLibrarySource.loadComics(1);
 
     expect(result.success, isTrue);
@@ -59,6 +75,8 @@ void main() {
         const WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
       ]);
 
+      await WebDavLibrarySource.loadComics(1);
+      await WebDavLibrarySource.synchronize();
       final result = await WebDavLibrarySource.loadComics(1);
 
       expect(result.success, isTrue);
@@ -82,6 +100,148 @@ void main() {
       expect(result.success, isTrue);
       expect(result.data.single.title, 'Cat Eye');
       expect(result.data.single.cover, '');
+    },
+  );
+
+  test(
+    'initial list returns before comic metadata inspection finishes',
+    () async {
+      ops.dirs['/manga/'] = const [
+        WebDavLibraryEntry(name: 'Slow Book', isDirectory: true),
+      ];
+      ops.dirs['/manga/Slow Book/'] = const [
+        WebDavLibraryEntry(name: 'cover.jpg', isDirectory: false),
+        WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+      ];
+      final blocker = Completer<void>();
+      ops.blockers['/manga/Slow Book/'] = blocker;
+
+      final initial = await WebDavLibrarySource.loadComics(1);
+
+      expect(initial.success, isTrue);
+      expect(initial.data.single.title, 'Slow Book');
+      expect(initial.data.single.cover, isEmpty);
+      expect(WebDavLibrarySource.syncStatus.value.isSyncing, isTrue);
+
+      blocker.complete();
+      await WebDavLibrarySource.synchronize();
+      final updated = await WebDavLibrarySource.loadComics(1);
+
+      expect(updated.data.single.cover, '/manga/Slow Book/cover.jpg');
+    },
+  );
+
+  test('cached comic list is paged without additional WebDAV reads', () async {
+    ops.dirs['/manga/'] = [
+      for (var index = 1; index <= 45; index++)
+        WebDavLibraryEntry(
+          name: 'Book ${index.toString().padLeft(2, '0')}',
+          isDirectory: true,
+          eTag: 'v1',
+        ),
+    ];
+    for (var index = 1; index <= 45; index++) {
+      final name = 'Book ${index.toString().padLeft(2, '0')}';
+      ops.dirs['/manga/$name/'] = const [
+        WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+      ];
+    }
+
+    await WebDavLibrarySource.synchronize();
+    ops.readPaths.clear();
+
+    final first = await WebDavLibrarySource.loadComics(1);
+    final second = await WebDavLibrarySource.loadComics(2);
+    final third = await WebDavLibrarySource.loadComics(3);
+
+    expect(first.data, hasLength(20));
+    expect(second.data, hasLength(20));
+    expect(third.data, hasLength(5));
+    expect(first.subData, 3);
+    expect(second.subData, 3);
+    expect(third.subData, 3);
+    expect(ops.readPaths, isEmpty);
+  });
+
+  test('incremental sync only re-inspects changed directories', () async {
+    ops.dirs['/manga/'] = const [
+      WebDavLibraryEntry(name: 'Book A', isDirectory: true, eTag: 'v1'),
+      WebDavLibraryEntry(name: 'Book B', isDirectory: true, eTag: 'v1'),
+    ];
+    ops.dirs['/manga/Book A/'] = const [
+      WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+    ];
+    ops.dirs['/manga/Book B/'] = const [
+      WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+    ];
+    await WebDavLibrarySource.synchronize();
+    ops.readPaths.clear();
+
+    await WebDavLibrarySource.synchronize();
+    expect(ops.readPaths, ['/manga/']);
+
+    ops.readPaths.clear();
+    ops.dirs['/manga/'] = const [
+      WebDavLibraryEntry(name: 'Book A', isDirectory: true, eTag: 'v2'),
+      WebDavLibraryEntry(name: 'Book B', isDirectory: true, eTag: 'v1'),
+    ];
+    await WebDavLibrarySource.synchronize();
+
+    expect(ops.readPaths, ['/manga/', '/manga/Book A/']);
+  });
+
+  test('failed refresh keeps the last successful cached list', () async {
+    ops.dirs['/manga/'] = const [
+      WebDavLibraryEntry(name: 'Cached Book', isDirectory: true),
+    ];
+    ops.dirs['/manga/Cached Book/'] = const [
+      WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+    ];
+    await WebDavLibrarySource.synchronize();
+    ops.errors['/manga/'] = StateError('WebDAV unavailable');
+
+    final refresh = await WebDavLibrarySource.synchronize(force: true);
+    final cached = await WebDavLibrarySource.loadComics(1);
+
+    expect(refresh.error, isTrue);
+    expect(cached.success, isTrue);
+    expect(cached.data.single.title, 'Cached Book');
+  });
+
+  test('concurrent detail loads share one snapshot request', () async {
+    ops.dirs['/manga/Book/'] = const [
+      WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+    ];
+
+    final results = await Future.wait([
+      WebDavLibrarySource.loadComicInfo('Book'),
+      WebDavLibrarySource.loadComicInfo('Book'),
+    ]);
+
+    expect(results.every((result) => result.success), isTrue);
+    expect(ops.readPaths, ['/manga/Book/']);
+  });
+
+  test(
+    'a detail-only cache entry does not replace the full library index',
+    () async {
+      ops.dirs['/manga/'] = const [
+        WebDavLibraryEntry(name: 'Book A', isDirectory: true),
+        WebDavLibraryEntry(name: 'Book B', isDirectory: true),
+      ];
+      ops.dirs['/manga/Book A/'] = const [
+        WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+      ];
+      ops.dirs['/manga/Book B/'] = const [
+        WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+      ];
+
+      await WebDavLibrarySource.loadComicInfo('Book A');
+      await WebDavLibrarySource.loadComics(1);
+      await WebDavLibrarySource.synchronize();
+      final comics = await WebDavLibrarySource.loadComics(1);
+
+      expect(comics.data.map((comic) => comic.id), ['Book A', 'Book B']);
     },
   );
 
@@ -210,6 +370,8 @@ void main() {
         ],
       });
 
+      await WebDavLibrarySource.loadComics(1);
+      await WebDavLibrarySource.synchronize();
       final comics = await WebDavLibrarySource.loadComics(1);
       final details = await WebDavLibrarySource.loadComicInfo('猫之眼[北条司]');
       final pages = await WebDavLibrarySource.loadComicPages(
@@ -357,6 +519,7 @@ class _FakeWebDavLibraryOps implements WebDavLibraryOps {
   final textFiles = <String, String>{};
   final readPaths = <String>[];
   final textReadPaths = <String>[];
+  final blockers = <String, Completer<void>>{};
 
   @override
   Future<List<WebDavLibraryEntry>> readDir(
@@ -364,6 +527,7 @@ class _FakeWebDavLibraryOps implements WebDavLibraryOps {
     String remotePath,
   ) async {
     readPaths.add(remotePath);
+    await blockers[remotePath]?.future;
     final error = errors[remotePath];
     if (error != null) throw error;
     return dirs[remotePath] ?? const [];

@@ -15,6 +15,7 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/settings/settings.dart';
 import 'package:venera_next/features/sync/sync.dart';
+import 'package:venera_next/features/webdav_library/webdav_library.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/cookie_jar.dart';
@@ -79,6 +80,7 @@ Future<void> init() async {
     Log.error("init", "$e\n$s");
   }
   DataSync();
+  WebDavLibrarySource.initializeAutoSync();
   CacheManager().setLimitSize(appdata.settings['cacheSize']);
   _checkOldConfigs();
   if (App.isAndroid) {

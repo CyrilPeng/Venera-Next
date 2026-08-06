@@ -376,6 +376,8 @@ class Settings with ChangeNotifier {
     'backupWebdavSyncEnabled': false,
     'webdavComicLibrary': [], // empty means not configured
     'webdavComicLibraryPath': '/venera_comics/',
+    'webdavComicLibraryAutoSync': true,
+    'webdavComicLibrarySyncIntervalMinutes': 360,
     "disableSyncFields": "", // "field1, field2, ..."
     'dataVersion': 0,
     'quickFavorite': null,

@@ -314,14 +314,20 @@ class ExplorePageData {
   /// return a `List` contains `List<Comic>` or `ExplorePagePart`
   final Future<Res<List<Object>>> Function(int index)? loadMixed;
 
+  final Listenable? changeListenable;
+
+  final Future<void> Function()? onRefresh;
+
   ExplorePageData(
     this.title,
     this.type,
     this.loadPage,
     this.loadNext,
     this.loadMultiPart,
-    this.loadMixed,
-  );
+    this.loadMixed, {
+    this.changeListenable,
+    this.onRefresh,
+  });
 }
 
 class ExplorePagePart {
