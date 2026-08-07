@@ -83,6 +83,10 @@ class ImageFavorite {
   int get hashCode => Object.hash(id, sourceKey, page, eid, ep);
 }
 
+bool canUncollectImageFavorite(ImageFavorite? imageFavorite) {
+  return imageFavorite != null && imageFavorite.isAutoFavorite != true;
+}
+
 class ImageFavoritesEp {
   // 小心拷贝等多章节的可能更新章节顺序
   String eid;

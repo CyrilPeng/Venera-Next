@@ -315,13 +315,18 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   }
 
   bool isLiked() {
-    return ImageFavoriteManager().has(
+    return _findImageFavorite(context.reader.page) != null;
+  }
+
+  ImageFavorite? _findImageFavorite(int page) {
+    final comic = ImageFavoriteManager().find(
       context.reader.cid,
       context.reader.type.sourceKey,
-      context.reader.eid,
-      context.reader.page,
-      context.reader.chapter,
     );
+    final ep = comic?.imageFavoritesEp
+        .where((e) => e.eid == context.reader.eid)
+        .firstOrNull;
+    return ep?.imageFavorites.where((image) => image.page == page).firstOrNull;
   }
 
   void addImageFavorite() async {
@@ -354,17 +359,18 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
           "E${context.reader.chapter}";
       var translatedTags = tags.map((e) => e.translateTagsToCN).toList();
 
-      if (isLiked()) {
+      final likedImage = _findImageFavorite(page);
+      if (likedImage != null) {
         if (page == firstPage) {
-          showToast(
-            message: "The cover cannot be uncollected here".tl,
-            context: context,
-          );
-          return;
+          if (!canUncollectImageFavorite(likedImage)) {
+            showToast(
+              message: "The cover cannot be uncollected here".tl,
+              context: context,
+            );
+            return;
+          }
         }
-        ImageFavoriteManager().deleteImageFavorite([
-          ImageFavorite(page, imageKey, null, eid, id, ep, sourceKey, epName),
-        ]);
+        ImageFavoriteManager().deleteImageFavorite([likedImage]);
         showToast(
           message: "Uncollected the image".tl,
           context: context,
