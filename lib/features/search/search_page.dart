@@ -25,6 +25,7 @@ import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'aggregated_search_page.dart';
 import 'search_result_page.dart';
+import 'search_shortcuts.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -250,6 +251,7 @@ class _SearchPageState extends State<SearchPage> {
         duration: const Duration(milliseconds: 200),
         child: buildSearchOptions(),
       );
+      yield const SearchShortcutsSliver();
       yield _SearchHistory(search);
     }
   }

@@ -576,6 +576,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
     Widget buildTag({
       required String text,
       VoidCallback? onTap,
+      void Function(BuildContext context)? onLongPress,
       bool isTitle = false,
     }) {
       Color color;
@@ -602,35 +603,43 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
       const padding = EdgeInsets.symmetric(horizontal: 16, vertical: 6);
 
       if (onTap != null) {
-        return Material(
-          color: color,
-          borderRadius: borderRadius,
-          child: ClickInkWell(
-            borderRadius: borderRadius,
-            onTap: onTap,
-            onLongPress: () {
-              Clipboard.setData(ClipboardData(text: text));
-              context.showMessage(message: "Copied".tl);
-            },
-            onSecondaryTapDown: (details) {
-              showMenuX(context, details.globalPosition, [
-                MenuEntry(
-                  icon: Icons.remove_red_eye,
-                  text: "View".tl,
-                  onClick: onTap,
-                ),
-                MenuEntry(
-                  icon: Icons.copy,
-                  text: "Copy".tl,
-                  onClick: () {
+        return Builder(
+          builder: (tagContext) {
+            return Material(
+              color: color,
+              borderRadius: borderRadius,
+              child: ClickInkWell(
+                borderRadius: borderRadius,
+                onTap: onTap,
+                onLongPress: () {
+                  if (onLongPress != null) {
+                    onLongPress(tagContext);
+                  } else {
                     Clipboard.setData(ClipboardData(text: text));
                     context.showMessage(message: "Copied".tl);
-                  },
-                ),
-              ]);
-            },
-            child: Text(text).padding(padding),
-          ),
+                  }
+                },
+                onSecondaryTapDown: (details) {
+                  showMenuX(context, details.globalPosition, [
+                    MenuEntry(
+                      icon: Icons.remove_red_eye,
+                      text: "View".tl,
+                      onClick: onTap,
+                    ),
+                    MenuEntry(
+                      icon: Icons.copy,
+                      text: "Copy".tl,
+                      onClick: () {
+                        Clipboard.setData(ClipboardData(text: text));
+                        context.showMessage(message: "Copied".tl);
+                      },
+                    ),
+                  ]);
+                },
+                child: Text(text).padding(padding),
+              ),
+            );
+          },
         );
       } else {
         return Container(
@@ -700,6 +709,10 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
                     onTap: _isReadOnlyComicInfoNamespace(e.key)
                         ? null
                         : () => onTapTag(tag, e.key),
+                    onLongPress: _isReadOnlyComicInfoNamespace(e.key)
+                        ? null
+                        : (tagContext) =>
+                              onLongPressTag(tag, e.key, tagContext),
                   ),
               ],
             ),

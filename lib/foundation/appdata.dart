@@ -344,6 +344,7 @@ class Settings with ChangeNotifier {
     'categories': [],
     'favorites': [],
     'searchSources': null,
+    'searchShortcuts': [],
     'showFavoriteStatusOnTile': true,
     'showHistoryStatusOnTile': false,
     'showUpdateStatusOnTile': true,

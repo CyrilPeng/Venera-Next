@@ -269,17 +269,8 @@ class ComicDetails with HistoryMixin {
 
   /// Find the first author tag
   String? findAuthor() {
-    var authorNamespaces = [
-      "author",
-      "authors",
-      "artist",
-      "artists",
-      "作者",
-      "画师",
-    ];
     for (var entry in tags.entries) {
-      if (authorNamespaces.contains(entry.key.toLowerCase()) &&
-          entry.value.isNotEmpty) {
+      if (isAuthorNamespace(entry.key) && entry.value.isNotEmpty) {
         return entry.value.first;
       }
     }
@@ -314,6 +305,18 @@ class ComicDetails with HistoryMixin {
     }
     return null;
   }
+}
+
+bool isAuthorNamespace(String namespace) {
+  const authorNamespaces = {
+    'author',
+    'authors',
+    'artist',
+    'artists',
+    '作者',
+    '画师',
+  };
+  return authorNamespaces.contains(namespace.trim().toLowerCase());
 }
 
 class ArchiveInfo {

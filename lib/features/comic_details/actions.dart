@@ -15,6 +15,7 @@ import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/reader.dart';
+import 'package:venera_next/features/search/search_shortcuts.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -323,9 +324,37 @@ abstract mixin class ComicPageActions {
   }
 
   void onTapTag(String tag, String namespace) {
-    var target = comicSource.handleClickTagEvent?.call(namespace, tag);
+    var target = searchTargetForTag(tag, namespace);
     var context = App.mainNavigatorKey!.currentContext!;
     target?.jump(context);
+  }
+
+  PageJumpTarget? searchTargetForTag(String tag, String namespace) {
+    return comicSource.handleClickTagEvent?.call(namespace, tag);
+  }
+
+  void onLongPressTag(String tag, String namespace, BuildContext tagContext) {
+    final renderBox = tagContext.findRenderObject() as RenderBox;
+    final offset = renderBox.localToGlobal(Offset.zero);
+    final shortcut = searchTargetForTag(tag, namespace) == null
+        ? null
+        : SearchShortcut(
+            kind: isAuthorNamespace(namespace)
+                ? SearchShortcutKind.author
+                : SearchShortcutKind.tag,
+            sourceKey: comic.sourceKey,
+            namespace: namespace,
+            value: tag,
+          );
+    showSearchShortcutMenu(
+      context: tagContext,
+      location: Offset(
+        offset.dx + renderBox.size.width / 2 - 121,
+        offset.dy + renderBox.size.height - 8,
+      ),
+      copyText: tag,
+      shortcut: shortcut,
+    );
   }
 
   void showMoreActions() {
