@@ -4,6 +4,8 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
 
+const webDavLibrarySnapshotFormatVersion = 2;
+
 class WebDavLibraryCachedComic {
   const WebDavLibraryCachedComic({
     required this.id,
@@ -45,7 +47,8 @@ class WebDavLibraryCachedComic {
   final String? remoteETag;
   final int? remoteModifiedAt;
 
-  bool get isReady => snapshot != null;
+  bool get isReady =>
+      snapshot?['formatVersion'] == webDavLibrarySnapshotFormatVersion;
 
   bool hasSameRemoteVersion({String? eTag, int? modifiedAt}) {
     final hasVersion = (eTag?.isNotEmpty ?? false) || modifiedAt != null;

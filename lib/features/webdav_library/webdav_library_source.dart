@@ -663,9 +663,9 @@ class WebDavLibrarySource {
     if (!forceRefresh) {
       final memoryCached = _snapshotCache[memoryKey];
       if (memoryCached != null) return memoryCached;
-      final diskCached = _cache.find(config.cacheKey, id)?.snapshot;
-      if (diskCached != null) {
-        final snapshot = _WebDavComicSnapshot.fromJson(diskCached);
+      final diskCached = _cache.find(config.cacheKey, id);
+      if (diskCached?.isReady == true) {
+        final snapshot = _WebDavComicSnapshot.fromJson(diskCached!.snapshot!);
         _snapshotCache[memoryKey] = snapshot;
         return snapshot;
       }
@@ -738,7 +738,7 @@ class WebDavLibrarySource {
         chapterMap[chapterId] = chapter.title;
       }
     } else {
-      for (final directory in directories.take(3)) {
+      for (final directory in directories) {
         chapterMap[directory.name] = directory.name;
       }
       if (chapterMap.isEmpty && rootImages.isNotEmpty) {
@@ -926,6 +926,7 @@ class _WebDavComicSnapshot {
   }
 
   Map<String, dynamic> toJson() => {
+    'formatVersion': webDavLibrarySnapshotFormatVersion,
     'title': title,
     'author': author,
     'tags': tags,

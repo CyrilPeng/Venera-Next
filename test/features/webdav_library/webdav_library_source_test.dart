@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/webdav_library/webdav_library.dart';
+import 'package:venera_next/features/webdav_library/webdav_library_cache.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
@@ -246,11 +247,14 @@ void main() {
   );
 
   test(
-    'loadComicInfo detects chapter directories and uses the first page as cover',
+    'loadComicInfo lists every chapter directory and uses the first page as cover',
     () async {
       ops.dirs['/manga/Cat Eye/'] = const [
         WebDavLibraryEntry(name: '第01卷', isDirectory: true),
         WebDavLibraryEntry(name: '第02卷', isDirectory: true),
+        WebDavLibraryEntry(name: '第03卷', isDirectory: true),
+        WebDavLibraryEntry(name: '第04卷', isDirectory: true),
+        WebDavLibraryEntry(name: '第05卷', isDirectory: true),
         WebDavLibraryEntry(name: 'book.cbz', isDirectory: false),
       ];
       ops.dirs['/manga/Cat Eye/第01卷/'] = const [
@@ -268,8 +272,68 @@ void main() {
       expect(result.data.chapters!.allChapters, {
         '第01卷': '第01卷',
         '第02卷': '第02卷',
+        '第03卷': '第03卷',
+        '第04卷': '第04卷',
+        '第05卷': '第05卷',
       });
       expect(ops.readPaths, ['/manga/Cat Eye/', '/manga/Cat Eye/第01卷/']);
+    },
+  );
+
+  test(
+    'incremental sync rebuilds snapshots from the old cache format',
+    () async {
+      const comicId = 'Cached Book';
+      final config = WebDavLibraryConfig.fromSettings();
+      final cache = WebDavLibraryCache.instance;
+      cache.replaceDirectoryIndex(config.cacheKey, const [
+        WebDavLibraryRemoteDirectory(id: comicId, sortIndex: 0, eTag: 'v1'),
+      ]);
+      cache.upsertSnapshot(
+        config.cacheKey,
+        const WebDavLibraryCachedComic(
+          id: comicId,
+          sortIndex: 0,
+          title: comicId,
+          author: '',
+          tags: [],
+          cover: '/manga/Cached Book/cover.jpg',
+          snapshot: {
+            'title': comicId,
+            'author': '',
+            'tags': [],
+            'cover': '/manga/Cached Book/cover.jpg',
+            'chapters': {
+              'Chapter 01': 'Chapter 01',
+              'Chapter 02': 'Chapter 02',
+              'Chapter 03': 'Chapter 03',
+            },
+            'metadataChapters': {},
+            'rootImages': [],
+          },
+          remoteETag: 'v1',
+          remoteModifiedAt: null,
+        ),
+      );
+      ops.dirs['/manga/'] = const [
+        WebDavLibraryEntry(name: comicId, isDirectory: true, eTag: 'v1'),
+      ];
+      ops.dirs['/manga/Cached Book/'] = const [
+        WebDavLibraryEntry(name: 'cover.jpg', isDirectory: false),
+        WebDavLibraryEntry(name: 'Chapter 01', isDirectory: true),
+        WebDavLibraryEntry(name: 'Chapter 02', isDirectory: true),
+        WebDavLibraryEntry(name: 'Chapter 03', isDirectory: true),
+        WebDavLibraryEntry(name: 'Chapter 04', isDirectory: true),
+        WebDavLibraryEntry(name: 'Chapter 05', isDirectory: true),
+      ];
+
+      final sync = await WebDavLibrarySource.synchronize();
+      final details = await WebDavLibrarySource.loadComicInfo(comicId);
+
+      expect(sync.success, isTrue);
+      expect(details.success, isTrue);
+      expect(details.data.chapters!.allChapters, hasLength(5));
+      expect(ops.readPaths, ['/manga/', '/manga/Cached Book/']);
     },
   );
 
