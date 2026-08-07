@@ -299,6 +299,101 @@ void main() {
   );
 
   test(
+    'history writes support legacy tables without a unique id constraint',
+    () async {
+      final dataDir = Directory.systemTemp.createTempSync(
+        'venera-history-legacy-key-data-',
+      );
+      final cacheDir = Directory.systemTemp.createTempSync(
+        'venera-history-legacy-key-cache-',
+      );
+      addTearDown(() {
+        try {
+          HistoryManager().close();
+        } catch (_) {
+          // ignore cleanup failures in partially initialized tests
+        }
+        HistoryManager.cache = null;
+        if (dataDir.existsSync()) {
+          dataDir.deleteSync(recursive: true);
+        }
+        if (cacheDir.existsSync()) {
+          cacheDir.deleteSync(recursive: true);
+        }
+      });
+
+      final oldDb = sqlite3.open('${dataDir.path}/history.db');
+      oldDb.execute('''
+        create table history (
+          id text,
+          title text,
+          subtitle text,
+          cover text,
+          time int,
+          type int,
+          ep int,
+          page int,
+          readEpisode text,
+          max_page int,
+          chapter_group int,
+          primary key (id, type)
+        );
+      ''');
+      oldDb.execute(
+        '''
+        insert into history
+          (id, title, subtitle, cover, time, type, ep, page, readEpisode, max_page, chapter_group)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        ''',
+        [
+          'legacy-comic',
+          'Legacy Comic',
+          'Author',
+          'cover.jpg',
+          DateTime(2026, 1, 1).millisecondsSinceEpoch,
+          ComicType.local.value,
+          1,
+          2,
+          '1',
+          10,
+          null,
+        ],
+      );
+      oldDb.dispose();
+
+      App.dataPath = dataDir.path;
+      App.cachePath = cacheDir.path;
+      HistoryManager.cache = null;
+      final manager = HistoryManager();
+      await manager.init();
+
+      final existing = _history('legacy-comic')..page = 7;
+      manager.addHistory(existing);
+      await manager.addReadDuration(existing, const Duration(seconds: 15));
+      await manager.addHistoryAsync(_history('new-comic'));
+      await manager.waitForAsyncWrites();
+
+      final db = sqlite3.open('${dataDir.path}/history.db');
+      try {
+        final existingRows = db.select(
+          '''
+          select page, read_duration_ms
+          from history where id = ? and type = ?;
+          ''',
+          ['legacy-comic', ComicType.local.value],
+        );
+        expect(existingRows, hasLength(1));
+        expect(existingRows.first['page'], 7);
+        expect(existingRows.first['read_duration_ms'], 15000);
+        expect(db.select('select count(*) from history;').first[0], 2);
+      } finally {
+        db.dispose();
+      }
+    },
+    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+  );
+
+  test(
     'reading duration accumulates and survives progress upserts',
     () async {
       final dataDir = Directory.systemTemp.createTempSync(

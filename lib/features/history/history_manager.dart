@@ -238,46 +238,106 @@ class HistoryManager with ChangeNotifier {
     isInitialized = true;
   }
 
-  static const _upsertHistorySql = """
-        insert into history (id, title, subtitle, cover, time, type, ep, page, readEpisode, max_page, chapter_group)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        on conflict(id) do update set
-          title = excluded.title,
-          subtitle = excluded.subtitle,
-          cover = excluded.cover,
-          time = excluded.time,
-          type = excluded.type,
-          ep = excluded.ep,
-          page = excluded.page,
-          readEpisode = excluded.readEpisode,
-          max_page = excluded.max_page,
-          chapter_group = excluded.chapter_group;
+  static const _insertHistorySql = """
+        insert or replace into history (id, title, subtitle, cover, time, type, ep, page, readEpisode, max_page, chapter_group)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
       """;
 
-  static const _addReadDurationSql = """
-        insert into history (id, title, subtitle, cover, time, type, ep, page, readEpisode, max_page, chapter_group, read_duration_ms)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        on conflict(id) do update set
-          read_duration_ms = history.read_duration_ms + excluded.read_duration_ms;
+  static const _updateHistorySql = """
+        update history set
+          title = ?,
+          subtitle = ?,
+          cover = ?,
+          time = ?,
+          ep = ?,
+          page = ?,
+          readEpisode = ?,
+          max_page = ?,
+          chapter_group = ?
+        where id = ? and type = ?;
       """;
+
+  static const _insertReadDurationSql = """
+        insert or replace into history (id, title, subtitle, cover, time, type, ep, page, readEpisode, max_page, chapter_group, read_duration_ms)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+      """;
+
+  static const _incrementReadDurationSql = """
+        update history
+        set read_duration_ms = read_duration_ms + ?
+        where id = ? and type = ?;
+      """;
+
+  static List<Object?> _historyValues(History item) {
+    return [
+      item.id,
+      item.title,
+      item.subtitle,
+      item.cover,
+      item.time.millisecondsSinceEpoch,
+      item.type.value,
+      item.ep,
+      item.page,
+      item.readEpisode.join(','),
+      item.maxPage,
+      item.group,
+    ];
+  }
+
+  static void _runWriteTransaction(Database db, void Function() write) {
+    db.execute('BEGIN IMMEDIATE;');
+    try {
+      write();
+      db.execute('COMMIT;');
+    } catch (_) {
+      db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  // Legacy databases do not consistently expose a single-column UNIQUE(id).
+  static void _writeHistory(Database db, History item) {
+    _runWriteTransaction(db, () {
+      db.execute(_updateHistorySql, [
+        item.title,
+        item.subtitle,
+        item.cover,
+        item.time.millisecondsSinceEpoch,
+        item.ep,
+        item.page,
+        item.readEpisode.join(','),
+        item.maxPage,
+        item.group,
+        item.id,
+        item.type.value,
+      ]);
+      if (db.updatedRows == 0) {
+        db.execute(_insertHistorySql, _historyValues(item));
+      }
+    });
+  }
+
+  static void _writeReadDuration(Database db, History item, int durationMs) {
+    _runWriteTransaction(db, () {
+      db.execute(_incrementReadDurationSql, [
+        durationMs,
+        item.id,
+        item.type.value,
+      ]);
+      if (db.updatedRows == 0) {
+        db.execute(_insertReadDurationSql, [
+          ..._historyValues(item),
+          durationMs,
+        ]);
+      }
+    });
+  }
 
   static Future<void> _addHistoryAsync(String dbPath, History newItem) {
     return Isolate.run(() {
       var db = openSqliteDatabase(dbPath);
       try {
-        db.execute(_upsertHistorySql, [
-          newItem.id,
-          newItem.title,
-          newItem.subtitle,
-          newItem.cover,
-          newItem.time.millisecondsSinceEpoch,
-          newItem.type.value,
-          newItem.ep,
-          newItem.page,
-          newItem.readEpisode.join(','),
-          newItem.maxPage,
-          newItem.group,
-        ]);
+        _writeHistory(db, newItem);
       } finally {
         db.dispose();
       }
@@ -292,20 +352,7 @@ class HistoryManager with ChangeNotifier {
     return Isolate.run(() {
       var db = openSqliteDatabase(dbPath);
       try {
-        db.execute(_addReadDurationSql, [
-          item.id,
-          item.title,
-          item.subtitle,
-          item.cover,
-          item.time.millisecondsSinceEpoch,
-          item.type.value,
-          item.ep,
-          item.page,
-          item.readEpisode.join(','),
-          item.maxPage,
-          item.group,
-          durationMs,
-        ]);
+        _writeReadDuration(db, item, durationMs);
       } finally {
         db.dispose();
       }
@@ -368,19 +415,7 @@ class HistoryManager with ChangeNotifier {
   ///
   /// This function would be called when user start reading.
   void addHistory(History newItem) {
-    _db.execute(_upsertHistorySql, [
-      newItem.id,
-      newItem.title,
-      newItem.subtitle,
-      newItem.cover,
-      newItem.time.millisecondsSinceEpoch,
-      newItem.type.value,
-      newItem.ep,
-      newItem.page,
-      newItem.readEpisode.join(','),
-      newItem.maxPage,
-      newItem.group,
-    ]);
+    _writeHistory(_db, newItem);
     _cacheHistory(newItem);
     notifyListeners();
   }
