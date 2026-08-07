@@ -141,12 +141,12 @@ bool _hasNewUpdate(Comic comic) {
   return LocalFavoritesManager().hasNewUpdate(comic.id, type);
 }
 
-Widget _buildUpdateBadge(BuildContext context) {
+Widget _buildUpdateBadge(BuildContext context, {double size = 24}) {
   return Container(
-    height: 24,
-    width: 24,
+    height: size,
+    width: size,
     color: Colors.deepOrange.shade700,
-    child: const Icon(Icons.update, size: 16, color: Colors.white),
+    child: Icon(Icons.update, size: size * 2 / 3, color: Colors.white),
   );
 }
 
@@ -163,6 +163,8 @@ ComicType _comicTypeOf(Comic comic) {
   return ComicType.fromKey(comic.sourceKey);
 }
 
+enum ComicTileDisplayMode { detailed, gallery }
+
 class ComicTile extends StatelessWidget {
   const ComicTile({
     super.key,
@@ -174,6 +176,7 @@ class ComicTile extends StatelessWidget {
     this.onLongPressed,
     this.onBlocked,
     this.heroID,
+    this.displayMode,
   });
 
   final Comic comic;
@@ -191,6 +194,8 @@ class ComicTile extends StatelessWidget {
   final VoidCallback? onBlocked;
 
   final int? heroID;
+
+  final ComicTileDisplayMode? displayMode;
 
   void _onTap() {
     if (onTap != null) {
@@ -267,11 +272,17 @@ class ComicTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var type = appdata.settings['comicDisplayMode'];
+    final type = switch (displayMode) {
+      ComicTileDisplayMode.detailed => 'detailed',
+      ComicTileDisplayMode.gallery => 'gallery',
+      null => appdata.settings['comicDisplayMode'],
+    };
 
-    Widget child = type == 'detailed'
-        ? _buildDetailedMode(context)
-        : _buildBriefMode(context);
+    Widget child = switch (type) {
+      'detailed' => _buildDetailedMode(context),
+      'gallery' => _buildGalleryMode(context),
+      _ => _buildBriefMode(context),
+    };
 
     final comicType = _comicTypeOf(comic);
     var isFavorite = appdata.settings['showFavoriteStatusOnTile']
@@ -291,48 +302,62 @@ class ComicTile extends StatelessWidget {
       return child;
     }
 
-    return Stack(
-      children: [
-        Positioned.fill(child: child),
-        Positioned(
-          left: type == 'detailed' ? 16 : 6,
-          top: 8,
-          child: Container(
-            height: 24,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(4)),
-            clipBehavior: Clip.antiAlias,
-            child: Row(
-              children: [
-                if (isFavorite)
-                  Container(
-                    height: 24,
-                    width: 24,
-                    color: Colors.green,
-                    child: const Icon(
-                      Icons.bookmark_rounded,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                if (history != null)
-                  Container(
-                    height: 24,
-                    color: Colors.blue.toOpacity(0.9),
-                    constraints: const BoxConstraints(minWidth: 24),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: CustomPaint(
-                      painter: _ReadingHistoryPainter(
-                        history.page,
-                        history.maxPage,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = type == 'gallery' && constraints.maxWidth < 88;
+        final badgeSize = compact ? 18.0 : 24.0;
+        return Stack(
+          children: [
+            Positioned.fill(child: child),
+            Positioned(
+              left: type == 'detailed'
+                  ? 16
+                  : compact
+                  ? 4
+                  : 6,
+              top: compact ? 6 : 8,
+              child: Container(
+                height: badgeSize,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Row(
+                  children: [
+                    if (isFavorite)
+                      Container(
+                        height: badgeSize,
+                        width: badgeSize,
+                        color: Colors.green,
+                        child: Icon(
+                          Icons.bookmark_rounded,
+                          size: badgeSize * 2 / 3,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                  ),
-                if (hasUpdate) _buildUpdateBadge(context),
-              ],
+                    if (history != null)
+                      Container(
+                        height: badgeSize,
+                        color: Colors.blue.toOpacity(0.9),
+                        constraints: BoxConstraints(minWidth: badgeSize),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: compact ? 2 : 4,
+                        ),
+                        child: CustomPaint(
+                          painter: _ReadingHistoryPainter(
+                            history.page,
+                            history.maxPage,
+                          ),
+                        ),
+                      ),
+                    if (hasUpdate) _buildUpdateBadge(context, size: badgeSize),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -523,6 +548,64 @@ class ComicTile extends StatelessWidget {
               ),
             ],
           ).paddingHorizontal(6).paddingVertical(8),
+        );
+      },
+    );
+  }
+
+  Widget _buildGalleryMode(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 88;
+        Widget image = Container(
+          decoration: BoxDecoration(
+            color: context.colorScheme.secondaryContainer,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.toOpacity(0.16),
+                blurRadius: 2,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: buildImage(context),
+        );
+
+        if (heroID != null) {
+          image = Hero(tag: 'cover$heroID', child: image);
+        }
+
+        return ClickInkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: _onTap,
+          onLongPress: enableLongPressed ? () => _onLongPressed(context) : null,
+          onSecondaryTapDown: (detail) => onSecondaryTap(detail, context),
+          child: Padding(
+            padding: compact
+                ? const EdgeInsets.fromLTRB(4, 5, 4, 4)
+                : const EdgeInsets.fromLTRB(6, 8, 6, 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: image),
+                SizedBox(height: compact ? 3 : 5),
+                SizedBox(
+                  height: compact ? 24 : 36,
+                  child: Text(
+                    comic.title.replaceAll('\n', ''),
+                    maxLines: compact ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: compact ? 10 : 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

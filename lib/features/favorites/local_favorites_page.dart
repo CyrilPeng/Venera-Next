@@ -16,6 +16,7 @@ import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/favorites/favorite_actions.dart';
+import 'package:venera_next/features/favorites/favorites_display.dart';
 import 'package:venera_next/features/favorites/favorites_constants.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/history/history.dart';
@@ -387,6 +388,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                     ),
                   ),
                 ),
+              const FavoriteDisplayButton(),
               Tooltip(
                 message: "Filter".tl,
                 child: IconButton(
@@ -677,6 +679,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
           SliverGridComics(
             comics: searchMode ? searchResults : filterComics(comics),
             selections: selectedComics,
+            useFavoriteDisplaySettings: true,
             menuBuilder: (c) {
               return [
                 if (!isAllFolder)

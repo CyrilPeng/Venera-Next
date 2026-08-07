@@ -80,7 +80,14 @@ class SliverGridDelegateWithFixedHeight extends SliverGridDelegate {
 }
 
 class SliverGridDelegateWithComics extends SliverGridDelegate {
-  SliverGridDelegateWithComics();
+  SliverGridDelegateWithComics({
+    this.galleryColumns,
+    this.forceDetailed = false,
+  });
+
+  final int? galleryColumns;
+
+  final bool forceDetailed;
 
   final bool useBriefMode = appdata.settings['comicDisplayMode'] == 'brief';
 
@@ -88,11 +95,36 @@ class SliverGridDelegateWithComics extends SliverGridDelegate {
 
   @override
   SliverGridLayout getLayout(SliverConstraints constraints) {
-    if (useBriefMode) {
+    if (galleryColumns != null) {
+      return getGalleryModeLayout(constraints, galleryColumns!);
+    } else if (useBriefMode && !forceDetailed) {
       return getBriefModeLayout(constraints, scale);
     } else {
       return getDetailedModeLayout(constraints, scale);
     }
+  }
+
+  SliverGridLayout getGalleryModeLayout(
+    SliverConstraints constraints,
+    int configuredColumns,
+  ) {
+    const maxItemWidth = 144.0;
+    const childAspectRatio = 0.64;
+    final width = constraints.crossAxisExtent;
+    var crossAxisCount = configuredColumns;
+    if (crossAxisCount <= 0) {
+      crossAxisCount = math.max(1, (width / maxItemWidth).ceil());
+    }
+    final childCrossAxisExtent = width / crossAxisCount;
+    final childMainAxisExtent = childCrossAxisExtent / childAspectRatio;
+    return SliverGridRegularTileLayout(
+      crossAxisCount: crossAxisCount,
+      mainAxisStride: childMainAxisExtent,
+      crossAxisStride: childCrossAxisExtent,
+      childMainAxisExtent: childMainAxisExtent,
+      childCrossAxisExtent: childCrossAxisExtent,
+      reverseCrossAxis: axisDirectionIsReversed(constraints.crossAxisDirection),
+    );
   }
 
   SliverGridLayout getDetailedModeLayout(
@@ -146,7 +178,9 @@ class SliverGridDelegateWithComics extends SliverGridDelegate {
   @override
   bool shouldRelayout(covariant SliverGridDelegate oldDelegate) {
     if (oldDelegate is! SliverGridDelegateWithComics) return true;
-    if (oldDelegate.scale != scale ||
+    if (oldDelegate.galleryColumns != galleryColumns ||
+        oldDelegate.forceDetailed != forceDetailed ||
+        oldDelegate.scale != scale ||
         oldDelegate.useBriefMode != useBriefMode) {
       return true;
     }

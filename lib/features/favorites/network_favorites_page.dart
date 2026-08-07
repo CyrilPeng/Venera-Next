@@ -11,6 +11,7 @@ import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/favorites/favorite_actions.dart';
 import 'package:venera_next/features/favorites/favorites_constants.dart';
+import 'package:venera_next/features/favorites/favorites_display.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -134,6 +135,7 @@ class _NormalFavoritePageState extends State<_NormalFavoritePage> {
           child: Text(widget.data.title),
         ),
         actions: [
+          const FavoriteDisplayButton(),
           Tooltip(
             message: "Refresh".tl,
             child: IconButton(
@@ -202,6 +204,7 @@ class _NormalFavoritePageState extends State<_NormalFavoritePage> {
         ];
       },
       enablePageStorage: true,
+      useFavoriteDisplaySettings: true,
     );
   }
 }
@@ -575,6 +578,7 @@ class _FavoriteFolder extends StatelessWidget {
       leadingSliver: SliverAppbar(
         title: Text(title),
         actions: [
+          const FavoriteDisplayButton(),
           MenuButton(
             entries: [
               MenuEntry(
@@ -614,6 +618,7 @@ class _FavoriteFolder extends StatelessWidget {
           ),
         ];
       },
+      useFavoriteDisplaySettings: true,
     );
   }
 }
