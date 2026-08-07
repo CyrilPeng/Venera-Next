@@ -13,15 +13,15 @@
       "bundleIdentifier": "com.github.cyrilpeng.veneranext",
       "developerName": "CyrilPeng/venera-next",
       "subtitle": "A comic reader that supports reading local and network comics",
-      "version": "1.9.1",
-      "versionDate": "2026-06-18",
-      "versionDescription": "\u6539\u8fdb\n\n\u2022 \u6b63\u5f0f\u53d1\u5e03 v1.9.1\uff0c\u6574\u5408 RC \u9636\u6bb5\u9a8c\u8bc1\u901a\u8fc7\u7684\u7a33\u5b9a\u6027\u4fee\u590d\u548c\u53d1\u5e03\u6d41\u7a0b\u6539\u8fdb\u3002\n\u2022 \u66f4\u65b0\u65e5\u5fd7\u9875\u9762\u6539\u4e3a\u6309 Markdown \u6837\u5f0f\u6e32\u67d3\uff0c\u63d0\u5347\u6807\u9898\u3001\u5217\u8868\u548c\u884c\u5185\u4ee3\u7801\u7684\u9605\u8bfb\u4f53\u9a8c\u3002\n\u2022 \u6f2b\u753b\u6e90\u591a\u4e2a\u5165\u53e3\u7edf\u4e00\u5f52\u4e00\u5316 JS \u8fd4\u56de\u503c\uff0c\u51cf\u5c11\u52a8\u6001 Map/List \u7c7b\u578b\u8fb9\u754c\u95ee\u9898\u3002\n\u2022 \u591a\u5904\u540e\u53f0\u4efb\u52a1\u6539\u4e3a\u6392\u961f\u3001\u663e\u5f0f\u8bb8\u53ef\u6216\u53d6\u6d88\u4fe1\u53f7\u9a71\u52a8\uff0c\u51cf\u5c11\u56fa\u5b9a\u95f4\u9694\u8f6e\u8be2\u548c\u9000\u51fa\u505c\u987f\u3002\n\n\u4fee\u590d\n\n\u2022 \u4fee\u590d WebDAV \u540c\u6b65\u3001\u5386\u53f2\u8fdb\u5ea6\u3001\u6536\u85cf\u7ba1\u7406\u3001JS \u5f15\u64ce\u3001\u7f51\u7edc\u7f13\u5b58\u3001\u6587\u4ef6\u4e0b\u8f7d\u548c\u56fe\u7247\u4e0b\u8f7d\u76f8\u5173\u7a33\u5b9a\u6027\u95ee\u9898\u3002\n\u2022 \u4fee\u590d Windows\u3001Linux/Arch \u548c Release \u53d1\u5e03\u94fe\u8def\u4e2d\u7684\u7248\u672c\u53f7\u3001\u7f16\u8bd1\u517c\u5bb9\u4e0e\u7a7a\u4ea7\u7269\u4e0a\u4f20\u95ee\u9898\u3002\n",
-      "downloadURL": "https://github.com/CyrilPeng/venera-next/releases/download/v1.9.1/venera-ios-1.9.1%2B196.ipa",
+      "version": "1.14.2",
+      "versionDate": "2026-08-07",
+      "versionDescription": "\u65b0\u589e\n\n\u2022 \u6536\u85cf\u9875\u65b0\u589e\u72ec\u7acb\u7684\u5c01\u9762\u753b\u5eca\u6a21\u5f0f\uff0c\u652f\u6301\u81ea\u52a8\u6216 2\uff5e6 \u5217\u5e03\u5c40\uff0c\u5e76\u5728\u672c\u5730\u6536\u85cf\u4e0e\u7f51\u7edc\u6536\u85cf\u4e4b\u95f4\u4fdd\u6301\u4e00\u81f4\u3002\n\n\u4fee\u590d\n\n\u2022 \u4fee\u590d\u9605\u8bfb\u5668\u4e2d\u624b\u52a8\u6536\u85cf\u7ae0\u8282\u5c01\u9762\u540e\u65e0\u6cd5\u53d6\u6d88\u6536\u85cf\u7684\u95ee\u9898\uff0c\u540c\u65f6\u7ee7\u7eed\u4fdd\u62a4\u6536\u85cf\u5176\u4ed6\u56fe\u7247\u65f6\u81ea\u52a8\u8865\u5165\u7684\u5c01\u9762\u3002\n\u2022 \u4fee\u590d WebDAV \u6f2b\u753b\u8be6\u60c5\u53ea\u663e\u793a\u524d\u4e09\u7ae0\u7684\u95ee\u9898\uff1b\u5347\u7ea7\u540e\u4f1a\u81ea\u52a8\u8bc6\u522b\u5e76\u91cd\u5efa\u53d7\u5f71\u54cd\u7248\u672c\u751f\u6210\u7684\u65e7\u7f13\u5b58\u3002\n",
+      "downloadURL": "https://github.com/CyrilPeng/Venera-Next/releases/download/v1.14.2/VeneraNext-ios-1.14.2%2B220.ipa",
       "localizedDescription": "A comic reader that supports reading local and network comics",
       "iconURL": "https://raw.githubusercontent.com/CyrilPeng/venera-next/main/assets/app_icon.png",
       "tintColor": "#0784FC",
       "category": "utilities",
-      "size": 15555395,
+      "size": 19316858,
       "appPermissions": {
         "entitlements": [
           "application-identifier",
@@ -39,6 +39,13 @@
         }
       },
       "versions": [
+        {
+          "version": "1.14.2",
+          "date": "2026-08-07",
+          "localizedDescription": "\u65b0\u589e\n\n\u2022 \u6536\u85cf\u9875\u65b0\u589e\u72ec\u7acb\u7684\u5c01\u9762\u753b\u5eca\u6a21\u5f0f\uff0c\u652f\u6301\u81ea\u52a8\u6216 2\uff5e6 \u5217\u5e03\u5c40\uff0c\u5e76\u5728\u672c\u5730\u6536\u85cf\u4e0e\u7f51\u7edc\u6536\u85cf\u4e4b\u95f4\u4fdd\u6301\u4e00\u81f4\u3002\n\n\u4fee\u590d\n\n\u2022 \u4fee\u590d\u9605\u8bfb\u5668\u4e2d\u624b\u52a8\u6536\u85cf\u7ae0\u8282\u5c01\u9762\u540e\u65e0\u6cd5\u53d6\u6d88\u6536\u85cf\u7684\u95ee\u9898\uff0c\u540c\u65f6\u7ee7\u7eed\u4fdd\u62a4\u6536\u85cf\u5176\u4ed6\u56fe\u7247\u65f6\u81ea\u52a8\u8865\u5165\u7684\u5c01\u9762\u3002\n\u2022 \u4fee\u590d WebDAV \u6f2b\u753b\u8be6\u60c5\u53ea\u663e\u793a\u524d\u4e09\u7ae0\u7684\u95ee\u9898\uff1b\u5347\u7ea7\u540e\u4f1a\u81ea\u52a8\u8bc6\u522b\u5e76\u91cd\u5efa\u53d7\u5f71\u54cd\u7248\u672c\u751f\u6210\u7684\u65e7\u7f13\u5b58\u3002\n",
+          "downloadURL": "https://github.com/CyrilPeng/Venera-Next/releases/download/v1.14.2/VeneraNext-ios-1.14.2%2B220.ipa",
+          "size": 19316858
+        },
         {
           "version": "1.9.1",
           "date": "2026-06-18",
@@ -178,6 +185,16 @@
       "tintColor": "#0784FC",
       "title": "v1.9.1 - Venera  18/06/26",
       "url": "https://github.com/CyrilPeng/venera-next/releases/tag/v1.9.1"
+    },
+    {
+      "appID": "com.github.cyrilpeng.veneranext",
+      "caption": "Update of VeneraNext just got released!",
+      "date": "2026-08-07T16:03:31Z",
+      "identifier": "release-v1.14.2",
+      "notify": true,
+      "tintColor": "#0784FC",
+      "title": "v1.14.2 - VeneraNext  07/08/26",
+      "url": "https://github.com/CyrilPeng/venera-next/releases/tag/v1.14.2"
     }
   ]
 }
