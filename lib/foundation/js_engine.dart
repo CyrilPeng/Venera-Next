@@ -335,26 +335,28 @@ class JsEngine with _JSEngineApi, Init {
   }
 
   Future<dynamic> runReadCode(String js, [String? name]) async {
-    try {
-      return await runCode(js, name);
-    } catch (error) {
-      if (!_isRetryableReadSyntaxError(error)) {
-        rethrow;
+    const maxRetries = 2;
+    for (var retry = 0; ; retry++) {
+      try {
+        return await runCode(js, name);
+      } catch (error) {
+        if (retry >= maxRetries || !_isRetryableReadError(error)) {
+          rethrow;
+        }
+        Log.warning(
+          'JS Engine',
+          'Retrying a read-only source call after a transient failure '
+              '(${retry + 1}/$maxRetries): $error',
+        );
+        NetworkCacheManager().clear();
+        await Future.delayed(Duration(milliseconds: 200 * (retry + 1)));
       }
-      Log.warning(
-        'JS Engine',
-        'Retrying a read-only source call after a JavaScript syntax error: '
-            '$error',
-      );
-      NetworkCacheManager().clear();
-      await Future.delayed(const Duration(milliseconds: 200));
-      return await runCode(js, name);
     }
   }
 
   @visibleForTesting
-  static bool debugIsRetryableReadSyntaxError(Object error) {
-    return _isRetryableReadSyntaxError(error);
+  static bool debugIsRetryableReadError(Object error) {
+    return _isRetryableReadError(error);
   }
 
   void dispose() {
@@ -365,9 +367,36 @@ class JsEngine with _JSEngineApi, Init {
   }
 }
 
-bool _isRetryableReadSyntaxError(Object error) {
+bool _isRetryableReadError(Object error) {
   final message = error.toString().toLowerCase();
-  return message.contains('syntaxerror') || message.contains('syntax error');
+  final isJsonParseFailure =
+      (message.contains('syntaxerror') || message.contains('syntax error')) &&
+      (message.contains('json') ||
+          message.contains('unexpected token') ||
+          message.contains('unexpected end'));
+  if (isJsonParseFailure) {
+    return true;
+  }
+
+  const transientNetworkFailures = [
+    'connection timeout',
+    'connection timed out',
+    'receive timeout',
+    'send timeout',
+    'connection reset',
+    'connection closed',
+    'connection aborted',
+    'connection terminated',
+    'failed host lookup',
+    'temporary failure in name resolution',
+    'unexpected end of file',
+    'unexpected eof',
+    'response ended prematurely',
+    'stream was reset',
+    'http2',
+    'http/2',
+  ];
+  return transientNetworkFailures.any(message.contains);
 }
 
 mixin class _JSEngineApi {

@@ -1,6 +1,6 @@
 <div align="center">
   <strong>简体中文</strong> | <a href="README.en.md">English</a>
-
+  <br>
   <br>
   <img src="assets/readme_logo.png" alt="VeneraNext" width="200" />
 
@@ -48,11 +48,9 @@
 
 <div align="center">
   <a href="https://github.com/CyrilPeng/Venera-Next">
-    <img alt="GitHub 主仓库" src="https://img.shields.io/badge/GitHub-主仓库-181717?style=for-the-badge&logo=github&logoColor=white" />
-  </a>
+    <img alt="GitHub 主仓库" src="https://img.shields.io/badge/GitHub-主仓库-181717?style=for-the-badge&logo=github&logoColor=white" /></a>
   <a href="https://gitee.com/CyrilPeng/venera-next">
-    <img alt="Gitee 国内镜像" src="https://img.shields.io/badge/Gitee-国内镜像-C71D23?style=for-the-badge&logo=gitee&logoColor=white" />
-  </a>
+    <img alt="Gitee 国内镜像" src="https://img.shields.io/badge/Gitee-国内镜像-C71D23?style=for-the-badge&logo=gitee&logoColor=white" /></a>
 </div>
 
 ---
@@ -350,6 +348,8 @@ README 面向安装和使用。构建、测试、仓库结构与发布维护说�
 ---
 
 ## 赞助
+
+[![爱发电](https://img.shields.io/badge/爱发电-支持我-ff69b4?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyMS4zNWwtMS40NS0xLjMyQzUuNCAxNS4zNiAyIDEyLjI4IDIgOC41IDIgNS40MiA0LjQyIDMgNy41IDNjMS43NCAwIDMuNDEuODEgNC41IDIuMDlDMTMuMDkgMy44MSAxNC43NiAzIDE2LjUgMyAxOS41OCAzIDIyIDUuNDIgMjIgOC41YzAgMy43OC0zLjQgNi44Ni04LjU1IDExLjU0TDEyIDIxLjM1eiIvPjwvc3ZnPg==)](https://ifdian.net/a/cyril)
 
 本项目为个人兴趣维护，不以盈利为目的。如果 VeneraNext 对你的日常阅读有帮助，欢迎在[爱发电](https://ifdian.net/a/cyril)上支持作者的持续维护。
 
