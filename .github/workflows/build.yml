@@ -199,7 +199,7 @@ jobs:
           flutter pub get --enforce-lockfile
           sudo apt-get update -y
           sudo apt-get install -y ninja-build libgtk-3-dev webkit2gtk-4.1
-          dart pub global activate -s git https://github.com/venera-app/flutter_to_debian.git
+          dart pub global activate -s git --git-ref 3777c91b6b1cc0b7c03357c67ca216d4313c3db5 https://github.com/venera-app/flutter_to_debian.git
       - run: python3 debian/build.py x64
       - run: python3 .github/scripts/build_arch_package.py
       - run: |
@@ -230,7 +230,7 @@ jobs:
           flutter pub get --enforce-lockfile
           sudo apt-get update -y
           sudo apt-get install -y ninja-build libgtk-3-dev webkit2gtk-4.1
-          dart pub global activate -s git https://github.com/venera-app/flutter_to_debian.git
+          dart pub global activate -s git --git-ref 3777c91b6b1cc0b7c03357c67ca216d4313c3db5 https://github.com/venera-app/flutter_to_debian.git
       - name: 修补字体
         run: dart run patch/font.dart
       - run: python3 debian/build.py arm64

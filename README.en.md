@@ -318,6 +318,9 @@ If a newly released version is not visible, run `winget source update`. Microsof
 This README focuses on installation and usage. Build, test, architecture, and distribution details live in the developer documentation:
 
 - [Build and Development](doc/development/build.en.md) / [构建与开发](doc/development/build.zh.md)
+- [Contributing](CONTRIBUTING.en.md) / [贡献指南](CONTRIBUTING.md)
+- [Dependency Governance](doc/development/dependencies.en.md)
+- [Security Policy](SECURITY.md) / [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Repository Structure](doc/architecture/project_structure.en.md)
 - [Windows Distribution](doc/distribution/windows.en.md)
 - [Documentation Index](doc/README.en.md)

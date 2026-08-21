@@ -11,8 +11,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  path_provider: any
-  intl: any
+  path_provider: ^2.1.5
+  intl: ^0.20.2
   window_manager: ^0.5.1
   sqlite3: ^2.7.4
   sqlite3_flutter_libs: ^0.5.30
@@ -84,7 +84,7 @@ dependencies:
   enough_convert: ^1.6.0
   display_mode: ^0.0.2
   flutter_staggered_grid_view: ^0.7.0
-  archive: any
+  archive: ^4.0.7
   image: ^4.8.0
   pdfrx: ^2.4.7
   xml: ^6.6.1
@@ -97,6 +97,7 @@ dev_dependencies:
   flutter_to_debian:
     git:
       url: https://github.com/venera-app/flutter_to_debian.git
+      ref: 3777c91b6b1cc0b7c03357c67ca216d4313c3db5
 
 dependency_overrides:
   flutter_rust_bridge: 2.11.1

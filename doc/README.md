@@ -27,6 +27,7 @@ English index: [README.en.md](README.en.md)
 ## 开发和构建
 
 - [构建与开发](development/build.zh.md) / [Build and Development](development/build.en.md)
+- [依赖治理](development/dependencies.zh.md) / [Dependency Governance](development/dependencies.en.md)
 
 ## 分发和发布
 

@@ -318,6 +318,9 @@ winget upgrade --id CyrilPeng.VeneraNext --exact
 README 面向安装和使用。构建、测试、仓库结构与发布维护说明统一放在开发文档中：
 
 - [构建与开发](doc/development/build.zh.md) / [Build and Development](doc/development/build.en.md)
+- [贡献指南](CONTRIBUTING.md) / [Contributing](CONTRIBUTING.en.md)
+- [依赖治理](doc/development/dependencies.zh.md)
+- [安全政策](SECURITY.md) / [行为准则](CODE_OF_CONDUCT.md)
 - [项目结构约定](doc/architecture/project_structure.zh.md)
 - [Windows 分发维护](doc/distribution/windows.zh.md)
 - [完整文档索引](doc/README.md)

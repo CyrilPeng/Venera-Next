@@ -32,6 +32,8 @@ flutter pub get --enforce-lockfile
 
 不要在不了解依赖影响的情况下删除或重新生成 `pubspec.lock`。
 
+Git fork 的来源、固定 commit 和升级要求见[依赖治理](dependencies.zh.md)。
+
 ### 关键依赖锁定
 
 项目依赖 `rhttp 0.15.1`，必须保持 `flutter_rust_bridge 2.11.1`。版本不匹配时，构建可能成功，但应用启动后无法联网，并提示：
@@ -62,6 +64,8 @@ flutter analyze --no-pub
 flutter test --no-pub
 git diff --check
 ```
+
+CI 会使用 `flutter test --coverage` 生成 `coverage/lcov.info`，在工作流摘要中显示行覆盖率，并上传报告产物。当前覆盖率用于建立可见基线，尚未设置统一硬阈值；涉及关键业务路径的改动仍必须增加针对性测试。
 
 涉及发布版本时再运行：
 

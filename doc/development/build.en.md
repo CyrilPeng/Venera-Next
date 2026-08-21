@@ -32,6 +32,8 @@ flutter pub get --enforce-lockfile
 
 Do not delete or regenerate `pubspec.lock` without understanding the dependency changes.
 
+See [Dependency Governance](dependencies.en.md) for Git fork provenance, pinned commits, and upgrade requirements.
+
 ### Critical Version Pin
 
 The project uses `rhttp 0.15.1` and must keep `flutter_rust_bridge 2.11.1`. With an incompatible version, a build may succeed while the resulting application cannot access the network and reports:
@@ -62,6 +64,8 @@ flutter analyze --no-pub
 flutter test --no-pub
 git diff --check
 ```
+
+CI runs `flutter test --coverage`, publishes line coverage in the workflow summary, and uploads `coverage/lcov.info`. Coverage is currently a visible baseline rather than a repository-wide hard threshold. Changes to critical behavior still require focused tests.
 
 For release-related changes, also run:
 

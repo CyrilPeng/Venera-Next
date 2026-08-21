@@ -28,6 +28,7 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/coverage/
 
 # 符号化相关
 app.*.symbols

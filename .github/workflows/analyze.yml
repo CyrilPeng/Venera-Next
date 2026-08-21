@@ -19,5 +19,13 @@ jobs:
       - run: python3 .github/scripts/check_structure_imports.py
       - run: python3 -m unittest discover -s .github/scripts/tests -p "test_*.py"
       - run: flutter pub get --enforce-lockfile
-      - run: flutter test
+      - run: flutter test --coverage
+      - name: 汇总 Dart 覆盖率
+        run: python3 .github/scripts/report_dart_coverage.py coverage/lcov.info --github-summary
+      - name: 上传 Dart 覆盖率报告
+        uses: actions/upload-artifact@v5
+        with:
+          name: dart-coverage
+          path: coverage/lcov.info
+          if-no-files-found: error
       - uses: invertase/github-action-dart-analyzer@v1
