@@ -28,4 +28,4 @@ jobs:
           name: dart-coverage
           path: coverage/lcov.info
           if-no-files-found: error
-      - uses: invertase/github-action-dart-analyzer@v1
+      - uses: invertase/github-action-dart-analyzer@v3
