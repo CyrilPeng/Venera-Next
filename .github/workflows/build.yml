@@ -1,4 +1,4 @@
-﻿name: 构建
+name: 构建
 run-name: 构建 ${{ github.ref_name }}
 
 on:
@@ -73,22 +73,22 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - run: flutter build apk --release
       - name: 上传 APK (armeabi-v7a)
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: apk-armeabi-v7a
           path: build/app/outputs/apk/release/*armeabi-v7a*.apk
       - name: 上传 APK (arm64-v8a)
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: apk-arm64-v8a
           path: build/app/outputs/apk/release/*arm64-v8a*.apk
       - name: 上传 APK (x86_64)
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: apk-x86_64
           path: build/app/outputs/apk/release/*x86_64*.apk
       - name: 上传 APK (universal)
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: apk-universal
           path: build/app/outputs/apk/release/*-android.apk
@@ -143,7 +143,7 @@ jobs:
             $archive.Dispose()
           }
           $artifacts | Sort-Object Name | ForEach-Object { "$($_.Name) $($_.Length) bytes" }
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: windows_build
           path: |
@@ -180,7 +180,7 @@ jobs:
           mkdir -p result
           mv dist/VeneraNext.dmg "result/VeneraNext-$APP_VERSION.dmg"
       - name: 上传 DMG
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: macos_build
           path: result/
@@ -208,11 +208,11 @@ jobs:
           sudo rm -rf build/linux/arch/src
           sudo rm -rf build/linux/arch/PKGBUILD
           sudo rm -rf build/linux/arch/Dockerfile
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: deb_build
           path: build/linux/x64/release/debian
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: arch_build
           path: build/linux/arch/
@@ -234,7 +234,7 @@ jobs:
       - name: 修补字体
         run: dart run patch/font.dart
       - run: python3 debian/build.py arm64
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: deb_arm64_build
           path: build/linux/x64/release/debian

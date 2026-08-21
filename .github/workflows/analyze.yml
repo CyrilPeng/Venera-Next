@@ -23,7 +23,7 @@ jobs:
       - name: 汇总 Dart 覆盖率
         run: python3 .github/scripts/report_dart_coverage.py coverage/lcov.info --github-summary
       - name: 上传 Dart 覆盖率报告
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: dart-coverage
           path: coverage/lcov.info
