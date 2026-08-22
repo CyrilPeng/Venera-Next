@@ -16,7 +16,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     steps:
     - name: 检出仓库
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
 
     - name: 设置 Python
       uses: actions/setup-python@v7

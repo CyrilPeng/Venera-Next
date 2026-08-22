@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: 检出代码
         id: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 检查 Issue
         id: check

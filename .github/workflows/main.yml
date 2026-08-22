@@ -13,7 +13,7 @@ jobs:
   Release_Metadata:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: 校验发布元数据
         run: python3 .github/scripts/validate_release.py
 
@@ -21,7 +21,7 @@ jobs:
     runs-on: macos-15
     needs: Release_Metadata
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
@@ -62,7 +62,7 @@ jobs:
     runs-on: macos-15
     needs: Release_Metadata
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
@@ -102,7 +102,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: Release_Metadata
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: rm -rf /opt/hostedtoolcache
       - uses: subosito/flutter-action@v2
         with:
@@ -144,7 +144,7 @@ jobs:
     runs-on: windows-latest
     needs: Release_Metadata
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: 安装依赖
         run: | 
           choco install yq -y
@@ -201,7 +201,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: Release_Metadata
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
@@ -234,7 +234,7 @@ jobs:
     runs-on: ubuntu-22.04-arm
     needs: Release_Metadata
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: 'master'
@@ -258,7 +258,7 @@ jobs:
     needs: [Release_Metadata, Build_MacOS, Build_IOS, Build_Android, Build_Windows, Build_Linux, Build_Linux_ARM64]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: 校验发布元数据
         run: python3 .github/scripts/validate_release.py --write-notes release_notes.md
       - uses: actions/download-artifact@v8
