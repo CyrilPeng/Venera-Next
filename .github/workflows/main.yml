@@ -54,7 +54,7 @@ jobs:
 
       # 上传构建产物
       - name: 上传 DMG
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: macos_build
           path: result/
@@ -94,7 +94,7 @@ jobs:
           APP_VERSION=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | tr -d '\r\n')
           mkdir -p result
           mv build/ios/iphoneos/VeneraNext-ios.ipa "result/VeneraNext-ios-$APP_VERSION.ipa"
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: ios_build
           path: result/
@@ -136,7 +136,7 @@ jobs:
         run: rustup show
       - run: flutter pub get --enforce-lockfile
       - run: flutter build apk --release
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: apks
           path: build/app/outputs/apk/release
@@ -190,7 +190,7 @@ jobs:
             $archive.Dispose()
           }
           $artifacts | Sort-Object Name | ForEach-Object { "$($_.Name) $($_.Length) bytes" }
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: windows_build
           path: |
@@ -222,11 +222,11 @@ jobs:
           sudo rm -rf build/linux/arch/PKGBUILD
           sudo rm -rf build/linux/arch/Dockerfile
           rm -f build/linux/arch/venera-next-debug-*.pkg.tar.zst
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: deb_build
           path: build/linux/x64/release/debian
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: arch_build
           path: build/linux/arch/
@@ -248,7 +248,7 @@ jobs:
         run: |
           dart run patch/font.dart
       - run: python3 debian/build.py arm64
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: deb_arm64_build
           path: build/linux/x64/release/debian # 这是 flutter_to_debian 的路径问题，对当前构建结果没有影响。
@@ -299,7 +299,7 @@ jobs:
             --release-date "$(date -u +%F)" \
             --output outputs/winget \
             --print-path
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: ${{ !contains(github.ref_name, '-') }}
         with:
           name: winget_manifest
