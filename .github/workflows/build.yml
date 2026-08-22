@@ -38,7 +38,7 @@ jobs:
     if: ${{ inputs.build_android }}
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: rm -rf /opt/hostedtoolcache
       - uses: subosito/flutter-action@v2
         with:
@@ -97,7 +97,7 @@ jobs:
     if: ${{ inputs.build_windows }}
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: 安装依赖
         run: |
           choco install yq -y
@@ -155,7 +155,7 @@ jobs:
     if: ${{ inputs.build_macos }}
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
@@ -189,7 +189,7 @@ jobs:
     if: ${{ inputs.build_linux_x64 }}
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
@@ -221,7 +221,7 @@ jobs:
     if: ${{ inputs.build_linux_arm64 }}
     runs-on: ubuntu-22.04-arm
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: 'master'

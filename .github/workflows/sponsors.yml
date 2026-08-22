@@ -32,7 +32,7 @@ jobs:
       AFDIAN_API_TOKEN: ${{ secrets.AFDIAN_API_TOKEN }}
     steps:
       - name: 检出仓库
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 设置 Python
         uses: actions/setup-python@v7
