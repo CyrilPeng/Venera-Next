@@ -5,9 +5,17 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    ignore:
+      # rhttp 0.18+ requires a newer flutter_rust_bridge than this project pins.
+      - dependency-name: rhttp
+        versions: [">= 0.18.0"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    ignore:
+      # Wait for a Dart analyzer action release that runs on Node.js 24.
+      - dependency-name: invertase/github-action-dart-analyzer
+        versions: [">= 2.0.0"]

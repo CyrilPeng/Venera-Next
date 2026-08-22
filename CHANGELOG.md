@@ -8,6 +8,7 @@
 
 - 收紧 `path_provider`、`intl` 和 `archive` 的版本约束，并固定 Debian 打包工具依赖及发布工作流使用的 Git commit，降低依赖和构建环境漂移风险。
 - 增加 Git 依赖治理说明、可见的 Dart 覆盖率报告、贡献指南、安全政策、行为规范和 Dependabot 配置。
+- 合并已通过验证的依赖和 GitHub Actions 更新，并暂缓与当前 `flutter_rust_bridge` 或 Node.js 运行时不兼容的自动升级。
 
 ### 修复
 
