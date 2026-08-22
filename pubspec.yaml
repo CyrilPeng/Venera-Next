@@ -15,7 +15,7 @@ dependencies:
   intl: ^0.20.2
   window_manager: ^0.5.2
   sqlite3: ^2.7.4
-  sqlite3_flutter_libs: ^0.5.30
+  sqlite3_flutter_libs: ^0.6.0+eol
   flutter_qjs:
     git:
       url: https://github.com/venera-app/flutter_qjs
