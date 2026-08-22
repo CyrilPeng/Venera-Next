@@ -261,31 +261,31 @@ jobs:
       - uses: actions/checkout@v5
       - name: 校验发布元数据
         run: python3 .github/scripts/validate_release.py --write-notes release_notes.md
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: macos_build
           path: outputs
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: ios_build
           path: outputs
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: apks
           path: outputs
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: windows_build
           path: outputs
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: deb_build
           path: outputs
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: arch_build
           path: outputs
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: deb_arm64_build
           path: outputs
