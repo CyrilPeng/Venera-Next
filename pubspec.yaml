@@ -64,7 +64,7 @@ dependencies:
       url: https://github.com/venera-app/webdav_client
       ref: 2f669c98fb81cff1c64fee93466a1475c77e4273
   battery_plus: ^7.0.0
-  local_auth: ^3.0.1
+  local_auth: ^3.0.2
   flutter_saf:
     git:
       url: https://github.com/venera-app/flutter_saf
