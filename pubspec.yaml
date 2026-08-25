@@ -38,7 +38,7 @@ dependencies:
       ref: 09e756b1f1b04e6298318d99ec20a787fb360f59
       path: packages/scrollable_positioned_list
   flutter_reorderable_grid_view: ^5.4.0
-  uuid: ^4.5.1
+  uuid: ^4.6.0
   desktop_webview_window:
     git:
       url: https://github.com/venera-app/flutter_desktop_webview
