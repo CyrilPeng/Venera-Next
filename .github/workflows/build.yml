@@ -56,6 +56,12 @@ jobs:
         with:
           distribution: 'oracle'
           java-version: '17'
+      - name: 准备 Rust 工具链
+        run: |
+          python3 .github/scripts/prepare_rust_toolchain.py \
+            --target aarch64-linux-android \
+            --target armv7-linux-androideabi \
+            --target x86_64-linux-android
       - name: 配置 Gradle 插件仓库
         run: |
           mkdir -p ~/.gradle/init.d
@@ -162,6 +168,11 @@ jobs:
           flutter-version-file: pubspec.yaml
           architecture: x64
       - run: sudo xcode-select --switch /Applications/Xcode_16.4.app
+      - name: 准备 Rust 工具链
+        run: |
+          python3 .github/scripts/prepare_rust_toolchain.py \
+            --target aarch64-apple-darwin \
+            --target x86_64-apple-darwin
       - run: flutter pub get --enforce-lockfile
       - name: 检查 rust-toolchain.toml
         run: rustup show
@@ -195,6 +206,8 @@ jobs:
           channel: 'stable'
           flutter-version-file: pubspec.yaml
           architecture: x64
+      - name: 准备 Rust 工具链
+        run: python3 .github/scripts/prepare_rust_toolchain.py
       - run: |
           flutter pub get --enforce-lockfile
           sudo apt-get update -y
@@ -226,6 +239,8 @@ jobs:
         with:
           channel: 'master'
           flutter-version-file: pubspec.yaml
+      - name: 准备 Rust 工具链
+        run: python3 .github/scripts/prepare_rust_toolchain.py
       - run: |
           flutter pub get --enforce-lockfile
           sudo apt-get update -y
