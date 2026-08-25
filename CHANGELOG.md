@@ -11,6 +11,7 @@
 - 合并已通过验证的依赖和 GitHub Actions 更新，并暂缓与当前 `flutter_rust_bridge` 或 Node.js 运行时不兼容的自动升级；`archive`、`image`、`crypto` 和 `uuid` 已更新到兼容版本。
 - 将 `sqlite3_flutter_libs` 更新到兼容 `sqlite3 2.x` 的 `0.5.42`，并忽略已停止使用的 `0.6.x` 迁移占位版本，避免破坏桌面端和移动端原生 SQLite 库。
 - 发布构建会在编译前重新安装并校验固定的 Rust 工具链及平台目标，避免运行器缓存损坏导致 `cargo` 缺失或并发下载 target 失败；Linux 打包现在也会直接传播 Flutter 构建错误。
+- 为 macOS 发布构建增加 Rustup 安装操作的串行保护，避免多个 Rust 插件并行准备 iOS 目标时造成下载文件竞态。
 
 ### 修复
 

@@ -33,6 +33,14 @@ jobs:
           python3 .github/scripts/prepare_rust_toolchain.py \
             --target aarch64-apple-darwin \
             --target x86_64-apple-darwin
+      - name: 串行化 Rustup 安装操作
+        run: |
+          install "$(command -v rustup)" "$RUNNER_TEMP/rustup"
+          rm -f "$HOME/.cargo/bin/rustup"
+          install .github/scripts/serialized_rustup.py "$HOME/.cargo/bin/rustup"
+          chmod +x "$HOME/.cargo/bin/rustup"
+          echo "RUSTUP_REAL_BINARY=$RUNNER_TEMP/rustup" >> "$GITHUB_ENV"
+          echo "RUSTUP_LOCK_FILE=$RUNNER_TEMP/venera-rustup.lock" >> "$GITHUB_ENV"
       - run: flutter pub get --enforce-lockfile
 
       - name: 检查 rust-toolchain.toml
@@ -80,6 +88,14 @@ jobs:
             --target aarch64-apple-darwin \
             --target x86_64-apple-darwin \
             --target aarch64-apple-ios
+      - name: 串行化 Rustup 安装操作
+        run: |
+          install "$(command -v rustup)" "$RUNNER_TEMP/rustup"
+          rm -f "$HOME/.cargo/bin/rustup"
+          install .github/scripts/serialized_rustup.py "$HOME/.cargo/bin/rustup"
+          chmod +x "$HOME/.cargo/bin/rustup"
+          echo "RUSTUP_REAL_BINARY=$RUNNER_TEMP/rustup" >> "$GITHUB_ENV"
+          echo "RUSTUP_LOCK_FILE=$RUNNER_TEMP/venera-rustup.lock" >> "$GITHUB_ENV"
       - run: flutter pub get --enforce-lockfile
       - name: 构建 iOS 应用
         run: |
