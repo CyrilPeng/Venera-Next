@@ -8,7 +8,7 @@ void _initializeDatabase(String path) {
   final db = sqlite3.open(path);
   try {
     db.execute('CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT);');
-    db.execute('INSERT INTO items (value) VALUES ("seed");');
+    db.execute("INSERT INTO items (value) VALUES ('seed');");
   } finally {
     db.dispose();
   }
@@ -100,7 +100,7 @@ void main() {
       reader.select('SELECT * FROM items;');
 
       expect(
-        () => writer.execute('INSERT INTO items (value) VALUES ("locked");'),
+        () => writer.execute("INSERT INTO items (value) VALUES ('locked');"),
         throwsA(
           isA<SqliteException>().having(
             (error) => error.resultCode,

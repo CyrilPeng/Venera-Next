@@ -9,6 +9,9 @@ updates:
       # rhttp 0.18+ requires a newer flutter_rust_bridge than this project pins.
       - dependency-name: rhttp
         versions: [">= 0.18.0"]
+      # 0.6.x is an end-of-life placeholder for the sqlite3 3.x migration.
+      - dependency-name: sqlite3_flutter_libs
+        versions: [">= 0.6.0"]
 
   - package-ecosystem: github-actions
     directory: /
