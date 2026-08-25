@@ -249,6 +249,7 @@ class LocalFavoritesManager with ChangeNotifier {
     _isClosed = false;
     counts = {};
     _dbPath = "${App.dataPath}/local_favorite.db";
+    final databaseExisted = File(_dbPath).existsSync();
     _db = openSqliteDatabase(_dbPath);
     _db.execute("""
       create table if not exists folder_order (
@@ -265,7 +266,10 @@ class LocalFavoritesManager with ChangeNotifier {
     """);
     var folderNames = _getFolderNamesWithDB();
     final foldersToMigrate = List<String>.from(folderNames);
-    folderNames = _ensureTrackingFolder(folderNames);
+    folderNames = _ensureTrackingFolder(
+      folderNames,
+      createIfMissing: !databaseExisted,
+    );
     for (var folder in foldersToMigrate) {
       var columns = _db.select("""
         pragma table_info("$folder");
@@ -294,13 +298,37 @@ class LocalFavoritesManager with ChangeNotifier {
     if (App.isInitialized) {
       await appdata.ensureInit();
     }
-    appdata.settings['followUpdatesFolder'] = trackingFolderName;
-    prepareTableForFollowUpdates(trackingFolderName, false);
+    var settingsChanged = false;
+    final configuredTrackingFolder = appdata.settings['followUpdatesFolder'];
+    final trackingFolder =
+        configuredTrackingFolder is String &&
+            folderNames.contains(configuredTrackingFolder)
+        ? configuredTrackingFolder
+        : !databaseExisted && folderNames.contains(trackingFolderName)
+        ? trackingFolderName
+        : null;
+    if (configuredTrackingFolder != trackingFolder) {
+      appdata.settings['followUpdatesFolder'] = trackingFolder;
+      settingsChanged = true;
+    }
+    if (trackingFolder != null) {
+      prepareTableForFollowUpdates(trackingFolder, false);
+    }
     final quickFavorite = appdata.settings['quickFavorite'];
     if (quickFavorite is! String || !folderNames.contains(quickFavorite)) {
-      appdata.settings['quickFavorite'] = trackingFolderName;
+      final fallbackQuickFavorite =
+          !databaseExisted && folderNames.contains(trackingFolderName)
+          ? trackingFolderName
+          : null;
+      if (quickFavorite != fallbackQuickFavorite) {
+        appdata.settings['quickFavorite'] = fallbackQuickFavorite;
+        settingsChanged = true;
+      }
     }
     initCounts();
+    if (settingsChanged) {
+      await appdata.saveData(false);
+    }
   }
 
   void initCounts() {
@@ -317,8 +345,11 @@ class LocalFavoritesManager with ChangeNotifier {
 
   static const String trackingFolderName = "追更";
 
-  List<String> _ensureTrackingFolder(List<String> folderNames) {
-    if (!folderNames.contains(trackingFolderName)) {
+  List<String> _ensureTrackingFolder(
+    List<String> folderNames, {
+    required bool createIfMissing,
+  }) {
+    if (createIfMissing && folderNames.isEmpty) {
       createFolder(trackingFolderName);
       return _getFolderNamesWithDB();
     }

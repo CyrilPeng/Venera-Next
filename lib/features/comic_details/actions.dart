@@ -7,6 +7,7 @@ import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/side_bar.dart';
+import 'package:venera_next/features/comic_details/archive_download.dart';
 import 'package:venera_next/features/comic_details/comments_page.dart';
 import 'package:venera_next/features/comic_details/favorite.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -174,11 +175,40 @@ abstract mixin class ComicPageActions {
       int selected = -1;
       bool isLoading = false;
       bool isGettingLink = false;
+      String? archiveLoadError;
       await showDialog(
         context: App.rootContext,
         builder: (context) {
           return StatefulBuilder(
             builder: (context, setState) {
+              Future<void> loadArchives() async {
+                if (isLoading) return;
+                isLoading = true;
+                archives = null;
+                archiveLoadError = null;
+                selected = -1;
+                setState(() {});
+                final value = await loadArchiveOptions(
+                  comicSource.archiveDownloader!,
+                  comic.id,
+                );
+                if (value.success) {
+                  archives = value.dataOrNull ?? [];
+                  if (archives!.isEmpty) {
+                    archiveLoadError = "No archive options available".tl;
+                  }
+                } else {
+                  archives = [];
+                  archiveLoadError =
+                      (value.errorMessage ?? "Failed to load archive options")
+                          .tl;
+                }
+                isLoading = false;
+                if (context.mounted) {
+                  setState(() {});
+                }
+              }
+
               return ContentDialog(
                 title: "Download".tl,
                 content: RadioGroup<int>(
@@ -201,27 +231,25 @@ abstract mixin class ComicPageActions {
                           borderRadius: BorderRadius.zero,
                         ),
                         onExpansionChanged: (b) {
-                          if (!isLoading && b && archives == null) {
-                            isLoading = true;
-                            comicSource.archiveDownloader!
-                                .getArchives(comic.id)
-                                .then((value) {
-                                  if (value.success) {
-                                    archives = value.data;
-                                  } else {
-                                    App.rootContext.showMessage(
-                                      message: value.errorMessage!,
-                                    );
-                                  }
-                                  setState(() {
-                                    isLoading = false;
-                                  });
-                                });
+                          if (b &&
+                              (archives == null || archiveLoadError != null)) {
+                            loadArchives();
                           }
                         },
                         children: [
                           if (archives == null)
                             const ListLoadingIndicator().toCenter()
+                          else if (archiveLoadError != null)
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ListTile(title: Text(archiveLoadError!)),
+                                Button.text(
+                                  onPressed: loadArchives,
+                                  child: Text("Retry".tl),
+                                ),
+                              ],
+                            )
                           else
                             for (int i = 0; i < archives!.length; i++)
                               RadioListTile<int>(
@@ -246,23 +274,35 @@ abstract mixin class ComicPageActions {
                       setState(() {
                         isGettingLink = true;
                       });
-                      var res = await comicSource.archiveDownloader!
-                          .getDownloadUrl(comic.id, archives![selected].id);
-                      if (res.error) {
-                        App.rootContext.showMessage(message: res.errorMessage!);
-                        setState(() {
-                          isGettingLink = false;
-                        });
-                      } else if (context.mounted) {
-                        if (res.data.isNotEmpty) {
+                      if (archives == null ||
+                          selected < 0 ||
+                          selected >= archives!.length) {
+                        App.rootContext.showMessage(
+                          message: "Select an archive option".tl,
+                        );
+                      } else {
+                        final res = await loadArchiveDownloadLink(
+                          comicSource.archiveDownloader!,
+                          comic.id,
+                          archives![selected].id,
+                        );
+                        if (res.error) {
+                          App.rootContext.showMessage(
+                            message: (res.errorMessage ?? "Error").tl,
+                          );
+                        } else if (context.mounted) {
                           LocalManager().addTask(
                             ArchiveDownloadTask(res.data, comic),
                           );
                           App.rootContext.showMessage(
                             message: "Download started".tl,
                           );
+                          context.pop();
                         }
-                        context.pop();
+                      }
+                      if (context.mounted) {
+                        isGettingLink = false;
+                        setState(() {});
                       }
                     },
                     child: Text("Confirm".tl),

@@ -136,19 +136,27 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
     super.dispose();
   }
 
-  void openOrClose() {
-    if (!_isOpen) {
+  dynamic _readerSetting(String key) {
+    return appdata.settings.getReaderSetting(
+      context.reader.cid,
+      context.reader.type.sourceKey,
+      key,
+    );
+  }
+
+  void _applySystemUiMode() {
+    if (_isOpen || _readerSetting('showSystemStatusBar') == true) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     } else {
-      if (!appdata.settings['showSystemStatusBar']) {
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
-      } else {
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      }
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
     }
+  }
+
+  void openOrClose() {
     setState(() {
       _isOpen = !_isOpen;
     });
+    _applySystemUiMode();
   }
 
   bool? rotation;
@@ -205,7 +213,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
             child: widget.child,
           ),
         ),
-        if (appdata.settings['showPageNumberInReader'] == true &&
+        if (_readerSetting('showPageNumberInReader') == true &&
             !isOnChapterCommentsPage)
           buildPageInfoText(),
         if (!isOnChapterCommentsPage) buildStatusInfo(),
@@ -709,7 +717,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   }
 
   Widget buildStatusInfo() {
-    if (appdata.settings['enableClockAndBatteryInfoInReader']) {
+    if (_readerSetting('enableClockAndBatteryInfoInReader') == true) {
       return Positioned(
         bottom: 13,
         right: 25,
@@ -795,6 +803,14 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
           }
           if (key == "showChapterComments" ||
               key == "showChapterCommentsAtEnd") {
+            update();
+          }
+          if (key == "showSystemStatusBar") {
+            _applySystemUiMode();
+            update();
+          }
+          if (key == "showPageNumberInReader" ||
+              key == "enableClockAndBatteryInfoInReader") {
             update();
           }
           context.reader.update();

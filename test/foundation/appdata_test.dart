@@ -11,6 +11,82 @@ void main() {
     expect(appdata.settings['comicSourceListUrl'], isEmpty);
   });
 
+  test('reader settings resolve from global, device, then comic scope', () {
+    final previousDeviceId = appdata.settings['deviceId'];
+    final previousDeviceSettings = appdata.settings['deviceSpecificSettings'];
+    final previousComicSettings = appdata.settings['comicSpecificSettings'];
+    final previousPageNumber = appdata.settings['showPageNumberInReader'];
+    final previousClockInfo =
+        appdata.settings['enableClockAndBatteryInfoInReader'];
+
+    try {
+      appdata.settings['deviceId'] = 'reader-settings-test-device';
+      appdata.settings['deviceSpecificSettings'] = <String, dynamic>{};
+      appdata.settings['comicSpecificSettings'] = <String, dynamic>{};
+      appdata.settings['showPageNumberInReader'] = true;
+      appdata.settings['enableClockAndBatteryInfoInReader'] = true;
+
+      appdata.settings.setEnabledDeviceSpecificSettings(true);
+      appdata.settings.setDeviceReaderSetting('showPageNumberInReader', false);
+      appdata.settings.setDeviceReaderSetting(
+        'enableClockAndBatteryInfoInReader',
+        false,
+      );
+
+      expect(
+        appdata.settings.getReaderSetting(
+          'comic-id',
+          'source-key',
+          'showPageNumberInReader',
+        ),
+        isFalse,
+      );
+      expect(
+        appdata.settings.getReaderSetting(
+          'comic-id',
+          'source-key',
+          'enableClockAndBatteryInfoInReader',
+        ),
+        isFalse,
+      );
+
+      appdata.settings.setEnabledComicSpecificSettings(
+        'comic-id',
+        'source-key',
+        true,
+      );
+      appdata.settings.setReaderSetting(
+        'comic-id',
+        'source-key',
+        'showPageNumberInReader',
+        true,
+      );
+
+      expect(
+        appdata.settings.getReaderSetting(
+          'comic-id',
+          'source-key',
+          'showPageNumberInReader',
+        ),
+        isTrue,
+      );
+      expect(
+        appdata.settings.getReaderSetting(
+          'comic-id',
+          'source-key',
+          'enableClockAndBatteryInfoInReader',
+        ),
+        isFalse,
+      );
+    } finally {
+      appdata.settings['deviceId'] = previousDeviceId;
+      appdata.settings['deviceSpecificSettings'] = previousDeviceSettings;
+      appdata.settings['comicSpecificSettings'] = previousComicSettings;
+      appdata.settings['showPageNumberInReader'] = previousPageNumber;
+      appdata.settings['enableClockAndBatteryInfoInReader'] = previousClockInfo;
+    }
+  });
+
   test(
     'saveData queues concurrent writes and keeps the latest snapshot',
     () async {

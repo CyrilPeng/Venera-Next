@@ -142,7 +142,7 @@ void main() {
   );
 
   test(
-    'init preserves valid quick favorite folder',
+    'init preserves valid quick favorite folder without creating tracking',
     () async {
       final dataDir = Directory.systemTemp.createTempSync(
         'venera-favorites-data-',
@@ -213,15 +213,66 @@ void main() {
       final manager = LocalFavoritesManager();
       await manager.init();
 
-      expect(
-        appdata.settings['followUpdatesFolder'],
-        LocalFavoritesManager.trackingFolderName,
-      );
+      expect(appdata.settings['followUpdatesFolder'], isNull);
       expect(appdata.settings['quickFavorite'], 'custom');
       expect(
         manager.folderNames,
-        contains(LocalFavoritesManager.trackingFolderName),
+        isNot(contains(LocalFavoritesManager.trackingFolderName)),
       );
+    },
+    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+  );
+
+  test(
+    'init preserves a custom tracking folder after restart',
+    () async {
+      final dataDir = Directory.systemTemp.createTempSync(
+        'venera-favorites-data-',
+      );
+      final cacheDir = Directory.systemTemp.createTempSync(
+        'venera-favorites-cache-',
+      );
+      final previousFollowUpdatesFolder =
+          appdata.settings['followUpdatesFolder'];
+      final previousQuickFavorite = appdata.settings['quickFavorite'];
+      addTearDown(() async {
+        if (LocalFavoritesManager.cache != null) {
+          await LocalFavoritesManager().debugWaitForHashedIdsRefresh();
+          try {
+            LocalFavoritesManager().close();
+          } catch (_) {
+            // ignore cleanup failures in partially initialized tests
+          }
+        }
+        LocalFavoritesManager.cache = null;
+        appdata.settings['followUpdatesFolder'] = previousFollowUpdatesFolder;
+        appdata.settings['quickFavorite'] = previousQuickFavorite;
+        if (dataDir.existsSync()) {
+          dataDir.deleteSync(recursive: true);
+        }
+        if (cacheDir.existsSync()) {
+          cacheDir.deleteSync(recursive: true);
+        }
+      });
+
+      App.dataPath = dataDir.path;
+      App.cachePath = cacheDir.path;
+      LocalFavoritesManager.cache = null;
+
+      final firstManager = LocalFavoritesManager();
+      await firstManager.init();
+      firstManager.createFolder('B');
+      appdata.settings['followUpdatesFolder'] = 'B';
+      firstManager.prepareTableForFollowUpdates('B');
+      firstManager.deleteFolder(LocalFavoritesManager.trackingFolderName);
+      firstManager.close();
+      LocalFavoritesManager.cache = null;
+
+      final secondManager = LocalFavoritesManager();
+      await secondManager.init();
+
+      expect(secondManager.folderNames, ['B']);
+      expect(appdata.settings['followUpdatesFolder'], 'B');
     },
     skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
   );
