@@ -8,6 +8,7 @@
 
 - 更新 `share_plus` 至 12.0.2，包含 iOS 分享流程的稳定性修复。
 - 预处理 Dio 5.11.0 的拦截器兼容性，避免自定义拦截器在异常路径中因缺少 Dio 内部调用链而导致请求挂起。
+- 更新 `battery_plus` 至 7.1.1，并通过 Android release 与 macOS DMG 构建验证。
 
 ## v1.14.3
 
