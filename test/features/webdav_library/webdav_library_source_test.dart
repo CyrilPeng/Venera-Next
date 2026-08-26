@@ -281,6 +281,130 @@ void main() {
   );
 
   test(
+    'nested metadata directory is indexed as one comic with child chapters',
+    () async {
+      ops.dirs['/manga/'] = const [
+        WebDavLibraryEntry(name: '分类', isDirectory: true),
+      ];
+      ops.dirs['/manga/分类/'] = const [
+        WebDavLibraryEntry(name: '作者', isDirectory: true),
+      ];
+      ops.dirs['/manga/分类/作者/'] = const [
+        WebDavLibraryEntry(name: '猫之眼', isDirectory: true),
+      ];
+      ops.dirs['/manga/分类/作者/猫之眼/'] = const [
+        WebDavLibraryEntry(name: 'metadata.json', isDirectory: false),
+        WebDavLibraryEntry(name: 'cover.jpg', isDirectory: false),
+        WebDavLibraryEntry(name: '第01章', isDirectory: true),
+        WebDavLibraryEntry(name: '第02章', isDirectory: true),
+      ];
+      ops.dirs['/manga/分类/作者/猫之眼/第01章/'] = const [
+        WebDavLibraryEntry(name: '002.jpg', isDirectory: false),
+        WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+      ];
+      ops.dirs['/manga/分类/作者/猫之眼/第02章/'] = const [
+        WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+      ];
+      ops.textFiles['/manga/分类/作者/猫之眼/metadata.json'] = jsonEncode({
+        'title': '猫之眼',
+        'author': '北条司',
+        'tags': ['动作'],
+        'chapters': [
+          {'title': '错误的扁平章节', 'start': 1, 'end': 2},
+        ],
+      });
+
+      final sync = await WebDavLibrarySource.synchronize();
+      final comics = await WebDavLibrarySource.loadComics(1);
+      final details = await WebDavLibrarySource.loadComicInfo('分类/作者/猫之眼');
+      final pages = await WebDavLibrarySource.loadComicPages(
+        '分类/作者/猫之眼',
+        '第01章',
+      );
+
+      expect(sync.success, isTrue);
+      expect(comics.success, isTrue);
+      expect(comics.data.single.id, '分类/作者/猫之眼');
+      expect(comics.data.single.title, '猫之眼');
+      expect(comics.data.single.cover, '/manga/分类/作者/猫之眼/cover.jpg');
+      expect(details.success, isTrue);
+      expect(details.data.chapters!.allChapters, {
+        '第01章': '第01章',
+        '第02章': '第02章',
+      });
+      expect(pages.success, isTrue);
+      expect(pages.data, [
+        '/manga/分类/作者/猫之眼/第01章/001.jpg',
+        '/manga/分类/作者/猫之眼/第01章/002.jpg',
+      ]);
+    },
+  );
+
+  test(
+    'nested metadata directories keep distinct relative ids for duplicate names',
+    () async {
+      ops.dirs['/manga/'] = const [
+        WebDavLibraryEntry(name: '分类A', isDirectory: true),
+        WebDavLibraryEntry(name: '分类B', isDirectory: true),
+      ];
+      for (final category in ['分类A', '分类B']) {
+        ops.dirs['/manga/$category/'] = const [
+          WebDavLibraryEntry(name: '猫之眼', isDirectory: true),
+        ];
+        ops.dirs['/manga/$category/猫之眼/'] = const [
+          WebDavLibraryEntry(name: 'metadata.json', isDirectory: false),
+          WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+        ];
+        ops.textFiles['/manga/$category/猫之眼/metadata.json'] = jsonEncode({
+          'title': category,
+          'author': '',
+          'tags': <String>[],
+          'chapters': null,
+        });
+      }
+
+      final sync = await WebDavLibrarySource.synchronize();
+      final comics = await WebDavLibrarySource.loadComics(1);
+
+      expect(sync.success, isTrue);
+      expect(comics.data, hasLength(2));
+      expect(comics.data.map((comic) => comic.id), ['分类A/猫之眼', '分类B/猫之眼']);
+    },
+  );
+
+  test('metadata directory wins over nested metadata directories', () async {
+    ops.dirs['/manga/'] = const [
+      WebDavLibraryEntry(name: '猫之眼', isDirectory: true),
+    ];
+    ops.dirs['/manga/猫之眼/'] = const [
+      WebDavLibraryEntry(name: 'metadata.json', isDirectory: false),
+      WebDavLibraryEntry(name: '第01章', isDirectory: true),
+    ];
+    ops.dirs['/manga/猫之眼/第01章/'] = const [
+      WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+    ];
+    ops.dirs['/manga/猫之眼/第01章/嵌套漫画/'] = const [
+      WebDavLibraryEntry(name: 'metadata.json', isDirectory: false),
+      WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
+    ];
+    ops.textFiles['/manga/猫之眼/metadata.json'] = jsonEncode({
+      'title': '猫之眼',
+      'author': '',
+      'tags': <String>[],
+      'chapters': null,
+    });
+
+    final sync = await WebDavLibrarySource.synchronize();
+    final comics = await WebDavLibrarySource.loadComics(1);
+
+    expect(sync.success, isTrue);
+    expect(comics.data, hasLength(1));
+    expect(comics.data.single.id, '猫之眼');
+    expect(ops.readPaths, contains('/manga/猫之眼/'));
+    expect(ops.readPaths, isNot(contains('/manga/猫之眼/第01章/嵌套漫画/')));
+  });
+
+  test(
     'incremental sync rebuilds snapshots from the old cache format',
     () async {
       const comicId = 'Cached Book';

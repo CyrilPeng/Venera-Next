@@ -154,6 +154,32 @@ Plain directory rules:
 - The preferred cover is a root image whose base name is `cover`. Supported extensions are `jpg`, `jpeg`, `png`, `webp`, `gif`, `jpe`, and `avif`. Without one, the app tries the first root page, then `cover.*` or the first page in the first readable chapter.
 - Neither `metadata.json` nor `ComicInfo.xml` is required.
 
+### Metadata-Marked Nested Layout
+
+For a deeply nested WebDAV library, place `metadata.json` in the comic root to explicitly mark that directory as one comic:
+
+```text
+/venera_comics/
+└── Category/
+    └── Author/
+        └── Cat's Eye/
+            ├── metadata.json
+            ├── cover.jpg
+            ├── Chapter 01/
+            │   ├── 001.jpg
+            │   └── 002.jpg
+            └── Chapter 02/
+                └── 001.jpg
+```
+
+During WebDAV synchronization, the app recursively searches for directories containing `metadata.json` and treats each marked directory as one comic. Its direct child directories become chapters. Once a comic root is found, the app does not expose its chapters or deeper directories as separate comics. Comic IDs use paths relative to the configured WebDAV library path, so same-named comics in different categories do not overwrite one another.
+
+In this mode, the title, author, and tags come from `metadata.json`, while chapter names and paths come from direct child directories. A root-level `cover.*` file is used only as the cover. Other root-level images are preserved in an `Images` chapter.
+
+When real chapter directories and `metadata.json` page ranges coexist, the real directory layout takes precedence; page ranges are not matched to directories by position. `chapters[].start` and `chapters[].end` are used for virtual chapters only when the root contains flat images and no chapter directories, which preserves the extracted CBZ layout.
+
+Recursive discovery is limited to directories with an explicit metadata marker. Complex multi-level layouts without metadata are not guessed indefinitely; add `metadata.json` at the comic root to prevent unrelated comics from being merged.
+
 ### Extracted CBZ Enhanced Mode
 
 A single-comic CBZ exported by VeneraNext normally has a flat image layout after extraction:

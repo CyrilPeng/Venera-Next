@@ -207,6 +207,8 @@ class WebDavLibrarySource {
   static const rootChapterTitle = 'Images';
   static const _metadataFileName = 'metadata.json';
   static const _metadataChapterPrefix = '__cbz_range_';
+  static const _maxDiscoveryDepth = 8;
+  static const _maxDiscoveryDirectories = 2000;
   static const _autoSyncCheckInterval = Duration(minutes: 15);
 
   static final _snapshotCache = <String, _WebDavComicSnapshot>{};
@@ -454,30 +456,43 @@ class WebDavLibrarySource {
       lastSuccessfulSync: previousLastSync,
     );
     try {
-      final entries = List<WebDavLibraryEntry>.from(
+      final rootEntries = List<WebDavLibraryEntry>.from(
         await ops.readDir(config, config.remotePath),
       );
-      final directories =
-          entries
-              .where((entry) => entry.isDirectory)
-              .where((entry) => !_isIgnoredEntry(entry.name))
-              .toList()
-            ..sort((a, b) => compareComicFileNames(a.name, b.name));
       final hadDirectoryIndex = _cache.hasDirectoryIndex(configKey);
       final previous = _cache.all(configKey);
-      final remoteDirectories = <WebDavLibraryRemoteDirectory>[
-        for (var index = 0; index < directories.length; index++)
-          WebDavLibraryRemoteDirectory(
-            id: directories[index].name,
-            sortIndex: index,
-            eTag: directories[index].eTag,
-            modifiedAt: directories[index].modifiedAt,
-          ),
-      ];
-      _cache.replaceDirectoryIndex(configKey, remoteDirectories);
+      final provisionalDirectories = _sortedDirectories(rootEntries);
+      if (!hadDirectoryIndex) {
+        _cache.replaceDirectoryIndex(configKey, [
+          for (var index = 0; index < provisionalDirectories.length; index++)
+            WebDavLibraryRemoteDirectory(
+              id: provisionalDirectories[index].name,
+              sortIndex: index,
+              eTag: provisionalDirectories[index].eTag,
+              modifiedAt: provisionalDirectories[index].modifiedAt,
+            ),
+        ]);
+      }
       if (!indexReady.isCompleted) {
         indexReady.complete(const Res(true));
       }
+      contentVersion.value++;
+      final discovered = await _discoverComicDirectories(
+        config,
+        rootEntries: rootEntries,
+        previous: previous,
+        force: force,
+      );
+      final remoteDirectories = <WebDavLibraryRemoteDirectory>[
+        for (var index = 0; index < discovered.length; index++)
+          WebDavLibraryRemoteDirectory(
+            id: discovered[index].id,
+            sortIndex: index,
+            eTag: discovered[index].eTag,
+            modifiedAt: discovered[index].modifiedAt,
+          ),
+      ];
+      _cache.replaceDirectoryIndex(configKey, remoteDirectories);
       contentVersion.value++;
 
       final toRefresh = <WebDavLibraryRemoteDirectory>[];
@@ -508,11 +523,15 @@ class WebDavLibrarySource {
         throttleEvery: 0,
         run: (directory) async {
           try {
+            final discoveredDirectory = discovered.firstWhere(
+              (candidate) => candidate.id == directory.id,
+            );
             await _loadSnapshot(
               config,
               directory.id,
               forceRefresh: true,
               remoteDirectory: directory,
+              rootEntries: discoveredDirectory.entries,
             );
           } catch (e) {
             failed++;
@@ -658,6 +677,7 @@ class WebDavLibrarySource {
     String id, {
     bool forceRefresh = false,
     WebDavLibraryRemoteDirectory? remoteDirectory,
+    List<WebDavLibraryEntry>? rootEntries,
   }) async {
     final memoryKey = jsonEncode([config.cacheKey, id]);
     if (!forceRefresh) {
@@ -674,7 +694,11 @@ class WebDavLibrarySource {
     final inFlight = _snapshotInFlight[memoryKey];
     if (inFlight != null) return inFlight;
     final future = () async {
-      final snapshot = await _buildSnapshot(config, id);
+      final snapshot = await _buildSnapshot(
+        config,
+        id,
+        rootEntries: rootEntries,
+      );
       final existing = _cache.find(config.cacheKey, id);
       _cache.upsertSnapshot(
         config.cacheKey,
@@ -706,11 +730,12 @@ class WebDavLibrarySource {
 
   static Future<_WebDavComicSnapshot> _buildSnapshot(
     WebDavLibraryConfig config,
-    String id,
-  ) async {
+    String id, {
+    List<WebDavLibraryEntry>? rootEntries,
+  }) async {
     final comicPath = config.childDirectoryPath(id);
     final entries = List<WebDavLibraryEntry>.from(
-      await ops.readDir(config, comicPath),
+      rootEntries ?? await ops.readDir(config, comicPath),
     );
     final rootImages = _imageEntries(
       entries,
@@ -725,25 +750,27 @@ class WebDavLibrarySource {
       config,
       comicPath,
       entries,
-      pageCount: rootImages.length,
+      pageCount: directories.isEmpty ? rootImages.length : null,
     );
 
     final metadataChapters = <String, ComicChapter>{};
     final chapterMap = <String, String>{};
-    if (metadata?.chapters?.isNotEmpty == true) {
+    if (directories.isNotEmpty) {
+      for (final directory in directories) {
+        chapterMap[directory.name] = directory.name;
+      }
+      if (rootImages.isNotEmpty) {
+        chapterMap[rootChapterId] = rootChapterTitle;
+      }
+    } else if (metadata?.chapters?.isNotEmpty == true) {
       for (var index = 0; index < metadata!.chapters!.length; index++) {
         final chapter = metadata.chapters![index];
         final chapterId = '$_metadataChapterPrefix$index';
         metadataChapters[chapterId] = chapter;
         chapterMap[chapterId] = chapter.title;
       }
-    } else {
-      for (final directory in directories) {
-        chapterMap[directory.name] = directory.name;
-      }
-      if (chapterMap.isEmpty && rootImages.isNotEmpty) {
-        chapterMap[rootChapterId] = rootChapterTitle;
-      }
+    } else if (rootImages.isNotEmpty) {
+      chapterMap[rootChapterId] = rootChapterTitle;
     }
     if (chapterMap.isEmpty) {
       throw const FormatException(
@@ -788,7 +815,7 @@ class WebDavLibrarySource {
 
     final metadataTitle = metadata?.title.trim() ?? '';
     return _WebDavComicSnapshot(
-      title: metadataTitle.isEmpty ? id : metadataTitle,
+      title: metadataTitle.isEmpty ? _directoryName(id) : metadataTitle,
       author: metadata?.author ?? '',
       tags: metadata?.tags ?? const [],
       cover: coverPath ?? '',
@@ -802,7 +829,7 @@ class WebDavLibrarySource {
     WebDavLibraryConfig config,
     String comicPath,
     List<WebDavLibraryEntry> entries, {
-    required int pageCount,
+    int? pageCount,
   }) async {
     final metadataEntry = entries.firstWhereOrNull(
       (entry) =>
@@ -828,6 +855,181 @@ class WebDavLibrarySource {
       );
       return null;
     }
+  }
+
+  static Future<List<_WebDavDiscoveredDirectory>> _discoverComicDirectories(
+    WebDavLibraryConfig config, {
+    required List<WebDavLibraryEntry> rootEntries,
+    required Map<String, WebDavLibraryCachedComic> previous,
+    required bool force,
+  }) async {
+    final topLevelDirectories = _sortedDirectories(rootEntries);
+    final result = <_WebDavDiscoveredDirectory>[];
+    var inspectedDirectories = 0;
+
+    Future<List<_WebDavDiscoveredDirectory>> scanNested(
+      String parentId,
+      List<WebDavLibraryEntry> entries,
+      int depth,
+    ) async {
+      if (depth > _maxDiscoveryDepth ||
+          inspectedDirectories >= _maxDiscoveryDirectories) {
+        return const [];
+      }
+
+      final directories = _sortedDirectories(entries);
+      final nested = <_WebDavDiscoveredDirectory>[];
+      for (final directory in directories) {
+        if (inspectedDirectories >= _maxDiscoveryDirectories) break;
+        inspectedDirectories++;
+        final id = _joinRelativeDirectoryPath(parentId, directory.name);
+        final path = config.childDirectoryPath(id);
+        List<WebDavLibraryEntry> childEntries;
+        try {
+          childEntries = List<WebDavLibraryEntry>.from(
+            await ops.readDir(config, path),
+          );
+        } catch (e) {
+          Log.warning(
+            'WebDAV Library',
+            'Failed to inspect nested directory at $path: $e',
+          );
+          continue;
+        }
+
+        if (_hasMetadataFile(childEntries)) {
+          nested.add(
+            _WebDavDiscoveredDirectory(
+              id: id,
+              entries: childEntries,
+              eTag: directory.eTag,
+              modifiedAt: directory.modifiedAt,
+            ),
+          );
+          continue;
+        }
+        nested.addAll(await scanNested(id, childEntries, depth + 1));
+      }
+      return nested;
+    }
+
+    for (final directory in topLevelDirectories) {
+      if (inspectedDirectories >= _maxDiscoveryDirectories) break;
+      inspectedDirectories++;
+      final id = directory.name;
+      final cached = previous[id];
+      if (!force &&
+          cached?.isReady == true &&
+          cached!.hasSameRemoteVersion(
+            eTag: directory.eTag,
+            modifiedAt: directory.modifiedAt,
+          )) {
+        result.add(
+          _WebDavDiscoveredDirectory(
+            id: id,
+            entries: const [],
+            eTag: directory.eTag,
+            modifiedAt: directory.modifiedAt,
+          ),
+        );
+        continue;
+      }
+      final path = config.childDirectoryPath(id);
+      List<WebDavLibraryEntry> entries;
+      try {
+        entries = List<WebDavLibraryEntry>.from(
+          await ops.readDir(config, path),
+        );
+      } catch (e) {
+        Log.warning(
+          'WebDAV Library',
+          'Failed to inspect directory at $path: $e',
+        );
+        result.add(
+          _WebDavDiscoveredDirectory(
+            id: id,
+            entries: const [],
+            eTag: directory.eTag,
+            modifiedAt: directory.modifiedAt,
+          ),
+        );
+        continue;
+      }
+
+      if (_hasMetadataFile(entries)) {
+        final discoveredDirectories = [
+          _WebDavDiscoveredDirectory(
+            id: id,
+            entries: entries,
+            eTag: directory.eTag,
+            modifiedAt: directory.modifiedAt,
+          ),
+        ];
+        result.addAll(discoveredDirectories);
+        continue;
+      }
+
+      final rootImages = _imageEntries(entries);
+      final childDirectories = _sortedDirectories(entries);
+      if (rootImages.isNotEmpty || childDirectories.isEmpty) {
+        final discoveredDirectories = [
+          _WebDavDiscoveredDirectory(
+            id: id,
+            entries: entries,
+            eTag: directory.eTag,
+            modifiedAt: directory.modifiedAt,
+          ),
+        ];
+        result.addAll(discoveredDirectories);
+        continue;
+      }
+
+      final nested = await scanNested(id, entries, 1);
+      if (nested.isEmpty) {
+        // Keep the original first-level directory behavior when no metadata
+        // marker can be found below a directory.
+        final discoveredDirectories = [
+          _WebDavDiscoveredDirectory(
+            id: id,
+            entries: entries,
+            eTag: directory.eTag,
+            modifiedAt: directory.modifiedAt,
+          ),
+        ];
+        result.addAll(discoveredDirectories);
+      } else {
+        result.addAll(nested);
+      }
+    }
+
+    result.sort((a, b) => compareComicFileNames(a.id, b.id));
+    return result;
+  }
+
+  static List<WebDavLibraryEntry> _sortedDirectories(
+    List<WebDavLibraryEntry> entries,
+  ) {
+    return entries
+        .where((entry) => entry.isDirectory)
+        .where((entry) => !_isIgnoredEntry(entry.name))
+        .toList()
+      ..sort((a, b) => compareComicFileNames(a.name, b.name));
+  }
+
+  static bool _hasMetadataFile(List<WebDavLibraryEntry> entries) {
+    return entries.any(
+      (entry) =>
+          !entry.isDirectory && entry.name.toLowerCase() == _metadataFileName,
+    );
+  }
+
+  static String _joinRelativeDirectoryPath(String parent, String name) {
+    return parent.isEmpty ? name : '$parent/$name';
+  }
+
+  static String _directoryName(String id) {
+    final separator = id.lastIndexOf('/');
+    return separator < 0 ? id : id.substring(separator + 1);
   }
 
   static Future<Map<String, dynamic>> getImageLoadingConfig(
@@ -866,6 +1068,20 @@ class WebDavLibrarySource {
   static bool _isIgnoredEntry(String name) {
     return isIgnoredComicStorageEntry(name) || isComicArchiveFileName(name);
   }
+}
+
+class _WebDavDiscoveredDirectory {
+  const _WebDavDiscoveredDirectory({
+    required this.id,
+    required this.entries,
+    this.eTag,
+    this.modifiedAt,
+  });
+
+  final String id;
+  final List<WebDavLibraryEntry> entries;
+  final String? eTag;
+  final int? modifiedAt;
 }
 
 class _WebDavComicSnapshot {
