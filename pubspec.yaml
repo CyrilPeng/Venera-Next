@@ -21,7 +21,7 @@ dependencies:
       url: https://github.com/venera-app/flutter_qjs
       ref: 8feae95df7fb00455df129ad7a0dfec1d0e8d8e4
   crypto: ^3.0.7
-  dio: ^5.9.2
+  dio: ^5.11.0
   html: ^0.15.6
   pointycastle: ^4.0.0
   url_launcher: ^6.3.2
