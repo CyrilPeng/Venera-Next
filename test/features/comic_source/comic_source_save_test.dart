@@ -6,19 +6,14 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/comic_type.dart';
-import 'package:venera_next/foundation/res.dart';
-import 'package:venera_next/features/sync/sync.dart';
 
 void main() {
   setUp(() {
-    DataSync.resetForTesting();
-    DataSync.debugDisableWindowCloseHandler = true;
-    appdata.implicitData['webdavAutoSync'] = false;
+    configureComicSourceDataSavedHandler(null);
   });
 
   tearDown(() {
-    appdata.implicitData['webdavAutoSync'] = false;
-    DataSync.resetForTesting();
+    configureComicSourceDataSavedHandler(null);
   });
 
   test(
@@ -35,10 +30,9 @@ void main() {
       App.dataPath = dataDir.path;
 
       var uploadCount = 0;
-      DataSync.debugUploadOverride = () async {
+      configureComicSourceDataSavedHandler(() async {
         uploadCount++;
-        return const Res(true);
-      };
+      });
 
       final source = _source();
       source.data = {'token': 'first'};

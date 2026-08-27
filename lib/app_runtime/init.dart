@@ -43,6 +43,12 @@ Future<void> init() async {
   await App.init().wait();
   await SingleInstanceCookieJar.createInstance();
   configureComicTypeSourceKeyResolver();
+  configureComicSourceDataSavedHandler(() => DataSync().uploadData());
+  configureRuntimeComicSourcesProvider(
+    () => WebDavLibraryConfig.fromSettings().isValid
+        ? [WebDavLibrarySource.create()]
+        : const [],
+  );
   configureComicWidgets(
     comicPageBuilder:
         ({

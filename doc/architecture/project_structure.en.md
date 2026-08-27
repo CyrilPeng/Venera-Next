@@ -10,7 +10,7 @@ This document is the English companion for the repository structure rules. The C
 - `app_runtime/` contains runtime assembly, such as startup initialization, update checks, debug reload, and headless command entry points.
 - Business code should be grouped by feature domain under `features/<domain>/`.
 - Do not add new source files under `pages/`; app-level entry points belong in `app_shell/`, and business pages belong in the corresponding feature domain.
-- `foundation/` contains cross-domain application foundations, including app state, initialization protocols, async queues, Dart extensions, constants, logging, localization, file system helpers, image processing, image provider bases, platform channels, and shared data infrastructure.
+- `foundation/` contains cross-domain application foundations, including app state, initialization protocols, async queues, Dart extensions, constants, logging, localization, file system helpers, image processing, image provider bases, reading-history metadata contracts, platform channels, and shared data infrastructure.
 - `components/` contains reusable UI components. Components that only serve one business domain should live inside that feature domain.
 - `network/` contains general network, cache, request, and file transfer infrastructure. `network/webdav.dart` owns shared WebDAV endpoints, authentication, client creation, and remote path rules. Business-specific download tasks and API wrappers should remain in their owning feature domain.
 
@@ -64,6 +64,8 @@ Feature domains must not depend on `app_shell/`.
 
 Feature domains must not depend on `app_runtime/`.
 
+`app_runtime/` also owns runtime connections between feature domains. Comic-source data synchronization is registered through a callback, and the WebDAV comic source is registered through a runtime source provider. The `comic_source/` domain must not depend directly on `sync/` or `webdav_library/` for those integrations.
+
 ## Tests
 
 Tests should mirror source directories where possible:
@@ -90,10 +92,13 @@ Each structure migration should:
 
 `.github/scripts/check_structure_imports.py` scans Dart imports and exports under `lib/` and prevents dependency direction regressions. The main guarded rules are:
 
+Run `python .github/scripts/check_structure_imports.py --print-feature-dependencies` to inspect the current feature-to-feature import counts. The report identifies candidates for incremental cleanup; it does not require eliminating every cross-feature dependency at once.
+
 - Do not reintroduce source files under retired `pages/` or `utils/` paths.
 - `features/`, `routing/`, `foundation/`, `network/`, `utils/`, and `components/` must not depend on `app_shell/`.
 - `app_shell/`, `features/`, `routing/`, `foundation/`, `network/`, `utils/`, and `components/` must not depend on `app_runtime/`.
 - `foundation/`, `network/`, `utils/`, and `components/` must not depend on `features/` or `pages/`.
+- `features/comic_source/` must not depend directly on `features/history/`, `features/sync/`, or `features/webdav_library/`; shared history metadata contracts belong in `foundation/history_contract.dart`, while synchronization and runtime sources are injected by `app_runtime/`.
 - `foundation/app.dart` must remain the `App` singleton entry and must not re-export UI extension buckets.
 - Feature domains with stable entries must not be bypassed by external implementation imports.
 - Retired `part` libraries in reader, settings, history, favorites, comic details, comic source, and image favorites must not be reintroduced.

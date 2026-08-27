@@ -5,7 +5,6 @@ import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/init.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/features/webdav_library/webdav_library.dart';
 
 import 'category.dart';
 import 'comic_type_bridge.dart';
@@ -16,6 +15,16 @@ import 'models.dart';
 import 'normalization.dart';
 import 'parser.dart';
 import 'source.dart';
+
+typedef RuntimeComicSourcesProvider = Iterable<ComicSource> Function();
+
+RuntimeComicSourcesProvider? _runtimeComicSourcesProvider;
+
+void configureRuntimeComicSourcesProvider(
+  RuntimeComicSourcesProvider? provider,
+) {
+  _runtimeComicSourcesProvider = provider;
+}
 
 @visibleForTesting
 Map<String, Map<String, dynamic>>? debugNormalizeComicSourceSettings(
@@ -141,8 +150,12 @@ class ComicSourceManager with ChangeNotifier, Init {
         }
       }
     }
-    if (WebDavLibraryConfig.fromSettings().isValid) {
-      _sources.add(WebDavLibrarySource.create());
+    final runtimeSources =
+        _runtimeComicSourcesProvider?.call() ?? const <ComicSource>[];
+    for (final source in runtimeSources) {
+      if (find(source.key) == null) {
+        _sources.add(source);
+      }
     }
   }
 

@@ -58,6 +58,20 @@ RETIRED_DART_DIRS = {
     ),
 }
 
+FORBIDDEN_FEATURE_DEPENDENCIES = {
+    "features/comic_source": {
+        "features/history": (
+            "shared history metadata contracts belong in foundation/"
+        ),
+        "features/sync": (
+            "data synchronization must be connected by app_runtime callbacks"
+        ),
+        "features/webdav_library": (
+            "runtime comic sources must be injected by app_runtime"
+        ),
+    },
+}
+
 IMPORT_RE = re.compile(r"\b(?:import|export)\s+['\"]([^'\"]+)['\"]")
 EXPORT_RE = re.compile(r"\bexport\s+['\"]([^'\"]+)['\"]")
 PART_RE = re.compile(r"\bpart\s+['\"]([^'\"]+)['\"]")
@@ -954,6 +968,62 @@ def _scan_restricted_imports() -> set[str]:
     return imports
 
 
+def _scan_forbidden_feature_dependencies() -> set[str]:
+    violations = set()
+    for source in sorted((LIB_DIR / "features").rglob("*.dart")):
+        source_module = _module(source.resolve())
+        forbidden_targets = FORBIDDEN_FEATURE_DEPENDENCIES.get(source_module)
+        if forbidden_targets is None:
+            continue
+        text = source.read_text(encoding="utf-8")
+        for match in IMPORT_RE.finditer(text):
+            target = _resolve_import(source, match.group(1))
+            if target is None:
+                continue
+            try:
+                target_module = _module(target)
+            except ValueError:
+                continue
+            message = forbidden_targets.get(target_module)
+            if message is not None:
+                violations.add(
+                    f"{_relative(source)} -> {_relative(target)} ({message})"
+                )
+    return violations
+
+
+def _feature_dependency_edges() -> dict[tuple[str, str], int]:
+    edges: dict[tuple[str, str], int] = {}
+    for source in sorted((LIB_DIR / "features").rglob("*.dart")):
+        source_module = _module(source.resolve())
+        text = source.read_text(encoding="utf-8")
+        for match in IMPORT_RE.finditer(text):
+            target = _resolve_import(source, match.group(1))
+            if target is None:
+                continue
+            try:
+                target_module = _module(target)
+            except ValueError:
+                continue
+            if not target_module.startswith("features/") or (
+                source_module == target_module
+            ):
+                continue
+            edge = (source_module, target_module)
+            edges[edge] = edges.get(edge, 0) + 1
+    return edges
+
+
+def _print_feature_dependency_report() -> None:
+    print("Feature dependency report:")
+    edges = _feature_dependency_edges()
+    if not edges:
+        print("  (none)")
+        return
+    for (source, target), count in sorted(edges.items()):
+        print(f"  {source} -> {target} ({count})")
+
+
 def _scan_retired_pages_violations() -> set[str]:
     if not PAGES_DIR.exists():
         return set()
@@ -1249,6 +1319,11 @@ def main() -> None:
         action="store_true",
         help="Print the current restricted imports.",
     )
+    parser.add_argument(
+        "--print-feature-dependencies",
+        action="store_true",
+        help="Print the current feature-to-feature dependency report.",
+    )
     args = parser.parse_args()
 
     restricted_imports = _scan_restricted_imports()
@@ -1256,6 +1331,11 @@ def main() -> None:
         for item in sorted(restricted_imports):
             print(item)
         return
+    if args.print_feature_dependencies:
+        _print_feature_dependency_report()
+        return
+
+    forbidden_feature_dependencies = _scan_forbidden_feature_dependencies()
 
     component_barrel_violations = _scan_component_barrel_violations()
     component_app_import_violations = _scan_component_app_import_violations()
@@ -1283,6 +1363,7 @@ def main() -> None:
 
     if (
         restricted_imports
+        or forbidden_feature_dependencies
         or component_barrel_violations
         or component_app_import_violations
         or foundation_app_reexport_violations
@@ -1310,6 +1391,10 @@ def main() -> None:
         if restricted_imports:
             print("Restricted imports:")
             for item in sorted(restricted_imports):
+                print(f"  {item}")
+        if forbidden_feature_dependencies:
+            print("Forbidden feature dependencies:")
+            for item in sorted(forbidden_feature_dependencies):
                 print(f"  {item}")
         if retired_pages_violations:
             print("Retired pages directory violations:")

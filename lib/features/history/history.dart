@@ -1,3 +1,4 @@
+export '../../foundation/history_contract.dart';
 export 'history_image_provider.dart';
 export 'image_favorites.dart';
 export 'image_favorites_models.dart';

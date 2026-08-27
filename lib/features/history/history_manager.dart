@@ -6,6 +6,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/comic_type.dart';
+import 'package:venera_next/foundation/history_contract.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/image_favorites.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -13,22 +14,6 @@ import 'package:venera_next/foundation/sqlite_connection.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/throttled_task_runner.dart';
 import 'package:venera_next/foundation/translations.dart';
-
-typedef HistoryType = ComicType;
-
-abstract mixin class HistoryMixin {
-  String get title;
-
-  String? get subTitle;
-
-  String get cover;
-
-  String get id;
-
-  int? get maxPage => null;
-
-  HistoryType get historyType;
-}
 
 class History implements Comic {
   HistoryType type;

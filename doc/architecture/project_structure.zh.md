@@ -8,7 +8,7 @@
 - `app_runtime/` 放应用运行时组装，例如启动初始化、更新检查、调试重载和无头命令入口。
 - 优先按功能域归集代码。一个功能同时包含状态、数据模型、服务、页面和子组件时，应放在同一个 `features/<domain>/` 下。
 - 不再新增 `pages/` 目录；应用级入口放入 `app_shell/`，业务页面放入对应 `features/<domain>/`。
-- `foundation/` 放跨业务域的应用基础能力，例如应用状态、初始化协议、异步队列、通用 Dart 扩展、常量、日志、本地化、中文转换、文件系统基础工具、文件类型识别、平台文件交互、节流任务调度、图片处理、图片 provider 基类、平台连接和通用数据基建。
+- `foundation/` 放跨业务域的应用基础能力，例如应用状态、初始化协议、异步队列、通用 Dart 扩展、常量、日志、本地化、中文转换、文件系统基础工具、文件类型识别、平台文件交互、节流任务调度、图片处理、图片 provider 基类、阅读历史元数据契约、平台连接和通用数据基建。
 - `components/` 放可跨页面复用的 UI 组件。若组件只服务某个业务域，应放回对应的 `features/<domain>/`。
 - `foundation/app.dart` 只作为 `App` 单例入口，不再 re-export `foundation/context.dart` 或 `foundation/widget_utils.dart`。
 - 任何文件若使用 BuildContext、Widget、TextStyle 或 Color 扩展，应显式引用实际使用的 `foundation/context.dart` 或 `foundation/widget_utils.dart`，避免把应用状态入口当作 UI 扩展桶。
@@ -77,6 +77,8 @@ test/features/<domain>/
 运行时组装层可以依赖功能域、基础设施和路由入口；业务功能域不应反向依赖运行时组装。
 `app_runtime.dart` 是运行时组装对外入口，`main.dart` 等应用入口代码应通过它引用启动和无头模式能力；`app_shell/`、`features/`、`routing/`、`foundation/`、`network/`、`utils/` 和 `components/` 不应依赖 `app_runtime/`。
 
+跨功能域的运行时连接也归 `app_runtime/` 负责。漫画源保存后的数据同步通过回调注入，WebDAV 漫画源通过附加源 provider 注入；`comic_source/` 不应为了这些运行时能力反向依赖 `sync/` 或 `webdav_library/`。
+
 ## `lib/pages`
 
 `pages/` 已退场，不再承载源码。若新增页面无法归属到现有功能域，应先判断它是应用壳层入口还是新的业务域：前者放入 `app_shell/`，后者放入 `features/<domain>/` 并提供功能域入口。
@@ -113,12 +115,15 @@ test/features/<domain>/
 
 `.github/scripts/check_structure_imports.py` 会扫描 `lib/` 下的 Dart import/export，阻止新增以下方向的依赖：
 
+需要审查当前功能域依赖时，可运行 `python .github/scripts/check_structure_imports.py --print-feature-dependencies` 输出功能域之间的 import 数量；该报告用于识别后续收束目标，不要求一次性消除所有跨域依赖。
+
 - `lib/pages` 中重新新增 Dart 源码。
 - `lib/utils/tags_translation.dart`、`lib/utils/translations.dart`、`lib/utils/image.dart`、`lib/utils/io.dart`、`lib/utils/file_type.dart`、`lib/utils/init.dart`、`lib/utils/throttled_task_runner.dart`、`lib/utils/channel.dart`、`lib/utils/clipboard_image.dart`、`lib/utils/volume.dart`、`lib/utils/opencc.dart`、`lib/utils/ext.dart` 等已退场业务/应用基础文件重新出现。
 - `lib/utils/` 下重新新增任何 Dart 源码；跨功能域基础能力应进入 `foundation/`，业务专用 helper 应进入对应 `features/<domain>/`。
 - `features/`、`routing/`、`foundation/`、`network/`、`utils/`、`components/` 反向依赖 `app_shell/`。
 - `app_shell/`、`features/`、`routing/`、`foundation/`、`network/`、`utils/`、`components/` 反向依赖 `app_runtime/`。
 - `foundation/`、`network/`、`utils/`、`components/` 依赖 `features/` 或 `pages/`。
+- `features/comic_source/` 不得直接依赖 `features/history/`、`features/sync/` 或 `features/webdav_library/`；共享阅读历史元数据契约应放在 `foundation/history_contract.dart`，同步和附加源由 `app_runtime/` 注入。
 - `foundation/app.dart` 重新 export `foundation/context.dart` 或 `foundation/widget_utils.dart`。
 - `components/` 中未使用 `App` 单例的文件通过 `foundation/app.dart` 间接引用 UI 扩展；应直接引用 `foundation/context.dart` 或 `foundation/widget_utils.dart`。
 - `components/` 中使用 BuildContext UI 扩展、Widget/TextStyle/Color helper 却未显式引用 `foundation/context.dart` 或 `foundation/widget_utils.dart`。

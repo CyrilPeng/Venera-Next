@@ -8,7 +8,6 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
-import 'package:venera_next/features/sync/sync.dart';
 
 import 'category.dart';
 import 'favorites.dart';
@@ -20,11 +19,13 @@ typedef ComicSourceListResolver = List<ComicSource> Function();
 typedef ComicSourceResolver = ComicSource? Function(String key);
 typedef ComicSourceIntKeyResolver = ComicSource? Function(int key);
 typedef ComicSourceIsEmptyResolver = bool Function();
+typedef ComicSourceDataSavedHandler = Future<void> Function();
 
 ComicSourceListResolver? _comicSourceListResolver;
 ComicSourceResolver? _comicSourceResolver;
 ComicSourceIntKeyResolver? _comicSourceIntKeyResolver;
 ComicSourceIsEmptyResolver? _comicSourceIsEmptyResolver;
+ComicSourceDataSavedHandler? _comicSourceDataSavedHandler;
 
 void configureComicSourceRegistry({
   required ComicSourceListResolver all,
@@ -36,6 +37,12 @@ void configureComicSourceRegistry({
   _comicSourceResolver = find;
   _comicSourceIntKeyResolver = fromIntKey;
   _comicSourceIsEmptyResolver = isEmpty;
+}
+
+void configureComicSourceDataSavedHandler(
+  ComicSourceDataSavedHandler? handler,
+) {
+  _comicSourceDataSavedHandler = handler;
 }
 
 class ComicSource {
@@ -188,7 +195,10 @@ class ComicSource {
       await file.create(recursive: true);
     }
     await file.writeAsString(jsonEncode(data));
-    unawaited(DataSync().uploadData());
+    final sync = _comicSourceDataSavedHandler?.call();
+    if (sync != null) {
+      unawaited(sync);
+    }
   }
 
   Future<bool> reLogin() async {
