@@ -9,14 +9,9 @@ import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/select.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
-import 'package:venera_next/features/history/history.dart';
-import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
-import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -33,17 +28,74 @@ typedef ComicPageBuilder =
     });
 
 typedef AddComicFavoriteHandler = void Function(List<Comic> comics);
+typedef ComicTileStateResolver = ComicTileState Function(Comic comic);
+typedef ComicTileImageProviderResolver = ImageProvider? Function(Comic comic);
+typedef ComicWidgetListenerRegistrar = void Function(VoidCallback listener);
+typedef ComicFavoriteDisplayStateResolver =
+    ComicFavoriteDisplayState Function();
+
+class ComicTileState {
+  const ComicTileState({
+    this.isFavorite = false,
+    this.historyPage,
+    this.historyMaxPage,
+    this.hasNewUpdate = false,
+  });
+
+  final bool isFavorite;
+  final int? historyPage;
+  final int? historyMaxPage;
+  final bool hasNewUpdate;
+}
+
+class ComicFavoriteDisplayState {
+  const ComicFavoriteDisplayState({
+    this.isGallery = false,
+    this.galleryColumns,
+  });
+
+  final bool isGallery;
+  final int? galleryColumns;
+}
 
 ComicPageBuilder? _comicPageBuilder;
 
 AddComicFavoriteHandler? _addComicFavoriteHandler;
+ComicTileStateResolver? _comicTileStateResolver;
+ComicTileImageProviderResolver? _comicTileImageProviderResolver;
+ComicWidgetListenerRegistrar? _addComicWidgetStateListener;
+ComicWidgetListenerRegistrar? _removeComicWidgetStateListener;
+ComicFavoriteDisplayStateResolver? _comicFavoriteDisplayStateResolver;
 
 void configureComicWidgets({
   ComicPageBuilder? comicPageBuilder,
   AddComicFavoriteHandler? addFavorite,
+  ComicTileStateResolver? tileStateResolver,
+  ComicTileImageProviderResolver? tileImageProviderResolver,
+  ComicWidgetListenerRegistrar? addStateListener,
+  ComicWidgetListenerRegistrar? removeStateListener,
+  ComicFavoriteDisplayStateResolver? favoriteDisplayStateResolver,
 }) {
   _comicPageBuilder = comicPageBuilder;
   _addComicFavoriteHandler = addFavorite;
+  _comicTileStateResolver = tileStateResolver;
+  _comicTileImageProviderResolver = tileImageProviderResolver;
+  _addComicWidgetStateListener = addStateListener;
+  _removeComicWidgetStateListener = removeStateListener;
+  _comicFavoriteDisplayStateResolver = favoriteDisplayStateResolver;
+}
+
+void addComicWidgetStateListener(VoidCallback listener) {
+  _addComicWidgetStateListener?.call(listener);
+}
+
+void removeComicWidgetStateListener(VoidCallback listener) {
+  _removeComicWidgetStateListener?.call(listener);
+}
+
+ComicFavoriteDisplayState comicFavoriteDisplayState() {
+  return _comicFavoriteDisplayStateResolver?.call() ??
+      const ComicFavoriteDisplayState();
 }
 
 Widget _buildComicPage({
@@ -93,52 +145,11 @@ void _addComicToFavorites(List<Comic> comics) {
 }
 
 ImageProvider? _findImageProvider(Comic comic) {
-  if (comic.cover.trim().isEmpty) {
-    return null;
-  }
-  ImageProvider image;
-  if (comic is LocalComic) {
-    image = LocalComicImageProvider(comic);
-  } else if (comic is History) {
-    image = HistoryImageProvider(comic);
-  } else if (comic.sourceKey == 'local') {
-    var localComic = LocalManager().find(comic.id, ComicType.local);
-    if (localComic == null) {
-      return null;
-    }
-    image = FileImage(localComic.coverFile);
-  } else {
-    image = CachedImageProvider(
-      comic.cover,
-      sourceKey: comic.sourceKey,
-      cid: comic.id,
-      fallback: comic is FavoriteItem
-          ? () => _loadLocalCoverFallback(comic.sourceKey, comic.id)
-          : null,
-    );
-  }
-  return image;
+  return _comicTileImageProviderResolver?.call(comic);
 }
 
-Future<Uint8List?> _loadLocalCoverFallback(String sourceKey, String id) async {
-  final localComic = LocalManager().find(id, ComicType.fromKey(sourceKey));
-  if (localComic == null) {
-    return null;
-  }
-  final file = localComic.coverFile;
-  if (!await file.exists()) {
-    return null;
-  }
-  final data = await file.readAsBytes();
-  return data.isEmpty ? null : data;
-}
-
-bool _hasNewUpdate(Comic comic) {
-  final type = _comicTypeOf(comic);
-  if (type == ComicType.local) {
-    return false;
-  }
-  return LocalFavoritesManager().hasNewUpdate(comic.id, type);
+ComicTileState _tileState(Comic comic) {
+  return _comicTileStateResolver?.call(comic) ?? const ComicTileState();
 }
 
 Widget _buildUpdateBadge(BuildContext context, {double size = 24}) {
@@ -148,19 +159,6 @@ Widget _buildUpdateBadge(BuildContext context, {double size = 24}) {
     color: Colors.deepOrange.shade700,
     child: Icon(Icons.update, size: size * 2 / 3, color: Colors.white),
   );
-}
-
-ComicType _comicTypeOf(Comic comic) {
-  if (comic is FavoriteItem) {
-    return comic.type;
-  }
-  if (comic is History) {
-    return comic.type;
-  }
-  if (comic is LocalComic) {
-    return comic.comicType;
-  }
-  return ComicType.fromKey(comic.sourceKey);
 }
 
 enum ComicTileDisplayMode { detailed, gallery }
@@ -284,21 +282,12 @@ class ComicTile extends StatelessWidget {
       _ => _buildBriefMode(context),
     };
 
-    final comicType = _comicTypeOf(comic);
-    var isFavorite = appdata.settings['showFavoriteStatusOnTile']
-        ? LocalFavoritesManager().isExist(comic.id, comicType)
-        : false;
-    var history = appdata.settings['showHistoryStatusOnTile']
-        ? HistoryManager().find(comic.id, comicType)
-        : null;
-    var hasUpdate = appdata.settings['showUpdateStatusOnTile']
-        ? _hasNewUpdate(comic)
-        : false;
-    if (history?.page == 0) {
-      history!.page = 1;
-    }
+    final state = _tileState(comic);
+    final isFavorite = state.isFavorite;
+    final historyPage = state.historyPage == 0 ? 1 : state.historyPage;
+    final hasUpdate = state.hasNewUpdate;
 
-    if (!isFavorite && history == null && !hasUpdate) {
+    if (!isFavorite && historyPage == null && !hasUpdate) {
       return child;
     }
 
@@ -335,7 +324,7 @@ class ComicTile extends StatelessWidget {
                           color: Colors.white,
                         ),
                       ),
-                    if (history != null)
+                    if (historyPage != null)
                       Container(
                         height: badgeSize,
                         color: Colors.blue.toOpacity(0.9),
@@ -345,8 +334,8 @@ class ComicTile extends StatelessWidget {
                         ),
                         child: CustomPaint(
                           painter: _ReadingHistoryPainter(
-                            history.page,
-                            history.maxPage,
+                            historyPage,
+                            state.historyMaxPage,
                           ),
                         ),
                       ),
@@ -994,7 +983,7 @@ class SimpleComicTile extends StatelessWidget {
       child: child,
     );
 
-    if (appdata.settings['showUpdateStatusOnTile'] && _hasNewUpdate(comic)) {
+    if (_tileState(comic).hasNewUpdate) {
       child = Stack(
         children: [
           child,

@@ -79,6 +79,8 @@ test/features/<domain>/
 
 跨功能域的运行时连接也归 `app_runtime/` 负责。漫画源保存后的数据同步通过回调注入，WebDAV 漫画源通过附加源 provider 注入；`comic_source/` 不应为了这些运行时能力反向依赖 `sync/` 或 `webdav_library/`。
 
+跨功能域复用的漫画展示组件只声明展示所需的状态与 provider 接口。收藏、历史、本地漫画封面和收藏页显示偏好由 `app_runtime/` 注入，`comic_widgets/` 不应直接依赖这些业务域的管理器或实现文件。
+
 ## `lib/pages`
 
 `pages/` 已退场，不再承载源码。若新增页面无法归属到现有功能域，应先判断它是应用壳层入口还是新的业务域：前者放入 `app_shell/`，后者放入 `features/<domain>/` 并提供功能域入口。
@@ -124,6 +126,7 @@ test/features/<domain>/
 - `app_shell/`、`features/`、`routing/`、`foundation/`、`network/`、`utils/`、`components/` 反向依赖 `app_runtime/`。
 - `foundation/`、`network/`、`utils/`、`components/` 依赖 `features/` 或 `pages/`。
 - `features/comic_source/` 不得直接依赖 `features/history/`、`features/sync/` 或 `features/webdav_library/`；共享阅读历史元数据契约应放在 `foundation/history_contract.dart`，同步和附加源由 `app_runtime/` 注入。
+- `features/comic_widgets/` 不得直接依赖 `features/favorites/`、`features/history/` 或 `features/local_comics/`；卡片状态、封面 provider、收藏页显示偏好和状态监听由 `app_runtime/` 注入。
 - `foundation/app.dart` 重新 export `foundation/context.dart` 或 `foundation/widget_utils.dart`。
 - `components/` 中未使用 `App` 单例的文件通过 `foundation/app.dart` 间接引用 UI 扩展；应直接引用 `foundation/context.dart` 或 `foundation/widget_utils.dart`。
 - `components/` 中使用 BuildContext UI 扩展、Widget/TextStyle/Color helper 却未显式引用 `foundation/context.dart` 或 `foundation/widget_utils.dart`。

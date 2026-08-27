@@ -10,8 +10,6 @@ import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
-import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -98,8 +96,7 @@ class _SliverGridComicsState extends State<SliverGridComics> {
       }
     }
     generateHeroID();
-    HistoryManager().addListener(update);
-    LocalFavoritesManager().addListener(update);
+    addComicWidgetStateListener(update);
     if (widget.useFavoriteDisplaySettings) {
       appdata.settings.addListener(_onSettingsChanged);
     }
@@ -108,8 +105,7 @@ class _SliverGridComicsState extends State<SliverGridComics> {
 
   @override
   void dispose() {
-    HistoryManager().removeListener(update);
-    LocalFavoritesManager().removeListener(update);
+    removeComicWidgetStateListener(update);
     if (widget.useFavoriteDisplaySettings) {
       appdata.settings.removeListener(_onSettingsChanged);
     }
@@ -135,8 +131,9 @@ class _SliverGridComicsState extends State<SliverGridComics> {
 
   @override
   Widget build(BuildContext context) {
+    final favoriteDisplayState = comicFavoriteDisplayState();
     final favoriteDisplayMode = widget.useFavoriteDisplaySettings
-        ? (isFavoriteGalleryMode()
+        ? (favoriteDisplayState.isGallery
               ? ComicTileDisplayMode.gallery
               : ComicTileDisplayMode.detailed)
         : null;
@@ -152,7 +149,7 @@ class _SliverGridComicsState extends State<SliverGridComics> {
       onBlocked: update,
       favoriteDisplayMode: favoriteDisplayMode,
       galleryColumns: favoriteDisplayMode == ComicTileDisplayMode.gallery
-          ? favoriteGalleryColumns()
+          ? favoriteDisplayState.galleryColumns
           : null,
     );
   }

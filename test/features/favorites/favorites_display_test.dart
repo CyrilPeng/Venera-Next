@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/layout.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
-import 'package:venera_next/features/favorites/favorites_display.dart';
+import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
 void main() {
@@ -45,6 +45,13 @@ void main() {
     appdata.settings['showFavoriteStatusOnTile'] = false;
     appdata.settings['showHistoryStatusOnTile'] = false;
     appdata.settings['showUpdateStatusOnTile'] = false;
+    configureComicWidgets(
+      favoriteDisplayStateResolver: () => ComicFavoriteDisplayState(
+        isGallery: isFavoriteGalleryMode(),
+        galleryColumns: favoriteGalleryColumns(),
+      ),
+    );
+    addTearDown(configureComicWidgets);
     addTearDown(() {
       appdata.settings[favoriteDisplayModeKey] = oldFavoriteDisplay;
       appdata.settings[favoriteGalleryColumnsKey] = oldGalleryColumns;

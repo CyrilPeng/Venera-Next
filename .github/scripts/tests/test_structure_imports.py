@@ -29,6 +29,18 @@ class StructureImportsTest(unittest.TestCase):
             ("features/comic_source", "features/webdav_library"),
             edges,
         )
+        self.assertNotIn(
+            ("features/comic_widgets", "features/favorites"),
+            edges,
+        )
+        self.assertNotIn(
+            ("features/comic_widgets", "features/history"),
+            edges,
+        )
+        self.assertNotIn(
+            ("features/comic_widgets", "features/local_comics"),
+            edges,
+        )
 
 
 if __name__ == "__main__":

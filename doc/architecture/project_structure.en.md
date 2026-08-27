@@ -66,6 +66,8 @@ Feature domains must not depend on `app_runtime/`.
 
 `app_runtime/` also owns runtime connections between feature domains. Comic-source data synchronization is registered through a callback, and the WebDAV comic source is registered through a runtime source provider. The `comic_source/` domain must not depend directly on `sync/` or `webdav_library/` for those integrations.
 
+Cross-domain comic display widgets declare only the state and provider interfaces needed for rendering. Favorite state, history state, local comic covers, and favorite display preferences are injected by `app_runtime/`; `comic_widgets/` must not import those feature implementations directly.
+
 ## Tests
 
 Tests should mirror source directories where possible:
@@ -99,6 +101,7 @@ Run `python .github/scripts/check_structure_imports.py --print-feature-dependenc
 - `app_shell/`, `features/`, `routing/`, `foundation/`, `network/`, `utils/`, and `components/` must not depend on `app_runtime/`.
 - `foundation/`, `network/`, `utils/`, and `components/` must not depend on `features/` or `pages/`.
 - `features/comic_source/` must not depend directly on `features/history/`, `features/sync/`, or `features/webdav_library/`; shared history metadata contracts belong in `foundation/history_contract.dart`, while synchronization and runtime sources are injected by `app_runtime/`.
+- `features/comic_widgets/` must not depend directly on `features/favorites/`, `features/history/`, or `features/local_comics/`; tile state, cover providers, favorite display preferences, and state listeners are injected by `app_runtime/`.
 - `foundation/app.dart` must remain the `App` singleton entry and must not re-export UI extension buckets.
 - Feature domains with stable entries must not be bypassed by external implementation imports.
 - Retired `part` libraries in reader, settings, history, favorites, comic details, comic source, and image favorites must not be reintroduced.

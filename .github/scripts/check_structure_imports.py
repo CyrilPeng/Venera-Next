@@ -59,6 +59,17 @@ RETIRED_DART_DIRS = {
 }
 
 FORBIDDEN_FEATURE_DEPENDENCIES = {
+    "features/comic_widgets": {
+        "features/favorites": (
+            "favorite state and display settings must be injected by app_runtime"
+        ),
+        "features/history": (
+            "history state must be injected by app_runtime"
+        ),
+        "features/local_comics": (
+            "local comic image providers must be injected by app_runtime"
+        ),
+    },
     "features/comic_source": {
         "features/history": (
             "shared history metadata contracts belong in foundation/"
