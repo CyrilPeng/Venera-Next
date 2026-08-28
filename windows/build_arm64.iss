@@ -41,28 +41,9 @@ Name: "chinesesimplified"; MessagesFile: "{#RootPath}\windows\ChineseSimplified.
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "{#RootPath}\build\windows\arm64\runner\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\flutter_inappwebview_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\file_selector_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\app_links_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\sqlite3.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\sqlite3_flutter_libs_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\flutter_windows.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\flutter_qjs_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\desktop_webview_window_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\share_plus_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\url_launcher_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\battery_plus_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\screen_retriever_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\window_manager_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\local_auth_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\zip_flutter.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\rhttp.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\lodepng_flutter.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\dynamic_color_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\flutter_7zip.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#RootPath}\build\windows\arm64\runner\Release\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Flutter may add native plugin libraries as dependencies. Include the complete
+; release directory so new DLLs cannot be omitted from the installer.
+Source: "{#RootPath}\build\windows\arm64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
