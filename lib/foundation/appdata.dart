@@ -419,6 +419,10 @@ class Settings with ChangeNotifier {
         false, // show chapter comments at end of chapter
     'splitDualPage': false,
     'splitDualPageInvert': false,
+    'bangumiAccessToken': '',
+    'bangumiUsername': '',
+    'bangumiAutoSyncEnabled': true,
+    'bangumiBindings': <String, Map<String, dynamic>>{},
   };
 
   operator [](String key) {

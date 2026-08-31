@@ -18,6 +18,7 @@ This document is the English companion for the repository structure rules. The C
 
 `lib/features` is the main home for business code. Current domains include:
 
+- `bangumi/`: Bangumi access-token connection, subject binding, episode/volume progress upload, rating edits, and device-local retry state.
 - `comic_source/`: comic source models, parsing, categories, home summaries, favorites mapping, tag translation, and source translation.
 - `comic_storage/`: archive metadata, image file rules, and local filesystem layout detection shared by local directories, CBZ, and WebDAV.
 - `comic_widgets/`: cross-domain comic display widgets such as cards, lists, and rating controls.
@@ -45,7 +46,7 @@ test/features/<domain>/
   <domain>_test.dart
 ```
 
-External modules should prefer stable feature entry files instead of importing implementation files directly. For example, external code should use `features/reader/reader.dart` for reader capabilities, `features/comic_source/comic_source.dart` for comic source capabilities, `features/comic_storage/comic_storage.dart` for archive metadata and file rules, and `features/webdav_library/webdav_library.dart` for the WebDAV online comic library source.
+External modules should prefer stable feature entry files instead of importing implementation files directly. For example, external code should use `features/bangumi/bangumi.dart` for Bangumi models, API, service, settings, and progress UI, `features/reader/reader.dart` for reader capabilities and chapter-completion events, `features/comic_source/comic_source.dart` for comic source capabilities, `features/comic_storage/comic_storage.dart` for archive metadata and file rules, and `features/webdav_library/webdav_library.dart` for the WebDAV online comic library source.
 
 ## App Shell And Runtime
 
@@ -64,7 +65,7 @@ Feature domains must not depend on `app_shell/`.
 
 Feature domains must not depend on `app_runtime/`.
 
-`app_runtime/` also owns runtime connections between feature domains. Comic-source data synchronization is registered through a callback, and the WebDAV comic source is registered through a runtime source provider. The `comic_source/` domain must not depend directly on `sync/` or `webdav_library/` for those integrations.
+`app_runtime/` also owns runtime connections between feature domains. Comic-source data synchronization is registered through a callback, the WebDAV comic source is registered through a runtime source provider, and reader chapter-completion events are connected to one-way Bangumi progress uploads through a callback. The `comic_source/` and `reader/` domains must not depend directly on `sync/`, `webdav_library/`, or `bangumi/` for those integrations.
 
 Cross-domain comic display widgets declare only the state and provider interfaces needed for rendering. Favorite state, history state, local comic covers, and favorite display preferences are injected by `app_runtime/`; `comic_widgets/` must not import those feature implementations directly.
 

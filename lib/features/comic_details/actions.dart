@@ -7,6 +7,7 @@ import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/side_bar.dart';
+import 'package:venera_next/features/bangumi/bangumi.dart';
 import 'package:venera_next/features/comic_details/archive_download.dart';
 import 'package:venera_next/features/comic_details/comments_page.dart';
 import 'package:venera_next/features/comic_details/favorite.dart';
@@ -91,6 +92,19 @@ abstract mixin class ComicPageActions {
         },
         favoriteItem: _toFavoriteItem(),
         updateTime: comic.findUpdateTime(),
+      ),
+    );
+  }
+
+  void openBangumiProgress() {
+    showSideBar(
+      App.rootContext,
+      BangumiProgressPanel(
+        sourceKey: comic.sourceKey,
+        comicId: comic.id,
+        comicTitle: comic.title,
+        chapters: comic.chapters,
+        history: history,
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/reader/chapter_completion.dart';
 import 'package:venera_next/features/reader/gesture.dart';
 import 'package:venera_next/features/reader/images.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
@@ -147,6 +148,7 @@ class ReaderState extends State<Reader>
   History? history;
 
   late final ReadingSessionTracker _readingSession;
+  final _chapterCompletionNotifier = ReaderChapterCompletionNotifier();
   bool _readerContentReady = false;
 
   @override
@@ -269,6 +271,7 @@ class ReaderState extends State<Reader>
     super.dispose();
   }
 
+  @override
   void onReaderContentLoading() {
     _readerContentReady = false;
     unawaited(_readingSession.pause());
@@ -280,6 +283,7 @@ class ReaderState extends State<Reader>
     if (lifecycleState == null || lifecycleState == AppLifecycleState.resumed) {
       _readingSession.start();
     }
+    unawaited(_notifyChapterCompletedIfNeeded());
   }
 
   @override
@@ -288,6 +292,7 @@ class ReaderState extends State<Reader>
       case AppLifecycleState.resumed:
         if (_readerContentReady) {
           _readingSession.start();
+          unawaited(_notifyChapterCompletedIfNeeded());
         }
         return;
       case AppLifecycleState.inactive:
@@ -336,6 +341,49 @@ class ReaderState extends State<Reader>
   @override
   void onPageChanged() {
     updateHistory();
+    unawaited(_notifyChapterCompletedIfNeeded());
+  }
+
+  Future<void> _notifyChapterCompletedIfNeeded() async {
+    final chapters = widget.chapters;
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    if (!_readerContentReady ||
+        !isReaderChapterCompletionPosition(
+          isActive:
+              lifecycleState == null ||
+              lifecycleState == AppLifecycleState.resumed,
+          hasImages: images?.isNotEmpty ?? false,
+          page: page,
+          lastImagePage: maxPage,
+          totalPages: totalPages,
+        ) ||
+        chapters == null ||
+        chapter < 1 ||
+        chapter > chapters.length) {
+      return;
+    }
+    final chapterKey = chapters.ids.elementAtOrNull(chapter - 1);
+    final chapterTitle = chapters.titles.elementAtOrNull(chapter - 1);
+    if (chapterKey == null || chapterTitle == null) {
+      return;
+    }
+    try {
+      await _chapterCompletionNotifier.notify(
+        isAtEnd: true,
+        event: ReaderChapterCompletedEvent(
+          sourceKey: type.sourceKey,
+          comicId: cid,
+          chapterKey: chapterKey,
+          chapterTitle: chapterTitle,
+        ),
+      );
+    } catch (error, stackTrace) {
+      Log.error(
+        'Reader',
+        'Failed to notify chapter completion: $error',
+        stackTrace,
+      );
+    }
   }
 
   /// Prevent multiple history updates in a short time.
@@ -645,6 +693,8 @@ abstract mixin class ReaderLocation {
 
   ComicType get type;
 
+  void onReaderContentLoading();
+
   void update();
 
   bool enablePageAnimation(String cid, ComicType type) => appdata.settings
@@ -727,6 +777,7 @@ abstract mixin class ReaderLocation {
       if (imageViewController?.toChapter(c, toLastPage: toLastPage) ?? false) {
         return true;
       }
+      onReaderContentLoading();
       chapter = c;
       page = 1;
       jumpToLastPageOnLoad = toLastPage;

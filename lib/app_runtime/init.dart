@@ -28,6 +28,8 @@ import 'package:venera_next/routing/handle_text_share.dart';
 import 'package:venera_next/foundation/opencc.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/features/bangumi/bangumi.dart';
+import 'package:venera_next/features/reader/reader.dart';
 
 extension _FutureInit<T> on Future<T> {
   /// Prevent unhandled exception
@@ -42,10 +44,39 @@ extension _FutureInit<T> on Future<T> {
   }
 }
 
+@visibleForTesting
+Future<void> initializeBangumiAfterDataSync({
+  required Future<void> Function() waitForDownload,
+  required Future<void> Function() Function() createInitializer,
+}) async {
+  await waitForDownload();
+  await createInitializer()();
+}
+
+@visibleForTesting
+void startBangumiAfterDataSync({
+  required Future<void> Function() waitForDownload,
+  required Future<void> Function() Function() createInitializer,
+}) {
+  unawaited(
+    initializeBangumiAfterDataSync(
+      waitForDownload: waitForDownload,
+      createInitializer: createInitializer,
+    ).wait(),
+  );
+}
+
 Future<void> init() async {
   await App.init().wait();
   await SingleInstanceCookieJar.createInstance();
   configureComicTypeSourceKeyResolver();
+  configureReaderChapterCompletedHandler(
+    (event) => BangumiService().onChapterCompleted(
+      sourceKey: event.sourceKey,
+      comicId: event.comicId,
+      chapterTitle: event.chapterTitle,
+    ),
+  );
   configureComicSourceDataSavedHandler(() => DataSync().uploadData());
   configureRuntimeComicSourcesProvider(
     () => WebDavLibraryConfig.fromSettings().isValid
@@ -102,7 +133,11 @@ Future<void> init() async {
   } catch (e, s) {
     Log.error("init", "$e\n$s");
   }
-  DataSync();
+  final dataSync = DataSync();
+  startBangumiAfterDataSync(
+    waitForDownload: dataSync.waitForDownload,
+    createInitializer: () => BangumiService().initialize,
+  );
   WebDavLibrarySource.initializeAutoSync();
   CacheManager().setLimitSize(appdata.settings['cacheSize']);
   _checkOldConfigs();

@@ -523,6 +523,26 @@ UTILS_IO_PATH = (LIB_DIR / "utils" / "io.dart").resolve()
 FILE_SYSTEM_ENTRYPOINT_PATH = (LIB_DIR / "foundation" / "file_system.dart").resolve()
 
 FEATURE_ENTRYPOINT_TARGETS = {
+    _feature_path("bangumi", "bangumi_api.dart"): _feature_path(
+        "bangumi",
+        "bangumi.dart",
+    ),
+    _feature_path("bangumi", "bangumi_models.dart"): _feature_path(
+        "bangumi",
+        "bangumi.dart",
+    ),
+    _feature_path("bangumi", "bangumi_progress.dart"): _feature_path(
+        "bangumi",
+        "bangumi.dart",
+    ),
+    _feature_path("bangumi", "bangumi_service.dart"): _feature_path(
+        "bangumi",
+        "bangumi.dart",
+    ),
+    _feature_path("bangumi", "bangumi_settings.dart"): _feature_path(
+        "bangumi",
+        "bangumi.dart",
+    ),
     _feature_path("comic_widgets", "comic_list.dart"): _feature_path(
         "comic_widgets",
         "comic_widgets.dart",
@@ -761,6 +781,10 @@ FEATURE_ENTRYPOINT_TARGETS = {
         "local_comics.dart",
     ),
     _feature_path("reader", "chapter_comments.dart"): _feature_path(
+        "reader",
+        "reader.dart",
+    ),
+    _feature_path("reader", "chapter_completion.dart"): _feature_path(
         "reader",
         "reader.dart",
     ),

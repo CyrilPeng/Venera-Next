@@ -7,6 +7,24 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
 void main() {
+  late Directory fallbackDataDir;
+
+  setUpAll(() {
+    fallbackDataDir = Directory.systemTemp.createTempSync(
+      'venera-appdata-fallback-',
+    );
+  });
+
+  setUp(() {
+    App.dataPath = fallbackDataDir.path;
+  });
+
+  tearDownAll(() {
+    if (fallbackDataDir.existsSync()) {
+      fallbackDataDir.deleteSync(recursive: true);
+    }
+  });
+
   test('does not configure a comic source list by default', () {
     expect(appdata.settings['comicSourceListUrl'], isEmpty);
   });
@@ -178,6 +196,59 @@ void main() {
       expect(appData['settings']['proxy'], 'second');
       expect(appData['searchHistory'], ['second']);
       expect(syncData['settings'].containsKey('proxy'), isFalse);
+    },
+  );
+
+  test(
+    'Bangumi connection data syncs while pending progress remains local',
+    () async {
+      final dataDir = Directory.systemTemp.createTempSync(
+        'venera-appdata-bangumi-',
+      );
+      addTearDown(() {
+        App.dataPath = fallbackDataDir.path;
+        appdata.settings['disableSyncFields'] = '';
+        appdata.settings['bangumiAccessToken'] = '';
+        appdata.settings['bangumiUsername'] = '';
+        appdata.settings['bangumiAutoSyncEnabled'] = true;
+        appdata.settings['bangumiBindings'] = <String, dynamic>{};
+        appdata.implicitData.remove('bangumiPendingProgress');
+        if (dataDir.existsSync()) dataDir.deleteSync(recursive: true);
+      });
+
+      App.dataPath = dataDir.path;
+      appdata.settings['disableSyncFields'] = 'proxy';
+      appdata.settings['bangumiAccessToken'] = 'token';
+      appdata.settings['bangumiUsername'] = 'alice';
+      appdata.settings['bangumiAutoSyncEnabled'] = false;
+      appdata.settings['bangumiBindings'] = {
+        'source@comic': {'subjectId': 42},
+      };
+      appdata.implicitData['bangumiPendingProgress'] = {
+        'source@comic': {
+          'ep_status': {'value': 12},
+        },
+      };
+
+      await appdata.saveData(false);
+      appdata.writeImplicitData();
+      await appdata.saveData(false);
+
+      final syncData = jsonDecode(
+        File('${dataDir.path}/syncdata.json').readAsStringSync(),
+      );
+      final implicitData = jsonDecode(
+        File('${dataDir.path}/implicitData.json').readAsStringSync(),
+      );
+      expect(syncData['settings']['bangumiAccessToken'], 'token');
+      expect(syncData['settings']['bangumiUsername'], 'alice');
+      expect(syncData['settings']['bangumiAutoSyncEnabled'], isFalse);
+      expect(syncData['settings']['bangumiBindings'], isNotEmpty);
+      expect(
+        syncData['settings'].containsKey('bangumiPendingProgress'),
+        isFalse,
+      );
+      expect(implicitData['bangumiPendingProgress'], isNotEmpty);
     },
   );
 

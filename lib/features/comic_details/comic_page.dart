@@ -413,6 +413,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
                   iconColor: context.useTextColor(Colors.red),
                 ),
               ComicDetailActionButton(
+                key: const Key('comic-detail-favorite'),
                 icon: const Icon(Icons.bookmark_outline_outlined),
                 activeIcon: const Icon(Icons.bookmark),
                 isActive: isFavorite || isAddToLocalFav,
@@ -420,6 +421,13 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
                 onPressed: openFavPanel,
                 onLongPressed: quickFavorite,
                 iconColor: context.useTextColor(Colors.purple),
+              ),
+              ComicDetailActionButton(
+                key: const Key('comic-detail-progress'),
+                icon: const Icon(Icons.update),
+                text: 'Progress'.tl,
+                onPressed: openBangumiProgress,
+                iconColor: context.useTextColor(Colors.orange),
               ),
               if (comicSource.commentsLoader != null)
                 ComicDetailActionButton(
