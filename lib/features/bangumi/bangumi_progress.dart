@@ -169,7 +169,7 @@ class _BangumiProgressPanelState extends State<BangumiProgressPanel> {
           Text(binding.subjectOriginalTitle),
         Text('Subject ID: ${binding.subjectId}'),
         Text(
-          '${'Episodes'.tl}: ${binding.lastRemoteEpisode}    ${'Volumes'.tl}: ${binding.lastRemoteVolume}',
+          '${'Episodes'.tl}: ${binding.totalEpisodes}    ${'Volumes'.tl}: ${binding.totalVolumes}',
         ),
         const SizedBox(height: 12),
         _statusPicker(),

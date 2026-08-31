@@ -320,8 +320,8 @@ void main() {
       _panel(gateway, chapters: const ComicChapters({'1': '第 1 卷 第 3 话'})),
     );
 
-    expect(find.textContaining('Episodes: 3'), findsOneWidget);
-    expect(find.textContaining('Volumes: 1'), findsOneWidget);
+    expect(find.textContaining('Episodes: 12'), findsOneWidget);
+    expect(find.textContaining('Volumes: 2'), findsOneWidget);
     expect(
       tester
           .widget<TextField>(find.byKey(const Key('bangumi-progress-field')))
@@ -335,6 +335,41 @@ void main() {
       {'rate': 8},
     ]);
   });
+
+  testWidgets(
+    'summary shows book totals while current chapter shows local progress',
+    (tester) async {
+      appdata.settings['bangumiBindings'] = {
+        bangumiBindingKey('source', 'comic'): _binding(
+          episode: 3,
+          volume: 1,
+        ).toJson(),
+      };
+      await tester.pumpWidget(
+        MaterialApp(
+          home: BangumiProgressPanel(
+            service: BangumiService.forTesting(gatewayFactory: (_) => gateway),
+            sourceKey: 'source',
+            comicId: 'comic',
+            comicTitle: 'Title',
+            chapters: const ComicChapters({'chapter': '第 5 话'}),
+            history: _history(ep: 1, page: 1, maxPage: 1),
+          ),
+        ),
+      );
+
+      expect(find.textContaining('Episodes: 12'), findsOneWidget);
+      expect(find.textContaining('Volumes: 2'), findsOneWidget);
+      expect(find.text('Current chapter: 5 (Episode)'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('bangumi-progress-field')))
+            .controller!
+            .text,
+        '3',
+      );
+    },
+  );
 
   testWidgets('explicit mode saves only an edited rating', (tester) async {
     gateway.collection = const BangumiCollection(
