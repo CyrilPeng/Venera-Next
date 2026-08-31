@@ -313,6 +313,7 @@ class BangumiService {
       subjectOriginalTitle: subject.originalTitle,
       coverUrl: subject.coverUrl,
       progressMode: mode,
+      collectionStatus: finalCollection.status!,
       totalEpisodes: subject.totalEpisodes,
       totalVolumes: subject.totalVolumes,
       lastRemoteEpisode: finalCollection.epStatus,
@@ -357,6 +358,7 @@ class BangumiService {
         lastRemoteEpisode: collection.epStatus,
         lastRemoteVolume: collection.volStatus,
         rating: collection.rate,
+        collectionStatus: collection.status!,
       ),
       expected: snapshot,
     );
@@ -403,6 +405,7 @@ class BangumiService {
     required BangumiProgressField? field,
     required int? progress,
     required int? rating,
+    BangumiCollectionStatus? collectionStatus,
     required bool allowDecrease,
   }) => _runBinding(
     sourceKey,
@@ -414,6 +417,7 @@ class BangumiService {
         field: field,
         progress: progress,
         rating: rating,
+        collectionStatus: collectionStatus,
         allowDecrease: allowDecrease,
       ),
     ),
@@ -425,6 +429,7 @@ class BangumiService {
     required BangumiProgressField? field,
     required int? progress,
     required int? rating,
+    required BangumiCollectionStatus? collectionStatus,
     required bool allowDecrease,
   }) async {
     if ((field == null) != (progress == null)) {
@@ -457,10 +462,12 @@ class BangumiService {
       throw StateError('Bangumi collection no longer exists');
     }
     _validateCollection(collection);
+    final remoteStatus = collection.status!;
     final freshBinding = binding.copyWith(
       lastRemoteEpisode: collection.epStatus,
       lastRemoteVolume: collection.volStatus,
       rating: collection.rate,
+      collectionStatus: remoteStatus,
     );
     final remoteProgress = field == null
         ? null
@@ -484,6 +491,9 @@ class BangumiService {
     }
     if (rating != null && rating != collection.rate) {
       fields['rate'] = rating;
+    }
+    if (collectionStatus != null && collectionStatus != remoteStatus) {
+      fields['type'] = collectionStatus.apiValue;
     }
     if (fields.isEmpty) {
       await _saveBinding(freshBinding, expected: snapshot);
@@ -510,6 +520,7 @@ class BangumiService {
               ? progress
               : freshBinding.lastRemoteVolume,
           rating: rating ?? freshBinding.rating,
+          collectionStatus: collectionStatus ?? freshBinding.collectionStatus,
         ),
         remoteSucceeded: true,
         expected: snapshot,
@@ -796,10 +807,12 @@ class BangumiService {
       throw StateError('Bangumi collection no longer exists');
     }
     _validateCollection(collection);
+    final remoteStatus = collection.status!;
     final freshBinding = binding.copyWith(
       lastRemoteEpisode: collection.epStatus,
       lastRemoteVolume: collection.volStatus,
       rating: collection.rate,
+      collectionStatus: remoteStatus,
     );
     if (progress.value <= _progressValue(collection, progress.field)) {
       try {
@@ -818,10 +831,19 @@ class BangumiService {
     final total = progress.field == BangumiProgressField.episode
         ? binding.totalEpisodes
         : binding.totalVolumes;
-    if (collection.type != 2 && total > 0 && progress.value >= total) {
-      fields['type'] = 2;
-    } else if ({1, 4, 5}.contains(collection.type)) {
-      fields['type'] = 3;
+    var uploadedStatus = remoteStatus;
+    if (remoteStatus != BangumiCollectionStatus.completed &&
+        total > 0 &&
+        progress.value >= total) {
+      uploadedStatus = BangumiCollectionStatus.completed;
+      fields['type'] = uploadedStatus.apiValue;
+    } else if ({
+      BangumiCollectionStatus.wish,
+      BangumiCollectionStatus.onHold,
+      BangumiCollectionStatus.dropped,
+    }.contains(remoteStatus)) {
+      uploadedStatus = BangumiCollectionStatus.reading;
+      fields['type'] = uploadedStatus.apiValue;
     }
     await _awaitRemoteOperation(
       snapshot,
@@ -836,6 +858,7 @@ class BangumiService {
           lastRemoteVolume: progress.field == BangumiProgressField.volume
               ? progress.value
               : freshBinding.lastRemoteVolume,
+          collectionStatus: uploadedStatus,
         ),
         remoteSucceeded: true,
         expected: snapshot,
@@ -1061,11 +1084,14 @@ class BangumiService {
       binding.rating <= 10;
 
   void _validateCollection(BangumiCollection collection) {
-    if (collection.epStatus < 0 ||
+    if (collection.status == null ||
+        collection.epStatus < 0 ||
         collection.volStatus < 0 ||
         collection.rate < 0 ||
         collection.rate > 10) {
-      throw StateError('Bangumi collection has invalid progress or rating');
+      throw StateError(
+        'Bangumi collection has invalid status, progress, or rating',
+      );
     }
   }
 

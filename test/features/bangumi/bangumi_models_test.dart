@@ -89,17 +89,81 @@ void main() {
       );
     });
 
-    test('rejects titles without Arabic numbers', () {
+    test('parses common Chinese numerals adjacent to units', () {
       expect(
-        BangumiTitleProgressParser.parse('番外', BangumiProgressMode.episode),
+        BangumiTitleProgressParser.parse('第十二话', BangumiProgressMode.auto),
+        const BangumiTitleParseResult.success(
+          BangumiProgress(BangumiProgressField.episode, 12),
+        ),
+      );
+      expect(
+        BangumiTitleProgressParser.parse('第一百零三話', BangumiProgressMode.auto),
+        const BangumiTitleParseResult.success(
+          BangumiProgress(BangumiProgressField.episode, 103),
+        ),
+      );
+      expect(
+        BangumiTitleProgressParser.parse('第兩百卷', BangumiProgressMode.auto),
+        const BangumiTitleParseResult.success(
+          BangumiProgress(BangumiProgressField.volume, 200),
+        ),
+      );
+      expect(
+        BangumiTitleProgressParser.parse('卷二〇四', BangumiProgressMode.auto),
+        const BangumiTitleParseResult.success(
+          BangumiProgress(BangumiProgressField.volume, 204),
+        ),
+      );
+      expect(
+        BangumiTitleProgressParser.parse('第一萬零三话', BangumiProgressMode.auto),
+        const BangumiTitleParseResult.success(
+          BangumiProgress(BangumiProgressField.episode, 10003),
+        ),
+      );
+    });
+
+    test('requires Chinese numerals to be adjacent to a progress unit', () {
+      expect(
+        BangumiTitleProgressParser.parse('番外三', BangumiProgressMode.episode),
         const BangumiTitleParseResult.failure(
           BangumiTitleParseFailure.noNumber,
         ),
       );
       expect(
-        BangumiTitleProgressParser.parse('第十二话', BangumiProgressMode.auto),
+        BangumiTitleProgressParser.parse(
+          'Chapter 十二',
+          BangumiProgressMode.volume,
+        ),
         const BangumiTitleParseResult.failure(
           BangumiTitleParseFailure.noNumber,
+        ),
+      );
+    });
+
+    test('rejects unsupported Chinese numeric expressions', () {
+      expect(
+        BangumiTitleProgressParser.parse('第十2话', BangumiProgressMode.auto),
+        const BangumiTitleParseResult.failure(
+          BangumiTitleParseFailure.noNumber,
+        ),
+      );
+      expect(
+        BangumiTitleProgressParser.parse('第十二点五话', BangumiProgressMode.auto),
+        const BangumiTitleParseResult.failure(BangumiTitleParseFailure.decimal),
+      );
+      expect(
+        BangumiTitleProgressParser.parse('负三话', BangumiProgressMode.auto),
+        const BangumiTitleParseResult.failure(
+          BangumiTitleParseFailure.negative,
+        ),
+      );
+    });
+
+    test('rejects multiple Chinese values for the same unit', () {
+      expect(
+        BangumiTitleProgressParser.parse('第十二话 第十三話', BangumiProgressMode.auto),
+        const BangumiTitleParseResult.failure(
+          BangumiTitleParseFailure.ambiguous,
         ),
       );
     });
@@ -122,6 +186,27 @@ void main() {
     expect(result.failure, BangumiTitleParseFailure.noNumber);
   });
 
+  test('Bangumi collection statuses map their API values', () {
+    expect(
+      BangumiCollectionStatus.values.map((status) => status.apiValue).toList(),
+      [1, 3, 2, 4, 5],
+    );
+    for (final status in BangumiCollectionStatus.values) {
+      expect(BangumiCollectionStatus.fromApiValue(status.apiValue), status);
+    }
+    expect(BangumiCollectionStatus.fromApiValue(0), isNull);
+    expect(
+      const BangumiCollection(
+        type: 3,
+        rate: 0,
+        epStatus: 0,
+        volStatus: 0,
+      ).status,
+      BangumiCollectionStatus.reading,
+    );
+    expect(BangumiCollection.fromJson({}).status, isNull);
+  });
+
   test(
     'BangumiBinding round-trips through JSON and creates an escaped key',
     () {
@@ -133,6 +218,7 @@ void main() {
         subjectOriginalTitle: 'Original',
         coverUrl: 'https://example.com/cover.jpg',
         progressMode: BangumiProgressMode.volume,
+        collectionStatus: BangumiCollectionStatus.onHold,
         totalEpisodes: 12,
         totalVolumes: 3,
         lastRemoteEpisode: 10,
@@ -158,6 +244,14 @@ void main() {
           'progressMode': 1,
         }).progressMode,
         BangumiProgressMode.auto,
+      );
+      expect(binding.toJson()['collectionType'], 4);
+      final legacyJson = binding.toJson()..remove('collectionType');
+      expect(BangumiBinding.fromJson(legacyJson).collectionStatus, isNull);
+      expect(
+        () =>
+            BangumiBinding.fromJson({...binding.toJson(), 'collectionType': 9}),
+        throwsFormatException,
       );
     },
   );

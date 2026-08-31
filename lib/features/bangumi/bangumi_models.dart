@@ -2,6 +2,31 @@ enum BangumiProgressMode { auto, episode, volume }
 
 enum BangumiProgressField { episode, volume }
 
+enum BangumiCollectionStatus {
+  wish(1),
+  reading(3),
+  completed(2),
+  onHold(4),
+  dropped(5);
+
+  const BangumiCollectionStatus(this.apiValue);
+
+  final int apiValue;
+
+  static BangumiCollectionStatus? fromApiValue(Object? value) {
+    if (value is! num || value != value.toInt()) {
+      return null;
+    }
+    final apiValue = value.toInt();
+    for (final status in values) {
+      if (status.apiValue == apiValue) {
+        return status;
+      }
+    }
+    return null;
+  }
+}
+
 enum BangumiTitleParseFailure {
   unknownUnit,
   ambiguous,
@@ -48,6 +73,34 @@ class BangumiTitleParseResult {
 }
 
 class BangumiTitleProgressParser {
+  static const _numberPattern = r'(?:\d+|[零〇一二两兩三四五六七八九十百千万萬]+)';
+  static final _decimalPattern = RegExp(
+    '$_numberPattern\\s*[.．点點]\\s*$_numberPattern',
+  );
+  static final _negativePattern = RegExp('[-−负負]\\s*$_numberPattern');
+  static const _chineseDigits = <int, int>{
+    0x96f6: 0,
+    0x3007: 0,
+    0x4e00: 1,
+    0x4e8c: 2,
+    0x4e24: 2,
+    0x5169: 2,
+    0x4e09: 3,
+    0x56db: 4,
+    0x4e94: 5,
+    0x516d: 6,
+    0x4e03: 7,
+    0x516b: 8,
+    0x4e5d: 9,
+  };
+  static const _chineseUnits = <int, int>{
+    0x5341: 10,
+    0x767e: 100,
+    0x5343: 1000,
+    0x4e07: 10000,
+    0x842c: 10000,
+  };
+
   static BangumiTitleParseResult parse(
     String source,
     BangumiProgressMode mode,
@@ -56,12 +109,12 @@ class BangumiTitleProgressParser {
       RegExp(r'[０-９]'),
       (match) => String.fromCharCode(match.group(0)!.codeUnitAt(0) - 0xfee0),
     );
-    if (RegExp(r'\d+\.\d+').hasMatch(title)) {
+    if (_decimalPattern.hasMatch(title)) {
       return const BangumiTitleParseResult.failure(
         BangumiTitleParseFailure.decimal,
       );
     }
-    if (RegExp(r'-\s*\d+').hasMatch(title)) {
+    if (_negativePattern.hasMatch(title)) {
       return const BangumiTitleParseResult.failure(
         BangumiTitleParseFailure.negative,
       );
@@ -94,10 +147,11 @@ class BangumiTitleProgressParser {
       );
     }
 
-    final numbers = RegExp(
-      r'\d+',
-    ).allMatches(title).map((match) => match.group(0)!);
-    final uniqueNumbers = numbers.map(int.parse).toSet();
+    final uniqueNumbers = RegExp(r'\d+')
+        .allMatches(title)
+        .where((match) => !_hasNumeralNeighbor(title, match))
+        .map((match) => int.parse(match.group(0)!))
+        .toSet();
     if (uniqueNumbers.isEmpty) {
       return const BangumiTitleParseResult.failure(
         BangumiTitleParseFailure.noNumber,
@@ -129,13 +183,110 @@ class BangumiTitleProgressParser {
     BangumiProgressField field,
   ) sync* {
     final unit = field == BangumiProgressField.episode ? r'[话話]' : r'卷';
-    for (final pattern in [RegExp('\\d+\\s*$unit'), RegExp('$unit\\s*\\d+')]) {
-      for (final match in pattern.allMatches(title)) {
-        final value = RegExp(r'\d+').firstMatch(match.group(0)!)!.group(0)!;
-        yield int.parse(value);
+    final beforeUnit = RegExp('($_numberPattern)\\s*$unit');
+    for (final match in beforeUnit.allMatches(title)) {
+      if (match.start > 0 &&
+          _isNumeralCodeUnit(title.codeUnitAt(match.start - 1))) {
+        continue;
+      }
+      final value = _parseNumberToken(match.group(1)!);
+      if (value != null) {
+        yield value;
+      }
+    }
+
+    final afterUnit = RegExp('$unit\\s*($_numberPattern)');
+    for (final match in afterUnit.allMatches(title)) {
+      if (match.end < title.length &&
+          _isNumeralCodeUnit(title.codeUnitAt(match.end))) {
+        continue;
+      }
+      final value = _parseNumberToken(match.group(1)!);
+      if (value != null) {
+        yield value;
       }
     }
   }
+
+  static bool _hasNumeralNeighbor(String title, Match match) =>
+      (match.start > 0 &&
+          _isNumeralCodeUnit(title.codeUnitAt(match.start - 1))) ||
+      (match.end < title.length &&
+          _isNumeralCodeUnit(title.codeUnitAt(match.end)));
+
+  static int? _parseNumberToken(String token) =>
+      int.tryParse(token) ?? _parseChineseNumeral(token);
+
+  static int? _parseChineseNumeral(String token) {
+    if (!token.runes.any(_chineseUnits.containsKey)) {
+      var value = 0;
+      for (final rune in token.runes) {
+        final digit = _chineseDigits[rune];
+        if (digit == null) {
+          return null;
+        }
+        value = value * 10 + digit;
+      }
+      return value;
+    }
+
+    var total = 0;
+    var section = 0;
+    int? digit;
+    var lastUnit = 10000;
+    var sawTerm = false;
+    var sawWan = false;
+
+    for (final rune in token.runes) {
+      final nextDigit = _chineseDigits[rune];
+      if (nextDigit != null) {
+        if (nextDigit != 0 && digit != null && digit != 0) {
+          return null;
+        }
+        digit = nextDigit;
+        continue;
+      }
+
+      final unit = _chineseUnits[rune];
+      if (unit == null) {
+        return null;
+      }
+      if (unit == 10000) {
+        if (sawWan || digit == 0) {
+          return null;
+        }
+        final high = section + (digit ?? 0);
+        if (high == 0) {
+          return null;
+        }
+        total += high * unit;
+        section = 0;
+        digit = null;
+        lastUnit = 10000;
+        sawTerm = false;
+        sawWan = true;
+        continue;
+      }
+      if (unit >= lastUnit || digit == 0) {
+        return null;
+      }
+      final coefficient = digit ?? (unit == 10 && !sawTerm ? 1 : null);
+      if (coefficient == null) {
+        return null;
+      }
+      section += coefficient * unit;
+      digit = null;
+      lastUnit = unit;
+      sawTerm = true;
+    }
+
+    return total + section + (digit ?? 0);
+  }
+
+  static bool _isNumeralCodeUnit(int codeUnit) =>
+      (codeUnit >= 0x30 && codeUnit <= 0x39) ||
+      _chineseDigits.containsKey(codeUnit) ||
+      _chineseUnits.containsKey(codeUnit);
 }
 
 class BangumiUser {
@@ -216,6 +367,9 @@ class BangumiCollection {
   final int epStatus;
   final int volStatus;
 
+  BangumiCollectionStatus? get status =>
+      BangumiCollectionStatus.fromApiValue(type);
+
   const BangumiCollection({
     required this.type,
     required this.rate,
@@ -249,6 +403,7 @@ class BangumiBinding {
   final String subjectOriginalTitle;
   final String coverUrl;
   final BangumiProgressMode progressMode;
+  final BangumiCollectionStatus? collectionStatus;
   final int totalEpisodes;
   final int totalVolumes;
   final int lastRemoteEpisode;
@@ -263,6 +418,7 @@ class BangumiBinding {
     required this.subjectOriginalTitle,
     required this.coverUrl,
     required this.progressMode,
+    this.collectionStatus,
     required this.totalEpisodes,
     required this.totalVolumes,
     required this.lastRemoteEpisode,
@@ -278,6 +434,7 @@ class BangumiBinding {
     subjectOriginalTitle: json['subjectOriginalTitle'] as String? ?? '',
     coverUrl: json['coverUrl'] as String? ?? '',
     progressMode: _progressModeFromJson(json['progressMode']),
+    collectionStatus: _collectionStatusFromJson(json),
     totalEpisodes: (json['totalEpisodes'] as num?)?.toInt() ?? 0,
     totalVolumes: (json['totalVolumes'] as num?)?.toInt() ?? 0,
     lastRemoteEpisode: (json['lastRemoteEpisode'] as num?)?.toInt() ?? 0,
@@ -293,6 +450,7 @@ class BangumiBinding {
     'subjectOriginalTitle': subjectOriginalTitle,
     'coverUrl': coverUrl,
     'progressMode': progressMode.name,
+    if (collectionStatus != null) 'collectionType': collectionStatus!.apiValue,
     'totalEpisodes': totalEpisodes,
     'totalVolumes': totalVolumes,
     'lastRemoteEpisode': lastRemoteEpisode,
@@ -308,6 +466,7 @@ class BangumiBinding {
     String? subjectOriginalTitle,
     String? coverUrl,
     BangumiProgressMode? progressMode,
+    BangumiCollectionStatus? collectionStatus,
     int? totalEpisodes,
     int? totalVolumes,
     int? lastRemoteEpisode,
@@ -321,6 +480,7 @@ class BangumiBinding {
     subjectOriginalTitle: subjectOriginalTitle ?? this.subjectOriginalTitle,
     coverUrl: coverUrl ?? this.coverUrl,
     progressMode: progressMode ?? this.progressMode,
+    collectionStatus: collectionStatus ?? this.collectionStatus,
     totalEpisodes: totalEpisodes ?? this.totalEpisodes,
     totalVolumes: totalVolumes ?? this.totalVolumes,
     lastRemoteEpisode: lastRemoteEpisode ?? this.lastRemoteEpisode,
@@ -338,6 +498,7 @@ class BangumiBinding {
       other.subjectOriginalTitle == subjectOriginalTitle &&
       other.coverUrl == coverUrl &&
       other.progressMode == progressMode &&
+      other.collectionStatus == collectionStatus &&
       other.totalEpisodes == totalEpisodes &&
       other.totalVolumes == totalVolumes &&
       other.lastRemoteEpisode == lastRemoteEpisode &&
@@ -353,6 +514,7 @@ class BangumiBinding {
     subjectOriginalTitle,
     coverUrl,
     progressMode,
+    collectionStatus,
     totalEpisodes,
     totalVolumes,
     lastRemoteEpisode,
@@ -373,4 +535,15 @@ BangumiProgressMode _progressModeFromJson(Object? value) {
     }
   }
   return BangumiProgressMode.auto;
+}
+
+BangumiCollectionStatus? _collectionStatusFromJson(Map<String, dynamic> json) {
+  if (!json.containsKey('collectionType')) {
+    return null;
+  }
+  final status = BangumiCollectionStatus.fromApiValue(json['collectionType']);
+  if (status == null) {
+    throw const FormatException('Invalid Bangumi collection type');
+  }
+  return status;
 }

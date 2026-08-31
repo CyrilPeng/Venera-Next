@@ -144,6 +144,7 @@ void main() {
     expect(result.lastRemoteEpisode, 12);
     expect(result.lastRemoteVolume, 3);
     expect(result.rating, 7);
+    expect(result.collectionStatus, BangumiCollectionStatus.reading);
     expect(service.bindingFor('source', 'comic'), result);
   });
 
@@ -368,7 +369,12 @@ void main() {
   test('refresh updates all remote fields in its local binding', () async {
     connectSettings();
     setBinding(binding(lastRemoteEpisode: 1, lastRemoteVolume: 1, rating: 1));
-    gateway.collection = collection(epStatus: 12, volStatus: 4, rate: 9);
+    gateway.collection = collection(
+      epStatus: 12,
+      volStatus: 4,
+      rate: 9,
+      type: 4,
+    );
 
     final result = await service.refresh('source', 'comic');
 
@@ -376,10 +382,12 @@ void main() {
     expect(result!.epStatus, 12);
     expect(result.volStatus, 4);
     expect(result.rate, 9);
+    expect(result.status, BangumiCollectionStatus.onHold);
     final updated = service.bindingFor('source', 'comic')!;
     expect(updated.lastRemoteEpisode, 12);
     expect(updated.lastRemoteVolume, 4);
     expect(updated.rating, 9);
+    expect(updated.collectionStatus, BangumiCollectionStatus.onHold);
     expect(saveCount, 1);
   });
 
@@ -423,6 +431,18 @@ void main() {
     },
   );
 
+  test('refresh rejects an invalid remote collection status', () async {
+    connectSettings();
+    final original = binding();
+    setBinding(original);
+    gateway.collection = collection(type: 0);
+
+    await expectLater(service.refresh('source', 'comic'), throwsStateError);
+
+    expect(service.bindingFor('source', 'comic'), original);
+    expect(saveCount, 0);
+  });
+
   test(
     'manual progress decrease requires confirmation before patching',
     () async {
@@ -461,16 +481,18 @@ void main() {
       field: BangumiProgressField.episode,
       progress: 10,
       rating: 8,
+      collectionStatus: BangumiCollectionStatus.dropped,
       allowDecrease: true,
     );
 
     expect(gateway.patchFields, [
-      {'ep_status': 10, 'rate': 8},
+      {'ep_status': 10, 'rate': 8, 'type': 5},
     ]);
     final updated = service.bindingFor('source', 'comic')!;
     expect(updated.lastRemoteEpisode, 10);
     expect(updated.lastRemoteVolume, 5);
     expect(updated.rating, 8);
+    expect(updated.collectionStatus, BangumiCollectionStatus.dropped);
   });
 
   test('manual reports remote success when persisting a patch fails', () async {
@@ -552,6 +574,58 @@ void main() {
     expect(gateway.patchFields, [
       {'rate': 8},
     ]);
+  });
+
+  test('manual status-only update patches and caches the status', () async {
+    connectSettings();
+    setBinding(binding(collectionStatus: BangumiCollectionStatus.reading));
+    gateway.collection = collection(
+      epStatus: 12,
+      volStatus: 5,
+      rate: 6,
+      type: 3,
+    );
+
+    await service.updateManual(
+      sourceKey: 'source',
+      comicId: 'comic',
+      field: null,
+      progress: null,
+      rating: null,
+      collectionStatus: BangumiCollectionStatus.onHold,
+      allowDecrease: false,
+    );
+
+    expect(gateway.patchFields, [
+      {'type': 4},
+    ]);
+    final updated = service.bindingFor('source', 'comic')!;
+    expect(updated.collectionStatus, BangumiCollectionStatus.onHold);
+    expect(updated.lastRemoteEpisode, 12);
+    expect(updated.lastRemoteVolume, 5);
+    expect(updated.rating, 6);
+  });
+
+  test('manual status compares against fresh remote state', () async {
+    connectSettings();
+    setBinding(binding(collectionStatus: BangumiCollectionStatus.wish));
+    gateway.collection = collection(type: 5);
+
+    await service.updateManual(
+      sourceKey: 'source',
+      comicId: 'comic',
+      field: null,
+      progress: null,
+      rating: null,
+      collectionStatus: BangumiCollectionStatus.dropped,
+      allowDecrease: false,
+    );
+
+    expect(gateway.patchFields, isEmpty);
+    expect(
+      service.bindingFor('source', 'comic')!.collectionStatus,
+      BangumiCollectionStatus.dropped,
+    );
   });
 
   test('manual rating-only update keeps pending automatic progress', () async {
@@ -1026,13 +1100,18 @@ void main() {
         setBinding(binding());
         gateway.collection = collection(epStatus: 11, type: 1);
 
-        await automaticService().onChapterCompleted(
+        final automatic = automaticService();
+        await automatic.onChapterCompleted(
           sourceKey: 'source',
           comicId: 'comic',
           chapterTitle: '第 12 话',
         );
 
         expect(gateway.patchFields.single, {'ep_status': 12, 'type': 3});
+        expect(
+          automatic.bindingFor('source', 'comic')!.collectionStatus,
+          BangumiCollectionStatus.reading,
+        );
       },
     );
 
@@ -1079,6 +1158,10 @@ void main() {
           {'ep_status': 12, 'type': 2},
           {'ep_status': 13},
         ]);
+        expect(
+          automatic.bindingFor('source', 'comic')!.collectionStatus,
+          BangumiCollectionStatus.completed,
+        );
       },
     );
 
@@ -3215,6 +3298,7 @@ BangumiBinding binding({
   int lastRemoteEpisode = 12,
   int lastRemoteVolume = 3,
   int rating = 6,
+  BangumiCollectionStatus? collectionStatus = BangumiCollectionStatus.reading,
   int totalEpisodes = 24,
   int totalVolumes = 4,
 }) => BangumiBinding(
@@ -3225,6 +3309,7 @@ BangumiBinding binding({
   subjectOriginalTitle: 'Original',
   coverUrl: 'cover',
   progressMode: BangumiProgressMode.episode,
+  collectionStatus: collectionStatus,
   totalEpisodes: totalEpisodes,
   totalVolumes: totalVolumes,
   lastRemoteEpisode: lastRemoteEpisode,

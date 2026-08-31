@@ -66,6 +66,19 @@ void main() {
         }),
         '章节标题无法解析：小数章节号',
       );
+      expect('Status'.tl, '状态');
+      expect('Plan to read'.tl, '想读');
+      expect('Currently reading'.tl, '在读');
+      expect('Finished reading'.tl, '读过');
+      expect('On hold'.tl, '搁置');
+      expect('Dropped'.tl, '抛弃');
+      appdata.settings['language'] = 'zh-TW';
+      expect('Status'.tl, '狀態');
+      expect('Plan to read'.tl, '想讀');
+      expect('Currently reading'.tl, '在讀');
+      expect('Finished reading'.tl, '讀過');
+      expect('On hold'.tl, '擱置');
+      expect('Dropped'.tl, '拋棄');
     },
   );
 
@@ -131,6 +144,90 @@ void main() {
 
     expect(find.byKey(const Key('bangumi-progress-field')), findsOneWidget);
     expect(find.byKey(const Key('bangumi-rating-field')), findsOneWidget);
+    expect(find.byKey(const Key('bangumi-status')), findsOneWidget);
+  });
+
+  testWidgets('bound panel exposes all Bangumi book statuses', (tester) async {
+    appdata.settings['bangumiBindings'] = {
+      bangumiBindingKey('source', 'comic'): _binding().toJson(),
+    };
+    await tester.pumpWidget(_panel(gateway));
+
+    expect(find.text('Currently reading'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('bangumi-status')));
+    await tester.pumpAndSettle();
+
+    for (final label in [
+      'Plan to read',
+      'Currently reading',
+      'Finished reading',
+      'On hold',
+      'Dropped',
+    ]) {
+      expect(find.text(label), findsWidgets);
+    }
+  });
+
+  testWidgets('selected status is submitted with the existing save action', (
+    tester,
+  ) async {
+    appdata.settings['bangumiBindings'] = {
+      bangumiBindingKey('source', 'comic'): _binding().toJson(),
+    };
+    await tester.pumpWidget(_panel(gateway));
+    await tester.tap(find.byKey(const Key('bangumi-status')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('On hold').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('bangumi-save')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.patches, [
+      {'type': 4},
+    ]);
+    expect(find.text('On hold'), findsOneWidget);
+    expect(
+      BangumiService.forTesting(
+        gatewayFactory: (_) => gateway,
+      ).bindingFor('source', 'comic')?.collectionStatus,
+      BangumiCollectionStatus.onHold,
+    );
+  });
+
+  testWidgets('sync now refreshes the displayed status', (tester) async {
+    appdata.settings['bangumiBindings'] = {
+      bangumiBindingKey('source', 'comic'): _binding().toJson(),
+    };
+    gateway.collection = const BangumiCollection(
+      type: 5,
+      rate: 0,
+      epStatus: 0,
+      volStatus: 0,
+    );
+    await tester.pumpWidget(_panel(gateway));
+    await tester.tap(find.byKey(const Key('bangumi-sync-now')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dropped'), findsOneWidget);
+  });
+
+  testWidgets('legacy binding fetches its missing status once', (tester) async {
+    appdata.settings['bangumiBindings'] = {
+      bangumiBindingKey('source', 'comic'): _binding(
+        collectionStatus: null,
+      ).toJson(),
+    };
+    gateway.collection = const BangumiCollection(
+      type: 4,
+      rate: 0,
+      epStatus: 0,
+      volStatus: 0,
+    );
+    await tester.pumpWidget(_panel(gateway));
+    await tester.pumpAndSettle();
+
+    expect(gateway.collectionRequests, 1);
+    expect(find.text('On hold'), findsOneWidget);
   });
 
   testWidgets('selected volume mode is passed to binding', (tester) async {
@@ -343,6 +440,7 @@ void main() {
       bangumiBindingKey('source', 'comic'): _binding().toJson(),
     };
     await tester.pumpWidget(_panel(gateway));
+    await tester.ensureVisible(find.byKey(const Key('bangumi-unbind')));
     await tester.tap(find.byKey(const Key('bangumi-unbind')));
     await tester.pumpAndSettle();
 
@@ -682,6 +780,7 @@ BangumiBinding _binding({
   int episode = 0,
   int volume = 0,
   int rating = 0,
+  BangumiCollectionStatus? collectionStatus = BangumiCollectionStatus.reading,
 }) => BangumiBinding(
   sourceKey: 'source',
   comicId: 'comic',
@@ -690,6 +789,7 @@ BangumiBinding _binding({
   subjectOriginalTitle: 'Original',
   coverUrl: '',
   progressMode: mode,
+  collectionStatus: collectionStatus,
   totalEpisodes: 12,
   totalVolumes: 2,
   lastRemoteEpisode: episode,

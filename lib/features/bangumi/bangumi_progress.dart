@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:venera_next/components/button.dart';
@@ -38,6 +40,8 @@ class _BangumiProgressPanelState extends State<BangumiProgressPanel> {
   List<BangumiSubject>? _results;
   BangumiSubject? _selected;
   BangumiProgressMode _mode = BangumiProgressMode.auto;
+  BangumiCollectionStatus? _status;
+  BangumiCollectionStatus? _loadedStatus;
   String? _loadedProgressText;
   String? _loadedRatingText;
   bool _rebinding = false;
@@ -53,6 +57,14 @@ class _BangumiProgressPanelState extends State<BangumiProgressPanel> {
     super.initState();
     _queryController = TextEditingController(text: widget.comicTitle);
     _loadBinding();
+    final binding = _binding;
+    if (binding != null &&
+        binding.collectionStatus == null &&
+        _service.isConnected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_refreshMissingStatus());
+      });
+    }
   }
 
   @override
@@ -67,6 +79,8 @@ class _BangumiProgressPanelState extends State<BangumiProgressPanel> {
     final binding = _binding;
     if (binding == null) return;
     _mode = binding.progressMode;
+    _status = binding.collectionStatus;
+    _loadedStatus = binding.collectionStatus;
     final progressText = _remoteProgress(
       binding,
       _manualField(binding),
@@ -157,6 +171,8 @@ class _BangumiProgressPanelState extends State<BangumiProgressPanel> {
         Text(
           '${'Episodes'.tl}: ${binding.lastRemoteEpisode}    ${'Volumes'.tl}: ${binding.lastRemoteVolume}',
         ),
+        const SizedBox(height: 12),
+        _statusPicker(),
         const SizedBox(height: 12),
         _modePicker(onChanged: _changeMode),
         if (parsed != null)
@@ -262,6 +278,33 @@ class _BangumiProgressPanelState extends State<BangumiProgressPanel> {
         ),
       ),
     ],
+  );
+
+  Widget _statusPicker() => KeyedSubtree(
+    key: const Key('bangumi-status'),
+    child: DropdownButtonFormField<BangumiCollectionStatus>(
+      key: ValueKey(_status),
+      initialValue: _status,
+      decoration: InputDecoration(
+        labelText: 'Status'.tl,
+        border: const OutlineInputBorder(),
+      ),
+      items: BangumiCollectionStatus.values
+          .map(
+            (status) => DropdownMenuItem(
+              value: status,
+              child: Text(_statusName(status)),
+            ),
+          )
+          .toList(),
+      onChanged: _loading
+          ? null
+          : (status) {
+              if (status != null) {
+                setState(() => _status = status);
+              }
+            },
+    ),
   );
 
   Widget _modePicker({ValueChanged<BangumiProgressMode>? onChanged}) =>
@@ -381,12 +424,44 @@ class _BangumiProgressPanelState extends State<BangumiProgressPanel> {
     }
   }
 
+  Future<void> _refreshMissingStatus() async {
+    final binding = _binding;
+    if (!mounted ||
+        _loading ||
+        binding == null ||
+        binding.collectionStatus != null) {
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final collection = await _service.refresh(
+        widget.sourceKey,
+        widget.comicId,
+      );
+      if (!mounted) return;
+      if (collection == null) {
+        setState(() => _error = 'Bangumi collection no longer exists'.tl);
+        return;
+      }
+      _loadBinding();
+      setState(() => _error = null);
+    } catch (error) {
+      if (mounted) setState(() => _error = '$error');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   Future<void> _save({bool allowDecrease = false}) async {
     final binding = _binding;
     final field = binding == null ? null : _manualField(binding);
     final progressChanged =
         field != null && _progressController.text != _loadedProgressText;
     final ratingChanged = _ratingController.text != _loadedRatingText;
+    final statusChanged = _status != _loadedStatus;
     final progress = !progressChanged
         ? null
         : int.tryParse(_progressController.text);
@@ -411,6 +486,7 @@ class _BangumiProgressPanelState extends State<BangumiProgressPanel> {
         field: progressChanged ? field : null,
         progress: progress,
         rating: rating,
+        collectionStatus: statusChanged ? _status : null,
         allowDecrease: allowDecrease,
       );
       if (mounted) {
@@ -535,6 +611,14 @@ class _BangumiProgressPanelState extends State<BangumiProgressPanel> {
       field == BangumiProgressField.volume
       ? binding.lastRemoteVolume
       : binding.lastRemoteEpisode;
+  String _statusName(BangumiCollectionStatus status) => switch (status) {
+    BangumiCollectionStatus.wish => 'Plan to read'.tl,
+    BangumiCollectionStatus.reading => 'Currently reading'.tl,
+    BangumiCollectionStatus.completed => 'Finished reading'.tl,
+    BangumiCollectionStatus.onHold => 'On hold'.tl,
+    BangumiCollectionStatus.dropped => 'Dropped'.tl,
+  };
+
   String _modeName(BangumiProgressMode mode) => switch (mode) {
     BangumiProgressMode.auto => 'Auto'.tl,
     BangumiProgressMode.episode => 'Episode'.tl,
