@@ -360,6 +360,8 @@ class Settings with ChangeNotifier {
     'enableTapToTurnPages': true,
     'reverseTapToTurnPages': false,
     'enablePageAnimation': true,
+    'readerBrightnessEnabled': false,
+    'readerBrightness': 50, // 20 - 100
     'eInkRefreshEnabled': false,
     'eInkRefreshDuration': 100, // milliseconds
     'eInkRefreshInterval': 1, // page changes
@@ -455,6 +457,21 @@ class Settings with ChangeNotifier {
       }
     }
     return getDeviceReaderSetting(key);
+  }
+
+  void setActiveReaderSetting(
+    String? comicId,
+    String? sourceKey,
+    String key,
+    dynamic value,
+  ) {
+    if (isComicSpecificSettingsEnabled(comicId, sourceKey)) {
+      setReaderSetting(comicId!, sourceKey!, key, value);
+    } else if (isDeviceSpecificSettingsEnabled()) {
+      setDeviceReaderSetting(key, value);
+    } else {
+      this[key] = value;
+    }
   }
 
   void setReaderSetting(

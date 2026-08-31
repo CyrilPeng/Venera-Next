@@ -3,6 +3,7 @@ import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/code.dart';
 import 'package:venera_next/components/layout.dart';
 import 'package:venera_next/components/scroll.dart';
+import 'package:venera_next/features/reader/brightness.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -231,6 +232,44 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           comicId: isEnabledSpecificSettings ? widget.comicId : null,
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
+        ).toSliver(),
+        ReaderBrightnessControl(
+          enabled:
+              _readerSettingValue(
+                'readerBrightnessEnabled',
+                isEnabledSpecificSettings: isEnabledSpecificSettings,
+                useDeviceSpecificSettings: useDeviceSpecificSettings,
+              ) ==
+              true,
+          brightness: _readerSettingValue(
+            'readerBrightness',
+            isEnabledSpecificSettings: isEnabledSpecificSettings,
+            useDeviceSpecificSettings: useDeviceSpecificSettings,
+          ),
+          onEnabledChanged: (enabled) {
+            appdata.settings.setActiveReaderSetting(
+              widget.comicId,
+              widget.comicSource,
+              'readerBrightnessEnabled',
+              enabled,
+            );
+            setState(() {});
+            appdata.saveData();
+            widget.onChanged?.call('readerBrightnessEnabled');
+          },
+          onBrightnessChanged: (brightness) {
+            appdata.settings.setActiveReaderSetting(
+              widget.comicId,
+              widget.comicSource,
+              'readerBrightness',
+              brightness,
+            );
+            setState(() {});
+            widget.onChanged?.call('readerBrightness');
+          },
+          onBrightnessChangeEnd: (_) {
+            appdata.saveData();
+          },
         ).toSliver(),
         SwitchSetting(
           title: "E-Ink display refresh".tl,

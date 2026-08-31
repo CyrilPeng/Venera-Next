@@ -10,6 +10,7 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/side_bar.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/reader/brightness.dart';
 import 'package:venera_next/features/reader/chapter_comments.dart';
 import 'package:venera_next/features/reader/chapters.dart';
 import 'package:venera_next/features/reader/eink_refresh.dart';
@@ -40,6 +41,8 @@ class ReaderScaffold extends StatefulWidget {
 
 class ReaderScaffoldState extends State<ReaderScaffold> {
   bool _isOpen = false;
+
+  bool _brightnessPanelOpen = false;
 
   final EInkRefreshController _eInkRefreshController = EInkRefreshController();
 
@@ -155,6 +158,9 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   void openOrClose() {
     setState(() {
       _isOpen = !_isOpen;
+      if (!_isOpen) {
+        _brightnessPanelOpen = false;
+      }
     });
     _applySystemUiMode();
   }
@@ -205,6 +211,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   @override
   Widget build(BuildContext context) {
     final isOnChapterCommentsPage = context.reader.isOnChapterCommentsPage;
+    final brightnessPanelVisible = _isOpen && _brightnessPanelOpen;
     return Stack(
       children: [
         Positioned.fill(
@@ -213,6 +220,13 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
             child: widget.child,
           ),
         ),
+        if (!isOnChapterCommentsPage)
+          Positioned.fill(
+            child: ReaderBrightnessOverlay(
+              enabled: _readerSetting('readerBrightnessEnabled') == true,
+              brightness: _readerSetting('readerBrightness'),
+            ),
+          ),
         if (_readerSetting('showPageNumberInReader') == true &&
             !isOnChapterCommentsPage)
           buildPageInfoText(),
@@ -239,6 +253,24 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
           left: 0,
           right: 0,
           child: buildBottom(),
+        ),
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          right: 16 + context.padding.right,
+          bottom: brightnessPanelVisible
+              ? kBottomBarHeight + context.padding.bottom + 12
+              : -220,
+          child: ExcludeFocus(
+            excluding: !brightnessPanelVisible,
+            child: ExcludeSemantics(
+              excluding: !brightnessPanelVisible,
+              child: IgnorePointer(
+                ignoring: !brightnessPanelVisible,
+                child: buildBrightnessPanel(),
+              ),
+            ),
+          ),
         ),
         Positioned.fill(
           child: EInkRefreshOverlay(controller: _eInkRefreshController),
@@ -539,6 +571,24 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
           ),
         ),
       Tooltip(
+        message: 'Reader brightness'.tl,
+        child: IconButton(
+          icon: Icon(
+            _readerSetting('readerBrightnessEnabled') == true
+                ? Icons.brightness_4
+                : Icons.brightness_6,
+          ),
+          color: _readerSetting('readerBrightnessEnabled') == true
+              ? context.colorScheme.primary
+              : null,
+          onPressed: () {
+            setState(() {
+              _brightnessPanelOpen = !_brightnessPanelOpen;
+            });
+          },
+        ),
+      ),
+      Tooltip(
         message: "Auto Page Turning".tl,
         child: IconButton(
           icon: context.reader.autoPageTurningTimer != null
@@ -611,7 +661,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
               final small = (constrains.maxWidth - buttons.length * 50) < 120;
               return Row(
                 children: [
-                  if (!small)
+                  if (!small) ...[
                     Container(
                       height: 24,
                       padding: const EdgeInsets.fromLTRB(6, 2, 6, 0),
@@ -621,15 +671,12 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
                       ),
                       child: Center(child: Text(text)),
                     ).paddingLeft(16),
-                  const Spacer(),
-                  for (var button in buttons)
-                    if (!small)
-                      button.paddingHorizontal(4)
-                    else ...[
-                      button,
-                      const Spacer(),
-                    ],
-                  if (!small) const SizedBox(width: 4),
+                    const Spacer(),
+                    for (var button in buttons) button.paddingHorizontal(4),
+                    const SizedBox(width: 4),
+                  ] else
+                    for (var button in buttons)
+                      Expanded(child: Center(child: button)),
                 ],
               );
             },
@@ -658,6 +705,54 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
             right: context.padding.right,
           ),
           child: child,
+        ),
+      ),
+    );
+  }
+
+  Widget buildBrightnessPanel() {
+    final panelWidth =
+        (MediaQuery.sizeOf(context).width -
+                context.padding.left -
+                context.padding.right -
+                32)
+            .clamp(0.0, 360.0);
+    return Material(
+      elevation: 8,
+      color: context.colorScheme.surface,
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        width: panelWidth,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: ReaderBrightnessControl(
+            compact: true,
+            enabled: _readerSetting('readerBrightnessEnabled') == true,
+            brightness: _readerSetting('readerBrightness'),
+            onEnabledChanged: (enabled) {
+              appdata.settings.setActiveReaderSetting(
+                context.reader.cid,
+                context.reader.type.sourceKey,
+                'readerBrightnessEnabled',
+                enabled,
+              );
+              setState(() {});
+              appdata.saveData();
+            },
+            onBrightnessChanged: (brightness) {
+              appdata.settings.setActiveReaderSetting(
+                context.reader.cid,
+                context.reader.type.sourceKey,
+                'readerBrightness',
+                brightness,
+              );
+              setState(() {});
+            },
+            onBrightnessChangeEnd: (_) {
+              appdata.saveData();
+            },
+          ),
         ),
       ),
     );
@@ -770,6 +865,9 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   }
 
   void openSetting() {
+    setState(() {
+      _brightnessPanelOpen = false;
+    });
     _openSideBar(
       ReaderSettings(
         comicId: context.reader.cid,
@@ -800,6 +898,9 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
           }
           if (key.startsWith('eInkRefresh')) {
             resetEInkRefreshCounter();
+          }
+          if (key.startsWith('readerBrightness')) {
+            update();
           }
           if (key == "showChapterComments" ||
               key == "showChapterCommentsAtEnd") {

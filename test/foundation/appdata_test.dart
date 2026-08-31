@@ -87,6 +87,64 @@ void main() {
     }
   });
 
+  test('active reader setting writes to the current settings scope', () {
+    final previousDeviceId = appdata.settings['deviceId'];
+    final previousDeviceSettings = appdata.settings['deviceSpecificSettings'];
+    final previousComicSettings = appdata.settings['comicSpecificSettings'];
+    final previousBrightness = appdata.settings['readerBrightness'];
+
+    try {
+      appdata.settings['deviceId'] = 'reader-brightness-test-device';
+      appdata.settings['deviceSpecificSettings'] = <String, dynamic>{};
+      appdata.settings['comicSpecificSettings'] = <String, dynamic>{};
+      appdata.settings['readerBrightness'] = 50;
+
+      appdata.settings.setActiveReaderSetting(
+        'comic-id',
+        'source-key',
+        'readerBrightness',
+        60,
+      );
+      expect(appdata.settings['readerBrightness'], 60);
+
+      appdata.settings.setEnabledDeviceSpecificSettings(true);
+      appdata.settings.setActiveReaderSetting(
+        'comic-id',
+        'source-key',
+        'readerBrightness',
+        40,
+      );
+      expect(appdata.settings['readerBrightness'], 60);
+      expect(appdata.settings.getDeviceReaderSetting('readerBrightness'), 40);
+
+      appdata.settings.setEnabledComicSpecificSettings(
+        'comic-id',
+        'source-key',
+        true,
+      );
+      appdata.settings.setActiveReaderSetting(
+        'comic-id',
+        'source-key',
+        'readerBrightness',
+        30,
+      );
+      expect(
+        appdata.settings.getReaderSetting(
+          'comic-id',
+          'source-key',
+          'readerBrightness',
+        ),
+        30,
+      );
+      expect(appdata.settings.getDeviceReaderSetting('readerBrightness'), 40);
+    } finally {
+      appdata.settings['deviceId'] = previousDeviceId;
+      appdata.settings['deviceSpecificSettings'] = previousDeviceSettings;
+      appdata.settings['comicSpecificSettings'] = previousComicSettings;
+      appdata.settings['readerBrightness'] = previousBrightness;
+    }
+  });
+
   test(
     'saveData queues concurrent writes and keeps the latest snapshot',
     () async {
