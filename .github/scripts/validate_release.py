@@ -50,6 +50,13 @@ def validate_flutter_rust_bridge_lock() -> None:
         fail("pubspec.lock must lock flutter_rust_bridge as direct overridden version 2.11.1")
 
 
+def validate_windows_installer_metadata() -> None:
+    expected = "UninstallDisplayName={#MyAppName}"
+    for path in ("windows/build.iss", "windows/build_arm64.iss"):
+        if expected not in read_text(path).splitlines():
+            fail(f"{path} must set {expected} so Windows shows a stable app name")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", default=os.environ.get("GITHUB_REF_NAME", ""))
@@ -62,6 +69,7 @@ def main() -> None:
 
     validate_pubspec_version(tag)
     validate_flutter_rust_bridge_lock()
+    validate_windows_installer_metadata()
     notes = extract_release_notes(tag)
 
     if args.write_notes:
