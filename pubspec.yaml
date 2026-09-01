@@ -11,7 +11,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  path_provider: ^2.1.5
+  path_provider: ^2.1.6
   intl: ^0.20.2
   window_manager: ^0.5.2
   sqlite3: ^2.7.4
