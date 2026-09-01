@@ -8,6 +8,11 @@
 
 - 修复 Windows 安装后在应用列表中将版本号拼入软件名称的问题；现在 x64 与 ARM64 安装项均稳定显示为 `VeneraNext`。
 
+### 维护
+
+- 更新 `html`、`yaml`、`archive`、`path_provider` 和 `mime` 依赖，纳入解析器安全修复、归档处理优化及平台路径与 MIME 类型表更新。
+- 将 GitHub Actions 的 `actions/setup-java` 更新到 v6，使用最新的 Java 环境配置实现并兼容 Node.js 24 运行时。
+
 ## v1.15.0
 
 ### 新增
