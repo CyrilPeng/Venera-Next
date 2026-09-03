@@ -1,0 +1,28 @@
+name: 依赖安全审查
+
+on:
+  pull_request:
+
+concurrency:
+  group: dependency-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependency_review:
+    name: 依赖安全审查
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: 检查新增依赖漏洞
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          vulnerability-check: true
+          license-check: false
+          retry-on-snapshot-warnings: true
+          retry-on-snapshot-warnings-timeout: 120
+          show-patched-versions: true
