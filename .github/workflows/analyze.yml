@@ -1,13 +1,22 @@
 name: "代码分析"
 on:
+  workflow_call:
   pull_request:
   push:
     branches:
       - main
 
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_call' }}
+
+permissions:
+  contents: read
+
 jobs:
   analyze:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
@@ -15,10 +24,12 @@ jobs:
           channel: "stable"
           flutter-version-file: pubspec.yaml
           architecture: x64
+          cache: true
       - run: python3 .github/scripts/release_version.py --check
       - run: python3 .github/scripts/check_structure_imports.py
       - run: python3 -m unittest discover -s .github/scripts/tests -p "test_*.py"
       - run: flutter pub get --enforce-lockfile
+      - run: flutter analyze --no-fatal-infos --fatal-warnings
       - run: flutter test --coverage
       - name: 汇总 Dart 覆盖率
         run: python3 .github/scripts/report_dart_coverage.py coverage/lcov.info --github-summary
@@ -28,4 +39,4 @@ jobs:
           name: dart-coverage
           path: coverage/lcov.info
           if-no-files-found: error
-      - uses: invertase/github-action-dart-analyzer@v1
+          retention-days: 14

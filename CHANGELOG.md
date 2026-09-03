@@ -10,6 +10,9 @@
 
 ### 维护
 
+- 重构 GitHub Actions：发布与手动构建复用统一平台构建工作流，发版前强制复用代码质量检查，并补充并发控制、超时、Flutter/Gradle 缓存、严格产物校验及短期工件保留策略。
+- 修复长期失败的自动化：移除依赖 Node.js 20 的第三方 Dart Analyzer 与 Issue 检查 Action；Issue 检查默认关闭且仅提供人工复核建议，AltStore 更新仅在稳定版后运行，并在无法创建 PR 时明确失败。
+- 提升构建可复现性：固定 Windows 构建环境和中文安装器翻译版本及校验值、统一 Linux ARM64 Flutter stable 通道、移除未使用的 Windows 构建依赖，并将 Dependabot 的同类更新分组。
 - 更新 `html`、`yaml`、`archive`、`path_provider` 和 `mime` 依赖，纳入解析器安全修复、归档处理优化及平台路径与 MIME 类型表更新。
 - 将 GitHub Actions 的 `actions/setup-java` 更新到 v6，使用最新的 Java 环境配置实现并兼容 Node.js 24 运行时。
 

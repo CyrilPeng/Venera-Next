@@ -26,7 +26,8 @@ permissions:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     env:
       AFDIAN_USER_ID: ${{ secrets.AFDIAN_USER_ID }}
       AFDIAN_API_TOKEN: ${{ secrets.AFDIAN_API_TOKEN }}
@@ -81,6 +82,8 @@ jobs:
             SPONSORS.md
             README.md
             README.en.md
+          if-no-files-found: error
+          retention-days: 7
 
       - name: 提交赞助者公开文件
         if: github.event_name != 'workflow_dispatch' || inputs.dry_run == false

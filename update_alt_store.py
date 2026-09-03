@@ -1,8 +1,9 @@
 import json
 import re
-import requests
 import os
 from datetime import datetime
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 def prepare_description(text):
     text = re.sub('<[^<]+?>', '', text) # Remove HTML tags
@@ -22,15 +23,15 @@ def fetch_latest_release(repo_url):
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    request = Request(api_url, headers=headers)
     try:
-        response = requests.get(api_url, headers=headers, timeout=30)
-        response.raise_for_status()
-        releases = response.json()
+        with urlopen(request, timeout=30) as response:
+            releases = json.load(response)
         for release in releases:
             if not release.get("draft") and not release.get("prerelease"):
                 return release
         raise RuntimeError("No published release found.")
-    except requests.RequestException as e:
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as e:
         print(f"Error fetching releases: {e}")
         raise
 
@@ -152,7 +153,6 @@ def update_json_file_release(json_file, latest_release):
 
 def main():
     repo_url = "CyrilPeng/venera-next"
-    is_nightly = "NIGHTLY_LINK" in os.environ
 
     try:
         fetched_data_latest = fetch_latest_release(repo_url)

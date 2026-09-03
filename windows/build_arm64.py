@@ -2,7 +2,8 @@ import platform
 import subprocess
 import os
 import shutil
-import httpx
+import hashlib
+from urllib.request import Request, urlopen
 
 file = open('pubspec.yaml', 'r')
 content = file.read()
@@ -44,10 +45,25 @@ file.close()
 
 if not os.path.exists("windows/ChineseSimplified.isl"):
     # download ChineseSimplified.isl
-    url = "https://cdn.jsdelivr.net/gh/kira-96/Inno-Setup-Chinese-Simplified-Translation@latest/ChineseSimplified.isl"
-    response = httpx.get(url)
+    url = (
+        "https://cdn.jsdelivr.net/gh/kira-96/"
+        "Inno-Setup-Chinese-Simplified-Translation@"
+        "1ace6a485174288c7416d0979cc2db1f0990f95a/ChineseSimplified.isl"
+    )
+    request = Request(url, headers={"User-Agent": "VeneraNext-Windows-Build"})
+    with urlopen(request, timeout=30) as response:
+        content = response.read()
+    if not content:
+        raise RuntimeError("Downloaded ChineseSimplified.isl is empty")
+    digest = hashlib.sha256(content).hexdigest()
+    expected = "bc76580176cba3303fb4b0edfd4c65557cc57dad09d1efc3f8d16557c0f2d694"
+    if digest != expected:
+        raise RuntimeError(
+            "Downloaded ChineseSimplified.isl failed SHA256 verification: "
+            f"{digest}"
+        )
     with open('windows/ChineseSimplified.isl', 'wb') as file:
-        file.write(response.content)
+        file.write(content)
 
 subprocess.run(["iscc", issPath], shell=True)
 

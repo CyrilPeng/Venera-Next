@@ -2,6 +2,37 @@ name: 构建
 run-name: 构建 ${{ github.ref_name }}
 
 on:
+  workflow_call:
+    inputs:
+      build_android:
+        required: false
+        type: boolean
+        default: true
+      build_windows:
+        required: false
+        type: boolean
+        default: true
+      build_macos:
+        required: false
+        type: boolean
+        default: true
+      build_ios:
+        required: false
+        type: boolean
+        default: false
+      build_linux_x64:
+        required: false
+        type: boolean
+        default: true
+      build_linux_arm64:
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      ANDROID_KEYSTORE:
+        required: false
+      ANDROID_KEY_PROPERTIES:
+        required: false
   workflow_dispatch:
     inputs:
       build_android:
@@ -19,6 +50,11 @@ on:
         required: true
         type: boolean
         default: true
+      build_ios:
+        description: '构建 iOS'
+        required: true
+        type: boolean
+        default: false
       build_linux_x64:
         description: '构建 Linux x64'
         required: true
@@ -30,6 +66,10 @@ on:
         type: boolean
         default: true
 
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -37,14 +77,17 @@ jobs:
   Build_Android:
     if: ${{ inputs.build_android }}
     runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
-      - run: rm -rf /opt/hostedtoolcache
+      - name: 释放 Android 构建所需磁盘空间
+        run: rm -rf /opt/hostedtoolcache
       - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
           flutter-version-file: pubspec.yaml
           architecture: x64
+          cache: true
       - name: 解码并安装 Android 证书
         env:
           STORE_FILE: ${{ secrets.ANDROID_KEYSTORE }}
@@ -56,6 +99,11 @@ jobs:
         with:
           distribution: 'oracle'
           java-version: '17'
+          cache: gradle
+          cache-dependency-path: |
+            android/**/*.gradle*
+            android/gradle/wrapper/gradle-wrapper.properties
+            pubspec.lock
       - name: 准备 Rust 工具链
         run: |
           python3 .github/scripts/prepare_rust_toolchain.py \
@@ -83,38 +131,44 @@ jobs:
         with:
           name: apk-armeabi-v7a
           path: build/app/outputs/apk/release/*armeabi-v7a*.apk
+          if-no-files-found: error
+          retention-days: 7
       - name: 上传 APK (arm64-v8a)
         uses: actions/upload-artifact@v7
         with:
           name: apk-arm64-v8a
           path: build/app/outputs/apk/release/*arm64-v8a*.apk
+          if-no-files-found: error
+          retention-days: 7
       - name: 上传 APK (x86_64)
         uses: actions/upload-artifact@v7
         with:
           name: apk-x86_64
           path: build/app/outputs/apk/release/*x86_64*.apk
+          if-no-files-found: error
+          retention-days: 7
       - name: 上传 APK (universal)
         uses: actions/upload-artifact@v7
         with:
           name: apk-universal
           path: build/app/outputs/apk/release/*-android.apk
+          if-no-files-found: error
+          retention-days: 7
 
   Build_Windows:
     if: ${{ inputs.build_windows }}
-    runs-on: windows-latest
+    runs-on: windows-2025
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
-      - name: 安装依赖
-        run: |
-          choco install yq -y
-          pip install httpx
       - name: 安装 Inno Setup
-        run: choco install innosetup --no-progress
+        run: choco install innosetup --version=6.7.1 --no-progress -y
       - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
           flutter-version-file: pubspec.yaml
           architecture: x64
+          cache: true
       - name: 构建 Windows 安装包
         run: |
           flutter pub get --enforce-lockfile
@@ -156,10 +210,12 @@ jobs:
             build/windows/VeneraNext-*-windows.zip
             build/windows/VeneraNext-*-windows-installer.exe
           if-no-files-found: error
+          retention-days: 7
 
   Build_MacOS:
     if: ${{ inputs.build_macos }}
     runs-on: macos-15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
@@ -167,6 +223,7 @@ jobs:
           channel: "stable"
           flutter-version-file: pubspec.yaml
           architecture: x64
+          cache: true
       - run: sudo xcode-select --switch /Applications/Xcode_16.4.app
       - name: 准备 Rust 工具链
         run: |
@@ -203,10 +260,73 @@ jobs:
         with:
           name: macos_build
           path: result/
+          if-no-files-found: error
+          retention-days: 7
+
+  Build_IOS:
+    if: ${{ inputs.build_ios }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          flutter-version-file: pubspec.yaml
+          architecture: x64
+          cache: true
+      - run: sudo xcode-select --switch /Applications/Xcode_16.4.app
+      - name: 准备 Rust 工具链
+        run: |
+          python3 .github/scripts/prepare_rust_toolchain.py \
+            --target aarch64-apple-darwin \
+            --target x86_64-apple-darwin \
+            --target aarch64-apple-ios
+      - name: 串行化 Rustup 安装操作
+        run: |
+          install "$(command -v rustup)" "$RUNNER_TEMP/rustup"
+          rm -f "$HOME/.cargo/bin/rustup"
+          install .github/scripts/serialized_rustup.py "$HOME/.cargo/bin/rustup"
+          chmod +x "$HOME/.cargo/bin/rustup"
+          echo "RUSTUP_REAL_BINARY=$RUNNER_TEMP/rustup" >> "$GITHUB_ENV"
+          echo "RUSTUP_LOCK_FILE=$RUNNER_TEMP/venera-rustup.lock" >> "$GITHUB_ENV"
+      - run: flutter pub get --enforce-lockfile
+      - name: 构建 iOS 应用
+        run: |
+          APP_VERSION=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | tr -d '\r\n')
+          IOS_VERSION="${APP_VERSION%%+*}"
+          IOS_BUILD="${APP_VERSION#*+}"
+          if [ "$IOS_BUILD" = "$APP_VERSION" ]; then
+            IOS_BUILD=1
+          fi
+          IOS_VERSION="${IOS_VERSION%%-*}"
+          echo "正在根据 ${APP_VERSION} 构建 iOS 包版本 ${IOS_VERSION}+${IOS_BUILD}"
+          cp pubspec.yaml pubspec.yaml.release
+          trap 'mv pubspec.yaml.release pubspec.yaml' EXIT
+          perl -0pi -e "s/^version:.*/version: ${IOS_VERSION}+${IOS_BUILD}/m" pubspec.yaml
+          flutter build ios --release --no-codesign
+      - name: 创建 IPA
+        run: |
+          mkdir -p build/ios/iphoneos/Payload
+          mv build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload
+          cd build/ios/iphoneos/
+          zip -r VeneraNext-ios.ipa Payload
+      - name: 将版本号写入文件名
+        run: |
+          APP_VERSION=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | tr -d '\r\n')
+          mkdir -p result
+          mv build/ios/iphoneos/VeneraNext-ios.ipa "result/VeneraNext-ios-$APP_VERSION.ipa"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ios_build
+          path: result/
+          if-no-files-found: error
+          retention-days: 7
 
   Build_Linux_x64:
     if: ${{ inputs.build_linux_x64 }}
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
@@ -214,45 +334,55 @@ jobs:
           channel: 'stable'
           flutter-version-file: pubspec.yaml
           architecture: x64
+          cache: true
       - name: 准备 Rust 工具链
         run: python3 .github/scripts/prepare_rust_toolchain.py
-      - run: |
-          flutter pub get --enforce-lockfile
+      - run: flutter pub get --enforce-lockfile
+      - name: 安装 Linux 构建依赖
+        run: |
           sudo apt-get update -y
           sudo apt-get install -y ninja-build libgtk-3-dev webkit2gtk-4.1
+      - name: 安装 Debian 打包工具
+        run: |
           dart pub global activate -s git --git-ref 3777c91b6b1cc0b7c03357c67ca216d4313c3db5 https://github.com/venera-app/flutter_to_debian.git
       - run: python3 debian/build.py x64
-      - run: python3 .github/scripts/build_arch_package.py
-      - run: |
-          sudo rm -rf build/linux/arch/app.tar.gz
-          sudo rm -rf build/linux/arch/pkg
-          sudo rm -rf build/linux/arch/src
-          sudo rm -rf build/linux/arch/PKGBUILD
-          sudo rm -rf build/linux/arch/Dockerfile
+      - name: 构建 Arch 软件包
+        run: python3 .github/scripts/build_arch_package.py
+      - name: 移除 Arch 调试包
+        run: rm -f build/linux/arch/*-debug-*.pkg.tar.zst
       - uses: actions/upload-artifact@v7
         with:
           name: deb_build
           path: build/linux/x64/release/debian
+          if-no-files-found: error
+          retention-days: 7
       - uses: actions/upload-artifact@v7
         with:
           name: arch_build
-          path: build/linux/arch/
+          path: build/linux/arch/*.pkg.tar.zst
+          if-no-files-found: error
+          retention-days: 7
 
   Build_Linux_ARM64:
     if: ${{ inputs.build_linux_arm64 }}
     runs-on: ubuntu-22.04-arm
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
-          channel: 'master'
+          channel: 'stable'
           flutter-version-file: pubspec.yaml
+          cache: true
       - name: 准备 Rust 工具链
         run: python3 .github/scripts/prepare_rust_toolchain.py
-      - run: |
-          flutter pub get --enforce-lockfile
+      - run: flutter pub get --enforce-lockfile
+      - name: 安装 Linux 构建依赖
+        run: |
           sudo apt-get update -y
           sudo apt-get install -y ninja-build libgtk-3-dev webkit2gtk-4.1
+      - name: 安装 Debian 打包工具
+        run: |
           dart pub global activate -s git --git-ref 3777c91b6b1cc0b7c03357c67ca216d4313c3db5 https://github.com/venera-app/flutter_to_debian.git
       - name: 修补字体
         run: dart run patch/font.dart
@@ -261,3 +391,5 @@ jobs:
         with:
           name: deb_arm64_build
           path: build/linux/x64/release/debian
+          if-no-files-found: error
+          retention-days: 7

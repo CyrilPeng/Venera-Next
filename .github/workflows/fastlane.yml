@@ -11,9 +11,17 @@ on:
       paths:
         - 'fastlane/**'
 
+concurrency:
+  group: fastlane-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   go:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: 校验 Fastlane Supply 元数据

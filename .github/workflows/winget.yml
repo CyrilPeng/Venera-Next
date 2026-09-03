@@ -13,12 +13,17 @@ on:
         default: false
         type: boolean
 
+concurrency:
+  group: winget-${{ inputs.tag }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
   manifest:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: 解析发布元数据
@@ -58,6 +63,7 @@ jobs:
           name: winget_manifest
           path: build/winget/manifests
           if-no-files-found: error
+          retention-days: 14
       - name: 提交 Winget PR
         if: ${{ inputs.submit_pr }}
         env:

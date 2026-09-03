@@ -1,11 +1,10 @@
 import os
 from pathlib import Path
+import hashlib
 import re
 import shutil
 import subprocess
-
-import httpx
-
+from urllib.request import Request, urlopen
 
 ROOT = Path.cwd()
 WINDOWS_BUILD_DIR = ROOT / "build" / "windows"
@@ -16,7 +15,11 @@ ISS_PATH = ROOT / "windows" / "build.iss"
 CHINESE_TRANSLATION_PATH = ROOT / "windows" / "ChineseSimplified.isl"
 CHINESE_TRANSLATION_URL = (
     "https://cdn.jsdelivr.net/gh/kira-96/"
-    "Inno-Setup-Chinese-Simplified-Translation@latest/ChineseSimplified.isl"
+    "Inno-Setup-Chinese-Simplified-Translation@"
+    "1ace6a485174288c7416d0979cc2db1f0990f95a/ChineseSimplified.isl"
+)
+CHINESE_TRANSLATION_SHA256 = (
+    "bc76580176cba3303fb4b0edfd4c65557cc57dad09d1efc3f8d16557c0f2d694"
 )
 
 
@@ -81,9 +84,24 @@ def ensure_chinese_translation():
     if CHINESE_TRANSLATION_PATH.exists():
         return
 
-    response = httpx.get(CHINESE_TRANSLATION_URL)
-    response.raise_for_status()
-    CHINESE_TRANSLATION_PATH.write_bytes(response.content)
+    request = Request(
+        CHINESE_TRANSLATION_URL,
+        headers={"User-Agent": "VeneraNext-Windows-Build"},
+    )
+    with urlopen(request, timeout=30) as response:
+        content = response.read()
+    if not content:
+        raise RuntimeError("Downloaded ChineseSimplified.isl is empty")
+    digest = hashlib.sha256(content).hexdigest()
+    if digest != CHINESE_TRANSLATION_SHA256:
+        raise RuntimeError(
+            "Downloaded ChineseSimplified.isl failed SHA256 verification: "
+            f"{digest}"
+        )
+
+    temporary_path = CHINESE_TRANSLATION_PATH.with_suffix(".isl.tmp")
+    temporary_path.write_bytes(content)
+    temporary_path.replace(CHINESE_TRANSLATION_PATH)
 
 
 def build_installer(version):
