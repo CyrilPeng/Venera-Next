@@ -67,6 +67,8 @@ git diff --check
 
 CI runs `flutter test --coverage`, publishes line coverage in the workflow summary, and uploads `coverage/lcov.info`. Coverage is currently a visible baseline rather than a repository-wide hard threshold. Changes to critical behavior still require focused tests.
 
+Pull requests also run `PR 平台冒烟构建`. Changes to Flutter code, native platform directories, dependencies, build scripts, or workflows run Android Debug and Windows Debug builds; documentation-only changes skip those platform jobs. Dart formatting is checked only for Dart files changed by the current PR, so historical formatting differences do not block new contributions. The `main` branch requires a pull request with `代码分析 / analyze` passing, and direct force-pushes or branch deletion are disabled.
+
 For release-related changes, also run:
 
 ```bash
@@ -144,7 +146,7 @@ python .github/scripts/release_version.py --check --tag v1.2.3
 
 `pubspec.yaml`, the release tag, and the version section in `CHANGELOG.md` must match `release.json`. `alt_store.json` is not a version source. After a stable GitHub Release succeeds, workflows update it from release assets; RC prereleases do not update the AltStore source.
 
-The `代码分析` workflow runs version and structure checks, Python script tests, `flutter analyze`, the full Dart test suite, and coverage reporting. Before starting multi-platform builds, `完整构建` reuses the same quality workflow. Manual platform builds and tag releases both reuse `.github/workflows/build.yml` so their build definitions cannot drift apart.
+The `代码分析` workflow runs version and structure checks, Python script tests, formatting checks for changed Dart files, `flutter analyze`, the full Dart test suite, and coverage reporting. `PR 平台冒烟构建` verifies Android and Windows compilation when the changed files can affect platform builds. Before starting multi-platform builds, `完整构建` reuses the same quality workflow. Manual platform builds and tag releases both reuse `.github/workflows/build.yml` so their build definitions cannot drift apart.
 
 Android release workflows require these repository Secrets:
 

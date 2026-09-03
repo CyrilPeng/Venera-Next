@@ -15,6 +15,7 @@
 - 提升构建可复现性：固定 Windows 构建环境和中文安装器翻译版本及校验值、统一 Linux ARM64 Flutter stable 通道、移除未使用的 Windows 构建依赖，并将 Dependabot 的同类更新分组。
 - 更新 `html`、`yaml`、`archive`、`path_provider` 和 `mime` 依赖，纳入解析器安全修复、归档处理优化及平台路径与 MIME 类型表更新。
 - 将 GitHub Actions 的 `actions/setup-java` 更新到 v6，使用最新的 Java 环境配置实现并兼容 Node.js 24 运行时。
+- 完善 PR 质量门禁：增加修改 Dart 文件的格式检查和按改动范围执行的 Android/Windows 冒烟构建，并为平台构建提供统一的门禁结果。
 
 ## v1.15.0
 

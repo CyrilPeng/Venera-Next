@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
@@ -29,6 +31,22 @@ jobs:
       - run: python3 .github/scripts/check_structure_imports.py
       - run: python3 -m unittest discover -s .github/scripts/tests -p "test_*.py"
       - run: flutter pub get --enforce-lockfile
+      - name: 检查本次修改的 Dart 格式
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          if [[ -n "${BASE_SHA:-}" ]]; then
+            diff_range="${BASE_SHA}...HEAD"
+          else
+            diff_range="HEAD^...HEAD"
+          fi
+          mapfile -t dart_files < <(git diff --diff-filter=ACMRTUXB --name-only "$diff_range" -- '*.dart')
+          if (( ${#dart_files[@]} == 0 )); then
+            echo "本次没有修改 Dart 文件。"
+            exit 0
+          fi
+          dart format --output=none --set-exit-if-changed "${dart_files[@]}"
       - run: flutter analyze --no-fatal-infos --fatal-warnings
       - run: flutter test --coverage
       - name: 汇总 Dart 覆盖率

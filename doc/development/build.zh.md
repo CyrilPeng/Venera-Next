@@ -67,6 +67,8 @@ git diff --check
 
 CI 会使用 `flutter test --coverage` 生成 `coverage/lcov.info`，在工作流摘要中显示行覆盖率，并上传报告产物。当前覆盖率用于建立可见基线，尚未设置统一硬阈值；涉及关键业务路径的改动仍必须增加针对性测试。
 
+PR 还会运行 `PR 平台冒烟构建`。当改动涉及 Flutter 代码、原生平台目录、依赖、构建脚本或工作流时，它会执行 Android Debug 和 Windows Debug 构建；文档等不影响构建的改动会跳过这两个平台任务。Dart 格式检查只针对本次修改的 Dart 文件执行，避免历史格式差异阻塞后续贡献。`main` 分支要求 PR 通过 `代码分析 / analyze`，并禁止直接强推或删除分支。
+
 涉及发布版本时再运行：
 
 ```bash
@@ -144,7 +146,7 @@ python .github/scripts/release_version.py --check --tag v1.2.3
 
 `pubspec.yaml`、发布 tag 和 `CHANGELOG.md` 版本章节必须与 `release.json` 一致。`alt_store.json` 不是版本源；正式版 GitHub Release 成功后，工作流会根据发布资产更新它，RC 预发布不会更新 AltStore 源。
 
-`代码分析` 工作流会运行版本与结构检查、Python 脚本测试、`flutter analyze`、完整 Dart 测试及覆盖率汇总。`完整构建` 在开始多平台构建前会复用同一质量工作流；手动平台构建和 tag 发布则共同复用 `.github/workflows/build.yml`，避免两套构建定义产生差异。
+`代码分析` 工作流会运行版本与结构检查、Python 脚本测试、修改文件的 Dart 格式检查、`flutter analyze`、完整 Dart 测试及覆盖率汇总。`PR 平台冒烟构建` 会按改动范围验证 Android 和 Windows 编译。`完整构建` 在开始多平台构建前会复用同一质量工作流；手动平台构建和 tag 发布则共同复用 `.github/workflows/build.yml`，避免两套构建定义产生差异。
 
 Android release 工作流需要以下仓库 Secrets：
 
