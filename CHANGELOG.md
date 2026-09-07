@@ -14,8 +14,9 @@
 - 修复长期失败的自动化：移除依赖 Node.js 20 的第三方 Dart Analyzer 与 Issue 检查 Action；Issue 检查默认关闭且仅提供人工复核建议，AltStore 更新仅在稳定版后运行，并在无法创建 PR 时明确失败。
 - 提升构建可复现性：固定 Windows 构建环境和中文安装器翻译版本及校验值、统一 Linux ARM64 Flutter stable 通道、移除未使用的 Windows 构建依赖，并将 Dependabot 的同类更新分组。
 - 更新 `html`、`yaml`、`archive`、`path_provider` 和 `mime` 依赖，纳入解析器安全修复、归档处理优化及平台路径与 MIME 类型表更新。
+- 将 `flutter_reorderable_grid_view` 更新到 `5.7.0`，纳入拖拽与滚动修复，并补充收藏及页面配置排序、持久化、边缘自动滚动和窗口尺寸变化的回归测试。
 - 将 GitHub Actions 的 `actions/setup-java` 更新到 v6，使用最新的 Java 环境配置实现并兼容 Node.js 24 运行时。
-- 完善 PR 质量门禁：增加修改 Dart 文件的格式检查和按改动范围执行的 Android/Windows 冒烟构建，并为平台构建提供统一的门禁结果。
+- 完善 PR 质量门禁：增加修改 Dart 文件的格式检查、依赖漏洞审查和按改动范围执行的 Android/Windows 冒烟构建，并为平台构建提供统一的门禁结果。
 
 ## v1.15.0
 

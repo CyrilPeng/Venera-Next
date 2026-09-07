@@ -66,6 +66,23 @@ jobs:
             android/**/*.gradle*
             android/gradle/wrapper/gradle-wrapper.properties
             pubspec.lock
+      - name: 准备临时 Android Debug 签名
+        run: |
+          keytool -genkeypair -noprompt \
+            -keystore android/debug.keystore \
+            -storepass android \
+            -keypass android \
+            -alias androiddebugkey \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000
+          printf '%s\n' \
+            'storePassword=android' \
+            'keyPassword=android' \
+            'keyAlias=androiddebugkey' \
+            'storeFile=../debug.keystore' \
+            > android/key.properties
       - run: flutter pub get --enforce-lockfile
       - name: 构建 Android Debug APK
         run: flutter build apk --debug --target-platform android-arm64

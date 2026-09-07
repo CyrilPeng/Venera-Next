@@ -66,7 +66,6 @@ Long series can be read continuously across chapters in waterfall mode. Frequent
 - **Persistent chapter order preference**: ascending and descending chapter order is controlled by a segmented selector and stored as a global preference.
 - **Reading-time statistics**: foreground reading time is accumulated per comic, with total time, the most-read title, and duration rankings available from History.
 - **Local and remote libraries**: local comics can be imported from directories, CBZ, ZIP, or 7Z archives, PDF files, and image-based EPUB files. A WebDAV comic library can read regular image directories and extracted VeneraNext CBZ directories online.
-- **Reader and sources remain separate**: this repository maintains the reader itself and does not bundle, recommend, or maintain source-site configurations.
 
 ### Comic channels
 
