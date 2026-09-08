@@ -4,7 +4,7 @@ import 'package:image/image.dart' as image;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:venera_next/features/local_comics/import_export/document_import.dart';
 import 'package:venera_next/features/local_comics/local.dart';
-import 'package:venera_next/foundation/file_interaction.dart';
+import 'package:venera_next/foundation/file_system.dart';
 
 const double _pdfRenderScale = 3;
 const int _pdfRenderMaxEdge = 3000;
@@ -14,6 +14,15 @@ class PdfRenderSize {
 
   final int width;
   final int height;
+}
+
+class PdfPageRenderException implements Exception {
+  const PdfPageRenderException(this.page);
+
+  final int page;
+
+  @override
+  String toString() => 'Failed to render PDF page $page';
 }
 
 PdfRenderSize calculatePdfRenderSize(
@@ -36,8 +45,12 @@ PdfRenderSize calculatePdfRenderSize(
 abstract final class PdfComicImporter {
   static Future<LocalComic> import(
     File file, {
+    String? title,
     DocumentImportProgress? onProgress,
+    DocumentImportCancellation? cancellation,
+    Future<void> Function(LocalComic comic)? registerComic,
   }) async {
+    cancellation?.throwIfCancelled();
     await pdfrxFlutterInitialize();
     late final PdfDocument document;
     try {
@@ -47,16 +60,36 @@ abstract final class PdfComicImporter {
         'Password-protected PDF files are not supported',
       );
     }
+    return importDocument(
+      document,
+      title: title ?? file.basenameWithoutExt,
+      onProgress: onProgress,
+      cancellation: cancellation,
+      registerComic: registerComic,
+    );
+  }
+
+  /// Takes ownership of [document] and closes it even if conversion fails.
+  /// The output is committed only after [registerComic] succeeds, when supplied.
+  static Future<LocalComic> importDocument(
+    PdfDocument document, {
+    required String title,
+    DocumentImportProgress? onProgress,
+    DocumentImportCancellation? cancellation,
+    Future<void> Function(LocalComic comic)? registerComic,
+  }) async {
     DocumentImportSession? session;
     try {
+      cancellation?.throwIfCancelled();
       if (document.pages.isEmpty) {
         throw const FormatException('PDF contains no pages');
       }
 
-      final title = file.basenameWithoutExt;
       session = DocumentImportSession.start(title);
       final total = document.pages.length;
+      onProgress?.call(0, total);
       for (var i = 0; i < total; i++) {
+        cancellation?.throwIfCancelled();
         final page = document.pages[i];
         final size = calculatePdfRenderSize(page.width, page.height);
         final rendered = await page.render(
@@ -64,9 +97,11 @@ abstract final class PdfComicImporter {
           fullHeight: size.height.toDouble(),
         );
         if (rendered == null) {
-          throw Exception('Failed to render PDF page ${i + 1}');
+          cancellation?.throwIfCancelled();
+          throw PdfPageRenderException(i + 1);
         }
         try {
+          cancellation?.throwIfCancelled();
           final decoded = image.Image.fromBytes(
             width: rendered.width,
             height: rendered.height,
@@ -89,7 +124,14 @@ abstract final class PdfComicImporter {
         onProgress?.call(i + 1, total);
       }
 
-      return session.finish(author: '', tags: const [], cover: 'cover.jpg');
+      cancellation?.throwIfCancelled();
+      final comic = session.finish(
+        author: '',
+        tags: const [],
+        cover: 'cover.jpg',
+      );
+      await registerComic?.call(comic);
+      return comic;
     } catch (_) {
       await session?.abort();
       rethrow;

@@ -151,6 +151,95 @@ Future<FileSelectResult?> selectFile({required List<String> ext}) async {
   }
 }
 
+Future<List<FileSelection>> selectFiles({
+  required List<String> ext,
+  List<String>? uniformTypeIdentifiers,
+}) async {
+  IO._isSelectingFiles = true;
+  try {
+    if (App.isAndroid) {
+      final mimeType = ext.length == 1
+          ? FileType.fromExtension(ext.single).mime
+          : '*/*';
+      final files = await FileSelection._channel.invokeListMethod<dynamic>(
+        'selectFiles',
+        mimeType == 'application/octet-stream' ? '*/*' : mimeType,
+      );
+      return [
+        for (final file in files ?? const [])
+          FileSelection.androidDocument(
+            uri: file['uri'] as String,
+            name: file['name'] as String,
+          ),
+      ];
+    }
+    final files = await file_selector.openFiles(
+      acceptedTypeGroups: [
+        file_selector.XTypeGroup(
+          label: 'files',
+          extensions: App.isIOS || App.isMacOS ? null : ext,
+          uniformTypeIdentifiers: uniformTypeIdentifiers,
+        ),
+      ],
+    );
+    return files.map((file) => FileSelection(file.path)).toList();
+  } finally {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      IO._isSelectingFiles = false;
+    });
+  }
+}
+
+/// A selection that keeps its file alive until explicitly released.
+/// Android document URIs are copied only when the consumer needs the file.
+class FileSelection {
+  FileSelection(String path)
+    : identifier = path,
+      name = File(path).name,
+      _isDocument = false,
+      _file = FileSelectResult(path);
+
+  FileSelection.androidDocument({required String uri, required this.name})
+    : identifier = uri,
+      _isDocument = true;
+
+  static const _channel = MethodChannel('venera/select_file');
+
+  final String identifier;
+  final String name;
+  final bool _isDocument;
+  FileSelectResult? _file;
+  String? _temporaryPath;
+  bool _disposed = false;
+
+  Future<File> prepare() async {
+    if (_disposed) throw StateError('File selection has been released');
+    if (_file == null && _isDocument) {
+      final result = await _channel.invokeMapMethod<String, dynamic>(
+        'prepareFile',
+        identifier,
+      );
+      if (result == null) throw StateError('Failed to prepare selected file');
+      final path = result['path'] as String;
+      if (result['temporary'] == true) _temporaryPath = path;
+      _file = FileSelectResult(path);
+    }
+    return File(_file!.path);
+  }
+
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    try {
+      if (_temporaryPath != null) {
+        await _channel.invokeMethod<void>('releaseFile', _temporaryPath);
+      }
+    } finally {
+      _file = null;
+    }
+  }
+}
+
 Future<String?> selectDirectory() async {
   IO._isSelectingFiles = true;
   try {

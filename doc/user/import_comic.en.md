@@ -105,6 +105,11 @@ import; the original document is not streamed by the reader.
 
 ### PDF
 
+- Open `Local` -> `Import` -> `PDF comic files` to select one or more PDFs. Each file becomes a separate comic, and the destination favorites folder is selected once for the batch.
+- Files are converted sequentially. Progress includes the current file, its position in the batch, and its page count, so there is no need to select each volume separately.
+- Each successful comic is saved immediately. Duplicate selections and titles already in the local library are skipped. A damaged, password-protected, or unreadable file does not stop the remaining files; individual results are shown at the end.
+- Cancelling stops subsequent imports and cleans up the unfinished comic after the current file preparation or page operation finishes safely. Successfully imported comics are kept, and unprocessed files are not counted as failures.
+- Keep the app running during import. Continuing after the app exits or resuming across restarts is not supported. On Android, files that cannot be accessed directly are copied to temporary storage one at a time and released after processing.
 - Each PDF page is rendered to JPEG in order, and the first page is also used as the cover.
 - The result is a flat comic without chapters. Its title defaults to the PDF file name.
 - Pages are rendered at roughly three times their PDF point size with a 3000-pixel longest-edge limit to balance clarity, memory, and storage use.

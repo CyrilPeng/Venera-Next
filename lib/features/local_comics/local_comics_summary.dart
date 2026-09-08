@@ -208,7 +208,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
       "Select a directory which contains the comic directories.".tl,
       "Select an archive file (cbz, zip, 7z, cb7)".tl,
       "Select a directory which contains multiple archive files.".tl,
-      "Select a PDF comic file. Pages are imported as local images.".tl,
+      "Select PDF comic files. Pages are imported as local images.".tl,
       "Select an image-based EPUB file. Text-based EPUB files are not supported."
           .tl,
       "Select an EhViewer database and a download folder.".tl,
@@ -219,7 +219,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
       "Multiple Comics".tl,
       "An archive file".tl,
       "Multiple archive files".tl,
-      "A PDF comic file".tl,
+      "PDF comic files".tl,
       "An image EPUB file".tl,
       "EhViewer downloads".tl,
       "Restore local downloads".tl,
@@ -336,6 +336,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
       7 => await importer.localDownloads(),
       int() => true,
     };
+    if (!mounted) return;
     if (result) {
       context.pop();
     } else {

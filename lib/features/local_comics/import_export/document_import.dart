@@ -5,6 +5,22 @@ import 'package:venera_next/foundation/file_interaction.dart';
 
 typedef DocumentImportProgress = void Function(int current, int total);
 
+class DocumentImportCancellation {
+  bool _cancelled = false;
+
+  bool get isCancelled => _cancelled;
+
+  void cancel() => _cancelled = true;
+
+  void throwIfCancelled() {
+    if (_cancelled) throw const DocumentImportCancelled();
+  }
+}
+
+class DocumentImportCancelled implements Exception {
+  const DocumentImportCancelled();
+}
+
 class DocumentImportSession {
   DocumentImportSession._({required this.title, required this.directory});
 

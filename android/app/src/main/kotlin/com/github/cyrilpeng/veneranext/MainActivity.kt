@@ -30,6 +30,7 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugins.GeneratedPluginRegistrant
 import java.io.File
 import java.io.FileOutputStream
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 class MainActivity : FlutterFragmentActivity() {
@@ -167,8 +168,13 @@ class MainActivity : FlutterFragmentActivity() {
 
         val selectFileChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "venera/select_file")
         selectFileChannel.setMethodCallHandler { req, res ->
-            val mimeType = req.arguments<String>()
-            openFile(res, mimeType!!)
+            when (req.method) {
+                "selectFile" -> openFile(res, req.arguments<String>() ?: "*/*")
+                "selectFiles" -> openFiles(res, req.arguments<String>() ?: "*/*")
+                "prepareFile" -> prepareSelectedFile(res, req.arguments<String>()!!)
+                "releaseFile" -> releaseSelectedFile(res, req.arguments<String>()!!)
+                else -> res.notImplemented()
+            }
         }
 
         val shareTextChannel = EventChannel(flutterEngine.dartExecutor.binaryMessenger, "venera/text_share")
@@ -343,6 +349,82 @@ class MainActivity : FlutterFragmentActivity() {
             })
             storagePermissionRequest = null
         }
+    }
+
+    private fun openFiles(result: MethodChannel.Result, mimeType: String) {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = mimeType
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        startContractForResult(ActivityResultContracts.StartActivityForResult(), intent) { activityResult ->
+            if (activityResult.resultCode != Activity.RESULT_OK) {
+                result.success(emptyList<Any>())
+                return@startContractForResult
+            }
+            val data = activityResult.data
+            val clip = data?.clipData
+            val uris = if (clip != null) {
+                (0 until clip.itemCount).map { clip.getItemAt(it).uri }
+            } else {
+                listOfNotNull(data?.data)
+            }
+            try {
+                result.success(uris.distinct().map { uri ->
+                    val document = DocumentFile.fromSingleUri(this, uri)
+                    mapOf("uri" to uri.toString(), "name" to (document?.name ?: "document.pdf"))
+                })
+            } catch (e: Exception) {
+                result.error("selection_error", e.message, null)
+            }
+        }
+    }
+
+    private fun prepareSelectedFile(result: MethodChannel.Result, source: String) {
+        Thread {
+            var temporaryDirectory: File? = null
+            try {
+                val uri = Uri.parse(source)
+                if (hasStoragePermission()) {
+                    val path = try { FileUtils.getPathFromUri(this, uri) } catch (_: Exception) { null }
+                    if (path != null && File(path).isFile && File(path).canRead()) {
+                        runOnUiThread { result.success(mapOf("path" to path, "temporary" to false)) }
+                        return@Thread
+                    }
+                }
+                val document = DocumentFile.fromSingleUri(this, uri)
+                    ?: throw IllegalArgumentException("Cannot open selected document")
+                val name = File(document.name ?: "document.pdf").name
+                val directory = File(cacheDir, "selected_files/${UUID.randomUUID()}")
+                temporaryDirectory = directory
+                check(directory.mkdirs()) { "Cannot create temporary directory" }
+                val file = File(directory, name)
+                require(file.canonicalFile.parentFile == directory.canonicalFile) { "Invalid document name" }
+                val input = contentResolver.openInputStream(uri)
+                    ?: throw IllegalArgumentException("Cannot read selected document")
+                input.use { sourceStream ->
+                    FileOutputStream(file).use { output -> sourceStream.copyTo(output) }
+                }
+                runOnUiThread { result.success(mapOf("path" to file.absolutePath, "temporary" to true)) }
+            } catch (e: Exception) {
+                temporaryDirectory?.deleteRecursively()
+                runOnUiThread { result.error("prepare_error", e.message, null) }
+            }
+        }.start()
+    }
+
+    private fun releaseSelectedFile(result: MethodChannel.Result, path: String) {
+        Thread {
+            try {
+                val root = File(cacheDir, "selected_files").canonicalFile
+                val directory = File(path).canonicalFile.parentFile
+                require(directory != null && directory.parentFile == root) { "Invalid temporary file path" }
+                directory.deleteRecursively()
+                runOnUiThread { result.success(null) }
+            } catch (e: Exception) {
+                runOnUiThread { result.error("release_error", e.message, null) }
+            }
+        }.start()
     }
 
     private fun openFile(result: MethodChannel.Result, mimeType: String) {

@@ -206,6 +206,7 @@ Comic.cbz
 
 ### PDF and image-based EPUB import
 
+- Select multiple PDFs to import them sequentially with file and page progress. Cancelling keeps completed comics; duplicate files and existing titles are skipped, and a single-file failure does not stop the batch.
 - PDF pages are rendered to local JPEG images during import, with the first page used as the cover. The result is a flat comic without chapters.
 - Image-based EPUB files are read in spine order. Title, author, cover, and meaningful chapter navigation are preserved when possible, while raster images are copied without recompression.
 - Text-based EPUB files, directly rendered SVG pages, encrypted PDF files, and MOBI/AZW/AZW3 are not supported.

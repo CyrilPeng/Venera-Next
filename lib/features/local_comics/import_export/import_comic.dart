@@ -15,6 +15,8 @@ import 'package:venera_next/foundation/translations.dart';
 import 'cbz.dart';
 import 'epub_import.dart';
 import 'pdf_import.dart';
+import 'pdf_import_batch.dart';
+import 'pdf_import_dialog.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 
 class ImportComic {
@@ -69,36 +71,35 @@ class ImportComic {
   }
 
   Future<bool> pdf() async {
-    final selected = await selectFile(ext: ['pdf']);
-    if (selected == null) return false;
-    final controller = showLoadingDialog(
-      App.rootContext,
-      allowCancel: false,
-      withProgress: true,
-      message: 'Importing PDF'.tl,
-    );
-    LocalComic? comic;
     try {
-      comic = await PdfComicImporter.import(
-        File(selected.path),
-        onProgress: (current, total) {
-          controller
-            ..setProgress(current / total)
-            ..setMessage(
-              'Importing PDF (@a/@b)'.tlParams({'a': current, 'b': total}),
-            );
-        },
+      final selected = await selectFiles(
+        ext: ['pdf'],
+        uniformTypeIdentifiers: ['com.adobe.pdf'],
       );
+      if (selected.isEmpty) return false;
+      final result = await showPdfImportDialog(
+        context: App.rootContext,
+        files: selected,
+        batch: PdfImportBatch(
+          containsTitle: (title) => LocalManager().findByName(title) != null,
+          importFile: (file, title, onProgress, cancellation) async {
+            await PdfComicImporter.import(
+              file,
+              title: title,
+              onProgress: onProgress,
+              cancellation: cancellation,
+              registerComic: (comic) =>
+                  registerComic(comic, folder: selectedFolder),
+            );
+          },
+        ),
+      );
+      return (result?.count(PdfImportStatus.imported) ?? 0) > 0;
     } catch (e, s) {
       Log.error('Import PDF', e.toString(), s);
       App.rootContext.showMessage(message: _documentImportError(e));
-    } finally {
-      controller.close();
+      return false;
     }
-    if (comic == null) return false;
-    return registerComics({
-      selectedFolder: [comic],
-    }, false);
   }
 
   Future<bool> epub() async {
@@ -474,23 +475,8 @@ class ImportComic {
       int importedCount = 0;
       for (var folder in importedComics.keys) {
         for (var comic in importedComics[folder]!) {
-          var id = LocalManager().findValidId(ComicType.local);
-          LocalManager().add(comic, id);
+          await registerComic(comic, folder: folder);
           importedCount++;
-          if (folder != null) {
-            LocalFavoritesManager().addComic(
-              folder,
-              FavoriteItem(
-                id: id,
-                name: comic.title,
-                coverPath: comic.cover,
-                author: comic.subtitle,
-                type: comic.comicType,
-                tags: comic.tags,
-                favoriteTime: comic.createdAt,
-              ),
-            );
-          }
         }
       }
       App.rootContext.showMessage(
@@ -502,5 +488,38 @@ class ImportComic {
       return false;
     }
     return true;
+  }
+
+  Future<void> registerComic(LocalComic comic, {String? folder}) async {
+    final manager = LocalManager();
+    final id = manager.findValidId(ComicType.local);
+    final favorites = folder == null ? null : LocalFavoritesManager();
+    if (folder != null && !favorites!.existsFolder(folder)) {
+      throw const FormatException('Favorite folder no longer exists');
+    }
+    await manager.add(comic, id);
+    try {
+      if (folder != null) {
+        favorites!.addComic(
+          folder,
+          FavoriteItem(
+            id: id,
+            name: comic.title,
+            coverPath: comic.cover,
+            author: comic.subtitle,
+            type: comic.comicType,
+            tags: comic.tags,
+            favoriteTime: comic.createdAt,
+          ),
+        );
+      }
+    } catch (_) {
+      manager.remove(id, comic.comicType);
+      if (folder != null &&
+          favorites!.find(id, comic.comicType).contains(folder)) {
+        favorites.deleteComicWithId(folder, id, comic.comicType);
+      }
+      rethrow;
+    }
   }
 }
