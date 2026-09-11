@@ -70,6 +70,33 @@ Do not submit winget manifests for `-rc` prerelease versions. winget should foll
 
 A merged PR is not immediately visible to clients; the winget publishing pipeline must also finish. After the PR reports `Publish-Pipeline-Succeeded`, maintainers should verify the public source with `winget search --id CyrilPeng.VeneraNext --exact`.
 
+## Startup Validation And Diagnostics
+
+Silent installation and upgrades do not launch the app automatically. Interactive setup still offers the option to run the app after installation. Launching the app again restores the existing window and exits the new process with code `0`. Real window or Flutter initialization failures still return a nonzero exit code.
+
+Native startup logging begins before Dart initialization:
+
+```text
+%LOCALAPPDATA%\com.github.cyrilpeng\VeneraNext\logs\windows-startup.log
+```
+
+The log records UTC timestamps, process IDs, startup stages, and applicable Windows error codes. It does not record comic content, accounts, or command-line arguments. Each log is limited to 128 KiB, with at most one rotated `windows-startup.previous.log`. An unwritable directory or a locked log does not prevent startup. Loader failures before the application entry point, such as missing DLLs, may occur before a log can be created; also inspect the Windows error message in those cases.
+
+`Validation-Executable-Error` means that the post-installation execution check needs investigation, not necessarily that installation failed. Check the installation result, exit code, and startup diagnostics first. Do not add real failure codes to `InstallerSuccessCodes` to bypass validation.
+
+Windows PR CI runs native regression tests and checks first-frame rendering, continued execution for more than 10 seconds, repeated launches and minimized-window restoration, and failure diagnostics when Flutter resources are missing. Release builds also install silently into a temporary directory, verify that setup does not launch the app, and run the same execution checks. Logs are retained as short-lived Actions artifacts.
+
+Run the native regression tests locally without loading Dart or everyday comic data:
+
+```powershell
+flutter build windows --debug
+cmake -S windows/tests -B build/windows/startup_tests -A x64
+cmake --build build/windows/startup_tests --config Debug
+ctest --test-dir build/windows/startup_tests -C Debug --output-on-failure
+```
+
+`.github/scripts/test_windows_startup.ps1` installs or runs the real app. It only permits disposable GitHub Actions Windows runners and refuses to continue when an existing installation, process, or app data is detected. Do not bypass this restriction in your everyday account. Do not replace published installers when investigating older versions; ship the fix in a new patch release.
+
 ## Notes
 
 - Do not casually change the `AppId` in `windows/build.iss`; it affects how winget identifies installed apps.

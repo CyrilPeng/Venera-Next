@@ -104,6 +104,25 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - name: 构建 Windows Debug 应用
         run: flutter build windows --debug
+      - name: 编译并运行 Windows 原生启动测试
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          cmake -S windows/tests -B build/windows/startup_tests -A x64
+          cmake --build build/windows/startup_tests --config Debug
+          ctest --test-dir build/windows/startup_tests -C Debug --output-on-failure
+      - name: 验证 Windows 首次启动、重复启动和失败诊断
+        shell: pwsh
+        timeout-minutes: 5
+        run: ./.github/scripts/test_windows_startup.ps1 -Application build/windows/x64/runner/Debug/VeneraNext.exe
+      - name: 上传 Windows 启动诊断
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-pr-startup-logs
+          path: build/windows/startup-smoke/**/*.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   platform_gate:
     name: 平台冒烟构建门禁

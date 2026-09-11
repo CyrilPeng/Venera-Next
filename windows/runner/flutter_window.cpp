@@ -1,5 +1,6 @@
 #pragma comment(lib, "winhttp.lib")
 #include "flutter_window.h"
+#include "startup_log.h"
 #include <optional>
 #include <winhttp.h>
 #include <Windows.h>
@@ -75,13 +76,21 @@ bool FlutterWindow::OnCreate() {
 
   // The size here must match the window dimensions to avoid unnecessary surface
   // creation / destruction in the startup path.
+  LogWindowsStartup("Creating Flutter engine and view");
   flutter_controller_ = std::make_unique<flutter::FlutterViewController>(
       frame.right - frame.left, frame.bottom - frame.top, project_);
   // Ensure that basic setup of the controller was successful.
-  if (!flutter_controller_->engine() || !flutter_controller_->view()) {
+  if (!flutter_controller_->engine()) {
+    LogWindowsStartup("Flutter engine initialization failed");
     return false;
   }
+  if (!flutter_controller_->view()) {
+    LogWindowsStartup("Flutter view initialization failed");
+    return false;
+  }
+  LogWindowsStartup("Registering native plugins");
   RegisterPlugins(flutter_controller_->engine());
+  LogWindowsStartup("Native plugins registered");
 
   const flutter::MethodChannel<> channel(
       flutter_controller_->engine()->messenger(), "venera/method_channel",
@@ -180,6 +189,7 @@ bool FlutterWindow::OnCreate() {
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
+    LogWindowsStartup("First Flutter frame rendered");
     // this->Show();
   });
 

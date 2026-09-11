@@ -4,6 +4,7 @@
 #include <flutter_windows.h>
 
 #include "resource.h"
+#include "startup_log.h"
 
 namespace {
 
@@ -100,7 +101,10 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     window_class.hbrBackground = 0;
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
-    RegisterClass(&window_class);
+    if (!RegisterClass(&window_class)) {
+      LogWindowsStartup("Window class registration failed", GetLastError());
+      return nullptr;
+    }
     class_registered_ = true;
   }
   return kWindowClassName;
@@ -120,33 +124,30 @@ Win32Window::~Win32Window() {
   Destroy();
 }
 
-bool Win32Window::Create(const std::wstring& title,
-                         const Point& origin,
-                         const Size& size) {
+Win32Window::CreateResult Win32Window::Create(const std::wstring& title,
+                                             const Point& origin,
+                                             const Size& size) {
   HWND hwnd = ::FindWindow(kWindowClassName, title.c_str());
   if (hwnd) {
-    WINDOWPLACEMENT place = { sizeof(WINDOWPLACEMENT) };
-    GetWindowPlacement(hwnd, &place);
-    SetForegroundWindow(hwnd);
-    switch (place.showCmd) {
-    case SW_SHOWMAXIMIZED:
-        ShowWindow(hwnd, SW_SHOWMAXIMIZED);
-        break;
-    case SW_SHOWMINIMIZED:
-        ShowWindow(hwnd, SW_RESTORE);
-        break;
-    default:
-        ShowWindow(hwnd, SW_NORMAL);
-        break;
+    LogWindowsStartup("Existing instance found");
+    ShowWindow(hwnd, IsIconic(hwnd) ? SW_RESTORE : SW_SHOW);
+    if (!SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0,
+                      SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE)) {
+      LogWindowsStartup("Existing window activation failed", GetLastError());
     }
-
-    SetWindowPos(0, HWND_TOP, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE);
-    return false;
+    // Windows may deny foreground focus; that does not require a second app.
+    if (!SetForegroundWindow(hwnd)) {
+      LogWindowsStartup("Foreground focus was not granted");
+    }
+    return CreateResult::kExistingInstance;
   }
   Destroy();
 
   const wchar_t* window_class =
       WindowClassRegistrar::GetInstance()->GetWindowClass();
+  if (!window_class) {
+    return CreateResult::kFailed;
+  }
 
   const POINT target_point = {static_cast<LONG>(origin.x),
                               static_cast<LONG>(origin.y)};
@@ -161,12 +162,18 @@ bool Win32Window::Create(const std::wstring& title,
       nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   if (!window) {
-    return false;
+    LogWindowsStartup("Native window creation failed", GetLastError());
+    return CreateResult::kFailed;
   }
 
+  LogWindowsStartup("Native window created");
   UpdateTheme(window);
 
-  return OnCreate();
+  if (!OnCreate()) {
+    LogWindowsStartup("Window initialization failed");
+    return CreateResult::kFailed;
+  }
+  return CreateResult::kCreated;
 }
 
 bool Win32Window::Show() {

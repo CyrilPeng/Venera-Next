@@ -68,6 +68,33 @@ wingetcreate update CyrilPeng.VeneraNext `
 
 PR 合并不代表客户端会立即看到新版本；还需要等待 winget 发布流水线完成。维护者应在 PR 出现 `Publish-Pipeline-Succeeded` 后，再通过 `winget search --id CyrilPeng.VeneraNext --exact` 核对公共源版本。
 
+## 启动验证与诊断
+
+Windows 安装器在静默安装或升级时不会自动启动应用，交互安装仍可勾选安装后运行。重复启动时，新的进程会恢复已有窗口并以 `0` 退出，不再将单实例交接误报为启动失败；真正的窗口或 Flutter 初始化失败仍返回非零退出码。
+
+原生启动日志在 Dart 初始化之前开始记录，位置为：
+
+```text
+%LOCALAPPDATA%\com.github.cyrilpeng\VeneraNext\logs\windows-startup.log
+```
+
+日志记录 UTC 时间、进程 ID、启动阶段和适用的 Windows 错误码，不记录漫画内容、账号或命令行参数。单个日志上限为 128 KiB，轮转后最多保留一份 `windows-startup.previous.log`。日志目录不可写或文件被占用时，不会阻止应用启动。加载程序在进入应用入口前因缺少 DLL 等原因失败时，可能还来不及生成该日志，需要结合 Windows 错误提示检查。
+
+`Validation-Executable-Error` 表示安装后的运行检查需要进一步核实，不等同于安装失败。应先检查 Winget 验证日志中的安装结果、退出码和启动日志，不要将真实失败码加入 `InstallerSuccessCodes` 来绕过验证。
+
+PR 的 Windows CI 会运行原生回归测试，并检查首次渲染、持续运行超过 10 秒、重复启动与最小化恢复、缺少 Flutter 资源时的失败诊断。发布构建还会在临时目录静默安装，确认没有自动启动，并执行相同的运行检查。日志以短期 Actions 工件保留。
+
+不加载 Dart 或日常漫画数据的原生回归测试可在本地运行：
+
+```powershell
+flutter build windows --debug
+cmake -S windows/tests -B build/windows/startup_tests -A x64
+cmake --build build/windows/startup_tests --config Debug
+ctest --test-dir build/windows/startup_tests -C Debug --output-on-failure
+```
+
+`.github/scripts/test_windows_startup.ps1` 会真实安装或运行应用，只允许在一次性的 GitHub Actions Windows 运行器中执行，并在检测到已有安装、进程或应用数据时拒绝继续。不要在日常使用的账户中绕过这个限制。排查旧版本时，不覆盖已发布安装包；修复应随新的补丁版本发布。
+
 ## 注意事项
 
 - `windows/build.iss` 中的 `AppId` 不要随意改动，它会影响 winget 对已安装应用的识别。

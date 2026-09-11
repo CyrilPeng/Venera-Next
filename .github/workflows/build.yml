@@ -203,6 +203,28 @@ jobs:
             $archive.Dispose()
           }
           $artifacts | Sort-Object Name | ForEach-Object { "$($_.Name) $($_.Length) bytes" }
+      - name: 编译并运行 Windows 原生启动测试
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          cmake -S windows/tests -B build/windows/startup_tests -A x64
+          cmake --build build/windows/startup_tests --config Release
+          ctest --test-dir build/windows/startup_tests -C Release --output-on-failure
+      - name: 验证 Windows 静默安装与实际启动
+        shell: pwsh
+        timeout-minutes: 7
+        run: |
+          $installers = @(Get-ChildItem -Path build/windows -File -Filter 'VeneraNext-*-windows-installer.exe')
+          if ($installers.Count -ne 1) { throw '静默安装测试需要恰好一个安装包。' }
+          ./.github/scripts/test_windows_startup.ps1 -Installer $installers[0].FullName
+      - name: 上传 Windows 启动诊断
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-release-startup-logs
+          path: build/windows/startup-smoke/**/*.log
+          if-no-files-found: ignore
+          retention-days: 7
       - uses: actions/upload-artifact@v7
         with:
           name: windows_build
