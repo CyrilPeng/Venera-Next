@@ -838,10 +838,10 @@ packages:
     dependency: transitive
     description:
       name: pdfrx_engine
-      sha256: "8043527245e4c35a2a3b7df8494c066b9efa97fe031945951e46b378318b3d5f"
+      sha256: "4399846809a75aed03881d8b8a19e5e70addd4b46b22fd94a0effd8859258f07"
       url: "https://pub.dev"
     source: hosted
-    version: "0.4.5"
+    version: "0.4.7"
   petitparser:
     dependency: transitive
     description:

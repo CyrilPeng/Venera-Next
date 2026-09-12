@@ -79,6 +79,10 @@ class ReaderImagesState extends State<ReaderImages> {
           reader.type,
           reader.chapter,
         );
+        if (!mounted) return;
+        reader.images = images;
+        await reader.prepareReadingMode();
+        if (!mounted) return;
         setState(() {
           reader.images = images;
           reader.isLoading = false;
@@ -90,6 +94,7 @@ class ReaderImagesState extends State<ReaderImages> {
           });
         });
       } catch (e) {
+        if (!mounted) return;
         setState(() {
           error = e.toString();
           reader.isLoading = false;
@@ -102,6 +107,7 @@ class ReaderImagesState extends State<ReaderImages> {
         reader.widget.cid,
         cp,
       );
+      if (!mounted) return;
       if (res.error) {
         setState(() {
           error = res.errorMessage;
@@ -109,6 +115,9 @@ class ReaderImagesState extends State<ReaderImages> {
           inProgress = false;
         });
       } else {
+        reader.images = res.data;
+        await reader.prepareReadingMode();
+        if (!mounted) return;
         setState(() {
           reader.images = res.data;
           reader.isLoading = false;
@@ -121,7 +130,7 @@ class ReaderImagesState extends State<ReaderImages> {
         });
       }
     }
-    context.readerScaffold.update();
+    if (mounted) context.readerScaffold.update();
   }
 
   @override
@@ -941,6 +950,10 @@ class ContinuousModeState extends State<_ContinuousMode>
     if (segment != null && chapterChanged) {
       reader.chapter = imageRef.chapter;
       reader.images = segment.images;
+      // Wait until the scroll/layout callback has finished before updating UI.
+      Future.microtask(() {
+        if (mounted) reader.detectLayout();
+      });
     }
     if (chapterChanged || reader.page != imageRef.page) {
       reader.setPage(imageRef.page);

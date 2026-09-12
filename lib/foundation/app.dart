@@ -32,18 +32,28 @@ class _App {
   bool isInitialized = false;
 
   Locale get locale {
-    Locale deviceLocale = PlatformDispatcher.instance.locale;
-    if (deviceLocale.languageCode == "zh" &&
-        deviceLocale.scriptCode == "Hant") {
-      deviceLocale = const Locale("zh", "TW");
+    final selected = switch (appdata.settings['language']) {
+      'zh-CN' => const Locale('zh', 'CN'),
+      'zh-TW' => const Locale('zh', 'TW'),
+      'en-US' => const Locale('en'),
+      _ => null,
+    };
+    if (selected != null) return selected;
+
+    for (final locale in PlatformDispatcher.instance.locales) {
+      if (locale.languageCode == 'zh') {
+        // Script takes priority over region: zh-Hans-US is simplified Chinese.
+        // Older locale identifiers may only provide a region, such as zh-HK.
+        final traditional = switch (locale.scriptCode) {
+          'Hant' => true,
+          'Hans' => false,
+          _ => const ['TW', 'HK', 'MO'].contains(locale.countryCode),
+        };
+        return Locale('zh', traditional ? 'TW' : 'CN');
+      }
+      if (locale.languageCode == 'en') return const Locale('en');
     }
-    if (appdata.settings['language'] != 'system') {
-      return Locale(
-        appdata.settings['language'].split('-')[0],
-        appdata.settings['language'].split('-')[1],
-      );
-    }
-    return deviceLocale;
+    return const Locale('en');
   }
 
   late String dataPath;

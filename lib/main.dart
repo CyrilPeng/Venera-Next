@@ -89,6 +89,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   OverlayEntry? hideContentOverlay;
 
   @override
+  void didChangeLocales(List<Locale>? locales) {
+    if (mounted && appdata.settings['language'] == 'system') {
+      forceRebuild();
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       WebDavLibrarySource.checkForAutomaticSync();
@@ -250,18 +257,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             GlobalMaterialLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          locale: () {
-            var lang = appdata.settings['language'];
-            if (lang == 'system') {
-              return null;
-            }
-            return switch (lang) {
-              'zh-CN' => const Locale('zh', 'CN'),
-              'zh-TW' => const Locale('zh', 'TW'),
-              'en-US' => const Locale('en'),
-              _ => null,
-            };
-          }(),
+          locale: App.locale,
           supportedLocales: const [
             Locale('zh', 'CN'),
             Locale('zh', 'TW'),
