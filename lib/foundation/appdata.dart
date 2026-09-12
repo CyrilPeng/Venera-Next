@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/comic_layout.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/init.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -355,6 +356,10 @@ class Settings with ChangeNotifier {
     'defaultSearchTarget': null,
     'autoPageTurningInterval': 5, // in seconds
     'readerMode': 'waterfallTopToBottom', // values of [ReaderMode]
+    'autoReaderMode': false,
+    'pagedReaderMode': 'galleryRightToLeft',
+    'longStripReaderMode': 'continuousTopToBottom',
+    'comicLayoutDetections': <String, dynamic>{},
     'readerScreenPicNumberForLandscape': 1, // 1 - 5
     'readerScreenPicNumberForPortrait': 1, // 1 - 5
     'enableTapToTurnPages': true,
@@ -437,6 +442,18 @@ class Settings with ChangeNotifier {
     String sourceKey,
     bool enabled,
   ) {
+    // Freeze the legacy mode's current meaning before changing the switch for
+    // other options. Toggling brightness/gesture overrides must not change mode.
+    final values = _data['comicSpecificSettings']["$comicId@$sourceKey"];
+    if (values is Map &&
+        values.containsKey('readerMode') &&
+        !values.containsKey('readerModeOverride')) {
+      setComicReaderModeOverride(
+        comicId,
+        sourceKey,
+        comicReaderModeOverride(comicId, sourceKey),
+      );
+    }
     setReaderSetting(comicId, sourceKey, "enabled", enabled);
   }
 
@@ -449,6 +466,7 @@ class Settings with ChangeNotifier {
   }
 
   dynamic getReaderSetting(String comicId, String sourceKey, String key) {
+    if (key == 'readerMode') return resolveReaderMode(comicId, sourceKey);
     if (isComicSpecificSettingsEnabled(comicId, sourceKey)) {
       var comicValue =
           _data['comicSpecificSettings']["$comicId@$sourceKey"]?[key];
@@ -457,6 +475,68 @@ class Settings with ChangeNotifier {
       }
     }
     return getDeviceReaderSetting(key);
+  }
+
+  /// A mode override is independent of the switch for other comic settings.
+  /// Legacy per-comic modes remain effective until explicitly changed.
+  String? comicReaderModeOverride(String comicId, String sourceKey) {
+    final values = _data['comicSpecificSettings']["$comicId@$sourceKey"];
+    if (values is Map && values.containsKey('readerModeOverride')) {
+      final mode = values['readerModeOverride'];
+      return mode == 'default' ? null : mode as String?;
+    }
+    if (isComicSpecificSettingsEnabled(comicId, sourceKey)) {
+      return values?['readerMode'] as String?;
+    }
+    return null;
+  }
+
+  void setComicReaderModeOverride(
+    String comicId,
+    String sourceKey,
+    String? mode,
+  ) {
+    setReaderSetting(
+      comicId,
+      sourceKey,
+      'readerModeOverride',
+      mode ?? 'default',
+    );
+  }
+
+  ComicLayout comicLayout(String comicId, String sourceKey) {
+    final record = _data['comicLayoutDetections']["$comicId@$sourceKey"];
+    if (record is! Map || record['version'] != ComicLayoutDetection.version) {
+      return ComicLayout.unknown;
+    }
+    return ComicLayout.fromKey(record['layout']);
+  }
+
+  void setComicLayout(
+    String comicId,
+    String sourceKey,
+    ComicLayoutDetection detection,
+  ) {
+    _data['comicLayoutDetections']["$comicId@$sourceKey"] = {
+      'layout': detection.layout.name,
+      'samples': detection.sampleCount,
+      'version': ComicLayoutDetection.version,
+    };
+    notifyListeners();
+  }
+
+  String resolveReaderMode(String comicId, String sourceKey) {
+    final override = comicReaderModeOverride(comicId, sourceKey);
+    if (override != null) return override;
+    if (getDeviceReaderSetting('autoReaderMode') == true) {
+      final key = switch (comicLayout(comicId, sourceKey)) {
+        ComicLayout.paged => 'pagedReaderMode',
+        ComicLayout.longStrip => 'longStripReaderMode',
+        ComicLayout.unknown => 'readerMode',
+      };
+      return getDeviceReaderSetting(key) as String;
+    }
+    return getDeviceReaderSetting('readerMode') as String;
   }
 
   void setActiveReaderSetting(

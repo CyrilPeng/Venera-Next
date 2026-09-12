@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memory_info/flutter_memory_info.dart';
+import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/reader/gesture.dart';
 import 'package:venera_next/features/reader/images.dart';
+import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/features/reader/volume.dart';
@@ -16,7 +18,9 @@ import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
+import 'package:venera_next/foundation/comic_layout.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/translations.dart';
 import 'package:window_manager/window_manager.dart';
 
 extension ReaderContext on BuildContext {
@@ -77,7 +81,7 @@ class ReaderState extends State<Reader>
         WidgetsBindingObserver {
   @override
   void update() {
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   /// The maximum page number for images only (excluding chapter comments page).
@@ -148,6 +152,93 @@ class ReaderState extends State<Reader>
 
   late final ReadingSessionTracker _readingSession;
   bool _readerContentReady = false;
+  bool _hasPresentedImages = false;
+  ComicLayoutProbe? _layoutProbe;
+  final _sampledChapters = <String>{};
+
+  bool get isDetectingLayout => _layoutProbe != null;
+
+  bool get _shouldDetectLayout =>
+      appdata.settings.getDeviceReaderSetting('autoReaderMode') == true &&
+      appdata.settings.comicReaderModeOverride(cid, type.sourceKey) == null &&
+      appdata.settings.comicLayout(cid, type.sourceKey) == ComicLayout.unknown;
+
+  /// Give first-open detection a small budget, then let reading proceed.
+  Future<void> prepareReadingMode() async {
+    if (_shouldDetectLayout && !_sampledChapters.contains(eid)) {
+      final detection = detectLayout();
+      if (!_hasPresentedImages) {
+        await Future.any([
+          detection,
+          Future<void>.delayed(const Duration(milliseconds: 700)),
+        ]);
+      }
+    }
+    _hasPresentedImages = true;
+  }
+
+  Future<void> detectLayout({bool force = false}) async {
+    if (!mounted || images == null || _layoutProbe != null) return;
+    if (!force && (!_shouldDetectLayout || _sampledChapters.contains(eid))) {
+      return;
+    }
+    _sampledChapters.add(eid);
+    final probe = ComicLayoutProbe();
+    _layoutProbe = probe;
+    update();
+    final detection = await probe.detect(
+      images: images!,
+      sourceKey: type.comicSource?.key,
+      comicId: cid,
+      chapterId: eid,
+    );
+    if (!mounted || _layoutProbe != probe) return;
+    _layoutProbe = null;
+    appdata.settings.setComicLayout(cid, type.sourceKey, detection);
+    unawaited(appdata.saveData(false));
+    update();
+    if (detection.layout == ComicLayout.unknown) return;
+    final next = ReaderMode.fromKey(
+      appdata.settings.resolveReaderMode(cid, type.sourceKey),
+    );
+    if (next == mode) return;
+    if (!_hasPresentedImages) {
+      applyReadingMode(next);
+    } else if (appdata.settings.getDeviceReaderSetting('autoReaderMode') ==
+            true &&
+        appdata.settings.comicReaderModeOverride(cid, type.sourceKey) == null) {
+      showToast(
+        context: context,
+        message:
+            (detection.layout == ComicLayout.longStrip
+                    ? 'Long-strip comic detected'
+                    : 'Paged comic detected')
+                .tl,
+        seconds: 8,
+        trailing: TextButton(
+          onPressed: () {
+            if (!mounted) return;
+            applyReadingMode(
+              ReaderMode.fromKey(
+                appdata.settings.resolveReaderMode(cid, type.sourceKey),
+              ),
+            );
+          },
+          child: Text('Apply reading preference'.tl),
+        ),
+      );
+    }
+  }
+
+  void applyReadingMode(ReaderMode next) {
+    if (!mounted || mode == next) return;
+    resetPageAnimation();
+    mode = next;
+    // Convert the old display page to its source image before rebuilding.
+    _checkImagesPerPageChange();
+    imageViewController = null;
+    update();
+  }
 
   @override
   bool isLoading = false;
@@ -175,7 +266,6 @@ class ReaderState extends State<Reader>
         page = 1;
       }
     }
-    // mode = ReaderMode.fromKey(appdata.settings['readerMode']);
     mode = ReaderMode.fromKey(
       appdata.settings.getReaderSetting(cid, type.sourceKey, 'readerMode'),
     );
@@ -250,6 +340,8 @@ class ReaderState extends State<Reader>
 
   @override
   void dispose() {
+    _layoutProbe?.cancel();
+    _layoutProbe = null;
     WidgetsBinding.instance.removeObserver(this);
     if (isFullscreen) {
       fullscreen();
@@ -563,7 +655,7 @@ abstract mixin class ReaderImagePerPageHandler {
     }
 
     // Clamp to valid range (1 to maxPage)
-    newPage = newPage.clamp(1, maxPage);
+    newPage = newPage.clamp(1, maxPage < 1 ? 1 : maxPage);
 
     // If we were on the comments page, stay on the comments page
     if (_wasOnCommentsPage) {
@@ -677,8 +769,16 @@ abstract mixin class ReaderLocation {
   }
 
   int _animationCount = 0;
+  int _pageAnimationGeneration = 0;
+
+  void resetPageAnimation() {
+    _pageAnimationGeneration++;
+    _animationCount = 0;
+    _pendingPage = null;
+  }
 
   bool toPage(int page) {
+    if (imageViewController == null || isLoading) return false;
     if (_validatePage(page)) {
       if (page == this.page && page != 1 && page != totalPages) {
         return false;
@@ -687,8 +787,10 @@ abstract mixin class ReaderLocation {
       if (hasAnimation) {
         _pendingPage = page;
         _animationCount++;
+        final generation = _pageAnimationGeneration;
         update();
         imageViewController!.animateToPage(page).then((_) {
+          if (generation != _pageAnimationGeneration) return;
           _animationCount--;
           if (_pendingPage == page) {
             _pendingPage = null;
