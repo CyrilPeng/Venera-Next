@@ -139,6 +139,7 @@ Download `VeneraNext-xxx.dmg` from GitHub Releases.
    - For a network comic extension, open comic source management and add an extension compatible with the JavaScript API.
    - For online NAS or WebDAV reading, open `Settings` -> `App` -> `WebDAV Comic Library` and configure the remote directory.
 3. Select a reading mode under `Settings` -> `Reader`. Waterfall is recommended for long series; Gallery provides traditional page turning; Continuous scrolls within the current chapter only.
+   Enable **Choose reading mode automatically** to choose separate preferences for paged comics, long-strip comics, and unknown layouts. Recognition uses only the proportions of multiple source images and works with online and local comics. In the reader, **Reading mode for this comic** can override this preference or return to **Follow default**.
 4. Check the chapter order on the comic details page. Switch between ascending and descending order when necessary; the preference is remembered globally.
 5. For landscape double-page spreads, enable split spreads in vertical continuous or waterfall mode. Enable reverse split order when the halves appear in the wrong reading order.
 6. Add frequently read titles to favorites or update tracking. Download chapters first when the network is unreliable or when reading offline.

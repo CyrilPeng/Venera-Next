@@ -83,7 +83,6 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
 
   void addDragListener() async {
     if (!mounted) return;
-    var readerMode = context.reader.mode;
 
     // 横向阅读的时候, 如果纵向滑就触发收藏, 纵向阅读的时候, 如果横向滑动就触发收藏
     if (appdata.settings['quickCollectImage'] == 'Swipe') {
@@ -91,7 +90,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
         double distance = 0;
         _imageFavoriteDragListener = ReaderDragListener(
           onMove: (offset) {
-            switch (readerMode) {
+            switch (context.reader.mode) {
               case ReaderMode.continuousTopToBottom:
               case ReaderMode.waterfallTopToBottom:
               case ReaderMode.galleryTopToBottom:
@@ -872,15 +871,22 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
       ReaderSettings(
         comicId: context.reader.cid,
         comicSource: context.reader.type.sourceKey,
+        currentReaderMode: () => context.reader.mode.key,
+        isDetectingLayout: () => context.reader.isDetectingLayout,
+        onDetectLayout: () => context.reader.detectLayout(force: true),
         onChanged: (key) {
           if (key == "readerMode") {
-            context.reader.mode = ReaderMode.fromKey(
-              appdata.settings.getReaderSetting(
-                context.reader.cid,
-                context.reader.type.sourceKey,
-                key,
+            context.reader.applyReadingMode(
+              ReaderMode.fromKey(
+                appdata.settings.getReaderSetting(
+                  context.reader.cid,
+                  context.reader.type.sourceKey,
+                  key,
+                ),
               ),
             );
+            addDragListener();
+            context.reader.detectLayout();
           }
           if (key == "enableTurnPageByVolumeKey") {
             if (appdata.settings.getReaderSetting(
