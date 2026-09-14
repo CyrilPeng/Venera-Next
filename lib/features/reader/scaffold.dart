@@ -16,6 +16,7 @@ import 'package:venera_next/features/reader/chapters.dart';
 import 'package:venera_next/features/reader/eink_refresh.dart';
 import 'package:venera_next/features/reader/gesture.dart';
 import 'package:venera_next/features/reader/images.dart';
+import 'package:venera_next/features/reader/orientation.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -39,7 +40,8 @@ class ReaderScaffold extends StatefulWidget {
   State<ReaderScaffold> createState() => ReaderScaffoldState();
 }
 
-class ReaderScaffoldState extends State<ReaderScaffold> {
+class ReaderScaffoldState extends State<ReaderScaffold>
+    with ReaderOrientationState {
   bool _isOpen = false;
 
   bool _brightnessPanelOpen = false;
@@ -125,9 +127,6 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
         sliderFocus.nextFocus();
       }
     });
-    if (rotation != null) {
-      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
-    }
     super.initState();
     Future.delayed(const Duration(milliseconds: 200), addDragListener);
   }
@@ -164,8 +163,6 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
     });
     _applySystemUiMode();
   }
-
-  bool? rotation;
 
   void update() {
     setState(() {});
@@ -535,39 +532,12 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
         Tooltip(
           message: "Screen Rotation".tl,
           child: IconButton(
-            icon: () {
-              if (rotation == null) {
-                return const Icon(Icons.screen_rotation);
-              } else if (rotation == false) {
-                return const Icon(Icons.screen_lock_portrait);
-              } else {
-                return const Icon(Icons.screen_lock_landscape);
-              }
-            }.call(),
-            onPressed: () {
-              if (rotation == null) {
-                setState(() {
-                  rotation = false;
-                });
-                SystemChrome.setPreferredOrientations([
-                  DeviceOrientation.portraitUp,
-                  DeviceOrientation.portraitDown,
-                ]);
-              } else if (rotation == false) {
-                setState(() {
-                  rotation = true;
-                });
-                SystemChrome.setPreferredOrientations([
-                  DeviceOrientation.landscapeLeft,
-                  DeviceOrientation.landscapeRight,
-                ]);
-              } else {
-                setState(() {
-                  rotation = null;
-                });
-                SystemChrome.setPreferredOrientations(DeviceOrientation.values);
-              }
-            },
+            icon: Icon(switch (readerOrientation) {
+              ReaderOrientation.system => Icons.screen_rotation,
+              ReaderOrientation.portrait => Icons.screen_lock_portrait,
+              ReaderOrientation.landscape => Icons.screen_lock_landscape,
+            }),
+            onPressed: cycleReaderOrientation,
           ),
         ),
       Tooltip(
