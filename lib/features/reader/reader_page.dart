@@ -11,6 +11,7 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/reader/gesture.dart';
 import 'package:venera_next/features/reader/images.dart';
 import 'package:venera_next/features/reader/layout_detection.dart';
+import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/features/reader/volume.dart';
@@ -158,9 +159,12 @@ class ReaderState extends State<Reader>
 
   bool get isDetectingLayout => _layoutProbe != null;
 
-  bool get _shouldDetectLayout =>
+  bool get _usesAutomaticReadingMode =>
       appdata.settings.getDeviceReaderSetting('autoReaderMode') == true &&
-      appdata.settings.comicReaderModeOverride(cid, type.sourceKey) == null &&
+      appdata.settings.comicReaderModeOverride(cid, type.sourceKey) == null;
+
+  bool get _shouldDetectLayout =>
+      _usesAutomaticReadingMode &&
       appdata.settings.comicLayout(cid, type.sourceKey) == ComicLayout.unknown;
 
   /// Give first-open detection a small budget, then let reading proceed.
@@ -197,37 +201,20 @@ class ReaderState extends State<Reader>
     appdata.settings.setComicLayout(cid, type.sourceKey, detection);
     unawaited(appdata.saveData(false));
     update();
-    if (detection.layout == ComicLayout.unknown) return;
+    if (detection.layout == ComicLayout.unknown || !_usesAutomaticReadingMode) {
+      return;
+    }
     final next = ReaderMode.fromKey(
       appdata.settings.resolveReaderMode(cid, type.sourceKey),
     );
     if (next == mode) return;
-    if (!_hasPresentedImages) {
-      applyReadingMode(next);
-    } else if (appdata.settings.getDeviceReaderSetting('autoReaderMode') ==
-            true &&
-        appdata.settings.comicReaderModeOverride(cid, type.sourceKey) == null) {
-      showToast(
-        context: context,
-        message:
-            (detection.layout == ComicLayout.longStrip
-                    ? 'Long-strip comic detected'
-                    : 'Paged comic detected')
-                .tl,
-        seconds: 8,
-        trailing: TextButton(
-          onPressed: () {
-            if (!mounted) return;
-            applyReadingMode(
-              ReaderMode.fromKey(
-                appdata.settings.resolveReaderMode(cid, type.sourceKey),
-              ),
-            );
-          },
-          child: Text('Apply reading preference'.tl),
-        ),
-      );
-    }
+    applyReadingMode(next);
+    showToast(
+      context: context,
+      message: 'Switched to @mode'.tlParams({
+        'mode': readerModeLabels[next.key] ?? next.key,
+      }),
+    );
   }
 
   void applyReadingMode(ReaderMode next) {

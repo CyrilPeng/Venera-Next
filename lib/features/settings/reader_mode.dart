@@ -1,17 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
 import 'package:venera_next/foundation/translations.dart';
-
-Map<String, String> get readerModeLabels => {
-  'galleryRightToLeft': 'Page turn (Right to Left)'.tl,
-  'galleryLeftToRight': 'Page turn (Left to Right)'.tl,
-  'galleryTopToBottom': 'Page turn (Top to Bottom)'.tl,
-  'continuousTopToBottom': 'Continuous (Top to Bottom)'.tl,
-  'waterfallTopToBottom': 'Waterfall (Top to Bottom)'.tl,
-  'continuousLeftToRight': 'Continuous (Left to Right)'.tl,
-  'continuousRightToLeft': 'Continuous (Right to Left)'.tl,
-};
 
 class ReaderModeSettings extends StatefulWidget {
   const ReaderModeSettings({
@@ -213,27 +204,10 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
                       ? 'Your choice for this comic takes priority.'
                       : layout == ComicLayout.unknown
                       ? 'Not enough consistent image proportions to identify the layout.'
-                      : current != effective
-                      ? 'Apply the preference now, or it will be used the next time you open this comic.'
                       : 'Recognized from image proportions. Your reading preference applies automatically.')
                   .tl,
             ),
           ),
-          if (override == null && current != effective)
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TextButton.icon(
-                  onPressed: () {
-                    widget.onChanged?.call();
-                    _refresh();
-                  },
-                  icon: const Icon(Icons.swap_horiz),
-                  label: Text('Apply reading preference'.tl),
-                ),
-              ),
-            ),
           if (widget.onDetect != null)
             Align(
               alignment: AlignmentDirectional.centerStart,

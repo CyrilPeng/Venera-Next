@@ -1,6 +1,5 @@
 {
   "zh_CN": {
-    "Apply the preference now, or it will be used the next time you open this comic.": "可立即应用阅读偏好，也会在下次打开本书时自动使用。",
     "Customize other settings for this comic": "为本书单独设置其他选项",
     "Reset all settings for this comic": "重置本书的全部设置",
     "Page turn (Right to Left)": "翻页（从右到左）",
@@ -23,11 +22,8 @@
     "Your choice for this comic takes priority.": "优先使用你为本书指定的阅读模式。",
     "Not enough consistent image proportions to identify the layout.": "图片比例尚不足以确定版式，可使用默认模式或为本书手动选择。",
     "Recognized from image proportions. Your reading preference applies automatically.": "已根据图片比例识别，按你的版式偏好选择阅读模式。",
-    "Apply reading preference": "应用阅读偏好",
     "Identify again from this chapter": "根据当前章节重新识别",
     "This selection only affects this comic. Change default preferences in Settings → Reader.": "此选择仅影响本书。通用偏好可在「设置 → 阅读器」中修改。",
-    "Long-strip comic detected": "已识别为条漫",
-    "Paged comic detected": "已识别为页漫",
     "Home": "主页",
     "Favorites": "收藏",
     "Explore": "发现",
@@ -681,10 +677,10 @@
     "Fetching image list...": "正在获取图片列表...",
     "Fetching image list (@a/@b)...": "正在获取图片列表（@a/@b）...",
     "Downloading...": "正在下载...",
-    "Webview": "网页浏览"
+    "Webview": "网页浏览",
+    "Switched to @mode": "已切换为@mode"
   },
   "zh_TW": {
-    "Apply the preference now, or it will be used the next time you open this comic.": "可立即套用閱讀偏好，也會在下次開啟本書時自動使用。",
     "Customize other settings for this comic": "為本書單獨設定其他選項",
     "Reset all settings for this comic": "重設本書的全部設定",
     "Page turn (Right to Left)": "翻頁（從右到左）",
@@ -707,11 +703,8 @@
     "Your choice for this comic takes priority.": "優先使用你為本書指定的閱讀模式。",
     "Not enough consistent image proportions to identify the layout.": "圖片比例尚不足以確定版式，可使用預設模式或為本書手動選擇。",
     "Recognized from image proportions. Your reading preference applies automatically.": "已根據圖片比例識別，按你的版式偏好選擇閱讀模式。",
-    "Apply reading preference": "套用閱讀偏好",
     "Identify again from this chapter": "根據目前章節重新識別",
     "This selection only affects this comic. Change default preferences in Settings → Reader.": "此選擇僅影響本書。通用偏好可在「設定 → 閱讀器」中修改。",
-    "Long-strip comic detected": "已識別為條漫",
-    "Paged comic detected": "已識別為頁漫",
     "Home": "首頁",
     "Favorites": "收藏",
     "Explore": "探索",
@@ -1365,6 +1358,7 @@
     "Fetching image list...": "正在取得圖片清單...",
     "Fetching image list (@a/@b)...": "正在取得圖片清單（@a/@b）...",
     "Downloading...": "正在下載...",
-    "Webview": "網頁瀏覽"
+    "Webview": "網頁瀏覽",
+    "Switched to @mode": "已切換為@mode"
   }
 }
