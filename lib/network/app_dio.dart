@@ -282,7 +282,12 @@ class RHttpAdapter implements HttpClientAdapter {
       options.headers['User-Agent'] = "VeneraNext/v${App.version}";
     }
 
+    final nativeCancelToken = cancelFuture == null ? null : rhttp.CancelToken();
+    if (nativeCancelToken != null) {
+      unawaited(cancelFuture!.then((_) => nativeCancelToken.cancel()));
+    }
     var res = await rhttp.Rhttp.request(
+      cancelToken: nativeCancelToken,
       method: rhttp.HttpMethod(options.method),
       url: options.uri.toString(),
       settings: await settings,

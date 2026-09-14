@@ -76,8 +76,12 @@ class ComicSourceParser {
 
   String? _name;
 
-  Future<ComicSource> createAndParse(String js, String fileName) async {
-    if (!fileName.endsWith("js")) {
+  Future<ComicSource> createAndParse(
+    String js,
+    String fileName, {
+    String? expectedKey,
+  }) async {
+    if (!fileName.endsWith(".js")) {
       fileName = "$fileName.js";
     }
     var file = File(FilePath.join(App.dataPath, "comic_source", fileName));
@@ -94,16 +98,26 @@ class ComicSourceParser {
         i++;
       }
     }
-    await file.writeAsString(js);
     try {
-      return await parse(js, file.path);
+      await file.writeAsString(js);
+      return await parse(js, file.path, expectedKey: expectedKey);
     } catch (e) {
-      await file.delete();
+      // Only this new source can have been registered. Keep other sources and
+      // their running requests intact when a downloaded script is invalid.
+      if (_key != null) {
+        JsEngine().runCode('delete ComicSource.sources[${jsonEncode(_key)}];');
+      }
+      await file.deleteIfExists();
       rethrow;
     }
   }
 
-  Future<ComicSource> parse(String js, String filePath) async {
+  Future<ComicSource> parse(
+    String js,
+    String filePath, {
+    String? expectedKey,
+    bool replacing = false,
+  }) async {
     configureComicTypeSourceKeyResolver();
     configureComicSourceJsDataBridge();
     js = js.replaceAll("\r\n", "\n");
@@ -132,6 +146,11 @@ class ComicSourceParser {
         (throw ComicSourceParseException('version is required'));
     var minAppVersion = JsEngine().runCode("this['temp'].minAppVersion");
     var url = JsEngine().runCode("this['temp'].url");
+    if (expectedKey != null && key != expectedKey) {
+      throw ComicSourceParseException(
+        'The downloaded script does not match this source.'.tl,
+      );
+    }
     if (minAppVersion != null) {
       if (compareSemVer(minAppVersion, App.version.split('-').first)) {
         throw ComicSourceParseException(
@@ -142,7 +161,7 @@ class ComicSourceParser {
       }
     }
     for (var source in ComicSource.all()) {
-      if (source.key == key) {
+      if (source.key == key && !(replacing && expectedKey == key)) {
         throw ComicSourceParseException("key($key) already exists");
       }
     }
@@ -193,7 +212,7 @@ class ComicSourceParser {
 
     if (_checkExists("init")) {
       Future.delayed(const Duration(milliseconds: 50), () {
-        JsEngine().runCode("ComicSource.sources.$_key.init()");
+        JsEngine().runCode("ComicSource.sources.$_key?.init?.()");
       });
     }
 
