@@ -398,6 +398,9 @@ class Settings with ChangeNotifier {
     'sni': true,
     'autoAddLanguageFilter': 'none', // none, chinese, english, japanese
     'comicSourceListUrl': "",
+    'comicSourceRepositories': <Map<String, dynamic>>[],
+    'comicSourceOrigins': <String, dynamic>{},
+    'comicSourceRepositoriesMigrated': false,
     'preloadImageCount': 4,
     'followUpdatesFolder': null,
     'initialPage': '0',
