@@ -82,7 +82,17 @@ class _InstallationCanceled implements Exception {}
 /// Session-wide tasks outlive pages. Downloads overlap; the source manager
 /// serializes commits with updates and reloads of the shared JS runtime.
 class SourceInstallations extends ChangeNotifier {
-  SourceInstallations._();
+  SourceInstallations._() : _client = null, _manager = null;
+
+  @visibleForTesting
+  SourceInstallations.forTesting({
+    required Dio client,
+    required ComicSourceManager manager,
+  }) : _client = client,
+       _manager = manager;
+
+  final Dio? _client;
+  final ComicSourceManager? _manager;
   static final instance = SourceInstallations._();
   final _tasks = <SourceInstallTask>[];
   int _nextId = 0;
@@ -227,7 +237,7 @@ class SourceInstallations extends ChangeNotifier {
       if (task.url == null) {
         js = task.fileContents!;
       } else {
-        final response = await AppDio().get<String>(
+        final response = await (_client ?? AppDio()).get<String>(
           task.url!,
           cancelToken: token,
           options: Options(
@@ -286,7 +296,7 @@ class SourceInstallations extends ChangeNotifier {
   ) async {
     try {
       final repository = task.repository;
-      final source = await ComicSourceManager().installScript(
+      final source = await (_manager ?? ComicSourceManager()).installScript(
         js: js,
         fileName: task.fileName,
         expectedKey: task.sourceKey,

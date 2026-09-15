@@ -78,7 +78,12 @@ class SourceUpdateCheck {
 /// Repository preferences live alongside the existing source and app backups.
 /// Catalogs are loaded per operation, so editing a URL never leaves a stale base.
 class SourceRepositories extends ChangeNotifier {
-  SourceRepositories._();
+  SourceRepositories._() : _client = null;
+
+  @visibleForTesting
+  SourceRepositories.forTesting(Dio client) : _client = client;
+
+  final Dio? _client;
   static final instance = SourceRepositories._();
   int revision = 0;
 
@@ -171,7 +176,7 @@ class SourceRepositories extends ChangeNotifier {
 
   Future<List<SourceCatalogEntry>> load(SourceRepository repository) async {
     final base = Uri.parse(normalizeUrl(repository.url));
-    final response = await AppDio().get<String>(
+    final response = await (_client ?? AppDio()).get<String>(
       base.toString(),
       options: Options(
         responseType: ResponseType.plain,
