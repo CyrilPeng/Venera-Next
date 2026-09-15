@@ -159,6 +159,12 @@ class ReaderState extends State<Reader>
 
   bool get isDetectingLayout => _layoutProbe != null;
 
+  @protected
+  ComicLayoutProbe createLayoutProbe() => ComicLayoutProbe();
+
+  @protected
+  Future<void> saveReadingSettings() => appdata.saveData(false);
+
   bool get _usesAutomaticReadingMode =>
       appdata.settings.getDeviceReaderSetting('autoReaderMode') == true &&
       appdata.settings.comicReaderModeOverride(cid, type.sourceKey) == null;
@@ -187,7 +193,7 @@ class ReaderState extends State<Reader>
       return;
     }
     _sampledChapters.add(eid);
-    final probe = ComicLayoutProbe();
+    final probe = createLayoutProbe();
     _layoutProbe = probe;
     update();
     final detection = await probe.detect(
@@ -199,7 +205,7 @@ class ReaderState extends State<Reader>
     if (!mounted || _layoutProbe != probe) return;
     _layoutProbe = null;
     appdata.settings.setComicLayout(cid, type.sourceKey, detection);
-    unawaited(appdata.saveData(false));
+    unawaited(saveReadingSettings());
     update();
     if (detection.layout == ComicLayout.unknown || !_usesAutomaticReadingMode) {
       return;
