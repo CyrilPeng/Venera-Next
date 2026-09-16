@@ -31,16 +31,19 @@ The JSON file should have the following format:
 [
   {
     "name": "Source Name",
-    "url": "https://example.com/source.js",
-    "filename": "Relative path to the source file",
+    "key": "example_source",
+    "fileName": "source.js",
     "version": "1.0.0",
     "description": "A brief description of the source"
   }
 ]
 ```
 
-Only one of `url` and `filename` should be provided.
-The description field is optional.
+`name` and `key` are required, and `key` should match the extension's key. Use `url` or `fileName` to specify the download location; field names are case-sensitive. If both are provided, a nonempty `url` takes priority. `description` is optional.
+
+`url` can be an absolute HTTP(S) URL or a relative path; `fileName` is normally a relative path. Relative references are resolved against the URL used to successfully load the list. For example, `source.js` in `https://example.com/repo/index.json` resolves to `https://example.com/repo/source.js`.
+
+After editing the repository URL in the app, select **Refresh**. The new address is saved only after the list loads and parses successfully; unfinished edits or failed refreshes do not replace the last working configuration. Clearing the field and refreshing removes the repository URL without uninstalling existing extensions. The displayed list remains bound to its loading URL, regardless of later edits to the input field.
 
 ## Create a Comic Source
 

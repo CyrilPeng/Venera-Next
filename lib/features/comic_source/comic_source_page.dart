@@ -19,7 +19,6 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/app_dio.dart';
 import 'package:venera_next/network/cookie_jar.dart';
 import 'package:venera_next/routing/webview.dart';
-import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -30,54 +29,80 @@ import 'source_translation.dart';
 class ComicSourcePage extends StatelessWidget {
   const ComicSourcePage({super.key});
 
-  static Future<void> update(
-    ComicSource source, [
+  @visibleForTesting
+  static Dio Function()? debugCreateDio;
+
+  static Dio _createDio() => debugCreateDio?.call() ?? AppDio();
+
+  static Future<String?> _downloadSource(
+    String url, {
     bool showLoading = true,
-  ]) async {
-    if (!source.url.isURL) {
-      if (showLoading) {
-        App.rootContext.showMessage(message: "Invalid url config".tl);
-        return;
-      } else {
-        throw Exception("Invalid url config");
-      }
-    }
-    ComicSourceManager().remove(source.key);
-    bool cancel = false;
-    LoadingDialogController? controller;
-    if (showLoading) {
-      controller = showLoadingDialog(
-        App.rootContext,
-        onCancel: () => cancel = true,
-        barrierDismissible: false,
-      );
-    }
+    CancelToken? cancelToken,
+  }) async {
+    final uri = _sourceHttpUri(url);
+    final token = cancelToken ?? CancelToken();
+    final dio = _createDio();
+    final loadingContext = showLoading ? App.rootContext : null;
+    final controller = loadingContext == null
+        ? null
+        : showLoadingDialog(
+            loadingContext,
+            onCancel: token.cancel,
+            barrierDismissible: false,
+          );
     try {
-      var res = await AppDio().get<String>(
-        source.url,
+      final res = await dio.get<String>(
+        uri.toString(),
+        cancelToken: token,
         options: Options(
           responseType: ResponseType.plain,
           headers: {"cache-time": "no"},
         ),
       );
-      if (cancel) return;
-      controller?.close();
-      await ComicSourceParser().parse(res.data!, source.filePath);
-      await io.File(source.filePath).writeAsString(res.data!);
+      if (token.isCancelled) return null;
+      return res.data ?? '';
+    } catch (_) {
+      if (token.isCancelled) return null;
+      rethrow;
+    } finally {
+      if (loadingContext?.mounted ?? false) controller?.close();
+      dio.close();
+    }
+  }
+
+  static Future<void> update(
+    ComicSource source, [
+    bool showLoading = true,
+  ]) async {
+    var sourceRemoved = false;
+    try {
+      final content = await _downloadSource(
+        source.url,
+        showLoading: showLoading,
+      );
+      if (content == null) return;
+      ComicSourceManager().remove(source.key);
+      sourceRemoved = true;
+      await ComicSourceParser().parse(content, source.filePath);
+      await io.File(source.filePath).writeAsString(content);
       if (ComicSourceManager().availableUpdates.containsKey(source.key)) {
         ComicSourceManager().availableUpdates.remove(source.key);
       }
-    } catch (e) {
-      if (cancel) return;
+    } catch (e, s) {
+      Log.error("Update comic source", "$e\n$s");
       if (showLoading) {
-        App.rootContext.showMessage(message: e.toString());
+        final context = App.rootNavigatorKey.currentContext;
+        if (context != null && context.mounted) {
+          context.showMessage(message: _sourceErrorMessage(e));
+        }
       } else {
         rethrow;
       }
-    }
-    await ComicSourceManager().reload();
-    if (showLoading) {
-      App.forceRebuild();
+    } finally {
+      if (sourceRemoved) {
+        await ComicSourceManager().reload();
+        if (showLoading) App.forceRebuild();
+      }
     }
   }
 
@@ -133,9 +158,10 @@ class _Body extends StatefulWidget {
 
 class _BodyState extends State<_Body> {
   var url = "";
+  CancelToken? _addSourceToken;
 
   void updateUI() {
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   @override
@@ -146,8 +172,9 @@ class _BodyState extends State<_Body> {
 
   @override
   void dispose() {
-    super.dispose();
+    _addSourceToken?.cancel();
     ComicSourceManager().removeListener(updateUI);
+    super.dispose();
   }
 
   @override
@@ -307,33 +334,34 @@ class _BodyState extends State<_Body> {
   }
 
   Future<void> handleAddSource(String url) async {
-    if (url.isEmpty) {
+    if (url.trim().isEmpty || _addSourceToken != null) {
       return;
     }
-    var splits = url.split("/");
-    splits.removeWhere((element) => element == "");
-    var fileName = splits.last;
-    bool cancel = false;
-    var controller = showLoadingDialog(
-      App.rootContext,
-      onCancel: () => cancel = true,
-      barrierDismissible: false,
-    );
+    final token = CancelToken();
+    _addSourceToken = token;
     try {
-      var res = await AppDio().get<String>(
-        url,
-        options: Options(
-          responseType: ResponseType.plain,
-          headers: {"cache-time": "no"},
-        ),
+      final uri = _sourceHttpUri(url);
+      final fileName = uri.pathSegments.lastOrNull;
+      if (fileName == null ||
+          fileName.isEmpty ||
+          fileName == '.' ||
+          fileName == '..' ||
+          fileName.contains('/') ||
+          fileName.contains('\\')) {
+        throw ComicSourceParseException('Invalid url config'.tl);
+      }
+      final content = await ComicSourcePage._downloadSource(
+        uri.toString(),
+        cancelToken: token,
       );
-      if (cancel) return;
-      controller.close();
-      await addSource(res.data!, fileName);
+      if (content == null || token.isCancelled || !mounted) return;
+      await addSource(content, fileName);
     } catch (e, s) {
-      if (cancel) return;
-      context.showMessage(message: e.toString());
+      if (token.isCancelled || !mounted) return;
+      context.showMessage(message: _sourceErrorMessage(e));
       Log.error("Add comic source", "$e\n$s");
+    } finally {
+      _addSourceToken = null;
     }
   }
 
@@ -356,41 +384,66 @@ class _ComicSourceList extends StatefulWidget {
 }
 
 class _ComicSourceListState extends State<_ComicSourceList> {
-  List? json;
-  bool changed = false;
-  var controller = TextEditingController();
+  ({Uri uri, List<Map<String, dynamic>> entries})? _list;
+  bool _loading = false;
+  int _loadGeneration = 0;
+  CancelToken? _loadToken;
+  final controller = TextEditingController();
 
-  void load() async {
-    if (json != null) {
-      setState(() {
-        json = null;
-      });
-    }
-    if (controller.text.isEmpty) {
-      setState(() {
-        json = [];
-      });
-      return;
-    }
-    var dio = AppDio();
+  Future<void> load() async {
+    final generation = ++_loadGeneration;
+    _loadToken?.cancel();
+    final token = CancelToken();
+    _loadToken = token;
+    final requestedUrl = controller.text.trim();
+    setState(() {
+      _list = null;
+      _loading = true;
+    });
+    Dio? dio;
     try {
-      var res = await dio.get<String>(controller.text);
-      if (res.statusCode != 200) {
-        throw "error";
+      if (requestedUrl.isEmpty) {
+        await _saveListUrl('');
+        return;
       }
-      if (mounted) {
-        setState(() {
-          json = jsonDecode(res.data!);
-        });
+      final uri = _sourceHttpUri(requestedUrl);
+      dio = ComicSourcePage._createDio();
+      final res = await dio.get<String>(
+        uri.toString(),
+        cancelToken: token,
+        options: Options(responseType: ResponseType.plain),
+      );
+      if (!mounted || generation != _loadGeneration || token.isCancelled) {
+        return;
       }
-    } catch (e) {
-      context.showMessage(message: "Network error".tl);
-      if (mounted) {
+      final entries = _sourceListEntries(res.data ?? '');
+      // Keep the response and its request URL together, independent of edits.
+      setState(() {
+        _list = (uri: uri, entries: entries);
+        _loading = false;
+      });
+      await _saveListUrl(uri.toString());
+    } catch (e, s) {
+      if (!mounted || generation != _loadGeneration || token.isCancelled) {
+        return;
+      }
+      context.showMessage(message: _sourceErrorMessage(e));
+      Log.error("Load comic source list", "$e\n$s");
+    } finally {
+      dio?.close();
+      if (mounted && generation == _loadGeneration) {
+        _loadToken = null;
         setState(() {
-          json = [];
+          _loading = false;
         });
       }
     }
+  }
+
+  Future<void> _saveListUrl(String url) async {
+    if (appdata.settings['comicSourceListUrl'] == url) return;
+    appdata.settings['comicSourceListUrl'] = url;
+    await appdata.saveData();
   }
 
   @override
@@ -402,11 +455,10 @@ class _ComicSourceListState extends State<_ComicSourceList> {
 
   @override
   void dispose() {
+    _loadGeneration++;
+    _loadToken?.cancel();
+    controller.dispose();
     super.dispose();
-    if (changed) {
-      appdata.settings['comicSourceListUrl'] = controller.text;
-      appdata.saveData();
-    }
   }
 
   @override
@@ -416,9 +468,10 @@ class _ComicSourceListState extends State<_ComicSourceList> {
 
   Widget buildBody() {
     var currentKey = ComicSource.all().map((e) => e.key).toList();
+    final list = _list;
 
     return ListView.builder(
-      itemCount: (json?.length ?? 1) + 1,
+      itemCount: (_loading ? 1 : list?.entries.length ?? 0) + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
           return Container(
@@ -444,9 +497,7 @@ class _ComicSourceListState extends State<_ComicSourceList> {
                     border: const UnderlineInputBorder(),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
-                  onChanged: (value) {
-                    changed = true;
-                  },
+                  onSubmitted: (_) => load(),
                 ).paddingHorizontal(16).paddingBottom(8),
                 Text(
                   "The URL should point to a 'index.json' file".tl,
@@ -479,7 +530,7 @@ class _ComicSourceListState extends State<_ComicSourceList> {
           );
         }
 
-        if (index == 1 && json == null) {
+        if (_loading) {
           return Center(
             child: CircularProgressIndicator(
               strokeWidth: 2,
@@ -487,47 +538,86 @@ class _ComicSourceListState extends State<_ComicSourceList> {
           );
         }
 
-        index--;
-
-        var key = json![index]["key"];
+        final entry = list!.entries[index - 1];
+        var key = entry["key"];
         var action = currentKey.contains(key)
             ? const Icon(Icons.check, size: 20).paddingRight(8)
             : Button.filled(
                 child: Text("Add".tl),
                 onPressed: () async {
-                  var fileName = json![index]["fileName"];
-                  var url = json![index]["url"];
-                  if (url == null || !(url.toString()).isURL) {
-                    var listUrl = appdata.settings['comicSourceListUrl']
-                        .toString();
-                    if (listUrl
-                        .replaceFirst("https://", "")
-                        .replaceFirst("http://", "")
-                        .contains("/")) {
-                      url =
-                          listUrl.substring(0, listUrl.lastIndexOf("/") + 1) +
-                          fileName;
-                    } else {
-                      url = '$listUrl/$fileName';
+                  try {
+                    final explicitUrl = entry['url'];
+                    final reference =
+                        explicitUrl is String && explicitUrl.trim().isNotEmpty
+                        ? explicitUrl.trim()
+                        : entry['fileName'];
+                    if (reference is! String || reference.trim().isEmpty) {
+                      throw ComicSourceParseException('Invalid url config'.tl);
                     }
+                    final referenceUri = Uri.tryParse(reference.trim());
+                    if (referenceUri == null) {
+                      throw ComicSourceParseException('Invalid url config'.tl);
+                    }
+                    final uri = _sourceHttpUri(
+                      list.uri.resolveUri(referenceUri).toString(),
+                    );
+                    await widget.onAdd(uri.toString());
+                  } catch (e, s) {
+                    if (!mounted) return;
+                    context.showMessage(message: _sourceErrorMessage(e));
+                    Log.error("Add comic source", "$e\n$s");
                   }
-                  await widget.onAdd(url);
-                  setState(() {});
+                  if (mounted) setState(() {});
                 },
               ).fixHeight(32);
 
-        var description = json![index]["version"];
-        if (json![index]["description"] != null) {
-          description = "$description\n${json![index]["description"]}";
-        }
+        final description = [
+          if (entry['version'] != null) entry['version'].toString(),
+          if (entry['description'] != null) entry['description'].toString(),
+        ].join('\n');
 
         return ListTile(
-          title: Text(json![index]["name"]),
+          title: Text(entry["name"]),
           subtitle: Text(description),
           trailing: action,
         );
       },
     );
+  }
+}
+
+Uri _sourceHttpUri(String url) {
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null ||
+      (uri.scheme != 'https' && uri.scheme != 'http') ||
+      uri.host.isEmpty) {
+    throw ComicSourceParseException('Invalid url config'.tl);
+  }
+  return uri;
+}
+
+String _sourceErrorMessage(Object error) {
+  if (error is DioException) return 'Network error'.tl;
+  return error.toString();
+}
+
+List<Map<String, dynamic>> _sourceListEntries(String content) {
+  try {
+    final decoded = jsonDecode(content);
+    if (decoded is! List ||
+        decoded.any(
+          (entry) =>
+              entry is! Map<String, dynamic> ||
+              entry['name'] is! String ||
+              entry['key'] is! String,
+        )) {
+      throw const FormatException('Invalid comic source list');
+    }
+    return List<Map<String, dynamic>>.unmodifiable(
+      decoded.map((entry) => Map<String, dynamic>.unmodifiable(entry)),
+    );
+  } on FormatException {
+    throw ComicSourceParseException('Invalid comic source list'.tl);
   }
 }
 

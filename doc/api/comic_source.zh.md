@@ -16,15 +16,19 @@ VeneraNext 只维护漫画阅读器本体和扩展运行环境。
 [
   {
     "name": "Source Name",
-    "url": "https://example.com/source.js",
-    "filename": "Relative path to the source file",
+    "key": "example_source",
+    "fileName": "source.js",
     "version": "1.0.0",
     "description": "A brief description of the source"
   }
 ]
 ```
 
-`url` 和 `filename` 只应提供其中一个。`description` 可选。
+`name` 和 `key` 必填，`key` 应与扩展中的同名字段一致。使用 `url` 或 `fileName` 指定下载地址，字段名称区分大小写；两者同时提供时，优先使用非空的 `url`。`description` 可选。
+
+`url` 可以是完整的 HTTP(S) 地址，也可以是相对路径；`fileName` 通常是相对路径。相对地址以本次成功加载列表所使用的 URL 为基准解析，例如列表地址为 `https://example.com/repo/index.json` 时，`source.js` 指向 `https://example.com/repo/source.js`。
+
+在应用中修改仓库地址后，点击“刷新”。成功加载并解析列表后才会保存新地址；仅编辑输入框或刷新失败不会覆盖上次成功配置。清空输入框并刷新可以清除仓库地址，不会卸载已安装的扩展。当前列表使用其加载时绑定的地址，不受输入框后续编辑影响。
 
 ## 开发准备
 
