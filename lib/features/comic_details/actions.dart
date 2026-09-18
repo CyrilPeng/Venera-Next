@@ -113,6 +113,17 @@ abstract mixin class ComicPageActions {
     );
   }
 
+  Widget buildReadLaterAction() => ReadLaterButton(
+    comic: _toFavoriteItem(),
+    onChanged: () {
+      isAddToLocalFav = LocalFavoritesManager().isExist(
+        comic.id,
+        comic.comicType,
+      );
+      update();
+    },
+  );
+
   void share() {
     var text = comic.title;
     if (comic.url != null) {

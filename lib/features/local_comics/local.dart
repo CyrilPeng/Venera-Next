@@ -286,6 +286,16 @@ class LocalManager with ChangeNotifier {
         PRIMARY KEY (id, comic_type)
       );
     ''');
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS natural_sort_migration (
+        id TEXT NOT NULL,
+        comic_type INTEGER NOT NULL,
+        history_time INTEGER,
+        old_page INTEGER,
+        new_page INTEGER,
+        PRIMARY KEY (id, comic_type)
+      );
+    ''');
     if (File(FilePath.join(App.dataPath, 'local_path')).existsSync()) {
       path = File(FilePath.join(App.dataPath, 'local_path')).readAsStringSync();
       if (!directory.existsSync()) {
@@ -326,6 +336,13 @@ class LocalManager with ChangeNotifier {
 
   Future<void> add(LocalComic comic, [String? id]) async {
     var old = find(id ?? comic.id, comic.comicType);
+    if (old == null) {
+      // Newly imported books already use natural ordering.
+      _db.execute(
+        'INSERT OR REPLACE INTO natural_sort_migration (id, comic_type) VALUES (?, ?)',
+        [id ?? comic.id, comic.comicType.value],
+      );
+    }
     var downloaded = comic.downloadedChapters;
     if (old != null) {
       downloaded.addAll(old.downloadedChapters);
@@ -349,6 +366,10 @@ class LocalManager with ChangeNotifier {
   }
 
   void remove(String id, ComicType comicType, {bool notify = true}) {
+    _db.execute(
+      'DELETE FROM natural_sort_migration WHERE id = ? AND comic_type = ?',
+      [id, comicType.value],
+    );
     _db.execute('DELETE FROM comics WHERE id = ? AND comic_type = ?;', [
       id,
       comicType.value,
@@ -458,6 +479,50 @@ class LocalManager with ChangeNotifier {
     }
     files.sort((a, b) => compareComicFileNames(a.name, b.name));
     return files.map((e) => "file://${e.path}").toList();
+  }
+
+  /// Preserve the actual saved image on the first read after the sort upgrade.
+  /// Record the mapping before writing history so an interrupted migration can
+  /// be resumed without interpreting an already converted page a second time.
+  Future<void> migrateLegacyPageOrder(History history) async {
+    if (history.type != ComicType.local) return;
+    final key = [history.id, history.type.value];
+    var rows = _db.select(
+      'SELECT * FROM natural_sort_migration WHERE id = ? AND comic_type = ?',
+      key,
+    );
+    if (rows.isEmpty) {
+      var page = history.page;
+      if (history.ep > 0 && page > 0) {
+        var chapter = history.ep;
+        final chapters = find(history.id, ComicType.local)?.chapters;
+        if (chapters != null && chapters.isGrouped && history.group != null) {
+          for (var group = 0; group < history.group! - 1; group++) {
+            chapter += chapters.getGroupByIndex(group).length;
+          }
+        }
+        final images = await getImages(history.id, ComicType.local, chapter);
+        final legacy = images.toList()..sort(compareLegacyComicFileNames);
+        if (page <= legacy.length) page = images.indexOf(legacy[page - 1]) + 1;
+      }
+      _db.execute('INSERT INTO natural_sort_migration VALUES (?, ?, ?, ?, ?)', [
+        ...key,
+        history.time.millisecondsSinceEpoch,
+        history.page,
+        page,
+      ]);
+      rows = _db.select(
+        'SELECT * FROM natural_sort_migration WHERE id = ? AND comic_type = ?',
+        key,
+      );
+    }
+    final migration = rows.single;
+    if (migration['history_time'] == history.time.millisecondsSinceEpoch &&
+        migration['old_page'] == history.page &&
+        migration['new_page'] != history.page) {
+      history.page = migration['new_page'] as int;
+      HistoryManager().addHistory(history);
+    }
   }
 
   bool isDownloaded(

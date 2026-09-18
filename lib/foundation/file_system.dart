@@ -1,10 +1,47 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 
 export 'dart:io';
 export 'dart:typed_data';
+
+/// SAF can report a failed or short read as bytes instead of an IO error.
+/// Reopen the file on each attempt and never pass incomplete data to callers.
+Future<Uint8List> readFileBytesChecked(
+  File file, {
+  bool requireNonEmpty = false,
+  bool synchronousIO = false,
+  void Function()? checkStop,
+  Future<void>? cancelSignal,
+}) async {
+  for (var attempt = 0; ; attempt++) {
+    checkStop?.call();
+    try {
+      final expected = synchronousIO ? file.lengthSync() : await file.length();
+      final data = synchronousIO
+          ? file.readAsBytesSync()
+          : await file.readAsBytes();
+      checkStop?.call();
+      if ((requireNonEmpty && data.isEmpty) ||
+          (expected > 0 && data.length != expected)) {
+        throw FileSystemException(
+          'Incomplete file read: expected $expected bytes, got ${data.length}',
+          file.path,
+        );
+      }
+      return data;
+    } on FileSystemException {
+      if (attempt >= 2) rethrow;
+      final delay = Future<void>.delayed(
+        Duration(milliseconds: 150 * (attempt + 1)),
+      );
+      await (cancelSignal == null ? delay : Future.any([delay, cancelSignal]));
+      checkStop?.call();
+    }
+  }
+}
 
 class FilePath {
   const FilePath._();
@@ -60,7 +97,11 @@ extension FileExtension on File {
   Future<void> copyMem(String newPath) async {
     var newFile = File(newPath);
     // Stream is not usable since [AndroidFile] does not support [openRead].
-    await newFile.writeAsBytes(await readAsBytes());
+    final data = await readFileBytesChecked(this);
+    await newFile.writeAsBytes(data, flush: true);
+    if (await newFile.length() != data.length) {
+      throw FileSystemException('Incomplete file copy', newPath);
+    }
   }
 
   /// Get the base name of the file without the extension.
@@ -254,7 +295,11 @@ String sanitizeFileNameWithSuffix(
 }
 
 /// Copy the **contents** of the source directory to the destination directory.
-Future<void> copyDirectory(Directory source, Directory destination) async {
+Future<void> copyDirectory(
+  Directory source,
+  Directory destination, {
+  bool Function(File)? requireNonEmpty,
+}) async {
   if (!destination.existsSync()) {
     destination.createSync();
   }
@@ -264,13 +309,25 @@ Future<void> copyDirectory(Directory source, Directory destination) async {
 
     if (content is File) {
       var resultFile = File(newPath);
-      resultFile.createSync();
-      var data = content.readAsBytesSync();
-      resultFile.writeAsBytesSync(data);
+      final data = await readFileBytesChecked(
+        content,
+        requireNonEmpty: requireNonEmpty?.call(content) ?? false,
+        // Import runs in an isolate without the SAF async worker. The native
+        // sync API is safe here and was also used by the original copier.
+        synchronousIO: true,
+      );
+      resultFile.writeAsBytesSync(data, flush: true);
+      if (resultFile.lengthSync() != data.length) {
+        throw FileSystemException('Incomplete file copy', newPath);
+      }
     } else if (content is Directory) {
       Directory newDirectory = Directory(newPath);
       newDirectory.createSync();
-      copyDirectory(content.absolute, newDirectory.absolute);
+      await copyDirectory(
+        content.absolute,
+        newDirectory.absolute,
+        requireNonEmpty: requireNonEmpty,
+      );
     }
   }
 }

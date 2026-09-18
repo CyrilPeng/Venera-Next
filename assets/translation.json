@@ -654,7 +654,12 @@
     "Fetching image list...": "正在获取图片列表...",
     "Fetching image list (@a/@b)...": "正在获取图片列表（@a/@b）...",
     "Downloading...": "正在下载...",
-    "Webview": "网页浏览"
+    "Webview": "网页浏览",
+    "Read later": "稍后阅读",
+    "Remove from read later": "移出稍后阅读",
+    "Removed from read later": "已移出稍后阅读",
+    "Added to read later": "已加入稍后阅读",
+    "Save comics here with Read later on the details page.": "在漫画详情页点击“稍后阅读”，即可保存到这里。"
   },
   "zh_TW": {
     "Home": "首頁",
@@ -1311,6 +1316,11 @@
     "Fetching image list...": "正在取得圖片清單...",
     "Fetching image list (@a/@b)...": "正在取得圖片清單（@a/@b）...",
     "Downloading...": "正在下載...",
-    "Webview": "網頁瀏覽"
+    "Webview": "網頁瀏覽",
+    "Read later": "稍後閱讀",
+    "Remove from read later": "移出稍後閱讀",
+    "Removed from read later": "已移出稍後閱讀",
+    "Added to read later": "已加入稍後閱讀",
+    "Save comics here with Read later on the details page.": "在漫畫詳情頁點擊「稍後閱讀」，即可儲存到這裡。"
   }
 }

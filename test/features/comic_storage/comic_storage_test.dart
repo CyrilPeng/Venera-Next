@@ -4,6 +4,32 @@ import 'package:venera_next/foundation/file_system.dart';
 
 void main() {
   group('comic file rules', () {
+    test('naturally sorts prefixed and multi-part page numbers', () {
+      final pages = ['图片_10.jpg', '图片_2.jpg', '图片_1.jpg']
+        ..sort(compareComicFileNames);
+      expect(pages, ['图片_1.jpg', '图片_2.jpg', '图片_10.jpg']);
+      final chapters = ['vol10_p2', 'vol2_p10', 'vol2_p2']
+        ..sort(compareComicFileNames);
+      expect(chapters, ['vol2_p2', 'vol2_p10', 'vol10_p2']);
+    });
+
+    test('natural ordering handles large IDs and deterministic ties', () {
+      expect(
+        compareComicFileNames(
+          'p9999999999999999999999.jpg',
+          'p10000000000000000000000.jpg',
+        ),
+        lessThan(0),
+      );
+      final ties = ['p2.jpg', 'p02.jpg', 'P02.jpg']
+        ..sort(compareComicFileNames);
+      expect(ties, ['P02.jpg', 'p02.jpg', 'p2.jpg']);
+      expect(
+        compareComicFileNames('dir/page2.jpg', r'other\page10.jpg'),
+        lessThan(0),
+      );
+    });
+
     test('recognizes images, archives, covers, and ignored entries', () {
       expect(isComicImageFileName('PAGE.JPEG'), isTrue);
       expect(isComicImageFileName('PAGE.AVIF'), isTrue);

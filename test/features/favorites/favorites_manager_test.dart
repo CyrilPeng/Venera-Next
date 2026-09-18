@@ -236,6 +236,7 @@ void main() {
           appdata.settings['followUpdatesFolder'];
       final previousQuickFavorite = appdata.settings['quickFavorite'];
       addTearDown(() async {
+        await appdata.saveData(false);
         if (LocalFavoritesManager.cache != null) {
           await LocalFavoritesManager().debugWaitForHashedIdsRefresh();
           try {

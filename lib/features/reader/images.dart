@@ -74,11 +74,32 @@ class ReaderImagesState extends State<ReaderImages> {
           reader.widget.chapters,
         ))) {
       try {
+        if (!reader.localPageOrderChecked && reader.type == ComicType.local) {
+          final history = reader.history;
+          if (history != null) {
+            final previousPage = history.page;
+            await LocalManager().migrateLegacyPageOrder(history);
+            if (!mounted) return;
+            if ((reader.widget.initialChapter ?? 1) == history.ep &&
+                reader.widget.initialPage == previousPage) {
+              // Set the viewport directly: the page setter writes history,
+              // and images/maxPage are not available until loading completes.
+              final imagePage = history.page;
+              reader.pageValue = reader.imagesPerPage == 1
+                  ? imagePage
+                  : reader.showSingleImageOnFirstPage()
+                  ? ((imagePage - 1) / reader.imagesPerPage).ceil() + 1
+                  : (imagePage / reader.imagesPerPage).ceil();
+            }
+          }
+          reader.localPageOrderChecked = true;
+        }
         var images = await LocalManager().getImages(
           reader.cid,
           reader.type,
           reader.chapter,
         );
+        if (!mounted) return;
         setState(() {
           reader.images = images;
           reader.isLoading = false;

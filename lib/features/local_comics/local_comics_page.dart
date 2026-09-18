@@ -354,17 +354,56 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
             menuBuilder: (c) {
               return [
                 MenuEntry(
+                  icon: Icons.watch_later_outlined,
+                  text:
+                      LocalFavoritesManager().isInReadLater(
+                        c.id,
+                        (c as LocalComic).comicType,
+                      )
+                      ? 'Remove from read later'.tl
+                      : 'Read later'.tl,
+                  onClick: () async {
+                    final manager = LocalFavoritesManager();
+                    final included = manager.isInReadLater(c.id, c.comicType);
+                    try {
+                      await manager.setReadLater(
+                        FavoriteItem(
+                          id: c.id,
+                          name: c.title,
+                          coverPath: c.cover,
+                          author: c.subtitle,
+                          type: c.comicType,
+                          tags: c.tags,
+                        ),
+                        included: !included,
+                        folderName: 'Read later'.tl,
+                      );
+                      if (context.mounted) {
+                        context.showMessage(
+                          message: included
+                              ? 'Removed from read later'.tl
+                              : 'Added to read later'.tl,
+                        );
+                      }
+                    } catch (error) {
+                      if (context.mounted) {
+                        context.showMessage(message: error.toString());
+                      }
+                    }
+                  },
+                ),
+                MenuEntry(
                   icon: Icons.folder_open,
                   text: "Open Folder".tl,
                   onClick: () {
-                    openComicFolder(c as LocalComic);
+                    openComicFolder(c);
                   },
                 ),
                 MenuEntry(
                   icon: Icons.delete,
                   text: "Delete".tl,
                   onClick: () {
-                    deleteComics([c as LocalComic]).then((value) {
+                    deleteComics([c]).then((value) {
                       if (value && multiSelectMode) {
                         setState(() {
                           multiSelectMode = false;
@@ -378,10 +417,10 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
                   icon: Icons.cloud_upload_outlined,
                   text: "Archive to WebDAV".tl,
                   onClick: () {
-                    archiveComics([c as LocalComic]);
+                    archiveComics([c]);
                   },
                 ),
-                ...exportActions([c as LocalComic]),
+                ...exportActions([c]),
               ];
             },
           ),

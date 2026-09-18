@@ -71,14 +71,22 @@ class ReaderImageProvider
   final bool enableResize;
 
   @override
+  bool get retryFileSystemErrors => !imageKey.startsWith('file://');
+
+  @override
   Future<Uint8List> load(chunkEvents, checkStop) async {
     Uint8List? imageBytes;
     if (imageKey.startsWith('file://')) {
-      var file = File(imageKey);
+      var file = File(imageKey.substring(7));
       if (await file.exists()) {
-        imageBytes = await file.readAsBytes();
+        imageBytes = await readFileBytesChecked(
+          file,
+          requireNonEmpty: true,
+          checkStop: checkStop,
+          cancelSignal: BaseImageProvider.cancelSignalOf(checkStop),
+        );
       } else {
-        throw "Error: File not found.";
+        throw FileSystemException('File not found', file.path);
       }
     } else {
       await for (var event in ImageDownloader.loadComicImage(

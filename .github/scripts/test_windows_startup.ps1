@@ -94,7 +94,7 @@ function Wait-ForExit(
 
 function Start-TestProcess([string]$Path, [string]$Name) {
     $process = Start-Process -FilePath $Path -WorkingDirectory $testRoot `
-        -WindowStyle Hidden -PassThru `
+        -PassThru `
         -RedirectStandardOutput (Join-Path $testRoot "$Name.stdout.log") `
         -RedirectStandardError (Join-Path $testRoot "$Name.stderr.log")
     $started.Add($process)

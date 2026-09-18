@@ -58,7 +58,7 @@ comic_directory
 
 The file name can be anything, but the extension must be a valid image extension.
 
-The page order is determined by the file name. App will sort the files by name and display them in that order.
+Pages use natural filename order, such as `page_1.jpg`, `page_2.jpg`, `page_10.jpg`. Multiple numeric segments, leading zeros and mixed-case filenames are supported.
 
 Cover image is optional. 
 If there is a file named `cover.[ext]` in the directory, it will be considered as the cover image.
@@ -155,7 +155,7 @@ Plain directory rules:
 
 - The comic title defaults to the comic folder name.
 - Child directories are chapters. Root-level images can also form a single-chapter comic.
-- Pages and chapters are sorted by file name. Zero-padded names such as `0001.jpg` and `0002.jpg` are recommended.
+- Pages and chapters in ordinary directories use natural filename order. Explicit chapter ranges from metadata are preserved.
 - The preferred cover is a root image whose base name is `cover`. Supported extensions are `jpg`, `jpeg`, `png`, `webp`, `gif`, `jpe`, and `avif`. Without one, the app tries the first root page, then `cover.*` or the first page in the first readable chapter.
 - Neither `metadata.json` nor `ComicInfo.xml` is required.
 

@@ -386,6 +386,7 @@ class Settings with ChangeNotifier {
     "disableSyncFields": "", // "field1, field2, ..."
     'dataVersion': 0,
     'quickFavorite': null,
+    'readLaterFolder': null,
     'enableTurnPageByVolumeKey': true,
     'enableClockAndBatteryInfoInReader': true,
     'quickCollectImage': 'No', // No, DoubleTap, Swipe

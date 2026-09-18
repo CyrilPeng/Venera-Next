@@ -180,7 +180,7 @@ Comic/
 ```
 
 - `cover.jpg` is optional. When it is absent, the app tries to use the first readable image as the cover.
-- Pages are ordered by file name. Names such as `001.jpg`, `002.jpg`, and `003.jpg` avoid inconsistent ordering such as `1.jpg`, `10.jpg`, `2.jpg`.
+- Pages use natural filename order, such as `page_1.jpg`, `page_2.jpg`, `page_10.jpg`, including leading zeros and multiple numeric segments. PDF/EPUB conversion and explicit archive metadata retain their defined order.
 - For batch directory import, select the parent directory containing multiple comic directories, rather than an internal chapter directory.
 
 ### CBZ, ZIP, and 7Z import and export
@@ -277,6 +277,7 @@ VeneraNext has three independent WebDAV features:
 ### Favorites, update tracking, and downloads
 
 - Favorites provide long-term organization, while reading history returns to recently viewed positions.
+- Read later: save a comic from its details page or the local library menu, then open the queue from Home. Tap again to remove it; opening a comic does not remove it. The queue uses a separate local favorites folder with rename, deletion, backup and sync support, without changing Quick Favorite.
 - Update tracking checks followed titles for new chapters and depends on the associated network extension or favorite data.
 - Download management provides offline reading, especially on mobile devices or unreliable networks. Downloaded chapters are read as local content.
 - Image favorites and gallery browsing store and revisit individual pages.

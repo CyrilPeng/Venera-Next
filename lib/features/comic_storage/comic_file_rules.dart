@@ -71,6 +71,35 @@ T? findNamedComicCover<T>(
 int compareComicFileNames(String a, String b) {
   final aName = _baseName(a);
   final bName = _baseName(b);
+  final parts = RegExp(r'\d+|\D+');
+  final aParts = parts.allMatches(aName.toLowerCase()).toList();
+  final bParts = parts.allMatches(bName.toLowerCase()).toList();
+  for (var i = 0; i < aParts.length && i < bParts.length; i++) {
+    final left = aParts[i].group(0)!;
+    final right = bParts[i].group(0)!;
+    final leftNumber = left.codeUnitAt(0) >= 48 && left.codeUnitAt(0) <= 57;
+    final rightNumber = right.codeUnitAt(0) >= 48 && right.codeUnitAt(0) <= 57;
+    int comparison;
+    if (leftNumber && rightNumber) {
+      // Comparing significant digit counts avoids overflowing large IDs.
+      final l = left.replaceFirst(RegExp(r'^0+'), '');
+      final r = right.replaceFirst(RegExp(r'^0+'), '');
+      comparison = l.length.compareTo(r.length);
+      if (comparison == 0) comparison = l.compareTo(r);
+    } else {
+      comparison = left.compareTo(right);
+    }
+    if (comparison != 0) return comparison;
+  }
+  final lengthComparison = aParts.length.compareTo(bParts.length);
+  if (lengthComparison != 0) return lengthComparison;
+  return compareLegacyComicFileNames(a, b);
+}
+
+/// Used to locate saved pages when upgrading from lexical page ordering.
+int compareLegacyComicFileNames(String a, String b) {
+  final aName = _baseName(a);
+  final bName = _baseName(b);
   final aIndex = int.tryParse(comicFileStem(aName));
   final bIndex = int.tryParse(comicFileStem(bName));
   if (aIndex != null && bIndex != null) {

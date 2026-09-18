@@ -391,6 +391,7 @@ class ImportComic {
       for (var dir in toBeCopied) {
         var source = Directory(dir);
         var dest = Directory("$destination/${source.name}");
+        Directory? previousDirectory;
         if (dest.existsSync()) {
           // The destination directory already exists, and it is not managed by the app.
           // Rename the old directory to avoid conflicts.
@@ -398,17 +399,44 @@ class ImportComic {
             "Import Comic",
             "Directory already exists: ${source.name}\nRenaming the old directory.",
           );
-          dest.renameSync(
-            findValidDirectoryName(dest.parent.path, "${dest.path}_old"),
+          previousDirectory = dest.renameSync(
+            FilePath.join(
+              dest.parent.path,
+              findValidDirectoryName(dest.parent.path, '${source.name}_old'),
+            ),
           );
         }
-        dest.createSync();
-        await copyDirectory(source, dest);
+        try {
+          dest.createSync();
+          await copyDirectory(
+            source,
+            dest,
+            requireNonEmpty: (file) => isComicImageFileName(file.name),
+          );
+        } catch (error, stack) {
+          dest.deleteIfExistsSync(recursive: true);
+          if (previousDirectory != null) {
+            previousDirectory.renameSync(dest.path);
+          }
+          Log.error(
+            'Import Comic',
+            'Failed to copy ${source.path}: $error',
+            stack,
+          );
+          continue;
+        }
         result[source.path] = dest.path;
       }
       return result;
     });
   }
+
+  @visibleForTesting
+  static Future<Map<String, String>> debugCopyDirectories(
+    List<String> directories,
+    String destination,
+  ) =>
+      _copyDirectories({'toBeCopied': directories, 'destination': destination});
 
   Future<Map<String?, List<LocalComic>>> _copyComicsToLocalDir(
     Map<String?, List<LocalComic>> comics,
@@ -440,6 +468,10 @@ class ImportComic {
         );
         //Construct a new object since LocalComic.directory is a final String
         for (var c in comics[favoriteFolder]!) {
+          if (!pathMap.containsKey(c.directory)) {
+            App.rootContext.showMessage(message: 'Failed to copy comics'.tl);
+            continue;
+          }
           result[favoriteFolder]!.add(
             LocalComic(
               id: c.id,
