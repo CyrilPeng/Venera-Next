@@ -9,6 +9,31 @@ import 'package:yaml/yaml.dart';
 
 import 'appdata.dart';
 
+Locale resolveAppLocale(String preference, List<Locale> systemLocales) {
+  final selected = switch (preference) {
+    'zh-CN' => const Locale('zh', 'CN'),
+    'zh-TW' => const Locale('zh', 'TW'),
+    'en-US' => const Locale('en'),
+    _ => null,
+  };
+  if (selected != null) return selected;
+
+  for (final locale in systemLocales) {
+    if (locale.languageCode == 'zh') {
+      // Script takes priority over region: zh-Hans-US is simplified Chinese.
+      // Older locale identifiers may only provide a region, such as zh-HK.
+      final traditional = switch (locale.scriptCode) {
+        'Hant' => true,
+        'Hans' => false,
+        _ => const ['TW', 'HK', 'MO'].contains(locale.countryCode),
+      };
+      return Locale('zh', traditional ? 'TW' : 'CN');
+    }
+    if (locale.languageCode == 'en') return const Locale('en');
+  }
+  return const Locale('en');
+}
+
 class _App {
   String version = "0.0.0";
 
@@ -31,20 +56,10 @@ class _App {
   // If current Isolate is main Isolate, this value is always true.
   bool isInitialized = false;
 
-  Locale get locale {
-    Locale deviceLocale = PlatformDispatcher.instance.locale;
-    if (deviceLocale.languageCode == "zh" &&
-        deviceLocale.scriptCode == "Hant") {
-      deviceLocale = const Locale("zh", "TW");
-    }
-    if (appdata.settings['language'] != 'system') {
-      return Locale(
-        appdata.settings['language'].split('-')[0],
-        appdata.settings['language'].split('-')[1],
-      );
-    }
-    return deviceLocale;
-  }
+  Locale get locale => resolveAppLocale(
+    appdata.settings['language'],
+    PlatformDispatcher.instance.locales,
+  );
 
   late String dataPath;
   late String cachePath;
