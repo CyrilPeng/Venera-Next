@@ -35,11 +35,13 @@ This is the English companion index for `doc/`. Documents are grouped by type an
 
 ## User And CLI
 
+- [漫画源与源仓库](user/source_repositories.zh.md) / [Source repositories](user/source_repositories.en.md)
 - [本地漫画导入](user/import_comic.zh.md) / [Import Comic](user/import_comic.en.md)
 - [无头命令模式](user/headless.zh.md) / [Headless Mode](user/headless.en.md)
 
 ## Experiments
 
+- [Source installation task design (Chinese)](experiments/source_installation_tasks.zh.md)
 - [图片增强实验](experiments/image_enhancement.zh.md)
 
 ## Maintenance Rules

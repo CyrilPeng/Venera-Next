@@ -7,7 +7,6 @@ import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/code.dart';
 import 'package:venera_next/components/message.dart';
-import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/components/select.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -23,8 +22,12 @@ import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
-import 'parser.dart';
+import 'parser.dart' show compareSemVer;
+import 'source_installation.dart';
+import 'source_installation_widgets.dart';
 import 'source_translation.dart';
+import 'source_repositories.dart';
+import 'source_repository_page.dart';
 
 class ComicSourcePage extends StatelessWidget {
   const ComicSourcePage({super.key});
@@ -34,113 +37,126 @@ class ComicSourcePage extends StatelessWidget {
 
   static Dio _createDio() => debugCreateDio?.call() ?? AppDio();
 
-  static Future<String?> _downloadSource(
-    String url, {
-    bool showLoading = true,
-    CancelToken? cancelToken,
-  }) async {
-    final uri = _sourceHttpUri(url);
-    final token = cancelToken ?? CancelToken();
-    final dio = _createDio();
-    final loadingContext = showLoading ? App.rootContext : null;
-    final controller = loadingContext == null
-        ? null
-        : showLoadingDialog(
-            loadingContext,
-            onCancel: token.cancel,
-            barrierDismissible: false,
-          );
-    try {
-      final res = await dio.get<String>(
-        uri.toString(),
-        cancelToken: token,
-        options: Options(
-          responseType: ResponseType.plain,
-          headers: {"cache-time": "no"},
-        ),
-      );
-      if (token.isCancelled) return null;
-      return res.data ?? '';
-    } catch (_) {
-      if (token.isCancelled) return null;
-      rethrow;
-    } finally {
-      if (loadingContext?.mounted ?? false) controller?.close();
-      dio.close();
-    }
-  }
+  static final _updating = <String, CancelToken>{};
+  static Future<int>? _checking;
+  static SourceUpdateCheck? lastUpdateCheck;
 
   static Future<void> update(
     ComicSource source, [
     bool showLoading = true,
   ]) async {
-    var sourceRemoved = false;
-    try {
-      final content = await _downloadSource(
-        source.url,
-        showLoading: showLoading,
-      );
-      if (content == null) return;
-      ComicSourceManager().remove(source.key);
-      sourceRemoved = true;
-      await ComicSourceParser().parse(content, source.filePath);
-      await io.File(source.filePath).writeAsString(content);
-      if (ComicSourceManager().availableUpdates.containsKey(source.key)) {
-        ComicSourceManager().availableUpdates.remove(source.key);
+    if (_updating.containsKey(source.key)) return;
+    final token = CancelToken();
+    _updating[source.key] = token;
+    Dio? dio;
+    LoadingDialogController? controller;
+    final loadingContext = showLoading ? App.rootContext : null;
+    void releaseUpdate() {
+      if (identical(_updating[source.key], token)) {
+        _updating.remove(source.key);
       }
-    } catch (e, s) {
-      Log.error("Update comic source", "$e\n$s");
-      if (showLoading) {
-        final context = App.rootNavigatorKey.currentContext;
-        if (context != null && context.mounted) {
-          context.showMessage(message: _sourceErrorMessage(e));
+    }
+
+    try {
+      if (loadingContext != null) {
+        controller = showLoadingDialog(
+          loadingContext,
+          onCancel: () {
+            token.cancel();
+            releaseUpdate();
+          },
+          barrierDismissible: false,
+        );
+      }
+      dio = _createDio();
+      final store = SourceRepositories.instance;
+      final origin = store.originFor(source.key);
+      final repository = store.find(origin?.repositoryId);
+      final url = await store.updateUrl(
+        source,
+        client: dio,
+        cancelToken: token,
+      );
+      if (token.isCancelled) return;
+      final res = await dio.get<String>(
+        url,
+        cancelToken: token,
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: {'cache-time': 'no'},
+        ),
+      );
+      if (token.isCancelled) return;
+      await ComicSourceManager().replaceScript(
+        source,
+        res.data!,
+        validate: () {
+          if (token.isCancelled) throw token.cancelError!;
+          if (store.originFor(source.key)?.repositoryId !=
+                  origin?.repositoryId ||
+              store.originFor(source.key)?.url != origin?.url ||
+              ComicSource.find(source.key)?.filePath != source.filePath ||
+              (repository != null &&
+                  store.find(repository.id)?.url != repository.url)) {
+            throw 'Repository changed. Refresh the list and try again.'.tl;
+          }
+          // Once the serialized commit begins, the script must be replaced
+          // atomically. Cancellation is available while downloading or queued.
+          if (loadingContext?.mounted ?? false) controller?.close();
+        },
+        origin: repository == null
+            ? null
+            : SourceOrigin(
+                kind: 'repository',
+                repositoryId: repository.id,
+                repositoryName: repository.name,
+                url: url,
+              ),
+      );
+    } catch (e, stack) {
+      if (!token.isCancelled) {
+        Log.error('Update comic source', '$e\n$stack');
+        if (showLoading) {
+          final context = App.rootNavigatorKey.currentContext;
+          if (context != null && context.mounted) {
+            context.showMessage(
+              message: e is DioException ? 'Network error'.tl : e.toString(),
+            );
+          }
+        } else {
+          rethrow;
         }
-      } else {
-        rethrow;
       }
     } finally {
-      if (sourceRemoved) {
-        await ComicSourceManager().reload();
-        if (showLoading) App.forceRebuild();
-      }
+      if (loadingContext?.mounted ?? false) controller?.close();
+      dio?.close();
+      releaseUpdate();
     }
   }
 
-  static Future<int> checkComicSourceUpdate() async {
-    if (ComicSource.all().isEmpty) {
-      return 0;
+  static Future<int> checkComicSourceUpdate() {
+    return _checking ??= _checkUpdates().whenComplete(() => _checking = null);
+  }
+
+  static Future<int> _checkUpdates() async {
+    ComicSourceManager().updateAvailableUpdates({});
+    final revision = SourceRepositories.instance.revision;
+    var result = await SourceRepositories.instance.checkUpdates(
+      ComicSource.all().where((source) => source.filePath.isNotEmpty).toList(),
+    );
+    if (revision != SourceRepositories.instance.revision) {
+      result = SourceUpdateCheck(
+        updates: {},
+        failures: ['Repository changed. Refresh the list and try again.'.tl],
+        checked: 0,
+        skipped: ComicSource.all().length,
+      );
     }
-    final sourceListUrl = appdata.settings['comicSourceListUrl']
-        ?.toString()
-        .trim();
-    if (sourceListUrl == null || sourceListUrl.isEmpty) {
-      return 0;
-    }
-    var dio = AppDio();
-    var res = await dio.get<String>(sourceListUrl);
-    if (res.statusCode != 200) {
-      return -1;
-    }
-    var list = jsonDecode(res.data!) as List;
-    var versions = <String, String>{};
-    for (var source in list) {
-      versions[source['key']] = source['version'];
-    }
-    var shouldUpdate = <String>[];
-    for (var source in ComicSource.all()) {
-      if (versions.containsKey(source.key) &&
-          compareSemVer(versions[source.key]!, source.version)) {
-        shouldUpdate.add(source.key);
-      }
-    }
-    if (shouldUpdate.isNotEmpty) {
-      var updates = <String, String>{};
-      for (var key in shouldUpdate) {
-        updates[key] = versions[key]!;
-      }
-      ComicSourceManager().updateAvailableUpdates(updates);
-    }
-    return shouldUpdate.length;
+    lastUpdateCheck = result;
+    ComicSourceManager().updateAvailableUpdates(result.updates);
+    return result.updates.isEmpty && result.failures.isNotEmpty
+        ? -1
+        : result.updates.length;
   }
 
   @override
@@ -156,9 +172,8 @@ class _Body extends StatefulWidget {
   State<_Body> createState() => _BodyState();
 }
 
-class _BodyState extends State<_Body> {
-  var url = "";
-  CancelToken? _addSourceToken;
+class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
+  late final tabs = TabController(length: 2, vsync: this);
 
   void updateUI() {
     if (mounted) setState(() {});
@@ -172,26 +187,58 @@ class _BodyState extends State<_Body> {
 
   @override
   void dispose() {
-    _addSourceToken?.cancel();
     ComicSourceManager().removeListener(updateUI);
+    tabs.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return SmoothCustomScrollView(
-      slivers: [
-        SliverAppbar(title: Text('Comic Source'.tl), style: AppbarStyle.shadow),
-        buildCard(context),
-        for (var source in ComicSource.all())
-          _SliverComicSource(
-            key: ValueKey(source.key),
-            source: source,
-            edit: edit,
-            update: update,
-            delete: delete,
+    return Column(
+      children: [
+        Appbar(title: Text('Comic Source'.tl)),
+        AppTabBar(
+          controller: tabs,
+          tabs: [
+            Tab(text: 'Installed'.tl),
+            Tab(text: 'Source repositories'.tl),
+          ],
+        ),
+        const SourceInstallationSummary(),
+        Expanded(
+          child: TabBarView(
+            controller: tabs,
+            children: [
+              SmoothCustomScrollView(
+                slivers: [
+                  buildCard(context),
+                  if (ComicSource.isEmpty)
+                    SliverToBoxAdapter(
+                      child: SourceManagementEmptyState(
+                        icon: Icons.extension_outlined,
+                        title: 'No installed sources'.tl,
+                        description:
+                            'Open the Repositories tab to browse and install sources.'
+                                .tl,
+                      ),
+                    ),
+                  for (var source in ComicSource.all())
+                    _SliverComicSource(
+                      key: ValueKey(source.key),
+                      source: source,
+                      edit: edit,
+                      update: update,
+                      delete: delete,
+                    ),
+                  SliverPadding(
+                    padding: EdgeInsets.only(bottom: context.padding.bottom),
+                  ),
+                ],
+              ),
+              const SourceRepositoriesPanel(),
+            ],
           ),
-        SliverPadding(padding: EdgeInsets.only(bottom: context.padding.bottom)),
+        ),
       ],
     );
   }
@@ -199,13 +246,11 @@ class _BodyState extends State<_Body> {
   void delete(ComicSource source) {
     showConfirmDialog(
       context: App.rootContext,
-      title: "Delete".tl,
+      title: 'Uninstall source'.tl,
       content: "Delete comic source '@n' ?".tlParams({"n": source.name}),
       btnColor: context.colorScheme.error,
-      onConfirm: () {
-        var file = File(source.filePath);
-        file.delete();
-        ComicSourceManager().remove(source.key);
+      onConfirm: () async {
+        await ComicSourceManager().uninstallScript(source);
         _validatePages();
         App.forceRebuild();
       },
@@ -252,75 +297,59 @@ class _BodyState extends State<_Body> {
     ComicSourcePage.update(source, showLoading);
   }
 
-  Widget buildCard(BuildContext context) {
-    return SliverToBoxAdapter(
-      child: SizedBox(
-        width: double.infinity,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: Text("Add comic source".tl),
-              leading: const Icon(Icons.dashboard_customize),
-            ),
-            TextField(
-              decoration: InputDecoration(
-                hintText: "URL",
-                border: const UnderlineInputBorder(),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                suffix: IconButton(
-                  onPressed: () => handleAddSource(url),
-                  icon: const Icon(Icons.check),
-                ),
+  Widget buildCard(BuildContext context) => SliverToBoxAdapter(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              const _CheckUpdatesButton(),
+              FilledButton.tonalIcon(
+                onPressed: _installFromLink,
+                icon: const Icon(Icons.link),
+                label: Text('Install from link'.tl),
               ),
-              onChanged: (value) {
-                url = value;
-              },
-              onSubmitted: handleAddSource,
-            ).paddingHorizontal(16).paddingBottom(8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.tonalIcon(
-                  icon: Icon(Icons.article_outlined),
-                  label: Text("Comic Source list".tl),
-                  onPressed: () {
-                    showPopUpWidget(
-                      App.rootContext,
-                      _ComicSourceList(handleAddSource),
-                    );
-                  },
-                ),
-                FilledButton.tonalIcon(
-                  icon: Icon(Icons.file_open_outlined),
-                  label: Text("Use a config file".tl),
-                  onPressed: _selectFile,
-                ),
-                FilledButton.tonalIcon(
-                  icon: Icon(Icons.help_outline),
-                  label: Text("Help".tl),
-                  onPressed: help,
-                ),
-                _CheckUpdatesButton(),
-              ],
-            ).paddingHorizontal(12).paddingVertical(8),
-            const SizedBox(height: 8),
-          ],
-        ),
+              FilledButton.tonalIcon(
+                onPressed: _selectFile,
+                icon: const Icon(Icons.file_open_outlined),
+                label: Text('Import source file'.tl),
+              ),
+              IconButton(
+                onPressed: help,
+                tooltip: 'Help'.tl,
+                icon: const Icon(Icons.help_outline),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Update checks use each source’s linked repository. Link older or manually imported sources to include them.'
+                .tl,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       ),
+    ),
+  );
+
+  Future<void> _installFromLink() async {
+    final url = await showDialog<String>(
+      context: context,
+      builder: (_) => const _SourceUrlDialog(),
     );
+    if (url != null) SourceInstallations.instance.enqueueUrl(url);
   }
 
   void _selectFile() async {
     final file = await selectFile(ext: ["js"]);
     if (file == null) return;
     try {
-      var fileName = file.name;
-      var bytes = await file.readAsBytes();
-      var content = utf8.decode(bytes);
-      await addSource(content, fileName);
+      final bytes = await file.readAsBytes();
+      SourceInstallations.instance.enqueueFile(file.name, bytes);
     } catch (e, s) {
       App.rootContext.showMessage(message: e.toString());
       Log.error("Add comic source", "$e\n$s");
@@ -332,293 +361,60 @@ class _BodyState extends State<_Body> {
       "https://github.com/CyrilPeng/venera-next/blob/main/doc/comic_source.md",
     );
   }
-
-  Future<void> handleAddSource(String url) async {
-    if (url.trim().isEmpty || _addSourceToken != null) {
-      return;
-    }
-    final token = CancelToken();
-    _addSourceToken = token;
-    try {
-      final uri = _sourceHttpUri(url);
-      final fileName = uri.pathSegments.lastOrNull;
-      if (fileName == null ||
-          fileName.isEmpty ||
-          fileName == '.' ||
-          fileName == '..' ||
-          fileName.contains('/') ||
-          fileName.contains('\\')) {
-        throw ComicSourceParseException('Invalid url config'.tl);
-      }
-      final content = await ComicSourcePage._downloadSource(
-        uri.toString(),
-        cancelToken: token,
-      );
-      if (content == null || token.isCancelled || !mounted) return;
-      await addSource(content, fileName);
-    } catch (e, s) {
-      if (token.isCancelled || !mounted) return;
-      context.showMessage(message: _sourceErrorMessage(e));
-      Log.error("Add comic source", "$e\n$s");
-    } finally {
-      _addSourceToken = null;
-    }
-  }
-
-  Future<void> addSource(String js, String fileName) async {
-    var comicSource = await ComicSourceParser().createAndParse(js, fileName);
-    ComicSourceManager().add(comicSource);
-    _addAllPagesWithComicSource(comicSource);
-    appdata.saveData();
-    App.forceRebuild();
-  }
 }
 
-class _ComicSourceList extends StatefulWidget {
-  const _ComicSourceList(this.onAdd);
-
-  final Future<void> Function(String) onAdd;
-
+class _SourceUrlDialog extends StatefulWidget {
+  const _SourceUrlDialog();
   @override
-  State<_ComicSourceList> createState() => _ComicSourceListState();
+  State<_SourceUrlDialog> createState() => _SourceUrlDialogState();
 }
 
-class _ComicSourceListState extends State<_ComicSourceList> {
-  ({Uri uri, List<Map<String, dynamic>> entries})? _list;
-  bool _loading = false;
-  int _loadGeneration = 0;
-  CancelToken? _loadToken;
+class _SourceUrlDialogState extends State<_SourceUrlDialog> {
   final controller = TextEditingController();
-
-  Future<void> load() async {
-    final generation = ++_loadGeneration;
-    _loadToken?.cancel();
-    final token = CancelToken();
-    _loadToken = token;
-    final requestedUrl = controller.text.trim();
-    setState(() {
-      _list = null;
-      _loading = true;
-    });
-    Dio? dio;
-    try {
-      if (requestedUrl.isEmpty) {
-        await _saveListUrl('');
-        return;
-      }
-      final uri = _sourceHttpUri(requestedUrl);
-      dio = ComicSourcePage._createDio();
-      final res = await dio.get<String>(
-        uri.toString(),
-        cancelToken: token,
-        options: Options(responseType: ResponseType.plain),
-      );
-      if (!mounted || generation != _loadGeneration || token.isCancelled) {
-        return;
-      }
-      final entries = _sourceListEntries(res.data ?? '');
-      // Keep the response and its request URL together, independent of edits.
-      setState(() {
-        _list = (uri: uri, entries: entries);
-        _loading = false;
-      });
-      await _saveListUrl(uri.toString());
-    } catch (e, s) {
-      if (!mounted || generation != _loadGeneration || token.isCancelled) {
-        return;
-      }
-      context.showMessage(message: _sourceErrorMessage(e));
-      Log.error("Load comic source list", "$e\n$s");
-    } finally {
-      dio?.close();
-      if (mounted && generation == _loadGeneration) {
-        _loadToken = null;
-        setState(() {
-          _loading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _saveListUrl(String url) async {
-    if (appdata.settings['comicSourceListUrl'] == url) return;
-    appdata.settings['comicSourceListUrl'] = url;
-    await appdata.saveData();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    controller.text = appdata.settings['comicSourceListUrl']?.toString() ?? "";
-    load();
-  }
-
+  String? error;
   @override
   void dispose() {
-    _loadGeneration++;
-    _loadToken?.cancel();
     controller.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return PopUpWidgetScaffold(title: "Comic Source".tl, body: buildBody());
-  }
-
-  Widget buildBody() {
-    var currentKey = ComicSource.all().map((e) => e.key).toList();
-    final list = _list;
-
-    return ListView.builder(
-      itemCount: (_loading ? 1 : list?.entries.length ?? 0) + 1,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant,
-                width: 0.6,
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ListTile(
-                  leading: Icon(Icons.source_outlined),
-                  title: Text("Repo URL".tl),
-                ),
-                TextField(
-                  controller: controller,
-                  decoration: InputDecoration(
-                    hintText: "URL",
-                    border: const UnderlineInputBorder(),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  onSubmitted: (_) => load(),
-                ).paddingHorizontal(16).paddingBottom(8),
-                Text(
-                  "The URL should point to a 'index.json' file".tl,
-                ).paddingLeft(16),
-                Text(
-                  "Do not report any issues related to sources to App repo.".tl,
-                ).paddingLeft(16),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () {
-                        launchUrlString(
-                          "https://github.com/CyrilPeng/venera-next/blob/main/doc/comic_source.md",
-                        );
-                      },
-                      child: Text("Help".tl),
-                    ),
-                    FilledButton.tonal(
-                      onPressed: load,
-                      child: Text("Refresh".tl),
-                    ),
-                    const SizedBox(width: 16),
-                  ],
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          );
-        }
-
-        if (_loading) {
-          return Center(
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-            ).fixWidth(24).fixHeight(24),
-          );
-        }
-
-        final entry = list!.entries[index - 1];
-        var key = entry["key"];
-        var action = currentKey.contains(key)
-            ? const Icon(Icons.check, size: 20).paddingRight(8)
-            : Button.filled(
-                child: Text("Add".tl),
-                onPressed: () async {
-                  try {
-                    final explicitUrl = entry['url'];
-                    final reference =
-                        explicitUrl is String && explicitUrl.trim().isNotEmpty
-                        ? explicitUrl.trim()
-                        : entry['fileName'];
-                    if (reference is! String || reference.trim().isEmpty) {
-                      throw ComicSourceParseException('Invalid url config'.tl);
-                    }
-                    final referenceUri = Uri.tryParse(reference.trim());
-                    if (referenceUri == null) {
-                      throw ComicSourceParseException('Invalid url config'.tl);
-                    }
-                    final uri = _sourceHttpUri(
-                      list.uri.resolveUri(referenceUri).toString(),
-                    );
-                    await widget.onAdd(uri.toString());
-                  } catch (e, s) {
-                    if (!mounted) return;
-                    context.showMessage(message: _sourceErrorMessage(e));
-                    Log.error("Add comic source", "$e\n$s");
-                  }
-                  if (mounted) setState(() {});
-                },
-              ).fixHeight(32);
-
-        final description = [
-          if (entry['version'] != null) entry['version'].toString(),
-          if (entry['description'] != null) entry['description'].toString(),
-        ].join('\n');
-
-        return ListTile(
-          title: Text(entry["name"]),
-          subtitle: Text(description),
-          trailing: action,
-        );
-      },
-    );
-  }
-}
-
-Uri _sourceHttpUri(String url) {
-  final uri = Uri.tryParse(url.trim());
-  if (uri == null ||
-      (uri.scheme != 'https' && uri.scheme != 'http') ||
-      uri.host.isEmpty) {
-    throw ComicSourceParseException('Invalid url config'.tl);
-  }
-  return uri;
-}
-
-String _sourceErrorMessage(Object error) {
-  if (error is DioException) return 'Network error'.tl;
-  return error.toString();
-}
-
-List<Map<String, dynamic>> _sourceListEntries(String content) {
-  try {
-    final decoded = jsonDecode(content);
-    if (decoded is! List ||
-        decoded.any(
-          (entry) =>
-              entry is! Map<String, dynamic> ||
-              entry['name'] is! String ||
-              entry['key'] is! String,
-        )) {
-      throw const FormatException('Invalid comic source list');
+  void submit() {
+    try {
+      Navigator.pop(context, SourceRepositories.normalizeUrl(controller.text));
+    } catch (e) {
+      setState(() => error = e.toString());
     }
-    return List<Map<String, dynamic>>.unmodifiable(
-      decoded.map((entry) => Map<String, dynamic>.unmodifiable(entry)),
-    );
-  } on FormatException {
-    throw ComicSourceParseException('Invalid comic source list'.tl);
   }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text('Install from link'.tl),
+    content: SizedBox(
+      width: 440,
+      child: TextField(
+        controller: controller,
+        autofocus: true,
+        keyboardType: TextInputType.url,
+        autocorrect: false,
+        onSubmitted: (_) => submit(),
+        decoration: InputDecoration(
+          labelText: 'Source script URL'.tl,
+          hintText: 'https://example.com/source.js',
+          helperText: 'To add a source list, use the Repositories tab.'.tl,
+          helperMaxLines: 3,
+          errorText: error,
+          errorMaxLines: 3,
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: Text('Cancel'.tl),
+      ),
+      FilledButton(onPressed: submit, child: Text('Install source'.tl)),
+    ],
+  );
 }
 
 void _validatePages() {
@@ -660,39 +456,6 @@ void _validatePages() {
   appdata.settings['explore_pages'] = explorePages.toSet().toList();
   appdata.settings['categories'] = categoryPages.toSet().toList();
   appdata.settings['favorites'] = networkFavorites.toSet().toList();
-
-  appdata.saveData();
-}
-
-void _addAllPagesWithComicSource(ComicSource source) {
-  var explorePages = appdata.settings['explore_pages'];
-  var categoryPages = appdata.settings['categories'];
-  var networkFavorites = appdata.settings['favorites'];
-  var searchPages = appdata.settings['searchSources'];
-
-  if (source.explorePages.isNotEmpty) {
-    for (var page in source.explorePages) {
-      if (!explorePages.contains(page.title)) {
-        explorePages.add(page.title);
-      }
-    }
-  }
-  if (source.categoryData != null &&
-      !categoryPages.contains(source.categoryData!.key)) {
-    categoryPages.add(source.categoryData!.key);
-  }
-  if (source.favoriteData != null &&
-      !networkFavorites.contains(source.favoriteData!.key)) {
-    networkFavorites.add(source.favoriteData!.key);
-  }
-  if (source.searchPageData != null && !searchPages.contains(source.key)) {
-    searchPages.add(source.key);
-  }
-
-  appdata.settings['explore_pages'] = explorePages.toSet().toList();
-  appdata.settings['categories'] = categoryPages.toSet().toList();
-  appdata.settings['favorites'] = networkFavorites.toSet().toList();
-  appdata.settings['searchSources'] = searchPages.toSet().toList();
 
   appdata.saveData();
 }
@@ -753,68 +516,122 @@ class _CheckUpdatesButton extends StatefulWidget {
 class _CheckUpdatesButtonState extends State<_CheckUpdatesButton> {
   bool isLoading = false;
 
-  void check() async {
-    setState(() {
-      isLoading = true;
-    });
-    var count = await ComicSourcePage.checkComicSourceUpdate();
-    if (count == -1) {
-      context.showMessage(message: "Network error".tl);
-    } else if (count == 0) {
-      context.showMessage(message: "No updates".tl);
-    } else {
-      showUpdateDialog();
+  Future<void> check() async {
+    if (isLoading) return;
+    setState(() => isLoading = true);
+    try {
+      await ComicSourcePage.checkComicSourceUpdate();
+      if (!mounted) return;
+      final result = ComicSourcePage.lastUpdateCheck!;
+      if (result.updates.isEmpty &&
+          result.failures.isEmpty &&
+          result.skipped == 0) {
+        context.showMessage(message: 'No updates'.tl);
+      } else {
+        await showUpdateDialog(result);
+      }
+    } catch (error) {
+      if (mounted) context.showMessage(message: error.toString());
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
-    setState(() {
-      isLoading = false;
-    });
   }
 
-  void showUpdateDialog() async {
-    var text = ComicSourceManager().availableUpdates.entries
-        .map((e) {
-          return "${ComicSource.find(e.key)!.name}: ${e.value}";
-        })
-        .join("\n");
-    bool doUpdate = false;
-    await showDialog(
-      context: App.rootContext,
-      builder: (context) {
-        return ContentDialog(
-          title: "Updates".tl,
-          content: Text(text).paddingHorizontal(16),
-          actions: [
-            FilledButton(
-              onPressed: () {
-                doUpdate = true;
-                context.pop();
-              },
-              child: Text("Update".tl),
+  Future<void> showUpdateDialog(SourceUpdateCheck result) async {
+    final doUpdate = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Source update check'.tl),
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '@checked checked · @skipped not checked'.tlParams({
+                    'checked': result.checked.toString(),
+                    'skipped': result.skipped.toString(),
+                  }),
+                ),
+                if (result.skipped > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      'Unlinked sources are not checked. Link a repository from each source’s origin menu.'
+                          .tl,
+                    ),
+                  ),
+                if (result.updates.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      result.updates.entries
+                          .map(
+                            (e) =>
+                                '${ComicSource.find(e.key)?.name ?? e.key}: ${e.value}',
+                          )
+                          .join('\n'),
+                    ),
+                  ),
+                if (result.updates.isEmpty && result.checked > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text('Checked sources are up to date.'.tl),
+                  ),
+                if (result.failures.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      '${'Some sources could not be checked.'.tl}\n${result.failures.join('\n')}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ],
-        );
-      },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Close'.tl),
+          ),
+          if (result.updates.isNotEmpty)
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text('Update'.tl),
+            ),
+        ],
+      ),
     );
-    if (doUpdate) {
-      var loadingController = showLoadingDialog(
-        context,
-        message: "Updating".tl,
-        withProgress: true,
-      );
-      int current = 0;
-      int total = ComicSourceManager().availableUpdates.length;
-      try {
-        var shouldUpdate = ComicSourceManager().availableUpdates.keys.toList();
-        for (var key in shouldUpdate) {
-          var source = ComicSource.find(key)!;
-          await ComicSourcePage.update(source, false);
-          current++;
-          loadingController.setProgress(current / total);
+    if (doUpdate != true || !mounted) return;
+    final loadingController = showLoadingDialog(
+      context,
+      message: 'Updating'.tl,
+      withProgress: true,
+    );
+    final failures = <String>[];
+    var current = 0;
+    try {
+      for (final key in result.updates.keys) {
+        final source = ComicSource.find(key);
+        if (source != null) {
+          try {
+            await ComicSourcePage.update(source, false);
+          } catch (error) {
+            failures.add('${source.name}: $error');
+          }
         }
-      } catch (e) {
-        context.showMessage(message: e.toString());
+        loadingController.setProgress(++current / result.updates.length);
       }
+    } finally {
       loadingController.close();
+    }
+    if (failures.isNotEmpty && mounted) {
+      context.showMessage(message: failures.join('\n'));
     }
   }
 
@@ -829,7 +646,7 @@ class _CheckUpdatesButtonState extends State<_CheckUpdatesButton> {
             )
           : Icon(Icons.update),
       label: Text("Check updates".tl),
-      onPressed: check,
+      onPressed: isLoading ? null : check,
     );
   }
 }
@@ -906,100 +723,112 @@ class _SliverComicSource extends StatefulWidget {
 class _SliverComicSourceState extends State<_SliverComicSource> {
   ComicSource get source => widget.source;
 
+  bool expanded = false;
+
   @override
   Widget build(BuildContext context) {
-    var newVersion = ComicSourceManager().availableUpdates[source.key];
-    bool hasUpdate =
+    final newVersion = ComicSourceManager().availableUpdates[source.key];
+    final hasUpdate =
         newVersion != null && compareSemVer(newVersion, source.version);
-
+    final canManageScript = source.filePath.isNotEmpty;
     return SliverMainAxisGroup(
       slivers: [
-        SliverPadding(padding: const EdgeInsets.only(top: 16)),
         SliverToBoxAdapter(
-          child: ListTile(
-            title: Row(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(source.name, style: ts.s18),
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: context.colorScheme.surfaceContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    source.version,
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                ),
-                if (hasUpdate)
-                  Tooltip(
-                    message: newVersion,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: context.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        "New Version".tl,
-                        style: const TextStyle(fontSize: 13),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(source.name, style: ts.s18),
+                          Text(
+                            source.version,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          if (hasUpdate)
+                            Text(
+                              'New Version'.tl,
+                              style: TextStyle(
+                                color: context.colorScheme.primary,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                  ).paddingLeft(4),
-              ],
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Tooltip(
-                  message: "Edit".tl,
-                  child: IconButton(
-                    onPressed: () => widget.edit(source),
-                    icon: const Icon(Icons.edit_note),
-                  ),
+                    IconButton(
+                      onPressed: () => setState(() => expanded = !expanded),
+                      tooltip:
+                          (expanded
+                                  ? 'Hide source settings'
+                                  : 'Show source settings')
+                              .tl,
+                      icon: Icon(
+                        expanded ? Icons.expand_less : Icons.expand_more,
+                      ),
+                    ),
+                    if (canManageScript)
+                      PopupMenuButton<String>(
+                        tooltip: 'Source actions'.tl,
+                        onSelected: (action) {
+                          switch (action) {
+                            case 'origin':
+                              showSourceOriginPicker(context, source);
+                            case 'edit':
+                              widget.edit(source);
+                            case 'update':
+                              widget.update(source);
+                            case 'delete':
+                              widget.delete(source);
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: 'origin',
+                            child: Text('Manage source origin'.tl),
+                          ),
+                          PopupMenuItem(
+                            value: 'update',
+                            child: Text('Update'.tl),
+                          ),
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: Text('Edit script'.tl),
+                          ),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Text('Uninstall source'.tl),
+                          ),
+                        ],
+                      ),
+                  ],
                 ),
-                Tooltip(
-                  message: "Update".tl,
-                  child: IconButton(
-                    onPressed: () => widget.update(source),
-                    icon: const Icon(Icons.update),
+                if (canManageScript)
+                  TextButton.icon(
+                    onPressed: () => showSourceOriginPicker(context, source),
+                    icon: const Icon(Icons.link, size: 16),
+                    label: Text(
+                      SourceRepositories.instance.originLabel(source.key),
+                      textAlign: TextAlign.start,
+                    ),
                   ),
-                ),
-                Tooltip(
-                  message: "Delete".tl,
-                  child: IconButton(
-                    onPressed: () => widget.delete(source),
-                    icon: const Icon(Icons.delete),
-                  ),
-                ),
               ],
             ),
           ),
         ),
-        SliverToBoxAdapter(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: context.colorScheme.outlineVariant,
-                  width: 0.6,
-                ),
-              ),
-            ),
+        if (expanded) ...[
+          SliverToBoxAdapter(
+            child: Column(children: buildSourceSettings().toList()),
           ),
-        ),
-        SliverToBoxAdapter(
-          child: Column(children: buildSourceSettings().toList()),
-        ),
-        SliverToBoxAdapter(child: Column(children: _buildAccount().toList())),
+          SliverToBoxAdapter(child: Column(children: _buildAccount().toList())),
+        ],
+        const SliverToBoxAdapter(child: Divider(indent: 16, endIndent: 16)),
       ],
     );
   }
