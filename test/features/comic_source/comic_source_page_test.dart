@@ -12,6 +12,7 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/network/app_dio.dart';
 
 void main() {
@@ -131,6 +132,29 @@ void main() {
       expect(File(source.filePath).readAsStringSync(), 'original content');
     });
   }
+
+  sourceScenario(
+    'batch update reports a source whose update is already running',
+    (tester) async {
+      await pumpPage(tester);
+      final source = install();
+      var finished = false;
+      final running = ComicSourcePage.update(source, false).catchError((_) {});
+      running.whenComplete(() => finished = true);
+      await _pumpUntil(tester, () => requests.items.isNotEmpty);
+      final conflict = expectLater(
+        ComicSourcePage.update(source, false),
+        throwsA('Update already in progress'.tl),
+      );
+      // The first update fails with a network error, which is swallowed above.
+      requests.items.single.reply('', status: 503);
+      await _pumpUntil(tester, () => finished);
+      await conflict;
+      await running;
+      await tester.pump();
+      expect(find.text('Loading'), findsNothing);
+    },
+  );
 
   sourceScenario(
     'cancel repository lookup closes loading without starting a script download',

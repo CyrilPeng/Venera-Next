@@ -40,6 +40,17 @@ class SourceCatalogEntry {
   final String description;
 }
 
+/// A loaded catalog. Invalid entries are skipped and reported instead of
+/// making the whole repository unusable.
+class SourceCatalog {
+  const SourceCatalog(this.entries, this.skipped);
+
+  final List<SourceCatalogEntry> entries;
+
+  /// Labels of the entries that were skipped, in catalog order.
+  final List<String> skipped;
+}
+
 class SourceOrigin {
   const SourceOrigin({
     required this.kind,
@@ -177,7 +188,7 @@ class SourceRepositories extends ChangeNotifier {
     return uri.removeFragment().toString();
   }
 
-  Future<List<SourceCatalogEntry>> load(
+  Future<SourceCatalog> load(
     SourceRepository repository, {
     Dio? client,
     CancelToken? cancelToken,
@@ -209,33 +220,50 @@ class SourceRepositories extends ChangeNotifier {
       throw 'The address must return a source list in JSON format.'.tl;
     }
     final entries = <SourceCatalogEntry>[];
-    for (final record in json) {
+    final skipped = <String>[];
+    for (var index = 0; index < json.length; index++) {
+      final record = json[index];
+      final key = record is Map ? record['key'] : null;
+      final label = key is String && key.trim().isNotEmpty
+          ? key.trim()
+          : '#${index + 1}';
       if (record is! Map ||
-          record['key'] is! String ||
+          key is! String ||
           record['name'] is! String ||
           record['version'] is! String ||
-          !RegExp(r'^\w+$').hasMatch(record['key']) ||
-          !RegExp(r'^\d+\.\d+\.\d+(?:[.\-].+)?$').hasMatch(record['version'])) {
-        throw 'The repository contains an invalid source entry.'.tl;
+          !RegExp(r'^\w+$').hasMatch(key) ||
+          !RegExp(
+            r'^\d+\.\d+\.\d+(?:[.\-].+)?$',
+          ).hasMatch(record['version'] as String)) {
+        skipped.add(label);
+        continue;
       }
       final target =
           record['url'] is String && (record['url'] as String).trim().isNotEmpty
           ? record['url'] as String
           : record['fileName'];
       if (target is! String || target.trim().isEmpty) {
-        throw 'The repository contains an invalid source entry.'.tl;
+        skipped.add(label);
+        continue;
       }
-      entries.add(
-        SourceCatalogEntry(
-          key: record['key'],
-          name: record['name'],
-          version: record['version'],
-          url: normalizeUrl(base.resolve(target.trim()).toString()),
-          description: record['description']?.toString() ?? '',
-        ),
-      );
+      try {
+        entries.add(
+          SourceCatalogEntry(
+            key: key,
+            name: record['name'] as String,
+            version: record['version'] as String,
+            url: normalizeUrl(base.resolve(target.trim()).toString()),
+            description: record['description']?.toString() ?? '',
+          ),
+        );
+      } catch (_) {
+        skipped.add(label);
+      }
     }
-    return entries;
+    if (entries.isEmpty && skipped.isNotEmpty) {
+      throw 'The repository contains no usable source entries.'.tl;
+    }
+    return SourceCatalog(entries, skipped);
   }
 
   Future<SourceRepository> save({
@@ -355,10 +383,12 @@ class SourceRepositories extends ChangeNotifier {
   }) async {
     final repository = find(originFor(source.key)?.repositoryId);
     if (repository == null) return normalizeUrl(source.url);
-    return entryFor(
-      source,
-      await load(repository, client: client, cancelToken: cancelToken),
-    ).url;
+    final catalog = await load(
+      repository,
+      client: client,
+      cancelToken: cancelToken,
+    );
+    return entryFor(source, catalog.entries).url;
   }
 
   Future<SourceUpdateCheck> checkUpdates(List<ComicSource> sources) async {
@@ -376,7 +406,8 @@ class SourceRepositories extends ChangeNotifier {
           .toList();
       if (linked.isEmpty) continue;
       try {
-        final entries = await load(repository);
+        final catalog = await load(repository);
+        final entries = catalog.entries;
         if (find(repository.id)?.url != repository.url) {
           failures.add(
             '${repository.name}: ${'Repository changed. Refresh the list and try again.'.tl}',
