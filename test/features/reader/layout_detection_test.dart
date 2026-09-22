@@ -82,6 +82,37 @@ void main() {
     expect(result.sampleCount, 0);
   });
 
+  for (final layout in [ComicLayout.paged, ComicLayout.longStrip]) {
+    test(
+      'classifies real local $layout images with original file paths',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'venera-layout-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final chapter = await Directory(
+          '${directory.path}/中文 扫描 # %20',
+        ).create();
+        final urls = <String>[];
+        for (var i = 0; i < 7; i++) {
+          final file = File('${chapter.path}/正文 $i.png');
+          // Give the cover the opposite proportions to verify it is skipped.
+          final isStrip = i == 0
+              ? layout == ComicLayout.paged
+              : layout == ComicLayout.longStrip;
+          await file.writeAsBytes(isStrip ? strip : page);
+          // LocalManager and downloaded chapters use this unescaped key format.
+          urls.add('file://${file.path}');
+        }
+        ImageDownloader.debugLoadComicImageUnwrapped = (_, _, _, _) =>
+            throw StateError('Local images must not start network downloads');
+        final result = await detect(ComicLayoutProbe(), urls);
+        expect(result.layout, layout);
+        expect(result.sampleCount, 6);
+      },
+    );
+  }
+
   test(
     'at most two downloads run and cancellation leaves queued samples untouched',
     () async {
@@ -130,22 +161,28 @@ void main() {
     'local reads share the two-task limit and late reads cannot restart the queue',
     () async {
       final reads = <Completer<Uint8List>>[];
-      await IOOverrides.runZoned(() async {
-        final probe = ComicLayoutProbe();
-        final pending = detect(
-          probe,
-          List.generate(7, (i) => 'file:///scan-$i.png'),
-        );
-        await pumpEventQueue();
-        expect(reads, hasLength(2));
-        probe.cancel();
-        expect((await pending).layout, ComicLayout.unknown);
-        for (final read in reads) {
-          read.complete(page);
-        }
-        await pumpEventQueue();
-        expect(reads, hasLength(2));
-      }, createFile: (path) => _PendingFile(path, page.length, reads));
+      await IOOverrides.runZoned(
+        () async {
+          final probe = ComicLayoutProbe();
+          final pending = detect(
+            probe,
+            List.generate(7, (i) => 'file:///scan-$i.png'),
+          );
+          await pumpEventQueue();
+          expect(reads, hasLength(2));
+          probe.cancel();
+          expect((await pending).layout, ComicLayout.unknown);
+          for (final read in reads) {
+            read.complete(page);
+          }
+          await pumpEventQueue();
+          expect(reads, hasLength(2));
+        },
+        createFile: (path) {
+          expect(path, matches(r'^/scan-[1-6]\.png$'));
+          return _PendingFile(path, page.length, reads);
+        },
+      );
     },
   );
 

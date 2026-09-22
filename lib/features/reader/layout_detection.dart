@@ -78,8 +78,10 @@ class ComicLayoutProbe {
     try {
       Uint8List? bytes;
       if (image.startsWith('file://')) {
+        // LocalManager and downloads prefix raw paths, without URI encoding.
+        // Match the reader: preserve literal # and % sequences in filenames.
         bytes = await readFileBytesChecked(
-          File(image),
+          File(image.substring(7)),
           requireNonEmpty: true,
           checkStop: () {
             if (_cancelled) throw StateError('Layout detection canceled');

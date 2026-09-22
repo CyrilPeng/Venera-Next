@@ -485,12 +485,14 @@ class Settings with ChangeNotifier {
   /// Legacy per-comic modes remain effective until explicitly changed.
   String? comicReaderModeOverride(String comicId, String sourceKey) {
     final values = _data['comicSpecificSettings']["$comicId@$sourceKey"];
-    if (values is Map && values.containsKey('readerModeOverride')) {
+    if (values is! Map) return null;
+    if (values.containsKey('readerModeOverride')) {
       final mode = values['readerModeOverride'];
-      return mode == 'default' ? null : mode as String?;
+      return mode is String && mode != 'default' ? mode : null;
     }
     if (isComicSpecificSettingsEnabled(comicId, sourceKey)) {
-      return values?['readerMode'] as String?;
+      final mode = values['readerMode'];
+      return mode is String ? mode : null;
     }
     return null;
   }

@@ -1,5 +1,7 @@
 # 自动选择阅读模式
 
+English: [Automatic Reader Mode](automatic_reader_mode.en.md)
+
 在「设置 → 阅读器」中开启「根据漫画版式自动选择阅读模式」，再分别选择：
 
 - **页漫阅读模式**：初始为翻页（从右到左）。

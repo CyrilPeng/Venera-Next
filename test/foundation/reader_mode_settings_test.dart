@@ -76,6 +76,34 @@ void main() {
     expect(resolve(), 'continuousTopToBottom');
   });
 
+  for (final key in ['readerModeOverride', 'readerMode']) {
+    test(
+      'non-string $key falls back without throwing or blocking detection',
+      () {
+        settings.setEnabledDeviceSpecificSettings(true);
+        settings.setDeviceReaderSetting('readerMode', 'continuousLeftToRight');
+        detect(ComicLayout.longStrip);
+        for (final value in [null, 42, true, <Object>[], <String, Object>{}]) {
+          settings['comicSpecificSettings'] = <String, dynamic>{
+            '$cid@$source': <String, dynamic>{
+              'enabled': true,
+              // An invalid new override must not revive an old manual choice.
+              'readerMode': 'galleryTopToBottom',
+              key: value,
+            },
+          };
+          settings['autoReaderMode'] = false;
+          expect(settings.comicReaderModeOverride(cid, source), isNull);
+          expect(resolve(), 'continuousLeftToRight');
+          settings['autoReaderMode'] = true;
+          expect(resolve(), 'continuousTopToBottom');
+          settings.setEnabledComicSpecificSettings(cid, source, false);
+          expect(resolve(), 'continuousTopToBottom');
+        }
+      },
+    );
+  }
+
   for (final enabled in [true, false]) {
     test(
       'legacy comic mode retains meaning when enabled=$enabled is toggled',
