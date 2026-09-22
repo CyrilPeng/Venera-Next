@@ -45,7 +45,13 @@ class ComicSourcePage extends StatelessWidget {
     ComicSource source, [
     bool showLoading = true,
   ]) async {
-    if (_updating.containsKey(source.key)) return;
+    if (_updating.containsKey(source.key)) {
+      // An interactive duplicate tap stays silent because the loading dialog
+      // already owns the update. A batch caller must not mistake the skipped
+      // update for a success.
+      if (!showLoading) throw 'Update already in progress'.tl;
+      return;
+    }
     final token = CancelToken();
     _updating[source.key] = token;
     Dio? dio;

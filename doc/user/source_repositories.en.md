@@ -29,8 +29,10 @@ An installed source displays its origin. Click that label or choose **Manage sou
 - A source is installed once, even if multiple repositories provide it. **Use this repository** changes its future update origin, keeping the current script and settings until the next update.
 - Older sources without reliable origin records display **No repository linked**. Manual installs display their installation method.
 - Sources without a linked, saved repository are excluded from catalog version checks. Their individual Update action can still use the update URL declared by the script.
+- A linked source can use **Remove repository link** in **Manage source origin**. The script and settings are kept, and later updates use the URL declared by the script.
 - Checks report checked and skipped counts, plus repository failures. A failed repository does not prevent checking others.
 - If a source disappears from its catalog or its variant becomes ambiguous, select its origin again.
+- Invalid catalog entries are skipped and reported above the list. The repository stays browsable and saveable while at least one entry is usable; saving is rejected only when every entry is invalid.
 
 Source settings and accounts remain available by expanding the source in the Installed tab.
 

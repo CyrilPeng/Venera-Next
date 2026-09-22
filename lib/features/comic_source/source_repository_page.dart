@@ -302,6 +302,7 @@ class SourceRepositoryCatalogPage extends StatefulWidget {
 class _SourceRepositoryCatalogPageState
     extends State<SourceRepositoryCatalogPage> {
   List<SourceCatalogEntry>? entries;
+  List<String> skipped = const [];
   String? error;
   String query = '';
   bool loading = false;
@@ -330,6 +331,7 @@ class _SourceRepositoryCatalogPageState
       loading = true;
       error = null;
       entries = null;
+      skipped = const [];
     });
     try {
       final result = await SourceRepositories.instance.load(
@@ -337,7 +339,10 @@ class _SourceRepositoryCatalogPageState
         cancelToken: token,
       );
       if (isCurrent()) {
-        setState(() => entries = result);
+        setState(() {
+          entries = result.entries;
+          skipped = result.skipped;
+        });
       }
     } catch (e) {
       if (isCurrent()) {
@@ -488,6 +493,20 @@ class _SourceRepositoryCatalogPageState
                         ),
                       ),
                     ),
+                  if (skipped.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        'Skipped @count invalid source entries: @names'
+                            .tlParams({
+                              'count': skipped.length.toString(),
+                              'names': skipped.join(', '),
+                            }),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
                   if (!loading && error == null && visible.isEmpty)
                     SourceManagementEmptyState(
                       icon: Icons.search_off,
@@ -628,6 +647,7 @@ Future<void> showSourceOriginPicker(
   ComicSource source,
 ) async {
   final store = SourceRepositories.instance;
+  final canUnlink = store.originFor(source.key)?.kind == 'repository';
   final repository = await showDialog<SourceRepository>(
     context: context,
     builder: (context) => SimpleDialog(
@@ -641,6 +661,14 @@ Future<void> showSourceOriginPicker(
             }),
           ),
         ),
+        if (canUnlink)
+          SimpleDialogOption(
+            onPressed: () async {
+              Navigator.pop(context);
+              await store.setOrigin(source.key, null);
+            },
+            child: Text('Remove repository link'.tl),
+          ),
         if (store.all.isEmpty)
           Padding(
             padding: const EdgeInsets.all(24),

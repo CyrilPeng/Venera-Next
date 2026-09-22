@@ -28,12 +28,34 @@ void main() {
       {"key":"first","name":"First","version":"1.0.0","fileName":"../first.js"},
       {"key":"second","name":"Second","version":"2.0.0","url":"https://other.test/second.js"}
     ]''';
-      final entries = await repositories.load(repository);
-      expect(entries.map((entry) => entry.url), [
+      final catalog = await repositories.load(repository);
+      expect(catalog.skipped, isEmpty);
+      expect(catalog.entries.map((entry) => entry.url), [
         'https://example.test/first.js',
         'https://other.test/second.js',
       ]);
-      expect(entries.map((entry) => entry.key), ['first', 'second']);
+      expect(catalog.entries.map((entry) => entry.key), ['first', 'second']);
+    },
+  );
+
+  test(
+    'invalid entries are skipped and reported instead of failing the catalog',
+    () async {
+      adapter.body = '''[
+      {"key":"good","name":"Good","version":"1.0.0","fileName":"good.js"},
+      {"key":"bad-key","name":"Bad","version":"1.0.0","fileName":"bad.js"},
+      {"key":"bad-version","name":"Bad","version":"1","fileName":"bad.js"},
+      {"key":"missing-target","name":"Bad","version":"1.0.0"},
+      {"key":"local-file","name":"Bad","version":"1.0.0","url":"file:///tmp/x.js"}
+    ]''';
+      final catalog = await repositories.load(repository);
+      expect(catalog.entries.map((entry) => entry.key), ['good']);
+      expect(catalog.skipped, [
+        'bad-key',
+        'bad-version',
+        'missing-target',
+        'local-file',
+      ]);
     },
   );
 
@@ -107,10 +129,10 @@ void main() {
           ...sample.entry,
         },
       ]);
-      final entries = await repositories.load(
+      final catalog = await repositories.load(
         SourceRepository(id: 'repo', name: 'Repo', url: sample.base),
       );
-      expect(entries.single.url, sample.expected);
+      expect(catalog.entries.single.url, sample.expected);
     });
   }
 

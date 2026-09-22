@@ -725,6 +725,8 @@
     "Unable to load repository.": "无法加载仓库。",
     "The address must return a source list in JSON format.": "此地址需要返回 JSON 格式的源列表。",
     "The repository contains an invalid source entry.": "仓库中存在格式不正确的源条目。",
+    "The repository contains no usable source entries.": "仓库中没有可用的源条目。",
+    "Skipped @count invalid source entries: @names": "已跳过 @count 个无效源条目：@names",
     "Enter a repository name.": "请输入仓库名称。",
     "This repository address has already been added.": "已添加过这个仓库地址。",
     "Repository no longer exists.": "这个仓库已被移除。",
@@ -747,7 +749,9 @@
     "Show source settings": "展开源设置",
     "Source actions": "漫画源操作",
     "Edit script": "编辑脚本",
-    "Uninstall source": "卸载漫画源"
+    "Uninstall source": "卸载漫画源",
+    "Remove repository link": "解除仓库关联",
+    "Update already in progress": "更新已在进行中"
   },
   "zh_TW": {
     "Home": "首頁",
@@ -1475,6 +1479,8 @@
     "Unable to load repository.": "無法載入倉庫。",
     "The address must return a source list in JSON format.": "此網址需要回傳 JSON 格式的來源清單。",
     "The repository contains an invalid source entry.": "倉庫中存在格式不正確的來源項目。",
+    "The repository contains no usable source entries.": "倉庫中沒有可用的來源項目。",
+    "Skipped @count invalid source entries: @names": "已跳過 @count 個無效來源項目：@names",
     "Enter a repository name.": "請輸入倉庫名稱。",
     "This repository address has already been added.": "已新增過這個倉庫網址。",
     "Repository no longer exists.": "這個倉庫已被移除。",
@@ -1497,6 +1503,8 @@
     "Show source settings": "展開來源設定",
     "Source actions": "漫畫來源操作",
     "Edit script": "編輯腳本",
-    "Uninstall source": "解除安裝漫畫來源"
+    "Uninstall source": "解除安裝漫畫來源",
+    "Remove repository link": "解除倉庫關聯",
+    "Update already in progress": "更新已在進行中"
   }
 }
