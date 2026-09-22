@@ -35,6 +35,7 @@ This is the English companion index for `doc/`. Documents are grouped by type an
 
 ## User And CLI
 
+- [自动选择阅读模式](user/automatic_reader_mode.zh.md) / [Automatic Reader Mode](user/automatic_reader_mode.en.md)
 - [漫画源与源仓库](user/source_repositories.zh.md) / [Source repositories](user/source_repositories.en.md)
 - [本地漫画导入](user/import_comic.zh.md) / [Import Comic](user/import_comic.en.md)
 - [无头命令模式](user/headless.zh.md) / [Headless Mode](user/headless.en.md)
