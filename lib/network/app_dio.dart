@@ -65,32 +65,42 @@ bool isMalformedExpectedJsonResponse(Response<dynamic> response) {
 class MyLogInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    Log.error("Network",
-        "${err.requestOptions.method} ${err.requestOptions.path}\n$err\n${err.response?.data.toString()}");
+    Log.error(
+      "Network",
+      "${err.requestOptions.method} ${err.requestOptions.path}\n$err\n${err.response?.data.toString()}",
+    );
     switch (err.type) {
       case DioExceptionType.badResponse:
         var statusCode = err.response?.statusCode;
         if (statusCode != null) {
           err = err.copyWith(
-              message: "Invalid Status Code: $statusCode. "
-                  "${_getStatusCodeInfo(statusCode)}");
+            message:
+                "Invalid Status Code: $statusCode. "
+                "${_getStatusCodeInfo(statusCode)}",
+          );
         }
       case DioExceptionType.connectionTimeout:
         err = err.copyWith(message: "Connection Timeout");
       case DioExceptionType.receiveTimeout:
         err = err.copyWith(
-            message: "Receive Timeout: "
-                "This indicates that the server is too busy to respond");
+          message:
+              "Receive Timeout: "
+              "This indicates that the server is too busy to respond",
+        );
       case DioExceptionType.unknown:
         if (err.toString().contains("Connection terminated during handshake")) {
           err = err.copyWith(
-              message: "Connection terminated during handshake: "
-                  "This may be caused by the firewall blocking the connection "
-                  "or your requests are too frequent.");
+            message:
+                "Connection terminated during handshake: "
+                "This may be caused by the firewall blocking the connection "
+                "or your requests are too frequent.",
+          );
         } else if (err.toString().contains("Connection reset by peer")) {
           err = err.copyWith(
-              message: "Connection reset by peer: "
-                  "The error is unrelated to app, please check your network.");
+            message:
+                "Connection reset by peer: "
+                "The error is unrelated to app, please check your network.",
+          );
         }
       default:
         {}
@@ -117,9 +127,15 @@ class MyLogInterceptor extends Interceptor {
 
   @override
   void onResponse(
-      Response<dynamic> response, ResponseInterceptorHandler handler) {
-    var headers = response.headers.map.map((key, value) => MapEntry(
-        key.toLowerCase(), value.length == 1 ? value.first : value.toString()));
+    Response<dynamic> response,
+    ResponseInterceptorHandler handler,
+  ) {
+    var headers = response.headers.map.map(
+      (key, value) => MapEntry(
+        key.toLowerCase(),
+        value.length == 1 ? value.first : value.toString(),
+      ),
+    );
     headers.remove("cookie");
     String content;
     if (response.data is List<int>) {
@@ -132,12 +148,13 @@ class MyLogInterceptor extends Interceptor {
       content = response.data.toString();
     }
     Log.addLog(
-        (response.statusCode != null && response.statusCode! < 400)
-            ? LogLevel.info
-            : LogLevel.error,
-        "Network",
-        "Response ${response.realUri.toString()} ${response.statusCode}\n"
-            "headers:\n$headers\n$content");
+      (response.statusCode != null && response.statusCode! < 400)
+          ? LogLevel.info
+          : LogLevel.error,
+      "Network",
+      "Response ${response.realUri.toString()} ${response.statusCode}\n"
+          "headers:\n$headers\n$content",
+    );
     handler.next(response);
   }
 
@@ -146,24 +163,10 @@ class MyLogInterceptor extends Interceptor {
     const String headerMask = "********";
     const String dataMask = "****** DATA_PROTECTED ******";
     Log.info(
-        "Network",
-        "${options.method} ${options.uri}\n"
-            "headers:\n${
-              options.extra.containsKey("maskHeadersInLog")
-                ? options.headers.map((key, value) =>
-                  MapEntry(
-                    key,
-                    options.extra["maskHeadersInLog"].contains(key)
-                      ? headerMask
-                      : value
-                  ))
-                : options.headers
-            }\n"
-            "data:\n${
-              options.extra["maskDataInLog"] == true
-                ? dataMask
-                : options.data
-            }"
+      "Network",
+      "${options.method} ${options.uri}\n"
+          "headers:\n${options.extra.containsKey("maskHeadersInLog") ? options.headers.map((key, value) => MapEntry(key, options.extra["maskHeadersInLog"].contains(key) ? headerMask : value)) : options.headers}\n"
+          "data:\n${options.extra["maskDataInLog"] == true ? dataMask : options.data}",
     );
     options.connectTimeout = const Duration(seconds: 15);
     options.receiveTimeout = const Duration(seconds: 15);
@@ -282,7 +285,12 @@ class RHttpAdapter implements HttpClientAdapter {
       options.headers['User-Agent'] = "VeneraNext/v${App.version}";
     }
 
+    final nativeCancelToken = cancelFuture == null ? null : rhttp.CancelToken();
+    if (nativeCancelToken != null) {
+      unawaited(cancelFuture!.then((_) => nativeCancelToken.cancel()));
+    }
     var res = await rhttp.Rhttp.request(
+      cancelToken: nativeCancelToken,
       method: rhttp.HttpMethod(options.method),
       url: options.uri.toString(),
       settings: await settings,

@@ -6,6 +6,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/source_repositories.dart';
+import 'package:venera_next/features/comic_source/source_repository_page.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -16,455 +18,268 @@ void main() {
   late Directory dataDir;
   late _SourceRequests requests;
   late List<String> messages;
-  late Object? previousListUrl;
+  late Map<String, dynamic> previousSettings;
   late bool previousLogMuted;
   final scenarios = <({String name, WidgetTesterCallback body})>[];
+  const repository = SourceRepository(
+    id: 'repo',
+    name: 'Repo',
+    url: 'https://example.test/repo/index.json',
+  );
 
-  void sourceScenario(String name, WidgetTesterCallback body) {
-    scenarios.add((name: name, body: body));
-  }
-
+  void sourceScenario(String name, WidgetTesterCallback body) =>
+      scenarios.add((name: name, body: body));
   void setUpScenario() {
-    dataDir = Directory.systemTemp.createTempSync('venera-source-list-');
+    dataDir = Directory.systemTemp.createTempSync('venera-source-update-');
     Directory('${dataDir.path}/comic_source').createSync();
     App.dataPath = dataDir.path;
-    previousListUrl = appdata.settings['comicSourceListUrl'];
-    appdata.settings['comicSourceListUrl'] = '';
+    previousSettings = jsonDecode(jsonEncode(appdata.toJson()['settings']));
+    appdata.settings['comicSourceRepositories'] = <Map<String, dynamic>>[];
+    appdata.settings['comicSourceOrigins'] = <String, dynamic>{};
+    appdata.settings['language'] = 'en-US';
     previousLogMuted = Log.isMuted;
     Log.isMuted = true;
     requests = _SourceRequests();
     messages = [];
-    ComicSourcePage.debugCreateDio = () =>
-        AppDio()..httpClientAdapter = requests;
+    Dio createDio() => Dio()..httpClientAdapter = requests;
+    ComicSourcePage.debugCreateDio = createDio;
+    SourceRepositories.debugCreateDio = createDio;
     registerShowMessageHandler((context, message) => messages.add(message));
   }
 
   void tearDownScenario() {
     ComicSourceManager().remove('installed_source');
-    appdata.settings['comicSourceListUrl'] = previousListUrl;
+    previousSettings.forEach((key, value) => appdata.settings[key] = value);
     ComicSourcePage.debugCreateDio = null;
+    SourceRepositories.debugCreateDio = null;
     registerShowMessageHandler((context, message) {});
     Log.isMuted = previousLogMuted;
     dataDir.deleteSync(recursive: true);
   }
 
-  Future<void> pumpPage(WidgetTester tester, {bool sourcePage = true}) async {
-    tester.view.physicalSize = const Size(480, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  Future<void> pumpPage(WidgetTester tester, {Widget? child}) async {
     await tester.pumpWidget(
       MaterialApp(
         navigatorKey: App.rootNavigatorKey,
-        home: sourcePage ? const ComicSourcePage() : const Scaffold(),
+        home: child ?? const Scaffold(),
       ),
     );
   }
 
-  Future<void> openList(WidgetTester tester) async {
-    await pumpPage(tester);
-    await tester.tap(find.text('Comic Source list'));
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.pump();
-  }
-
-  Future<_PendingRequest> refresh(WidgetTester tester, String url) async {
-    final count = requests.items.length;
-    await tester.enterText(find.byType(TextField).last, url);
-    await tester.tap(find.text('Refresh'));
-    await _pumpUntil(tester, () => requests.items.length == count + 1);
-    return requests.items.last;
-  }
-
-  Future<void> loadList(
-    WidgetTester tester, {
-    String url = 'https://example.test/repo/index.json',
-    Map<String, dynamic>? entry,
-  }) async {
-    final request = await refresh(tester, url);
-    request.reply(_listJson(entry: entry));
-    await _pumpUntil(
-      tester,
-      () => find.text('Example Source').evaluate().isNotEmpty,
+  ComicSource install({bool linked = false}) {
+    final source = _installedSource(
+      '${dataDir.path}/comic_source/installed.js',
     );
-    await _flushSettings(tester);
+    ComicSourceManager().add(source);
+    File(source.filePath).writeAsStringSync('original content');
+    if (linked) {
+      appdata.settings['comicSourceRepositories'] = [repository.toJson()];
+      appdata.settings['comicSourceOrigins'] = {
+        source.key: const SourceOrigin(
+          kind: 'repository',
+          repositoryId: 'repo',
+          url: 'https://example.test/repo/installed.js',
+        ).toJson(),
+      };
+    }
+    return source;
   }
 
-  Future<_PendingRequest> add(WidgetTester tester) async {
-    final count = requests.items.length;
-    await tester.tap(find.text('Add'));
-    await _pumpUntil(tester, () => requests.items.length == count + 1);
-    return requests.items.last;
-  }
+  String catalog({String name = 'Installed Source'}) => jsonEncode([
+    {
+      'key': 'installed_source',
+      'name': name,
+      'version': '1.1.0',
+      'fileName': 'installed.js',
+    },
+  ]);
 
-  Future<void> failDownload(
-    WidgetTester tester,
-    _PendingRequest request,
-  ) async {
-    request.reply('', status: 503);
-    await _pumpUntil(tester, () => messages.isNotEmpty);
-    expect(find.text('Loading'), findsNothing);
-    expect(messages.last, 'Network error');
-    expect(tester.takeException(), isNull);
+  for (final linked in [false, true]) {
+    sourceScenario('cancel script download and retry immediately: linked=$linked', (
+      tester,
+    ) async {
+      await pumpPage(tester);
+      final source = install(linked: linked);
+      final update = ComicSourcePage.update(source);
+      await _pumpUntil(tester, () => requests.items.isNotEmpty);
+      if (linked) {
+        requests.items.single.reply(catalog());
+        await _pumpUntil(tester, () => requests.items.length == 2);
+      }
+      final request = requests.items.last;
+      final count = requests.items.length;
+      await tester.tap(find.text('Cancel'));
+      // Retry before the old request's cleanup runs; it must not clear the new lock.
+      final retry = ComicSourcePage.update(source);
+      await _pumpUntil(tester, () => requests.items.length == count + 1);
+      expect(request.cancelled, isTrue);
+      request.reply('late cancelled response must not replace the script');
+      await update;
+      await ComicSourcePage.update(source);
+      await tester.pump();
+      expect(requests.items, hasLength(count + 1));
+      expect(find.text('Loading'), findsOneWidget);
+      expect(ComicSourceManager().find(source.key), same(source));
+      expect(File(source.filePath).readAsStringSync(), 'original content');
+      expect(messages, isEmpty);
+      // Cancel the retry too; for linked sources it is still querying the catalog.
+      await tester.tap(find.text('Cancel'));
+      await _pumpUntil(tester, () => requests.items.last.cancelled);
+      await retry;
+      await tester.pump();
+      expect(find.text('Loading'), findsNothing);
+      expect(File(source.filePath).readAsStringSync(), 'original content');
+    });
   }
 
   sourceScenario(
-    'first refresh saves its URL and immediately adds from that repo',
+    'cancel repository lookup closes loading without starting a script download',
     (tester) async {
-      await openList(tester);
-      await loadList(tester, url: '  https://example.test/repo/index.json  ');
+      await pumpPage(tester);
+      final source = install(linked: true);
+      final update = ComicSourcePage.update(source);
+      await _pumpUntil(tester, () => requests.items.isNotEmpty);
+      final lookup = requests.items.single;
+      expect(lookup.options.uri.toString(), repository.url);
+      await tester.tap(find.text('Cancel'));
+      await _pumpUntil(tester, () => lookup.cancelled);
+      await update;
+      await tester.pump();
+      expect(find.text('Loading'), findsNothing);
+      lookup.reply(catalog());
+      await tester.pump();
+      expect(requests.items, hasLength(1));
+      expect(ComicSourceManager().find(source.key), same(source));
+      expect(File(source.filePath).readAsStringSync(), 'original content');
+      expect(messages, isEmpty);
+    },
+  );
 
-      expect(
-        appdata.settings['comicSourceListUrl'],
-        'https://example.test/repo/index.json',
-      );
-      final saved = jsonDecode(
+  sourceScenario(
+    'failed update preserves the source, closes loading and permits retry',
+    (tester) async {
+      await pumpPage(tester);
+      final source = install();
+      final update = ComicSourcePage.update(source);
+      await _pumpUntil(tester, () => requests.items.isNotEmpty);
+      requests.items.single.reply('', status: 503);
+      await _pumpUntil(tester, () => messages.isNotEmpty);
+      await update;
+      expect(messages, ['Network error']);
+      expect(find.text('Loading'), findsNothing);
+      expect(ComicSourceManager().find(source.key), same(source));
+      expect(File(source.filePath).readAsStringSync(), 'original content');
+      final retry = ComicSourcePage.update(source);
+      await _pumpUntil(tester, () => requests.items.length == 2);
+      await tester.tap(find.text('Cancel'));
+      await _pumpUntil(tester, () => requests.items.last.cancelled);
+      await retry;
+    },
+  );
+
+  // The old single-list editor was replaced by repository management. Keep its
+  // validate-before-save and URL binding guarantees against the new public API.
+  sourceScenario(
+    'save and edit validate first and persist the loaded catalog address',
+    (tester) async {
+      await pumpPage(tester);
+      SourceRepository? saved;
+      final save = SourceRepositories.instance
+          .save(name: 'Repo', url: '  https://example.test/repo/index.json  ')
+          .then((value) => saved = value);
+      await _pumpUntil(tester, () => requests.items.length == 1);
+      expect(SourceRepositories.instance.all, isEmpty);
+      requests.items.single.reply(catalog());
+      await _pumpUntil(tester, () => saved != null);
+      await save;
+      expect(saved!.url, repository.url);
+      final persisted = jsonDecode(
         File('${dataDir.path}/appdata.json').readAsStringSync(),
       );
       expect(
-        saved['settings']['comicSourceListUrl'],
-        'https://example.test/repo/index.json',
+        persisted['settings']['comicSourceRepositories'].single['url'],
+        repository.url,
       );
-
-      final request = await add(tester);
+      final edit = SourceRepositories.instance.save(
+        id: saved!.id,
+        name: 'New',
+        url: 'https://new.test/index.json',
+      );
+      final failed = expectLater(edit, throwsA(isA<DioException>()));
+      await _pumpUntil(tester, () => requests.items.length == 2);
+      requests.items.last.reply('', status: 503);
+      await _pumpUntil(tester, () => requests.closedClients >= 2);
+      await failed;
+      expect(SourceRepositories.instance.find(saved!.id)!.url, repository.url);
+      final changed = SourceRepositories.instance.save(
+        id: saved!.id,
+        name: 'New',
+        url: 'https://new.test/index.json',
+      );
+      await _pumpUntil(tester, () => requests.items.length == 3);
+      requests.items.last.reply(catalog());
+      var finished = false;
+      final done = changed.then((_) => finished = true);
+      await _pumpUntil(tester, () => finished);
+      await done;
       expect(
-        request.options.uri.toString(),
-        'https://example.test/repo/example.js',
-      );
-      expect(find.text('Loading'), findsOneWidget);
-      await failDownload(tester, request);
-      expect(find.text('Example Source'), findsOneWidget);
-    },
-  );
-
-  sourceScenario('editing the input does not change the loaded list base URL', (
-    tester,
-  ) async {
-    await openList(tester);
-    await loadList(tester);
-    await tester.enterText(
-      find.byType(TextField).last,
-      'https://other.test/index.json',
-    );
-
-    final request = await add(tester);
-    expect(
-      request.options.uri.toString(),
-      'https://example.test/repo/example.js',
-    );
-    await failDownload(tester, request);
-
-    App.rootNavigatorKey.currentState!.pop();
-    await tester.pumpAndSettle();
-    expect(
-      appdata.settings['comicSourceListUrl'],
-      'https://example.test/repo/index.json',
-    );
-  });
-
-  sourceScenario(
-    'switching repositories uses the new successfully loaded URL',
-    (tester) async {
-      appdata.settings['comicSourceListUrl'] = 'https://old.test/index.json';
-      await openList(tester);
-      await _pumpUntil(tester, () => requests.items.isNotEmpty);
-      requests.items.single.reply(_listJson());
-      await _pumpUntil(
-        tester,
-        () => find.text('Example Source').evaluate().isNotEmpty,
-      );
-      await loadList(tester, url: 'https://new.test/config/index.json');
-
-      final request = await add(tester);
-      expect(
-        request.options.uri.toString(),
-        'https://new.test/config/example.js',
-      );
-      await failDownload(tester, request);
-    },
-  );
-
-  for (final staleFails in [false, true]) {
-    sourceScenario('latest refresh wins when stale request fails=$staleFails', (
-      tester,
-    ) async {
-      await openList(tester);
-      final old = await refresh(tester, 'https://old.test/index.json');
-      final current = await refresh(tester, 'https://new.test/index.json');
-      current.reply(_listJson());
-      await _pumpUntil(
-        tester,
-        () => find.text('Example Source').evaluate().isNotEmpty,
-      );
-      old.reply(
-        _listJson(name: 'Stale Source'),
-        status: staleFails ? 503 : 200,
-      );
-      await tester.pump();
-
-      expect(old.cancelled, isTrue);
-      expect(find.text('Stale Source'), findsNothing);
-      expect(find.text('Example Source'), findsOneWidget);
-      expect(
-        appdata.settings['comicSourceListUrl'],
+        SourceRepositories.instance.find(saved!.id)!.url,
         'https://new.test/index.json',
       );
       expect(messages, isEmpty);
-      expect(tester.takeException(), isNull);
-    });
-  }
-
-  sourceScenario('failed refresh does not save over the last working repo', (
-    tester,
-  ) async {
-    await openList(tester);
-    await loadList(tester);
-    final failed = await refresh(tester, 'https://offline.test/index.json');
-    failed.reply('', status: 503);
-    await _pumpUntil(tester, () => messages.isNotEmpty);
-
-    expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(
-      appdata.settings['comicSourceListUrl'],
-      'https://example.test/repo/index.json',
-    );
-    App.rootNavigatorKey.currentState!.pop();
-    await tester.pumpAndSettle();
-    expect(
-      appdata.settings['comicSourceListUrl'],
-      'https://example.test/repo/index.json',
-    );
-  });
-
-  sourceScenario(
-    'closing a loading list cancels it without saving or reporting errors',
-    (tester) async {
-      await openList(tester);
-      final request = await refresh(tester, 'https://example.test/index.json');
-      App.rootNavigatorKey.currentState!.pop();
-      await tester.pumpAndSettle();
-      request.reply(_listJson());
-      await tester.pump();
-
-      expect(request.cancelled, isTrue);
-      expect(appdata.settings['comicSourceListUrl'], isEmpty);
-      expect(messages, isEmpty);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  sourceScenario('refreshing an empty input explicitly clears the saved repo', (
-    tester,
-  ) async {
-    await openList(tester);
-    await loadList(tester);
-    await tester.enterText(find.byType(TextField).last, '   ');
-    await tester.tap(find.text('Refresh'));
-    await _flushSettings(tester);
-    await tester.pumpAndSettle();
-
-    expect(appdata.settings['comicSourceListUrl'], isEmpty);
-    expect(requests.items, hasLength(1));
-    expect(find.text('Example Source'), findsNothing);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
-  });
-
-  for (final invalid in [
-    'not json',
-    '{}',
-    '[null]',
-    '[{"name": 42, "key": "bad"}]',
-  ]) {
-    sourceScenario(
-      'rejects malformed list $invalid without saving its address',
-      (tester) async {
-        await openList(tester);
-        final request = await refresh(
-          tester,
-          'https://example.test/index.json',
-        );
-        request.reply(invalid);
-        await _pumpUntil(tester, () => messages.isNotEmpty);
-
-        expect(messages.single, 'Invalid comic source list');
-        expect(appdata.settings['comicSourceListUrl'], isEmpty);
-        expect(find.byType(CircularProgressIndicator), findsNothing);
-        expect(tester.takeException(), isNull);
-      },
-    );
-  }
-
-  final urlCases =
-      <
-        ({
-          String label,
-          String base,
-          Map<String, dynamic> entry,
-          String expected,
-        })
-      >[
-        (
-          label: 'absolute url',
-          base: 'https://example.test/repo/index.json',
-          entry: {'url': 'https://cdn.test/custom.js'},
-          expected: 'https://cdn.test/custom.js',
-        ),
-        (
-          label: 'relative url',
-          base: 'https://example.test/repo/index.json',
-          entry: {'url': '../scripts/custom.js'},
-          expected: 'https://example.test/scripts/custom.js',
-        ),
-        (
-          label: 'root relative path',
-          base: 'https://example.test/repo/index.json',
-          entry: {'fileName': '/scripts/custom.js'},
-          expected: 'https://example.test/scripts/custom.js',
-        ),
-        (
-          label: 'query with slash',
-          base: 'https://example.test/repo/index.json?token=a/b',
-          entry: {'fileName': 'nested/custom.js'},
-          expected: 'https://example.test/repo/nested/custom.js',
-        ),
-        (
-          label: 'scheme relative url',
-          base: 'https://example.test/repo/index.json',
-          entry: {'url': '//cdn.test/custom.js'},
-          expected: 'https://cdn.test/custom.js',
-        ),
-        (
-          label: 'local host and port',
-          base: 'http://localhost:8080/index.json',
-          entry: {'fileName': 'custom.js'},
-          expected: 'http://localhost:8080/custom.js',
-        ),
-      ];
-  for (final sample in urlCases) {
-    sourceScenario('resolves ${sample.label} using URI semantics', (
-      tester,
-    ) async {
-      await openList(tester);
-      await loadList(tester, url: sample.base, entry: sample.entry);
-      final request = await add(tester);
-      expect(request.options.uri.toString(), sample.expected);
-      await failDownload(tester, request);
-    });
-  }
-
-  sourceScenario(
-    'invalid source download URL reports an error without opening loading',
-    (tester) async {
-      await openList(tester);
-      await loadList(tester, entry: {'url': 'file:///tmp/example.js'});
-      await tester.tap(find.text('Add'));
-      await tester.pump();
-
-      expect(requests.items, hasLength(1));
-      expect(messages.single, 'Invalid url config');
-      expect(find.text('Loading'), findsNothing);
-      expect(tester.takeException(), isNull);
     },
   );
 
   sourceScenario(
-    'successful download closes loading before reporting a parse failure',
+    'closing catalog cancels the request and ignores its late response',
     (tester) async {
-      await openList(tester);
-      await loadList(
+      await pumpPage(
         tester,
-        entry: {'url': 'https://cdn.test/custom.js?token=a/b#fragment'},
+        child: const SourceRepositoryCatalogPage(repository: repository),
       );
-      final request = await add(tester);
-      request.reply('This is deliberately not a JavaScript source.');
-      await _pumpUntil(tester, () => messages.isNotEmpty);
-
-      expect(messages.single, 'Invalid Content');
-      expect(find.text('Loading'), findsNothing);
-      expect(Directory('${dataDir.path}/comic_source').listSync(), isEmpty);
+      await _pumpUntil(tester, () => requests.items.isNotEmpty);
+      final request = requests.items.single;
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpUntil(tester, () => request.cancelled);
+      request.reply(catalog());
+      await tester.pump();
+      expect(messages, isEmpty);
+      expect(requests.closedClients, 1);
       expect(tester.takeException(), isNull);
     },
   );
 
-  sourceScenario(
-    'cancelling a download ignores its late response and allows retry',
-    (tester) async {
-      await openList(tester);
-      await loadList(tester);
-      final request = await add(tester);
-      await tester.tap(find.text('Cancel'));
-      await _pumpUntil(tester, () => request.cancelled);
-      request.reply('This cancelled source must not be parsed.');
-      await tester.pump();
-
-      expect(find.text('Loading'), findsNothing);
-      expect(messages, isEmpty);
-      expect(Directory('${dataDir.path}/comic_source').listSync(), isEmpty);
-      final retry = await add(tester);
-      await failDownload(tester, retry);
-    },
-  );
-
-  sourceScenario('disposing the source page cancels its pending download', (
+  sourceScenario('catalog HTTP failure clears loading and refresh can retry', (
     tester,
   ) async {
-    await openList(tester);
-    await loadList(tester);
-    final request = await add(tester);
-    await tester.pumpWidget(const SizedBox.shrink());
-    request.reply('This disposed source must not be parsed.');
-    await tester.pump();
-
-    expect(request.cancelled, isTrue);
-    expect(messages, isEmpty);
+    await pumpPage(
+      tester,
+      child: const SourceRepositoryCatalogPage(repository: repository),
+    );
+    await _pumpUntil(tester, () => requests.items.isNotEmpty);
+    requests.items.single.reply('', status: 503);
+    await _pumpUntil(
+      tester,
+      () => find.byType(LinearProgressIndicator).evaluate().isEmpty,
+    );
+    expect(requests.closedClients, 1);
+    await tester.tap(find.text('Refresh list'));
+    await _pumpUntil(tester, () => requests.items.length == 2);
+    requests.items.last.reply(catalog());
+    await _pumpUntil(
+      tester,
+      () => find.text('Installed Source').evaluate().isNotEmpty,
+    );
+    expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(tester.takeException(), isNull);
   });
-
-  for (final cancel in [false, true]) {
-    sourceScenario(
-      'failed/cancelled update preserves installed source: cancel=$cancel',
-      (tester) async {
-        await pumpPage(tester, sourcePage: false);
-        final source = _installedSource(
-          '${dataDir.path}/comic_source/installed.js',
-        );
-        final manager = ComicSourceManager();
-        manager.add(source);
-        File(source.filePath).writeAsStringSync('original content');
-
-        final update = ComicSourcePage.update(source);
-        await _pumpUntil(tester, () => requests.items.isNotEmpty);
-        final request = requests.items.single;
-        expect(manager.find(source.key), same(source));
-        if (cancel) {
-          await tester.tap(find.text('Cancel'));
-          await _pumpUntil(tester, () => request.cancelled);
-          request.reply('cancelled update');
-        } else {
-          await failDownload(tester, request);
-        }
-        await update;
-        await tester.pump();
-
-        expect(find.text('Loading'), findsNothing);
-        expect(manager.find(source.key), same(source));
-        expect(File(source.filePath).readAsStringSync(), 'original content');
-        expect(messages, cancel ? isEmpty : ['Network error']);
-        expect(tester.takeException(), isNull);
-      },
-    );
-  }
 
   test(
     'headless update propagates download errors without removing the source',
     () async {
       setUpScenario();
       addTearDown(tearDownScenario);
-      final source = _installedSource(
-        '${dataDir.path}/comic_source/installed.js',
-      );
-      final manager = ComicSourceManager();
-      manager.add(source);
+      final source = install();
       final result = expectLater(
         ComicSourcePage.update(source, false),
         throwsA(isA<DioException>()),
@@ -472,44 +287,38 @@ void main() {
       await pumpEventQueue();
       requests.items.single.reply('', status: 503);
       await result;
-      expect(manager.find(source.key), same(source));
+      expect(ComicSourceManager().find(source.key), same(source));
+      expect(File(source.filePath).readAsStringSync(), 'original content');
+      expect(requests.closedClients, 1);
     },
   );
 
-  testWidgets('source repository and download regression scenarios', (
-    tester,
-  ) async {
-    // Appdata's shared write queue must stay within one widget-test clock.
-    for (final scenario in scenarios) {
-      debugPrint('Source scenario: ${scenario.name}');
-      setUpScenario();
-      try {
-        await scenario.body(tester);
-      } finally {
-        await tester.pumpWidget(const SizedBox.shrink());
-        for (final request in requests.items) {
-          if (!request.response.isCompleted) request.reply('', status: 503);
+  testWidgets(
+    'source update and repository cancellation regression scenarios',
+    (tester) async {
+      tester.view.physicalSize = const Size(480, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      // Keep Appdata's shared write queue within the same widget-test clock.
+      for (final scenario in scenarios) {
+        debugPrint('Source scenario: ${scenario.name}');
+        setUpScenario();
+        try {
+          await scenario.body(tester);
+        } finally {
+          await tester.pumpWidget(const SizedBox.shrink());
+          for (final request in requests.items) {
+            if (!request.response.isCompleted) request.reply('', status: 503);
+          }
+          await tester.pump();
+          await _flushSettings(tester);
+          tearDownScenario();
         }
-        await tester.pump();
-        await _flushSettings(tester);
-        tearDownScenario();
       }
-    }
-  });
+    },
+  );
 }
-
-String _listJson({
-  String name = 'Example Source',
-  Map<String, dynamic>? entry,
-}) => jsonEncode([
-  {
-    'name': name,
-    'key': 'example_source',
-    'version': '1.0.0',
-    'fileName': 'example.js',
-    ...?entry,
-  },
-]);
 
 Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
   for (var i = 0; i < 100; i++) {
@@ -543,6 +352,7 @@ class _PendingRequest {
 
 class _SourceRequests implements HttpClientAdapter {
   final items = <_PendingRequest>[];
+  int closedClients = 0;
 
   @override
   Future<ResponseBody> fetch(
@@ -556,7 +366,9 @@ class _SourceRequests implements HttpClientAdapter {
   }
 
   @override
-  void close({bool force = false}) {}
+  void close({bool force = false}) {
+    closedClients++;
+  }
 }
 
 ComicSource _installedSource(String filePath) => ComicSource(
