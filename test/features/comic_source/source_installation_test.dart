@@ -8,6 +8,7 @@ import 'package:venera_next/features/comic_source/comic_source_manager.dart';
 import 'package:venera_next/features/comic_source/source.dart';
 import 'package:venera_next/features/comic_source/source_installation.dart';
 import 'package:venera_next/features/comic_source/source_repositories.dart';
+import 'package:venera_next/features/comic_source/parser.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
 void main() {
@@ -158,6 +159,58 @@ void main() {
       expect(manager.installs.single.kind, 'file');
     },
   );
+
+  test(
+    'file retry reads edited contents instead of the failed snapshot',
+    () async {
+      var content = 'broken';
+      manager.failNext = true;
+      final task = queue.enqueueFile(
+        'local.js',
+        Uint8List.fromList(utf8.encode(content)),
+        readFile: () async => Uint8List.fromList(utf8.encode(content)),
+      );
+      await settle();
+      expect(task.phase, SourceInstallPhase.failed);
+      content = 'fixed';
+      queue.retry(task);
+      await settle();
+      expect(manager.scripts, ['broken', 'fixed']);
+      expect(task.phase, SourceInstallPhase.succeeded);
+    },
+  );
+
+  test(
+    'duplicate imports can reload the edited file and recover from a failed replacement',
+    () async {
+      final registry = ComicSourceManager();
+      registry.add(_Source());
+      addTearDown(() => registry.remove('installed'));
+      var content = 'draft';
+      manager.failWith = SourceAlreadyInstalledException('installed');
+      final task = queue.enqueueFile(
+        'local.js',
+        Uint8List.fromList(utf8.encode(content)),
+        readFile: () async => Uint8List.fromList(utf8.encode(content)),
+      );
+      await settle();
+      expect(task.sourceKey, 'installed');
+      expect(queue.canRetry(task), isFalse);
+      expect(queue.canReplace(task), isTrue);
+      manager.failNext = true;
+      queue.replace(task);
+      await settle();
+      expect(task.phase, SourceInstallPhase.failed);
+      expect(registry.find('installed'), isNotNull);
+      content = 'fixed';
+      queue.replace(task);
+      expect(queue.canReplace(task), isFalse);
+      await settle();
+      expect(manager.replacements, ['draft', 'fixed']);
+      expect(task.phase, SourceInstallPhase.succeeded);
+      expect(queue.canReplace(task), isTrue);
+    },
+  );
 }
 
 class _Downloads implements HttpClientAdapter {
@@ -184,6 +237,10 @@ class _Downloads implements HttpClientAdapter {
 
 class _Manager extends Fake implements ComicSourceManager {
   final installs = <SourceOrigin>[];
+  final scripts = <String>[];
+  final replacements = <String>[];
+  Object? failWith;
+  bool failNext = false;
   @override
   Future<ComicSource> installScript({
     required String js,
@@ -193,8 +250,33 @@ class _Manager extends Fake implements ComicSourceManager {
     required void Function() beforeInstall,
   }) async {
     beforeInstall();
+    scripts.add(js);
+    if (failWith != null) {
+      final error = failWith!;
+      failWith = null;
+      throw error;
+    }
+    if (failNext) {
+      failNext = false;
+      throw 'invalid script';
+    }
     installs.add(origin);
     return _Source();
+  }
+
+  @override
+  Future<void> replaceScript(
+    ComicSource source,
+    String js, {
+    required void Function() validate,
+    SourceOrigin? origin,
+  }) async {
+    validate();
+    replacements.add(js);
+    if (failNext) {
+      failNext = false;
+      throw 'invalid replacement';
+    }
   }
 }
 

@@ -5,7 +5,6 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/button.dart';
-import 'package:venera_next/components/code.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/components/select.dart';
@@ -28,6 +27,7 @@ import 'source_installation_widgets.dart';
 import 'source_translation.dart';
 import 'source_repositories.dart';
 import 'source_repository_page.dart';
+import 'source_script_editor.dart';
 
 class ComicSourcePage extends StatelessWidget {
   const ComicSourcePage({super.key});
@@ -266,24 +266,64 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
   void edit(ComicSource source) async {
     if (App.isDesktop) {
       try {
-        await Process.run("code", [source.filePath], runInShell: true);
+        final directory = Directory('${App.cachePath}/source_edit');
+        await directory.create(recursive: true);
+        final draft = await File(
+          source.filePath,
+        ).copy('${directory.path}/${source.key}.js');
+        final process = await Process.run("code", [
+          draft.path,
+        ], runInShell: true);
+        if (process.exitCode != 0) throw process.stderr.toString();
+        if (!mounted) return;
+        String? error;
+        bool saving = false;
         await showDialog(
           context: App.rootContext,
-          builder: (context) => AlertDialog(
-            title: Text("Reload Configs".tl),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text("Cancel".tl),
+          builder: (context) => StatefulBuilder(
+            builder: (context, updateDialog) => AlertDialog(
+              title: Text("Reload Configs".tl),
+              scrollable: true,
+              content: SelectableText(
+                error ??
+                    'Save the file in your editor, then reload it here.'.tl,
               ),
-              TextButton(
-                onPressed: () async {
-                  await ComicSourceManager().reload();
-                  App.forceRebuild();
-                },
-                child: Text("Continue".tl),
-              ),
-            ],
+              actions: [
+                TextButton(
+                  onPressed: saving ? null : () => Navigator.pop(context),
+                  child: Text("Cancel".tl),
+                ),
+                TextButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          updateDialog(() {
+                            saving = true;
+                            error = null;
+                          });
+                          try {
+                            await ComicSourceManager().replaceScript(
+                              source,
+                              await draft.readAsString(),
+                              validate: () {},
+                            );
+                            if (context.mounted) {
+                              updateDialog(() => error = 'Source reloaded'.tl);
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              updateDialog(() => error = e.toString());
+                            }
+                          } finally {
+                            if (context.mounted) {
+                              updateDialog(() => saving = false);
+                            }
+                          }
+                        },
+                  child: Text(saving ? 'Loading'.tl : 'Reload'.tl),
+                ),
+              ],
+            ),
           ),
         );
         return;
@@ -291,12 +331,23 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
         //
       }
     }
-    context.to(
-      () => _EditFilePage(source.filePath, () async {
-        await ComicSourceManager().reload();
-        setState(() {});
-      }),
-    );
+    if (!mounted) return;
+    try {
+      final script = await File(source.filePath).readAsString();
+      if (!mounted) return;
+      context.to(
+        () => SourceScriptEditor(
+          script: script,
+          onSave: (script) => ComicSourceManager().replaceScript(
+            source,
+            script,
+            validate: () {},
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) context.showMessage(message: error.toString());
+    }
   }
 
   void update(ComicSource source, [bool showLoading = true]) {
@@ -355,7 +406,11 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
     if (file == null) return;
     try {
       final bytes = await file.readAsBytes();
-      SourceInstallations.instance.enqueueFile(file.name, bytes);
+      SourceInstallations.instance.enqueueFile(
+        file.name,
+        bytes,
+        readFile: file.readAsBytes,
+      );
     } catch (e, s) {
       App.rootContext.showMessage(message: e.toString());
       Log.error("Add comic source", "$e\n$s");
@@ -364,7 +419,7 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
 
   void help() {
     launchUrlString(
-      "https://github.com/CyrilPeng/venera-next/blob/main/doc/comic_source.md",
+      "https://github.com/CyrilPeng/venera-next/blob/main/doc/development/source_debugging.zh.md",
     );
   }
 }
@@ -464,52 +519,6 @@ void _validatePages() {
   appdata.settings['favorites'] = networkFavorites.toSet().toList();
 
   appdata.saveData();
-}
-
-class _EditFilePage extends StatefulWidget {
-  const _EditFilePage(this.path, this.onExit);
-
-  final String path;
-
-  final void Function() onExit;
-
-  @override
-  State<_EditFilePage> createState() => __EditFilePageState();
-}
-
-class __EditFilePageState extends State<_EditFilePage> {
-  var current = '';
-
-  @override
-  void initState() {
-    super.initState();
-    current = File(widget.path).readAsStringSync();
-  }
-
-  @override
-  void dispose() {
-    File(widget.path).writeAsStringSync(current);
-    widget.onExit();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: Appbar(title: Text("Edit".tl)),
-      body: Column(
-        children: [
-          Container(height: 0.6, color: context.colorScheme.outlineVariant),
-          Expanded(
-            child: CodeEditor(
-              initialValue: current,
-              onChanged: (value) => current = value,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _CheckUpdatesButton extends StatefulWidget {

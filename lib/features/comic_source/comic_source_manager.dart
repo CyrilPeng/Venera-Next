@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -138,6 +139,7 @@ class ComicSourceManager with ChangeNotifier, Init {
     );
     configureComicSourceJsDataBridge();
     await JsEngine().ensureInit();
+    final loaded = <ComicSource>[];
     final path = "${App.dataPath}/comic_source";
     if (!(await Directory(path).exists())) {
       await Directory(path).create();
@@ -150,6 +152,7 @@ class ComicSourceManager with ChangeNotifier, Init {
               entity.absolute.path,
             );
             _sources.add(source);
+            loaded.add(source);
           } catch (e, s) {
             Log.error("ComicSource", "$e\n$s");
           }
@@ -162,6 +165,15 @@ class ComicSourceManager with ChangeNotifier, Init {
       if (find(source.key) == null) {
         _sources.add(source);
       }
+    }
+    // Register every source before invoking init. Network work in one source
+    // must not hold up startup or prevent the other sources from initializing.
+    for (final source in loaded) {
+      unawaited(
+        _initializeSource(source).catchError((Object error, StackTrace stack) {
+          Log.error('ComicSource', '${source.name}: $error', stack);
+        }),
+      );
     }
   }
 
@@ -180,9 +192,62 @@ class ComicSourceManager with ChangeNotifier, Init {
 
   Future<void> _reloadSources() async {
     _sources.clear();
-    JsEngine().runCode("ComicSource.sources = {};");
+    JsEngine().runCode('ComicSource.sources = {};');
     await doInit();
     notifyListeners();
+  }
+
+  Future<void> reloadForDebug() => _mutate(() async {
+    final errors = <String>[];
+    for (final source in all().where((source) => source.filePath.isNotEmpty)) {
+      try {
+        await _replaceScript(
+          source,
+          await File(source.filePath).readAsString(),
+          validate: () {},
+        );
+      } catch (error) {
+        errors.add('${source.name}: $error');
+      }
+    }
+    notifyListeners();
+    if (errors.isNotEmpty) throw ComicSourceParseException(errors.join('\n'));
+  });
+
+  Future<void> reloadSource(ComicSource source) => _mutate(() async {
+    await _replaceScript(
+      source,
+      await File(source.filePath).readAsString(),
+      validate: () {},
+    );
+  });
+
+  Future<void> _initializeSource(ComicSource source) async {
+    await Future.sync(
+      () => JsEngine().runCode('''(() => {
+        const result = ComicSource.sources[${jsonEncode(source.key)}]?.init?.();
+        return result && typeof result.then === 'function'
+          ? result.then(() => undefined) : undefined;
+      })()''', source.filePath),
+    ).timeout(const Duration(seconds: 15));
+  }
+
+  Map<String, dynamic> _snapshotPages() => {
+    for (final key in [
+      'explore_pages',
+      'categories',
+      'favorites',
+      'searchSources',
+    ])
+      key: appdata.settings[key] == null
+          ? null
+          : List.from(appdata.settings[key]),
+  };
+
+  void _restorePages(Map<String, dynamic> pages) {
+    for (final entry in pages.entries) {
+      appdata.settings[entry.key] = entry.value;
+    }
   }
 
   Future<ComicSource> installScript({
@@ -193,40 +258,37 @@ class ComicSourceManager with ChangeNotifier, Init {
     required void Function() beforeInstall,
   }) => _mutate(() async {
     beforeInstall();
-    final pageKeys = [
-      'explore_pages',
-      'categories',
-      'favorites',
-      'searchSources',
-    ];
-    final oldPages = {
-      for (final key in pageKeys) key: List.from(appdata.settings[key]),
-    };
+    final oldPages = _snapshotPages();
     ComicSource? source;
     SourceOrigin? oldOrigin;
+    final parser = ComicSourceParser();
     try {
       fileName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_.()-]'), '_');
-      source = await ComicSourceParser().createAndParse(
+      source = await parser.createAndParse(
         js,
         fileName,
         expectedKey: expectedKey,
+        retainRollback: true,
       );
       oldOrigin = SourceRepositories.instance.originFor(source.key);
       _sources.add(source);
+      source.stageDataWrites();
+      await _initializeSource(source);
       _registerSourcePages(source);
       await SourceRepositories.instance.setOrigin(source.key, origin);
+      await source.commitDataWrites();
+      parser.commit();
       notifyListeners();
       return source;
     } catch (_) {
+      parser.rollback();
       if (source != null) {
         _sources.removeWhere((s) => s.key == source!.key);
         JsEngine().runCode(
           'delete ComicSource.sources[${jsonEncode(source.key)}];',
         );
         await File(source.filePath).deleteIfExists();
-        for (final entry in oldPages.entries) {
-          appdata.settings[entry.key] = entry.value;
-        }
+        _restorePages(oldPages);
         await SourceRepositories.instance.setOrigin(source.key, oldOrigin);
       }
       notifyListeners();
@@ -239,30 +301,79 @@ class ComicSourceManager with ChangeNotifier, Init {
     String js, {
     required void Function() validate,
     SourceOrigin? origin,
-  }) => _mutate(() async {
+  }) => _mutate(
+    () => _replaceScript(source, js, validate: validate, origin: origin),
+  );
+
+  Future<void> _replaceScript(
+    ComicSource source,
+    String js, {
+    required void Function() validate,
+    SourceOrigin? origin,
+  }) async {
     validate();
+    final index = _sources.indexWhere((item) => item.key == source.key);
+    if (index < 0 || _sources[index].filePath != source.filePath) {
+      throw ComicSourceParseException('The source is no longer installed.');
+    }
+    source = _sources[index];
+    final parser = ComicSourceParser();
+    final originalScript = await File(source.filePath).readAsString();
+    final oldPages = _snapshotPages();
+    final oldOrigin = SourceRepositories.instance.originFor(source.key);
+    var changedSettings = false;
+    var wroteScript = false;
     try {
-      await ComicSourceParser().parse(
+      final replacement = await parser.parse(
         js,
         source.filePath,
         expectedKey: source.key,
         replacing: true,
+        retainRollback: true,
       );
+      replacement.data = Map<String, dynamic>.from(
+        jsonDecode(jsonEncode(source.data)),
+      );
+      replacement.stageDataWrites();
+      _sources[index] = replacement;
+      await _initializeSource(replacement);
       final temporary = File('${source.filePath}.update');
       try {
         await temporary.writeAsString(js, flush: true);
         await temporary.rename(source.filePath);
+        wroteScript = true;
       } finally {
         await temporary.deleteIfExists();
       }
+      _registerSourcePages(replacement);
+      changedSettings = true;
       if (origin != null) {
         await SourceRepositories.instance.setOrigin(source.key, origin);
+      } else {
+        await appdata.saveData();
       }
+      await replacement.commitDataWrites();
+      parser.commit();
       clearSourceUpdate(source.key);
-    } finally {
-      await _reloadSources();
+      notifyListeners();
+    } catch (_) {
+      _sources[index] = source;
+      parser.rollback();
+      if (wroteScript) {
+        await File(source.filePath).writeAsString(originalScript, flush: true);
+      }
+      _restorePages(oldPages);
+      if (changedSettings) {
+        if (origin != null) {
+          await SourceRepositories.instance.setOrigin(source.key, oldOrigin);
+        } else {
+          await appdata.saveData(false);
+        }
+      }
+      notifyListeners();
+      rethrow;
     }
-  });
+  }
 
   Future<void> uninstallScript(ComicSource source) => _mutate(() async {
     await File(source.filePath).deleteIfExists();
@@ -284,10 +395,10 @@ class ComicSourceManager with ChangeNotifier, Init {
   }
 
   void _registerSourcePages(ComicSource source) {
-    var explorePages = appdata.settings['explore_pages'];
-    var categoryPages = appdata.settings['categories'];
-    var networkFavorites = appdata.settings['favorites'];
-    var searchPages = appdata.settings['searchSources'];
+    var explorePages = appdata.settings['explore_pages'] ?? <String>[];
+    var categoryPages = appdata.settings['categories'] ?? <String>[];
+    var networkFavorites = appdata.settings['favorites'] ?? <String>[];
+    var searchPages = appdata.settings['searchSources'] ?? <String>[];
 
     if (source.explorePages.isNotEmpty) {
       for (var page in source.explorePages) {

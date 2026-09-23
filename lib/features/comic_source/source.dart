@@ -151,8 +151,35 @@ class ComicSource {
 
   Future<void>? _activeSave;
   Future<void>? _pendingSave;
+  bool _stagingData = false;
+  bool _stagedSave = false;
+
+  void stageDataWrites() => _stagingData = true;
+
+  Future<void> commitDataWrites() async {
+    if (_stagedSave) {
+      // Publish initialized data only after a complete write. A broken draft
+      // or failed write must leave the previous credentials intact.
+      final file = File('${App.dataPath}/comic_source/$key.data');
+      final temporary = File('${file.path}.update');
+      try {
+        await temporary.writeAsString(jsonEncode(data), flush: true);
+        await temporary.rename(file.path);
+      } finally {
+        if (await temporary.exists()) await temporary.delete();
+      }
+      _stagedSave = false;
+      final sync = _comicSourceDataSavedHandler?.call();
+      if (sync != null) unawaited(sync);
+    }
+    _stagingData = false;
+  }
 
   Future<void> saveData() async {
+    if (_stagingData) {
+      _stagedSave = true;
+      return;
+    }
     if (_activeSave != null) {
       return _schedulePendingSave();
     }

@@ -15,6 +15,7 @@ import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/global_state.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/features/follow_updates/follow_updates_manager.dart';
 
@@ -468,6 +469,8 @@ class _FollowUpdatesPageState extends AutomaticGlobalState<FollowUpdatesPage> {
   }
 
   void disable() {
+    FollowUpdatesService._cancelChecking?.call();
+    FollowUpdateJob.cancelActive();
     appdata.settings["followUpdatesFolder"] = null;
     LocalFavoritesManager().refreshUpdateIds();
     appdata.saveData();
@@ -481,27 +484,27 @@ class _FollowUpdatesPageState extends AutomaticGlobalState<FollowUpdatesPage> {
     var count = LocalFavoritesManager().count(folder);
 
     if (count > 0) {
-      bool isCanceled = false;
-      void onCancel() {
-        isCanceled = true;
-      }
+      final job = FollowUpdateJob(folder, true);
 
       var loadingController = showLoadingDialog(
         App.rootContext,
         withProgress: true,
         cancelButtonText: "Cancel".tl,
-        onCancel: onCancel,
+        onCancel: job.cancel,
         message: "Updating comics...".tl,
       );
 
-      await for (var progress in updateFolder(folder, true)) {
-        if (isCanceled) {
-          return;
+      try {
+        await for (var progress in job.progress) {
+          loadingController.setProgress(progress.fraction);
         }
-        loadingController.setProgress(progress.current / progress.total);
+      } catch (error) {
+        if (mounted) context.showMessage(message: error.toString());
+        return;
+      } finally {
+        loadingController.close();
       }
-
-      loadingController.close();
+      if (job.isCancelled || !mounted) return;
     }
 
     setState(() {
@@ -517,32 +520,29 @@ class _FollowUpdatesPageState extends AutomaticGlobalState<FollowUpdatesPage> {
   void checkNow() async {
     FollowUpdatesService._cancelChecking?.call();
 
-    bool isCanceled = false;
-    void onCancel() {
-      isCanceled = true;
-    }
+    final job = FollowUpdateJob(folder!, true);
 
     var loadingController = showLoadingDialog(
       App.rootContext,
       withProgress: true,
       cancelButtonText: "Cancel".tl,
-      onCancel: onCancel,
+      onCancel: job.cancel,
       message: "Updating comics...".tl,
     );
 
     int updated = 0;
 
-    await for (var progress in updateFolder(folder!, true)) {
-      if (isCanceled) {
-        return;
+    try {
+      await for (var progress in job.progress) {
+        loadingController.setProgress(progress.fraction);
+        updated = progress.updated;
       }
-      loadingController.setProgress(progress.current / progress.total);
-      updated = progress.updated;
+    } catch (error) {
+      if (mounted) context.showMessage(message: error.toString());
+    } finally {
+      loadingController.close();
     }
-
-    loadingController.close();
-
-    if (updated > 0) {
+    if (updated > 0 && mounted) {
       GlobalState.findOrNull<_FollowUpdatesWidgetState>()?.updateCount();
       updateComics();
     }
@@ -576,7 +576,7 @@ abstract class FollowUpdatesService {
   static bool _isInitialized = false;
 
   static void _check() async {
-    if (_isChecking) {
+    if (_isChecking || FollowUpdateJob.isChecking) {
       return;
     }
     var folder = appdata.settings["followUpdatesFolder"];
@@ -586,6 +586,7 @@ abstract class FollowUpdatesService {
     bool isCanceled = false;
     _cancelChecking = () {
       isCanceled = true;
+      FollowUpdateJob.cancelActive();
     };
 
     _isChecking = true;
@@ -593,7 +594,7 @@ abstract class FollowUpdatesService {
     int updated = 0;
     try {
       await DataSync().waitForDownload();
-      if (isCanceled) {
+      if (isCanceled || FollowUpdateJob.isChecking) {
         return;
       }
       await for (var progress in updateFolder(folder, false)) {
@@ -602,6 +603,8 @@ abstract class FollowUpdatesService {
         }
         updated = progress.updated;
       }
+    } catch (error, stack) {
+      Log.error('Check Updates', error, stack);
     } finally {
       _cancelChecking = null;
       _isChecking = false;

@@ -70,7 +70,41 @@ class ComicSourceParseException implements Exception {
   }
 }
 
+String sourceClassName(String script) {
+  final match = RegExp(
+    r'^\s*class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s+extends\s+ComicSource\b',
+    multiLine: true,
+  ).firstMatch(script.replaceFirst('\uFEFF', ''));
+  if (match == null) {
+    throw ComicSourceParseException(
+      'Expected a class declaration extending ComicSource.',
+    );
+  }
+  return match.group(1)!;
+}
+
+class SourceAlreadyInstalledException extends ComicSourceParseException {
+  SourceAlreadyInstalledException(this.key) : super('key($key) already exists');
+  final String key;
+}
+
 class ComicSourceParser {
+  JSInvokable? _restore;
+
+  /// Restore the previous runtime object if a later disk commit fails.
+  void rollback() {
+    try {
+      _restore?.invoke([]);
+    } finally {
+      commit();
+    }
+  }
+
+  void commit() {
+    _restore?.free();
+    _restore = null;
+  }
+
   /// comic source key
   String? _key;
 
@@ -80,6 +114,7 @@ class ComicSourceParser {
     String js,
     String fileName, {
     String? expectedKey,
+    bool retainRollback = false,
   }) async {
     if (!fileName.endsWith(".js")) {
       fileName = "$fileName.js";
@@ -100,13 +135,13 @@ class ComicSourceParser {
     }
     try {
       await file.writeAsString(js);
-      return await parse(js, file.path, expectedKey: expectedKey);
+      return await parse(
+        js,
+        file.path,
+        expectedKey: expectedKey,
+        retainRollback: retainRollback,
+      );
     } catch (e) {
-      // Only this new source can have been registered. Keep other sources and
-      // their running requests intact when a downloaded script is invalid.
-      if (_key != null) {
-        JsEngine().runCode('delete ComicSource.sources[${jsonEncode(_key)}];');
-      }
       await file.deleteIfExists();
       rethrow;
     }
@@ -117,24 +152,39 @@ class ComicSourceParser {
     String filePath, {
     String? expectedKey,
     bool replacing = false,
+    bool retainRollback = false,
+  }) async {
+    try {
+      final source = await _parse(
+        js,
+        filePath,
+        expectedKey: expectedKey,
+        replacing: replacing,
+      );
+      if (!retainRollback) commit();
+      return source;
+    } catch (_) {
+      rollback();
+      rethrow;
+    } finally {
+      JsEngine().runCode("delete this['temp'];");
+    }
+  }
+
+  Future<ComicSource> _parse(
+    String js,
+    String filePath, {
+    String? expectedKey,
+    bool replacing = false,
   }) async {
     configureComicTypeSourceKeyResolver();
     configureComicSourceJsDataBridge();
     js = js.replaceAll("\r\n", "\n");
-    var line1 = js
-        .split('\n')
-        .firstWhereOrNull((e) => e.trim().startsWith("class "));
-    if (line1 == null ||
-        !line1.startsWith("class ") ||
-        !line1.contains("extends ComicSource")) {
-      throw ComicSourceParseException("Invalid Content");
-    }
-    var className = line1.split("class")[1].split("extends ComicSource").first;
-    className = className.trim();
+    final className = sourceClassName(js);
     JsEngine().runCode("""(() => { $js
         this['temp'] = new $className()
       }).call()
-    """, className);
+    """, filePath);
     _name =
         JsEngine().runCode("this['temp'].name") ??
         (throw ComicSourceParseException('name is required'));
@@ -162,14 +212,24 @@ class ComicSourceParser {
     }
     for (var source in ComicSource.all()) {
       if (source.key == key && !(replacing && expectedKey == key)) {
-        throw ComicSourceParseException("key($key) already exists");
+        throw SourceAlreadyInstalledException(key);
       }
     }
     _key = key;
     _checkKeyValidation();
 
+    _restore =
+        JsEngine().runCode('''(() => {
+      const previous = ComicSource.sources[${jsonEncode(key)}];
+      return () => {
+        if (previous === undefined) delete ComicSource.sources[${jsonEncode(key)}];
+        else ComicSource.sources[${jsonEncode(key)}] = previous;
+      };
+    })()''')
+            as JSInvokable;
+
     JsEngine().runCode("""
-      ComicSource.sources.$_key = this['temp'];
+      void (ComicSource.sources.$_key = this['temp']);
     """);
 
     var source = ComicSource(
@@ -210,32 +270,27 @@ class ComicSourceParser {
 
     await source.loadData();
 
-    if (_checkExists("init")) {
-      Future.delayed(const Duration(milliseconds: 50), () {
-        JsEngine().runCode("ComicSource.sources.$_key?.init?.()");
-      });
-    }
-
     return source;
   }
 
   _checkKeyValidation() {
     // 仅允许数字和字母以及下划线
-    if (!_key!.contains(RegExp(r"^[a-zA-Z0-9_]+$"))) {
+    if (!_key!.contains(RegExp(r"^[a-zA-Z_][a-zA-Z0-9_]*$"))) {
       throw ComicSourceParseException("key $_key is invalid");
     }
   }
 
   bool _checkExists(String index) {
-    return JsEngine().runCode(
-      "ComicSource.sources.$_key.$index !== null "
-      "&& ComicSource.sources.$_key.$index !== undefined",
-    );
+    return JsEngine().runCode('${_propertyPath(index)} != null');
   }
 
   dynamic _getValue(String index) {
-    return JsEngine().runCode("ComicSource.sources.$_key.$index");
+    return JsEngine().runCode(_propertyPath(index));
   }
+
+  // Optional sections such as search/account may be absent altogether.
+  String _propertyPath(String index) =>
+      'ComicSource.sources.$_key?.${index.replaceAll(RegExp(r'(?<!\?)\.'), '?.')}';
 
   Res<List<Comic>> _parseComicListResult(dynamic value, String subDataKey) {
     final data = normalizeComicSourceStringKeyedMap(value);

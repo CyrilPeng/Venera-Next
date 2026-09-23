@@ -360,7 +360,12 @@ LoadingDialogController showLoadingDialog(
 
   var navigator = Navigator.of(context, rootNavigator: true);
 
-  navigator.push(loadingDialogRoute).then((value) => controller.closed = true);
+  navigator.push(loadingDialogRoute).then((value) {
+    final wasClosed = controller.closed;
+    controller.closed = true;
+    // Back and barrier dismissal must cancel the work just like the button.
+    if (!wasClosed) onCancel?.call();
+  });
 
   controller._closeDialog = () {
     navigator.removeRoute(loadingDialogRoute);

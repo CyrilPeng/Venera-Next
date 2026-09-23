@@ -1,81 +1,82 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/foundation/throttled_task_runner.dart';
+import 'package:venera_next/network/request_scope.dart';
 
-const _updateConcurrency = 5;
-const _updateThrottleEvery = 5;
+import 'follow_update_queue.dart';
 
 class ComicUpdateResult {
   final bool updated;
   final String? errorMessage;
-
-  ComicUpdateResult(this.updated, this.errorMessage);
+  final bool cancelled;
+  ComicUpdateResult(this.updated, this.errorMessage, {this.cancelled = false});
 }
 
 Future<ComicUpdateResult> updateComic(
-  FavoriteItemWithUpdateInfo c,
+  FavoriteItemWithUpdateInfo comic,
   String folder, {
-  Future<void> Function(Duration duration)? retryDelay,
+  RequestScope? scope,
+  Duration timeout = const Duration(seconds: 45),
 }) async {
-  final waitRetry = retryDelay ?? Future<void>.delayed;
-  int retries = 3;
-  while (true) {
-    try {
-      var comicSource = c.type.comicSource;
-      if (comicSource == null) {
-        return ComicUpdateResult(false, "Comic source not found");
-      }
-      var newInfo = (await comicSource.loadComicInfo!(c.id)).data;
-
-      var newTags = <String>[];
-      for (var entry in newInfo.tags.entries) {
-        const shouldIgnore = ['author', 'artist', 'time'];
-        var namespace = entry.key;
-        if (shouldIgnore.contains(namespace.toLowerCase())) {
-          continue;
-        }
-        for (var tag in entry.value) {
-          newTags.add("$namespace:$tag");
-        }
-      }
-
-      var item = FavoriteItem(
-        id: c.id,
-        name: newInfo.title,
-        coverPath: newInfo.cover,
-        author:
-            newInfo.subTitle ?? newInfo.tags['author']?.firstOrNull ?? c.author,
-        type: c.type,
-        tags: newTags,
-      );
-
-      LocalFavoritesManager().updateInfo(folder, item, false);
-
-      var updated = false;
-      var updateTime = newInfo.findUpdateTime();
-      if (updateTime != null && updateTime != c.updateTime) {
-        LocalFavoritesManager().updateUpdateTime(
-          folder,
-          c.id,
-          c.type,
-          updateTime,
-        );
-        updated = true;
-      } else {
-        LocalFavoritesManager().updateCheckTime(folder, c.id, c.type);
-      }
-      return ComicUpdateResult(updated, null);
-    } catch (e, s) {
-      Log.error("Check Updates", e, s);
-      retries--;
-      if (retries == 0) {
-        return ComicUpdateResult(false, e.toString());
-      }
-      await waitRetry(const Duration(seconds: 2));
+  final request = RequestScope(parent: scope, timeout: timeout);
+  try {
+    final source = comic.type.comicSource;
+    if (source?.loadComicInfo == null) {
+      return ComicUpdateResult(false, 'Comic source not found');
     }
+    // Transient failures are retried by the JS bridge, once per source call.
+    final response = await request.run(() => source!.loadComicInfo!(comic.id));
+    request.check();
+    if (response.error) return ComicUpdateResult(false, response.errorMessage);
+    final info = response.data;
+    final tags = <String>[];
+    for (final entry in info.tags.entries) {
+      if (const [
+        'author',
+        'artist',
+        'time',
+      ].contains(entry.key.toLowerCase())) {
+        continue;
+      }
+      tags.addAll(entry.value.map((tag) => '${entry.key}:$tag'));
+    }
+    LocalFavoritesManager().updateInfo(
+      folder,
+      FavoriteItem(
+        id: comic.id,
+        name: info.title,
+        coverPath: info.cover,
+        author:
+            info.subTitle ?? info.tags['author']?.firstOrNull ?? comic.author,
+        type: comic.type,
+        tags: tags,
+      ),
+      false,
+    );
+    final updateTime = info.findUpdateTime();
+    final updated = updateTime != null && updateTime != comic.updateTime;
+    if (updated) {
+      LocalFavoritesManager().updateUpdateTime(
+        folder,
+        comic.id,
+        comic.type,
+        updateTime,
+      );
+    } else {
+      LocalFavoritesManager().updateCheckTime(folder, comic.id, comic.type);
+    }
+    return ComicUpdateResult(updated, null);
+  } catch (error, stack) {
+    if (scope?.isCancelled == true || error is RequestCancelled) {
+      return ComicUpdateResult(false, null, cancelled: true);
+    }
+    Log.error('Check Updates', error, stack);
+    return ComicUpdateResult(false, error.toString());
+  } finally {
+    request.dispose();
   }
 }
 
@@ -86,7 +87,6 @@ class UpdateProgress {
   final int updated;
   final FavoriteItemWithUpdateInfo? comic;
   final String? errorMessage;
-
   UpdateProgress(
     this.total,
     this.current,
@@ -95,81 +95,97 @@ class UpdateProgress {
     this.comic,
     this.errorMessage,
   ]);
+  double get fraction => total == 0 ? 1 : current / total;
 }
 
-void updateFolderBase(
-  String folder,
-  StreamController<UpdateProgress> stream,
-  bool ignoreCheckTime,
-) async {
-  var comics = LocalFavoritesManager().getComicsWithUpdatesInfo(folder);
-  int total = comics.length;
-  int current = 0;
-  int errors = 0;
-  int updated = 0;
+/// One application-wide check. Replacing a job cancels its queue and writes.
+class FollowUpdateJob {
+  FollowUpdateJob(this.folder, this.ignoreCheckTime) {
+    _controller = StreamController<UpdateProgress>(
+      onListen: () => unawaited(_run()),
+      onCancel: cancel,
+    );
+  }
+  static FollowUpdateJob? _active;
+  static bool get isChecking => _active != null && !_active!._scope.isCancelled;
+  static void cancelActive() => _active?.cancel();
+  final String folder;
+  final bool ignoreCheckTime;
+  final _scope = RequestScope();
+  bool _finished = false;
+  late final StreamController<UpdateProgress> _controller;
+  Stream<UpdateProgress> get progress => _controller.stream;
+  bool get isCancelled => _scope.isCancelled;
+  void cancel() {
+    if (!_finished) _scope.cancel();
+  }
 
-  stream.add(UpdateProgress(total, current, errors, updated));
-
-  var comicsToUpdate = <FavoriteItemWithUpdateInfo>[];
-
-  for (var comic in comics) {
-    if (!ignoreCheckTime) {
-      var lastCheckTime = comic.lastCheckTime;
-      if (lastCheckTime != null &&
-          DateTime.now().difference(lastCheckTime).inDays < 1) {
-        current++;
-        stream.add(UpdateProgress(total, current, errors, updated));
-        continue;
-      }
+  Future<void> _run() async {
+    if (isCancelled) {
+      unawaited(_controller.close());
+      return;
     }
-    comicsToUpdate.add(comic);
-  }
-
-  total = comicsToUpdate.length;
-  current = 0;
-  stream.add(UpdateProgress(total, current, errors, updated));
-
-  await runThrottledTasks(
-    comicsToUpdate,
-    concurrency: _updateConcurrency,
-    throttleEvery: _updateThrottleEvery,
-    run: (comic) async {
-      var result = await updateComic(comic, folder);
-      current++;
-      if (result.updated) {
-        updated++;
+    _active?.cancel();
+    _active = this;
+    var current = 0;
+    var errors = 0;
+    var updated = 0;
+    try {
+      final comics = LocalFavoritesManager()
+          .getComicsWithUpdatesInfo(folder)
+          .where(
+            (comic) =>
+                ignoreCheckTime ||
+                comic.lastCheckTime == null ||
+                DateTime.now().difference(comic.lastCheckTime!).inDays >= 1,
+          )
+          .toList();
+      void emit([FavoriteItemWithUpdateInfo? comic, String? error]) {
+        if (!isCancelled) {
+          _controller.add(
+            UpdateProgress(
+              comics.length,
+              current,
+              errors,
+              updated,
+              comic,
+              error,
+            ),
+          );
+        }
       }
-      if (result.errorMessage != null) {
-        errors++;
-      }
-      stream.add(
-        UpdateProgress(
-          total,
-          current,
-          errors,
-          updated,
-          comic,
-          result.errorMessage,
-        ),
+
+      emit();
+      await runFollowUpdateTasks(
+        comics,
+        scope: _scope,
+        sourceKey: (comic) => comic.type.sourceKey,
+        run: (comic) async {
+          final result = await updateComic(comic, folder, scope: _scope);
+          if (isCancelled || result.cancelled) return;
+          current++;
+          if (result.updated) updated++;
+          if (result.errorMessage != null) errors++;
+          emit(comic, result.errorMessage);
+        },
       );
-    },
-  );
-
-  if (updated > 0) {
-    LocalFavoritesManager().notifyChanges();
+    } catch (error, stack) {
+      if (error is! RequestCancelled && _controller.hasListener) {
+        _controller.addError(error, stack);
+      }
+    } finally {
+      _finished = true;
+      if (updated > 0) LocalFavoritesManager().notifyChanges();
+      if (identical(_active, this)) _active = null;
+      _scope.dispose();
+      unawaited(_controller.close());
+    }
   }
-
-  stream.close();
 }
 
-Stream<UpdateProgress> updateFolder(String folder, bool ignoreCheckTime) {
-  var stream = StreamController<UpdateProgress>();
-  updateFolderBase(folder, stream, ignoreCheckTime);
-  return stream.stream;
-}
+Stream<UpdateProgress> updateFolder(String folder, bool ignoreCheckTime) =>
+    FollowUpdateJob(folder, ignoreCheckTime).progress;
 
-/// Comics shown in the home follow-updates preview.
-///
 /// The preview represents the user's follow-updates folder, while the update
 /// badge and count are separate hints on top of that list.
 List<FavoriteItemWithUpdateInfo> getFollowUpdatesPreviewComics(String folder) {

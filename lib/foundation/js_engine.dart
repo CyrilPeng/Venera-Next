@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:crypto/crypto.dart';
@@ -28,6 +29,7 @@ import 'package:venera_next/network/app_dio.dart';
 import 'package:venera_next/network/cache.dart';
 import 'package:venera_next/network/cookie_jar.dart';
 import 'package:venera_next/network/proxy.dart';
+import 'package:venera_next/network/request_scope.dart';
 import 'package:venera_next/foundation/init.dart';
 
 import 'consts.dart';
@@ -270,6 +272,8 @@ class JsEngine with _JSEngineApi, Init {
     String? error;
 
     try {
+      final scope = RequestScope.current;
+      scope?.check();
       var headers = Map<String, dynamic>.from(req["headers"] ?? {});
       var extra = Map<String, dynamic>.from(req["extra"] ?? {});
       if (headers["user-agent"] == null && headers["User-Agent"] == null) {
@@ -297,6 +301,7 @@ class JsEngine with _JSEngineApi, Init {
       }
       response = await dio!.request(
         req["url"],
+        cancelToken: scope?.cancelToken,
         data: req["data"],
         options: Options(
           method: req['http_method'],
@@ -336,10 +341,15 @@ class JsEngine with _JSEngineApi, Init {
 
   Future<dynamic> runReadCode(String js, [String? name]) async {
     const maxRetries = 2;
+    final scope = RequestScope.current;
     for (var retry = 0; ; retry++) {
       try {
-        return await runCode(js, name);
+        scope?.check();
+        return scope == null
+            ? await runCode(js, name)
+            : await scope.run(() => runCode(js, name));
       } catch (error) {
+        scope?.check();
         if (retry >= maxRetries || !_isRetryableReadError(error)) {
           rethrow;
         }
@@ -349,7 +359,12 @@ class JsEngine with _JSEngineApi, Init {
               '(${retry + 1}/$maxRetries): $error',
         );
         NetworkCacheManager().clear();
-        await Future.delayed(Duration(milliseconds: 200 * (retry + 1)));
+        final delay = Duration(milliseconds: 200 * (retry + 1));
+        if (scope == null) {
+          await Future.delayed(delay);
+        } else {
+          await scope.wait(delay);
+        }
       }
     }
   }

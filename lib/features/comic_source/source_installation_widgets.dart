@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/foundation/translations.dart';
 
@@ -304,6 +305,24 @@ class _SourceInstallationAction extends StatelessWidget {
                 showPopUpWidget(context, const SourceInstallationPage()),
             icon: Icon(Icons.info_outline, color: colors.error, size: 20),
             constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+          ),
+        if (queue.canReplace(task))
+          Flexible(
+            child: TextButton(
+              onPressed: () => showConfirmDialog(
+                context: context,
+                title: 'Replace and reload'.tl,
+                content: 'Reload the latest script and replace @name?'.tlParams(
+                  {'name': task.name},
+                ),
+                onConfirm: () => queue.replace(task),
+              ),
+              child: Text(
+                'Reload'.tl,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ),
         if (queue.canRetry(task))
           Flexible(

@@ -6,6 +6,7 @@ import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_saf/flutter_saf.dart';
 import 'package:rhttp/rhttp.dart';
+import 'package:venera_next/components/message.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/comic_type.dart';
@@ -220,6 +221,11 @@ void checkUpdates() {
   FollowUpdatesService.initChecker();
 }
 
-void reloadComicSourcesForDebug() {
-  ComicSourceManager().reload();
+void reloadComicSourcesForDebug() async {
+  try {
+    await ComicSourceManager().reloadForDebug();
+  } catch (error, stack) {
+    Log.error('Reload comic sources', error, stack);
+    showToast(message: error.toString(), context: App.rootContext);
+  }
 }

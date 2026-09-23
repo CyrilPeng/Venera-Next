@@ -8,6 +8,7 @@ import 'package:venera_next/network/app_dio.dart';
 import 'comic_source_manager.dart';
 import 'source.dart';
 import 'source_repositories.dart';
+import 'parser.dart';
 
 enum SourceInstallPhase {
   queued,
@@ -28,6 +29,7 @@ class SourceInstallTask {
     this.sourceKey,
     this.repository,
     this.fileContents,
+    this.readFile,
   });
 
   final int id;
@@ -37,6 +39,8 @@ class SourceInstallTask {
   final String fileName;
   final SourceRepository? repository;
   String? fileContents;
+  final Future<Uint8List> Function()? readFile;
+  bool replaceExisting = false;
   SourceInstallPhase phase = SourceInstallPhase.queued;
   String? error;
   String? errorSummary;
@@ -144,7 +148,11 @@ class SourceInstallations extends ChangeNotifier {
     );
   }
 
-  SourceInstallTask enqueueFile(String name, Uint8List bytes) {
+  SourceInstallTask enqueueFile(
+    String name,
+    Uint8List bytes, {
+    Future<Uint8List> Function()? readFile,
+  }) {
     final contents = utf8.decode(bytes);
     for (final task in _tasks) {
       if (task.active &&
@@ -154,7 +162,7 @@ class SourceInstallations extends ChangeNotifier {
         return task;
       }
     }
-    return _enqueue(name: name, fileContents: contents);
+    return _enqueue(name: name, fileContents: contents, readFile: readFile);
   }
 
   SourceInstallTask _enqueue({
@@ -163,6 +171,7 @@ class SourceInstallations extends ChangeNotifier {
     String? sourceKey,
     SourceRepository? repository,
     String? fileContents,
+    Future<Uint8List> Function()? readFile,
   }) {
     final task = SourceInstallTask._(
       id: _nextId++,
@@ -171,6 +180,7 @@ class SourceInstallations extends ChangeNotifier {
       sourceKey: sourceKey,
       repository: repository,
       fileContents: fileContents,
+      readFile: readFile,
       fileName: url == null
           ? name
           : Uri.parse(url).pathSegments.where((s) => s.isNotEmpty).lastOrNull ??
@@ -201,11 +211,32 @@ class SourceInstallations extends ChangeNotifier {
 
   void retry(SourceInstallTask task) {
     if (!canRetry(task)) return;
+    task.replaceExisting = false;
     task._attempt++;
     task._cancelToken = CancelToken();
     task.phase = SourceInstallPhase.queued;
     task.error = null;
     task.errorSummary = null;
+    task.received = task.total = 0;
+    notifyListeners();
+    scheduleMicrotask(_pump);
+  }
+
+  bool canReplace(SourceInstallTask task) =>
+      !task.active &&
+      task.repository == null &&
+      task.sourceKey != null &&
+      ComicSource.find(task.sourceKey!) != null &&
+      taskFor(sourceKey: task.sourceKey, url: task.url)?.active != true &&
+      (task.url != null || task.readFile != null || task.fileContents != null);
+
+  void replace(SourceInstallTask task) {
+    if (!canReplace(task)) return;
+    task.replaceExisting = true;
+    task._attempt++;
+    task._cancelToken = CancelToken();
+    task.phase = SourceInstallPhase.queued;
+    task.error = task.errorSummary = null;
     task.received = task.total = 0;
     notifyListeners();
     scheduleMicrotask(_pump);
@@ -236,7 +267,9 @@ class SourceInstallations extends ChangeNotifier {
     try {
       String js;
       if (task.url == null) {
-        js = task.fileContents!;
+        js = task.readFile == null
+            ? task.fileContents!
+            : utf8.decode(await task.readFile!());
       } else {
         dio = _client ?? AppDio();
         final response = await dio.get<String>(
@@ -299,7 +332,29 @@ class SourceInstallations extends ChangeNotifier {
   ) async {
     try {
       final repository = task.repository;
-      final source = await (_manager ?? ComicSourceManager()).installScript(
+      final manager = _manager ?? ComicSourceManager();
+      final existing = task.replaceExisting
+          ? ComicSource.find(task.sourceKey!)
+          : null;
+      if (task.replaceExisting) {
+        if (existing == null) throw 'The source is no longer installed.';
+        await manager.replaceScript(
+          existing,
+          js,
+          validate: () {
+            if (token.isCancelled || task._attempt != attempt) {
+              throw _InstallationCanceled();
+            }
+            task.phase = SourceInstallPhase.installing;
+            notifyListeners();
+          },
+        );
+        task.phase = SourceInstallPhase.succeeded;
+        task.name = ComicSource.find(existing.key)?.name ?? existing.name;
+        notifyListeners();
+        return;
+      }
+      final source = await manager.installScript(
         js: js,
         fileName: task.fileName,
         expectedKey: task.sourceKey,
@@ -332,6 +387,7 @@ class SourceInstallations extends ChangeNotifier {
       task.fileContents = null;
     } catch (error) {
       if (token.isCancelled || task._attempt != attempt) return;
+      if (error is SourceAlreadyInstalledException) task.sourceKey = error.key;
       task.error = error.toString();
       task.errorSummary = _errorSummary(error);
       task.phase = SourceInstallPhase.failed;

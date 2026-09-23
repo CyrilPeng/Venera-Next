@@ -45,12 +45,22 @@ class _CodeEditorState extends State<CodeEditor> {
     future = _controller.init(context.brightness);
   }
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    horizontalScrollController.dispose();
+    verticalScrollController.dispose();
+    super.dispose();
+  }
+
   void handleTab() {
     var text = _controller.text;
     var start = _controller.selection.start;
     var end = _controller.selection.end;
     _controller.text = '${text.substring(0, start)}    ${text.substring(end)}';
     _controller.selection = TextSelection.collapsed(offset: start + 4);
+    widget.onChanged?.call(_controller.text);
   }
 
   int calculateLineCount(String text) {

@@ -776,7 +776,15 @@
     "Recognized from image proportions. Your reading preference applies automatically.": "已根据图片比例识别，按你的版式偏好选择阅读模式。",
     "Identify again from this chapter": "根据当前章节重新识别",
     "This selection only affects this comic. Change default preferences in Settings → Reader.": "此选择仅影响本书。通用偏好可在「设置 → 阅读器」中修改。",
-    "Switched to @mode": "已切换为@mode"
+    "Switched to @mode": "已切换为@mode",
+    "Source reloaded": "漫画源已重新加载",
+    "Replace and reload": "替换并重新加载",
+    "Save and reload": "保存并重新加载",
+    "Save the file in your editor, then reload it here.": "在编辑器中保存文件后，点击重新加载。",
+    "Reload the latest script and replace @name?": "重新读取最新脚本并替换 @name？",
+    "Discard unsaved changes?": "放弃未保存的修改？",
+    "Keep editing": "继续编辑",
+    "Discard changes": "放弃修改"
   },
   "zh_TW": {
     "Home": "首頁",
@@ -1555,6 +1563,14 @@
     "Recognized from image proportions. Your reading preference applies automatically.": "已根據圖片比例識別，按你的版式偏好選擇閱讀模式。",
     "Identify again from this chapter": "根據目前章節重新識別",
     "This selection only affects this comic. Change default preferences in Settings → Reader.": "此選擇僅影響本書。通用偏好可在「設定 → 閱讀器」中修改。",
-    "Switched to @mode": "已切換為@mode"
+    "Switched to @mode": "已切換為@mode",
+    "Source reloaded": "漫畫來源已重新載入",
+    "Replace and reload": "取代並重新載入",
+    "Save and reload": "儲存並重新載入",
+    "Save the file in your editor, then reload it here.": "在編輯器中儲存檔案後，點擊重新載入。",
+    "Reload the latest script and replace @name?": "重新讀取最新腳本並取代 @name？",
+    "Discard unsaved changes?": "捨棄未儲存的修改？",
+    "Keep editing": "繼續編輯",
+    "Discard changes": "捨棄修改"
   }
 }
