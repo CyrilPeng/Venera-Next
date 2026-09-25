@@ -327,15 +327,75 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           ),
         ),
         SliderSetting(
-          title: "Auto page turning interval".tl,
+          title: "Auto page turning interval (gallery)".tl,
           settingsIndex: "autoPageTurningInterval",
           interval: 1,
           min: 1,
           max: 20,
+          valueFormatter: (value) => '${value.toInt()} s',
+          onChanged: () => widget.onChanged?.call('autoPageTurningInterval'),
+          comicId: isEnabledSpecificSettings ? widget.comicId : null,
+          comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
+          useDeviceSettings: useDeviceSpecificSettings,
+        ).toSliver(),
+        SelectSetting(
+          title: 'Automatic scrolling (continuous and waterfall)'.tl,
+          settingKey: 'autoScrollStyle',
+          optionTranslation: {
+            'smooth': 'Smooth scrolling'.tl,
+            'stepped': 'Step scrolling'.tl,
+          },
           onChanged: () {
             setState(() {});
-            widget.onChanged?.call("autoPageTurningInterval");
+            widget.onChanged?.call('autoScrollStyle');
           },
+          comicId: isEnabledSpecificSettings ? widget.comicId : null,
+          comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
+          useDeviceSettings: useDeviceSpecificSettings,
+        ).toSliver(),
+        if (_value('autoScrollStyle') == 'smooth')
+          SliderSetting(
+            title: "Automatic scroll speed".tl,
+            settingsIndex: "autoScrollSpeed",
+            interval: 10,
+            min: 10,
+            max: 1000,
+            valueFormatter: (value) => '${value.toInt()} px/s',
+            onChanged: () => widget.onChanged?.call('autoScrollSpeed'),
+            comicId: isEnabledSpecificSettings ? widget.comicId : null,
+            comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
+            useDeviceSettings: useDeviceSpecificSettings,
+          ).toSliver(),
+        if (_value('autoScrollStyle') == 'stepped') ...[
+          SliderSetting(
+            title: "Scroll steps per second".tl,
+            settingsIndex: "autoScrollFrequency",
+            interval: 1,
+            min: 1,
+            max: 10,
+            valueFormatter: (value) => '${value.toInt()} /s',
+            onChanged: () => widget.onChanged?.call('autoScrollFrequency'),
+            comicId: isEnabledSpecificSettings ? widget.comicId : null,
+            comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
+            useDeviceSettings: useDeviceSpecificSettings,
+          ).toSliver(),
+          SliderSetting(
+            title: "Distance per scroll step".tl,
+            settingsIndex: "autoScrollDistance",
+            interval: 10,
+            min: 10,
+            max: 500,
+            valueFormatter: (value) => '${value.toInt()} px',
+            onChanged: () => widget.onChanged?.call('autoScrollDistance'),
+            comicId: isEnabledSpecificSettings ? widget.comicId : null,
+            comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
+            useDeviceSettings: useDeviceSpecificSettings,
+          ).toSliver(),
+        ],
+        SwitchSetting(
+          title: 'Continue automatically to the next chapter'.tl,
+          settingKey: 'autoReadingAcrossChapters',
+          onChanged: () => widget.onChanged?.call('autoReadingAcrossChapters'),
           comicId: isEnabledSpecificSettings ? widget.comicId : null,
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
@@ -423,19 +483,24 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
-        SwitchSetting(
-          title: 'Long press to zoom'.tl,
-          settingKey: 'enableLongPressToZoom',
+        SelectSetting(
+          title: 'Long press action'.tl,
+          settingKey: 'longPressAction',
+          optionTranslation: {
+            'zoom': 'Zoom image'.tl,
+            'autoReading': 'Start or stop automatic reading'.tl,
+            'none': 'No action'.tl,
+          },
           onChanged: () {
             setState(() {});
-            widget.onChanged?.call('enableLongPressToZoom');
+            widget.onChanged?.call('longPressAction');
           },
           comicId: isEnabledSpecificSettings ? widget.comicId : null,
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
         SliverAnimatedVisibility(
-          visible: appdata.settings['enableLongPressToZoom'] == true,
+          visible: _value('longPressAction') == 'zoom',
           child: SelectSetting(
             title: "Long press zoom position".tl,
             settingKey: "longPressZoomPosition",

@@ -7,6 +7,7 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_page_route.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/edge_back_gesture.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 import 'consts.dart';
@@ -629,7 +630,7 @@ class NaviObserver extends NavigatorObserver implements Listenable {
   }
 }
 
-class _NaviPopScope extends StatelessWidget {
+class _NaviPopScope extends StatefulWidget {
   const _NaviPopScope({
     required this.child,
     this.popGesture = false,
@@ -640,31 +641,29 @@ class _NaviPopScope extends StatelessWidget {
   final bool popGesture;
   final VoidCallback action;
 
-  static bool panStartAtEdge = false;
+  @override
+  State<_NaviPopScope> createState() => _NaviPopScopeState();
+}
+
+class _NaviPopScopeState extends State<_NaviPopScope> {
+  double _progress = 0;
 
   @override
   Widget build(BuildContext context) {
-    Widget res = child;
-    if (popGesture) {
-      res = GestureDetector(
-        onPanStart: (details) {
-          if (details.globalPosition.dx < 64) {
-            panStartAtEdge = true;
-          }
-        },
-        onPanEnd: (details) {
-          if (details.velocity.pixelsPerSecond.dx < 0 ||
-              details.velocity.pixelsPerSecond.dx > 0) {
-            if (panStartAtEdge) {
-              action();
-            }
-          }
-          panStartAtEdge = false;
-        },
-        child: res,
-      );
-    }
-    return res;
+    return EdgeBackGestureDetector(
+      enabled: () => widget.popGesture,
+      onStart: () => _progress = 0,
+      onUpdate: (delta) => _progress = (_progress + delta).clamp(0, 1),
+      onEnd: (velocity) {
+        final shouldPop = velocity.abs() >= 1
+            ? velocity > 0 && _progress >= 0.1
+            : _progress >= 0.5;
+        _progress = 0;
+        if (shouldPop) widget.action();
+      },
+      onCancel: () => _progress = 0,
+      child: widget.child,
+    );
   }
 }
 

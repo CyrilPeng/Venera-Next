@@ -148,6 +148,35 @@ class SourceInstallations extends ChangeNotifier {
     );
   }
 
+  /// Install the script that was previewed, preserving its download origin.
+  SourceInstallTask enqueuePreviewedScript({
+    required String name,
+    required String contents,
+    String? url,
+    Future<Uint8List> Function()? readFile,
+  }) {
+    if (url == null) {
+      return enqueueFile(
+        name,
+        Uint8List.fromList(utf8.encode(contents)),
+        readFile: readFile,
+      );
+    }
+    url = SourceRepositories.normalizeUrl(url);
+    final existing = taskFor(url: url);
+    if (existing?.active == true) return existing!;
+    return _enqueue(name: name, url: url, fileContents: contents);
+  }
+
+  SourceInstallTask enqueueCatalogEntry(SourceCatalogEntry entry) {
+    final existing = taskFor(sourceKey: entry.key, url: entry.url);
+    if (existing?.active == true) return existing!;
+    if (ComicSource.find(entry.key) != null) {
+      throw 'This source is already installed.'.tl;
+    }
+    return _enqueue(name: entry.name, url: entry.url, sourceKey: entry.key);
+  }
+
   SourceInstallTask enqueueFile(
     String name,
     Uint8List bytes, {
@@ -266,10 +295,12 @@ class SourceInstallations extends ChangeNotifier {
     Dio? dio;
     try {
       String js;
-      if (task.url == null) {
+      if (task.url == null || task.fileContents != null) {
         js = task.readFile == null
             ? task.fileContents!
             : utf8.decode(await task.readFile!());
+        // Reuse the preview once; a retry must fetch the server's latest script.
+        if (task.url != null) task.fileContents = null;
       } else {
         dio = _client ?? AppDio();
         final response = await dio.get<String>(

@@ -11,6 +11,7 @@ import 'package:venera_next/components/side_bar.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/reader/brightness.dart';
+import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/chapter_comments.dart';
 import 'package:venera_next/features/reader/chapters.dart';
 import 'package:venera_next/features/reader/eink_refresh.dart';
@@ -558,16 +559,22 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         ),
       ),
       Tooltip(
-        message: "Auto Page Turning".tl,
+        message: switch (context.reader.autoReading.status) {
+          AutoReadingStatus.waiting =>
+            'Automatic reading is waiting for content'.tl,
+          AutoReadingStatus.paused => 'Automatic reading is paused'.tl,
+          _ => 'Start or stop automatic reading'.tl,
+        },
         child: IconButton(
-          icon: context.reader.autoPageTurningTimer != null
-              ? const Icon(Icons.timer)
-              : const Icon(Icons.timer_sharp),
+          icon: context.reader.autoReading.isActive
+              ? const Icon(Icons.pause_circle_outline)
+              : const Icon(Icons.play_circle_outline),
+          color: context.reader.autoReading.isActive
+              ? context.colorScheme.primary
+              : null,
           onPressed: () {
-            context.reader.autoPageTurning(
-              context.reader.cid,
-              context.reader.type,
-            );
+            context.reader.autoReading.toggle();
+            if (context.reader.autoReading.isActive && isOpen) openOrClose();
             update();
           },
         ),
@@ -898,6 +905,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
   }
 
   void _openSideBar(Widget widget, {double width = 400}) {
+    context.reader.autoReading.pause('sidebar', true);
     gestureDetectorState?.ignoreNextTap();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -907,6 +915,8 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         width: width,
         dismissible: true,
       ).whenComplete(() {
+        if (!mounted) return;
+        context.reader.autoReading.pause('sidebar', false);
         gestureDetectorState?.clearIgnoreNextTap();
       });
     });

@@ -71,6 +71,7 @@ class ReaderGestureDetectorState
           return;
         }
         fingers++;
+        reader.autoReading.pause('pointer', true);
         if (ignoreNextTag) {
           ignoreNextTag = false;
           return;
@@ -85,7 +86,7 @@ class ReaderGestureDetectorState
           _dragInProgress = false;
         }
         Future.delayed(_kLongPressMinTime, () {
-          if (_lastTapPointer == event.pointer && fingers == 1) {
+          if (mounted && _lastTapPointer == event.pointer && fingers == 1) {
             if (_lastTapMoveDistance!.distanceSquared < 20.0 * 20.0) {
               onLongPressedDown(event.position);
               _longPressInProgress = true;
@@ -111,6 +112,7 @@ class ReaderGestureDetectorState
       },
       onPointerUp: (event) {
         fingers--;
+        if (fingers <= 0) reader.autoReading.pause('pointer', false);
         if (_longPressInProgress) {
           onLongPressedUp(event.position);
         }
@@ -125,6 +127,7 @@ class ReaderGestureDetectorState
       },
       onPointerCancel: (event) {
         fingers--;
+        if (fingers <= 0) reader.autoReading.pause('pointer', false);
         if (_longPressInProgress) {
           onLongPressedUp(event.position);
         }
@@ -138,6 +141,7 @@ class ReaderGestureDetectorState
         _lastTapMoveDistance = null;
       },
       onPointerSignal: (event) {
+        reader.autoReading.stop();
         if (event is PointerScrollEvent) {
           onMouseWheel(event.scrollDelta.dy > 0);
         }
@@ -344,12 +348,25 @@ class ReaderGestureDetectorState
     ]);
   }
 
+  String? _longPressAction;
+
   void onLongPressedUp(Offset location) {
-    context.reader.imageViewController?.handleLongPressUp(location);
+    if (_longPressAction == 'zoom') {
+      reader.imageViewController?.handleLongPressUp(location);
+    }
+    _longPressAction = null;
   }
 
   void onLongPressedDown(Offset location) {
-    context.reader.imageViewController?.handleLongPressDown(location);
+    _longPressAction = reader.readerSetting('longPressAction') as String;
+    switch (_longPressAction) {
+      case 'zoom':
+        reader.imageViewController?.handleLongPressDown(location);
+      case 'autoReading':
+        reader.autoReading.toggle();
+      default:
+        break;
+    }
   }
 
   void addDragListener(ReaderDragListener listener) {

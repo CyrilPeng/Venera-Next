@@ -122,6 +122,18 @@ class ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
   Object? _lastException;
   ImageStreamCompleterHandle? _completerHandle;
 
+  bool get readyForAutoReading => _imageInfo != null && _lastException == null;
+
+  bool get visibleInReader {
+    if (!mounted) return false;
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return false;
+    final bounds = box.localToGlobal(Offset.zero) & box.size;
+    final screen = Offset.zero & MediaQuery.sizeOf(context);
+    final visible = bounds.intersect(screen);
+    return visible.width > 1 && visible.height > 1;
+  }
+
   static final Map<int, Size> _cache = {};
 
   static clear() => _cache.clear();

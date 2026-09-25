@@ -210,9 +210,14 @@ class SourceRepositories extends ChangeNotifier {
       if (ownsClient) dio.close();
     }
     if (response.statusCode != 200) throw 'Unable to load repository.'.tl;
+    return parseCatalog(response.data!, baseUrl: response.realUri.toString());
+  }
+
+  static SourceCatalog parseCatalog(String contents, {String? baseUrl}) {
+    final base = baseUrl == null ? null : Uri.parse(normalizeUrl(baseUrl));
     dynamic json;
     try {
-      json = jsonDecode(response.data!);
+      json = jsonDecode(contents.replaceFirst('\uFEFF', ''));
     } catch (_) {
       throw 'The address must return a source list in JSON format.'.tl;
     }
@@ -252,7 +257,11 @@ class SourceRepositories extends ChangeNotifier {
             key: key,
             name: record['name'] as String,
             version: record['version'] as String,
-            url: normalizeUrl(base.resolve(target.trim()).toString()),
+            url: normalizeUrl(
+              base == null
+                  ? target.trim()
+                  : base.resolve(target.trim()).toString(),
+            ),
             description: record['description']?.toString() ?? '',
           ),
         );
@@ -270,6 +279,7 @@ class SourceRepositories extends ChangeNotifier {
     String? id,
     required String name,
     required String url,
+    String? catalogContents,
   }) async {
     name = name.trim();
     url = normalizeUrl(url);
@@ -290,7 +300,11 @@ class SourceRepositories extends ChangeNotifier {
       name: name,
       url: url,
     );
-    await load(repository);
+    if (catalogContents == null) {
+      await load(repository);
+    } else {
+      parseCatalog(catalogContents, baseUrl: url);
+    }
     validateDuplicate();
     final repositories = all;
     final index = repositories.indexWhere((r) => r.id == id);

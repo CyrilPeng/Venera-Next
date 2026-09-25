@@ -355,6 +355,11 @@ class Settings with ChangeNotifier {
     'blockedCommentWords': [],
     'defaultSearchTarget': null,
     'autoPageTurningInterval': 5, // in seconds
+    'autoScrollStyle': 'smooth',
+    'autoScrollSpeed': 80,
+    'autoScrollFrequency': 2,
+    'autoScrollDistance': 40,
+    'autoReadingAcrossChapters': true,
     'readerMode': 'waterfallTopToBottom', // values of [ReaderMode]
     'autoReaderMode': false,
     'pagedReaderMode': 'galleryRightToLeft',
@@ -376,6 +381,8 @@ class Settings with ChangeNotifier {
     'historyRetentionDays': 0, // 0 means disabled
     'downloadThreads': 5,
     'enableLongPressToZoom': true,
+    'longPressAction':
+        null, // Resolve legacy zoom preference until explicitly set.
     'longPressZoomPosition': "press", // press, center
     'checkUpdateOnStart': false,
     'limitImageWidth': true,
@@ -431,6 +438,7 @@ class Settings with ChangeNotifier {
   };
 
   operator [](String key) {
+    if (key == 'longPressAction') return _longPressAction(_data) ?? 'zoom';
     return _data[key];
   }
 
@@ -471,6 +479,13 @@ class Settings with ChangeNotifier {
 
   dynamic getReaderSetting(String comicId, String sourceKey, String key) {
     if (key == 'readerMode') return resolveReaderMode(comicId, sourceKey);
+    if (key == 'longPressAction' &&
+        isComicSpecificSettingsEnabled(comicId, sourceKey)) {
+      final action = _longPressAction(
+        _data['comicSpecificSettings']["$comicId@$sourceKey"],
+      );
+      return action ?? getDeviceReaderSetting(key);
+    }
     if (isComicSpecificSettingsEnabled(comicId, sourceKey)) {
       var comicValue =
           _data['comicSpecificSettings']["$comicId@$sourceKey"]?[key];
@@ -590,7 +605,24 @@ class Settings with ChangeNotifier {
     return _data['deviceSpecificSettings'][deviceId]?["enabled"] == true;
   }
 
+  static String? _longPressAction(dynamic values) {
+    if (values is! Map) return null;
+    final action = values['longPressAction'];
+    if (const ['zoom', 'autoReading', 'none'].contains(action)) return action;
+    final legacy = values['enableLongPressToZoom'];
+    return legacy is bool ? (legacy ? 'zoom' : 'none') : null;
+  }
+
   dynamic getDeviceReaderSetting(String key) {
+    if (key == 'longPressAction') {
+      if (isDeviceSpecificSettingsEnabled()) {
+        final action = _longPressAction(
+          _data['deviceSpecificSettings'][_data['deviceId']],
+        );
+        if (action != null) return action;
+      }
+      return this[key];
+    }
     if (!isDeviceSpecificSettingsEnabled()) {
       return _data[key];
     }

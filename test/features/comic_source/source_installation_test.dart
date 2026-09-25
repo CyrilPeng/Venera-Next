@@ -92,6 +92,42 @@ void main() {
     expect(task.phase, SourceInstallPhase.succeeded);
   });
 
+  test(
+    'previewed URL installs the inspected bytes without downloading twice',
+    () async {
+      final task = queue.enqueuePreviewedScript(
+        name: 'Preview',
+        contents: '// inspected',
+        url: 'https://example.test/source',
+      );
+      await settle();
+      expect(task.phase, SourceInstallPhase.succeeded);
+      expect(downloads.requests, isEmpty);
+      expect(manager.scripts, ['// inspected']);
+      expect(manager.installs.single.kind, 'url');
+      expect(manager.installs.single.url, 'https://example.test/source');
+    },
+  );
+
+  test('retrying a failed previewed URL downloads the latest script', () async {
+    manager.failNext = true;
+    final task = queue.enqueuePreviewedScript(
+      name: 'Preview',
+      contents: '// broken',
+      url: 'https://example.test/source',
+    );
+    await settle();
+    expect(task.phase, SourceInstallPhase.failed);
+    expect(downloads.requests, isEmpty);
+    queue.retry(task);
+    await settle();
+    expect(downloads.requests, hasLength(1));
+    downloads.complete(0);
+    await settle();
+    expect(task.phase, SourceInstallPhase.succeeded);
+    expect(manager.scripts, ['// broken', '// source']);
+  });
+
   const repository = SourceRepository(
     id: 'r',
     name: 'Repo',

@@ -1,16 +1,15 @@
 import 'dart:math';
 import 'dart:ui';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
+import 'package:venera_next/foundation/edge_back_gesture.dart';
 import 'package:venera_next/foundation/app.dart';
 
-const double _kBackGestureWidth = 20.0;
+const double _kBackGestureWidth = 24.0;
 const int _kMaxDroppedSwipePageForwardAnimationTime = 800;
 const int _kMaxPageBackAnimationTime = 300;
 const double _kMinFlingVelocity = 1.0;
 
-class AppPageRoute<T> extends PageRoute<T> with _AppRouteTransitionMixin{
+class AppPageRoute<T> extends PageRoute<T> with _AppRouteTransitionMixin {
   /// Construct a MaterialPageRoute whose contents are defined by [builder].
   AppPageRoute({
     required this.builder,
@@ -81,13 +80,13 @@ mixin _AppRouteTransitionMixin<T> on PageRoute<T> {
 
   @override
   Widget buildPage(
-      BuildContext context,
-      Animation<double> animation,
-      Animation<double> secondaryAnimation,
-      ) {
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
     Widget result;
 
-    if(preventRebuild){
+    if (preventRebuild) {
       result = _child ?? (_child = buildContent(context));
     } else {
       result = buildContent(context);
@@ -116,27 +115,33 @@ mixin _AppRouteTransitionMixin<T> on PageRoute<T> {
   }
 
   @override
-  Widget buildTransitions(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
     PageTransitionsBuilder builder;
     if (App.isAndroid) {
       builder = PredictiveBackPageTransitionsBuilder();
     } else {
       builder = SlidePageTransitionBuilder();
-  }
+    }
 
-  return builder.buildTransitions(
-        this,
-        context,
-        animation,
-        secondaryAnimation,
-    enableIOSGesture && App.isIOS
-      ? IOSBackGestureDetector(
-        gestureWidth: _kBackGestureWidth,
-        enabledCallback: () => _isPopGestureEnabled<T>(this),
-        onStartPopGesture: () => _startPopGesture(this),
-        child: child,
-        )
-      : child);
+    return builder.buildTransitions(
+      this,
+      context,
+      animation,
+      secondaryAnimation,
+      enableIOSGesture && App.isIOS
+          ? IOSBackGestureDetector(
+              gestureWidth: _kBackGestureWidth,
+              enabledCallback: () => _isPopGestureEnabled<T>(this),
+              onStartPopGesture: () => _startPopGesture(this),
+              child: child,
+            )
+          : child,
+    );
   }
 
   IOSBackGestureController _startPopGesture(PageRoute<T> route) {
@@ -153,11 +158,13 @@ class IOSBackGestureController {
     navigator.didStartUserGesture();
   }
 
-  void dragEnd(double velocity) {
+  void dragEnd(double velocity, {bool cancelled = false}) {
     const Curve animationCurve = Curves.fastLinearToSlowEaseIn;
     final bool animateForward;
 
-    if (velocity.abs() >= _kMinFlingVelocity) {
+    if (cancelled) {
+      animateForward = true;
+    } else if (velocity.abs() >= _kMinFlingVelocity && controller.value < 0.9) {
       animateForward = velocity <= 0;
     } else {
       animateForward = controller.value > 0.5;
@@ -166,22 +173,30 @@ class IOSBackGestureController {
     if (animateForward) {
       final droppedPageForwardAnimationTime = min(
         lerpDouble(
-                _kMaxDroppedSwipePageForwardAnimationTime, 0, controller.value)!
-            .floor(),
+          _kMaxDroppedSwipePageForwardAnimationTime,
+          0,
+          controller.value,
+        )!.floor(),
         _kMaxPageBackAnimationTime,
       );
-      controller.animateTo(1.0,
-          duration: Duration(milliseconds: droppedPageForwardAnimationTime),
-          curve: animationCurve);
+      controller.animateTo(
+        1.0,
+        duration: Duration(milliseconds: droppedPageForwardAnimationTime),
+        curve: animationCurve,
+      );
     } else {
       navigator.pop();
       if (controller.isAnimating) {
         final droppedPageBackAnimationTime = lerpDouble(
-                0, _kMaxDroppedSwipePageForwardAnimationTime, controller.value)!
-            .floor();
-        controller.animateBack(0.0,
-            duration: Duration(milliseconds: droppedPageBackAnimationTime),
-            curve: animationCurve);
+          0,
+          _kMaxDroppedSwipePageForwardAnimationTime,
+          controller.value,
+        )!.floor();
+        controller.animateBack(
+          0.0,
+          duration: Duration(milliseconds: droppedPageBackAnimationTime),
+          curve: animationCurve,
+        );
       }
     }
 
@@ -222,242 +237,35 @@ class IOSBackGestureDetector extends StatefulWidget {
 
 class _IOSBackGestureDetectorState extends State<IOSBackGestureDetector> {
   IOSBackGestureController? _backGestureController;
-  late _BackSwipeRecognizer _recognizer;
-
-
-  @override
-  void initState() {
-    super.initState();
-    _recognizer = _BackSwipeRecognizer(
-      debugOwner: this,
-      gestureWidth: widget.gestureWidth,
-      isPointerInHorizontal: _isPointerInHorizontalScrollable,
-      onStart: _handleDragStart,
-      onUpdate: _handleDragUpdate,
-      onEnd: _handleDragEnd,
-      onCancel: _handleDragCancel,
-    );
-  }
-
-  @override
-  void dispose() {
-    _recognizer.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
-    return RawGestureDetector(
-      behavior: HitTestBehavior.translucent,
-      gestures: {
-        _BackSwipeRecognizer: GestureRecognizerFactoryWithHandlers<_BackSwipeRecognizer>(
-          () => _recognizer,
-          (instance) {
-            instance.gestureWidth = widget.gestureWidth;
-          },
-        ),
+    return EdgeBackGestureDetector(
+      enabled: widget.enabledCallback,
+      edgeWidth: widget.gestureWidth,
+      onStart: () => _backGestureController = widget.onStartPopGesture(),
+      onUpdate: (delta) => _backGestureController?.dragUpdate(delta),
+      onEnd: (velocity) {
+        _backGestureController?.dragEnd(velocity);
+        _backGestureController = null;
+      },
+      onCancel: () {
+        _backGestureController?.dragEnd(0, cancelled: true);
+        _backGestureController = null;
       },
       child: widget.child,
     );
   }
-
-  bool _isPointerInHorizontalScrollable(Offset globalPosition) {
-    final HitTestResult result = HitTestResult();
-    final binding = WidgetsBinding.instance;
-    binding.hitTestInView(result, globalPosition, binding.platformDispatcher.implicitView!.viewId);
-
-    for (final entry in result.path) {
-      final target = entry.target;
-      if (target is RenderViewport) {
-        if (target.axisDirection == AxisDirection.left || 
-            target.axisDirection == AxisDirection.right) {
-          return true;
-        }
-      } 
-      else if (target is RenderSliver) {
-         if (target.constraints.axisDirection == AxisDirection.left || 
-             target.constraints.axisDirection == AxisDirection.right) {
-          return true;
-        }
-      }
-      else if (target.runtimeType.toString() == '_RenderSingleChildViewport') {
-        try {
-          final dynamic renderObject = target;
-          if (renderObject.axis == Axis.horizontal) {
-            return true;
-          }
-        } catch (e) {
-          // protected
-        }
-      }
-      else if (target is RenderEditable) {
-         return true;
-      }
-    }
-    return false;
-  }
-
-  void _handleDragStart(DragStartDetails details) {
-    if (!widget.enabledCallback()) return;
-    if (mounted && _backGestureController == null) {
-      _backGestureController = widget.onStartPopGesture();
-    }
-  }
-
-  void _handleDragUpdate(DragUpdateDetails details) {
-    if (mounted && _backGestureController != null) {
-      _backGestureController!.dragUpdate(
-          _convertToLogical(details.primaryDelta! / context.size!.width));
-    }
-  }
-
-  void _handleDragEnd(DragEndDetails details) {
-    if (mounted && _backGestureController != null) {
-      _backGestureController!.dragEnd(_convertToLogical(
-          details.velocity.pixelsPerSecond.dx / context.size!.width));
-      _backGestureController = null;
-    }
-  }
-
-  void _handleDragCancel() {
-    if (mounted && _backGestureController != null) {
-      _backGestureController?.dragEnd(0.0);
-      _backGestureController = null;
-    }
-  }
-
-  double _convertToLogical(double value) {
-    switch (Directionality.of(context)) {
-      case TextDirection.rtl: return -value;
-      case TextDirection.ltr: return value;
-    }
-  }
-}
-
-class _BackSwipeRecognizer extends OneSequenceGestureRecognizer {
-  _BackSwipeRecognizer({
-    required this.isPointerInHorizontal,
-    required this.gestureWidth,
-    required this.onStart,
-    required this.onUpdate,
-    required this.onEnd,
-    required this.onCancel,
-    super.debugOwner,
-  });
-
-  final bool Function(Offset globalPosition) isPointerInHorizontal;
-  double gestureWidth;
-  final ValueSetter<DragStartDetails> onStart;
-  final ValueSetter<DragUpdateDetails> onUpdate;
-  final ValueSetter<DragEndDetails> onEnd;
-  final VoidCallback onCancel;
-
-  Offset? _startGlobal;
-  bool _accepted = false;
-  bool _startedInHorizontal = false;
-  bool _startedNearLeftEdge = false; 
-
-  VelocityTracker? _velocityTracker;
-
-  static const double _minDistance = 5.0; 
-
-  @override
-  void addPointer(PointerDownEvent event) {
-    startTrackingPointer(event.pointer);
-    _startGlobal = event.position;
-    _accepted = false;
-    
-    _startedInHorizontal = isPointerInHorizontal(event.position);
-    _startedNearLeftEdge = event.position.dx <= gestureWidth;
-
-    _velocityTracker = VelocityTracker.withKind(event.kind);
-    _velocityTracker?.addPosition(event.timeStamp, event.position);
-  }
-
-  @override
-  void handleEvent(PointerEvent event) {
-    if (event is PointerMoveEvent || event is PointerUpEvent) {
-      _velocityTracker?.addPosition(event.timeStamp, event.position);
-    }
-
-    if (event is PointerMoveEvent) {
-      if (_startGlobal == null) return;
-      final delta = event.position - _startGlobal!;
-      final dx = delta.dx;
-      final dy = delta.dy.abs();
-
-      if (!_accepted) {
-        if (delta.distance < _minDistance) return;
-
-        final isRight = dx > 0;
-        final isHorizontal = dx.abs() > dy * 1.5;
-        final bool eligible = _startedNearLeftEdge || (!_startedInHorizontal);
-
-        if (isRight && isHorizontal && eligible) {
-          _accepted = true;
-          resolve(GestureDisposition.accepted);
-          onStart(DragStartDetails(
-            globalPosition: _startGlobal!, 
-            localPosition: event.localPosition
-          ));
-        } else {
-          resolve(GestureDisposition.rejected);
-          stopTrackingPointer(event.pointer);
-          _startGlobal = null;
-          _velocityTracker = null;
-        }
-      }
-
-      if (_accepted) {
-        onUpdate(DragUpdateDetails(
-          globalPosition: event.position,
-          localPosition: event.localPosition,
-          primaryDelta: event.delta.dx,
-          delta: Offset(event.delta.dx, 0),
-        ));
-      }
-    } else if (event is PointerUpEvent) {
-      if (_accepted) {
-        final Velocity velocity = _velocityTracker?.getVelocity() ?? Velocity.zero;
-        
-        onEnd(DragEndDetails(
-          velocity: velocity,
-          primaryVelocity: velocity.pixelsPerSecond.dx
-        ));
-      }
-      _reset();
-    } else if (event is PointerCancelEvent) {
-      if (_accepted) {
-        onCancel();
-      }
-      _reset();
-    }
-  }
-
-  void _reset() {
-    stopTrackingPointer(0);
-    _accepted = false;
-    _startGlobal = null;
-    _startedInHorizontal = false;
-    _startedNearLeftEdge = false;
-    _velocityTracker = null;
-  }
-
-  @override
-  String get debugDescription => 'IOSBackSwipe';
-
-  @override
-  void didStopTrackingLastPointer(int pointer) {}
 }
 
 class SlidePageTransitionBuilder extends PageTransitionsBuilder {
   @override
   Widget buildTransitions<T>(
-      PageRoute<T> route,
-      BuildContext context,
-      Animation<double> animation,
-      Animation<double> secondaryAnimation,
-      Widget child) {
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
     final Animation<double> primaryAnimation = App.isIOS
         ? animation
         : CurvedAnimation(parent: animation, curve: Curves.ease);

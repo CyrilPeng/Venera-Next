@@ -22,12 +22,12 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 import 'parser.dart' show compareSemVer;
-import 'source_installation.dart';
 import 'source_installation_widgets.dart';
 import 'source_translation.dart';
 import 'source_repositories.dart';
 import 'source_repository_page.dart';
 import 'source_script_editor.dart';
+import 'source_import_dialog.dart';
 
 class ComicSourcePage extends StatelessWidget {
   const ComicSourcePage({super.key});
@@ -203,6 +203,17 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
     return Column(
       children: [
         Appbar(title: Text('Comic Source'.tl)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: FilledButton.icon(
+              onPressed: _addSource,
+              icon: const Icon(Icons.add),
+              label: Text('Add source'.tl),
+            ),
+          ),
+        ),
         AppTabBar(
           controller: tabs,
           tabs: [
@@ -224,7 +235,7 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
                         icon: Icons.extension_outlined,
                         title: 'No installed sources'.tl,
                         description:
-                            'Open the Repositories tab to browse and install sources.'
+                            'Add a source link or JS/JSON file, or browse your saved repositories.'
                                 .tl,
                       ),
                     ),
@@ -365,16 +376,6 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
             runSpacing: 8,
             children: [
               const _CheckUpdatesButton(),
-              FilledButton.tonalIcon(
-                onPressed: _installFromLink,
-                icon: const Icon(Icons.link),
-                label: Text('Install from link'.tl),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: _selectFile,
-                icon: const Icon(Icons.file_open_outlined),
-                label: Text('Import source file'.tl),
-              ),
               IconButton(
                 onPressed: help,
                 tooltip: 'Help'.tl,
@@ -393,89 +394,17 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
     ),
   );
 
-  Future<void> _installFromLink() async {
-    final url = await showDialog<String>(
-      context: context,
-      builder: (_) => const _SourceUrlDialog(),
-    );
-    if (url != null) SourceInstallations.instance.enqueueUrl(url);
-  }
-
-  void _selectFile() async {
-    final file = await selectFile(ext: ["js"]);
-    if (file == null) return;
-    try {
-      final bytes = await file.readAsBytes();
-      SourceInstallations.instance.enqueueFile(
-        file.name,
-        bytes,
-        readFile: file.readAsBytes,
-      );
-    } catch (e, s) {
-      App.rootContext.showMessage(message: e.toString());
-      Log.error("Add comic source", "$e\n$s");
-    }
-  }
+  Future<void> _addSource() => showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const SourceImportDialog(),
+  );
 
   void help() {
     launchUrlString(
       "https://github.com/CyrilPeng/venera-next/blob/main/doc/development/source_debugging.zh.md",
     );
   }
-}
-
-class _SourceUrlDialog extends StatefulWidget {
-  const _SourceUrlDialog();
-  @override
-  State<_SourceUrlDialog> createState() => _SourceUrlDialogState();
-}
-
-class _SourceUrlDialogState extends State<_SourceUrlDialog> {
-  final controller = TextEditingController();
-  String? error;
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-
-  void submit() {
-    try {
-      Navigator.pop(context, SourceRepositories.normalizeUrl(controller.text));
-    } catch (e) {
-      setState(() => error = e.toString());
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text('Install from link'.tl),
-    content: SizedBox(
-      width: 440,
-      child: TextField(
-        controller: controller,
-        autofocus: true,
-        keyboardType: TextInputType.url,
-        autocorrect: false,
-        onSubmitted: (_) => submit(),
-        decoration: InputDecoration(
-          labelText: 'Source script URL'.tl,
-          hintText: 'https://example.com/source.js',
-          helperText: 'To add a source list, use the Repositories tab.'.tl,
-          helperMaxLines: 3,
-          errorText: error,
-          errorMaxLines: 3,
-        ),
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: Text('Cancel'.tl),
-      ),
-      FilledButton(onPressed: submit, child: Text('Install source'.tl)),
-    ],
-  );
 }
 
 void _validatePages() {

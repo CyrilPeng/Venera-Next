@@ -9,6 +9,7 @@ import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/reader/gesture.dart';
+import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/images.dart';
 import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_mode_labels.dart';
@@ -158,6 +159,51 @@ class ReaderState extends State<Reader>
   bool _hasPresentedImages = false;
   ComicLayoutProbe? _layoutProbe;
   final _sampledChapters = <String>{};
+
+  dynamic readerSetting(String key) =>
+      appdata.settings.getReaderSetting(cid, type.sourceKey, key);
+
+  late final autoReading = AutoReadingController(
+    settings: () => AutoReadingSettings(
+      gallery: mode.isGallery,
+      pageInterval: (readerSetting('autoPageTurningInterval') as num)
+          .toDouble(),
+      pixelsPerSecond: (readerSetting('autoScrollSpeed') as num).toDouble(),
+      stepped: readerSetting('autoScrollStyle') == 'stepped',
+      stepsPerSecond: (readerSetting('autoScrollFrequency') as num).toDouble(),
+      pixelsPerStep: (readerSetting('autoScrollDistance') as num).toDouble(),
+    ),
+    canAdvance: () {
+      final viewport = imageViewController;
+      return mounted &&
+          _readerContentReady &&
+          !isLoading &&
+          !isPageAnimating &&
+          (ModalRoute.of(context)?.isCurrent ?? true) &&
+          viewport is AutoReadingViewport &&
+          (viewport as AutoReadingViewport).autoReadingReady;
+    },
+    advance: (distance) {
+      final across = readerSetting('autoReadingAcrossChapters') == true;
+      if (!mode.isGallery) {
+        return (imageViewController as AutoReadingViewport).autoScroll(
+          distance,
+          acrossChapters: across,
+        );
+      }
+      if (page < maxPage) {
+        return toNextPage()
+            ? AutoReadingStep.advanced
+            : AutoReadingStep.waiting;
+      }
+      if (across && chapter < maxChapter) {
+        return toNextChapter()
+            ? AutoReadingStep.advanced
+            : AutoReadingStep.waiting;
+      }
+      return AutoReadingStep.finished;
+    },
+  )..addListener(update);
 
   bool get isDetectingLayout => _layoutProbe != null;
 
@@ -341,7 +387,7 @@ class ReaderState extends State<Reader>
     if (isFullscreen) {
       fullscreen();
     }
-    autoPageTurningTimer?.cancel();
+    autoReading.dispose();
     _flushPendingHistoryUpdate();
     unawaited(
       _readingSession.dispose().whenComplete(() {
@@ -371,6 +417,7 @@ class ReaderState extends State<Reader>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    autoReading.pause('lifecycle', state != AppLifecycleState.resumed);
     switch (state) {
       case AppLifecycleState.resumed:
         if (_readerContentReady) {
@@ -392,20 +439,14 @@ class ReaderState extends State<Reader>
       focusNode: focusNode,
       autofocus: true,
       onKeyEvent: onKeyEvent,
-      child: Overlay(
-        initialEntries: [
-          OverlayEntry(
-            builder: (context) {
-              return ReaderScaffold(
-                child: ReaderGestureDetector(
-                  child: ReaderImages(
-                    key: Key(mode.isWaterfall ? mode.key : chapter.toString()),
-                  ),
-                ),
-              );
-            },
+      child: Overlay.wrap(
+        child: ReaderScaffold(
+          child: ReaderGestureDetector(
+            child: ReaderImages(
+              key: Key(mode.isWaterfall ? mode.key : chapter.toString()),
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -834,27 +875,6 @@ abstract mixin class ReaderLocation {
       return true;
     }
     return false;
-  }
-
-  Timer? autoPageTurningTimer;
-
-  void autoPageTurning(String cid, ComicType type) {
-    if (autoPageTurningTimer != null) {
-      autoPageTurningTimer!.cancel();
-      autoPageTurningTimer = null;
-    } else {
-      int interval = appdata.settings.getReaderSetting(
-        cid,
-        type.sourceKey,
-        'autoPageTurningInterval',
-      );
-      autoPageTurningTimer = Timer.periodic(Duration(seconds: interval), (_) {
-        if (page == maxPage) {
-          autoPageTurningTimer!.cancel();
-        }
-        toNextPage();
-      });
-    }
   }
 }
 
