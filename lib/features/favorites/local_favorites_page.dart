@@ -1001,6 +1001,16 @@ class _ReorderComicsPageState extends State<_ReorderComicsPage> {
   late var comics = LocalFavoritesManager().getFolderComics(widget.name);
   bool changed = false;
 
+  @override
+  void initState() {
+    super.initState();
+    appdata.settings.addListener(_onDisplaySettingsChanged);
+  }
+
+  void _onDisplaySettingsChanged() {
+    if (mounted) setState(() {});
+  }
+
   static int _floatToInt8(double x) {
     return (x * 255.0).round() & 0xff;
   }
@@ -1018,6 +1028,8 @@ class _ReorderComicsPageState extends State<_ReorderComicsPage> {
 
   @override
   void dispose() {
+    appdata.settings.removeListener(_onDisplaySettingsChanged);
+    _scrollController.dispose();
     if (changed) {
       // Delay to ensure navigation is completed
       Future.delayed(const Duration(milliseconds: 200), () {
@@ -1029,24 +1041,30 @@ class _ReorderComicsPageState extends State<_ReorderComicsPage> {
 
   @override
   Widget build(BuildContext context) {
-    var type = appdata.settings['comicDisplayMode'];
+    final gallery = isFavoriteGalleryMode();
+    final displayMode = gallery
+        ? ComicTileDisplayMode.gallery
+        : ComicTileDisplayMode.detailed;
     var tiles = comics.map((e) {
       var comicSource = e.type.comicSource;
-      return ComicTile(
+      return Padding(
         key: Key(e.hashCode.toString()),
-        enableLongPressed: false,
-        comic: Comic(
-          e.name,
-          e.coverPath,
-          e.id,
-          e.author,
-          e.tags,
-          type == 'detailed'
-              ? "${e.time} | ${comicSource?.name ?? "Unknown"}"
-              : "${e.type.comicSource?.name ?? "Unknown"} | ${e.time}",
-          comicSource?.key ?? (e.type == ComicType.local ? "local" : "Unknown"),
-          null,
-          null,
+        padding: const EdgeInsets.all(4),
+        child: ComicTile(
+          enableLongPressed: false,
+          displayMode: displayMode,
+          comic: Comic(
+            e.name,
+            e.coverPath,
+            e.id,
+            e.author,
+            e.tags,
+            "${e.time} | ${comicSource?.name ?? "Unknown"}",
+            comicSource?.key ??
+                (e.type == ComicType.local ? "local" : "Unknown"),
+            null,
+            null,
+          ),
         ),
       );
     }).toList();
@@ -1105,7 +1123,10 @@ class _ReorderComicsPageState extends State<_ReorderComicsPage> {
           return GridView(
             key: _key,
             controller: _scrollController,
-            gridDelegate: SliverGridDelegateWithComics(),
+            gridDelegate: SliverGridDelegateWithComics(
+              galleryColumns: gallery ? favoriteGalleryColumns() : null,
+              forceDetailed: !gallery,
+            ),
             children: children,
           );
         },
