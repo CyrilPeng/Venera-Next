@@ -2,13 +2,21 @@
 
 中文：[漫画源与源仓库](source_repositories.zh.md)
 
+This guide describes the unified import, multiple repositories, and background tasks on the current main branch. They remain [unreleased in CHANGELOG](../../CHANGELOG.md#未发布). Version 1.16.0 uses the earlier script URL/file import and single-catalog entry points, without this unified preview interface.
+
 The Comic Source page has two tabs: **Installed** and **Source repositories**. A source is a script that connects the reader to a comic service. A repository is a catalog of source scripts. You can save multiple repositories.
 
 ## Add and install
 
-Open **Source repositories → Add repository**, enter a recognizable name and a complete source list URL (usually `index.json`), then save. The app validates the address and catalog before saving. Errors preserve your input; cancel discards the edits.
+1. Open **Comic Source → Add source**.
+2. Paste a script/catalog URL, paste JS/JSON contents, or choose a JS/JSON file.
+3. For pasted input, select **Detect and preview**; choosing a file starts detection automatically. Check the result: scripts show their name, and catalogs show available entries and any skipped invalid entries. Correct the input if detection fails.
+4. For a script, select **Install source**. For a catalog, choose entries and select **Install selected**. A catalog loaded from a URL can also be named and saved with **Save as a source repository** for future browsing and update checks. Deselect all entries to save only the repository.
+5. Installation runs as background tasks. Completed sources appear in **Installed**. Saved repositories offer **Browse sources** to search and install more entries later.
 
-Choose **Browse sources** to search a repository and install a source. Use **Install from link** or **Import source file** in the Installed tab for individual scripts. A catalog URL belongs in the repository editor.
+Pasted or local JSON catalogs with relative script paths require an **Original source list URL** to resolve those paths. Supplying it does not save the local catalog as an online repository; load the catalog directly from its URL to save a repository. Local catalogs with absolute HTTP(S) script URLs need no base URL.
+
+Script URLs must return raw JavaScript and catalog URLs must return JSON arrays, rather than GitHub file-view pages. See [publishing scripts and catalogs](../api/comic_source.en.md#7-publishing-scripts-and-repositories) for authoring rules.
 
 ## Install several sources
 

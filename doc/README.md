@@ -9,6 +9,7 @@ English index: [README.en.md](README.en.md)
 | 目录 | 类型 | 语言约定 |
 |---|---|---|
 | `api/` | 开发 API、扩展接口、脚本接口 | 中英文双版本 |
+| `examples/` | 配套代码模板 | 中英文指南共用，接口说明在指南中维护 |
 | `architecture/` | 仓库结构、模块边界、架构约定 | 中英文双版本，中文为默认维护入口 |
 | `development/` | 本地开发、构建、测试和开发故障排查 | 中英文双版本，中文为默认维护入口 |
 | `distribution/` | 发布、分发、包管理器和工作流维护 | 中英文双版本，中文为默认维护入口 |
@@ -16,6 +17,8 @@ English index: [README.en.md](README.en.md)
 | `experiments/` | 实验设计、任务跟踪、技术预研 | 中文即可，不作为正式路线图承诺 |
 
 ## 开发 API
+
+第三方源开发者建议按“[编写指南](api/comic_source.zh.md) → [最小模板](examples/minimal_source.js) → [API 参考](api/js.zh.md) → [本地调试](development/source_debugging.zh.md) → [发布脚本与源仓库](api/comic_source.zh.md#7-发布脚本与源仓库)”阅读。
 
 - [漫画源开发说明](api/comic_source.zh.md) / [Comic Source Guide](api/comic_source.en.md)
 - [JavaScript API](api/js.zh.md) / [JavaScript API](api/js.en.md)

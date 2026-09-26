@@ -4,14 +4,16 @@
 
 See the [Comic Source Guide](../api/comic_source.en.md) and [JavaScript API](../api/js.en.md) for extension contracts. This guide covers importing, editing, reloading, and diagnosing scripts.
 
+Unified import, task reload, explicit editor save/reload, and asynchronous evaluator improvements are currently unreleased main-branch features. Version 1.16.0 retains the earlier URL/file import entry points. Start from the [minimal template](../examples/minimal_source.js), replacing its fictional service and mappings according to the [example API contract](../api/comic_source.en.md#1-script-and-minimal-example).
+
 ## Import and retry
 
-1. Select a script file or enter its URL on the Comic Source page.
+1. Open Comic Source → Add source, choose a JS file or paste a raw script URL/contents, and install from the preview. Files are detected automatically; pasted input requires Detect and preview.
 2. If installation fails, open task details to read and copy the complete error. JavaScript execution errors include the script path and line information supplied by the runtime.
 3. Edit and save the original file, then select Retry. Accessible files are read again; URL tasks download the script again.
 4. If the `key` is already installed, select Reload and confirm replacement. Successful file/URL tasks also offer Reload, so repeated development changes do not require uninstalling the source.
 
-Some mobile file pickers supply a temporary copy. External changes do not update that copy; select the file again in that case. Files can also be imported again after clearing completed tasks. Use the normal Update action for repository upgrades.
+Some mobile file pickers supply a temporary copy. External changes do not update that copy; select the file again in that case. Pasted scripts have no original file to reread; use Edit script or paste the revised contents again. Files can also be imported again after clearing completed tasks. Use the normal Update action for repository upgrades.
 
 ## Edit an installed source
 

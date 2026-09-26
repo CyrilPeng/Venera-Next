@@ -9,6 +9,7 @@ This is the English companion index for `doc/`. Documents are grouped by type an
 | Directory | Type | Language rule |
 |---|---|---|
 | `api/` | Developer APIs, extension interfaces, script contracts | Chinese and English |
+| `examples/` | Companion code templates | Shared by both languages; contracts documented in the guides |
 | `architecture/` | Repository structure, module boundaries, architecture rules | Chinese and English; Chinese is the default maintenance entry |
 | `development/` | Local development, builds, testing, and developer troubleshooting | Chinese and English; Chinese is the default maintenance entry |
 | `distribution/` | Release, distribution, package manager, and workflow notes | Chinese and English; Chinese is the default maintenance entry |
@@ -16,6 +17,8 @@ This is the English companion index for `doc/`. Documents are grouped by type an
 | `experiments/` | Experiments, task tracking, technical research | Chinese only; not a public roadmap commitment |
 
 ## Developer API
+
+Source developers can follow the [authoring guide](api/comic_source.en.md) → [minimal template](examples/minimal_source.js) → [API reference](api/js.en.md) → [local debugging](development/source_debugging.en.md) → [publishing scripts and repositories](api/comic_source.en.md#7-publishing-scripts-and-repositories).
 
 - [漫画源开发说明](api/comic_source.zh.md) / [Comic Source Guide](api/comic_source.en.md)
 - [JavaScript API](api/js.zh.md) / [JavaScript API](api/js.en.md)
@@ -44,6 +47,7 @@ This is the English companion index for `doc/`. Documents are grouped by type an
 ## Experiments
 
 - [Source installation task design (Chinese)](experiments/source_installation_tasks.zh.md)
+- [Source repository management design (Chinese)](experiments/source_repositories.zh.md)
 - [图片增强实验](experiments/image_enhancement.zh.md)
 
 ## Maintenance Rules

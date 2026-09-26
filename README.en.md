@@ -27,66 +27,72 @@
 - [Download and installation](#download-and-installation)
 - [Quick start](#quick-start)
 - [Usage guide](#usage-guide)
+- [Developing comic sources](#developing-comic-sources)
 - [FAQ](#faq)
 - [Developer resources](#developer-resources)
 - [Statement](#statement)
 - [Sponsors](#sponsors)
+- [Acknowledgements](#acknowledgements)
 - [License](#license)
 
 ---
 
 ## Introduction
 
-[VeneraNext](https://github.com/CyrilPeng/Venera-Next) is a cross-platform comic reader built with Flutter. It supports local comics and network comic extensions on Android, iOS, Windows, Linux, and macOS.
+[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, iOS, Windows, Linux, and macOS**.
 
-This project is a fork of [Venera](https://github.com/venera-app/venera), focused on everyday personal reading with as few interruptions as possible.
+This fork focuses on fewer interruptions while reading: scroll across chapters, split wide spreads for vertical reading, and adjust the reader for nighttime or E-Ink devices. Read Later, update tracking, offline downloads, reading statistics, and synchronization connect the rest of the reading workflow.
 
-Long series can be read continuously across chapters in waterfall mode. Frequently read titles can be favorited, followed, or downloaded for offline use, while WebDAV can synchronize common application data across devices.
+Venera's JavaScript extensions, local reading, search and categories, favorites, downloads, and source-dependent login, comments, and ratings remain available.
+
+**Quick links:** [Install](#download-and-installation) · [Usage](#usage-guide) · [Write a source](doc/api/comic_source.en.md) · [JavaScript API](doc/api/js.en.md) · [Changelog](CHANGELOG.md)
 
 > [!IMPORTANT]
-> **This repository maintains the comic reader only.** It does not provide, bundle, host, or recommend any comic source. Users must configure legal comic source extensions themselves. Do not report source-site content, title availability, or comic-source issues in this repository.
+> This repository maintains the reader and extension runtime. It does not provide, bundle, host, or recommend comic sources. Users must configure legal extensions themselves; content and availability depend on the corresponding extension and service.
 
 <div align="center">
-  <a href="https://github.com/CyrilPeng/Venera-Next">
-    <img alt="GitHub main repository" src="https://img.shields.io/badge/GitHub-Main_repository-181717?style=for-the-badge&logo=github&logoColor=white" />
-  </a>
-  <a href="https://gitee.com/CyrilPeng/venera-next">
-    <img alt="Gitee China mirror" src="https://img.shields.io/badge/Gitee-China_mirror-C71D23?style=for-the-badge&logo=gitee&logoColor=white" />
-  </a>
+  <a href="https://github.com/CyrilPeng/venera-next">GitHub repository</a> ·
+  <a href="https://gitee.com/CyrilPeng/venera-next">Gitee mirror</a>
 </div>
 
 ---
 
 ## Highlights
 
-### Features specific to this fork
+### Improvements in this fork
 
-- **Cross-chapter waterfall reading**: the default reading mode preloads the next chapter near the end of the current chapter, making long series and collected volumes easier to read continuously.
-- **Split double-page spreads in vertical modes**: landscape spreads can be split into vertically stacked halves in vertical continuous and waterfall modes. The split order can be reversed for titles with a different reading direction.
-- **Persistent chapter order preference**: ascending and descending chapter order is controlled by a segmented selector and stored as a global preference.
-- **Reading-time statistics**: foreground reading time is accumulated per comic, with total time, the most-read title, and duration rankings available from History.
-- **Local and remote libraries**: local comics can be imported from directories, CBZ, ZIP, or 7Z archives, PDF files, and image-based EPUB files. A WebDAV comic library can read regular image directories and extracted VeneraNext CBZ directories online.
+These features are included in stable releases through **v1.16.0**. See the [changelog](CHANGELOG.md) for individual releases.
 
-### Comic channels
+| Improvement | What it adds |
+|---|---|
+| **Waterfall reading across chapters** | The default mode preloads the next chapter near the boundary. Keep scrolling or return to a loaded previous chapter; chapter separators and history follow the actual reading position. |
+| **Split wide spreads vertically** | Stack the two halves of a wide image in vertical Continuous and Waterfall modes, with an option to swap their order. Original image counts and progress are preserved. |
+| **Night dimming** | An independent reader toggle and 20%–100% brightness control in reader settings and the bottom quick panel, alongside the app's light and dark themes. |
+| **E-Ink refresh** | Flash after a configurable number of Gallery page changes, with adjustable duration and black, white, or white-then-black styles to help reduce ghosting. |
+| **Clearer comic details** | Consistent two-row actions on desktop and mobile emphasize Download, Read, and Continue, with chapter progress, update indicators, and a saved chapter sort preference. |
+| **Read Later and update tracking** | Keep titles you want to start separate from ongoing series. The home page provides the reading queue, followed-cover previews, and update indicators. |
+| **Favorites and discovery shortcuts** | Browse favorites in a cover gallery with automatic or 2–6 columns, save author/tag searches, and view saved images in a gallery for each comic. |
+| **Reading statistics** | Track active foreground reading time and view totals, comic counts, and rankings from History or Settings. |
+| **Expanded local library** | Import image folders, CBZ/ZIP/7Z/CB7, PDF, and image-based EPUB; support chapter folders, natural sorting, batch PDF import, CBZ export, and recovery. |
+| **WebDAV library and archives** | Read NAS/WebDAV image folders with directory caching, incremental synchronization, and metadata support; back up local comics as CBZ archives and restore them separately. |
+| **Data and desktop improvements** | Atomic settings writes and recovery, sync status and errors, history cleanup, and Windows installers, portable packages, and winget updates. |
 
-- **Local comics**: read image directories, archives, and image documents already available on the device. Single-title directories, parent directories containing multiple titles, CBZ, ZIP, 7Z, CB7, PDF, and image-based EPUB imports are supported.
-- **Network comic extensions**: compatible JavaScript extension APIs can provide search, categories, rankings, discovery, favorites, and downloads.
-- **WebDAV comic library**: use a NAS, Nextcloud, ownCloud, or another WebDAV server as an online image library. Regular image directories and enhanced extracted CBZ directories are supported; compressed archives are not streamed directly.
-- **Downloaded chapters**: chapters from a network extension can be saved into the local comic library for offline reading.
+### New changes on the main branch
 
-### Management and synchronization
+The following changes are merged into the current main branch and remain in the [Unreleased section](CHANGELOG.md#未发布). **They are not part of stable v1.16.0.**
 
-- Favorites, reading history and time statistics, image favorites, download queues, and update tracking.
-- Local comic importing, exporting, recovery scans, chapter deletion, and storage-path migration.
-- WebDAV data synchronization, CBZ archive backup and restore, and an online comic library. See the [WebDAV guide](#webdav-data-sync-and-comic-archives) for the differences.
+- **Automatic reader mode:** recognize page comics and webtoons from original image proportions and apply separate mode preferences. Off by default; a manual per-comic choice takes priority. [Guide](doc/user/automatic_reader_mode.en.md)
+- **Automatic reading and long-press actions:** timed page turns or smooth/stepped scrolling across all seven modes, with optional chapter transitions. Touch, zoom, settings, and background state pause advancement.
+- **Unified import and multiple repositories:** preview scripts or catalogs from links, pasted content, or JS/JSON files; select entries, save online repositories, and manage background installation, cancellation, retries, and origins. [Source repositories](doc/user/source_repositories.en.md)
+- **Update checks and source debugging:** rate-limit follow checks per source and stop previous runs on cancellation; save and reload source edits while preserving a working source on failure, and inspect asynchronous evaluator results. [Local debugging](doc/development/source_debugging.en.md)
 
-### Cross-platform support
+### Core Venera capabilities retained
 
-- Android, iOS, Windows, Linux, and macOS.
-- Release artifacts are provided for multiple platforms.
-- Windows installation and updates are available through winget.
-
-See [CHANGELOG.md](CHANGELOG.md) for the complete release history.
+- **Extensible sources:** use JavaScript to provide search, aggregate search, exploration pages, categories, rankings, and tag translation.
+- **Flexible reading:** Gallery pagination, scrolling within a chapter, zoom, and multi-image layouts, with touch, keyboard, and mobile volume-key controls.
+- **Favorites and offline access:** local and network favorites, history, saved images, and a download queue; read downloaded chapters offline.
+- **Source-dependent interaction:** accounts, cookies, comments and replies, chapter comments, likes, and ratings where implemented by the extension.
+- **Multiple devices:** WebDAV app-data synchronization, import/export, and [headless commands](doc/user/headless.en.md) for scripting.
 
 ---
 
@@ -99,7 +105,7 @@ Download an APK from [GitHub Releases](https://github.com/CyrilPeng/Venera-Next/
 | File | Description | Recommended for |
 |---|---|---|
 | `VeneraNext-xxx-android.apk` | Universal build | Most Android devices |
-| `VeneraNext-xxx-android-arm64-v8a.apk` | ARM64 build | 64-bit devices with at least 4 GB RAM |
+| `VeneraNext-xxx-android-arm64-v8a.apk` | ARM64 build | Android devices that support ARM64 apps |
 | `VeneraNext-xxx-android-armeabi-v7a.apk` | ARM32 build | Older 32-bit devices |
 
 When in doubt, use the universal `VeneraNext-xxx-android.apk` package.
@@ -133,199 +139,131 @@ Download `VeneraNext-xxx.dmg` from GitHub Releases.
 
 ## Quick start
 
-1. Download the package for your platform from [GitHub Releases](https://github.com/CyrilPeng/Venera-Next/releases).
-2. Choose a comic channel:
-   - For an existing image directory, comic archive, PDF, or image-based EPUB, open `Local` -> `Import`.
-   - For a network comic extension, open comic source management and add an extension compatible with the JavaScript API.
-   - For online NAS or WebDAV reading, open `Settings` -> `App` -> `WebDAV Comic Library` and configure the remote directory.
-3. Select a reading mode under `Settings` -> `Reader`. Waterfall is recommended for long series; Gallery provides traditional page turning; Continuous scrolls within the current chapter only.
-   Enable **Choose reading mode automatically** to choose separate preferences for paged comics, long-strip comics, and unknown layouts. Recognition uses only the proportions of multiple source images and works with online and local comics. In the reader, **Reading mode for this comic** can override this preference or return to **Follow default**. See the [Automatic Reader Mode guide](doc/user/automatic_reader_mode.en.md).
-4. Check the chapter order on the comic details page. Switch between ascending and descending order when necessary; the preference is remembered globally.
-5. For landscape double-page spreads, enable split spreads in vertical continuous or waterfall mode. Enable reverse split order when the halves appear in the wrong reading order.
-6. Add frequently read titles to favorites or update tracking. Download chapters first when the network is unreliable or when reading offline.
-7. Configure WebDAV only when needed. Application data sync, CBZ archive backup, and the online WebDAV comic library are three independent configurations.
-
----
+1. Install the appropriate build from [Releases](https://github.com/CyrilPeng/venera-next/releases).
+2. Choose a channel: use Local → Import for existing images, archives, or image documents; install a compatible extension for network reading; configure Settings → App → WebDAV Comic Library for a NAS.
+3. Choose a mode in Settings → Reader. Waterfall is the default for long series; Gallery turns pages; Continuous scrolls within the current chapter.
+4. Adjust split spreads, night dimming, or E-Ink refresh for your device. Enable device-specific or per-comic settings when needed.
+5. Use Read/Continue or select a chapter. Put titles you will start later in Read Later, and ongoing series in the folder used for update tracking.
+6. Download chapters for offline use. Configure data sync, comic archives, or the online library according to your cross-device needs.
 
 ## Usage guide
 
-### Reader modes
+### Reading modes and progress
 
-- **Waterfall (top to bottom)**: the default mode emphasized by this fork. It loads following chapters near the end of the current chapter and is suited to long, uninterrupted reading sessions.
-- **Gallery**: traditional paged reading with horizontal or vertical directions.
-- **Continuous**: scrolls continuously inside the current chapter without automatically crossing chapter boundaries.
-- **Image preloading**: the preload count can be adjusted in reader settings. A larger value may help on slow networks, but should remain moderate on devices with limited memory or thermal headroom.
-- **Progress tracking**: chapter, page, and chapter-group positions are recorded. Cross-chapter waterfall reading updates progress to the chapter actually being viewed.
-- **Split double-page spreads**: available only in vertical continuous and waterfall modes. A landscape image is transformed into vertically stacked halves without changing the chapter page count. The split order can be reversed.
+| Mode | Directions | Suitable for |
+|---|---|---|
+| Waterfall | Top to bottom | Continuous reading across chapters, loading adjacent chapters near boundaries |
+| Gallery | Left to right, right to left, top to bottom | Page turns, with configurable multi-image layouts |
+| Continuous | Left to right, right to left, top to bottom | Scrolling inside the current chapter with explicit chapter boundaries |
 
-### Local comics
+- **Preloading:** Waterfall reuses the image preload count. Larger values may load content earlier and increase network and memory use.
+- **Split wide images:** available in vertical Continuous and Waterfall only. Swap the split order if needed; page counts still refer to original images.
+- **Resume:** history stores chapter, page, and chapter group. Waterfall records the chapter actually being read. Ascending/descending on the details page only changes the chapter list display.
+- **Setting scope:** ordinary reader settings fall back from enabled per-comic settings to enabled device settings and then global settings. The main branch also has an independent manual per-comic mode override.
+- **Automatic mode recognition (main branch):** off by default and based on body-image proportions rather than source declarations. Switching preserves the chapter and original image position, but not the exact pixel offset inside an image. [Details](doc/user/automatic_reader_mode.en.md)
 
-Local comics support both flat image directories and directories containing chapter folders:
+### Nighttime and E-Ink reading
 
-```text
-Comic/
-|-- cover.jpg
-|-- 001.jpg
-`-- 002.jpg
-```
+Choose a light, dark, or system theme in Settings → Appearance. **Night dimming** independently darkens the comic in the reader: enable it in reader settings or the bottom quick panel and adjust brightness from 20% to 100%. This changes the in-app image, not the device's system brightness.
 
-```text
-Comic/
-|-- cover.jpg
-|-- Volume 01/
-|   |-- 001.jpg
-|   `-- 002.jpg
-`-- Volume 02/
-    |-- 001.jpg
-    `-- 002.jpg
-```
+For E-Ink devices, choose **Gallery mode** and enable E-Ink display refresh. Set a flash every 1–10 page changes, a duration of 100–1500 ms, and a black, white, or white-then-black style. This is a flash drawn by the reader; results depend on the device's own refresh behavior. Continuous and Waterfall do not trigger it.
 
-- `cover.jpg` is optional. When it is absent, the app tries to use the first readable image as the cover.
-- Pages use natural filename order, such as `page_1.jpg`, `page_2.jpg`, `page_10.jpg`, including leading zeros and multiple numeric segments. PDF/EPUB conversion and explicit archive metadata retain their defined order.
-- For batch directory import, select the parent directory containing multiple comic directories, rather than an internal chapter directory.
+### Automatic reading and gestures (main branch)
 
-### CBZ, ZIP, and 7Z import and export
+Gallery turns pages at the configured interval. Continuous and Waterfall can scroll smoothly at 10–1000 pixels/second or in steps at 1–10 steps/second and 10–500 pixels/step. Optional automatic chapter transitions wait until a long image has been scrolled to its end.
 
-- CBZ, ZIP, 7Z, and CB7 are suitable for importing, exporting, backup, migration, and distribution.
-- An archive may contain images directly or wrap everything in one top-level directory. Chapter directories inside that top-level directory are imported as chapters.
-- The following layout is supported:
+Touch, zoom, settings panels, and background state pause advancement. Loading failures or reaching the end of the final chapter stop it. Long press can zoom, start/stop automatic reading, or do nothing; previous zoom preferences are preserved.
 
-```text
-Comic.cbz
-`-- Comic/
-    |-- cover.jpg
-    |-- Volume 01/
-    |   |-- 001.jpg
-    |   `-- 002.jpg
-    `-- Volume 02/
-        |-- 001.jpg
-        `-- 002.jpg
-```
+### Comic details, Read Later, and update tracking
 
-- Large archives must be extracted and copied into the local library before reading. They are best suited to download-first reading, backup, and distribution rather than online streaming.
-- Imported local comics can be exported as CBZ files for backup or transfer between devices.
+- **Details:** common interactions and the Download/Read buttons occupy separate rows. Continue, chapter progress, update indicators, and a remembered ascending/descending choice make returning to a comic easier.
+- **Read Later:** add/remove a title from comic details or the local-comic menu and open the full list from Home. Reading does not automatically remove it. Its separate local favorites folder can be renamed, deleted, and synchronized.
+- **Update tracking:** checks comics in the selected local favorites folder. Home shows covers and update counts. The default quick-favorite target can be the follow folder; existing valid preferences and an explicit disabled state are preserved. Long-press Favorite on the details page for quick favorite.
+- **Update detection:** relies on a valid update date supplied by comic details. An additional chapter alone does not guarantee detection. Update indicators can be disabled in Settings.
+- **Authors and tags:** save searchable author/tag targets as shortcuts on the search page. A shortcut stores search criteria; it does not automatically follow every work by an author.
 
-### PDF and image-based EPUB import
+### Favorites, images, and reading statistics
 
-- Select multiple PDFs to import them sequentially with file and page progress. Cancelling keeps completed comics; duplicate files and existing titles are skipped, and a single-file failure does not stop the batch.
-- PDF pages are rendered to local JPEG images during import, with the first page used as the cover. The result is a flat comic without chapters.
-- Image-based EPUB files are read in spine order. Title, author, cover, and meaningful chapter navigation are preserved when possible, while raster images are copied without recompression.
-- Text-based EPUB files, directly rendered SVG pages, encrypted PDF files, and MOBI/AZW/AZW3 are not supported.
-- PDF and EPUB imports require additional local storage. The reader uses the converted images and does not depend on the original document afterward.
-- See [Local Comic Import](doc/user/import_comic.en.md#pdf-and-image-based-epub) for the full compatibility rules.
+Local favorites are managed by the app; network favorites depend on the source account and extension. The cover gallery supports automatic or 2–6 column layouts, and saved images can be browsed in a gallery for each comic.
+
+History stores reading position and active foreground time, with totals, comic counts, and time rankings. Settings also links to reading statistics. History can be cleaned by retention period. Leaving the reader or entering the background records the corresponding active reading period.
+
+### Local comics and offline downloads
+
+| Content | Import and reading behavior |
+|---|---|
+| Image folders | Single or batch imports, including chapter subfolders; optional covers and natural filename ordering |
+| CBZ / ZIP / 7Z / CB7 | Extract into the local library, including archives with a top-level folder and chapter subfolders |
+| PDF | Sequential multi-file import with progress and cancellation; render pages to local JPEGs and use the first page as the cover |
+| Image-based EPUB | Extract raster images in spine order and retain title, author, cover, and usable chapter navigation where possible |
+| Source downloads | Store downloaded chapters in the local library for offline reading, later export, and archival |
+
+CBZ export, scanning to recover downloads, chapter deletion, and storage migration are available. PDF/EPUB imports consume additional storage. Text-only EPUB, directly drawn SVG pages, encrypted PDF, and MOBI/AZW/AZW3 are unsupported.
+
+See [local import, CBZ, and WebDAV library rules](doc/user/import_comic.en.md) for folder examples, archive compatibility, and metadata templates.
 
 ### Network comic extensions
 
-- Network comic functionality is provided by extensions compatible with the JavaScript extension API. Search, browsing, and reading become available after an extension is added.
-- This repository does not provide source lists or handle source-site content issues. Missing search results, empty chapters, and image failures usually need to be investigated in the relevant extension, source site, network, or proxy configuration.
-- Capabilities differ between extensions. Categories, rankings, comments, ratings, archive downloads, and login entry points are shown only when supported.
-- When a source requires login, cookies, or site verification, use the settings or login entry point provided by that extension.
+User-installed JavaScript extensions provide network content. Search, exploration, categories, accounts, favorites, and comment capabilities vary by extension.
 
-### WebDAV comic library
+On the main branch, use Comic Source → Add source: paste a script/catalog URL or content, or choose a JS/JSON file, then preview and install. Online catalogs can be saved as repositories, and installed sources can link, switch, or unlink update origins. Stable v1.16.0 uses the previous link/file and single-catalog interfaces.
 
-- The WebDAV comic library treats a NAS, Nextcloud, ownCloud, or another WebDAV directory as an online comic library.
-- Configure it under `Settings` -> `App` -> `WebDAV Comic Library`.
-- Regular directories do not require metadata. The folder name becomes the comic title and child directories become chapters. Without `cover.*`, the app tries a root image and then the first readable chapter cover or page.
-- Example regular directory:
+See [source repositories](doc/user/source_repositories.en.md) for installation tasks, updates, and migration. To write an extension, start with [Developing comic sources](#developing-comic-sources).
 
-```text
-/venera_comics/
-|-- Comic A/
-|   |-- cover.jpg
-|   |-- Volume 01/
-|   |   |-- 001.jpg
-|   |   `-- 002.jpg
-|   `-- Volume 02/
-|       |-- 001.jpg
-|       `-- 002.jpg
-`-- Comic B/
-    |-- cover.jpg
-    `-- Chapter 01/
-        |-- 001.webp
-        `-- 002.webp
-```
+### WebDAV data sync, archives, and online library
 
-- A single-title CBZ exported by VeneraNext can be extracted directly into the library. Its `metadata.json` supplies title, author, tags, and chapter page ranges while root images remain lazily loaded:
+These are configured separately:
 
-```text
-/venera_comics/Comic A/
-|-- metadata.json
-|-- ComicInfo.xml
-|-- cover.jpg
-|-- 0001.jpg
-`-- 0002.jpg
-```
+| Capability | Entry in Settings → App | Purpose |
+|---|---|---|
+| App-data synchronization | Data Sync | Synchronize settings, favorites, history, cookies, and source files; local comic images are excluded |
+| Comic archives | Comic Archive Backup | Upload local comics as CBZ archives or download archives into the local library |
+| Online library | WebDAV Comic Library | Load remote image folders on demand and cache directory information and images |
 
-- Missing, damaged, or invalid metadata is ignored and the app falls back to regular directory inference instead of hiding the comic.
-- Remote CBZ, ZIP, 7Z, and CB7 files remain archive files and are not previewed online. Extract them on the server for online reading.
-- The first visit requires a directory listing and may take time on a slow WebDAV server. Images are then loaded on demand and use the application cache.
-- See [Local Comic Import, CBZ, and WebDAV Library](doc/user/import_comic.en.md) for complete directory and metadata rules.
+The online library accepts ordinary image folders, chapter folders, and extracted CBZ exports from VeneraNext. Valid `metadata.json` can supply title, author, tags, chapter page ranges, and identify comic roots in nested folders. Invalid metadata falls back to ordinary folder detection.
 
-### WebDAV data sync and comic archives
+The shelf displays cached entries first and checks remote changes incrementally. Manual synchronization and an automatic update interval are available. Remote CBZ/ZIP/7Z/CB7 files cannot be previewed directly: extract them on the server, or restore an archive for local reading. [Folder and metadata rules](doc/user/import_comic.en.md#webdav-online-library)
 
-VeneraNext has three independent WebDAV features:
+## Developing comic sources
 
-| Feature | Settings entry | Purpose | Online reading |
-|---|---|---|---|
-| WebDAV data sync | `Settings` -> `App` -> `Data Sync` | Synchronizes settings, favorites, history, cookies, extension files, and other application data | No |
-| WebDAV comic archive | `Settings` -> `App` -> `Comic Archive Backup` | Uploads local comics as CBZ archives or downloads them for restoration | No |
-| WebDAV comic library | `Settings` -> `App` -> `WebDAV Comic Library` | Reads remote image-directory structures online | Yes |
+**Start here when writing a third-party extension:**
 
-- Data sync shares application state between devices but does not synchronize local comic images.
-- Comic archives are intended for device migration, backup, and restoration. Restored archives enter the local comic library.
-- The WebDAV comic library reads remote directories on demand without downloading an entire comic first.
+| Document | Contents |
+|---|---|
+| [Comic Source Guide](doc/api/comic_source.en.md) | Minimal example, search/details/chapter contracts, image requests, optional capabilities, and repository publishing |
+| [Minimal source template](doc/examples/minimal_source.js) | Copyable JS file demonstrating the full loading flow with a fictional API |
+| [JavaScript API](doc/api/js.en.md) | Network, HTML parsing, source storage, UI, image processing, and runtime limits |
+| [Local Source Debugging](doc/development/source_debugging.en.md) | Import, edit, reload, JS Evaluator, logs, and cancellation boundaries |
+| [Source repositories](doc/user/source_repositories.en.md) | Installation queue, origins, updates, and legacy configuration migration |
 
-### Favorites, update tracking, and downloads
+Chinese editions: [漫画源编写指南](doc/api/comic_source.zh.md) · [JavaScript API](doc/api/js.zh.md) · [本地调试](doc/development/source_debugging.zh.md).
 
-- Favorites provide long-term organization, while reading history returns to recently viewed positions.
-- Read later: save a comic from its details page or the local library menu, then open the queue from Home. Tap again to remove it; opening a comic does not remove it. The queue uses a separate local favorites folder with rename, deletion, backup and sync support, without changing Quick Favorite.
-- Update tracking checks followed titles for new chapters and depends on the associated network extension or favorite data.
-- Download management provides offline reading, especially on mobile devices or unreliable networks. Downloaded chapters are read as local content.
-- Image favorites and gallery browsing store and revisit individual pages.
-- Local favorites and network favorites are separate: local favorites belong to the app, while network favorites depend on source-site accounts and extension capabilities.
-
----
+This fork continues to maintain Venera-compatible extension interfaces. Waterfall, split spreads, night dimming, and automatic reading are reader responsibilities. Extensions supply stable comic/chapter IDs, correctly ordered chapters and images, and valid update dates; they do not need separate rules for every reader mode.
 
 ## FAQ
 
-### 1. Does VeneraNext include comic sources?
+### Does VeneraNext include comic sources?
 
-No. VeneraNext provides the reader, local library management, and a runtime for extensions compatible with the JavaScript API. Users must configure legal network comic extensions themselves.
+No source or recommended catalog is bundled. Import local comics or configure a legal compatible extension or WebDAV library.
 
-### 2. Can I report comic-source problems here?
+### Why are some buttons mentioned here missing?
 
-No. Do not file issues about comic sources, source-site content, title availability, missing chapters, image availability, or copyright disputes in this repository.
+Check your version in About. Features marked “main branch” remain unreleased and are not in stable v1.16.0. Accounts, comments, ratings, and similar capabilities also require implementation by the source.
 
-Issues reproducible without a specific source or title, such as reader crashes, UI defects, settings failures, or build failures, may be reported here.
+### Why are searches, images, or update indicators missing?
 
-### 3. Why are search results missing or images failing to load?
+Check the extension, login/cookies, service availability, and network. Update tracking additionally requires a valid update date. Contact the relevant maintainer for site/content issues. Reader or extension-runtime problems reproducible independently of a particular site can be reported under the [contribution guidelines](CONTRIBUTING.en.md).
 
-This usually depends on the extension, source-site status, network environment, or proxy configuration. Check whether the relevant extension still works and whether the device can reach the associated website.
+### How do I update on Windows?
 
-### 4. Can Windows update with one command?
-
-Yes. Install and upgrade through winget:
-
-```powershell
-winget install --id CyrilPeng.VeneraNext --exact
-winget upgrade --id CyrilPeng.VeneraNext --exact
-```
-
-If a newly released version is not visible, run `winget source update`. Microsoft review means winget releases usually lag behind GitHub Releases. Portable ZIP builds cannot be upgraded by winget.
-
----
+Run `winget upgrade --id CyrilPeng.VeneraNext --exact`. Public-source availability may lag behind GitHub Release; try `winget source update` first. Portable installations require downloading and applying an update manually.
 
 ## Developer resources
 
-This README focuses on installation and usage. Build, test, architecture, and distribution details live in the developer documentation:
-
-- [Build and Development](doc/development/build.en.md) / [构建与开发](doc/development/build.zh.md)
-- [Contributing](CONTRIBUTING.en.md) / [贡献指南](CONTRIBUTING.md)
-- [Dependency Governance](doc/development/dependencies.en.md)
-- [Security Policy](SECURITY.md) / [Code of Conduct](CODE_OF_CONDUCT.md)
-- [Repository Structure](doc/architecture/project_structure.en.md)
-- [Windows Distribution](doc/distribution/windows.en.md)
-- [Documentation Index](doc/README.en.md)
+- [Build and Development](doc/development/build.en.md): Flutter/Rust, locked dependencies, tests, and releases.
+- [Contributing](CONTRIBUTING.en.md) · [Project Structure](doc/architecture/project_structure.en.md) · [Dependency Governance](doc/development/dependencies.en.md).
+- [Windows Distribution](doc/distribution/windows.en.md) · [Headless Mode](doc/user/headless.en.md).
+- [Security Policy](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Documentation Index](doc/README.en.md).
 
 ---
 
@@ -360,6 +298,10 @@ Sponsorship status is synchronized periodically through the Afdian API. To reque
 See [SPONSORS.md](SPONSORS.md) for the sponsor list and display policy.
 
 ---
+
+## Acknowledgements
+
+Thanks to [Venera](https://github.com/venera-app/venera) for the reader and extension foundation, and [EhTagTranslation](https://github.com/EhTagTranslation/Database) for Chinese tag translations. Thanks also to all contributors and sponsors.
 
 ## License
 
