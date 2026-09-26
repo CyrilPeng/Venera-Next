@@ -1,5 +1,8 @@
 {
   "zh_CN": {
+    "Local comic files are unavailable. Check the storage location or restore the files.": "本地漫画文件不可用，请检查存储位置或恢复文件。",
+    "Local chapter files are unavailable. Reading online instead.": "本地章节文件不可用，已改用在线阅读。",
+    "Comic source is unavailable": "漫画源不可用",
     "Home": "主页",
     "Favorites": "收藏",
     "Explore": "发现",
@@ -822,6 +825,9 @@
     "Failed to load source": "无法加载来源"
   },
   "zh_TW": {
+    "Local comic files are unavailable. Check the storage location or restore the files.": "本機漫畫檔案無法使用，請檢查儲存位置或還原檔案。",
+    "Local chapter files are unavailable. Reading online instead.": "本機章節檔案無法使用，已改用線上閱讀。",
+    "Comic source is unavailable": "漫畫來源無法使用",
     "Home": "首頁",
     "Favorites": "收藏",
     "Explore": "探索",

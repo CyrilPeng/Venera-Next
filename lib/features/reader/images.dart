@@ -14,6 +14,7 @@ import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/chapter_comments.dart';
+import 'package:venera_next/features/reader/chapter_loader.dart';
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
@@ -67,89 +68,54 @@ class ReaderImagesState extends State<ReaderImages> {
   void load() async {
     if (inProgress) return;
     inProgress = true;
-    if (reader.type == ComicType.local ||
-        (LocalManager().isDownloaded(
-          reader.cid,
-          reader.type,
-          reader.chapter,
-          reader.widget.chapters,
-        ))) {
-      try {
-        if (!reader.localPageOrderChecked && reader.type == ComicType.local) {
-          final history = reader.history;
-          if (history != null) {
-            final previousPage = history.page;
-            await LocalManager().migrateLegacyPageOrder(history);
-            if (!mounted) return;
-            if ((reader.widget.initialChapter ?? 1) == history.ep &&
-                reader.widget.initialPage == previousPage) {
-              // Set the viewport directly: the page setter writes history,
-              // and images/maxPage are not available until loading completes.
-              final imagePage = history.page;
-              reader.pageValue = reader.imagesPerPage == 1
-                  ? imagePage
-                  : reader.showSingleImageOnFirstPage()
-                  ? ((imagePage - 1) / reader.imagesPerPage).ceil() + 1
-                  : (imagePage / reader.imagesPerPage).ceil();
-            }
+    error = null;
+    try {
+      if (!reader.localPageOrderChecked && reader.type == ComicType.local) {
+        final history = reader.history;
+        if (history != null) {
+          final previousPage = history.page;
+          await LocalManager().migrateLegacyPageOrder(history);
+          if (!mounted) return;
+          if ((reader.widget.initialChapter ?? 1) == history.ep &&
+              reader.widget.initialPage == previousPage) {
+            final imagePage = history.page;
+            reader.pageValue = reader.imagesPerPage == 1
+                ? imagePage
+                : reader.showSingleImageOnFirstPage()
+                ? ((imagePage - 1) / reader.imagesPerPage).ceil() + 1
+                : (imagePage / reader.imagesPerPage).ceil();
           }
-          reader.localPageOrderChecked = true;
         }
-        var images = await LocalManager().getImages(
-          reader.cid,
-          reader.type,
-          reader.chapter,
-        );
-        if (!mounted) return;
-        reader.images = images;
-        await reader.prepareReadingMode();
-        if (!mounted) return;
-        setState(() {
-          reader.images = images;
-          reader.isLoading = false;
-          inProgress = false;
-          _handleJumpToLastPage();
-          Future.microtask(() {
-            reader.updateHistory();
-            reader.onReaderContentReady();
-          });
-        });
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          error = e.toString();
-          reader.isLoading = false;
-          inProgress = false;
-        });
+        reader.localPageOrderChecked = true;
       }
-    } else {
-      var cp = reader.widget.chapters?.ids.elementAtOrNull(reader.chapter - 1);
-      var res = await reader.type.comicSource!.loadComicPages!(
-        reader.widget.cid,
-        cp,
+      final images = await loadReaderChapterImages(
+        comicId: reader.cid,
+        type: reader.type,
+        chapter: reader.chapter,
+        chapters: reader.widget.chapters,
+        onOnlineFallback: reader.onLocalChapterRecoveredOnline,
       );
       if (!mounted) return;
-      if (res.error) {
-        setState(() {
-          error = res.errorMessage;
-          reader.isLoading = false;
-          inProgress = false;
+      reader.images = images;
+      await reader.prepareReadingMode();
+      if (!mounted) return;
+      setState(() {
+        reader.isLoading = false;
+        inProgress = false;
+        _handleJumpToLastPage();
+        Future.microtask(() {
+          if (!mounted) return;
+          reader.updateHistory();
+          reader.onReaderContentReady();
         });
-      } else {
-        reader.images = res.data;
-        await reader.prepareReadingMode();
-        if (!mounted) return;
-        setState(() {
-          reader.images = res.data;
-          reader.isLoading = false;
-          inProgress = false;
-          _handleJumpToLastPage();
-          Future.microtask(() {
-            reader.updateHistory();
-            reader.onReaderContentReady();
-          });
-        });
-      }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        error = e.toString();
+        reader.isLoading = false;
+        inProgress = false;
+      });
     }
     if (mounted) {
       if (error != null || reader.images?.isEmpty == true) {
@@ -887,23 +853,14 @@ class ContinuousModeState extends State<_ContinuousMode>
     return _waterfallFlow.imageRefAt(index);
   }
 
-  Future<List<String>> _loadChapterImages(int chapter) async {
-    if (reader.type == ComicType.local ||
-        LocalManager().isDownloaded(
-          reader.cid,
-          reader.type,
-          chapter,
-          reader.widget.chapters,
-        )) {
-      return LocalManager().getImages(reader.cid, reader.type, chapter);
-    }
-    var chapterId = reader.widget.chapters?.ids.elementAtOrNull(chapter - 1);
-    var res = await reader.type.comicSource!.loadComicPages!(
-      reader.widget.cid,
-      chapterId,
+  Future<List<String>> _loadChapterImages(int chapter) {
+    return loadReaderChapterImages(
+      comicId: reader.cid,
+      type: reader.type,
+      chapter: chapter,
+      chapters: reader.widget.chapters,
+      onOnlineFallback: reader.onLocalChapterRecoveredOnline,
     );
-    if (res.error) throw res.errorMessage ?? 'Failed to load chapter';
-    return res.data;
   }
 
   Future<void> _ensureWaterfallImagesAfter(int current) async {

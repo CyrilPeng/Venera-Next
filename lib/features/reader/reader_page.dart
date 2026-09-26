@@ -154,6 +154,18 @@ class ReaderState extends State<Reader>
 
   bool localPageOrderChecked = false;
 
+  bool _reportedMissingLocalFiles = false;
+
+  void onLocalChapterRecoveredOnline() {
+    if (!mounted || _reportedMissingLocalFiles) return;
+    _reportedMissingLocalFiles = true;
+    showToast(
+      context: context,
+      message:
+          'Local chapter files are unavailable. Reading online instead.'.tl,
+    );
+  }
+
   late final ReadingSessionTracker _readingSession;
   bool _readerContentReady = false;
   bool _hasPresentedImages = false;

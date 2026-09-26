@@ -311,7 +311,7 @@ class LocalManager with ChangeNotifier {
     } catch (e, s) {
       Log.error("IO", "Failed to create local folder: $e", s);
     }
-    _checkPathValidation();
+    await _checkPathValidation();
     _checkNoMedia();
     if (!debugSkipComicSourceInit) {
       await ComicSourceManager().ensureInit();
