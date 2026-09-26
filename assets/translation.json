@@ -1,5 +1,11 @@
 {
   "zh_CN": {
+    "PDF import tasks": "PDF 导入任务",
+    "No import tasks": "暂无导入任务",
+    "Clear completed tasks": "清除已完成任务",
+    "Waiting to import": "等待导入",
+    "Run in background": "后台运行",
+    "You can keep reading during import. View progress from PDF import tasks in Local.": "导入期间可继续阅读，在“本地”的 PDF 导入任务中查看进度。",
     "Local comic files are unavailable. Check the storage location or restore the files.": "本地漫画文件不可用，请检查存储位置或恢复文件。",
     "Local chapter files are unavailable. Reading online instead.": "本地章节文件不可用，已改用在线阅读。",
     "Comic source is unavailable": "漫画源不可用",
@@ -825,6 +831,12 @@
     "Failed to load source": "无法加载来源"
   },
   "zh_TW": {
+    "PDF import tasks": "PDF 匯入工作",
+    "No import tasks": "暫無匯入工作",
+    "Clear completed tasks": "清除已完成工作",
+    "Waiting to import": "等待匯入",
+    "Run in background": "背景執行",
+    "You can keep reading during import. View progress from PDF import tasks in Local.": "匯入期間可繼續閱讀，在「本機」的 PDF 匯入工作中查看進度。",
     "Local comic files are unavailable. Check the storage location or restore the files.": "本機漫畫檔案無法使用，請檢查儲存位置或還原檔案。",
     "Local chapter files are unavailable. Reading online instead.": "本機章節檔案無法使用，已改用線上閱讀。",
     "Comic source is unavailable": "漫畫來源無法使用",

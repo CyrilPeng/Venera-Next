@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:image/image.dart' as image;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:venera_next/features/local_comics/import_export/document_import.dart';
@@ -8,6 +9,18 @@ import 'package:venera_next/foundation/file_system.dart';
 
 const double _pdfRenderScale = 3;
 const int _pdfRenderMaxEdge = 3000;
+
+// Only pixels cross the isolate boundary; native PDF objects stay with pdfrx.
+Uint8List _encodePdfPage(({Uint8List pixels, int width, int height}) page) {
+  final decoded = image.Image.fromBytes(
+    width: page.width,
+    height: page.height,
+    bytes: page.pixels.buffer,
+    bytesOffset: page.pixels.offsetInBytes,
+    order: image.ChannelOrder.bgra,
+  );
+  return image.encodeJpg(decoded, quality: 92);
+}
 
 class PdfRenderSize {
   const PdfRenderSize(this.width, this.height);
@@ -102,17 +115,16 @@ abstract final class PdfComicImporter {
         }
         try {
           cancellation?.throwIfCancelled();
-          final decoded = image.Image.fromBytes(
+          final encoded = await compute(_encodePdfPage, (
+            pixels: rendered.pixels,
             width: rendered.width,
             height: rendered.height,
-            bytes: rendered.pixels.buffer,
-            bytesOffset: rendered.pixels.offsetInBytes,
-            order: image.ChannelOrder.bgra,
-          );
+          ), debugLabel: 'PDF JPEG encoding');
+          cancellation?.throwIfCancelled();
           final pageFile = File(
             session.pagePath(pageIndex: i + 1, extension: 'jpg'),
           );
-          await pageFile.writeAsBytes(image.encodeJpg(decoded, quality: 92));
+          await pageFile.writeAsBytes(encoded);
           if (i == 0) {
             await pageFile.copyMem(
               FilePath.join(session.directory.path, 'cover.jpg'),

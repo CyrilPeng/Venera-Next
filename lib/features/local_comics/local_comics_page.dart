@@ -228,6 +228,7 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
     ];
 
     List<Widget> normalActions = [
+      const PdfImportTasksButton(),
       Tooltip(
         message: "Search".tl,
         child: IconButton(

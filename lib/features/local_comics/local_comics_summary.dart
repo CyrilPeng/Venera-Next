@@ -89,6 +89,7 @@ class _LocalComicsSummaryState extends State<LocalComicsSummary> {
                       child: Text(count.toString(), style: ts.s12),
                     ),
                     const Spacer(),
+                    const PdfImportTasksButton(),
                     const Icon(Icons.arrow_right),
                   ],
                 ),

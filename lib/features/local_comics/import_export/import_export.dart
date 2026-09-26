@@ -9,3 +9,4 @@ export 'pdf.dart';
 export 'pdf_import.dart';
 export 'pdf_import_batch.dart';
 export 'pdf_import_dialog.dart';
+export 'pdf_import_tasks.dart';

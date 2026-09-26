@@ -47,8 +47,21 @@ Future<BuildContext> _pumpHost(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late PdfImportTasks tasks;
+
+  Future<PdfImportBatchResult?> showImport({
+    required BuildContext context,
+    required List<FileSelection> files,
+    required PdfImportBatch batch,
+  }) => showPdfImportDialog(
+    context: context,
+    task: tasks.add(files: files, batch: batch),
+    tasks: tasks,
+  );
 
   setUp(() async {
+    tasks = PdfImportTasks();
+    addTearDown(tasks.dispose);
     final language = appdata.settings['language'];
     final muted = Log.isMuted;
     appdata.settings['language'] = 'en-US';
@@ -65,7 +78,7 @@ void main() {
   ) async {
     final gate = Completer<void>();
     final context = await _pumpHost(tester);
-    final result = showPdfImportDialog(
+    final result = showImport(
       context: context,
       files: [_Selection('Volume 1.pdf'), _Selection('Volume 2.pdf')],
       batch: PdfImportBatch(
@@ -100,32 +113,72 @@ void main() {
   });
 
   testWidgets(
-    'system back requests cancellation without dismissing a running task',
+    'back hides progress, reopening does not restart, and completion keeps the reader open',
     (tester) async {
       final gate = Completer<void>();
       final context = await _pumpHost(tester);
-      final result = showPdfImportDialog(
+      var calls = 0;
+      final result = showImport(
         context: context,
         files: [_Selection('Volume.pdf')],
         batch: PdfImportBatch(
           containsTitle: (_) => false,
           importFile: (_, title, onProgress, cancellation) async {
+            calls++;
+            onProgress(1, 3);
             await gate.future;
             cancellation.throwIfCancelled();
           },
         ),
       );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      final task = tasks.tasks.single;
       await tester.binding.handlePopRoute();
-      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(find.byType(PdfImportDialog), findsNothing);
+      expect(task.isCancelling, isFalse);
+      expect(await result, isNull);
+
+      unawaited(showPdfImportTasksDialog(context: context, tasks: tasks));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Volume.pdf'));
+      await tester.pumpAndSettle();
       expect(find.byType(PdfImportDialog), findsOneWidget);
-      expect(find.text('Cancelling import'), findsOneWidget);
+      expect(calls, 1);
+      await tester.tap(find.text('Run in background'));
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      unawaited(
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('Reading another comic')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
       gate.complete();
       await tester.pumpAndSettle();
+      expect(find.text('Reading another comic'), findsOneWidget);
+      expect(find.byType(PdfImportDialog), findsNothing);
+      expect(task.result!.count(PdfImportStatus.imported), 1);
+      expect(calls, 1);
+      Navigator.of(context).pop();
+      await tester.pumpAndSettle();
+
+      unawaited(showPdfImportTasksDialog(context: context, tasks: tasks));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Imported: 1'), findsOneWidget);
+      await tester.tap(find.text('Volume.pdf'));
+      await tester.pumpAndSettle();
+      expect(find.text('Imported: 1'), findsOneWidget);
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
-      expect((await result)!.count(PdfImportStatus.cancelled), 1);
+      await tester.tap(find.text('Clear completed tasks'));
+      await tester.pumpAndSettle();
+      expect(find.text('No import tasks'), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
     },
   );
 
@@ -133,7 +186,7 @@ void main() {
     'closing the summary still returns successfully imported comics',
     (tester) async {
       final context = await _pumpHost(tester);
-      final result = showPdfImportDialog(
+      final result = showImport(
         context: context,
         files: [_Selection('Volume.pdf')],
         batch: PdfImportBatch(
@@ -169,7 +222,7 @@ void main() {
             textScale: 2,
             brightness: Brightness.dark,
           );
-          final result = showPdfImportDialog(
+          final result = showImport(
             context: context,
             files: [
               _Selection('${'LongVolumeName' * 10}.pdf'),
@@ -196,6 +249,11 @@ void main() {
           await tester.tap(find.text('OK'.tl));
           await tester.pumpAndSettle();
           expect((await result)!.count(PdfImportStatus.imported), 1);
+          unawaited(showPdfImportTasksDialog(context: context, tasks: tasks));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
         },
       );
     }

@@ -17,6 +17,7 @@ import 'epub_import.dart';
 import 'pdf_import.dart';
 import 'pdf_import_batch.dart';
 import 'pdf_import_dialog.dart';
+import 'pdf_import_tasks.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 
 class ImportComic {
@@ -77,8 +78,7 @@ class ImportComic {
         uniformTypeIdentifiers: ['com.adobe.pdf'],
       );
       if (selected.isEmpty) return false;
-      final result = await showPdfImportDialog(
-        context: App.rootContext,
+      final task = PdfImportTasks.instance.add(
         files: selected,
         batch: PdfImportBatch(
           containsTitle: (title) => LocalManager().findByName(title) != null,
@@ -94,7 +94,10 @@ class ImportComic {
           },
         ),
       );
-      return (result?.count(PdfImportStatus.imported) ?? 0) > 0;
+      await showPdfImportDialog(context: App.rootContext, task: task);
+      // Closing the view accepts the task. Its eventual completion must not
+      // navigate away from whatever the user is reading in the meantime.
+      return true;
     } catch (e, s) {
       Log.error('Import PDF', e.toString(), s);
       App.rootContext.showMessage(message: _documentImportError(e));

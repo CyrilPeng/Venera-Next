@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,122 +6,208 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/translations.dart';
 
-import 'document_import.dart';
 import 'pdf_import.dart';
 import 'pdf_import_batch.dart';
+import 'pdf_import_tasks.dart';
 
-Future<PdfImportBatchResult?> showPdfImportDialog({
-  required BuildContext context,
-  required List<FileSelection> files,
-  required PdfImportBatch batch,
-}) async {
-  PdfImportBatchResult? result;
-  await showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => PdfImportDialog(
-      files: files,
-      batch: batch,
-      onFinished: (value) => result = value,
-    ),
-  );
-  return result;
-}
+class PdfImportTasksButton extends StatelessWidget {
+  const PdfImportTasksButton({super.key, this.tasks});
 
-class PdfImportDialog extends StatefulWidget {
-  const PdfImportDialog({
-    super.key,
-    required this.files,
-    required this.batch,
-    this.onFinished,
-  });
-
-  final List<FileSelection> files;
-  final PdfImportBatch batch;
-  final ValueChanged<PdfImportBatchResult>? onFinished;
-
-  @override
-  State<PdfImportDialog> createState() => _PdfImportDialogState();
-}
-
-class _PdfImportDialogState extends State<PdfImportDialog> {
-  final _cancellation = DocumentImportCancellation();
-  PdfImportBatchProgress? _progress;
-  PdfImportBatchResult? _result;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_run());
-  }
-
-  Future<void> _run() async {
-    final result = await widget.batch.run(
-      widget.files,
-      cancellation: _cancellation,
-      onProgress: (value) {
-        if (mounted) setState(() => _progress = value);
-      },
-    );
-    widget.onFinished?.call(result);
-    if (mounted) setState(() => _result = result);
-  }
-
-  void _cancel() {
-    if (_cancellation.isCancelled) return;
-    setState(_cancellation.cancel);
-  }
-
-  @override
-  void dispose() {
-    _cancellation.cancel();
-    super.dispose();
-  }
+  final PdfImportTasks? tasks;
 
   @override
   Widget build(BuildContext context) {
-    final result = _result;
-    final title = result != null
-        ? (result.count(PdfImportStatus.cancelled) > 0
-              ? 'PDF import cancelled'.tl
-              : 'PDF import complete'.tl)
-        : (_cancellation.isCancelled
-              ? 'Cancelling import'.tl
-              : 'Importing PDF'.tl);
-    return PopScope(
-      canPop: result != null,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && result == null) _cancel();
-      },
-      child: ContentDialog(
-        title: title,
-        dismissible: result != null,
-        content: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-          child: SizedBox(
-            width: 520,
-            child: result == null ? _buildProgress() : _buildResult(result),
+    final manager = tasks ?? PdfImportTasks.instance;
+    return ListenableBuilder(
+      listenable: manager,
+      builder: (context, _) {
+        if (manager.tasks.isEmpty) return const SizedBox.shrink();
+        return IconButton(
+          tooltip: 'PDF import tasks'.tl,
+          icon: Badge(
+            label: Text('${manager.activeCount}'),
+            isLabelVisible: manager.activeCount > 0,
+            child: const Icon(Icons.picture_as_pdf_outlined),
           ),
+          onPressed: () =>
+              showPdfImportTasksDialog(context: context, tasks: manager),
+        );
+      },
+    );
+  }
+}
+
+Future<void> showPdfImportTasksDialog({
+  required BuildContext context,
+  PdfImportTasks? tasks,
+}) {
+  final manager = tasks ?? PdfImportTasks.instance;
+  return showDialog<void>(
+    context: context,
+    builder: (context) => ListenableBuilder(
+      listenable: manager,
+      builder: (context, _) => ContentDialog(
+        title: 'PDF import tasks'.tl,
+        content: SizedBox(
+          width: 520,
+          height: math.min(400, MediaQuery.sizeOf(context).height * 0.55),
+          child: manager.tasks.isEmpty
+              ? Center(child: Text('No import tasks'.tl))
+              : ListView.builder(
+                  itemCount: manager.tasks.length,
+                  itemBuilder: (context, index) {
+                    final task = manager.tasks[index];
+                    final progress = task.progress;
+                    return ListTile(
+                      title: Text(
+                        task.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        [
+                          _taskTitle(task),
+                          if (task.result case final result?)
+                            'Imported: @a'.tlParams({
+                              'a': result.count(PdfImportStatus.imported),
+                            }),
+                          if (task.result case final result?)
+                            'Failed: @a'.tlParams({
+                              'a': result.count(PdfImportStatus.failed),
+                            }),
+                          if (!task.isFinished)
+                            'File @current of @total'.tlParams({
+                              'current': progress == null
+                                  ? 0
+                                  : progress.fileIndex + 1,
+                              'total': task.fileCount,
+                            }),
+                        ].join(' · '),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => showPdfImportDialog(
+                        context: context,
+                        task: task,
+                        tasks: manager,
+                      ),
+                    );
+                  },
+                ),
         ),
         actions: [
-          if (result == null)
-            TextButton.icon(
-              onPressed: _cancellation.isCancelled ? null : _cancel,
-              icon: const Icon(Icons.stop_circle_outlined),
-              label: Text('Cancel'.tl),
-            )
-          else
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('OK'.tl),
+          Flexible(
+            child: TextButton(
+              onPressed: manager.tasks.any((task) => task.isFinished)
+                  ? manager.clearFinished
+                  : null,
+              child: Text('Clear completed tasks'.tl),
             ),
+          ),
         ],
       ),
+    ),
+  );
+}
+
+Future<PdfImportBatchResult?> showPdfImportDialog({
+  required BuildContext context,
+  required PdfImportTask task,
+  PdfImportTasks? tasks,
+}) async {
+  await showDialog<void>(
+    context: context,
+    builder: (context) =>
+        PdfImportDialog(task: task, tasks: tasks ?? PdfImportTasks.instance),
+  );
+  return task.result;
+}
+
+String _taskTitle(PdfImportTask task) {
+  if (task.result case final result?) {
+    return result.count(PdfImportStatus.cancelled) > 0
+        ? 'PDF import cancelled'.tl
+        : 'PDF import complete'.tl;
+  }
+  if (task.isCancelling) return 'Cancelling import'.tl;
+  return task.isQueued ? 'Waiting to import'.tl : 'Importing PDF'.tl;
+}
+
+class PdfImportDialog extends StatelessWidget {
+  const PdfImportDialog({super.key, required this.task, required this.tasks});
+
+  final PdfImportTask task;
+  final PdfImportTasks tasks;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: task,
+      builder: (context, _) {
+        final result = task.result;
+        return ContentDialog(
+          title: _taskTitle(task),
+          content: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: SizedBox(
+              width: 520,
+              child: result != null
+                  ? _buildResult(context, result)
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (task.isQueued)
+                          Text(
+                            task.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        else
+                          _buildProgress(),
+                        const SizedBox(height: 16),
+                        Text(
+                          'You can keep reading during import. View progress from PDF import tasks in Local.'
+                              .tl,
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+          actions: [
+            Flexible(
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (result == null) ...[
+                    TextButton.icon(
+                      onPressed: task.isCancelling
+                          ? null
+                          : () => tasks.cancel(task),
+                      icon: const Icon(Icons.stop_circle_outlined),
+                      label: Text('Cancel'.tl),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text('Run in background'.tl),
+                    ),
+                  ] else
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text('OK'.tl),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
   Widget _buildProgress() {
-    final progress = _progress;
+    final progress = task.progress;
     if (progress == null) return const LinearProgressIndicator();
     final pageCount = progress.pageCount;
     return Column(
@@ -165,7 +250,7 @@ class _PdfImportDialogState extends State<PdfImportDialog> {
     );
   }
 
-  Widget _buildResult(PdfImportBatchResult result) {
+  Widget _buildResult(BuildContext context, PdfImportBatchResult result) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,

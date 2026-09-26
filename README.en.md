@@ -83,6 +83,7 @@ The following changes are merged into the current main branch and remain in the 
 
 - **Automatic reader mode:** recognize page comics and webtoons from original image proportions and apply separate mode preferences. Off by default; a manual per-comic choice takes priority. [Guide](doc/user/automatic_reader_mode.en.md)
 - **Automatic reading and long-press actions:** timed page turns or smooth/stepped scrolling across all seven modes, with optional chapter transitions. Touch, zoom, settings, and background state pause advancement.
+- **Background PDF import:** keep reading after hiding progress, then use the PDF task button in Local to check progress, cancel, or review results. Batches run sequentially and require the app to remain running. [Import guide](doc/user/import_comic.en.md#pdf)
 - **Unified import and multiple repositories:** preview scripts or catalogs from links, pasted content, or JS/JSON files; select entries, save online repositories, and manage background installation, cancellation, retries, and origins. [Source repositories](doc/user/source_repositories.en.md)
 - **Update checks and source debugging:** rate-limit follow checks per source and stop previous runs on cancellation; save and reload source edits while preserving a working source on failure, and inspect asynchronous evaluator results. [Local debugging](doc/development/source_debugging.en.md)
 
