@@ -133,6 +133,21 @@ class _ReaderSettingsState extends State<ReaderSettings> {
         SliverAppbar(title: Text("Reading".tl)),
         if (comicId != null) _modeSettings(),
         if (comicId != null && sourceKey != null)
+          SwitchListTile(
+            title: Text('Reverse chapter reading order'.tl),
+            subtitle: Text('Read chapters in reverse order for this comic'.tl),
+            value: appdata.settings.reverseChapterReading(comicId, sourceKey),
+            onChanged: (reversed) {
+              appdata.settings.setReverseChapterReading(
+                comicId,
+                sourceKey,
+                reversed,
+              );
+              appdata.saveData();
+              widget.onChanged?.call('reverseChapterReading');
+            },
+          ).toSliver(),
+        if (comicId != null && sourceKey != null)
           SliverMainAxisGroup(
             slivers: [
               SwitchListTile(

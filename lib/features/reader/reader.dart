@@ -1,5 +1,6 @@
 export 'chapter_comments.dart'
     show ChapterCommentsPage, EmbeddedChapterCommentsPage;
+export 'chapter_order.dart' show ChapterReadingOrder;
 export 'loading.dart' show ReaderProps, ReaderWithLoading;
 export 'orientation.dart' show ReaderOrientation, ReaderOrientationState;
 export 'reading_session.dart' show ReadingSessionTracker;

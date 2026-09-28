@@ -39,15 +39,27 @@ void main() {
       final flow = WaterfallChapterFlow(segments: [segment(2, 5)]);
 
       expect(
-        flow.shouldLoadAfter(current: 2, threshold: 2, maxChapter: 3),
+        flow.shouldLoadAfter(
+          current: 2,
+          threshold: 2,
+          order: const ChapterReadingOrder([3]),
+        ),
         isFalse,
       );
       expect(
-        flow.shouldLoadAfter(current: 4, threshold: 2, maxChapter: 3),
+        flow.shouldLoadAfter(
+          current: 4,
+          threshold: 2,
+          order: const ChapterReadingOrder([3]),
+        ),
         isTrue,
       );
       expect(
-        flow.shouldLoadAfter(current: 4, threshold: 2, maxChapter: 2),
+        flow.shouldLoadAfter(
+          current: 4,
+          threshold: 2,
+          order: const ChapterReadingOrder([2]),
+        ),
         isFalse,
       );
     });
@@ -55,12 +67,30 @@ void main() {
     test('detects when previous chapter should be loaded', () {
       final flow = WaterfallChapterFlow(segments: [segment(2, 5)]);
 
-      expect(flow.shouldLoadBefore(current: 3, threshold: 2), isFalse);
-      expect(flow.shouldLoadBefore(current: 2, threshold: 2), isTrue);
+      expect(
+        flow.shouldLoadBefore(
+          current: 3,
+          threshold: 2,
+          order: const ChapterReadingOrder([3]),
+        ),
+        isFalse,
+      );
+      expect(
+        flow.shouldLoadBefore(
+          current: 2,
+          threshold: 2,
+          order: const ChapterReadingOrder([3]),
+        ),
+        isTrue,
+      );
 
       final firstChapterFlow = WaterfallChapterFlow(segments: [segment(1, 5)]);
       expect(
-        firstChapterFlow.shouldLoadBefore(current: 1, threshold: 2),
+        firstChapterFlow.shouldLoadBefore(
+          current: 1,
+          threshold: 2,
+          order: const ChapterReadingOrder([3]),
+        ),
         isFalse,
       );
     });
@@ -113,6 +143,48 @@ void main() {
 
       expect(flow.imageCount, 2);
       expect(flow.segments, hasLength(1));
+    });
+
+    test('preserves reverse order when appending and prepending chapters', () {
+      final flow = WaterfallChapterFlow(segments: [segment(2, 2)]);
+      flow.addAfter(segment(1, 3));
+      final inserted = flow.addBefore(segment(3, 4));
+      expect(flow.segments.map((segment) => segment.chapter), [3, 2, 1]);
+      expect(inserted, 4);
+      expect(flow.imageRefAt(5)!.chapter, 2);
+      expect(flow.imageRefAt(5)!.eid, 'ep-2');
+      expect(flow.imageIndexOf(chapter: 1, page: 3), 9);
+    });
+
+    test('uses reverse order at both loading boundaries', () {
+      const order = ChapterReadingOrder([3], reversed: true);
+      final flow = WaterfallChapterFlow(segments: [segment(3, 2)]);
+      expect(
+        flow.shouldLoadAfter(current: 2, threshold: 1, order: order),
+        isTrue,
+      );
+      expect(
+        flow.shouldLoadBefore(current: 1, threshold: 1, order: order),
+        isFalse,
+      );
+      flow.reset(segment(1, 2));
+      expect(
+        flow.shouldLoadAfter(current: 2, threshold: 1, order: order),
+        isFalse,
+      );
+      expect(
+        flow.shouldLoadBefore(current: 1, threshold: 1, order: order),
+        isTrue,
+      );
+    });
+
+    test('preserves reverse group transitions in flow order', () {
+      final flow = WaterfallChapterFlow(segments: [segment(1, 2)]);
+      flow.addAfter(segment(6, 2));
+      flow.addAfter(segment(5, 2));
+      flow.addBefore(segment(2, 2));
+      expect(flow.segments.map((segment) => segment.chapter), [2, 1, 6, 5]);
+      expect(flow.imageIndexOf(chapter: 6, page: 1), 5);
     });
 
     test(

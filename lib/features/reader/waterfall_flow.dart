@@ -1,3 +1,5 @@
+import 'chapter_order.dart';
+
 class WaterfallImageRef {
   final int chapter;
   final int page;
@@ -88,29 +90,31 @@ class WaterfallChapterFlow {
   bool shouldLoadAfter({
     required int current,
     required int threshold,
-    required int maxChapter,
+    required ChapterReadingOrder order,
   }) {
     if (_segments.isEmpty) return false;
     if (imageCount - current >= threshold) return false;
-    return _segments.last.chapter < maxChapter;
+    return order.next(_segments.last.chapter) != null;
   }
 
-  bool shouldLoadBefore({required int current, required int threshold}) {
+  bool shouldLoadBefore({
+    required int current,
+    required int threshold,
+    required ChapterReadingOrder order,
+  }) {
     if (_segments.isEmpty) return false;
     if (current > threshold) return false;
-    return _segments.first.chapter > 1;
+    return order.previous(_segments.first.chapter) != null;
   }
 
   void addAfter(WaterfallChapterSegment segment) {
     if (_segments.any((item) => item.chapter == segment.chapter)) return;
     _segments.add(segment);
-    _segments.sort((a, b) => a.chapter.compareTo(b.chapter));
   }
 
   int addBefore(WaterfallChapterSegment segment) {
     if (_segments.any((item) => item.chapter == segment.chapter)) return 0;
-    _segments.add(segment);
-    _segments.sort((a, b) => a.chapter.compareTo(b.chapter));
+    _segments.insert(0, segment);
     return segment.images.length;
   }
 

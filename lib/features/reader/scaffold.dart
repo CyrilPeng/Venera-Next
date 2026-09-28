@@ -610,10 +610,10 @@ class ReaderScaffoldState extends State<ReaderScaffold>
               const SizedBox(width: 8),
               IconButton.filledTonal(
                 onPressed: () => !isReversed
-                    ? context.reader.chapter > 1
+                    ? context.reader.hasPreviousChapter
                           ? context.reader.toPrevChapter()
                           : context.reader.toPage(1)
-                    : context.reader.chapter < context.reader.maxChapter
+                    : context.reader.hasNextChapter
                     ? context.reader.toNextChapter()
                     : context.reader.toPage(context.reader.maxPage),
                 icon: const Icon(Icons.first_page),
@@ -621,10 +621,10 @@ class ReaderScaffoldState extends State<ReaderScaffold>
               Expanded(child: buildSlider()),
               IconButton.filledTonal(
                 onPressed: () => !isReversed
-                    ? context.reader.chapter < context.reader.maxChapter
+                    ? context.reader.hasNextChapter
                           ? context.reader.toNextChapter()
                           : context.reader.toPage(context.reader.maxPage)
-                    : context.reader.chapter > 1
+                    : context.reader.hasPreviousChapter
                     ? context.reader.toPrevChapter()
                     : context.reader.toPage(1),
                 icon: const Icon(Icons.last_page),
@@ -852,6 +852,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         isDetectingLayout: () => context.reader.isDetectingLayout,
         onDetectLayout: () => context.reader.detectLayout(force: true),
         onChanged: (key) {
+          context.reader.applyChapterReadingOrder();
           if (key == "readerMode") {
             context.reader.applyReadingMode(
               ReaderMode.fromKey(

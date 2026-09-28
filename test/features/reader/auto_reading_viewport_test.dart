@@ -30,9 +30,12 @@ bool _sqliteAvailable() {
 }
 
 void main() {
-  for (final mode in ReaderMode.values) {
+  for (final (mode, reversed) in [
+    for (final mode in ReaderMode.values)
+      for (final reversed in [false, true]) (mode, reversed),
+  ]) {
     testWidgets(
-      '${mode.key}: reads content before crossing chapters and stops at the end',
+      '${mode.key}, reversed=$reversed: reads content before crossing chapters and stops at the end',
       (tester) async {
         final previous =
             jsonDecode(jsonEncode(appdata.toJson()['settings']))
@@ -52,6 +55,7 @@ void main() {
           settings['comicSpecificSettings'] = <String, dynamic>{};
           settings['deviceSpecificSettings'] = <String, dynamic>{};
           settings['autoReaderMode'] = false;
+          settings.setReverseChapterReading('book', 'local', reversed);
           settings['readerMode'] = mode.key;
           settings['readerScreenPicNumberForLandscape'] = 1;
           settings['readerScreenPicNumberForPortrait'] = 1;
@@ -161,21 +165,21 @@ void main() {
             await pumpFrames(25);
             expect(flow.scrollController.offset - start, closeTo(50, 3));
             // There is only one tall/wide image: page == maxPage must not stop scrolling.
-            expect(reader.chapter, 1);
+            expect(reader.chapter, reversed ? 2 : 1);
             expect(reader.autoReading.isActive, isTrue);
             settings['autoScrollSpeed'] = 1000;
           }
           for (var i = 0; i < 60 && reader.autoReading.isActive; i++) {
             await pumpFrames(10);
           }
-          expect(reader.chapter, 1);
+          expect(reader.chapter, reversed ? 2 : 1);
           expect(reader.autoReading.status, AutoReadingStatus.stopped);
           settings['autoReadingAcrossChapters'] = true;
           reader.autoReading.toggle();
           for (var i = 0; i < 60 && reader.autoReading.isActive; i++) {
             await pumpFrames(10);
           }
-          expect(reader.chapter, 2);
+          expect(reader.chapter, reversed ? 1 : 2);
           expect(reader.autoReading.status, AutoReadingStatus.stopped);
           expect(tester.takeException(), isNull);
         } finally {

@@ -11,6 +11,7 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/reader/gesture.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/images.dart';
+import 'package:venera_next/features/reader/chapter_order.dart';
 import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
@@ -175,6 +176,32 @@ class ReaderState extends State<Reader>
   dynamic readerSetting(String key) =>
       appdata.settings.getReaderSetting(cid, type.sourceKey, key);
 
+  @override
+  late ChapterReadingOrder chapterOrder;
+
+  ChapterReadingOrder _createChapterOrder() {
+    final chapters = widget.chapters;
+    return ChapterReadingOrder(
+      chapters != null && chapters.isGrouped
+          ? [
+              for (final group in chapters.groups)
+                chapters.getGroup(group).length,
+            ]
+          : [maxChapter],
+      reversed: appdata.settings.reverseChapterReading(cid, type.sourceKey),
+    );
+  }
+
+  void applyChapterReadingOrder() {
+    final order = _createChapterOrder();
+    if (order.reversed == chapterOrder.reversed) return;
+    chapterOrder = order;
+    resetPageAnimation();
+    imageViewController = null;
+    if (!isLoading && images != null) onReaderContentReady();
+    update();
+  }
+
   late final autoReading = AutoReadingController(
     settings: () => AutoReadingSettings(
       gallery: mode.isGallery,
@@ -208,7 +235,7 @@ class ReaderState extends State<Reader>
             ? AutoReadingStep.advanced
             : AutoReadingStep.waiting;
       }
-      if (across && chapter < maxChapter) {
+      if (across && hasNextChapter) {
         return toNextChapter()
             ? AutoReadingStep.advanced
             : AutoReadingStep.waiting;
@@ -304,14 +331,17 @@ class ReaderState extends State<Reader>
     if (page < 1) {
       page = 1;
     }
-    chapter = widget.initialChapter ?? 1;
-    if (chapter < 1) {
-      chapter = 1;
-    }
-    if (widget.initialChapterGroup != null) {
-      for (int i = 0; i < (widget.initialChapterGroup! - 1); i++) {
-        chapter += widget.chapters!.getGroupByIndex(i).length;
+    chapterOrder = _createChapterOrder();
+    final initialChapter = widget.initialChapter;
+    if (initialChapter != null && initialChapter > 0) {
+      chapter = initialChapter;
+      if (widget.initialChapterGroup != null) {
+        for (int i = 0; i < (widget.initialChapterGroup! - 1); i++) {
+          chapter += widget.chapters!.getGroupByIndex(i).length;
+        }
       }
+    } else {
+      chapter = chapterOrder.chapters.firstOrNull ?? 1;
     }
     if (widget.initialPage != null) {
       page = widget.initialPage!;
@@ -539,39 +569,11 @@ class ReaderState extends State<Reader>
     }
   }
 
-  bool get isFirstChapterOfGroup {
-    if (widget.chapters?.isGrouped ?? false) {
-      int c = chapter - 1;
-      int g = 1;
-      while (c > 0) {
-        c -= widget.chapters!.getGroupByIndex(g - 1).length;
-        g++;
-      }
-      if (c == 0) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-    return chapter == 1;
-  }
+  bool get isFirstChapterOfGroup =>
+      chapterOrder.previous(chapter, acrossGroups: false) == null;
 
-  bool get isLastChapterOfGroup {
-    if (widget.chapters?.isGrouped ?? false) {
-      int c = chapter;
-      int g = 1;
-      while (c > 0) {
-        c -= widget.chapters!.getGroupByIndex(g - 1).length;
-        g++;
-      }
-      if (c == 0) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-    return chapter == maxChapter;
-  }
+  bool get isLastChapterOfGroup =>
+      chapterOrder.next(chapter, acrossGroups: false) == null;
 
   /// Get the size of the reader.
   /// The size is not always the same as the size of the screen.
@@ -782,6 +784,12 @@ abstract mixin class ReaderLocation {
 
   int get maxChapter;
 
+  ChapterReadingOrder get chapterOrder => ChapterReadingOrder([maxChapter]);
+
+  bool get hasNextChapter => chapterOrder.next(chapter) != null;
+
+  bool get hasPreviousChapter => chapterOrder.previous(chapter) != null;
+
   bool get isLoading;
 
   String get cid;
@@ -885,13 +893,15 @@ abstract mixin class ReaderLocation {
 
   /// Returns true if the chapter is changed
   bool toNextChapter() {
-    return toChapter(chapter + 1);
+    final next = chapterOrder.next(chapter);
+    return next != null && toChapter(next);
   }
 
   /// Returns true if the chapter is changed
   /// If [toLastPage] is true, the page will be set to the last page of the previous chapter.
   bool toPrevChapter({bool toLastPage = false}) {
-    return toChapter(chapter - 1, toLastPage: toLastPage);
+    final previous = chapterOrder.previous(chapter);
+    return previous != null && toChapter(previous, toLastPage: toLastPage);
   }
 
   bool toChapter(int c, {bool toLastPage = false}) {

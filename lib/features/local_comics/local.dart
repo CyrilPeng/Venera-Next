@@ -17,6 +17,7 @@ import 'package:venera_next/foundation/file_interaction.dart';
 
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/features/history/history.dart';
 
@@ -115,31 +116,24 @@ class LocalComic with HistoryMixin implements Comic {
   void read() {
     var history = HistoryManager().find(id, comicType);
     int? firstDownloadedChapter;
-    int? firstDownloadedChapterGroup;
     if (downloadedChapters.isNotEmpty && chapters != null) {
       final chapters = this.chapters!;
-      if (chapters.isGrouped) {
-        for (int i = 0; i < chapters.groupCount; i++) {
-          var group = chapters.getGroupByIndex(i);
-          var keys = group.keys.toList();
-          for (int j = 0; j < keys.length; j++) {
-            var chapterId = keys[j];
-            if (downloadedChapters.contains(chapterId)) {
-              firstDownloadedChapter = j + 1;
-              firstDownloadedChapterGroup = i + 1;
-              break;
-            }
-          }
-        }
-      } else {
-        var keys = chapters.allChapters.keys;
-        for (int i = 0; i < keys.length; i++) {
-          if (downloadedChapters.contains(keys.elementAt(i))) {
-            firstDownloadedChapter = i + 1;
-            break;
-          }
-        }
-      }
+      final order = ChapterReadingOrder(
+        chapters.isGrouped
+            ? [
+                for (final group in chapters.groups)
+                  chapters.getGroup(group).length,
+              ]
+            : [chapters.length],
+        reversed: appdata.settings.reverseChapterReading(
+          id,
+          comicType.sourceKey,
+        ),
+      );
+      final ids = chapters.ids.toList();
+      firstDownloadedChapter = order.chapters
+          .where((chapter) => downloadedChapters.contains(ids[chapter - 1]))
+          .firstOrNull;
     }
     App.rootContext.to(
       () => Reader(
@@ -149,7 +143,7 @@ class LocalComic with HistoryMixin implements Comic {
         chapters: chapters,
         initialChapter: history?.ep ?? firstDownloadedChapter,
         initialPage: history?.page,
-        initialChapterGroup: history?.group ?? firstDownloadedChapterGroup,
+        initialChapterGroup: history?.group,
         history: history ?? History.fromModel(model: this, ep: 0, page: 0),
         author: subtitle,
         tags: tags,

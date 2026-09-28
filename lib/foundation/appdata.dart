@@ -496,6 +496,18 @@ class Settings with ChangeNotifier {
     return getDeviceReaderSetting(key);
   }
 
+  bool reverseChapterReading(String comicId, String sourceKey) =>
+      _data['comicSpecificSettings']["$comicId@$sourceKey"]?['reverseChapterReading'] ==
+      true;
+
+  void setReverseChapterReading(
+    String comicId,
+    String sourceKey,
+    bool reversed,
+  ) {
+    setReaderSetting(comicId, sourceKey, 'reverseChapterReading', reversed);
+  }
+
   /// A mode override is independent of the switch for other comic settings.
   /// Legacy per-comic modes remain effective until explicitly changed.
   String? comicReaderModeOverride(String comicId, String sourceKey) {

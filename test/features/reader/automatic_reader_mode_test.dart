@@ -230,6 +230,45 @@ void main() {
       expect((reader.chapter, reader.page), (2, 3));
     },
   );
+
+  readerTest('chapter direction changes preserve the current source location', (
+    tester,
+  ) async {
+    settings['autoReaderMode'] = false;
+    final reader = await mount(tester);
+    reader.applyReadingMode(ReaderMode.waterfallTopToBottom);
+    final images = reader.images;
+    expect((reader.chapter, reader.page), (2, 5));
+    settings.setReverseChapterReading('comic', 'local', true);
+    reader.applyChapterReadingOrder();
+    expect((reader.chapter, reader.page), (2, 5));
+    expect(reader.images, same(images));
+    expect(reader.eid, 'two');
+    expect(reader.imageViewController, isNull);
+    expect(reader.toNextChapter(), isTrue);
+    expect(reader.chapter, 1);
+    expect(reader.eid, 'one');
+    expect(reader.hasNextChapter, isFalse);
+    expect(reader.isLastChapterOfGroup, isTrue);
+    expect(reader.toNextChapter(), isFalse);
+    expect(reader.toPrevChapter(toLastPage: true), isTrue);
+    expect(reader.chapter, 2);
+    expect(reader.jumpToLastPageOnLoad, isTrue);
+    settings.resetComicReaderSettings('comic@local');
+    reader.applyChapterReadingOrder();
+    expect(reader.toNextChapter(), isTrue);
+    expect(reader.chapter, 3);
+  });
+
+  readerTest('saved reverse order preserves an explicit resume chapter', (
+    tester,
+  ) async {
+    settings.setReverseChapterReading('comic', 'local', true);
+    final reader = await mount(tester);
+    expect((reader.chapter, reader.page), (2, 3));
+    expect(reader.toNextChapter(), isTrue);
+    expect(reader.chapter, 1);
+  });
 }
 
 // Keep the real ReaderState lifecycle and navigation, isolating native window,
@@ -280,6 +319,8 @@ class _ReaderHarnessState extends ReaderState {
   void disposeReaderWindow() {}
   @override
   void onPageChanged() {}
+  @override
+  void onReaderContentReady() {}
   @override
   Widget build(BuildContext context) => Text('${mode.key}:$chapter:$page');
 }
