@@ -14,6 +14,7 @@ import 'package:venera_next/features/reader/images.dart';
 import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
+import 'package:venera_next/features/reader/page_layout.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/features/reader/volume.dart';
 import 'package:venera_next/features/sync/sync.dart';
@@ -90,12 +91,7 @@ class ReaderState extends State<Reader>
   /// The maximum page number for images only (excluding chapter comments page).
   /// This is used for display purposes and history recording.
   @override
-  int get maxPage {
-    if (images == null) return 1;
-    return !showSingleImageOnFirstPage()
-        ? (images!.length / imagesPerPage).ceil()
-        : 1 + ((images!.length - 1) / imagesPerPage).ceil();
-  }
+  int get maxPage => pageLayout.pageCount(images?.length);
 
   /// Total pages including chapter comments page (used for internal page control).
   @override
@@ -106,7 +102,6 @@ class ReaderState extends State<Reader>
   }
 
   /// Whether the current page is the chapter comments page.
-  @override
   bool get isOnChapterCommentsPage {
     return _shouldShowChapterCommentsAtEnd && pageValue > maxPage;
   }
@@ -492,22 +487,7 @@ class ReaderState extends State<Reader>
     // arrive. Keep the saved image index intact until loading/migration ends.
     if (isLoading || images == null) return;
     if (history != null) {
-      // page >= maxPage handles both last image page and chapter comments page
-      if (page >= maxPage) {
-        /// Record the last image of chapter
-        history!.page = images?.length ?? 1;
-      } else {
-        /// Record the first image of the page
-        if (!showSingleImageOnFirstPage() || imagesPerPage == 1) {
-          history!.page = (page - 1) * imagesPerPage + 1;
-        } else {
-          if (page == 1) {
-            history!.page = 1;
-          } else {
-            history!.page = (page - 2) * imagesPerPage + 2;
-          }
-        }
-      }
+      history!.page = pageLayout.historyImage(page, images!.length);
       history!.maxPage = images?.length ?? 1;
       if (widget.chapters?.isGrouped ?? false) {
         int g = 0;
@@ -579,9 +559,6 @@ abstract mixin class ReaderImagePerPageHandler {
 
   late bool _lastOrientation;
 
-  /// Track if we were on the chapter comments page before orientation change
-  bool _wasOnCommentsPage = false;
-
   bool get isPortrait;
 
   int get page;
@@ -594,27 +571,19 @@ abstract mixin class ReaderImagePerPageHandler {
 
   ComicType get type;
 
-  /// Whether the current page is the chapter comments page
-  bool get isOnChapterCommentsPage;
-
-  /// Get the max page (excluding comments page)
-  int get maxPage;
-
-  /// Get images list for calculating maxPage
+  /// Images used to bound page remapping
   List<String>? get images;
 
   void initImagesPerPage(int initialPage) {
     _lastImagesPerPage = imagesPerPage;
     _lastOrientation = isPortrait;
-    _wasOnCommentsPage = false;
-    if (imagesPerPage != 1) {
-      if (showSingleImageOnFirstPage()) {
-        page = ((initialPage - 1) / imagesPerPage).ceil() + 1;
-      } else {
-        page = (initialPage / imagesPerPage).ceil();
-      }
-    }
+    if (imagesPerPage != 1) page = pageLayout.pageForImage(initialPage);
   }
+
+  ReaderPageLayout get pageLayout => ReaderPageLayout(
+    imagesPerPage: imagesPerPage,
+    singleImageOnFirstPage: showSingleImageOnFirstPage(),
+  );
 
   bool showSingleImageOnFirstPage() => appdata.settings
       .readerSettings(cid, type.sourceKey)
@@ -634,70 +603,23 @@ abstract mixin class ReaderImagePerPageHandler {
     }
   }
 
-  /// Calculate maxPage with a specific imagesPerPage value
-  int _calcMaxPage(int imagesPerPageValue) {
-    if (images == null) return 1;
-    return !showSingleImageOnFirstPage()
-        ? (images!.length / imagesPerPageValue).ceil()
-        : 1 + ((images!.length - 1) / imagesPerPageValue).ceil();
-  }
-
-  /// Check if the number of images per page has changed
+  /// Check if the number of images per page has changed.
   void _checkImagesPerPageChange() {
-    int currentImagesPerPage = imagesPerPage;
-    bool currentOrientation = isPortrait;
-
+    final currentImagesPerPage = imagesPerPage;
+    final currentOrientation = isPortrait;
     if (_lastImagesPerPage != currentImagesPerPage ||
         _lastOrientation != currentOrientation) {
-      // Calculate old maxPage using old imagesPerPage to correctly determine
-      // if we were on the comments page before the orientation change
-      int oldMaxPage = _calcMaxPage(_lastImagesPerPage);
-      _wasOnCommentsPage = page > oldMaxPage;
-
-      _adjustPageForImagesPerPageChange(
-        _lastImagesPerPage,
-        currentImagesPerPage,
+      final previousLayout = ReaderPageLayout(
+        imagesPerPage: _lastImagesPerPage,
+        singleImageOnFirstPage: showSingleImageOnFirstPage(),
+      );
+      page = previousLayout.remapPage(
+        page,
+        pageLayout,
+        imageCount: images?.length,
       );
       _lastImagesPerPage = currentImagesPerPage;
       _lastOrientation = currentOrientation;
-    }
-  }
-
-  /// Adjust the page number when the number of images per page changes
-  void _adjustPageForImagesPerPageChange(
-    int oldImagesPerPage,
-    int newImagesPerPage,
-  ) {
-    int previousImageIndex = 1;
-    if (!showSingleImageOnFirstPage() || oldImagesPerPage == 1) {
-      previousImageIndex = (page - 1) * oldImagesPerPage + 1;
-    } else {
-      if (page == 1) {
-        previousImageIndex = 1;
-      } else {
-        previousImageIndex = (page - 2) * oldImagesPerPage + 2;
-      }
-    }
-
-    int newPage;
-    if (newImagesPerPage != 1) {
-      if (showSingleImageOnFirstPage()) {
-        newPage = ((previousImageIndex - 1) / newImagesPerPage).ceil() + 1;
-      } else {
-        newPage = (previousImageIndex / newImagesPerPage).ceil();
-      }
-    } else {
-      newPage = previousImageIndex;
-    }
-
-    // Clamp to valid range (1 to maxPage)
-    newPage = newPage.clamp(1, maxPage < 1 ? 1 : maxPage);
-
-    // If we were on the comments page, stay on the comments page
-    if (_wasOnCommentsPage) {
-      page = maxPage + 1;
-    } else {
-      page = newPage;
     }
   }
 }
