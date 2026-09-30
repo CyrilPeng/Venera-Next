@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
@@ -9,23 +8,21 @@ import 'package:flutter/services.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:venera_next/components/gesture.dart';
-import 'package:venera_next/features/reader/chapter_loader.dart';
 import 'package:venera_next/features/reader/image_downloads.dart';
 import 'package:venera_next/features/reader/image_position.dart';
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
-import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/features/reader/waterfall_flow.dart';
-import 'package:venera_next/foundation/appdata.dart';
-import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_provider/reader_image.dart';
-import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/features/reader/waterfall_controller.dart';
 
-import 'image_view_support.dart';
+import 'continuous_data.dart';
+import 'reader_controller.dart';
+import 'reader_viewport.dart';
+import 'package:venera_next/network/request_scope.dart';
 import 'chapter_swipe_indicator.dart';
 
 const Set<PointerDeviceKind> _kTouchLikeDeviceTypes = <PointerDeviceKind>{
@@ -37,9 +34,40 @@ const Set<PointerDeviceKind> _kTouchLikeDeviceTypes = <PointerDeviceKind>{
 };
 
 class ReaderContinuousView extends StatefulWidget {
-  const ReaderContinuousView({super.key, this.crossChapter = false});
+  const ReaderContinuousView({
+    super.key,
+    required this.data,
+    required this.navigation,
+    required this.loadChapter,
+    required this.chapterId,
+    required this.chapterTitle,
+    required this.onViewportChanged,
+    required this.onUpdate,
+    required this.onFloatingButton,
+    required this.onCollectImage,
+    required this.onActiveChapterChanged,
+    required this.onContentLoading,
+    required this.onPreviousError,
+    required this.onNavigationError,
+    required this.readerSize,
+    required this.readImage,
+  });
 
-  final bool crossChapter;
+  final ReaderContinuousData data;
+  final ReaderController navigation;
+  final Future<List<String>> Function(int, RequestScope) loadChapter;
+  final String Function(int) chapterId;
+  final String Function(int) chapterTitle;
+  final void Function(ReaderImageViewController, bool) onViewportChanged;
+  final VoidCallback onUpdate;
+  final void Function(int) onFloatingButton;
+  final VoidCallback onCollectImage;
+  final VoidCallback onActiveChapterChanged;
+  final void Function(bool) onContentLoading;
+  final void Function(Object, StackTrace) onPreviousError;
+  final void Function(int, Object, StackTrace) onNavigationError;
+  final Size Function() readerSize;
+  final Future<Uint8List?> Function(String) readImage;
 
   @override
   State<ReaderContinuousView> createState() => ContinuousModeState();
@@ -50,9 +78,14 @@ class ContinuousModeState extends State<ReaderContinuousView>
   final _imageDownloads = ReaderImageDownloads();
 
   @override
-  (int, int)? get currentImageRange => (reader.page - 1, reader.page);
+  (int, int)? get currentImageRange => (currentPage - 1, currentPage);
 
-  late ReaderState reader;
+  ReaderContinuousData get data => widget.data;
+  ReaderController get navigation => widget.navigation;
+  int get currentPage => navigation.state.page;
+  int get currentChapter => navigation.state.chapter;
+  List<String> get images => navigation.content.images ?? const [];
+  int get maxPage => images.length;
 
   var itemScrollController = ItemScrollController();
   var itemPositionsListener = ItemPositionsListener.create();
@@ -69,22 +102,13 @@ class ContinuousModeState extends State<ReaderContinuousView>
   late List<bool> cached;
 
   late final _waterfall = WaterfallController(
-    maxChapter: reader.maxChapter,
-    load: (chapter, scope) => loadReaderChapterImages(
-      scope: scope,
-      comicId: reader.cid,
-      type: reader.type,
-      chapter: chapter,
-      chapters: reader.widget.chapters,
-      onOnlineFallback: reader.onLocalChapterRecoveredOnline,
-    ),
-    chapterId: (chapter) =>
-        reader.widget.chapters?.ids.elementAtOrNull(chapter - 1) ?? '0',
+    maxChapter: data.maxChapter,
+    load: (chapter, scope) => widget.loadChapter(chapter, scope),
+    chapterId: (chapter) => widget.chapterId(chapter),
     onChanged: () {
       if (mounted) setState(() {});
     },
-    onPreviousError: (error, stack) =>
-        Log.error('Reader', 'Failed to load previous chapter: $error', stack),
+    onPreviousError: (error, stack) => widget.onPreviousError(error, stack),
   );
   WaterfallFlowView get _waterfallFlow => _waterfall.flow;
 
@@ -92,8 +116,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   bool _isNavigatingWaterfallLocation = false;
 
-  int get preCacheCount =>
-      appdata.settings.globalReaderSettings.preloadImageCount;
+  int get preCacheCount => data.preloadCount;
 
   /// Whether the user was scrolling the page.
   /// The gesture detector has a delay to detect tap event.
@@ -117,28 +140,27 @@ class ContinuousModeState extends State<ReaderContinuousView>
   bool isZoomedIn = false;
   bool isLongPressing = false;
 
-  bool get crossChapter => widget.crossChapter;
+  bool get crossChapter => data.crossChapter;
 
-  bool get _splitWideImages =>
-      reader.mode.isTopToBottom && reader.preferences.splitDualPage == true;
+  bool get _splitWideImages => data.vertical && data.splitWideImages;
 
-  bool get _splitWideImagesInvert =>
-      reader.preferences.splitDualPageInvert == true;
+  bool get _splitWideImagesInvert => data.invertSplit;
 
-  int get _flowImageCount =>
-      crossChapter ? _waterfallFlow.imageCount : reader.maxPage;
+  int get _flowImageCount => crossChapter ? _waterfallFlow.imageCount : maxPage;
 
   int get _flowItemCount => _flowImageCount + 2;
 
   void _initSegments() {
-    if (!crossChapter || !_waterfallFlow.isEmpty || reader.images == null) {
+    if (!crossChapter ||
+        !_waterfallFlow.isEmpty ||
+        navigation.content.images == null) {
       return;
     }
     _waterfall.initialize(
       WaterfallChapterSegment(
-        chapter: reader.chapter,
-        eid: reader.eid,
-        images: reader.images!,
+        chapter: currentChapter,
+        eid: widget.chapterId(currentChapter),
+        images: images,
       ),
     );
   }
@@ -149,14 +171,14 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   WaterfallImageRef? _imageRefAt(int index) {
     if (!crossChapter) {
-      if (index <= 0 || index > reader.images!.length) return null;
+      if (index <= 0 || index > images.length) return null;
       return WaterfallImageRef(
         position: ReaderImagePosition(
-          chapter: reader.chapter,
+          chapter: currentChapter,
           imageNumber: index,
-          chapterId: reader.eid,
+          chapterId: widget.chapterId(currentChapter),
         ),
-        imageKey: reader.images![index - 1],
+        imageKey: images[index - 1],
         isFirstInSegment: index == 1,
       );
     }
@@ -196,17 +218,17 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   void _setReaderLocation(WaterfallImageRef imageRef) {
     var segment = _segmentOfChapter(imageRef.position.chapter);
-    var chapterChanged = reader.chapter != imageRef.position.chapter;
+    var chapterChanged = currentChapter != imageRef.position.chapter;
     if (segment != null && chapterChanged) {
-      reader.controller.restoreChapter(imageRef.position.chapter);
-      reader.controller.replaceChapterImages(segment.images);
+      navigation.restoreChapter(imageRef.position.chapter);
+      navigation.replaceChapterImages(segment.images);
       // Wait until the scroll/layout callback has finished before updating UI.
       Future.microtask(() {
-        if (mounted) reader.detectLayout();
+        if (mounted) widget.onActiveChapterChanged();
       });
     }
-    if (chapterChanged || reader.page != imageRef.position.imageNumber) {
-      reader.setPage(imageRef.position.imageNumber);
+    if (chapterChanged || currentPage != imageRef.position.imageNumber) {
+      navigation.reportPage(imageRef.position.imageNumber);
     }
   }
 
@@ -226,10 +248,9 @@ class ContinuousModeState extends State<ReaderContinuousView>
   Future<bool> _loadWaterfallNavigationChapter(int chapter) async {
     try {
       return await _waterfall.navigate(chapter);
-    } catch (e) {
+    } catch (e, stack) {
       if (!mounted) return false;
-      Log.error("Reader", "Failed to load chapter $chapter", e);
-      context.showMessage(message: e.toString());
+      widget.onNavigationError(chapter, e, stack);
       return false;
     }
   }
@@ -239,7 +260,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
     required bool toLastPage,
   }) async {
     final needsLoading = _segmentOfChapter(chapter) == null;
-    if (needsLoading) reader.onReaderContentLoading();
+    if (needsLoading) widget.onContentLoading(true);
     _isRestoringPrependedSegmentPosition = false;
     _isNavigatingWaterfallLocation = false;
     final loading = _loadWaterfallNavigationChapter(chapter);
@@ -250,7 +271,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
       }
     } finally {
       if (mounted && revision == _waterfall.revision) {
-        reader.onReaderContentReady();
+        widget.onContentLoading(false);
       }
     }
     var segment = _segmentOfChapter(chapter);
@@ -263,9 +284,9 @@ class ContinuousModeState extends State<ReaderContinuousView>
     _isNavigatingWaterfallLocation = true;
     setState(() {
       _setReaderLocation(imageRef);
-      reader.controller.setJumpToLastPage(false);
+      navigation.setJumpToLastPage(false);
     });
-    context.readerScaffold.update();
+    widget.onUpdate();
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted || revision != _waterfall.revision) return;
       itemScrollController.jumpTo(index: index);
@@ -281,20 +302,20 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   void initState() {
-    reader = context.reader;
-    reader.imageViewController = this;
+    widget.onViewportChanged(this, true);
     _initSegments();
     itemPositionsListener.itemPositions.addListener(onPositionChanged);
-    cached = List.filled(reader.maxPage + 2, false);
+    cached = List.filled(maxPage + 2, false);
     Future.delayed(
       const Duration(milliseconds: 100),
-      () => cacheImages(reader.page),
+      () => cacheImages(currentPage),
     );
     super.initState();
   }
 
   @override
   void dispose() {
+    widget.onViewportChanged(this, false);
     _waterfall.dispose();
     unawaited(_imageDownloads.dispose());
     itemPositionsListener.itemPositions.removeListener(onPositionChanged);
@@ -308,7 +329,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
     var page = resolveFlowCurrentImageIndex(
       visibleIndex: itemPositionsListener.itemPositions.value.first.index,
       imageCount: _flowImageCount,
-      isTopToBottom: reader.mode.isTopToBottom,
+      isTopToBottom: data.vertical,
       isAtScrollEnd: _isAtScrollEnd,
     );
     var imageRef = _imageRefAt(page);
@@ -319,10 +340,10 @@ class ContinuousModeState extends State<ReaderContinuousView>
         return;
       }
       _setReaderLocation(imageRef);
-      context.readerScaffold.update();
-    } else if (page != reader.page) {
-      reader.setPage(page);
-      context.readerScaffold.update();
+      widget.onUpdate();
+    } else if (page != currentPage) {
+      navigation.reportPage(page);
+      widget.onUpdate();
     }
     cacheImages(page);
     if (crossChapter) {
@@ -365,7 +386,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
     if (!autoReadingReady) return AutoReadingStep.waiting;
     final position = scrollController.position;
     final lastIndex = crossChapter && !acrossChapters
-        ? _waterfallIndexOfChapterPage(reader.chapter, reader.maxPage)!
+        ? _waterfallIndexOfChapterPage(currentChapter, maxPage)!
         : _flowImageCount;
     final last = itemPositionsListener.itemPositions.value
         .where((item) => item.index == lastIndex)
@@ -379,15 +400,15 @@ class ContinuousModeState extends State<ReaderContinuousView>
       if (last.itemTrailingEdge <= 1.001) {
         if (crossChapter &&
             acrossChapters &&
-            _waterfallFlow.lastChapter! < reader.maxChapter) {
+            _waterfallFlow.lastChapter! < data.maxChapter) {
           if (_waterfall.afterError != null) return AutoReadingStep.finished;
           _ensureWaterfallImagesAfter(_flowImageCount);
           return AutoReadingStep.waiting;
         }
         if (!crossChapter &&
             acrossChapters &&
-            reader.chapter < reader.maxChapter) {
-          reader.toNextChapter();
+            currentChapter < data.maxChapter) {
+          navigation.toChapter(currentChapter + 1);
           return AutoReadingStep.waiting;
         }
         return AutoReadingStep.finished;
@@ -409,7 +430,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
     var old = _futurePosition;
     _futurePosition ??= currentLocation;
     double k = (_futurePosition! - currentLocation).abs() / 1600 + 1;
-    final customSpeed = context.reader.preferences.readerScrollSpeed;
+    final customSpeed = data.scrollSpeed;
     k *= customSpeed;
     _futurePosition = _futurePosition! + offset * k;
     var beforeOffset = (_futurePosition! - currentLocation).abs();
@@ -451,6 +472,16 @@ class ContinuousModeState extends State<ReaderContinuousView>
     }
   }
 
+  void _predownload(WaterfallImageRef image) {
+    if (image.imageKey.startsWith('file://')) return;
+    _imageDownloads.preload(
+      image.imageKey,
+      data.sourceKey,
+      data.comicId,
+      image.position.chapterId,
+    );
+  }
+
   void cacheImages(int current) {
     if (!mounted) return;
     for (int i = current + 1; i <= current + preCacheCount; i++) {
@@ -460,11 +491,11 @@ class ContinuousModeState extends State<ReaderContinuousView>
         var segment = _segmentOfChapter(imageRef.position.chapter);
         if (segment != null &&
             !segment.cached.contains(imageRef.position.imageNumber)) {
-          predownloadReaderImageRef(imageRef, context, _imageDownloads);
+          _predownload(imageRef);
           segment.cached.add(imageRef.position.imageNumber);
         }
-      } else if (i <= reader.maxPage && !cached[i]) {
-        predownloadReaderImage(i, context, _imageDownloads);
+      } else if (i <= maxPage && !cached[i]) {
+        _predownload(_imageRefAt(i)!);
         cached[i] = true;
       }
     }
@@ -510,8 +541,8 @@ class ContinuousModeState extends State<ReaderContinuousView>
     }
     var lastChapter = !_waterfallFlow.isEmpty
         ? _waterfallFlow.lastChapter!
-        : reader.chapter;
-    if (lastChapter >= reader.maxChapter) {
+        : currentChapter;
+    if (lastChapter >= data.maxChapter) {
       return SizedBox(
         height: 96,
         child: Center(child: Text('No more chapters'.tl)),
@@ -521,8 +552,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
   }
 
   String _chapterTitle(int chapter) {
-    return reader.widget.chapters?.titles.elementAtOrNull(chapter - 1) ??
-        '${'Chapter'.tl} $chapter';
+    return widget.chapterTitle(chapter);
   }
 
   Widget _buildChapterDivider(
@@ -583,7 +613,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
         prepareToPrevChapter = false;
         prepareToNextChapter = false;
       });
-      context.readerScaffold.setFloatingButton(0);
+      widget.onFloatingButton(0);
     }
     var isZoomedIn = (scale ?? photoViewController.scale) != 1.0;
     if (isZoomedIn != this.isZoomedIn) {
@@ -597,7 +627,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
   @override
   Widget build(BuildContext context) {
     Widget widget = ScrollablePositionedList.builder(
-      initialScrollIndex: reader.page,
+      initialScrollIndex: currentPage,
       itemScrollController: itemScrollController,
       itemPositionsListener: itemPositionsListener,
       scrollControllerCallback: (scrollController) {
@@ -609,10 +639,8 @@ class ContinuousModeState extends State<ReaderContinuousView>
       },
       itemCount: _flowItemCount,
       addSemanticIndexes: false,
-      scrollDirection: reader.mode.isTopToBottom
-          ? Axis.vertical
-          : Axis.horizontal,
-      reverse: reader.mode == ReaderMode.continuousRightToLeft,
+      scrollDirection: data.vertical ? Axis.vertical : Axis.horizontal,
+      reverse: data.reverse,
       physics: isCTRLPressed || _isMouseScrolling || disableScroll
           ? const NeverScrollableScrollPhysics()
           : isZoomedIn
@@ -630,16 +658,19 @@ class ContinuousModeState extends State<ReaderContinuousView>
           return const SizedBox();
         }
         double? width, height;
-        if (reader.mode == ReaderMode.continuousLeftToRight ||
-            reader.mode == ReaderMode.continuousRightToLeft) {
+        if (!data.vertical) {
           height = double.infinity;
         } else {
           width = double.infinity;
         }
 
-        ImageProvider image = createReaderImageProviderFromRef(
-          imageRef,
-          context,
+        ImageProvider image = ReaderImageProvider(
+          imageRef.imageKey,
+          data.sourceKey,
+          data.comicId,
+          imageRef.position.chapterId,
+          imageRef.position.imageNumber,
+          enableResize: true,
         );
 
         var comicImage = ComicImage(
@@ -656,7 +687,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
         return ColoredBox(
           color: context.colorScheme.surface,
-          child: reader.mode.isTopToBottom
+          child: data.vertical
               ? Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -704,11 +735,11 @@ class ContinuousModeState extends State<ReaderContinuousView>
         }
         if (fingers == 0) {
           if (jumpToPrevChapter) {
-            context.readerScaffold.setFloatingButton(0);
-            reader.toPrevChapter(toLastPage: true);
+            this.widget.onFloatingButton(0);
+            navigation.toChapter(currentChapter - 1, toLastPage: true);
           } else if (jumpToNextChapter) {
-            context.readerScaffold.setFloatingButton(0);
-            reader.toNextChapter();
+            this.widget.onFloatingButton(0);
+            navigation.toChapter(currentChapter + 1);
           }
         }
       },
@@ -736,7 +767,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
             sp.pixels >= sp.maxScrollExtent) {
           offset = Offset(value.dx, value.dy);
         } else {
-          if (reader.mode.isTopToBottom) {
+          if (data.vertical) {
             offset = Offset(value.dx, 0);
           } else {
             offset = Offset(0, value.dy);
@@ -768,30 +799,30 @@ class ContinuousModeState extends State<ReaderContinuousView>
           if (!scrollController.hasClients) return false;
           if (scrollController.position.pixels <=
                   scrollController.position.minScrollExtent &&
-              !reader.isFirstChapterOfGroup &&
+              !data.firstChapter &&
               !crossChapter) {
             if (!prepareToPrevChapter) {
               jumpToPrevChapter = false;
               jumpToNextChapter = false;
-              context.readerScaffold.setFloatingButton(-1);
+              this.widget.onFloatingButton(-1);
               setState(() {
                 prepareToPrevChapter = true;
               });
             }
           } else if (scrollController.position.pixels >=
                   scrollController.position.maxScrollExtent &&
-              !reader.isLastChapterOfGroup &&
+              !data.lastChapter &&
               !crossChapter) {
             if (!prepareToNextChapter) {
               jumpToPrevChapter = false;
               jumpToNextChapter = false;
-              context.readerScaffold.setFloatingButton(1);
+              this.widget.onFloatingButton(1);
               setState(() {
                 prepareToNextChapter = true;
               });
             }
           } else {
-            context.readerScaffold.setFloatingButton(0);
+            this.widget.onFloatingButton(0);
             if (prepareToPrevChapter || prepareToNextChapter) {
               jumpToPrevChapter = false;
               jumpToNextChapter = false;
@@ -807,15 +838,13 @@ class ContinuousModeState extends State<ReaderContinuousView>
       },
       child: widget,
     );
-    var width = reader.size.width;
-    var height = reader.size.height;
-    if (reader.preferences.limitImageWidth == true &&
-        width / height > 0.7 &&
-        reader.mode.isTopToBottom) {
+    var width = this.widget.readerSize().width;
+    var height = this.widget.readerSize().height;
+    if (data.limitImageWidth && width / height > 0.7 && data.vertical) {
       width = height * 0.7;
     }
-    if (reader.mode.isTopToBottom) {
-      final margin = reader.preferences.readerSideMargin;
+    if (data.vertical) {
+      final margin = data.sideMargin;
       final percent = margin;
       // Resize the flow itself so images retain their aspect ratio and scroll
       // extents match the visible content, including waterfall and auto-reading.
@@ -850,7 +879,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   Future<void> animateToPage(int page) {
-    var index = _waterfallIndexOfChapterPage(reader.chapter, page) ?? page;
+    var index = _waterfallIndexOfChapterPage(currentChapter, page) ?? page;
     return itemScrollController.scrollTo(
       index: index,
       duration: const Duration(milliseconds: 200),
@@ -860,9 +889,8 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   void handleDoubleTap(Offset location) {
-    if (appdata.settings.globalReaderSettings.quickCollectImage ==
-        'DoubleTap') {
-      context.readerScaffold.addImageFavorite();
+    if (data.doubleTapCollect) {
+      widget.onCollectImage();
       return;
     }
     double target;
@@ -886,9 +914,9 @@ class ContinuousModeState extends State<ReaderContinuousView>
       return;
     }
     double target = photoViewController.getInitialScale!.call()! * 1.75;
-    var size = reader.size;
+    var size = widget.readerSize();
     Offset zoomPosition;
-    if (reader.preferences.longPressZoomPosition != 'center') {
+    if (!data.centerLongPressZoom) {
       zoomPosition = Offset(
         size.width / 2 - location.dx,
         size.height / 2 - location.dy,
@@ -914,7 +942,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   void toPage(int page) {
-    var index = _waterfallIndexOfChapterPage(reader.chapter, page) ?? page;
+    var index = _waterfallIndexOfChapterPage(currentChapter, page) ?? page;
     itemScrollController.jumpTo(index: index);
     _futurePosition = null;
   }
@@ -942,22 +970,22 @@ class ContinuousModeState extends State<ReaderContinuousView>
       return;
     }
     bool? forward;
-    if (reader.mode == ReaderMode.continuousLeftToRight &&
+    if ((!data.vertical && !data.reverse) &&
         event.logicalKey == LogicalKeyboardKey.arrowRight) {
       forward = true;
-    } else if (reader.mode == ReaderMode.continuousRightToLeft &&
+    } else if (data.reverse &&
         event.logicalKey == LogicalKeyboardKey.arrowLeft) {
       forward = true;
-    } else if (reader.mode.isTopToBottom &&
+    } else if (data.vertical &&
         event.logicalKey == LogicalKeyboardKey.arrowDown) {
       forward = true;
-    } else if (reader.mode.isTopToBottom &&
+    } else if (data.vertical &&
         event.logicalKey == LogicalKeyboardKey.arrowUp) {
       forward = false;
-    } else if (reader.mode == ReaderMode.continuousLeftToRight &&
+    } else if ((!data.vertical && !data.reverse) &&
         event.logicalKey == LogicalKeyboardKey.arrowLeft) {
       forward = false;
-    } else if (reader.mode == ReaderMode.continuousRightToLeft &&
+    } else if (data.reverse &&
         event.logicalKey == LogicalKeyboardKey.arrowRight) {
       forward = false;
     }
@@ -988,13 +1016,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
   Future<Uint8List?> getImageByOffset(Offset offset) async {
     var imageKey = getImageKeyByOffset(offset);
     if (imageKey == null) return null;
-    if (imageKey.startsWith("file://")) {
-      return await File(imageKey.substring(7)).readAsBytes();
-    } else {
-      return (await CacheManager().findCache(
-        "$imageKey@${context.reader.type.sourceKey}@${context.reader.cid}@${context.reader.eid}",
-      ))!.readAsBytes();
-    }
+    return widget.readImage(imageKey);
   }
 
   @override

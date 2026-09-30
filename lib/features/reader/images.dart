@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/loading.dart';
@@ -15,6 +16,10 @@ import 'package:venera_next/foundation/cache_manager.dart';
 
 import 'gallery_view.dart';
 import 'gallery_data.dart';
+import 'continuous_data.dart';
+import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/translations.dart';
 import 'continuous_view.dart';
 
 // Transitional exports for existing viewport consumers.
@@ -107,6 +112,21 @@ class ReaderImagesState extends State<ReaderImages> {
     }
   }
 
+  void _onViewportChanged(ReaderImageViewController viewport, bool attached) {
+    if (attached) {
+      reader.imageViewController = viewport;
+    } else if (identical(reader.imageViewController, viewport)) {
+      reader.imageViewController = null;
+    }
+  }
+
+  Future<Uint8List?> _readImage(String key) async {
+    if (key.startsWith('file://')) return File(key.substring(7)).readAsBytes();
+    return (await CacheManager().findCache(
+      '$key@${reader.type.sourceKey}@${reader.cid}@${reader.eid}',
+    ))!.readAsBytes();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (reader.isLoading) {
@@ -160,13 +180,7 @@ class ReaderImagesState extends State<ReaderImages> {
             chapterId: reader.eid,
           ),
           navigation: reader.controller,
-          onViewportChanged: (viewport, attached) {
-            if (attached) {
-              reader.imageViewController = viewport;
-            } else if (identical(reader.imageViewController, viewport)) {
-              reader.imageViewController = null;
-            }
-          },
+          onViewportChanged: _onViewportChanged,
           onReady: () => context.readerScaffold.setFloatingButton(0),
           onPageReported: (comments, refreshEInk) {
             final scaffold = context.readerScaffold;
@@ -177,14 +191,7 @@ class ReaderImagesState extends State<ReaderImages> {
           onChapterChanged: () => context.readerScaffold.requestEInkRefresh(),
           onCollectImage: () => context.readerScaffold.addImageFavorite(),
           readerSize: () => reader.size,
-          readImage: (key) async {
-            if (key.startsWith('file://')) {
-              return File(key.substring(7)).readAsBytes();
-            }
-            return (await CacheManager().findCache(
-              '$key@${reader.type.sourceKey}@${reader.cid}@${reader.eid}',
-            ))!.readAsBytes();
-          },
+          readImage: _readImage,
           commentsBuilder: source == null || chapters == null
               ? null
               : (_) => EmbeddedChapterCommentsPage(
@@ -196,9 +203,72 @@ class ReaderImagesState extends State<ReaderImages> {
                 ),
         );
       } else {
+        final preferences = reader.preferences;
         return ReaderContinuousView(
           key: Key(reader.mode.key),
-          crossChapter: reader.mode.isWaterfall,
+          data: ReaderContinuousData(
+            vertical: reader.mode.isTopToBottom,
+            reverse: reader.mode == ReaderMode.continuousRightToLeft,
+            crossChapter: reader.mode.isWaterfall,
+            firstChapter: reader.isFirstChapterOfGroup,
+            lastChapter: reader.isLastChapterOfGroup,
+            maxChapter: reader.maxChapter,
+            preloadCount:
+                appdata.settings.globalReaderSettings.preloadImageCount,
+            splitWideImages: preferences.splitDualPage == true,
+            invertSplit: preferences.splitDualPageInvert == true,
+            scrollSpeed: preferences.readerScrollSpeed,
+            limitImageWidth: preferences.limitImageWidth == true,
+            sideMargin: preferences.readerSideMargin,
+            doubleTapCollect:
+                appdata.settings.globalReaderSettings.quickCollectImage ==
+                'DoubleTap',
+            centerLongPressZoom: preferences.longPressZoomPosition == 'center',
+            sourceKey: reader.type.comicSource?.key,
+            comicId: reader.cid,
+          ),
+          navigation: reader.controller,
+          loadChapter: (chapter, scope) => loadReaderChapterImages(
+            scope: scope,
+            comicId: reader.cid,
+            type: reader.type,
+            chapter: chapter,
+            chapters: reader.widget.chapters,
+            onOnlineFallback: reader.onLocalChapterRecoveredOnline,
+          ),
+          chapterId: (chapter) =>
+              reader.widget.chapters?.ids.elementAtOrNull(chapter - 1) ?? '0',
+          chapterTitle: (chapter) =>
+              reader.widget.chapters?.titles.elementAtOrNull(chapter - 1) ??
+              '${'Chapter'.tl} $chapter',
+          onViewportChanged: _onViewportChanged,
+          onUpdate: () => context.readerScaffold.update(),
+          onFloatingButton: (value) =>
+              context.readerScaffold.setFloatingButton(value),
+          onCollectImage: () => context.readerScaffold.addImageFavorite(),
+          onActiveChapterChanged: () => reader.detectLayout(),
+          onContentLoading: (loading) {
+            if (loading) {
+              reader.onReaderContentLoading();
+            } else {
+              reader.onReaderContentReady();
+            }
+          },
+          onPreviousError: (error, stack) => Log.error(
+            'Reader',
+            'Failed to load previous chapter: $error',
+            stack,
+          ),
+          onNavigationError: (chapter, error, stack) {
+            Log.error(
+              'Reader',
+              'Failed to load chapter $chapter: $error',
+              stack,
+            );
+            context.showMessage(message: error.toString());
+          },
+          readerSize: () => reader.size,
+          readImage: _readImage,
         );
       }
     }

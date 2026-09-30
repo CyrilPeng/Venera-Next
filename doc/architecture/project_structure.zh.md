@@ -262,7 +262,7 @@ ReaderController 持有导航状态并提供 ReaderNavigationState 快照；不�
 
 ReaderImagePosition 表示源图片，ReaderPageLayout 转换显示页，WaterfallChapterFlow 转换跨章列表索引；后者反向定位必须校验章节 ID。ReaderImageSlice 的源/显示区域为归一化绘制偏移，不是新的源图片或历史页。历史只保存转换后的源图片序号，保持现有数据协议。
 
-阅读加载/视图选择保留在 images.dart；gallery_view.dart 与 continuous_view.dart 分别承载画廊和连续/瀑布流适配，image_view_support.dart 共享图片辅助，chapter_swipe_indicator.dart 负责切章指示。菜单选图使用 ReaderImageViewController.currentImageRange，不依赖具体 State 类型；迁移期 State 导出不应被新业务代码使用。
+阅读加载/视图选择保留在 images.dart；gallery_view.dart 与 continuous_view.dart 分别承载画廊和连续/瀑布流适配，chapter_swipe_indicator.dart 负责切章指示。菜单选图使用 ReaderImageViewController.currentImageRange，不依赖具体 State 类型；迁移期 State 导出不应被新业务代码使用。
 
 ChapterImageLoader 只依赖注入的章节访问和错误回调，禁止直接查找全局管理器。loadReaderChapterImages 是连接旧存储/图源的适配入口；稳定章节 ID 与已下载判断在适配层，本地优先/回退/取消在策略层。两层测试分别覆盖真实存储兼容和无全局依赖的行为。
 
@@ -273,3 +273,5 @@ ReaderHistoryWriter 只负责单个阅读器的延迟保存和退出刷新调度
 WaterfallController 拥有章节插入/重置、预取/导航状态及请求作用域，连续视图只持有 WaterfallFlowView 查询协议。前插返回源图片数，由视图恢复滚动锚点；跳章和销毁使旧请求及帧回调失效。控制器不依赖 Flutter、ReaderState、全局图源或存储，实际访问由装配端注入。
 
 画廊通过 ReaderGalleryData 和 ReaderController 接收内容/配置与导航，不得查找祖先 ReaderState 或读取全局设置。images.dart 装配评论 Widget、界面回调与图片读取。ReaderImageViewController 独立于页面定义在 reader_viewport.dart；过渡页面导出供旧调用者使用，新视图应直接依赖协议。图片列表复用控制器快照，源图片处理页码语义不能在结构迁移中隐式改变。
+
+连续视图通过 ReaderContinuousData 接收设置，通过 ReaderController 读取当前章节/内容，章节加载和 UI 副作用使用显式回调。不得恢复祖先 ReaderState 或全局设置查找；跨章后的当前内容必须即时读取控制器，不能缓存成等待父级重建才更新的章节快照。images.dart 共享视口注册和图片读取适配。
