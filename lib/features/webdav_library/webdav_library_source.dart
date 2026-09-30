@@ -209,7 +209,6 @@ class WebDavLibrarySource {
   static const _metadataChapterPrefix = '__cbz_range_';
   static const _maxDiscoveryDepth = 8;
   static const _maxDiscoveryDirectories = 2000;
-  static const _autoSyncCheckInterval = Duration(minutes: 15);
 
   static final _snapshotCache = <String, _WebDavComicSnapshot>{};
   static final _snapshotInFlight = <String, Future<_WebDavComicSnapshot>>{};
@@ -220,7 +219,6 @@ class WebDavLibrarySource {
   static final _cache = WebDavLibraryCache.instance;
   static WebDavLibraryOps _ops = _WebDavLibraryOps();
   static _WebDavLibrarySyncRun? _syncRun;
-  static Timer? _autoSyncTimer;
 
   static WebDavLibraryOps get ops => _ops;
 
@@ -246,15 +244,6 @@ class WebDavLibrarySource {
       _cache.clear(previous.cacheKey);
     }
     contentVersion.value++;
-  }
-
-  static void initializeAutoSync() {
-    updateSyncStatusFromCache();
-    _autoSyncTimer ??= Timer.periodic(
-      _autoSyncCheckInterval,
-      (_) => checkForAutomaticSync(),
-    );
-    checkForAutomaticSync();
   }
 
   static void updateSyncStatusFromCache() {

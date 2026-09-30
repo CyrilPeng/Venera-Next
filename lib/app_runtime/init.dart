@@ -13,8 +13,6 @@ import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/settings/settings.dart';
-import 'package:venera_next/features/sync/sync.dart';
-import 'package:venera_next/features/webdav_library/webdav_library.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
@@ -60,8 +58,6 @@ Future<void> _initializeInteractive() async {
       galleryColumns: favoriteGalleryColumns(),
     ),
   );
-  DataSync().start();
-  WebDavLibrarySource.initializeAutoSync();
   if (App.isAndroid) {
     try {
       await FlutterDisplayMode.setHighRefreshRate();

@@ -60,16 +60,29 @@ class DataSync with ChangeNotifier {
   DataSync._();
 
   bool _started = false;
+  bool _observing = false;
 
   /// Attach automatic synchronization once, after core services are ready.
   void start() {
     if (_disposed) throw StateError('Cannot start a disposed DataSync');
     if (_started) return;
     _started = true;
-    appdata.registerSyncDataRequestHandler(onDataChanged);
-    LocalFavoritesManager().addListener(onDataChanged);
-    ComicSourceManager().addListener(onDataChanged);
+    if (!_observing) {
+      _observing = true;
+      appdata.registerSyncDataRequestHandler(onDataChanged);
+      LocalFavoritesManager().addListener(onDataChanged);
+      ComicSourceManager().addListener(onDataChanged);
+    }
     checkForAutomaticSync(startup: true);
+  }
+
+  /// Stop automatic scheduling without canceling requested transfers.
+  /// Keep observing local changes until dispose so edits made while the window
+  /// is detached cannot be overwritten by a download after the next start.
+  void stop() {
+    _scheduleTimer?.cancel();
+    _scheduleTimer = null;
+    _started = false;
   }
 
   void onDataChanged() {
@@ -269,8 +282,9 @@ class DataSync with ChangeNotifier {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    _scheduleTimer?.cancel();
-    if (_started) {
+    stop();
+    if (_observing) {
+      _observing = false;
       appdata.registerSyncDataRequestHandler(null);
       LocalFavoritesManager().removeListener(onDataChanged);
       ComicSourceManager().removeListener(onDataChanged);

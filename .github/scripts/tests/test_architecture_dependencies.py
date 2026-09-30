@@ -112,6 +112,8 @@ class ArchitectureDependenciesTest(unittest.TestCase):
             self.assertEqual(len(MODULE.startup_violations(lib)), 1)
             source.write_text("import 'bootstrap_core.dart'; void run() { DataSync().start(); }")
             self.assertEqual(len(MODULE.startup_violations(lib)), 1)
+            source.write_text("BackgroundSync.platform().start();")
+            self.assertEqual(len(MODULE.startup_violations(lib)), 1)
             source.write_text("import 'bootstrap_core.dart'; void run() { bootstrapCore(); }")
             self.assertEqual(MODULE.startup_violations(lib), [])
 

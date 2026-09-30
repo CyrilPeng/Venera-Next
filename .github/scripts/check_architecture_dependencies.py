@@ -176,7 +176,7 @@ def startup_violations(lib):
         if not source.exists():
             continue
         text = uncomment(source.read_text(encoding='utf-8'))
-        forbidden = r'App\.rootContext|WindowFrame|configureComicWidgets|initializeAutoSync|Timer\.periodic|DataSync\(\)\.start\('
+        forbidden = r'App\.rootContext|WindowFrame|BackgroundSync|configureComicWidgets|initializeAutoSync|Timer\.periodic|DataSync\(\)\.start\('
         if re.search(forbidden, text):
             errors.append(f'Core/headless startup activates interactive behavior: {name}')
         if name.endswith('headless.dart') and 'init.dart' in set(directives(text)):

@@ -1,3 +1,4 @@
+import 'package:venera_next/app_runtime/background_sync.dart';
 import 'package:venera_next/app_runtime/interactive_bindings.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
@@ -80,12 +81,16 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   final _interactiveBindings = InteractiveBindings.platform();
+  final _backgroundSync = BackgroundSync.platform();
 
   @override
   void initState() {
     App.registerForceRebuild(forceRebuild);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _interactiveBindings.start();
+      if (mounted) {
+        _interactiveBindings.start();
+        _backgroundSync.start();
+      }
     });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     WidgetsBinding.instance.addObserver(this);
@@ -99,6 +104,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     App.registerForceRebuild(null);
     hideContentOverlay?.remove();
     hideContentOverlay = null;
+    _backgroundSync.stop();
     unawaited(_interactiveBindings.dispose());
     super.dispose();
   }

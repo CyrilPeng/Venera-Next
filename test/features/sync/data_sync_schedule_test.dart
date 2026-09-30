@@ -78,6 +78,46 @@ void main() {
     expect(sync.start, throwsStateError);
   });
 
+  scheduleTest('stop retains pending edits and restart catches up once', (
+    clock,
+    calls,
+  ) async {
+    final sync = DataSync()..start();
+    sync.stop();
+    sync.stop();
+    appdata.settings['cacheSize'] = 2049;
+    await appdata.saveData();
+    await clock.elapse(const Duration(hours: 1));
+    expect(calls.uploads + calls.downloads, 0);
+    expect(sync.hasPendingChanges, isTrue);
+    sync.start();
+    sync.start();
+    await clock.elapse();
+    expect(calls.uploads, 1);
+    expect(sync.hasPendingChanges, isFalse);
+    sync.stop();
+  });
+
+  scheduleTest('stop lets an active transfer finish without rescheduling', (
+    clock,
+    calls,
+  ) async {
+    final sync = DataSync()..start();
+    final gate = Completer<Res<bool>>();
+    var uploads = 0;
+    DataSync.debugUploadOverride = () {
+      uploads++;
+      return gate.future;
+    };
+    final transfer = sync.uploadData();
+    sync.stop();
+    gate.complete(const Res(true));
+    expect((await transfer).success, isTrue);
+    await clock.elapse(const Duration(hours: 1));
+    expect(uploads, 1);
+    expect(calls.downloads, 0);
+  });
+
   scheduleTest('legacy preference migration and invalid interval fallback', (
     clock,
     calls,
