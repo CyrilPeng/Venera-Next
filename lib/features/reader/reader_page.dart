@@ -14,6 +14,7 @@ import 'package:venera_next/features/reader/images.dart';
 import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
+import 'package:venera_next/features/reader/history_writer.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/page_layout.dart';
 import 'package:venera_next/features/reader/image_position.dart';
@@ -392,7 +393,7 @@ class ReaderState extends State<Reader>
       fullscreen();
     }
     autoReading.dispose();
-    _flushPendingHistoryUpdate();
+    _historyWriter.dispose();
     unawaited(
       _readingSession.dispose().whenComplete(() {
         DataSync().onDataChanged();
@@ -470,21 +471,18 @@ class ReaderState extends State<Reader>
     updateHistory();
   }
 
-  /// Prevent multiple history updates in a short time.
-  /// `HistoryManager().addHistoryAsync` is a high-cost operation because it creates a new isolate.
-  Timer? _updateHistoryTimer;
-
-  void _flushPendingHistoryUpdate() {
-    if (_updateHistoryTimer == null) {
-      return;
-    }
-    _updateHistoryTimer!.cancel();
-    _updateHistoryTimer = null;
-    final item = history;
-    if (item != null) {
-      HistoryManager().addHistory(item);
-    }
-  }
+  late final _historyWriter = ReaderHistoryWriter(
+    write: () async {
+      final item = history;
+      if (item != null) await HistoryManager().addHistoryAsync(item);
+    },
+    flush: () {
+      final item = history;
+      if (item != null) HistoryManager().addHistory(item);
+    },
+    onError: (error, stack) =>
+        Log.error('Reader', 'Failed to save reading progress: $error', stack),
+  );
 
   void updateHistory() {
     // Initial layout and orientation can update the viewport before images
@@ -508,11 +506,7 @@ class ReaderState extends State<Reader>
         history!.ep = imagePosition.chapter;
       }
       history!.time = DateTime.now();
-      _updateHistoryTimer?.cancel();
-      _updateHistoryTimer = Timer(const Duration(seconds: 1), () {
-        HistoryManager().addHistoryAsync(history!);
-        _updateHistoryTimer = null;
-      });
+      _historyWriter.schedule();
     }
   }
 

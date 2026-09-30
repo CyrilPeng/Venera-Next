@@ -157,3 +157,5 @@ images.dart owns loading/view selection; gallery_view.dart and continuous_view.d
 ChapterImageLoader depends only on injected chapter access and error callbacks, with no global manager lookup. loadReaderChapterImages adapts legacy storage/sources: stable chapter IDs and download availability belong to the adapter, while local-first/fallback/cancellation belong to the policy. Tests separately cover real-storage compatibility and behavior without globals.
 
 ReaderController also owns ReaderContentState with copied immutable image lists. Loads commit by ReaderContentLoad identity; stale owners cannot cancel replacements. Keep loading active during layout preparation. Views coordinate rebuilds, so content commands do not emit notifications during build/init. Activate loaded waterfall chapters through replaceChapterImages.
+
+ReaderHistoryWriter owns one reader’s delayed saves and exit-flush scheduling through injected storage/error callbacks. Coordinate conversion stays in the adapter. Disposal cancels pending timers without cancelling or duplicating accepted storage operations; database ordering belongs to storage.
