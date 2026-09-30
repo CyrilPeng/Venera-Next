@@ -1,3 +1,5 @@
+import 'package:venera_next/features/reader/reader.dart'
+    show ReaderOrientationScope;
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/app_runtime/background_sync.dart';
 import 'package:venera_next/app_runtime/interactive_bindings.dart';
@@ -322,7 +324,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 );
               }
 
-              widget = OverlayWidget(widget);
+              widget = ReaderOrientationScope(child: OverlayWidget(widget));
               if (App.isDesktop) {
                 widget = Shortcuts(
                   shortcuts: {

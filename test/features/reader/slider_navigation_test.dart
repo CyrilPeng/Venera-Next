@@ -1,3 +1,5 @@
+import 'package:venera_next/features/reader/orientation.dart'
+    show ReaderOrientationScope;
 import 'dart:convert';
 import 'dart:io';
 
@@ -83,6 +85,7 @@ void main() {
         });
         await tester.pumpWidget(
           MaterialApp(
+            builder: (context, child) => ReaderOrientationScope(child: child!),
             navigatorKey: App.rootNavigatorKey,
             home: Scaffold(body: OverlayWidget(_Reader(key: key))),
           ),
