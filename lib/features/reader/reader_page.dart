@@ -135,7 +135,7 @@ class ReaderState extends State<Reader>
   String get eid => widget.chapters?.ids.elementAtOrNull(chapter - 1) ?? '0';
 
   @override
-  List<String>? images;
+  List<String>? get images => controller.content.images;
 
   @override
   late ReaderMode mode;
@@ -288,7 +288,7 @@ class ReaderState extends State<Reader>
   }
 
   @override
-  bool isLoading = false;
+  bool get isLoading => controller.content.isLoading;
 
   var focusNode = FocusNode();
 
@@ -648,7 +648,6 @@ abstract mixin class ReaderLocation {
   late final controller = ReaderController(
     pageCount: () => totalPages,
     chapterCount: () => maxChapter,
-    isLoading: () => isLoading,
     animationEnabled: () => enablePageAnimation(cid, type),
     viewport: () => imageViewController,
     onChanged: update,

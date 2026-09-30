@@ -265,3 +265,5 @@ ReaderImagePosition 表示源图片，ReaderPageLayout 转换显示页，Waterfa
 阅读加载/视图选择保留在 images.dart；gallery_view.dart 与 continuous_view.dart 分别承载画廊和连续/瀑布流适配，image_view_support.dart 共享图片辅助，chapter_swipe_indicator.dart 负责切章指示。菜单选图使用 ReaderImageViewController.currentImageRange，不依赖具体 State 类型；迁移期 State 导出不应被新业务代码使用。
 
 ChapterImageLoader 只依赖注入的章节访问和错误回调，禁止直接查找全局管理器。loadReaderChapterImages 是连接旧存储/图源的适配入口；稳定章节 ID 与已下载判断在适配层，本地优先/回退/取消在策略层。两层测试分别覆盖真实存储兼容和无全局依赖的行为。
+
+ReaderController 同时持有 ReaderContentState，图片列表必须复制为不可变快照。加载以 ReaderContentLoad 身份提交，旧所有者只能取消自身尝试；布局准备期间不得提前解除加载。视图协调刷新，内容命令不在 build/init 中自行触发通知；已加载瀑布流章节通过 replaceChapterImages 激活。

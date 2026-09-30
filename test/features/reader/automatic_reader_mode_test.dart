@@ -259,7 +259,7 @@ class _ReaderHarnessState extends ReaderState {
   @override
   void initState() {
     super.initState();
-    images = List.generate(12, (i) => 'image-$i');
+    controller.replaceChapterImages(List.generate(12, (i) => 'image-$i'));
   }
 
   @override

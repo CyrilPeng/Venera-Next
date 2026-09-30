@@ -264,7 +264,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
     var chapterChanged = reader.chapter != imageRef.position.chapter;
     if (segment != null && chapterChanged) {
       reader.controller.restoreChapter(imageRef.position.chapter);
-      reader.images = segment.images;
+      reader.controller.replaceChapterImages(segment.images);
       // Wait until the scroll/layout callback has finished before updating UI.
       Future.microtask(() {
         if (mounted) reader.detectLayout();

@@ -30,17 +30,14 @@ void main() {
   var updates = 0;
   var pageChanges = 0;
   var errors = 0;
-  var loading = false;
   var attached = true;
   setUp(() {
     updates = pageChanges = errors = 0;
-    loading = false;
     attached = true;
     view = _Viewport();
     controller = ReaderController(
       pageCount: () => 300,
       chapterCount: () => 3,
-      isLoading: () => loading,
       animationEnabled: () => true,
       viewport: () => attached ? view : null,
       onChanged: () => updates++,
@@ -49,6 +46,73 @@ void main() {
     );
   });
   tearDown(() => controller.dispose());
+
+  test('content attempts cancel predecessors and reject stale results', () {
+    final old = controller.beginContentLoad();
+    expect(controller.startContentLoad(old), true);
+    expect(controller.startContentLoad(old), false);
+    final current = controller.beginContentLoad();
+    expect(old.scope.isCancelled, true);
+    expect(controller.setContentImages(old, ['old']), false);
+    expect(controller.failContentLoad(old, 'late error'), false);
+    controller.cancelContentLoad(old);
+    expect(current.scope.isCancelled, false);
+    expect(controller.startContentLoad(current), true);
+    expect(controller.setContentImages(current, ['new']), true);
+    expect(controller.completeContentLoad(current), true);
+    expect(controller.content.images, ['new']);
+    expect(controller.content.isLoading, false);
+    expect(controller.failContentLoad(current, 'after completion'), false);
+  });
+
+  test(
+    'content snapshots copy image lists and retain loading during preparation',
+    () {
+      final attempt = controller.beginContentLoad();
+      controller.startContentLoad(attempt);
+      final images = ['one', 'two'];
+      controller.setContentImages(attempt, images);
+      final preparing = controller.content;
+      images.clear();
+      expect(preparing.images, ['one', 'two']);
+      expect(() => preparing.images!.clear(), throwsUnsupportedError);
+      expect(preparing.isLoading, true);
+      expect(controller.toPage(2), false);
+      controller.completeContentLoad(attempt);
+      expect(preparing.isLoading, true);
+      expect(controller.content.isLoading, false);
+    },
+  );
+
+  test(
+    'retry clears content errors and waterfall activation cancels pending load',
+    () {
+      final failed = controller.beginContentLoad();
+      controller.failContentLoad(failed, StateError('offline'));
+      expect(controller.content.error, contains('offline'));
+      final retry = controller.beginContentLoad();
+      expect(controller.content.error, isNull);
+      final segment = ['chapter-image'];
+      controller.replaceChapterImages(segment);
+      segment.clear();
+      expect(retry.scope.isCancelled, true);
+      expect(controller.content.images, ['chapter-image']);
+      expect(controller.content.isLoading, false);
+      expect(controller.completeContentLoad(retry), false);
+    },
+  );
+
+  test('content disposal cancels owned scope and forbids future writes', () {
+    final attempt = controller.beginContentLoad();
+    controller.dispose();
+    expect(attempt.scope.isCancelled, true);
+    expect(controller.setContentImages(attempt, ['late']), false);
+    expect(controller.completeContentLoad(attempt), false);
+    expect(controller.failContentLoad(attempt, 'late'), false);
+    expect(controller.beginContentLoad, throwsStateError);
+    controller.replaceChapterImages(['late']);
+    expect(controller.content.images, isNull);
+  });
 
   test('immutable snapshots are cached until a state change', () {
     final before = controller.state;
@@ -70,9 +134,9 @@ void main() {
   test('invalid, loading and detached page commands do not reach viewport', () {
     expect(controller.toPage(0), false);
     expect(controller.toPage(301), false);
-    loading = true;
+    final attempt = controller.beginContentLoad();
     expect(controller.toPage(2), false);
-    loading = false;
+    controller.completeContentLoad(attempt);
     attached = false;
     expect(controller.toPage(2), false);
     expect(view.animations, isEmpty);

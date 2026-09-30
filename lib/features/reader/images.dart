@@ -6,7 +6,7 @@ import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/chapter_loader.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/foundation/comic_type.dart';
-import 'package:venera_next/network/request_scope.dart';
+import 'package:venera_next/features/reader/reader_controller.dart';
 
 import 'gallery_view.dart';
 import 'continuous_view.dart';
@@ -23,10 +23,8 @@ class ReaderImages extends StatefulWidget {
 }
 
 class ReaderImagesState extends State<ReaderImages> {
-  final _chapterRequests = RequestScope();
-  String? error;
-
-  bool inProgress = false;
+  late ReaderContentLoad _contentLoad;
+  String? get error => reader.controller.content.error;
 
   late ReaderState reader;
 
@@ -34,14 +32,13 @@ class ReaderImagesState extends State<ReaderImages> {
   void initState() {
     reader = context.reader;
     reader.onReaderContentLoading();
-    reader.isLoading = true;
+    _contentLoad = reader.controller.beginContentLoad();
     super.initState();
   }
 
   @override
   void dispose() {
-    _chapterRequests.cancel();
-    _chapterRequests.dispose();
+    reader.controller.cancelContentLoad(_contentLoad);
     super.dispose();
   }
 
@@ -54,9 +51,8 @@ class ReaderImagesState extends State<ReaderImages> {
   }
 
   void load() async {
-    if (inProgress) return;
-    inProgress = true;
-    error = null;
+    final attempt = _contentLoad;
+    if (!reader.controller.startContentLoad(attempt)) return;
     try {
       if (!reader.localPageOrderChecked && reader.type == ComicType.local) {
         final history = reader.history;
@@ -75,7 +71,7 @@ class ReaderImagesState extends State<ReaderImages> {
         reader.localPageOrderChecked = true;
       }
       final images = await loadReaderChapterImages(
-        scope: _chapterRequests,
+        scope: attempt.scope,
         comicId: reader.cid,
         type: reader.type,
         chapter: reader.chapter,
@@ -83,12 +79,10 @@ class ReaderImagesState extends State<ReaderImages> {
         onOnlineFallback: reader.onLocalChapterRecoveredOnline,
       );
       if (!mounted) return;
-      reader.images = images;
+      if (!reader.controller.setContentImages(attempt, images)) return;
       await reader.prepareReadingMode();
-      if (!mounted) return;
+      if (!mounted || !reader.controller.completeContentLoad(attempt)) return;
       setState(() {
-        reader.isLoading = false;
-        inProgress = false;
         _handleJumpToLastPage();
         Future.microtask(() {
           if (!mounted) return;
@@ -97,12 +91,8 @@ class ReaderImagesState extends State<ReaderImages> {
         });
       });
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        error = e.toString();
-        reader.isLoading = false;
-        inProgress = false;
-      });
+      if (!mounted || !reader.controller.failContentLoad(attempt, e)) return;
+      setState(() {});
     }
     if (mounted) {
       if (error != null || reader.images?.isEmpty == true) {
@@ -127,8 +117,7 @@ class ReaderImagesState extends State<ReaderImages> {
             message: error!,
             retry: () {
               setState(() {
-                reader.isLoading = true;
-                error = null;
+                _contentLoad = reader.controller.beginContentLoad();
               });
             },
           ),
