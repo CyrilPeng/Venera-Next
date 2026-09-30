@@ -13,6 +13,12 @@ FOUNDATION_EXTENSIONS_BARREL = LIB_DIR / "foundation" / "extensions.dart"
 FOUNDATION_WIDGET_UTILS_PATH = (LIB_DIR / "foundation" / "widget_utils.dart").resolve()
 PAGES_DIR = LIB_DIR / "pages"
 RETIRED_DART_PATHS = {
+    LIB_DIR / "foundation" / "channel.dart": (
+        "unused Channel implementation was retired; use an owned task lifetime"
+    ),
+    COMPONENTS_BARREL: (
+        "unused component barrel was retired; import the specific component"
+    ),
     LIB_DIR / "utils" / "tags_translation.dart": (
         "tag translation belongs in features/comic_source/"
     ),
@@ -36,7 +42,7 @@ RETIRED_DART_PATHS = {
         "throttled task scheduling belongs in foundation/throttled_task_runner.dart"
     ),
     LIB_DIR / "utils" / "channel.dart": (
-        "async queue primitives belong in foundation/channel.dart"
+        "unused Channel implementation was retired"
     ),
     LIB_DIR / "utils" / "clipboard_image.dart": (
         "reader clipboard image interaction belongs in features/reader/"
@@ -1101,15 +1107,6 @@ def _scan_retired_part_violations() -> set[str]:
 
 def _scan_component_barrel_violations() -> set[str]:
     violations = set()
-
-    barrel_text = COMPONENTS_BARREL.read_text(encoding="utf-8")
-    for line_number, line in enumerate(barrel_text.splitlines(), start=1):
-        stripped = line.strip()
-        if stripped.startswith(("import ", "part ")):
-            violations.add(
-                f"{_relative(COMPONENTS_BARREL)}:{line_number}: "
-                "components.dart must remain an export-only barrel"
-            )
 
     for source in sorted(COMPONENTS_DIR.glob("*.dart")):
         if source == COMPONENTS_BARREL:

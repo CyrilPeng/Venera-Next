@@ -20,4 +20,4 @@ Compare identical devices/fixtures and establish natural variance before choosin
 
 ## Later phases
 
-P1–P8 are pending. Update this record and CHANGELOG for each verified work unit and commit separately while preserving existing local feature changes.
+P1 initial cleanup is complete: Channel had test-only consumers and the component barrel had no production consumers. Both and the dedicated Channel tests were removed; retired-path checks prevent reintroduction. Dynamic JS/platform entry points, migrations and packages are retained without evidence for deletion; temporary artifacts are outside this cleanup. P2–P8 are pending. Update this record and CHANGELOG for each verified work unit and commit separately while preserving existing local feature changes.
