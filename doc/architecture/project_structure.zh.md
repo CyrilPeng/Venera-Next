@@ -293,3 +293,5 @@ ReaderSession 拥有 ReaderHistoryWriter 与 ReadingSessionTracker，通过内�
 ReaderImageCachePolicy 只负责内存分档与单个阅读器的查询有效性；内存插件、日志和 PaintingBinding 缓存由页面适配。退出恢复原 100 MB 上限且使未完成查询失效，重复配置仅接受最新结果。策略不取消底层平台 Future，也不提供跨阅读器的全局缓存仲裁。
 
 ReaderVolumeController 通过注入事件流和导航回调拥有订阅，不能依赖 Flutter 或页面。切换立即使旧输入失效，重连等待 StreamSubscription.cancel，退出停止后续订阅；音量上键在前章末页回退、下键在后章开头前进的策略保留。volume.dart 只适配 venera/volume 通道，页面判断 Android 支持并记录错误。Flutter EventChannel 的原生启停确认与启停错误仍由框架管理，不能把 Dart 取消 Future 当作原生确认。
+
+ReaderWindowController 拥有关闭监听与全屏请求队列，依赖注入的窗口 API、边框显示和导航回调，不查找 context。ReaderState 在依赖初始化时捕获祖先 WindowFrame 和根 Navigator，保留测试可覆盖的装配/释放入口。退出同步移除监听，再等待已接受的原生操作并恢复窗口模式；平台调用不能强制取消，共享桌面窗口在多个阅读器间的所有权仍需运行时仲裁。

@@ -25,6 +25,7 @@ import 'package:venera_next/features/reader/image_position.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/features/reader/volume.dart';
 import 'package:venera_next/features/reader/volume_controller.dart';
+import 'package:venera_next/features/reader/window_controller.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -87,11 +88,7 @@ class Reader extends StatefulWidget {
 }
 
 class ReaderState extends State<Reader>
-    with
-        ReaderLocation,
-        ReaderWindow,
-        ReaderImagePerPageHandler,
-        WidgetsBindingObserver {
+    with ReaderLocation, ReaderImagePerPageHandler, WidgetsBindingObserver {
   @override
   void update() {
     if (mounted) setState(() {});
@@ -417,15 +414,42 @@ class ReaderState extends State<Reader>
 
   void stopVolumeEvent() => unawaited(_volumeController.setEnabled(false));
 
+  ReaderWindowController? _windowController;
+
+  void initReaderWindow() {
+    if (!App.isDesktop || _windowController != null) return;
+    final frame = WindowFrame.of(context);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    _windowController = ReaderWindowController(
+      hide: windowManager.hide,
+      show: windowManager.show,
+      setFullscreen: windowManager.setFullScreen,
+      setFrameVisible: frame.setWindowFrame,
+      addCloseListener: frame.addCloseListener,
+      removeCloseListener: frame.removeCloseListener,
+      canPop: navigator.canPop,
+      pop: () => navigator.pop(),
+      onError: (error, stack) =>
+          Log.error('Reader', 'Window transition failed: $error', stack),
+    )..attach();
+  }
+
+  void fullscreen() {
+    final window = _windowController;
+    if (window != null) unawaited(window.toggle());
+  }
+
+  void disposeReaderWindow() {
+    final window = _windowController;
+    if (window != null) unawaited(window.dispose());
+  }
+
   @override
   void dispose() {
     controller.dispose();
     _layoutProbe?.cancel();
     _layoutProbe = null;
     WidgetsBinding.instance.removeObserver(this);
-    if (isFullscreen) {
-      fullscreen();
-    }
     autoReading.dispose();
     unawaited(
       _session.dispose().catchError((Object error, StackTrace stack) {
@@ -637,44 +661,6 @@ abstract mixin class ReaderLocation {
   bool toNextChapter() => toChapter(chapter + 1);
   bool toPrevChapter({bool toLastPage = false}) =>
       toChapter(chapter - 1, toLastPage: toLastPage);
-}
-
-mixin class ReaderWindow {
-  bool isFullscreen = false;
-
-  late WindowFrameController windowFrame;
-
-  bool _isInit = false;
-
-  void initReaderWindow() {
-    if (!App.isDesktop || _isInit) return;
-    windowFrame = WindowFrame.of(App.rootContext);
-    windowFrame.addCloseListener(onWindowClose);
-    _isInit = true;
-  }
-
-  void fullscreen() async {
-    if (!App.isDesktop) return;
-    await windowManager.hide();
-    await windowManager.setFullScreen(!isFullscreen);
-    await windowManager.show();
-    isFullscreen = !isFullscreen;
-    WindowFrame.of(App.rootContext).setWindowFrame(!isFullscreen);
-  }
-
-  bool onWindowClose() {
-    if (Navigator.of(App.rootContext).canPop()) {
-      Navigator.of(App.rootContext).pop();
-      return false;
-    } else {
-      return true;
-    }
-  }
-
-  void disposeReaderWindow() {
-    if (!App.isDesktop) return;
-    windowFrame.removeCloseListener(onWindowClose);
-  }
 }
 
 enum ReaderMode {
