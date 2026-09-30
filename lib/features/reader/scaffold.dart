@@ -5,7 +5,7 @@ import 'dart:async';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:venera_next/components/custom_slider.dart';
+import 'package:venera_next/features/reader/progress_bar.dart';
 import 'package:venera_next/components/effects.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/message.dart';
@@ -57,8 +57,6 @@ class ReaderScaffoldState extends State<ReaderScaffold>
   final EInkRefreshController _eInkRefreshController = EInkRefreshController();
 
   static const kTopBarHeight = 56.0;
-
-  static const kBottomBarHeight = 105.0;
 
   bool get isOpen => _isOpen;
 
@@ -128,12 +126,6 @@ class ReaderScaffoldState extends State<ReaderScaffold>
 
   @override
   void initState() {
-    sliderFocus.canRequestFocus = false;
-    sliderFocus.addListener(() {
-      if (sliderFocus.hasFocus) {
-        sliderFocus.nextFocus();
-      }
-    });
     super.initState();
     Future.delayed(const Duration(milliseconds: 200), addDragListener);
   }
@@ -141,7 +133,6 @@ class ReaderScaffoldState extends State<ReaderScaffold>
   @override
   void dispose() {
     _eInkRefreshController.dispose();
-    sliderFocus.dispose();
     super.dispose();
   }
 
@@ -230,7 +221,8 @@ class ReaderScaffoldState extends State<ReaderScaffold>
           duration: const Duration(milliseconds: 180),
           bottom: _isOpen
               ? 0
-              : -(kBottomBarHeight + MediaQuery.of(context).padding.bottom),
+              : -(ReaderBottomBar.height +
+                    MediaQuery.of(context).padding.bottom),
           left: 0,
           right: 0,
           child: buildBottom(),
@@ -240,7 +232,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
           curve: Curves.easeOut,
           right: 16 + context.padding.right,
           bottom: brightnessPanelVisible
-              ? kBottomBarHeight + context.padding.bottom + 12
+              ? ReaderBottomBar.height + context.padding.bottom + 12
               : -220,
           child: ExcludeFocus(
             excluding: !brightnessPanelVisible,
@@ -584,89 +576,28 @@ class ReaderScaffoldState extends State<ReaderScaffold>
       ),
     ];
 
-    Widget child = SizedBox(
-      height: kBottomBarHeight,
-      child: Column(
-        children: [
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const SizedBox(width: 8),
-              IconButton.filledTonal(
-                onPressed: () => !isReversed
-                    ? context.reader.chapter > 1
-                          ? context.reader.toPrevChapter()
-                          : context.reader.toPage(1)
-                    : context.reader.chapter < context.reader.maxChapter
-                    ? context.reader.toNextChapter()
-                    : context.reader.toPage(context.reader.maxPage),
-                icon: const Icon(Icons.first_page),
-              ),
-              Expanded(child: buildSlider()),
-              IconButton.filledTonal(
-                onPressed: () => !isReversed
-                    ? context.reader.chapter < context.reader.maxChapter
-                          ? context.reader.toNextChapter()
-                          : context.reader.toPage(context.reader.maxPage)
-                    : context.reader.chapter > 1
-                    ? context.reader.toPrevChapter()
-                    : context.reader.toPage(1),
-                icon: const Icon(Icons.last_page),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ),
-          LayoutBuilder(
-            builder: (context, constrains) {
-              final small = (constrains.maxWidth - buttons.length * 50) < 120;
-              return Row(
-                children: [
-                  if (!small) ...[
-                    Container(
-                      height: 24,
-                      padding: const EdgeInsets.fromLTRB(6, 2, 6, 0),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.tertiaryContainer,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(child: Text(text)),
-                    ).paddingLeft(16),
-                    const Spacer(),
-                    for (var button in buttons) button.paddingHorizontal(4),
-                    const SizedBox(width: 4),
-                  ] else
-                    for (var button in buttons)
-                      Expanded(child: Center(child: button)),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-
-    return BlurEffect(
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.colorScheme.surface.toOpacity(0.92),
-          border: isOpen
-              ? Border(
-                  top: BorderSide(
-                    color: Colors.grey.toOpacity(0.5),
-                    width: 0.5,
-                  ),
-                )
-              : null,
-        ),
-        padding: EdgeInsets.only(bottom: context.padding.bottom),
-        child: Padding(
-          padding: EdgeInsets.only(
-            left: context.padding.left,
-            right: context.padding.right,
-          ),
-          child: child,
-        ),
-      ),
+    return ReaderBottomBar(
+      label: text,
+      actions: buttons,
+      page: context.reader.page,
+      maxPage: context.reader.maxPage,
+      reversed: isReversed,
+      isOpen: isOpen,
+      onPageChanged: (page) => context.reader.toPage(page, animated: false),
+      onPrevious: () => !isReversed
+          ? context.reader.chapter > 1
+                ? context.reader.toPrevChapter()
+                : context.reader.toPage(1)
+          : context.reader.chapter < context.reader.maxChapter
+          ? context.reader.toNextChapter()
+          : context.reader.toPage(context.reader.maxPage),
+      onNext: () => !isReversed
+          ? context.reader.chapter < context.reader.maxChapter
+                ? context.reader.toNextChapter()
+                : context.reader.toPage(context.reader.maxPage)
+          : context.reader.chapter > 1
+          ? context.reader.toPrevChapter()
+          : context.reader.toPage(1),
     );
   }
 
@@ -714,24 +645,6 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     );
   }
 
-  var sliderFocus = FocusNode();
-
-  Widget buildSlider() {
-    // Clamp page to maxPage (excluding chapter comments page)
-    final displayPage = context.reader.page.clamp(1, context.reader.maxPage);
-    return CustomSlider(
-      focusNode: sliderFocus,
-      value: displayPage.toDouble(),
-      min: 1,
-      max: context.reader.maxPage.clamp(displayPage, 1 << 16).toDouble(),
-      reversed: isReversed,
-      divisions: (context.reader.maxPage - 1).clamp(2, 1 << 16),
-      onChanged: (i) {
-        context.reader.toPage(i.toInt(), animated: false);
-      },
-    );
-  }
-
   Widget buildPageInfoText() {
     var epName =
         context.reader.widget.chapters?.titles.elementAtOrNull(
@@ -746,25 +659,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         ? "$epName : $pageText"
         : pageText;
 
-    return Positioned(
-      bottom: 13,
-      left: 25,
-      child: Stack(
-        children: [
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 14,
-              foreground: Paint()
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = 1.4
-                ..color = context.colorScheme.onInverseSurface,
-            ),
-          ),
-          Text(text),
-        ],
-      ),
-    );
+    return Positioned(bottom: 13, left: 25, child: ReaderPageInfo(text: text));
   }
 
   Widget buildStatusInfo() {
