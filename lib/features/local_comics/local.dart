@@ -463,9 +463,7 @@ class LocalManager with ChangeNotifier {
         var chapter = history.ep;
         final chapters = find(history.id, ComicType.local)?.chapters;
         if (chapters != null && chapters.isGrouped && history.group != null) {
-          for (var group = 0; group < history.group! - 1; group++) {
-            chapter += chapters.getGroupByIndex(group).length;
-          }
+          chapter = chapters.chapterIndex(chapter, group: history.group);
         }
         final images = await getImages(history.id, ComicType.local, chapter);
         final legacy = images.toList()..sort(compareLegacyComicFileNames);

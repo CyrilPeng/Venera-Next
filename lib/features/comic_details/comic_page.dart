@@ -1,3 +1,4 @@
+import 'package:venera_next/network/request_scope.dart';
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -150,6 +151,15 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
   }
 
   @override
+  void didUpdateWidget(ComicPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.id != widget.id || oldWidget.sourceKey != widget.sourceKey) {
+      isFirst = true;
+      retry();
+    }
+  }
+
+  @override
   void dispose() {
     scrollController.removeListener(onScroll);
     super.dispose();
@@ -227,7 +237,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
   }
 
   @override
-  Future<Res<ComicDetails>> loadData() async {
+  Future<Res<ComicDetails>> loadData(RequestScope scope) async {
     if (widget.sourceKey == 'local') {
       var localComic = LocalManager().find(widget.id, ComicType.local);
       if (localComic == null) {
@@ -236,6 +246,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
       var history = HistoryManager().find(widget.id, ComicType.local);
       if (isFirst) {
         Future.microtask(() {
+          if (!mounted || scope.isCancelled) return;
           App.rootContext.to(() {
             return Reader(
               type: ComicType.local,
@@ -256,7 +267,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
         });
         isFirst = false;
       }
-      await Future.delayed(const Duration(milliseconds: 200));
+      await scope.wait(const Duration(milliseconds: 200));
       return const Res.error('Local comic');
     }
     var comicSource = ComicSource.find(widget.sourceKey);
@@ -275,13 +286,14 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
   }
 
   @override
-  Future<void> onDataLoaded() async {
+  Future<void> onDataLoaded(RequestScope scope) async {
     isLiked = comic.isLiked ?? false;
     isFavorite = comic.isFavorite ?? false;
     // For sources with multi-folder favorites, prefer querying folders to get accurate favorite status
     // Some sources may not set isFavorite reliably when multi-folder is enabled
     if (comicSource.favoriteData?.loadFolders != null && comicSource.isLogged) {
       var res = await comicSource.favoriteData!.loadFolders!(comic.id);
+      scope.check();
       if (!res.error) {
         if (res.subData is List) {
           var list = List<String>.from(res.subData);

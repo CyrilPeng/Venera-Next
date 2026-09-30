@@ -22,8 +22,8 @@ void main() {
       expect(history.page, 10);
       expect(history.ep, 2);
       expect(history.time.millisecondsSinceEpoch, 1000);
-      reader.images = List.filled(20, 'page');
-      reader.isLoading = true;
+      final attempt = reader.controller.beginContentLoad();
+      reader.controller.setContentImages(attempt, List.filled(20, 'page'));
       reader.page = 2;
       expect(history.page, 10);
     },

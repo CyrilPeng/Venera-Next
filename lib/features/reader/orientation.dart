@@ -1,73 +1,84 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:venera_next/features/reader/orientation_controller.dart';
+import 'package:venera_next/foundation/log.dart';
 
-enum ReaderOrientation {
-  system([]),
-  portrait([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]),
-  landscape([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
+export 'orientation_controller.dart' show ReaderOrientation;
 
-  const ReaderOrientation(this.orientations);
+/// Install outside the Navigator so overlapping reader routes share ownership.
+class ReaderOrientationScope extends StatefulWidget {
+  const ReaderOrientationScope({super.key, required this.child});
+  final Widget child;
+  @override
+  State<ReaderOrientationScope> createState() => _ReaderOrientationScopeState();
+}
 
-  final List<DeviceOrientation> orientations;
+class _ReaderOrientationScopeState extends State<ReaderOrientationScope> {
+  late final coordinator = ReaderOrientationCoordinator(
+    apply: (orientation) =>
+        SystemChrome.setPreferredOrientations(switch (orientation) {
+          ReaderOrientation.system => const [],
+          ReaderOrientation.portrait => const [
+            DeviceOrientation.portraitUp,
+            DeviceOrientation.portraitDown,
+          ],
+          ReaderOrientation.landscape => const [
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ],
+        }),
+    onError: (error, stack) =>
+        Log.error('Reader', 'Failed to apply orientation: $error', stack),
+  );
+
+  @override
+  Widget build(BuildContext context) =>
+      _OrientationProvider(coordinator: coordinator, child: widget.child);
+
+  @override
+  void dispose() {
+    coordinator.dispose();
+    super.dispose();
+  }
+}
+
+class _OrientationProvider extends InheritedWidget {
+  const _OrientationProvider({required this.coordinator, required super.child});
+  final ReaderOrientationCoordinator coordinator;
+  @override
+  bool updateShouldNotify(_OrientationProvider oldWidget) =>
+      !identical(coordinator, oldWidget.coordinator);
 }
 
 mixin ReaderOrientationState<T extends StatefulWidget> on State<T> {
-  // Route transitions can keep an old reader alive after a new one opens.
-  static final _activeReaders = <ReaderOrientationState>[];
-
-  ReaderOrientation _readerOrientation = ReaderOrientation.system;
-
-  ReaderOrientation get readerOrientation => _readerOrientation;
-
-  late final bool _orientationEnabled;
+  ReaderOrientationCoordinator? _coordinator;
+  ReaderOrientationHandle? _orientation;
+  ReaderOrientation get readerOrientation =>
+      _orientation?.orientation ?? ReaderOrientation.system;
 
   @override
-  void initState() {
-    super.initState();
-    _orientationEnabled = defaultTargetPlatform == TargetPlatform.android;
-    if (_orientationEnabled) {
-      _activeReaders.add(this);
-      _applyOrientation(ReaderOrientation.system);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    final provider = context
+        .dependOnInheritedWidgetOfExactType<_OrientationProvider>();
+    if (provider == null) {
+      throw StateError('ReaderOrientationScope must wrap the Navigator');
     }
+    if (identical(provider.coordinator, _coordinator)) return;
+    _orientation?.dispose();
+    _coordinator = provider.coordinator;
+    _orientation = _coordinator!.acquire();
   }
 
   void cycleReaderOrientation() {
-    if (!_orientationEnabled || !identical(_activeReaders.lastOrNull, this)) {
-      return;
-    }
-    setState(() {
-      _readerOrientation = switch (_readerOrientation) {
-        ReaderOrientation.system => ReaderOrientation.portrait,
-        ReaderOrientation.portrait => ReaderOrientation.landscape,
-        ReaderOrientation.landscape => ReaderOrientation.system,
-      };
-    });
-    _applyOrientation(_readerOrientation);
-  }
-
-  void _applyOrientation(ReaderOrientation orientation) {
-    unawaited(SystemChrome.setPreferredOrientations(orientation.orientations));
+    if (_orientation?.cycle() ?? false) setState(() {});
   }
 
   @override
   void dispose() {
-    if (_orientationEnabled) {
-      final wasActive = identical(_activeReaders.lastOrNull, this);
-      _activeReaders.remove(this);
-      if (wasActive) {
-        // An empty list releases the last reader's lock to the operating system.
-        _applyOrientation(
-          _activeReaders.lastOrNull?.readerOrientation ??
-              ReaderOrientation.system,
-        );
-      }
-    }
+    _orientation?.dispose();
     super.dispose();
   }
 }

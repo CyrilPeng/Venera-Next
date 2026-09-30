@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:venera_next/features/reader/gesture.dart';
+import 'package:venera_next/features/reader/image_position.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/global_state.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -99,15 +100,15 @@ Size splitWideImageDisplaySize(Size imageSize) {
 
 @visibleForTesting
 List<Rect> splitWideImageSourceRects(Size imageSize, {required bool invert}) {
-  final halfWidth = imageSize.width / 2;
-  final left = Rect.fromLTWH(0, 0, halfWidth, imageSize.height);
-  final right = Rect.fromLTWH(
-    imageSize.width - halfWidth,
-    0,
-    halfWidth,
-    imageSize.height,
-  );
-  return invert ? [left, right] : [right, left];
+  return [
+    for (final slice in splitWideImageSlices(invert: invert))
+      Rect.fromLTWH(
+        imageSize.width * slice.sourceLeft,
+        0,
+        imageSize.width * slice.sourceWidth,
+        imageSize.height,
+      ),
+  ];
 }
 
 class ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
@@ -643,21 +644,7 @@ class _SplitWideImagePainter extends CustomPainter {
       fitted.destination,
       Offset.zero & size,
     );
-    final halfHeight = destination.height / 2;
-    final topDestination = Rect.fromLTWH(
-      destination.left,
-      destination.top,
-      destination.width,
-      halfHeight,
-    );
-    final bottomDestination = Rect.fromLTWH(
-      destination.left,
-      destination.top + halfHeight,
-      destination.width,
-      halfHeight,
-    );
-    final sources = splitWideImageSourceRects(
-      imageSize,
+    final slices = splitWideImageSlices(
       invert:
           splitInvert ^
           (matchTextDirection && textDirection == TextDirection.rtl),
@@ -673,8 +660,21 @@ class _SplitWideImagePainter extends CustomPainter {
       );
     }
 
-    canvas.drawImageRect(image, sources[0], topDestination, paint);
-    canvas.drawImageRect(image, sources[1], bottomDestination, paint);
+    for (final slice in slices) {
+      final source = Rect.fromLTWH(
+        imageSize.width * slice.sourceLeft,
+        0,
+        imageSize.width * slice.sourceWidth,
+        imageSize.height,
+      );
+      final target = Rect.fromLTWH(
+        destination.left,
+        destination.top + destination.height * slice.displayTop,
+        destination.width,
+        destination.height * slice.displayHeight,
+      );
+      canvas.drawImageRect(image, source, target, paint);
+    }
   }
 
   @override

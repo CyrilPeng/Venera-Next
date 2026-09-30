@@ -243,6 +243,7 @@ void main() {
 Future<void> _openReader(WidgetTester tester) async {
   await tester.pumpWidget(
     MaterialApp(
+      builder: (context, child) => ReaderOrientationScope(child: child!),
       home: Builder(
         builder: (context) => Scaffold(
           body: TextButton(

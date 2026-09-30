@@ -2,33 +2,33 @@ import 'package:venera_next/foundation/reader_preferences.dart';
 import 'package:venera_next/foundation/reader_preference_store.dart';
 import 'dart:async';
 
-import 'package:battery_plus/battery_plus.dart';
+import 'package:venera_next/features/reader/status_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:venera_next/components/custom_slider.dart';
-import 'package:venera_next/components/effects.dart';
+import 'package:venera_next/features/reader/progress_bar.dart';
+import 'package:venera_next/features/reader/top_bar.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/side_bar.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/history/image_favorite_actions.dart';
 import 'package:venera_next/features/reader/brightness.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/chapter_comments.dart';
 import 'package:venera_next/features/reader/chapters.dart';
 import 'package:venera_next/features/reader/eink_refresh.dart';
 import 'package:venera_next/features/reader/gesture.dart';
-import 'package:venera_next/features/reader/images.dart';
 import 'package:venera_next/features/reader/orientation.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
-import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
-import 'package:venera_next/foundation/file_type.dart';
+import 'package:venera_next/features/reader/image_export.dart';
+import 'package:venera_next/features/reader/settings_effects.dart';
+import 'package:venera_next/features/reader/image_selection.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -58,8 +58,6 @@ class ReaderScaffoldState extends State<ReaderScaffold>
   final EInkRefreshController _eInkRefreshController = EInkRefreshController();
 
   static const kTopBarHeight = 56.0;
-
-  static const kBottomBarHeight = 105.0;
 
   bool get isOpen => _isOpen;
 
@@ -129,20 +127,15 @@ class ReaderScaffoldState extends State<ReaderScaffold>
 
   @override
   void initState() {
-    sliderFocus.canRequestFocus = false;
-    sliderFocus.addListener(() {
-      if (sliderFocus.hasFocus) {
-        sliderFocus.nextFocus();
-      }
-    });
     super.initState();
     Future.delayed(const Duration(milliseconds: 200), addDragListener);
   }
 
   @override
   void dispose() {
+    _imageExporter.dispose();
+    _selectionOverlay.dispose();
     _eInkRefreshController.dispose();
-    sliderFocus.dispose();
     super.dispose();
   }
 
@@ -231,7 +224,8 @@ class ReaderScaffoldState extends State<ReaderScaffold>
           duration: const Duration(milliseconds: 180),
           bottom: _isOpen
               ? 0
-              : -(kBottomBarHeight + MediaQuery.of(context).padding.bottom),
+              : -(ReaderBottomBar.height +
+                    MediaQuery.of(context).padding.bottom),
           left: 0,
           right: 0,
           child: buildBottom(),
@@ -241,7 +235,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
           curve: Curves.easeOut,
           right: 16 + context.padding.right,
           bottom: brightnessPanelVisible
-              ? kBottomBarHeight + context.padding.bottom + 12
+              ? ReaderBottomBar.height + context.padding.bottom + 12
               : -220,
           child: ExcludeFocus(
             excluding: !brightnessPanelVisible,
@@ -261,95 +255,45 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     );
   }
 
-  Widget buildTop() {
-    final epName = context.reader.widget.chapters?.titles.elementAtOrNull(
+  Widget buildTop() => ReaderTopBar(
+    title: context.reader.widget.name,
+    chapterTitle: context.reader.widget.chapters?.titles.elementAtOrNull(
       context.reader.chapter - 1,
-    );
-
-    return BlurEffect(
-      child: Container(
-        padding: EdgeInsets.only(top: context.padding.top),
-        decoration: BoxDecoration(
-          color: context.colorScheme.surface.toOpacity(0.92),
-          border: Border(
-            bottom: BorderSide(color: Colors.grey.toOpacity(0.5), width: 0.5),
+    ),
+    onBack: () => Navigator.of(context).maybePop(),
+    actions: [
+      if (shouldShowChapterComments())
+        Tooltip(
+          message: "Chapter Comments".tl,
+          child: IconButton(
+            icon: const Icon(Icons.comment),
+            onPressed: openChapterComments,
           ),
         ),
-        child: Padding(
-          padding: EdgeInsets.only(
-            left: context.padding.left,
-            right: context.padding.right,
-          ),
-          child: Row(
-            children: [
-              const SizedBox(width: 8),
-              const BackButton(),
-              const SizedBox(width: 8),
-              Expanded(
-                child: epName == null
-                    ? Text(
-                        context.reader.widget.name,
-                        style: ts.s18,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            context.reader.widget.name,
-                            style: ts.s16,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            epName,
-                            style: ts.s12,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-              ),
-              const SizedBox(width: 8),
-              if (shouldShowChapterComments())
-                Tooltip(
-                  message: "Chapter Comments".tl,
-                  child: IconButton(
-                    icon: const Icon(Icons.comment),
-                    onPressed: openChapterComments,
-                  ),
-                ),
-              Tooltip(
-                message: "Settings".tl,
-                child: IconButton(
-                  icon: const Icon(Icons.settings),
-                  onPressed: openSetting,
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ),
+      Tooltip(
+        message: "Settings".tl,
+        child: IconButton(
+          icon: const Icon(Icons.settings),
+          onPressed: openSetting,
         ),
       ),
-    );
-  }
+    ],
+  );
 
-  bool isLiked() {
-    return _findImageFavorite(context.reader.page) != null;
-  }
+  late final _imageFavorites = ImageFavoriteActions(
+    findComic: (id, sourceKey) => ImageFavoriteManager().find(id, sourceKey),
+    save: (comic) => ImageFavoriteManager().addOrUpdateOrDelete(comic),
+    remove: (image) => ImageFavoriteManager().deleteImageFavorite([image]),
+  );
 
-  ImageFavorite? _findImageFavorite(int page) {
-    final comic = ImageFavoriteManager().find(
-      context.reader.cid,
-      context.reader.type.sourceKey,
-    );
-    final ep = comic?.imageFavoritesEp
-        .where((e) => e.eid == context.reader.eid)
-        .firstOrNull;
-    return ep?.imageFavorites.where((image) => image.page == page).firstOrNull;
-  }
+  bool isLiked() =>
+      _imageFavorites.find(
+        context.reader.cid,
+        context.reader.type.sourceKey,
+        context.reader.eid,
+        context.reader.page,
+      ) !=
+      null;
 
   void addImageFavorite() async {
     try {
@@ -360,125 +304,66 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         );
         return;
       }
-      String id = context.reader.cid;
-      int ep = context.reader.chapter;
-      String eid = context.reader.eid;
-      String title = context.reader.history!.title;
-      String subTitle = context.reader.history!.subtitle;
-      int maxPage = context.reader.images!.length;
-      int? page = await selectImage();
-      if (page == null) return;
-      page += 1;
-      String sourceKey = context.reader.type.sourceKey;
-      String imageKey = context.reader.images![page - 1];
-      List<String> tags = context.reader.widget.tags;
-      String author = context.reader.widget.author;
-
-      var epName =
-          context.reader.widget.chapters?.titles.elementAtOrNull(
-            context.reader.chapter - 1,
-          ) ??
-          "E${context.reader.chapter}";
-      var translatedTags = tags.map((e) => e.translateTagsToCN).toList();
-
-      final likedImage = _findImageFavorite(page);
-      if (likedImage != null) {
-        if (page == firstPage) {
-          if (!canUncollectImageFavorite(likedImage)) {
-            showToast(
-              message: "The cover cannot be uncollected here".tl,
-              context: context,
-            );
-            return;
-          }
-        }
-        ImageFavoriteManager().deleteImageFavorite([likedImage]);
-        showToast(
-          message: "Uncollected the image".tl,
-          context: context,
-          seconds: 1,
-        );
-      } else {
-        var imageFavoritesComic =
-            ImageFavoriteManager().find(id, sourceKey) ??
-            ImageFavoritesComic(
-              id,
-              [],
-              title,
-              sourceKey,
-              tags,
-              translatedTags,
-              DateTime.now(),
-              author,
-              {},
-              subTitle,
-              maxPage,
-            );
-        ImageFavorite imageFavorite = ImageFavorite(
-          page,
-          imageKey,
-          null,
-          eid,
-          id,
-          ep,
-          sourceKey,
-          epName,
-        );
-        ImageFavoritesEp? imageFavoritesEp = imageFavoritesComic
-            .imageFavoritesEp
-            .firstWhereOrNull((e) {
-              return e.ep == ep;
-            });
-        if (imageFavoritesEp == null) {
-          if (page != firstPage) {
-            var copy = imageFavorite.copyWith(
-              page: firstPage,
-              isAutoFavorite: true,
-              imageKey: context.reader.images![0],
-            );
-            // 不是第一页的话, 自动塞一个封面进去
-            imageFavoritesEp = ImageFavoritesEp(
-              eid,
-              ep,
-              [copy, imageFavorite],
-              epName,
-              maxPage,
-            );
-          } else {
-            imageFavoritesEp = ImageFavoritesEp(
-              eid,
-              ep,
-              [imageFavorite],
-              epName,
-              maxPage,
-            );
-          }
-          imageFavoritesComic.imageFavoritesEp.add(imageFavoritesEp);
-        } else {
-          if (imageFavoritesEp.eid != eid) {
-            // 空字符串说明是从pica导入的, 那我们就手动刷一遍保证一致
-            if (imageFavoritesEp.eid == "") {
-              imageFavoritesEp.eid == eid;
-            } else {
-              // 避免多章节漫画源的章节顺序发生变化, 如果情况比较多, 做一个以eid为准更新ep的功能
-              showToast(
-                message:
-                    "The chapter order of the comic may have changed, temporarily not supported for collection"
-                        .tl,
-                context: context,
-              );
-              return;
-            }
-          }
-          imageFavoritesEp.imageFavorites.add(imageFavorite);
-        }
-
-        ImageFavoriteManager().addOrUpdateOrDelete(imageFavoritesComic);
-        showToast(
-          message: "Successfully collected".tl,
-          context: context,
-          seconds: 1,
-        );
+      final id = context.reader.cid;
+      final ep = context.reader.chapter;
+      final eid = context.reader.eid;
+      final title = context.reader.history!.title;
+      final subtitle = context.reader.history!.subtitle;
+      final maxPage = context.reader.images!.length;
+      final index = await selectImage();
+      if (!mounted || index == null) return;
+      final reader = context.reader;
+      final result = _imageFavorites.toggle(
+        ImageFavoriteInput(
+          id: id,
+          sourceKey: reader.type.sourceKey,
+          eid: eid,
+          ep: ep,
+          epName:
+              reader.widget.chapters?.titles.elementAtOrNull(
+                reader.chapter - 1,
+              ) ??
+              "E${reader.chapter}",
+          title: title,
+          subtitle: subtitle,
+          author: reader.widget.author,
+          tags: reader.widget.tags,
+          translatedTags: reader.widget.tags
+              .map((e) => e.translateTagsToCN)
+              .toList(),
+          maxPage: maxPage,
+          page: index + 1,
+          imageKey: reader.images![index],
+          coverKey: reader.images![0],
+        ),
+      );
+      switch (result) {
+        case ImageFavoriteResult.protectedCover:
+          showToast(
+            message: "The cover cannot be uncollected here".tl,
+            context: context,
+          );
+          return;
+        case ImageFavoriteResult.chapterOrderChanged:
+          showToast(
+            message:
+                "The chapter order of the comic may have changed, temporarily not supported for collection"
+                    .tl,
+            context: context,
+          );
+          return;
+        case ImageFavoriteResult.collected:
+          showToast(
+            message: "Successfully collected".tl,
+            context: context,
+            seconds: 1,
+          );
+        case ImageFavoriteResult.uncollected:
+          showToast(
+            message: "Uncollected the image".tl,
+            context: context,
+            seconds: 1,
+          );
       }
       update();
     } catch (e, stackTrace) {
@@ -585,153 +470,45 @@ class ReaderScaffoldState extends State<ReaderScaffold>
       ),
     ];
 
-    Widget child = SizedBox(
-      height: kBottomBarHeight,
-      child: Column(
-        children: [
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const SizedBox(width: 8),
-              IconButton.filledTonal(
-                onPressed: () => !isReversed
-                    ? context.reader.chapter > 1
-                          ? context.reader.toPrevChapter()
-                          : context.reader.toPage(1)
-                    : context.reader.chapter < context.reader.maxChapter
-                    ? context.reader.toNextChapter()
-                    : context.reader.toPage(context.reader.maxPage),
-                icon: const Icon(Icons.first_page),
-              ),
-              Expanded(child: buildSlider()),
-              IconButton.filledTonal(
-                onPressed: () => !isReversed
-                    ? context.reader.chapter < context.reader.maxChapter
-                          ? context.reader.toNextChapter()
-                          : context.reader.toPage(context.reader.maxPage)
-                    : context.reader.chapter > 1
-                    ? context.reader.toPrevChapter()
-                    : context.reader.toPage(1),
-                icon: const Icon(Icons.last_page),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ),
-          LayoutBuilder(
-            builder: (context, constrains) {
-              final small = (constrains.maxWidth - buttons.length * 50) < 120;
-              return Row(
-                children: [
-                  if (!small) ...[
-                    Container(
-                      height: 24,
-                      padding: const EdgeInsets.fromLTRB(6, 2, 6, 0),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.tertiaryContainer,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(child: Text(text)),
-                    ).paddingLeft(16),
-                    const Spacer(),
-                    for (var button in buttons) button.paddingHorizontal(4),
-                    const SizedBox(width: 4),
-                  ] else
-                    for (var button in buttons)
-                      Expanded(child: Center(child: button)),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-
-    return BlurEffect(
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.colorScheme.surface.toOpacity(0.92),
-          border: isOpen
-              ? Border(
-                  top: BorderSide(
-                    color: Colors.grey.toOpacity(0.5),
-                    width: 0.5,
-                  ),
-                )
-              : null,
-        ),
-        padding: EdgeInsets.only(bottom: context.padding.bottom),
-        child: Padding(
-          padding: EdgeInsets.only(
-            left: context.padding.left,
-            right: context.padding.right,
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
-
-  Widget buildBrightnessPanel() {
-    final panelWidth =
-        (MediaQuery.sizeOf(context).width -
-                context.padding.left -
-                context.padding.right -
-                32)
-            .clamp(0.0, 360.0);
-    return Material(
-      elevation: 8,
-      color: context.colorScheme.surface,
-      borderRadius: BorderRadius.circular(8),
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: panelWidth,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: ReaderBrightnessControl(
-            compact: true,
-            enabled: context.reader.preferences.readerBrightnessEnabled == true,
-            brightness: context.reader.preferences.readerBrightness,
-            onEnabledChanged: (enabled) {
-              _settingsStore.write(
-                ReaderPreferences.readerBrightnessEnabled,
-                enabled,
-              );
-              setState(() {});
-              appdata.saveData();
-            },
-            onBrightnessChanged: (brightness) {
-              _settingsStore.write(
-                ReaderPreferences.readerBrightness,
-                brightness,
-              );
-              setState(() {});
-            },
-            onBrightnessChangeEnd: (_) {
-              appdata.saveData();
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  var sliderFocus = FocusNode();
-
-  Widget buildSlider() {
-    // Clamp page to maxPage (excluding chapter comments page)
-    final displayPage = context.reader.page.clamp(1, context.reader.maxPage);
-    return CustomSlider(
-      focusNode: sliderFocus,
-      value: displayPage.toDouble(),
-      min: 1,
-      max: context.reader.maxPage.clamp(displayPage, 1 << 16).toDouble(),
+    return ReaderBottomBar(
+      label: text,
+      actions: buttons,
+      page: context.reader.page,
+      maxPage: context.reader.maxPage,
       reversed: isReversed,
-      divisions: (context.reader.maxPage - 1).clamp(2, 1 << 16),
-      onChanged: (i) {
-        context.reader.toPage(i.toInt(), animated: false);
-      },
+      isOpen: isOpen,
+      onPageChanged: (page) => context.reader.toPage(page, animated: false),
+      onPrevious: () => !isReversed
+          ? context.reader.chapter > 1
+                ? context.reader.toPrevChapter()
+                : context.reader.toPage(1)
+          : context.reader.chapter < context.reader.maxChapter
+          ? context.reader.toNextChapter()
+          : context.reader.toPage(context.reader.maxPage),
+      onNext: () => !isReversed
+          ? context.reader.chapter < context.reader.maxChapter
+                ? context.reader.toNextChapter()
+                : context.reader.toPage(context.reader.maxPage)
+          : context.reader.chapter > 1
+          ? context.reader.toPrevChapter()
+          : context.reader.toPage(1),
     );
   }
+
+  Widget buildBrightnessPanel() => ReaderBrightnessPanel(
+    enabled: context.reader.preferences.readerBrightnessEnabled == true,
+    brightness: context.reader.preferences.readerBrightness,
+    onEnabledChanged: (enabled) {
+      _settingsStore.write(ReaderPreferences.readerBrightnessEnabled, enabled);
+      setState(() {});
+      appdata.saveData();
+    },
+    onBrightnessChanged: (brightness) {
+      _settingsStore.write(ReaderPreferences.readerBrightness, brightness);
+      setState(() {});
+    },
+    onBrightnessChangeEnd: (_) => appdata.saveData(),
+  );
 
   Widget buildPageInfoText() {
     var epName =
@@ -747,40 +524,12 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         ? "$epName : $pageText"
         : pageText;
 
-    return Positioned(
-      bottom: 13,
-      left: 25,
-      child: Stack(
-        children: [
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 14,
-              foreground: Paint()
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = 1.4
-                ..color = context.colorScheme.onInverseSurface,
-            ),
-          ),
-          Text(text),
-        ],
-      ),
-    );
+    return Positioned(bottom: 13, left: 25, child: ReaderPageInfo(text: text));
   }
 
   Widget buildStatusInfo() {
     if (context.reader.preferences.enableClockAndBatteryInfoInReader == true) {
-      return Positioned(
-        bottom: 13,
-        right: 25,
-        child: Row(
-          children: [
-            _ClockWidget(),
-            const SizedBox(width: 10),
-            _BatteryWidget(),
-          ],
-        ),
-      );
+      return Positioned(bottom: 13, right: 25, child: const ReaderStatusInfo());
     } else {
       return const SizedBox.shrink();
     }
@@ -795,30 +544,60 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     );
   }
 
-  void saveCurrentImage() async {
-    var result = await selectImageToData();
-    if (result == null) {
-      return;
-    }
-    var (imageIndex, data) = result;
-    var fileType = detectFileType(data);
-    // Save file name: ComicName_EP{chapter}_P{page}.{ext} to avoid conflict.
-    // The chapter index of different group is continuous, so we use chapter number is enough.
-    var filename =
-        "${context.reader.widget.name}_EP${context.reader.chapter}_P${imageIndex + 1}${fileType.ext}";
-    saveFile(data: data, filename: filename);
-  }
+  late final _imageExporter = ReaderImageExporter(
+    select: _selectImageForExport,
+    read: (selection) async {
+      if (selection.imageKey.startsWith('file://')) {
+        return File(selection.imageKey.substring(7)).readAsBytes();
+      }
+      final file = await CacheManager().findCache(selection.cacheKey);
+      if (file == null) throw StateError('Selected image is no longer cached');
+      return file.readAsBytes();
+    },
+    save: (image) async {
+      await saveFile(data: image.bytes, filename: image.filename);
+    },
+    share: (image) => Share.shareFile(
+      data: image.bytes,
+      filename: image.filename,
+      mime: image.type.mime,
+    ),
+    onError: (error, stack) {
+      Log.error('Reader', 'Failed to export image: $error', stack);
+      if (mounted) context.showMessage(message: error.toString());
+    },
+  );
 
-  void share() async {
-    var result = await selectImageToData();
-    if (result == null) {
-      return;
+  void saveCurrentImage() => unawaited(_imageExporter.export(sharing: false));
+  void share() => unawaited(_imageExporter.export(sharing: true));
+
+  Future<ReaderImageSelection?> _selectImageForExport() async {
+    final reader = context.reader;
+    final images = reader.images;
+    final chapter = reader.chapter;
+    final chapterId = reader.eid;
+    final title = reader.widget.name;
+    final comicId = reader.cid;
+    final sourceKey = reader.type.sourceKey;
+    final index = await selectImage();
+    if (!mounted ||
+        index == null ||
+        images == null ||
+        !identical(images, reader.images) ||
+        chapter != reader.chapter ||
+        index < 0 ||
+        index >= images.length) {
+      return null;
     }
-    var (imageIndex, data) = result;
-    var fileType = detectFileType(data);
-    var filename =
-        "${context.reader.widget.name}_EP${context.reader.chapter}_P${imageIndex + 1}${fileType.ext}";
-    Share.shareFile(data: data, filename: filename, mime: fileType.mime);
+    return ReaderImageSelection(
+      imageKey: images[index],
+      sourceKey: sourceKey,
+      comicId: comicId,
+      chapterId: chapterId,
+      title: title,
+      chapter: chapter,
+      imageNumber: index + 1,
+    );
   }
 
   void openSetting() {
@@ -832,47 +611,40 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         currentReaderMode: () => context.reader.mode.key,
         isDetectingLayout: () => context.reader.isDetectingLayout,
         onDetectLayout: () => context.reader.detectLayout(force: true),
-        onChanged: (key) {
-          if (key == "readerMode") {
-            context.reader.applyReadingMode(
-              ReaderMode.fromKey(context.reader.preferences.readerMode),
-            );
-            addDragListener();
-            context.reader.detectLayout();
-          }
-          if (key == "enableTurnPageByVolumeKey") {
-            if (context.reader.preferences.enableTurnPageByVolumeKey) {
-              context.reader.handleVolumeEvent();
-            } else {
-              context.reader.stopVolumeEvent();
-            }
-          }
-          if (key == "quickCollectImage") {
-            addDragListener();
-          }
-          if (key.startsWith('eInkRefresh')) {
-            resetEInkRefreshCounter();
-          }
-          if (key.startsWith('readerBrightness')) {
-            update();
-          }
-          if (key == "showChapterComments" ||
-              key == "showChapterCommentsAtEnd") {
-            update();
-          }
-          if (key == "showSystemStatusBar") {
-            _applySystemUiMode();
-            update();
-          }
-          if (key == "showPageNumberInReader" ||
-              key == "enableClockAndBatteryInfoInReader") {
-            update();
-          }
-          context.reader.update();
-        },
+        onChanged: _onSettingChanged,
       ),
       width: 400,
     );
+  }
+
+  void _onSettingChanged(String key) {
+    for (final effect in readerSettingEffects(key)) {
+      if (!mounted) return;
+      switch (effect) {
+        case ReaderSettingEffect.applyMode:
+          context.reader.applyReadingMode(
+            ReaderMode.fromKey(context.reader.preferences.readerMode),
+          );
+        case ReaderSettingEffect.rebindImageGesture:
+          addDragListener();
+        case ReaderSettingEffect.detectLayout:
+          context.reader.detectLayout();
+        case ReaderSettingEffect.updateVolumeListener:
+          if (context.reader.preferences.enableTurnPageByVolumeKey) {
+            context.reader.handleVolumeEvent();
+          } else {
+            context.reader.stopVolumeEvent();
+          }
+        case ReaderSettingEffect.resetEInk:
+          resetEInkRefreshCounter();
+        case ReaderSettingEffect.updateSystemUi:
+          _applySystemUiMode();
+        case ReaderSettingEffect.rebuildShell:
+          update();
+        case ReaderSettingEffect.rebuildReader:
+          context.reader.update();
+      }
+    }
   }
 
   void _openSideBar(Widget widget, {double width = 400}) {
@@ -1005,329 +777,36 @@ class ReaderScaffoldState extends State<ReaderScaffold>
   /// The return value is the index of the selected image.
   Future<int?> selectImage() async {
     var reader = context.reader;
-    var imageViewController = context.reader.imageViewController;
+    var imageViewController = reader.imageViewController;
+    final images = reader.images;
+    final chapter = reader.chapter;
 
-    bool needsSelection = false;
-    int? singleImageIndex;
-
-    if (imageViewController is GalleryModeState) {
-      var range = imageViewController.getCurrentPageImageRange();
-      if (range != null) {
-        var (startIndex, endIndex) = range;
-        int actualImageCount = endIndex - startIndex;
-        if (actualImageCount == 1) {
-          needsSelection = false;
-          singleImageIndex = startIndex;
-        } else {
-          needsSelection = true;
-        }
-      }
-    } else if (imageViewController is ContinuousModeState) {
-      needsSelection = false;
-      singleImageIndex = reader.page - 1;
-    }
-
-    if (!needsSelection && singleImageIndex != null) {
-      return singleImageIndex;
+    if (imageViewController == null || images == null) return null;
+    final range = imageViewController.currentImageRange;
+    if (range != null && range.$2 - range.$1 == 1) {
+      return range.$1 >= 0 && range.$2 <= images.length ? range.$1 : null;
     } else {
       var location = await _showSelectImageOverlay();
-      if (location == null) {
+      if (!mounted ||
+          location == null ||
+          !identical(imageViewController, reader.imageViewController) ||
+          !identical(images, reader.images) ||
+          chapter != reader.chapter) {
         return null;
       }
-      var imageKey = imageViewController!.getImageKeyByOffset(location);
+      var imageKey = imageViewController.getImageKeyByOffset(location);
       if (imageKey == null) {
         return null;
       }
-      return reader.images!.indexOf(imageKey);
+      final index = images.indexOf(imageKey);
+      return index < 0 ? null : index;
     }
   }
 
-  /// Same as [selectImage], but return the image data with its index.
-  /// Returns (imageIndex, imageData) or null if cancelled.
-  Future<(int, Uint8List)?> selectImageToData() async {
-    var i = await selectImage();
-    if (i == null) {
-      return null;
-    }
-    var imageKey = context.reader.images![i];
-    Uint8List data;
-    if (imageKey.startsWith("file://")) {
-      data = await File(imageKey.substring(7)).readAsBytes();
-    } else {
-      data = await (await CacheManager().findCache(
-        "$imageKey@${context.reader.type.sourceKey}@${context.reader.cid}@${context.reader.eid}",
-      ))!.readAsBytes();
-    }
-    return (i, data);
-  }
+  final _selectionOverlay = ReaderImageSelectionOverlay();
 
   Future<Offset?> _showSelectImageOverlay() {
-    if (_isOpen) {
-      openOrClose();
-    }
-
-    var completer = Completer<Offset?>();
-
-    var overlay = Overlay.of(context);
-    OverlayEntry? entry;
-    entry = OverlayEntry(
-      builder: (context) {
-        return Positioned.fill(
-          child: _SelectImageOverlayContent(
-            onTap: (offset) {
-              completer.complete(offset);
-              entry!.remove();
-            },
-            onDispose: () {
-              if (!completer.isCompleted) {
-                completer.complete(null);
-              }
-            },
-          ),
-        );
-      },
-    );
-    overlay.insert(entry);
-
-    return completer.future;
-  }
-}
-
-class _BatteryWidget extends StatefulWidget {
-  @override
-  _BatteryWidgetState createState() => _BatteryWidgetState();
-}
-
-class _BatteryWidgetState extends State<_BatteryWidget> {
-  late Battery _battery;
-  late int _batteryLevel = 100;
-  Timer? _timer;
-  bool _hasBattery = false;
-  BatteryState state = BatteryState.unknown;
-
-  @override
-  void initState() {
-    super.initState();
-    _battery = Battery();
-    _checkBatteryAvailability();
-  }
-
-  void _checkBatteryAvailability() async {
-    try {
-      _batteryLevel = await _battery.batteryLevel;
-      state = await _battery.batteryState;
-      if (_batteryLevel > 0 && state != BatteryState.unknown) {
-        setState(() {
-          _hasBattery = true;
-        });
-        _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          _battery.batteryLevel.then((level) {
-            if (_batteryLevel != level) {
-              setState(() {
-                _batteryLevel = level;
-              });
-            }
-          });
-        });
-      }
-    } catch (_) {
-      // ignore
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_hasBattery) {
-      return const SizedBox.shrink(); //Empty Widget
-    }
-    return _batteryInfo(_batteryLevel);
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  Widget _batteryInfo(int batteryLevel) {
-    IconData batteryIcon;
-    Color batteryColor = context.colorScheme.onSurface;
-
-    if (state == BatteryState.charging) {
-      batteryIcon = Icons.battery_charging_full;
-    } else if (batteryLevel >= 96) {
-      batteryIcon = Icons.battery_full_sharp;
-    } else if (batteryLevel >= 84) {
-      batteryIcon = Icons.battery_6_bar_sharp;
-    } else if (batteryLevel >= 72) {
-      batteryIcon = Icons.battery_5_bar_sharp;
-    } else if (batteryLevel >= 60) {
-      batteryIcon = Icons.battery_4_bar_sharp;
-    } else if (batteryLevel >= 48) {
-      batteryIcon = Icons.battery_3_bar_sharp;
-    } else if (batteryLevel >= 36) {
-      batteryIcon = Icons.battery_2_bar_sharp;
-    } else if (batteryLevel >= 24) {
-      batteryIcon = Icons.battery_1_bar_sharp;
-    } else if (batteryLevel >= 12) {
-      batteryIcon = Icons.battery_0_bar_sharp;
-    } else {
-      batteryIcon = Icons.battery_alert_sharp;
-      batteryColor = Colors.red;
-    }
-
-    return Row(
-      children: [
-        Icon(
-          batteryIcon,
-          size: 16,
-          color: batteryColor,
-          // Stroke
-          shadows: List.generate(9, (index) {
-            if (index == 4) {
-              return null;
-            }
-            double offsetX = (index % 3 - 1) * 0.8;
-            double offsetY = ((index / 3).floor() - 1) * 0.8;
-            return Shadow(
-              color: context.colorScheme.onInverseSurface,
-              offset: Offset(offsetX, offsetY),
-            );
-          }).whereType<Shadow>().toList(),
-        ),
-        Stack(
-          children: [
-            Text(
-              '$batteryLevel%',
-              style: TextStyle(
-                fontSize: 14,
-                foreground: Paint()
-                  ..style = PaintingStyle.stroke
-                  ..strokeWidth = 1.4
-                  ..color = context.colorScheme.onInverseSurface,
-              ),
-            ),
-            Text('$batteryLevel%'),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _ClockWidget extends StatefulWidget {
-  @override
-  _ClockWidgetState createState() => _ClockWidgetState();
-}
-
-class _ClockWidgetState extends State<_ClockWidget> {
-  late String _currentTime;
-  late Timer _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentTime = _getCurrentTime();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      final time = _getCurrentTime();
-      if (_currentTime != time) {
-        setState(() {
-          _currentTime = time;
-        });
-      }
-    });
-  }
-
-  String _getCurrentTime() {
-    final now = DateTime.now();
-    return "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
-  }
-
-  @override
-  void dispose() {
-    _timer.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Text(
-          _currentTime,
-          style: TextStyle(
-            fontSize: 14,
-            foreground: Paint()
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 1.4
-              ..color = context.colorScheme.onInverseSurface,
-          ),
-        ),
-        Text(_currentTime),
-      ],
-    );
-  }
-}
-
-class _SelectImageOverlayContent extends StatefulWidget {
-  const _SelectImageOverlayContent({
-    required this.onTap,
-    required this.onDispose,
-  });
-
-  final void Function(Offset) onTap;
-
-  final void Function() onDispose;
-
-  @override
-  State<_SelectImageOverlayContent> createState() =>
-      _SelectImageOverlayContentState();
-}
-
-class _SelectImageOverlayContentState
-    extends State<_SelectImageOverlayContent> {
-  @override
-  void dispose() {
-    widget.onDispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapUp: (details) {
-        widget.onTap(details.globalPosition);
-      },
-      child: Container(
-        color: Colors.black.withAlpha(50),
-        child: Align(
-          alignment: Alignment(0, -0.8),
-          child: Container(
-            width: 232,
-            height: 42,
-            decoration: BoxDecoration(
-              color: context.colorScheme.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: context.colorScheme.outlineVariant),
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 8),
-                const Icon(Icons.info_outline),
-                const SizedBox(width: 16),
-                Text(
-                  "Click to select an image".tl,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: context.colorScheme.onSurface,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    if (_isOpen) openOrClose();
+    return _selectionOverlay.show(context);
   }
 }

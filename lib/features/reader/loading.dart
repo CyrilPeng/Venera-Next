@@ -1,3 +1,4 @@
+import 'package:venera_next/network/request_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -31,6 +32,14 @@ class ReaderWithLoading extends StatefulWidget {
 class _ReaderWithLoadingState
     extends LoadingState<ReaderWithLoading, ReaderProps> {
   @override
+  void didUpdateWidget(ReaderWithLoading oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.id != widget.id || oldWidget.sourceKey != widget.sourceKey) {
+      retry();
+    }
+  }
+
+  @override
   Widget buildContent(BuildContext context, ReaderProps data) {
     return Reader(
       type: data.type,
@@ -47,7 +56,7 @@ class _ReaderWithLoadingState
   }
 
   @override
-  Future<Res<ReaderProps>> loadData() async {
+  Future<Res<ReaderProps>> loadData(RequestScope scope) async {
     var comicSource = ComicSource.find(widget.sourceKey);
     var history = HistoryManager().find(
       widget.id,
@@ -75,6 +84,7 @@ class _ReaderWithLoadingState
       );
     } else {
       var comic = await comicSource.loadComicInfo!(widget.id);
+      scope.check();
       if (comic.error) {
         return Res.fromErrorRes(comic);
       }

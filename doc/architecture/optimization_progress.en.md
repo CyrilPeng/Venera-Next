@@ -126,3 +126,217 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - Dispose rejects new work and drains accepted operations before closing SQLite. Failed operations do not poison later work. Scan failure preserves tracked size and reports the error. File layout/schema remain unchanged; cache tests no longer mutate App paths or global scan/cleanup hooks.
 - Replaced two tests with seven instance-based behavior tests covering real scans, error recovery, ordering, draining close, eviction and path isolation. Core integration uses the real disposal API. All 627 Flutter tests passed on Windows without failures/skips. Analysis: no errors/warnings, 24 existing infos; structure/architecture/Git dependency checks passed.
 - Cache operations now wait behind an active scan; large-cache first-read latency and throughput require P6 performance validation. Compatibility singleton callers will narrow with their respective domains; reader request ownership in P4 and P5–P8 remain unfinished.
+
+## P4: Chapter request ownership (2026-10-01)
+
+- ReaderImagesState and ContinuousModeState each own a chapter request scope, cancelled and disposed on unmount. Ordinary chapter changes reuse the existing chapter key to recreate state; waterfall chapter requests belong to their view.
+- Each chapter load creates a child scope, propagates it to source calls through the Zone, and detaches it on completion. Cancellation releases the caller immediately. Checks after local reads and online responses prevent late recovery callbacks, preserving local-first resolution, stable chapter IDs and missing-file fallback.
+- Three new behavioral tests cover pre-cancellation, stalled requests and late callbacks, and independent owners. All 630 Windows Flutter tests pass; analysis has zero errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass.
+- This unit covers chapter lists only. Entry-page comic details requests, shared image subscriptions, precache listeners and the existing global image cancellation remain pending. P4 and the overall plan are incomplete. Non-cooperative underlying work may continue, but late results are not published.
+
+## P4: Image predownload subscriptions and stalled stream cancellation (2026-10-01)
+
+- Gallery and continuous reader views own ReaderImageDownloads, replacing predownloads that created streams without consuming them. Pending work is deduplicated by image/source/comic/chapter; completion and failure release handles. Disposal rejects new work and waits for owned subscriptions to cancel. Delayed continuous predownloads no longer access context after unmount.
+- readImageStream is shared by predownloads and ReaderImageProvider. It races StreamIterator events against cancellation, releasing stalled subscriptions while preserving other consumers. Final bytes and errors also release subscriptions. Custom image-processing Future branches without onCancel now observe the stop signal and check cancellation before publishing results.
+- Six new behavioral tests cover shared prefetch/display consumers, deduplication, stalled cancellation, idempotent disposal, retry after failure/completion, progress/final bytes and late events. All 636 Windows Flutter tests pass; analysis has zero errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass.
+- This unit releases subscriptions only. Decoded prefetch listeners, Flutter pending-cache listeners, the reader's existing global image cancellation and prompt cancellation of underlying shared HTTP work remain pending. Reader exit isolation and P4 are not yet complete.
+
+## P4: Cancellation of shared image requests (2026-10-01)
+
+- SharedRequestStream is extracted from the image module and owns a RequestScope independent of any caller. Obtaining a stream does not start its source; listening does. Only active subscribers retain work. Last release signals cancellation before cancelling the asynchronous source. Factory errors, natural completion and repeated cancellation close once; generator termination errors during cancellation no longer escape unhandled.
+- Shared source configuration runs in the independent scope, and HTTP explicitly receives its cancellation token. Cancellation checks guard cache/network results, stream data, cache writes and retries. Cache hits now return immediately, avoiding source resolution and network work after fully consuming cached bytes. The unwrapped entry used by direct downloads retains its existing independent behavior.
+- Six new behavioral tests cover lazy start/unlistened handles, caller isolation, termination/factory errors, real stalled local HTTP cancellation, production cache hits and source configuration cancellation. All 642 Windows Flutter tests pass; analysis has zero errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass.
+- HTTP coverage uses AppDio with the Dio IO adapter and a local HttpServer; native Rhttp end-to-end cancellation still needs integration coverage. Decoded prefetch/pending-cache listeners, reader global image cancellation and entry-page requests remain pending. P4 and the overall plan are incomplete.
+
+## P4: Decoded prefetch and reader exit isolation (2026-10-01)
+
+- Gallery views own ReaderImagePrecache, deduplicating pending decoded prefetches by ReaderImageProvider and retaining release callbacks. Successful images stay attached through frame end; unmount/errors release listeners. The manager explicitly relies on ReaderImageProvider resolving synchronously to itself as the cache key, rather than generalizing to asynchronous-key providers.
+- Releasing pending prefetches removes only the matching pending-cache listener while retaining live consumers. Decoded cache entries remain. Flutter releases the final keep-alive handle at frame end, then the underlying subscription is cancelled. ReaderImagesState.dispose no longer calls cancelAllLoadingImages, so exiting a reader does not globally cancel other views' downloads.
+- BaseImageProvider uses a narrow completer subclass that suppresses only its internal normal-stop exception. Genuine errors retain their logging/error paths. Received ImageInfo handles are disposed promptly; repeated disposal and frame-end cleanup are idempotent.
+- Four new behavioral tests cover deduplication, frame-end cancellation, two prefetch owners sharing with a visible listener, error cleanup, decoded-cache retention and repeated release. All 646 Windows Flutter tests pass; analysis has zero errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass.
+- Pending cache work retained by Flutter for ordinary displayed images still follows framework cache policy; this unit does not clear the global cache. Entry-page details requests, native Rhttp cancellation verification and remaining P4/P5–P8 tasks are still pending. The overall plan remains incomplete.
+
+## P4: Entry loading and page retry lifecycle (2026-10-01)
+
+- LoadingState merges duplicate initial/retry then/setState paths. Each attempt owns an independent RequestScope cancelled on replacement or unmount. Requests, retry waits and post-load hooks run in that scope and validate attempt identity before committing results. Failed Res values retain the four-attempt budget with 200ms delays; cancellation prevents further retries.
+- loadData/onDataLoaded explicitly receive scope, migrating both actual consumers: ReaderWithLoading and ComicPage. Reader details and favorite-folder continuations check cancellation after awaits; local navigation microtasks check validity. Changing comic/source parameters on the same State reloads and cancels the previous attempt.
+- Genuine synchronous/asynchronous exceptions are logged and displayed as manually retryable page errors. Late cancelled/stale results cannot overwrite newer content. MultiPageLoadingState is unchanged; its reset/in-flight semantics require separate handling during paginated-domain migration.
+- Six new Widget tests cover scope propagation, unmount cancellation, retry replacement, the four-attempt budget, disposal during waits, late post-load hooks and recovery from exceptions. All 652 Windows Flutter tests pass; analysis has zero errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass.
+- Main reading request entries now have ownership. Native Rhttp integration, other service/pagination lifecycles, P5 reading position/controller/view decomposition and P6–P8 remain pending. Neither P4 nor the overall plan is marked complete.
+
+## P5: Image-number and display-page policy (2026-10-01)
+
+- ReaderPageLayout has no Flutter/global-state dependencies and unifies one-based image/display-page numbers with zero-based, end-exclusive image ranges. It supports single-image covers, grouped pages, incomplete final pages and trailing-comment remapping.
+- ReaderState history/max-page/initialization, ReaderImagePerPageHandler orientation remapping, legacy local-order progress recovery and gallery image selection reuse the policy. Duplicate formulas, _calcMaxPage, _adjustPageForImagesPerPageChange and temporary _wasOnCommentsPage state are removed; the mixin's abstract dependencies are reduced.
+- Last display/comment pages still record the chapter's last image; other pages record their first image. Loading/empty-list counts and existing remap triggers remain compatible. This unit does not alter single-cover setting-change triggers, persisted history, cross-chapter waterfall mapping or wide-image splitting.
+- Four new pure-policy tests check partitioning, inverse mapping and anchor preservation across chapter lengths, 1–5 images per page and layout changes. Existing navigation/slider/automatic-mode targeted tests pass. All 656 Windows Flutter tests pass; analysis has zero errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass.
+- Explicit reading positions, controller/session extraction and view/scaffold decomposition remain pending in P5. P6–P8 and unfinished platform/performance validation retain their full scope. No phase or overall completion is claimed.
+
+## P5: Chapter coordinates and grouped history (2026-10-01)
+
+- ComicChapterPosition distinguishes source chapter ID, one-based flattened index, group, within-group chapter and group boundaries. ComicChapters.positionAt/chapterIndex centralize conversion between reader and persisted coordinates. Original per-group keys preserve positions when groups share an ID, without relying on merged allChapters key counts.
+- ReaderState initialization, grouped-history writes and group boundaries, plus LocalManager legacy page-order migration, reuse the conversions. Repeated group accumulation/subtraction loops are removed. Existing history.ep/group/readEpisode formats and ungrouped behavior remain unchanged; conversion does not rewrite persisted data.
+- Four new pure-model tests cover ID order, empty groups, repeated IDs, boundaries, coordinate round trips and invalid indices. Existing natural-sort migration and reading-navigation targeted tests pass. All 660 Windows Flutter tests pass; analysis has zero errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass.
+- Chapter coordinates still need composition with source image numbers, display pages, wide-image split offsets and cross-chapter viewport positions. ReaderController, view/scaffold decomposition and P6–P8 remain pending. Platform/performance scope is unchanged; P5 and the overall plan are incomplete.
+
+## P5: Reader navigation controller (2026-10-01)
+
+- ReaderController owns page/chapter, pending page, end-page jump flags and navigation generations. Page/chapter counts, loading state, animation policy, viewport and callbacks are injected; it has no Flutter, global settings, logging or storage dependencies. Immutable ReaderNavigationState snapshots are reused until state changes to avoid allocation on every scroll read.
+- ReaderNavigationViewport exposes only direct/animated page navigation and chapter navigation. ReaderImageViewController extends it while retaining gesture capabilities. ReaderLocation becomes a transitional forwarding layer; duplicate animation counters/generations and navigation logic are removed. Gallery/waterfall position restoration now sends controller commands; the old pageValue field is removed.
+- Page disposal closes the controller, rejecting subsequent commands and late animation notifications. Generation filtering preserves replacement animations, boundary-page repositioning, rapid navigation and viewport-first handling of loaded chapters. Restore commands do not publish history; normal page reports retain the existing onPageChanged path.
+- Five controller tests without a Widget tree cover snapshots, command boundaries, stale animation/page reports, chapter adapters and late failures after disposal. Existing navigation and 300-page slider tests pass. All 665 Windows Flutter tests pass; analysis has zero errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass.
+- The controller owns navigation only. Images/loading/settings remain supplied by the assembly layer, and ReaderLocation forwarding remains. Full image/viewport positions, view/session decomposition, P6–P8 and platform/performance validation remain incomplete.
+
+## P5: Source image positions and slice offsets (2026-10-01)
+
+- ReaderImagePosition distinguishes flattened chapter number, source chapter ID and one-based source image number. WaterfallImageRef stores this position instead of separate ambiguous page/eid/chapter fields. All production consumers use position; flow.imageIndexOf accepts source coordinates and validates chapter ID. Prepending chapters changes only the global viewport-list index.
+- History writes first map display pages to source images through ReaderPageLayout, then combine ReaderImagePosition with chapter-coordinate conversion. Existing persisted fields remain; display pages/global list indices are not directly saved. Hit testing still selects the entire source image, so both wide-image halves retain the same source position.
+- ReaderImageSlice describes normalized horizontal source regions and vertical display offsets. Painting and source-rectangle helpers reuse slice order, retaining right-half-first, inversion and RTL XOR semantics. Slices are not new history pages, and no viewport-offset persistence is introduced.
+- Three new behavioral tests cover stable positions/inverse lookup after prepend, chapter-ID mismatch rejection and slice coverage invariants. Existing waterfall/page-layout/split tests are migrated and pass. All 668 Windows Flutter tests pass; analysis has zero errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass.
+- P5 still requires views to consume immutable state, image-loading state migration, gallery/continuous/scaffold decomposition, and validation of long-image viewport restoration and fixed-device performance. The full P0–P8 objective remains incomplete.
+
+## P5: Reader view files and image-selection protocol (2026-10-01)
+
+- images.dart shrinks from nearly 2,000 lines to 155, handling chapter loading and view selection only. Gallery moves to gallery_view.dart, shared continuous/waterfall rendering to continuous_view.dart, provider/prefetch helpers to image_view_support.dart, and chapter-swipe indication to chapter_swipe_indicator.dart. Each file retains only used imports.
+- ReaderImageViewController adds currentImageRange, returning a zero-based, end-exclusive source-image range. Menu selection uses this protocol instead of GalleryModeState/ContinuousModeState checks, removing its images.dart dependency. Gallery hit-selection uses the same range query.
+- Existing seven-mode, cross-chapter, prefetch, automatic-reading, gesture and animation behavior is preserved. images.dart temporarily exports both State types for existing consumers/tests. Continuous and waterfall views still share an adapter, and other ancestor ReaderState access remains to migrate.
+- Existing behavioral coverage validates the move; no tests were added merely to assert file relocation. All 668 Windows Flutter tests pass; analysis has zero errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass. Only this unit's scaffold protocol changes are staged, preserving original uncommitted menu/automatic-reading edits.
+- Loading dependency injection, immutable view inputs, separate waterfall coordination, scaffold components, remaining P5/P6–P8 work and platform/performance validation remain pending.
+
+## P5: Injected chapter access (2026-10-01)
+
+- ChapterImageLoader receives chapter-specific local/online readers, error construction and failure reporting. It owns local-first loading, empty/missing-file fallback and request scopes without accessing global managers, source registries, translation or logging.
+- loadReaderChapterImages remains the production adapter: it resolves stable chapter IDs and download availability, then supplies LocalManager/ComicSource access as dependencies. Existing local messages, online Res errors and download records are retained; missing local metadata uses the storage directory as the error-path fallback.
+- Cancellation releases waiting callers immediately. Late local FileSystemException results check cancellation before reporting, preventing errors/online work after exit. Non-filesystem failures do not silently fall back; recovery notification requires online success and an active scope.
+- Five new policy tests require no Widget tree, database or global reset; existing real-local-library adapter tests remain. All 673 Windows Flutter tests pass; analysis has zero errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass.
+- The adapter still connects compatibility singletons, and the controller does not yet own image-loading state. Immutable view inputs, waterfall coordination, scaffold components and remaining P5–P8/platform-performance validation remain pending. The overall goal is incomplete.
+
+## P5: Reader content state and load ownership (2026-10-01)
+
+- ReaderController owns ReaderContentState with copied immutable images, loading and errors. The page exposes read-only forwarding; views no longer duplicate loading/error flags, and navigation reads controller loading state.
+- Each ReaderContentLoad owns a RequestScope and can start once. Retry cancels the previous attempt; completion/failure validates identity, so disposing an old view cannot cancel a replacement. Layout preparation remains loading, while loaded waterfall segments activate through replaceChapterImages.
+- Four new behavior tests cover stale results, owner isolation, immutable snapshots, preparation, retry and disposal. All 21 targeted and 677 Windows Flutter tests passed; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
+- Views still coordinate loading/layout preparation; content commands do not notify UI independently, preserving batched refresh timing. Immutable view inputs, history/session coordination, waterfall/scaffold separation and remaining phases are unfinished.
+
+## P5: History save scheduling and exit flush (2026-10-01)
+
+- ReaderHistoryWriter injects asynchronous save, synchronous exit flush and error reporting, owning the one-second debounce timer. The page retains coordinate updates and storage adaptation but no longer implements timer/flush ownership. The writer imports no widgets, HistoryManager or global settings.
+- Repeated turns reset the deadline; timer state is cleared before a write starts. Disposal synchronously flushes only pending work and is idempotent; accepted storage operations are not duplicated. Synchronous/asynchronous save and flush failures are reported without disabling later saves.
+- Four new behavior tests cover debounce/latest progress, exit cancellation, repeated disposal, recovery and post-exit storage errors. All 7 targeted and 681 Windows Flutter tests passed; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
+- Existing history objects, synchronous exit-flush behavior, data format and database queues remain. P6 must still audit ordering between synchronous exit flushes and accepted asynchronous writes. Coordinate adapters, session/platform dependencies, waterfall/scaffold separation and remaining phases continue.
+
+## P5: Waterfall chapter coordination (2026-10-01)
+
+- WaterfallController injects chapter access, ID resolution, change notification and previous-chapter error reporting. It owns bidirectional prefetch deduplication, threshold filling, chapter bounds, next-chapter retry and explicit navigation. It reuses WaterfallChapterFlow behind WaterfallFlowView; views cannot insert/reset chapters through that protocol.
+- Each read owns a disposable child RequestScope. Navigation replaces the request generation, cancels old prefetch/navigation and rejects late success/failure. Loaded images are copied into immutable lists; empty chapters keep filling until the threshold or final chapter. Existing retry/log/message error paths remain.
+- Continuous views retain prepend offsets, frame scheduling and reading-position publication. Frame callbacks validate revision, preventing old prepend/navigation restoration and stale session-ready callbacks from overriding replacement navigation. Ordinary continuous mode does not prefetch chapters.
+- Seven new controller behavior tests cover deduplication, empty chapters, retry, prepend offsets, immutable lists, bidirectional cancellation, navigation replacement, recovery and disposal. All 26 targeted and 688 Windows Flutter tests passed; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
+- Views still obtain settings/positions from ReaderState, and cache marks remain in the existing segment model. Full immutable view inputs, scaffold decomposition, session/platform adapters, P6–P8 and platform/performance acceptance remain unfinished.
+
+## P5: Explicit gallery inputs and interaction boundary (2026-10-01)
+
+- ReaderGalleryData groups chapter content, page layout, direction, comments, group boundaries and interaction settings. It reuses immutable controller images without copying chapters on each build. Gallery navigation receives ReaderController explicitly; ReaderState/root-context, global settings and source lookups are removed.
+- images.dart composes configuration/dependencies and uses the page-count policy for comment visibility. Comment content, menu/e-ink refresh, collection, size and image-byte access are injected. The viewport interface lives in reader_viewport.dart with a transitional page export; registration/detachment checks identity, and disposal cancels keyboard-repeat timers.
+- Gallery owns its providers/prefetch lifetimes and preserves the legacy current-display-page image-processing argument. Removed unused createReaderImageProviderFromKey, _createImageProvider, precacheReaderImage, unused image-index arguments and the GalleryModeState transitional export. Continuous views retain the remaining helpers.
+- Three new widget tests mount without Reader/ReaderScaffold ancestors, covering LTR/RTL/vertical inputs, navigation, updated image ranges, collection callbacks, injected comments and detachment. Existing 25 targeted tests and all 691 Windows Flutter tests passed; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
+- Continuous/waterfall inputs, scaffold, session/platform adapters, P6–P8 and platform/performance acceptance remain. Provider internals still use existing infrastructure adapters; not all reader dependencies are instance-scoped yet.
+
+## P5: Explicit continuous-view dependencies (2026-10-01)
+
+- ReaderContinuousData captures direction, cross-chapter policy, boundaries, splitting, prefetch, speed, margins and interaction settings. Active chapters/images come from injected ReaderController so chapter activation takes effect immediately without waiting for parent rebuilds.
+- Continuous/waterfall views no longer locate ReaderState, global settings, sources or cache managers. images.dart injects chapter loading/IDs/titles, layout detection, content readiness, menu/collection/error callbacks, size and image-byte access. WaterfallController retains prefetch and request-generation ownership.
+- Gallery and continuous views share entry-level viewport identity registration and byte access. Continuous providers retain source-image numbering and resize behavior; the view owns predownload subscriptions. Removed unused image_view_support.dart and its remaining three ancestor-context helpers.
+- Four standalone widget tests cover three ordinary directions and waterfall, updated margins, collection, injected chapter loading, active-content replacement and detachment. Existing 25 targeted and all 695 Windows Flutter tests passed; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
+- Both view types have migrated direct ancestor dependencies, but composition still connects legacy services. Provider infrastructure, scaffold, session/platform adapters, P6–P8 and platform/performance acceptance remain; P5 and the full plan are not complete.
+
+## P5: Bottom bar and reading progress components (2026-10-01)
+
+- progress_bar.dart provides ReaderBottomBar, ReaderProgressSlider and ReaderPageInfo with explicit page/bounds/direction, action widgets and navigation callbacks. They access no ReaderState, settings or business managers; the shell retains chapter/group policy and business-action composition.
+- The slider owns and disposes its non-requestable FocusNode, preserving focus forwarding and non-animated navigation. The component defines bottom-bar height and retains comment-page clamping, action layout, safe-area padding, blur and border. Overlay position and abbreviated chapter labels remain shell concerns.
+- Existing behavior tests cover the structural move without mirror tests. All 10 targeted tests for 300-page rapid navigation, seven-mode automatic reading and auto-pause passed; all 695 Windows Flutter tests passed. Analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
+- Only this unit's scaffold changes were staged from a HEAD copy; original menu-lock/pause edits remain unstaged. Top menu, brightness/settings, status information, image actions, session/platform adapters, P6–P8 and platform/performance acceptance remain unfinished.
+
+## P5: Clock and battery status lifecycle (2026-10-01)
+
+- ReaderStatusInfo is extracted from scaffold with injected clock/battery readers; the default adapter uses Battery and publishes ReaderBatterySnapshot. Clock and battery share one one-second timer, reads do not overlap within a dependency generation, and outlined text rendering is shared.
+- Disposal cancels scheduling; dependency replacement advances the generation and rejects late results/errors. Null means unsupported and stops battery polling while the clock continues. Transient failures retain the previous value and retry on the next tick. Platform Futures cannot be forcibly aborted; the component stops scheduling and ignores invalid results.
+- Explicit behavior corrections: an initial 0% is no longer treated as absent hardware, charging icons update even at unchanged charge level, and polling failures no longer escape unhandled. Clock formatting, icon thresholds, outlines and shell placement remain.
+- Four injected widget tests cover stalled reads/disposal, recovery, charging/zero level, dependency replacement, unsupported hardware and independent clock updates. All 699 Windows Flutter tests passed; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
+- Only scaffold architecture edits were staged; original menu/pause changes remain unstaged. Native battery behavior still needs device validation. Top menu, settings, image actions, session/platform adapters and P6–P8/performance acceptance remain unfinished.
+
+## P5: Top bar and brightness panel presentation boundary (2026-10-01)
+
+- ReaderTopBar receives comic/chapter titles, action widgets and a back callback without ReaderState, source or settings lookup. Scaffold composes comment/settings/lock actions and visibility, preserving navigation, safe areas and title ellipsis.
+- ReaderBrightnessPanel lives beside ReaderBrightnessControl in brightness.dart and accepts values plus toggle/change/end callbacks. The panel owns width/styling/compact controls; preference scope, immediate updates and persistence timing remain in the shell.
+- Existing brightness and seven-mode reading/pause tests cover the move. All 12 targeted and 699 Windows Flutter tests passed; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
+- Separate staged versions were generated from HEAD, excluding original menu-lock edits. Original top-bar vertical-padding and minimum-column-size edits moved with the code and remain unstaged in top_bar.dart; other existing edits also remain uncommitted.
+- Settings-change dispatch, image actions, session/platform adapters, P6–P8 and device/performance acceptance remain unfinished.
+
+## P5: Image export and selection ownership (2026-10-01)
+
+- ReaderImageExporter injects selection, byte reading, save/share and error reporting, consolidating file detection/naming. ReaderImageSelection captures source/comic/chapter identity, chapter/image numbers and title before reading; completion no longer accesses context for filenames. Existing naming/MIME rules remain.
+- Each export owns a child RequestScope. Disposal cancels selection/read waits and suppresses late results; already-open platform operations finish independently, and underlying file Futures cannot be forcibly stopped. Current read/platform errors are reported and later attempts can recover. The unused selectImageToData entry is removed.
+- ReaderImageSelectionOverlay owns its entry/waiter, completes replaced selections and removes/completes on disposal. Selection validates viewport, content and chapter identity after awaits, rejecting missing/out-of-range images; collection also checks mounted after selection.
+- Five export-policy and two overlay tests were added. Standalone tests exposed fixed-height prompt overflow; applying ui-ux-pro-max flexible-layout guidance enables wrapping and growing height. Dark 375×667 and light 667×375 layouts pass with 2× text and reduced motion. All 706 Windows Flutter tests passed; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
+- Only scaffold architecture edits were staged; original menu/pause and top-bar layout changes remain unstaged. Native save/share interactions were not exercised. Image collection, settings dispatch, session/platform adapters, P6–P8 and device/performance acceptance remain unfinished.
+
+## P5: Reader settings-effect dispatch (2026-10-01)
+
+- settings_effects.dart resolves legacy form string keys into ordered ReaderSettingEffect values without Widget, ReaderState or global settings imports. Fixed keys reuse ReaderPreferences, preserving eInkRefresh/readerBrightness prefixes and final view refresh for unknown keys.
+- The shell executes an exhaustive switch and checks mounted before every effect. Mode→gesture rebinding→layout detection→reader refresh and system-UI→shell refresh→reader refresh ordering remain; repeated shell-refresh conditions resolve to one effect.
+- Two rule tests cover all registered/future settings, final refresh/no duplicate effects, mode ordering and gesture-only changes avoiding mode/detection work. All 12 targeted and 708 Windows Flutter tests passed; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
+- Only this unit's scaffold changes were staged, preserving original menu/pause edits. String notifications remain a compatibility entry and platform/session effects remain adapters. Image collection, session/platform adapters, P6–P8 and device/performance acceptance continue.
+
+## P5: Image favorite business entry point (2026-10-01)
+
+- ImageFavoriteActions in history injects lookup, save, removal and clock. Cover protection/insertion, chapter-order rejection and toggling have no ReaderState, Widget or global manager dependency; the shell adapts selection, translation, storage and feedback.
+- The entry is protected by the business dependency audit. Storage format, notifications and error propagation remain unchanged. Four behavioral tests added; the full Windows Flutter log reports 712 passing tests, analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass.
+- Staging excludes original menu/pause edits. The legacy no-op assignment for imported empty chapter IDs is intentionally deferred to a separate fix. Selection snapshots, session/platform adapters, P6–P8 and device/performance acceptance remain outstanding.
+
+## P5: Imported chapter favorite ID fix (2026-10-01)
+
+- Appending a favorite to an imported empty-eid chapter now assigns its resolved source ID and copies existing image identities to match. Previously the comparison expression performed no assignment. Page/key/automatic-cover metadata remains intact; nonempty ID conflicts still reject.
+- Two regressions cover identity alignment, lookup/removal, cover protection and unresolved IDs. Seven targeted tests pass; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass. The previous commit's 712-test full suite was not repeated for this localized fix.
+- This repairs the existing append path, not a bulk database migration. Untouched legacy records and broader compatibility/transaction review remain P6 work; the overall plan stays in progress.
+
+## P5: Reader session coordination and exit ordering (2026-10-01)
+
+- ReaderSession owns the existing duration tracker and history writer. Content readiness and foreground state jointly gate timing; automatic-reading pause and exit notifications are injected. The page adapts Flutter lifecycle, history fields and storage. The new business entry is audited for transitive UI dependencies.
+- Exit synchronously flushes pending progress, drains duration writes, then notifies synchronization once. Repeated disposal shares a Future; late content/lifecycle events are ignored. The page logs close notification errors. Accepted progress writes still belong to storage, so P6 ordering review remains required.
+- Four new coordination tests cover initial background/loading interleaving, duplicate readiness, exit draining, late events and write/close failures. Seventeen targeted tests and 718 full Windows Flutter tests pass; analysis has no errors/warnings and 24 existing infos; structure, architecture, Git dependency and 12 architecture-script tests pass.
+- Original menu/pause edits remain uncommitted. History mapping, window/volume/cache adapters, remaining P5, P6–P8 and device/performance acceptance remain outstanding.
+
+## P5: Memory-cache platform query lifetime (2026-10-01)
+
+- ReaderImageCachePolicy extracts thresholds and query lifetime with injected platform reads, cache writes and logging. Existing 1/2/4 GB thresholds, 100/200/300/500 MB limits and 100 MB exit reset are preserved.
+- Late memory results cannot enlarge the cache after exit. Only the newest query applies; exit is idempotent and prevents further reads. Null leaves the limit unchanged; current failures are logged and later attempts may retry. Native Futures are not aborted.
+- Four policy tests and all 722 Windows Flutter tests pass; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass. Changelog and boundaries are updated; original user edits remain uncommitted.
+- Cross-reader shared-cache arbitration and physical memory/performance checks remain open, along with volume cancellation/re-listening, window/orientation adapters, remaining P5, P6–P8 and device acceptance.
+
+## P5: Volume navigation and subscription controller (2026-10-01)
+
+- ReaderVolumeController injects events, page/chapter navigation and errors. It owns subscription generations and serialized cancellation; repeated enable reuses the listener, disable/exit immediately invalidates input, and reconnect waits for Dart subscription cancellation. Connection/event failures are reported and explicit enable can retry.
+- Removed the ReaderVolumeListener mixin and old VolumeListener. volume.dart retains only the original venera/volume adapter. The page selects Android and preserves previous-chapter-end/next-chapter navigation. The controller is a guarded business entry.
+- Added four controller tests and one channel protocol test. The initial Widget fake-clock protocol test stalled; that full run was terminated and the protocol test changed to a normal asynchronous test. It passed independently and the fresh full Windows suite passed all 727 tests. Analysis has no errors/warnings and 23 existing infos (one removed with the old untyped parameter); structure, architecture, Git dependency and 12 architecture-script tests pass.
+- Flutter source confirms native listen/cancel acknowledgement is separate from Dart cancellation, with activation errors reported through FlutterError. No native protocol changes, Android device acceptance or concurrent-reader channel verification are claimed. Window/orientation adapters, remaining P5, P6–P8 and platform/performance acceptance remain open; original edits stay uncommitted.
+
+## P5: Window controller and exit restoration (2026-10-01)
+
+- ReaderWindowController injects native window operations, frame visibility, close listeners and navigation. Removed the ReaderWindow mixin and App.rootContext lookup; the page captures WindowFrame and root Navigator during dependency initialization. The controller is protected as a business entry.
+- Transitions serialize and same-batch toggles coalesce to the final request. Exit immediately detaches the close listener and rejects new requests, then restores windowed mode after accepted operations. Successful hide→fullscreen→show→frame order is retained. Failures still attempt to show the window; any attempted fullscreen entry requires an explicit exit restoration, with errors logged.
+- Five behavioral tests cover binding/disposal, close navigation, ordering, in-flight exit, rapid toggles and failures. All 732 Windows Flutter tests pass; analysis has no errors/warnings and 23 existing infos; structure, architecture, Git dependency and 12 architecture-script tests pass. Original edits remain uncommitted.
+- Native operations cannot be cancelled. Real desktop interaction, shared-window arbitration across readers, orientation adapters, remaining P5, P6–P8 and device/performance acceptance remain outstanding.
+
+## P5: Orientation ownership and application scope (2026-10-01)
+
+- ReaderOrientationCoordinator owns plain handles instead of a static Widget State list. Only the top handle can cycle; releasing it restores the underlying lock, and releasing the last returns to system policy. Scopes share no state and disposed scopes cannot acquire or reactivate handles.
+- ReaderOrientationScope owns the coordinator outside the application Navigator. Main and test harnesses explicitly install it; widgets acquire through an inherited provider. DeviceOrientation conversion and error logging remain in orientation.dart; the coordinator is a guarded business entry.
+- System→portrait→landscape cycling, Android-only activation and immediate platform request issue order are preserved. Pending native Futures do not delay release. Three new coordinator tests and eleven existing Widget/channel tests pass; the full Windows suite passes 735 tests. Analysis has no errors/warnings and 23 existing infos; structure, architecture, Git dependency and 12 architecture-script tests pass.
+- Only scope wiring is staged in the already modified automatic-reading test. Original edits remain uncommitted. Physical rotation, other shared-platform ownership, remaining P5, P6–P8 and device/performance acceptance remain open.
+
+## P5: Navigation compatibility exit (2026-10-01)
+
+- Removed ReaderLocation, whose only consumers were the page and tests. ReaderState assembles ReaderController directly and uses preferences for animation settings; unused abstract contracts and the enablePageAnimation wrapper are gone.
+- reader_page.dart no longer re-exports ReaderImageViewController; images.dart no longer re-exports ContinuousModeState. Callers import the protocol or concrete view directly. The page retains UI navigation adapters; ReaderController is guarded as a business entry.
+- The four existing navigation tests now use ReaderController/ReaderNavigationViewport directly, inject/assert errors and dispose controllers without page/ComicType/global Log dependencies. Fifteen targeted and all 735 Windows Flutter tests pass; analysis has no errors/warnings and 23 existing infos; structure, architecture, Git dependency and 12 architecture-script tests pass.
+- Only import migration is staged in the modified automatic-reading test. Original edits remain uncommitted. Further UI adapter reduction, layout/history mapping, shared resource ownership, remaining P5, P6–P8 and platform/performance acceptance remain open.

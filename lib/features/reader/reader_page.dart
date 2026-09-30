@@ -11,11 +11,21 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/reader/gesture.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/images.dart';
+import 'package:venera_next/features/reader/image_cache_policy.dart';
 import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
+import 'package:venera_next/features/reader/reader_session.dart';
+import 'package:venera_next/features/reader/history_writer.dart';
+import 'package:venera_next/features/reader/reader_controller.dart';
+import 'package:venera_next/features/reader/reader_viewport.dart';
+
+import 'package:venera_next/features/reader/page_layout.dart';
+import 'package:venera_next/features/reader/image_position.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/features/reader/volume.dart';
+import 'package:venera_next/features/reader/volume_controller.dart';
+import 'package:venera_next/features/reader/window_controller.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -76,29 +86,49 @@ class Reader extends StatefulWidget {
 }
 
 class ReaderState extends State<Reader>
-    with
-        ReaderLocation,
-        ReaderWindow,
-        ReaderVolumeListener,
-        ReaderImagePerPageHandler,
-        WidgetsBindingObserver {
+    with ReaderImagePerPageHandler, WidgetsBindingObserver {
+  late final controller = ReaderController(
+    pageCount: () => totalPages,
+    chapterCount: () => maxChapter,
+    animationEnabled: () => preferences.enablePageAnimation,
+    viewport: () => imageViewController,
+    onChanged: update,
+    onPageChanged: onPageChanged,
+    onError: (error, stack) =>
+        Log.error('Reader', 'Page navigation failed: $error', stack),
+  );
+
   @override
+  int get page => controller.state.page;
+  @override
+  set page(int value) => controller.setPage(value);
+  int get chapter => controller.state.chapter;
+  bool get jumpToLastPageOnLoad => controller.state.jumpToLastPageOnLoad;
+
+  ReaderImageViewController? imageViewController;
+
+  void setPage(int page) => controller.reportPage(page);
+  void resetPageAnimation() => controller.resetAnimation();
+  bool get isPageAnimating => controller.state.isAnimating;
+  bool toPage(int page, {bool animated = true}) =>
+      controller.toPage(page, animated: animated);
+  bool toNextPage() => toPage(page + 1);
+  bool toPrevPage() => toPage(page - 1);
+  bool toChapter(int chapter, {bool toLastPage = false}) =>
+      controller.toChapter(chapter, toLastPage: toLastPage);
+  bool toNextChapter() => toChapter(chapter + 1);
+  bool toPrevChapter({bool toLastPage = false}) =>
+      toChapter(chapter - 1, toLastPage: toLastPage);
+
   void update() {
     if (mounted) setState(() {});
   }
 
   /// The maximum page number for images only (excluding chapter comments page).
   /// This is used for display purposes and history recording.
-  @override
-  int get maxPage {
-    if (images == null) return 1;
-    return !showSingleImageOnFirstPage()
-        ? (images!.length / imagesPerPage).ceil()
-        : 1 + ((images!.length - 1) / imagesPerPage).ceil();
-  }
+  int get maxPage => pageLayout.pageCount(images?.length);
 
   /// Total pages including chapter comments page (used for internal page control).
-  @override
   int get totalPages {
     var pages = maxPage;
     if (_shouldShowChapterCommentsAtEnd) pages++;
@@ -106,9 +136,8 @@ class ReaderState extends State<Reader>
   }
 
   /// Whether the current page is the chapter comments page.
-  @override
   bool get isOnChapterCommentsPage {
-    return _shouldShowChapterCommentsAtEnd && pageValue > maxPage;
+    return _shouldShowChapterCommentsAtEnd && page > maxPage;
   }
 
   bool get _shouldShowChapterCommentsAtEnd {
@@ -138,7 +167,7 @@ class ReaderState extends State<Reader>
   String get eid => widget.chapters?.ids.elementAtOrNull(chapter - 1) ?? '0';
 
   @override
-  List<String>? images;
+  List<String>? get images => controller.content.images;
 
   @override
   late ReaderMode mode;
@@ -163,8 +192,7 @@ class ReaderState extends State<Reader>
     );
   }
 
-  late final ReadingSessionTracker _readingSession;
-  bool _readerContentReady = false;
+  late final ReaderSession _session;
   bool _hasPresentedImages = false;
   ComicLayoutProbe? _layoutProbe;
   final _sampledChapters = <String>{};
@@ -187,7 +215,7 @@ class ReaderState extends State<Reader>
     canAdvance: () {
       final viewport = imageViewController;
       return mounted &&
-          _readerContentReady &&
+          _session.contentReady &&
           !isLoading &&
           !isPageAnimating &&
           (ModalRoute.of(context)?.isCurrent ?? true) &&
@@ -290,8 +318,7 @@ class ReaderState extends State<Reader>
     update();
   }
 
-  @override
-  bool isLoading = false;
+  bool get isLoading => controller.content.isLoading;
 
   var focusNode = FocusNode();
 
@@ -301,14 +328,15 @@ class ReaderState extends State<Reader>
     if (page < 1) {
       page = 1;
     }
-    chapter = widget.initialChapter ?? 1;
-    if (chapter < 1) {
-      chapter = 1;
-    }
+    final initialChapter = widget.initialChapter ?? 1;
+    controller.restoreChapter(initialChapter < 1 ? 1 : initialChapter);
     if (widget.initialChapterGroup != null) {
-      for (int i = 0; i < (widget.initialChapterGroup! - 1); i++) {
-        chapter += widget.chapters!.getGroupByIndex(i).length;
-      }
+      controller.restoreChapter(
+        widget.chapters!.chapterIndex(
+          chapter,
+          group: widget.initialChapterGroup,
+        ),
+      );
     }
     if (widget.initialPage != null) {
       page = widget.initialPage!;
@@ -320,16 +348,35 @@ class ReaderState extends State<Reader>
       appdata.settings.readerSettings(cid, type.sourceKey).readerMode,
     );
     history = widget.history;
-    _readingSession = ReadingSessionTracker(
-      onDuration: (duration) =>
-          HistoryManager().addReadDuration(widget.history, duration),
-      onError: (error, stackTrace) {
-        Log.error(
-          "Reader",
-          "Failed to save reading duration: $error",
-          stackTrace,
-        );
-      },
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _session = ReaderSession(
+      durations: ReadingSessionTracker(
+        onDuration: (duration) =>
+            HistoryManager().addReadDuration(widget.history, duration),
+        onError: (error, stack) => Log.error(
+          'Reader',
+          'Failed to save reading duration: $error',
+          stack,
+        ),
+      ),
+      progress: ReaderHistoryWriter(
+        write: () async {
+          final item = history;
+          if (item != null) await HistoryManager().addHistoryAsync(item);
+        },
+        flush: () {
+          final item = history;
+          if (item != null) HistoryManager().addHistory(item);
+        },
+        onError: (error, stack) => Log.error(
+          'Reader',
+          'Failed to save reading progress: $error',
+          stack,
+        ),
+      ),
+      pauseAutoReading: (paused) => autoReading.pause('lifecycle', paused),
+      onClosed: () => DataSync().onDataChanged(),
+      foreground: lifecycle == null || lifecycle == AppLifecycleState.resumed,
     );
     if (!appdata.settings
         .readerSettings(cid, type.sourceKey)
@@ -364,77 +411,93 @@ class ReaderState extends State<Reader>
     initReaderWindow();
   }
 
-  void setImageCacheSize() async {
-    var availableRAM = await MemoryInfo.getFreePhysicalMemorySize();
-    if (availableRAM == null) return;
-    int maxImageCacheSize;
-    if (availableRAM < 1 << 30) {
-      maxImageCacheSize = 100 << 20;
-    } else if (availableRAM < 2 << 30) {
-      maxImageCacheSize = 200 << 20;
-    } else if (availableRAM < 4 << 30) {
-      maxImageCacheSize = 300 << 20;
-    } else {
-      maxImageCacheSize = 500 << 20;
-    }
-    Log.info(
-      "Reader",
-      "Detect available RAM: $availableRAM, set image cache size to $maxImageCacheSize",
-    );
-    PaintingBinding.instance.imageCache.maximumSizeBytes = maxImageCacheSize;
+  late final _imageCachePolicy = ReaderImageCachePolicy(
+    readAvailableMemory: MemoryInfo.getFreePhysicalMemorySize,
+    setLimit: (bytes) =>
+        PaintingBinding.instance.imageCache.maximumSizeBytes = bytes,
+    onConfigured: (memory, limit) => Log.info(
+      'Reader',
+      'Detect available RAM: $memory, set image cache size to $limit',
+    ),
+    onError: (error, stack) =>
+        Log.error('Reader', 'Failed to size image cache: $error', stack),
+  );
+
+  void setImageCacheSize() => unawaited(_imageCachePolicy.configure());
+
+  late final _volumeController = ReaderVolumeController(
+    events: readerVolumeEvents,
+    nextPage: toNextPage,
+    previousPage: toPrevPage,
+    nextChapter: toNextChapter,
+    previousChapter: () => toPrevChapter(toLastPage: true),
+    onError: (error, stack) =>
+        Log.error('Reader', 'Volume navigation failed: $error', stack),
+  );
+
+  void handleVolumeEvent() {
+    if (App.isAndroid) unawaited(_volumeController.setEnabled(true));
+  }
+
+  void stopVolumeEvent() => unawaited(_volumeController.setEnabled(false));
+
+  ReaderWindowController? _windowController;
+
+  void initReaderWindow() {
+    if (!App.isDesktop || _windowController != null) return;
+    final frame = WindowFrame.of(context);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    _windowController = ReaderWindowController(
+      hide: windowManager.hide,
+      show: windowManager.show,
+      setFullscreen: windowManager.setFullScreen,
+      setFrameVisible: frame.setWindowFrame,
+      addCloseListener: frame.addCloseListener,
+      removeCloseListener: frame.removeCloseListener,
+      canPop: navigator.canPop,
+      pop: () => navigator.pop(),
+      onError: (error, stack) =>
+          Log.error('Reader', 'Window transition failed: $error', stack),
+    )..attach();
+  }
+
+  void fullscreen() {
+    final window = _windowController;
+    if (window != null) unawaited(window.toggle());
+  }
+
+  void disposeReaderWindow() {
+    final window = _windowController;
+    if (window != null) unawaited(window.dispose());
   }
 
   @override
   void dispose() {
+    controller.dispose();
     _layoutProbe?.cancel();
     _layoutProbe = null;
     WidgetsBinding.instance.removeObserver(this);
-    if (isFullscreen) {
-      fullscreen();
-    }
     autoReading.dispose();
-    _flushPendingHistoryUpdate();
     unawaited(
-      _readingSession.dispose().whenComplete(() {
-        DataSync().onDataChanged();
+      _session.dispose().catchError((Object error, StackTrace stack) {
+        Log.error('Reader', 'Failed to close reading session: $error', stack);
       }),
     );
     focusNode.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    stopVolumeEvent();
-    PaintingBinding.instance.imageCache.maximumSizeBytes = 100 << 20;
+    unawaited(_volumeController.dispose());
+    _imageCachePolicy.dispose();
     disposeReaderWindow();
     super.dispose();
   }
 
-  void onReaderContentLoading() {
-    _readerContentReady = false;
-    unawaited(_readingSession.pause());
-  }
+  void onReaderContentLoading() => _session.setContentReady(false);
 
-  void onReaderContentReady() {
-    _readerContentReady = true;
-    final lifecycleState = WidgetsBinding.instance.lifecycleState;
-    if (lifecycleState == null || lifecycleState == AppLifecycleState.resumed) {
-      _readingSession.start();
-    }
-  }
+  void onReaderContentReady() => _session.setContentReady(true);
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    autoReading.pause('lifecycle', state != AppLifecycleState.resumed);
-    switch (state) {
-      case AppLifecycleState.resumed:
-        if (_readerContentReady) {
-          _readingSession.start();
-        }
-        return;
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.hidden:
-      case AppLifecycleState.paused:
-      case AppLifecycleState.detached:
-        unawaited(_readingSession.pause());
-    }
+    _session.setForeground(state == AppLifecycleState.resumed);
   }
 
   @override
@@ -463,28 +526,10 @@ class ReaderState extends State<Reader>
     imageViewController?.handleKeyEvent(event);
   }
 
-  @override
   int get maxChapter => widget.chapters?.length ?? 1;
 
-  @override
   void onPageChanged() {
     updateHistory();
-  }
-
-  /// Prevent multiple history updates in a short time.
-  /// `HistoryManager().addHistoryAsync` is a high-cost operation because it creates a new isolate.
-  Timer? _updateHistoryTimer;
-
-  void _flushPendingHistoryUpdate() {
-    if (_updateHistoryTimer == null) {
-      return;
-    }
-    _updateHistoryTimer!.cancel();
-    _updateHistoryTimer = null;
-    final item = history;
-    if (item != null) {
-      HistoryManager().addHistory(item);
-    }
   }
 
   void updateHistory() {
@@ -492,79 +537,34 @@ class ReaderState extends State<Reader>
     // arrive. Keep the saved image index intact until loading/migration ends.
     if (isLoading || images == null) return;
     if (history != null) {
-      // page >= maxPage handles both last image page and chapter comments page
-      if (page >= maxPage) {
-        /// Record the last image of chapter
-        history!.page = images?.length ?? 1;
-      } else {
-        /// Record the first image of the page
-        if (!showSingleImageOnFirstPage() || imagesPerPage == 1) {
-          history!.page = (page - 1) * imagesPerPage + 1;
-        } else {
-          if (page == 1) {
-            history!.page = 1;
-          } else {
-            history!.page = (page - 2) * imagesPerPage + 2;
-          }
-        }
-      }
+      final imagePosition = ReaderImagePosition(
+        chapter: chapter,
+        chapterId: eid,
+        imageNumber: pageLayout.historyImage(page, images!.length),
+      );
+      history!.page = imagePosition.imageNumber;
       history!.maxPage = images?.length ?? 1;
       if (widget.chapters?.isGrouped ?? false) {
-        int g = 0;
-        int c = chapter;
-        while (c > widget.chapters!.getGroupByIndex(g).length) {
-          c -= widget.chapters!.getGroupByIndex(g).length;
-          g++;
-        }
-        history!.readEpisode.add('${g + 1}-$c');
-        history!.ep = c;
-        history!.group = g + 1;
+        final position = widget.chapters!.positionAt(imagePosition.chapter);
+        history!.readEpisode.add(position.historyKey);
+        history!.ep = position.chapter;
+        history!.group = position.group;
       } else {
-        history!.readEpisode.add(chapter.toString());
-        history!.ep = chapter;
+        history!.readEpisode.add(imagePosition.chapter.toString());
+        history!.ep = imagePosition.chapter;
       }
       history!.time = DateTime.now();
-      _updateHistoryTimer?.cancel();
-      _updateHistoryTimer = Timer(const Duration(seconds: 1), () {
-        HistoryManager().addHistoryAsync(history!);
-        _updateHistoryTimer = null;
-      });
+      _session.scheduleProgress();
     }
   }
 
-  bool get isFirstChapterOfGroup {
-    if (widget.chapters?.isGrouped ?? false) {
-      int c = chapter - 1;
-      int g = 1;
-      while (c > 0) {
-        c -= widget.chapters!.getGroupByIndex(g - 1).length;
-        g++;
-      }
-      if (c == 0) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-    return chapter == 1;
-  }
+  bool get isFirstChapterOfGroup => widget.chapters?.isGrouped == true
+      ? widget.chapters!.positionAt(chapter).isFirstInGroup
+      : chapter == 1;
 
-  bool get isLastChapterOfGroup {
-    if (widget.chapters?.isGrouped ?? false) {
-      int c = chapter;
-      int g = 1;
-      while (c > 0) {
-        c -= widget.chapters!.getGroupByIndex(g - 1).length;
-        g++;
-      }
-      if (c == 0) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-    return chapter == maxChapter;
-  }
+  bool get isLastChapterOfGroup => widget.chapters?.isGrouped == true
+      ? widget.chapters!.positionAt(chapter).isLastInGroup
+      : chapter == maxChapter;
 
   /// Get the size of the reader.
   /// The size is not always the same as the size of the screen.
@@ -579,9 +579,6 @@ abstract mixin class ReaderImagePerPageHandler {
 
   late bool _lastOrientation;
 
-  /// Track if we were on the chapter comments page before orientation change
-  bool _wasOnCommentsPage = false;
-
   bool get isPortrait;
 
   int get page;
@@ -594,27 +591,19 @@ abstract mixin class ReaderImagePerPageHandler {
 
   ComicType get type;
 
-  /// Whether the current page is the chapter comments page
-  bool get isOnChapterCommentsPage;
-
-  /// Get the max page (excluding comments page)
-  int get maxPage;
-
-  /// Get images list for calculating maxPage
+  /// Images used to bound page remapping
   List<String>? get images;
 
   void initImagesPerPage(int initialPage) {
     _lastImagesPerPage = imagesPerPage;
     _lastOrientation = isPortrait;
-    _wasOnCommentsPage = false;
-    if (imagesPerPage != 1) {
-      if (showSingleImageOnFirstPage()) {
-        page = ((initialPage - 1) / imagesPerPage).ceil() + 1;
-      } else {
-        page = (initialPage / imagesPerPage).ceil();
-      }
-    }
+    if (imagesPerPage != 1) page = pageLayout.pageForImage(initialPage);
   }
+
+  ReaderPageLayout get pageLayout => ReaderPageLayout(
+    imagesPerPage: imagesPerPage,
+    singleImageOnFirstPage: showSingleImageOnFirstPage(),
+  );
 
   bool showSingleImageOnFirstPage() => appdata.settings
       .readerSettings(cid, type.sourceKey)
@@ -634,301 +623,24 @@ abstract mixin class ReaderImagePerPageHandler {
     }
   }
 
-  /// Calculate maxPage with a specific imagesPerPage value
-  int _calcMaxPage(int imagesPerPageValue) {
-    if (images == null) return 1;
-    return !showSingleImageOnFirstPage()
-        ? (images!.length / imagesPerPageValue).ceil()
-        : 1 + ((images!.length - 1) / imagesPerPageValue).ceil();
-  }
-
-  /// Check if the number of images per page has changed
+  /// Check if the number of images per page has changed.
   void _checkImagesPerPageChange() {
-    int currentImagesPerPage = imagesPerPage;
-    bool currentOrientation = isPortrait;
-
+    final currentImagesPerPage = imagesPerPage;
+    final currentOrientation = isPortrait;
     if (_lastImagesPerPage != currentImagesPerPage ||
         _lastOrientation != currentOrientation) {
-      // Calculate old maxPage using old imagesPerPage to correctly determine
-      // if we were on the comments page before the orientation change
-      int oldMaxPage = _calcMaxPage(_lastImagesPerPage);
-      _wasOnCommentsPage = page > oldMaxPage;
-
-      _adjustPageForImagesPerPageChange(
-        _lastImagesPerPage,
-        currentImagesPerPage,
+      final previousLayout = ReaderPageLayout(
+        imagesPerPage: _lastImagesPerPage,
+        singleImageOnFirstPage: showSingleImageOnFirstPage(),
+      );
+      page = previousLayout.remapPage(
+        page,
+        pageLayout,
+        imageCount: images?.length,
       );
       _lastImagesPerPage = currentImagesPerPage;
       _lastOrientation = currentOrientation;
     }
-  }
-
-  /// Adjust the page number when the number of images per page changes
-  void _adjustPageForImagesPerPageChange(
-    int oldImagesPerPage,
-    int newImagesPerPage,
-  ) {
-    int previousImageIndex = 1;
-    if (!showSingleImageOnFirstPage() || oldImagesPerPage == 1) {
-      previousImageIndex = (page - 1) * oldImagesPerPage + 1;
-    } else {
-      if (page == 1) {
-        previousImageIndex = 1;
-      } else {
-        previousImageIndex = (page - 2) * oldImagesPerPage + 2;
-      }
-    }
-
-    int newPage;
-    if (newImagesPerPage != 1) {
-      if (showSingleImageOnFirstPage()) {
-        newPage = ((previousImageIndex - 1) / newImagesPerPage).ceil() + 1;
-      } else {
-        newPage = (previousImageIndex / newImagesPerPage).ceil();
-      }
-    } else {
-      newPage = previousImageIndex;
-    }
-
-    // Clamp to valid range (1 to maxPage)
-    newPage = newPage.clamp(1, maxPage < 1 ? 1 : maxPage);
-
-    // If we were on the comments page, stay on the comments page
-    if (_wasOnCommentsPage) {
-      page = maxPage + 1;
-    } else {
-      page = newPage;
-    }
-  }
-}
-
-abstract mixin class ReaderVolumeListener {
-  bool toNextPage();
-
-  bool toPrevPage();
-
-  bool toNextChapter();
-
-  bool toPrevChapter({bool toLastPage = false});
-
-  VolumeListener? volumeListener;
-
-  void onDown() {
-    if (!toNextPage()) {
-      toNextChapter();
-    }
-  }
-
-  void onUp() {
-    if (!toPrevPage()) {
-      toPrevChapter(toLastPage: true);
-    }
-  }
-
-  void handleVolumeEvent() {
-    if (!App.isAndroid) {
-      // Currently only support Android
-      return;
-    }
-    if (volumeListener != null) {
-      volumeListener?.cancel();
-    }
-    volumeListener = VolumeListener(onDown: onDown, onUp: onUp)..listen();
-  }
-
-  void stopVolumeEvent() {
-    if (volumeListener != null) {
-      volumeListener?.cancel();
-      volumeListener = null;
-    }
-  }
-}
-
-abstract mixin class ReaderLocation {
-  int pageValue = 1;
-  int? _pendingPage;
-
-  /// Flag to indicate that the page should jump to the last page after images are loaded.
-  bool jumpToLastPageOnLoad = false;
-
-  int get page => pageValue;
-
-  set page(int value) {
-    pageValue = value;
-    onPageChanged();
-  }
-
-  int chapter = 1;
-
-  int get maxPage;
-
-  /// Total pages including chapter comments page (for internal page control).
-  int get totalPages;
-
-  int get maxChapter;
-
-  bool get isLoading;
-
-  String get cid;
-
-  ComicType get type;
-
-  void update();
-
-  bool enablePageAnimation(String cid, ComicType type) =>
-      appdata.settings.readerSettings(cid, type.sourceKey).enablePageAnimation;
-
-  ReaderImageViewController? imageViewController;
-
-  void onPageChanged();
-
-  void setPage(int page) {
-    // Prevent page change during animation
-    if (_animationCount > 0 && _pendingPage != null && page != _pendingPage) {
-      return;
-    }
-    this.page = page;
-  }
-
-  bool _validatePage(int page) {
-    return page >= 1 && page <= totalPages;
-  }
-
-  /// Returns true if the page is changed
-  bool toNextPage() {
-    return toPage(page + 1);
-  }
-
-  /// Returns true if the page is changed
-  bool toPrevPage() {
-    return toPage(page - 1);
-  }
-
-  int _animationCount = 0;
-  int _pageAnimationGeneration = 0;
-
-  void resetPageAnimation() {
-    _pageAnimationGeneration++;
-    _animationCount = 0;
-    _pendingPage = null;
-  }
-
-  bool toPage(int page, {bool animated = true}) {
-    if (imageViewController == null || isLoading) return false;
-    if (_validatePage(page)) {
-      if (page == this.page &&
-          page != 1 &&
-          page != totalPages &&
-          !isPageAnimating) {
-        return false;
-      }
-      // A new destination supersedes the previous transition. The positioned
-      // list may never complete a far-scroll Future when it is interrupted
-      // before its secondary list mounts; do not keep waiting for that Future.
-      resetPageAnimation();
-      final hasAnimation = animated && enablePageAnimation(cid, type);
-      if (hasAnimation) {
-        _pendingPage = page;
-        _animationCount++;
-        final generation = _pageAnimationGeneration;
-        update();
-        void finishAnimation() {
-          if (generation != _pageAnimationGeneration) return;
-          _animationCount--;
-          if (_pendingPage == page) {
-            _pendingPage = null;
-          }
-          update();
-        }
-
-        unawaited(
-          Future<void>.sync(
-            () => imageViewController!.animateToPage(page),
-          ).then(
-            (_) => finishAnimation(),
-            onError: (Object error, StackTrace stackTrace) {
-              Log.error('Reader', 'Page navigation failed: $error', stackTrace);
-              finishAnimation();
-            },
-          ),
-        );
-      } else {
-        this.page = page;
-        update();
-        imageViewController!.toPage(page);
-      }
-      return true;
-    }
-    return false;
-  }
-
-  bool get isPageAnimating => _animationCount > 0;
-
-  bool _validateChapter(int chapter) {
-    return chapter >= 1 && chapter <= maxChapter;
-  }
-
-  /// Returns true if the chapter is changed
-  bool toNextChapter() {
-    return toChapter(chapter + 1);
-  }
-
-  /// Returns true if the chapter is changed
-  /// If [toLastPage] is true, the page will be set to the last page of the previous chapter.
-  bool toPrevChapter({bool toLastPage = false}) {
-    return toChapter(chapter - 1, toLastPage: toLastPage);
-  }
-
-  bool toChapter(int c, {bool toLastPage = false}) {
-    if (_validateChapter(c) && !isLoading) {
-      if (imageViewController?.toChapter(c, toLastPage: toLastPage) ?? false) {
-        return true;
-      }
-      chapter = c;
-      page = 1;
-      jumpToLastPageOnLoad = toLastPage;
-      update();
-      return true;
-    }
-    return false;
-  }
-}
-
-mixin class ReaderWindow {
-  bool isFullscreen = false;
-
-  late WindowFrameController windowFrame;
-
-  bool _isInit = false;
-
-  void initReaderWindow() {
-    if (!App.isDesktop || _isInit) return;
-    windowFrame = WindowFrame.of(App.rootContext);
-    windowFrame.addCloseListener(onWindowClose);
-    _isInit = true;
-  }
-
-  void fullscreen() async {
-    if (!App.isDesktop) return;
-    await windowManager.hide();
-    await windowManager.setFullScreen(!isFullscreen);
-    await windowManager.show();
-    isFullscreen = !isFullscreen;
-    WindowFrame.of(App.rootContext).setWindowFrame(!isFullscreen);
-  }
-
-  bool onWindowClose() {
-    if (Navigator.of(App.rootContext).canPop()) {
-      Navigator.of(App.rootContext).pop();
-      return false;
-    } else {
-      return true;
-    }
-  }
-
-  void disposeReaderWindow() {
-    if (!App.isDesktop) return;
-    windowFrame.removeCloseListener(onWindowClose);
   }
 }
 
@@ -964,27 +676,4 @@ enum ReaderMode {
     }
     return waterfallTopToBottom;
   }
-}
-
-abstract interface class ReaderImageViewController {
-  void toPage(int page);
-
-  Future<void> animateToPage(int page);
-
-  bool toChapter(int chapter, {bool toLastPage = false});
-
-  void handleDoubleTap(Offset location);
-
-  void handleLongPressDown(Offset location);
-
-  void handleLongPressUp(Offset location);
-
-  void handleKeyEvent(KeyEvent event);
-
-  /// Returns true if the event is handled.
-  bool handleOnTap(Offset location);
-
-  Future<Uint8List?> getImageByOffset(Offset offset);
-
-  String? getImageKeyByOffset(Offset offset);
 }

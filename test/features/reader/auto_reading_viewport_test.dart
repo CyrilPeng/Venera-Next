@@ -1,3 +1,5 @@
+import 'package:venera_next/features/reader/orientation.dart'
+    show ReaderOrientationScope;
 import 'dart:convert';
 import 'dart:io';
 
@@ -12,7 +14,7 @@ import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
-import 'package:venera_next/features/reader/images.dart';
+import 'package:venera_next/features/reader/continuous_view.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/features/sync/data_sync.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -107,6 +109,8 @@ void main() {
           });
           await tester.pumpWidget(
             MaterialApp(
+              builder: (context, child) =>
+                  ReaderOrientationScope(child: child!),
               navigatorKey: App.rootNavigatorKey,
               home: Scaffold(body: OverlayWidget(_TestReader(key: key))),
             ),

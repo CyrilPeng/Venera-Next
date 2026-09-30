@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:io';
+
+import 'package:venera_next/network/request_scope.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -100,17 +103,78 @@ void main() {
   }
 
   Future<List<String>> load({
+    RequestScope? scope,
     bool local = false,
     int chapter = 1,
     ComicChapters chapters = _chapters,
     void Function()? onOnlineFallback,
   }) => loadReaderChapterImages(
+    scope: scope,
     comicId: 'book',
     type: local ? ComicType.local : _type,
     chapter: chapter,
     chapters: chapters,
     onOnlineFallback: onOnlineFallback,
   );
+
+  test('cancelled owner never starts a source request', () async {
+    final scope = RequestScope()..cancel();
+    await expectLater(load(scope: scope), throwsA(isA<RequestCancelled>()));
+    expect(onlineCalls, 0);
+    scope.dispose();
+  });
+
+  test('cancellation releases caller and suppresses late recovery', () async {
+    await add(writeImage: false);
+    final response = Completer<Res<List<String>>>();
+    final started = Completer<RequestScope>();
+    ComicSourceManager().remove(_key);
+    ComicSourceManager().add(
+      source((id, ep) {
+        started.complete(RequestScope.current!);
+        return response.future;
+      }),
+    );
+    final owner = RequestScope();
+    var notified = false;
+    final pending = load(scope: owner, onOnlineFallback: () => notified = true);
+    final expectation = expectLater(pending, throwsA(isA<RequestCancelled>()));
+    final child = await started.future;
+    owner.cancel();
+    await expectation;
+    expect(child.cancelToken.isCancelled, true);
+    response.complete(Res(['https://example.invalid/late.jpg']));
+    await Future<void>.delayed(Duration.zero);
+    expect(notified, false);
+    owner.dispose();
+  });
+
+  test('one owner cancellation leaves another chapter request alive', () async {
+    final responses = <Completer<Res<List<String>>>>[];
+    ComicSourceManager().remove(_key);
+    ComicSourceManager().add(
+      source((id, ep) {
+        final response = Completer<Res<List<String>>>();
+        responses.add(response);
+        return response.future;
+      }),
+    );
+    final first = RequestScope();
+    final second = RequestScope();
+    final cancelled = expectLater(
+      load(scope: first),
+      throwsA(isA<RequestCancelled>()),
+    );
+    final remaining = load(scope: second);
+    expect(responses.length, 2);
+    first.cancel();
+    await cancelled;
+    responses[1].complete(Res(['second.jpg']));
+    expect(await remaining, ['second.jpg']);
+    responses[0].complete(Res(['first.jpg']));
+    first.dispose();
+    second.dispose();
+  });
 
   test(
     'downloaded chapter remains readable after reopening the database',

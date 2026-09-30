@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/reader/reader.dart';
+import 'package:venera_next/features/reader/image_position.dart';
 
 WaterfallChapterSegment segment(int chapter, int count) {
   return WaterfallChapterSegment(
@@ -11,6 +12,49 @@ WaterfallChapterSegment segment(int chapter, int count) {
 
 void main() {
   group('WaterfallChapterFlow', () {
+    test(
+      'source positions survive prepending and round trip to viewport indices',
+      () {
+        final flow = WaterfallChapterFlow(
+          segments: [segment(3, 4), segment(4, 3)],
+        );
+        final anchor = flow.imageRefAt(6)!.position;
+        expect(anchor.chapter, 4);
+        expect(anchor.chapterId, 'ep-4');
+        expect(anchor.imageNumber, 2);
+        flow.addBefore(segment(2, 5));
+        expect(flow.imageIndexOf(anchor), 11);
+        for (var index = 1; index <= flow.imageCount; index++) {
+          expect(flow.imageIndexOf(flow.imageRefAt(index)!.position), index);
+        }
+        expect(anchor.imageNumber, 2);
+      },
+    );
+
+    test('a position from a different source chapter ID is not reused', () {
+      final flow = WaterfallChapterFlow(segments: [segment(3, 4)]);
+      expect(
+        flow.imageIndexOf(
+          const ReaderImagePosition(
+            chapter: 3,
+            chapterId: 'old-ep-3',
+            imageNumber: 2,
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        flow.imageIndexOf(
+          const ReaderImagePosition(
+            chapter: 3,
+            chapterId: 'ep-3',
+            imageNumber: 2,
+          ),
+        ),
+        2,
+      );
+    });
+
     test('maps global image index to chapter and page', () {
       final flow = WaterfallChapterFlow(
         segments: [segment(2, 3), segment(3, 2)],
@@ -18,21 +62,51 @@ void main() {
 
       expect(flow.imageCount, 5);
       expect(flow.imageRefAt(0), isNull);
-      expect(flow.imageRefAt(1)!.chapter, 2);
-      expect(flow.imageRefAt(1)!.page, 1);
+      expect(flow.imageRefAt(1)!.position.chapter, 2);
+      expect(flow.imageRefAt(1)!.position.imageNumber, 1);
       expect(flow.imageRefAt(1)!.isFirstInSegment, isTrue);
       expect(flow.imageRefAt(3)!.imageKey, 'c2-p3');
-      expect(flow.imageRefAt(4)!.chapter, 3);
-      expect(flow.imageRefAt(4)!.page, 1);
+      expect(flow.imageRefAt(4)!.position.chapter, 3);
+      expect(flow.imageRefAt(4)!.position.imageNumber, 1);
       expect(flow.imageRefAt(4)!.isFirstInSegment, isTrue);
       expect(flow.imageRefAt(5)!.imageKey, 'c3-p2');
       expect(flow.imageRefAt(6), isNull);
-      expect(flow.imageIndexOf(chapter: 2, page: 1), 1);
-      expect(flow.imageIndexOf(chapter: 2, page: 3), 3);
-      expect(flow.imageIndexOf(chapter: 3, page: 1), 4);
-      expect(flow.imageIndexOf(chapter: 3, page: 2), 5);
-      expect(flow.imageIndexOf(chapter: 3, page: 3), isNull);
-      expect(flow.imageIndexOf(chapter: 4, page: 1), isNull);
+      expect(
+        flow.imageIndexOf(
+          ReaderImagePosition(chapter: 2, chapterId: 'ep-2', imageNumber: 1),
+        ),
+        1,
+      );
+      expect(
+        flow.imageIndexOf(
+          ReaderImagePosition(chapter: 2, chapterId: 'ep-2', imageNumber: 3),
+        ),
+        3,
+      );
+      expect(
+        flow.imageIndexOf(
+          ReaderImagePosition(chapter: 3, chapterId: 'ep-3', imageNumber: 1),
+        ),
+        4,
+      );
+      expect(
+        flow.imageIndexOf(
+          ReaderImagePosition(chapter: 3, chapterId: 'ep-3', imageNumber: 2),
+        ),
+        5,
+      );
+      expect(
+        flow.imageIndexOf(
+          ReaderImagePosition(chapter: 3, chapterId: 'ep-3', imageNumber: 3),
+        ),
+        isNull,
+      );
+      expect(
+        flow.imageIndexOf(
+          ReaderImagePosition(chapter: 4, chapterId: 'ep-4', imageNumber: 1),
+        ),
+        isNull,
+      );
     });
 
     test('detects when next chapter should be loaded', () {
@@ -73,8 +147,8 @@ void main() {
       expect(insertedCount, 4);
       expect(flow.firstChapter, 2);
       expect(flow.lastChapter, 3);
-      expect(flow.imageRefAt(5)!.chapter, 3);
-      expect(flow.imageRefAt(5)!.page, 1);
+      expect(flow.imageRefAt(5)!.position.chapter, 3);
+      expect(flow.imageRefAt(5)!.position.imageNumber, 1);
     });
 
     test(
@@ -85,9 +159,18 @@ void main() {
         final insertedCount = flow.addBefore(segment(97, 5));
         final shiftedCurrentIndex = 1 + insertedCount;
 
-        expect(flow.imageRefAt(shiftedCurrentIndex)!.chapter, 98);
-        expect(flow.imageRefAt(shiftedCurrentIndex)!.page, 1);
-        expect(flow.imageIndexOf(chapter: 98, page: 1), shiftedCurrentIndex);
+        expect(flow.imageRefAt(shiftedCurrentIndex)!.position.chapter, 98);
+        expect(flow.imageRefAt(shiftedCurrentIndex)!.position.imageNumber, 1);
+        expect(
+          flow.imageIndexOf(
+            ReaderImagePosition(
+              chapter: 98,
+              chapterId: 'ep-98',
+              imageNumber: 1,
+            ),
+          ),
+          shiftedCurrentIndex,
+        );
       },
     );
 
@@ -101,8 +184,22 @@ void main() {
       expect(flow.segments, hasLength(1));
       expect(flow.firstChapter, 120);
       expect(flow.lastChapter, 120);
-      expect(flow.imageIndexOf(chapter: 120, page: 4), 4);
-      expect(flow.imageIndexOf(chapter: 98, page: 1), isNull);
+      expect(
+        flow.imageIndexOf(
+          ReaderImagePosition(
+            chapter: 120,
+            chapterId: 'ep-120',
+            imageNumber: 4,
+          ),
+        ),
+        4,
+      );
+      expect(
+        flow.imageIndexOf(
+          ReaderImagePosition(chapter: 98, chapterId: 'ep-98', imageNumber: 1),
+        ),
+        isNull,
+      );
     });
 
     test('ignores duplicate chapters', () {

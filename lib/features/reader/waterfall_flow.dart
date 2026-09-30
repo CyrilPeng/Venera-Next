@@ -1,14 +1,12 @@
+import 'image_position.dart';
+
 class WaterfallImageRef {
-  final int chapter;
-  final int page;
-  final String eid;
+  final ReaderImagePosition position;
   final String imageKey;
   final bool isFirstInSegment;
 
   const WaterfallImageRef({
-    required this.chapter,
-    required this.page,
-    required this.eid,
+    required this.position,
     required this.imageKey,
     this.isFirstInSegment = false,
   });
@@ -27,7 +25,19 @@ class WaterfallChapterSegment {
   });
 }
 
-class WaterfallChapterFlow {
+/// Read access for view adapters; chapter insertion/reset belongs to the owner.
+abstract interface class WaterfallFlowView {
+  List<WaterfallChapterSegment> get segments;
+  bool get isEmpty;
+  int get imageCount;
+  int? get firstChapter;
+  int? get lastChapter;
+  WaterfallChapterSegment? segmentOfChapter(int chapter);
+  WaterfallImageRef? imageRefAt(int index);
+  int? imageIndexOf(ReaderImagePosition position);
+}
+
+class WaterfallChapterFlow implements WaterfallFlowView {
   WaterfallChapterFlow({List<WaterfallChapterSegment>? segments}) {
     if (segments != null) {
       _segments.addAll(segments);
@@ -36,17 +46,23 @@ class WaterfallChapterFlow {
 
   final _segments = <WaterfallChapterSegment>[];
 
+  @override
   List<WaterfallChapterSegment> get segments => List.unmodifiable(_segments);
 
+  @override
   bool get isEmpty => _segments.isEmpty;
 
+  @override
   int get imageCount =>
       _segments.fold(0, (value, segment) => value + segment.images.length);
 
+  @override
   int? get firstChapter => _segments.firstOrNull?.chapter;
 
+  @override
   int? get lastChapter => _segments.lastOrNull?.chapter;
 
+  @override
   WaterfallChapterSegment? segmentOfChapter(int chapter) {
     for (var segment in _segments) {
       if (segment.chapter == chapter) return segment;
@@ -54,15 +70,18 @@ class WaterfallChapterFlow {
     return null;
   }
 
+  @override
   WaterfallImageRef? imageRefAt(int index) {
     if (index <= 0) return null;
     var remaining = index;
     for (var segment in _segments) {
       if (remaining <= segment.images.length) {
         return WaterfallImageRef(
-          chapter: segment.chapter,
-          page: remaining,
-          eid: segment.eid,
+          position: ReaderImagePosition(
+            chapter: segment.chapter,
+            imageNumber: remaining,
+            chapterId: segment.eid,
+          ),
           imageKey: segment.images[remaining - 1],
           isFirstInSegment: remaining == 1,
         );
@@ -72,13 +91,17 @@ class WaterfallChapterFlow {
     return null;
   }
 
-  int? imageIndexOf({required int chapter, required int page}) {
-    if (page <= 0) return null;
+  @override
+  int? imageIndexOf(ReaderImagePosition position) {
+    if (position.imageNumber <= 0) return null;
     var index = 1;
     for (var segment in _segments) {
-      if (segment.chapter == chapter) {
-        if (page > segment.images.length) return null;
-        return index + page - 1;
+      if (segment.chapter == position.chapter) {
+        if (segment.eid != position.chapterId ||
+            position.imageNumber > segment.images.length) {
+          return null;
+        }
+        return index + position.imageNumber - 1;
       }
       index += segment.images.length;
     }

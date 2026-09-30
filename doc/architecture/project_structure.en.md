@@ -137,3 +137,55 @@ BackgroundSync owns automatic scheduling while the app is mounted. WebDAV source
 FollowUpdatesService is separate from the page and exposes a UI-free narrow contract through follow_updates_api.dart. It cancels only owned task handles; runtime bindings own timers and external listeners. Views subscribe to followUpdatesChanges and unsubscribe in dispose; do not restore global State lookup to refresh follow-update pages/previews.
 
 CacheManager owns instance paths, database, scanner and operation queue. CacheManager.open supports independent hosts; start explicitly begins one scan and dispose drains accepted work before closing. Scanners return results without global manager access. Cache operations must not bypass the queue, and directory cleanup must await disposal.
+
+Shared image downloads use SharedRequestStream with an independent RequestScope. Actual subscriptions start the source; the last subscriber cancels source/HTTP work before releasing the source subscription. Consumers release their own subscriptions and must not parent shared requests to one caller scope. Cache hits complete without entering source or network loading.
+
+Reader teardown must not cancel images globally. ReaderImageDownloads owns predownload subscriptions and ReaderImagePrecache owns decoded prefetch listeners. Pending-cache release preserves live consumers and decoded cache entries; Flutter releases the final keep-alive handle at frame end. Expected image cancellation is not reported as loading failure; genuine errors retain existing handling.
+
+LoadingState shares one attempt pipeline for initial loads and manual retries. Each attempt owns a RequestScope, cancelled on replacement/unmount, and results/post-load completion validate attempt identity. loadData/onDataLoaded explicitly receive the scope; consumers must check cancellation after awaits before publishing effects. Do not restore duplicate uncontrolled then/setState paths.
+
+Use UI-free ReaderPageLayout for image-number/display-page conversions; persisted history continues to store image numbers. Gallery ranges are zero-based and end-exclusive, and layout remapping keeps the old first image visible. Consumers must not duplicate cover/grouping/end-of-chapter history formulas. Cross-chapter waterfall and split-image coordinates remain separate policies.
+
+Convert chapter coordinates with ComicChapters.positionAt/chapterIndex. ComicChapterPosition distinguishes source ID, flattened index, group and within-group chapter; history keys retain their existing format. Do not derive cross-group positions from merged allChapters keys, since groups may share source IDs. Image/display-page conversion remains with ReaderPageLayout.
+
+ReaderController owns navigation state and ReaderNavigationState snapshots without importing Flutter, global settings or storage. View navigation uses ReaderNavigationViewport; gestures remain in the UI protocol. The ReaderLocation compatibility mixin is removed; the page assembles the controller directly. Do not reintroduce a page-owned animation state machine. Dispose the controller with its page to suppress late callbacks.
+
+ReaderImagePosition identifies a source image, ReaderPageLayout maps display pages, and WaterfallChapterFlow maps cross-chapter list indices with chapter-ID validation on inverse lookup. ReaderImageSlice regions are normalized painting offsets, not additional source images or history pages. Persist only converted source image numbers under the existing history protocol.
+
+images.dart owns loading/view selection; gallery_view.dart and continuous_view.dart host gallery and continuous/waterfall adapters, chapter_swipe_indicator.dart owns swipe indication. Menu selection uses ReaderImageViewController.currentImageRange instead of concrete State types. The images.dart transitional State export is removed; integration tests that need the implementation import continuous_view.dart directly.
+
+ChapterImageLoader depends only on injected chapter access and error callbacks, with no global manager lookup. loadReaderChapterImages adapts legacy storage/sources: stable chapter IDs and download availability belong to the adapter, while local-first/fallback/cancellation belong to the policy. Tests separately cover real-storage compatibility and behavior without globals.
+
+ReaderController also owns ReaderContentState with copied immutable image lists. Loads commit by ReaderContentLoad identity; stale owners cannot cancel replacements. Keep loading active during layout preparation. Views coordinate rebuilds, so content commands do not emit notifications during build/init. Activate loaded waterfall chapters through replaceChapterImages.
+
+ReaderHistoryWriter owns one reader’s delayed saves and exit-flush scheduling through injected storage/error callbacks. Coordinate conversion stays in the adapter. Disposal cancels pending timers without cancelling or duplicating accepted storage operations; database ordering belongs to storage.
+
+WaterfallController owns chapter insertion/reset, prefetch/navigation state and request scopes; continuous views use the WaterfallFlowView query protocol. Prepending returns source-image count for view-owned anchor restoration. Navigation/disposal invalidate old requests and frame callbacks. The controller has no Flutter, ReaderState, global source or storage dependency; composition supplies access.
+
+Gallery receives content/configuration through ReaderGalleryData and navigation through ReaderController; it must not locate ancestor ReaderState or read global settings. images.dart composes comments, UI callbacks and image access. ReaderImageViewController is defined independently in reader_viewport.dart; all callers import it directly; the page no longer re-exports it. Reuse controller image snapshots and preserve image-processing page semantics during structural migration.
+
+Continuous views receive settings through ReaderContinuousData, active chapter/content through ReaderController, and chapter access/UI effects through explicit callbacks. Do not restore ancestor ReaderState or global settings lookup. Read active controller content immediately after chapter changes instead of caching it until a parent rebuild. images.dart shares viewport registration and image-byte adaptation.
+
+progress_bar.dart presents the bottom bar, progress slider and page text through explicit values/callbacks; the slider owns its focus node. scaffold.dart decides chapter navigation, business actions, placement and menu lifecycle. Do not introduce ReaderState/global settings into progress components. ReaderBottomBar.height is the single bottom-bar height declaration.
+
+ReaderStatusInfo owns clock/battery polling; ReaderBatteryRead injects platform access returning ReaderBatterySnapshot. Scaffold controls visibility and placement only. Allow at most one read per dependency generation, reject results after disposal/replacement, and distinguish unsupported hardware from transient failure. Stop scheduling even when native Futures cannot be cancelled.
+
+ReaderTopBar receives titles/actions/back callbacks; ReaderBrightnessPanel receives values/change callbacks. Scaffold owns availability/visibility, preference scope and persistence, navigation and sidebar lifecycle. Panels must not locate reader State or write settings directly.
+
+ReaderImageExporter coordinates exports using ReaderImageSelection identity captured before reading. The shell supplies cache/files and platform actions; never rename selected images using current page state after an await. ReaderImageSelectionOverlay owns its entry/waiter and completes on replacement/disposal. Exit prevents only platform operations not yet handed off.
+
+readerSettingEffects resolves ordered setting effects only. ReaderPreferences supplies fixed keys, with explicit prefix/unknown-key compatibility. The shell checks validity while applying effects; keep widgets/platform calls outside the policy module and read current values in the application adapter.
+
+ImageFavoriteActions is a history business entry with injected storage callbacks, depending only on favorite models and constants. UI must not be transitively reachable. Reader adapters own selection, translation and feedback; actions return explicit outcomes. The existing history.dart UI barrel is not a dependency for new favorite business modules.
+
+ReaderSession owns ReaderHistoryWriter and ReadingSessionTracker and gates timing on both content readiness and foreground state. Flutter lifecycle, automatic-reading pause and exit synchronization use adapters. Exit flushes pending progress synchronously, drains duration writes and notifies the application once; late content/lifecycle events cannot restart it. Storage still owns ordering of accepted progress writes.
+
+ReaderImageCachePolicy owns memory thresholds and query validity for one reader. The page adapts the memory plugin, logging and PaintingBinding cache. Exit restores the existing 100 MB limit and invalidates pending queries; repeated configuration accepts only the latest result. It neither cancels native Futures nor arbitrates cache ownership across multiple readers.
+
+ReaderVolumeController owns an injected event stream and navigation callbacks without Flutter/page dependencies. Toggling immediately invalidates old input; reconnection waits for StreamSubscription.cancel; disposal prevents new subscriptions. Previous-chapter-end and next-chapter fallback behavior is preserved. volume.dart only adapts venera/volume; the page selects Android support and logs errors. Flutter retains native activation/deactivation acknowledgement and error handling; Dart cancellation is not native acknowledgement.
+
+ReaderWindowController owns the close listener and fullscreen request queue through injected window, frame and navigation callbacks, without context lookup. ReaderState captures its ancestor WindowFrame and root Navigator during dependency initialization, retaining overridable assembly/disposal seams. Exit removes the listener synchronously, then drains accepted native operations and restores windowed mode. Native operations cannot be forcibly cancelled; concurrent readers still require shared-window arbitration at runtime.
+
+ReaderOrientationScope must wrap the Navigator and be owned by the application tree. ReaderOrientationCoordinator depends only on orientation/error callbacks and owns handles instead of static Widget States. ReaderOrientationState acquires/releases handles and refreshes UI. DeviceOrientation mapping stays in orientation.dart; the business enum has no platform dependency. Missing scope in an Android reader is an assembly error, with no hidden global fallback.
+
+Navigation behavior tests depend only on ReaderController/ReaderNavigationViewport and injected error reporting, without a page mixin or global log muting.

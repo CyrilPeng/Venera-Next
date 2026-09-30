@@ -247,3 +247,55 @@ DataSync 构造无运行副作用，由运行时显式 start；dispose 禁止新
 追更后台检查从页面分离到 FollowUpdatesService，通过 follow_updates_api.dart 暴露无 UI 的窄边界。服务只能取消自身任务句柄；运行时负责定时器和外部通知监听的启停。页面订阅 followUpdatesChanges 并在 dispose 退订，不得重新使用全局 State 查找刷新追更页面或预览。
 
 缓存管理器以实例保存路径、数据库、扫描器和操作队列；CacheManager.open 支持独立宿主，start 显式启动一次扫描，dispose 排空已接收操作后关闭。扫描器只返回结果，不访问全局缓存实例；缓存操作不得绕过队列或在未等待 dispose 完成时删除工作目录。
+
+共享图片下载由 SharedRequestStream 持有独立 RequestScope；实际订阅触发源流，最后一个订阅退出时先取消图源/HTTP，再释放源订阅。调用者只能释放自己的订阅，不能把单个调用者的 RequestScope 作为共享请求的父作用域。图片缓存命中须直接完成，不再进入图源或网络加载。
+
+阅读器不得在卸载时调用全局图片取消。ReaderImageDownloads 管理预下载订阅，ReaderImagePrecache 管理解码预取监听；释放 pending 缓存时保留 live 消费者及已解码缓存，最终保活句柄由 Flutter 在帧末释放。正常图片取消不作为加载失败报告，真实错误保留原有处理。
+
+LoadingState 的首次加载与手动重试共享同一尝试流程，每次尝试持有 RequestScope；替换/卸载取消，结果与 onDataLoaded 完成后验证当前尝试身份。loadData/onDataLoaded 显式接收作用域，业务回调必须在 await 后先检查取消再发布副作用；不得恢复重复的未受控 then/setState 路径。
+
+图片序号与显示页码转换统一使用无 UI 依赖的 ReaderPageLayout；持久化历史仍保存图片序号。画廊取图使用零基半开区间，布局重排保持原页首图可见；调用端不得重新实现首页单图、多图同页和章节末图历史规则。跨章节瀑布流及拆图坐标属于独立策略。
+
+章节坐标通过 ComicChapters.positionAt/chapterIndex 转换。ComicChapterPosition 明确源 ID、展开编号、组号和组内编号，历史键沿用原格式；不得用合并 allChapters 后的键序列推断跨组位置，因为不同分组可包含相同源 ID。图片与显示页转换继续交由 ReaderPageLayout。
+
+ReaderController 持有导航状态并提供 ReaderNavigationState 快照；不得导入 Flutter、全局设置或存储。视图导航通过 ReaderNavigationViewport，手势接口保留在 UI 层。ReaderLocation 兼容 mixin 已删除，页面直接装配控制器，不得重新引入页面动画状态机；控制器必须随页面销毁以屏蔽迟到回调。
+
+ReaderImagePosition 表示源图片，ReaderPageLayout 转换显示页，WaterfallChapterFlow 转换跨章列表索引；后者反向定位必须校验章节 ID。ReaderImageSlice 的源/显示区域为归一化绘制偏移，不是新的源图片或历史页。历史只保存转换后的源图片序号，保持现有数据协议。
+
+阅读加载/视图选择保留在 images.dart；gallery_view.dart 与 continuous_view.dart 分别承载画廊和连续/瀑布流适配，chapter_swipe_indicator.dart 负责切章指示。菜单选图使用 ReaderImageViewController.currentImageRange，不依赖具体 State 类型；迁移期 State 导出不应被新业务代码使用。
+
+ChapterImageLoader 只依赖注入的章节访问和错误回调，禁止直接查找全局管理器。loadReaderChapterImages 是连接旧存储/图源的适配入口；稳定章节 ID 与已下载判断在适配层，本地优先/回退/取消在策略层。两层测试分别覆盖真实存储兼容和无全局依赖的行为。
+
+ReaderController 同时持有 ReaderContentState，图片列表必须复制为不可变快照。加载以 ReaderContentLoad 身份提交，旧所有者只能取消自身尝试；布局准备期间不得提前解除加载。视图协调刷新，内容命令不在 build/init 中自行触发通知；已加载瀑布流章节通过 replaceChapterImages 激活。
+
+ReaderHistoryWriter 只负责单个阅读器的延迟保存和退出刷新调度，通过回调访问存储与错误报告。历史坐标转换留在适配端；销毁必须取消待触发定时器，不能取消或重复提交存储已接受的操作。数据库写入排序由存储层负责。
+
+WaterfallController 拥有章节插入/重置、预取/导航状态及请求作用域，连续视图只持有 WaterfallFlowView 查询协议。前插返回源图片数，由视图恢复滚动锚点；跳章和销毁使旧请求及帧回调失效。控制器不依赖 Flutter、ReaderState、全局图源或存储，实际访问由装配端注入。
+
+画廊通过 ReaderGalleryData 和 ReaderController 接收内容/配置与导航，不得查找祖先 ReaderState 或读取全局设置。images.dart 装配评论 Widget、界面回调与图片读取。ReaderImageViewController 独立于页面定义在 reader_viewport.dart；页面不再重导出该接口，调用者必须直接依赖协议。图片列表复用控制器快照，源图片处理页码语义不能在结构迁移中隐式改变。
+
+连续视图通过 ReaderContinuousData 接收设置，通过 ReaderController 读取当前章节/内容，章节加载和 UI 副作用使用显式回调。不得恢复祖先 ReaderState 或全局设置查找；跨章后的当前内容必须即时读取控制器，不能缓存成等待父级重建才更新的章节快照。images.dart 共享视口注册和图片读取适配。
+
+progress_bar.dart 只负责底栏、进度滑块和页码文字展示，通过值与回调接收状态；滑块拥有自己的焦点节点。scaffold.dart 决定章节跳转、业务按钮、显示位置及菜单生命周期，不得向进度组件重新引入 ReaderState/全局设置依赖。底栏高度由 ReaderBottomBar.height 统一声明。
+
+ReaderStatusInfo 拥有时钟与电量轮询，平台访问通过 ReaderBatteryRead 注入并返回 ReaderBatterySnapshot；scaffold 只决定显示条件与位置。每个依赖代数最多一个电量请求，卸载/替换后不得发布旧结果，不支持与瞬时失败必须区分。底层平台 Future 不可取消时仍须停止后续调度。
+
+ReaderTopBar 只接收标题、动作与返回回调，ReaderBrightnessPanel 只接收数值与修改回调；scaffold 负责权限/可见性判断、设置范围与保存、导航和侧栏生命周期。面板不得重新查找阅读器 State 或直接写入设置。
+
+图片导出通过 ReaderImageExporter 编排，ReaderImageSelection 必须在读取前固定身份；外壳提供实际缓存/文件和平台操作，异步完成后不得用当前页面位置重命名已选图片。ReaderImageSelectionOverlay 独立持有覆盖层与等待者，替换/销毁必须结束等待；退出只阻止尚未交付的平台操作。
+
+readerSettingEffects 只解析设置通知的有序效果；ReaderPreferences 是固定键的唯一来源，前缀和未知键兼容规则显式保留。外壳执行效果时检查有效性，不得把 Widget 或平台调用移入规则模块；设置值读取仍由应用适配端完成。
+
+ImageFavoriteActions 是 history 领域的纯业务入口，通过回调访问存储；只依赖收藏模型与常量，不可传递导入 UI。阅读器适配选图、翻译、错误及提示，业务服务返回明确结果。原 history.dart 仅作为已有界面兼容入口，不得用于新收藏业务模块。
+
+ReaderSession 拥有 ReaderHistoryWriter 与 ReadingSessionTracker，通过内容就绪和前台状态共同控制计时；Flutter 生命周期、自动阅读暂停与退出同步由适配端注入。退出先同步刷新待保存进度，再排空时长队列并通知应用一次，迟到内容/生命周期事件不能重启会话。已接受进度写入的数据库排序仍由存储层保证。
+
+ReaderImageCachePolicy 只负责内存分档与单个阅读器的查询有效性；内存插件、日志和 PaintingBinding 缓存由页面适配。退出恢复原 100 MB 上限且使未完成查询失效，重复配置仅接受最新结果。策略不取消底层平台 Future，也不提供跨阅读器的全局缓存仲裁。
+
+ReaderVolumeController 通过注入事件流和导航回调拥有订阅，不能依赖 Flutter 或页面。切换立即使旧输入失效，重连等待 StreamSubscription.cancel，退出停止后续订阅；音量上键在前章末页回退、下键在后章开头前进的策略保留。volume.dart 只适配 venera/volume 通道，页面判断 Android 支持并记录错误。Flutter EventChannel 的原生启停确认与启停错误仍由框架管理，不能把 Dart 取消 Future 当作原生确认。
+
+ReaderWindowController 拥有关闭监听与全屏请求队列，依赖注入的窗口 API、边框显示和导航回调，不查找 context。ReaderState 在依赖初始化时捕获祖先 WindowFrame 和根 Navigator，保留测试可覆盖的装配/释放入口。退出同步移除监听，再等待已接受的原生操作并恢复窗口模式；平台调用不能强制取消，共享桌面窗口在多个阅读器间的所有权仍需运行时仲裁。
+
+ReaderOrientationScope 必须位于 Navigator 外并由应用树管理生命周期；ReaderOrientationCoordinator 只依赖异步方向回调与错误报告，句柄替代静态 Widget State 所有权。ReaderOrientationState 是 Flutter 适配器，取得/释放句柄并刷新 UI。平台映射集中在 orientation.dart，业务枚举不得依赖 DeviceOrientation；无作用域的 Android 阅读器装配属于错误，不回退到隐藏全局实例。
+
+images.dart 不再重导出 ContinuousModeState；依赖具体视图实现的集成测试直接导入 continuous_view.dart。导航行为测试仅依赖 ReaderController/ReaderNavigationViewport 并注入错误报告，不得通过页面 mixin 或全局日志静音进行测试。

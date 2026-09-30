@@ -1,3 +1,6 @@
+import 'package:venera_next/features/reader/reader_viewport.dart';
+import 'package:venera_next/features/reader/orientation.dart'
+    show ReaderOrientationScope;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -64,6 +67,7 @@ void main() {
     final key = GlobalKey<_ReaderHarnessState>();
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) => ReaderOrientationScope(child: child!),
         navigatorKey: App.rootNavigatorKey,
         home: OverlayWidget(_ReaderHarness(key: key)),
       ),
@@ -259,7 +263,7 @@ class _ReaderHarnessState extends ReaderState {
   @override
   void initState() {
     super.initState();
-    images = List.generate(12, (i) => 'image-$i');
+    controller.replaceChapterImages(List.generate(12, (i) => 'image-$i'));
   }
 
   @override

@@ -1,0 +1,206 @@
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:venera_next/features/reader/reader_controller.dart';
+
+class _Viewport implements ReaderNavigationViewport {
+  final animations = <Completer<void>>[];
+  int? page;
+  int? chapter;
+  bool handlesChapter = false;
+  @override
+  Future<void> animateToPage(int page) {
+    final future = Completer<void>();
+    animations.add(future);
+    return future.future;
+  }
+
+  @override
+  void toPage(int page) => this.page = page;
+  @override
+  bool toChapter(int chapter, {bool toLastPage = false}) {
+    this.chapter = chapter;
+    return handlesChapter;
+  }
+}
+
+void main() {
+  late ReaderController controller;
+  late _Viewport view;
+  var updates = 0;
+  var pageChanges = 0;
+  var errors = 0;
+  var attached = true;
+  setUp(() {
+    updates = pageChanges = errors = 0;
+    attached = true;
+    view = _Viewport();
+    controller = ReaderController(
+      pageCount: () => 300,
+      chapterCount: () => 3,
+      animationEnabled: () => true,
+      viewport: () => attached ? view : null,
+      onChanged: () => updates++,
+      onPageChanged: () => pageChanges++,
+      onError: (error, stack) => errors++,
+    );
+  });
+  tearDown(() => controller.dispose());
+
+  test('content attempts cancel predecessors and reject stale results', () {
+    final old = controller.beginContentLoad();
+    expect(controller.startContentLoad(old), true);
+    expect(controller.startContentLoad(old), false);
+    final current = controller.beginContentLoad();
+    expect(old.scope.isCancelled, true);
+    expect(controller.setContentImages(old, ['old']), false);
+    expect(controller.failContentLoad(old, 'late error'), false);
+    controller.cancelContentLoad(old);
+    expect(current.scope.isCancelled, false);
+    expect(controller.startContentLoad(current), true);
+    expect(controller.setContentImages(current, ['new']), true);
+    expect(controller.completeContentLoad(current), true);
+    expect(controller.content.images, ['new']);
+    expect(controller.content.isLoading, false);
+    expect(controller.failContentLoad(current, 'after completion'), false);
+  });
+
+  test(
+    'content snapshots copy image lists and retain loading during preparation',
+    () {
+      final attempt = controller.beginContentLoad();
+      controller.startContentLoad(attempt);
+      final images = ['one', 'two'];
+      controller.setContentImages(attempt, images);
+      final preparing = controller.content;
+      images.clear();
+      expect(preparing.images, ['one', 'two']);
+      expect(() => preparing.images!.clear(), throwsUnsupportedError);
+      expect(preparing.isLoading, true);
+      expect(controller.toPage(2), false);
+      controller.completeContentLoad(attempt);
+      expect(preparing.isLoading, true);
+      expect(controller.content.isLoading, false);
+    },
+  );
+
+  test(
+    'retry clears content errors and waterfall activation cancels pending load',
+    () {
+      final failed = controller.beginContentLoad();
+      controller.failContentLoad(failed, StateError('offline'));
+      expect(controller.content.error, contains('offline'));
+      final retry = controller.beginContentLoad();
+      expect(controller.content.error, isNull);
+      final segment = ['chapter-image'];
+      controller.replaceChapterImages(segment);
+      segment.clear();
+      expect(retry.scope.isCancelled, true);
+      expect(controller.content.images, ['chapter-image']);
+      expect(controller.content.isLoading, false);
+      expect(controller.completeContentLoad(retry), false);
+    },
+  );
+
+  test('content disposal cancels owned scope and forbids future writes', () {
+    final attempt = controller.beginContentLoad();
+    controller.dispose();
+    expect(attempt.scope.isCancelled, true);
+    expect(controller.setContentImages(attempt, ['late']), false);
+    expect(controller.completeContentLoad(attempt), false);
+    expect(controller.failContentLoad(attempt, 'late'), false);
+    expect(controller.beginContentLoad, throwsStateError);
+    controller.replaceChapterImages(['late']);
+    expect(controller.content.images, isNull);
+  });
+
+  test('immutable snapshots are cached until a state change', () {
+    final before = controller.state;
+    expect(controller.state, same(before));
+    controller.restorePage(8);
+    controller.restoreChapter(2);
+    final after = controller.state;
+    expect(before.page, 1);
+    expect(before.chapter, 1);
+    expect(after.page, 8);
+    expect(after.chapter, 2);
+    expect(pageChanges, 0);
+    controller.setPage(9);
+    expect(after.page, 8);
+    expect(controller.state.page, 9);
+    expect(pageChanges, 1);
+  });
+
+  test('invalid, loading and detached page commands do not reach viewport', () {
+    expect(controller.toPage(0), false);
+    expect(controller.toPage(301), false);
+    final attempt = controller.beginContentLoad();
+    expect(controller.toPage(2), false);
+    controller.completeContentLoad(attempt);
+    attached = false;
+    expect(controller.toPage(2), false);
+    expect(view.animations, isEmpty);
+    expect(updates, 0);
+    expect(controller.toChapter(4), false);
+  });
+
+  test(
+    'replacement animation filters old viewport positions and completion',
+    () async {
+      controller.toPage(150);
+      controller.toPage(200);
+      controller.reportPage(150);
+      expect(controller.state.page, 1);
+      controller.reportPage(200);
+      expect(controller.state.page, 200);
+      view.animations.first.complete();
+      await pumpEventQueue();
+      expect(controller.state.pendingPage, 200);
+      view.animations.last.complete();
+      await pumpEventQueue();
+      expect(controller.state.isAnimating, false);
+    },
+  );
+
+  test(
+    'chapter adapter handles loaded segments or falls back to chapter load',
+    () {
+      controller.restorePage(20);
+      view.handlesChapter = true;
+      expect(controller.toChapter(2), true);
+      expect(controller.state.chapter, 1);
+      expect(controller.state.page, 20);
+      view.handlesChapter = false;
+      expect(controller.toChapter(3, toLastPage: true), true);
+      expect(controller.state.chapter, 3);
+      expect(controller.state.page, 1);
+      expect(controller.state.jumpToLastPageOnLoad, true);
+      expect(pageChanges, 1);
+      expect(updates, 1);
+    },
+  );
+
+  test(
+    'disposing ignores late animation failures and rejects commands',
+    () async {
+      controller.toPage(20);
+      final previousUpdates = updates;
+      controller.dispose();
+      controller.dispose();
+      view.animations.single.completeError(StateError('late failure'));
+      await pumpEventQueue();
+      controller.reportPage(20);
+      controller.restorePage(30);
+      controller.restoreChapter(2);
+      controller.setJumpToLastPage(true);
+      expect(controller.toPage(40), false);
+      expect(controller.toChapter(2), false);
+      expect(controller.state.page, 1);
+      expect(controller.state.chapter, 1);
+      expect(controller.state.jumpToLastPageOnLoad, false);
+      expect(updates, previousUpdates);
+      expect(errors, 0);
+      expect(pageChanges, 0);
+    },
+  );
+}
