@@ -238,7 +238,9 @@
       "comic_storage"
     ]
   ],
-  "business_entrypoints": [],
+  "business_entrypoints": [
+    "features/comic_source/comic_source_api.dart"
+  ],
   "ui_files": [
     "app_shell/auth_page.dart",
     "app_shell/home_page.dart",

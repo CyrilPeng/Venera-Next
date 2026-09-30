@@ -217,3 +217,11 @@ test/features/<domain>/
 阅读器功能外部代码应通过 `features/reader/reader.dart` 引用阅读页面、加载入口、章节评论页和瀑布流模型，不应直接依赖 reader 内部实现文件。
 
 当前不再保留过渡例外；发现受限 import/export 时应通过移动代码、抽出回调或增加 `routing/` 薄适配层来恢复依赖方向。
+
+## 业务与 UI 入口增量迁移
+
+漫画源新增 `comic_source_api.dart`（模型、服务及运行时配置）和 `comic_source_ui.dart`（页面与首页摘要）。`comic_source.dart` 保留为兼容聚合入口；新的业务调用者使用 API 入口。更新检查/下载属于 `SourceUpdateService`，页面只处理交互，无头调用者直接使用服务。
+
+本地漫画阅读位置通过 `local_reading.dart` 的纯函数解析；页面调用 `routing/local_reading.dart` 打开阅读器，`LocalComic` 不承担导航。
+
+CI 同时运行 `check_architecture_dependencies.py`，按 `dependency_baseline.json` 禁止新增功能域依赖，并检查已登记业务入口的传递 UI 依赖。既有聚合图包含 UI 导航环，不能把该报告视为纯业务依赖图。业务入口逐步登记，基线变更必须伴随明确的职责调整。

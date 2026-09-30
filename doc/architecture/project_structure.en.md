@@ -107,3 +107,11 @@ Run `python .github/scripts/check_structure_imports.py --print-feature-dependenc
 - Retired `part` libraries in reader, settings, history, favorites, comic details, comic source, and image favorites must not be reintroduced.
 
 For the full and authoritative checklist, use [project_structure.zh.md](project_structure.zh.md).
+
+## Incremental business/UI entry points
+
+Comic sources expose `comic_source_api.dart` for models/services/runtime configuration and `comic_source_ui.dart` for pages/summaries. `comic_source.dart` remains a compatibility aggregate. New business consumers use the API. `SourceUpdateService` owns checking/downloading; pages own interaction and headless callers use the service directly.
+
+Local reading positions are resolved by a pure function in `local_reading.dart`; pages open readers through `routing/local_reading.dart`. `LocalComic` no longer navigates.
+
+CI also runs `check_architecture_dependencies.py` with `dependency_baseline.json` to reject new feature edges and transitive UI dependencies from enrolled business entry points. Aggregate cycles include UI navigation and are not business-only cycles. Enroll entry points incrementally; baseline changes require an explicit responsibility change.

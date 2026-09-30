@@ -529,6 +529,12 @@ UTILS_IO_PATH = (LIB_DIR / "utils" / "io.dart").resolve()
 FILE_SYSTEM_ENTRYPOINT_PATH = (LIB_DIR / "foundation" / "file_system.dart").resolve()
 
 FEATURE_ENTRYPOINT_TARGETS = {
+    _feature_path("comic_source", "source_update_service.dart"): _feature_path(
+        "comic_source", "comic_source_api.dart"
+    ),
+    _feature_path("local_comics", "local_reading.dart"): _feature_path(
+        "local_comics", "local_comics.dart"
+    ),
     _feature_path("comic_widgets", "comic_list.dart"): _feature_path(
         "comic_widgets",
         "comic_widgets.dart",

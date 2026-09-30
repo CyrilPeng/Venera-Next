@@ -7,7 +7,7 @@ English: [Execution Record](optimization_progress.en.md)
 - 起点：`550fcff`。工作区原有阅读菜单锁定、长按自动阅读暂停、相关设置与测试、README 和翻译修改；它们参与工作区测试但不纳入本阶段提交。
 - `flutter test --coverage --reporter expanded`：579 项通过，无失败；本次生成的行覆盖率 34.62%（10018/28938）。
 - 修正分析范围后 `flutter analyze --no-pub --no-fatal-infos`：无 error/warning，24 个 info。原两个错误及一个提示来自 `build/`，仅排除此生成目录。
-- 原 Python 脚本测试：44 项通过（3 项跳过）；新增依赖检查器有 7 项测试，覆盖条件引用、相对/包引用、part、注释/字符串、间接 UI 导出、新依赖及循环识别。
+- 原 Python 脚本测试：运行 44 项（3 项跳过，其余通过）；新增依赖检查器有 7 项测试，覆盖条件引用、相对/包引用、part、注释/字符串、间接 UI 导出、新依赖及循环识别。
 - 新检查器在 CI 阻止新增功能域依赖。现有聚合依赖环为：comic_details、favorites、history、local_comics、reader、search、sync。该环包含 UI 导航，不等同于纯业务依赖环。
 - `dependency_baseline.json` 明确记录现存依赖与 UI 文件；业务入口在后续迁移时登记，当前数量为零，不声称已对旧业务层实现隔离。
 - 日志位于本机 `output/architecture-baseline-tests.log`、`output/architecture-analysis.log`、`output/architecture-python-tests.log`，不将生成日志提交到仓库。
@@ -20,4 +20,15 @@ English: [Execution Record](optimization_progress.en.md)
 
 ## 后续阶段
 
-P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出无生产调用，已删除二者及 Channel 测试，并将路径加入退场检查。动态 JS/平台入口、迁移代码和依赖包没有充分删除证据，保留；临时产物不属于本次清理范围。P2–P8 待实施。每次完成可验收任务后更新本记录和 CHANGELOG，独立提交；保持原有未提交功能改动。
+P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出无生产调用，已删除二者及 Channel 测试，并将路径加入退场检查。动态 JS/平台入口、迁移代码和依赖包没有充分删除证据，保留；临时产物不属于本次清理范围。P2 首批服务与导航拆分已完成，其他功能域接口随对应迁移继续收束；P3–P8 待实施。每次完成可验收任务后更新本记录和 CHANGELOG，独立提交；保持原有未提交功能改动。
+
+## P2：首批服务与导航拆分（2026-09-30）
+
+- `SourceUpdateService` 接管更新检查、下载、取消、去重和仓库变化校验；UI 保留交互，无头入口直接调用服务。客户端支持构造注入，测试不再替换页面的网络工厂。
+- 漫画源业务/UI 入口分开，首个业务入口已加入传递 UI 依赖检查；旧聚合入口暂保留以兼容其他调用者。
+- `LocalComic.read()` 已退场：纯策略解析阅读起点，路由负责取历史并打开页面。分组选择沿用旧规则，另有测试明确记录，未混入行为修复。
+- 恢复仓库锁文件并执行 `PUB_HOSTED_URL=https://pub.dev flutter pub get --offline --enforce-lockfile`。首次自动 pub 解析可能改变本机依赖环境，因此 P0 的首次结果仅作为工作区观察；以本次锁定依赖回归为后续可重复比较点。锁文件无提交差异。
+- Windows 测试需要将本地 `build/windows/x64/runner/Release` 加入进程 PATH，使现有 sqlite3.dll 可加载；仅影响该测试进程。未设置路径时出现的库加载失败已确认并通过重跑解决，不将跳过当作通过。
+- 锁定依赖、配置 DLL PATH 后执行 `flutter test --no-pub --coverage --reporter expanded`：577 项通过，无失败/跳过。比首次 579 项少 2 项，来自删除 6 项 Channel 测试并新增 4 项阅读起点测试。
+- `flutter analyze --no-pub --no-fatal-infos`：零 error/warning，24 个 info；两套依赖检查通过。服务取消后立即重试、重复更新、下载失败与仓库相关场景继续通过。
+- P0 的真实设备性能和跨平台验证仍待补齐；现有服务尚有单例依赖，按 P4/P6 继续处理，不声称所有业务域已解耦。
