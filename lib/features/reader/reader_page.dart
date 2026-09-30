@@ -14,6 +14,7 @@ import 'package:venera_next/features/reader/images.dart';
 import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
+import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/page_layout.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/features/reader/volume.dart';
@@ -103,7 +104,7 @@ class ReaderState extends State<Reader>
 
   /// Whether the current page is the chapter comments page.
   bool get isOnChapterCommentsPage {
-    return _shouldShowChapterCommentsAtEnd && pageValue > maxPage;
+    return _shouldShowChapterCommentsAtEnd && page > maxPage;
   }
 
   bool get _shouldShowChapterCommentsAtEnd {
@@ -296,14 +297,14 @@ class ReaderState extends State<Reader>
     if (page < 1) {
       page = 1;
     }
-    chapter = widget.initialChapter ?? 1;
-    if (chapter < 1) {
-      chapter = 1;
-    }
+    final initialChapter = widget.initialChapter ?? 1;
+    controller.restoreChapter(initialChapter < 1 ? 1 : initialChapter);
     if (widget.initialChapterGroup != null) {
-      chapter = widget.chapters!.chapterIndex(
-        chapter,
-        group: widget.initialChapterGroup,
+      controller.restoreChapter(
+        widget.chapters!.chapterIndex(
+          chapter,
+          group: widget.initialChapterGroup,
+        ),
       );
     }
     if (widget.initialPage != null) {
@@ -382,6 +383,7 @@ class ReaderState extends State<Reader>
 
   @override
   void dispose() {
+    controller.dispose();
     _layoutProbe?.cancel();
     _layoutProbe = null;
     WidgetsBinding.instance.removeObserver(this);
@@ -637,153 +639,48 @@ abstract mixin class ReaderVolumeListener {
 }
 
 abstract mixin class ReaderLocation {
-  int pageValue = 1;
-  int? _pendingPage;
+  late final controller = ReaderController(
+    pageCount: () => totalPages,
+    chapterCount: () => maxChapter,
+    isLoading: () => isLoading,
+    animationEnabled: () => enablePageAnimation(cid, type),
+    viewport: () => imageViewController,
+    onChanged: update,
+    onPageChanged: onPageChanged,
+    onError: (error, stack) =>
+        Log.error('Reader', 'Page navigation failed: $error', stack),
+  );
 
-  /// Flag to indicate that the page should jump to the last page after images are loaded.
-  bool jumpToLastPageOnLoad = false;
-
-  int get page => pageValue;
-
-  set page(int value) {
-    pageValue = value;
-    onPageChanged();
-  }
-
-  int chapter = 1;
-
+  int get page => controller.state.page;
+  set page(int value) => controller.setPage(value);
+  int get chapter => controller.state.chapter;
+  bool get jumpToLastPageOnLoad => controller.state.jumpToLastPageOnLoad;
   int get maxPage;
-
-  /// Total pages including chapter comments page (for internal page control).
   int get totalPages;
-
   int get maxChapter;
-
   bool get isLoading;
-
   String get cid;
-
   ComicType get type;
-
   void update();
+  void onPageChanged();
 
   bool enablePageAnimation(String cid, ComicType type) =>
       appdata.settings.readerSettings(cid, type.sourceKey).enablePageAnimation;
 
   ReaderImageViewController? imageViewController;
 
-  void onPageChanged();
-
-  void setPage(int page) {
-    // Prevent page change during animation
-    if (_animationCount > 0 && _pendingPage != null && page != _pendingPage) {
-      return;
-    }
-    this.page = page;
-  }
-
-  bool _validatePage(int page) {
-    return page >= 1 && page <= totalPages;
-  }
-
-  /// Returns true if the page is changed
-  bool toNextPage() {
-    return toPage(page + 1);
-  }
-
-  /// Returns true if the page is changed
-  bool toPrevPage() {
-    return toPage(page - 1);
-  }
-
-  int _animationCount = 0;
-  int _pageAnimationGeneration = 0;
-
-  void resetPageAnimation() {
-    _pageAnimationGeneration++;
-    _animationCount = 0;
-    _pendingPage = null;
-  }
-
-  bool toPage(int page, {bool animated = true}) {
-    if (imageViewController == null || isLoading) return false;
-    if (_validatePage(page)) {
-      if (page == this.page &&
-          page != 1 &&
-          page != totalPages &&
-          !isPageAnimating) {
-        return false;
-      }
-      // A new destination supersedes the previous transition. The positioned
-      // list may never complete a far-scroll Future when it is interrupted
-      // before its secondary list mounts; do not keep waiting for that Future.
-      resetPageAnimation();
-      final hasAnimation = animated && enablePageAnimation(cid, type);
-      if (hasAnimation) {
-        _pendingPage = page;
-        _animationCount++;
-        final generation = _pageAnimationGeneration;
-        update();
-        void finishAnimation() {
-          if (generation != _pageAnimationGeneration) return;
-          _animationCount--;
-          if (_pendingPage == page) {
-            _pendingPage = null;
-          }
-          update();
-        }
-
-        unawaited(
-          Future<void>.sync(
-            () => imageViewController!.animateToPage(page),
-          ).then(
-            (_) => finishAnimation(),
-            onError: (Object error, StackTrace stackTrace) {
-              Log.error('Reader', 'Page navigation failed: $error', stackTrace);
-              finishAnimation();
-            },
-          ),
-        );
-      } else {
-        this.page = page;
-        update();
-        imageViewController!.toPage(page);
-      }
-      return true;
-    }
-    return false;
-  }
-
-  bool get isPageAnimating => _animationCount > 0;
-
-  bool _validateChapter(int chapter) {
-    return chapter >= 1 && chapter <= maxChapter;
-  }
-
-  /// Returns true if the chapter is changed
-  bool toNextChapter() {
-    return toChapter(chapter + 1);
-  }
-
-  /// Returns true if the chapter is changed
-  /// If [toLastPage] is true, the page will be set to the last page of the previous chapter.
-  bool toPrevChapter({bool toLastPage = false}) {
-    return toChapter(chapter - 1, toLastPage: toLastPage);
-  }
-
-  bool toChapter(int c, {bool toLastPage = false}) {
-    if (_validateChapter(c) && !isLoading) {
-      if (imageViewController?.toChapter(c, toLastPage: toLastPage) ?? false) {
-        return true;
-      }
-      chapter = c;
-      page = 1;
-      jumpToLastPageOnLoad = toLastPage;
-      update();
-      return true;
-    }
-    return false;
-  }
+  void setPage(int page) => controller.reportPage(page);
+  void resetPageAnimation() => controller.resetAnimation();
+  bool get isPageAnimating => controller.state.isAnimating;
+  bool toPage(int page, {bool animated = true}) =>
+      controller.toPage(page, animated: animated);
+  bool toNextPage() => toPage(page + 1);
+  bool toPrevPage() => toPage(page - 1);
+  bool toChapter(int chapter, {bool toLastPage = false}) =>
+      controller.toChapter(chapter, toLastPage: toLastPage);
+  bool toNextChapter() => toChapter(chapter + 1);
+  bool toPrevChapter({bool toLastPage = false}) =>
+      toChapter(chapter - 1, toLastPage: toLastPage);
 }
 
 mixin class ReaderWindow {
@@ -858,13 +755,8 @@ enum ReaderMode {
   }
 }
 
-abstract interface class ReaderImageViewController {
-  void toPage(int page);
-
-  Future<void> animateToPage(int page);
-
-  bool toChapter(int chapter, {bool toLastPage = false});
-
+abstract interface class ReaderImageViewController
+    implements ReaderNavigationViewport {
   void handleDoubleTap(Offset location);
 
   void handleLongPressDown(Offset location);

@@ -64,8 +64,8 @@ class ReaderImagesState extends State<ReaderImages> {
   /// Handle jumping to last page when jumpToLastPageOnLoad is true
   void _handleJumpToLastPage() {
     if (reader.jumpToLastPageOnLoad) {
-      reader.pageValue = reader.maxPage;
-      reader.jumpToLastPageOnLoad = false;
+      reader.controller.restorePage(reader.maxPage);
+      reader.controller.setJumpToLastPage(false);
     }
   }
 
@@ -83,7 +83,9 @@ class ReaderImagesState extends State<ReaderImages> {
           if ((reader.widget.initialChapter ?? 1) == history.ep &&
               reader.widget.initialPage == previousPage) {
             final imagePage = history.page;
-            reader.pageValue = reader.pageLayout.pageForImage(imagePage);
+            reader.controller.restorePage(
+              reader.pageLayout.pageForImage(imagePage),
+            );
           }
         }
         reader.localPageOrderChecked = true;
@@ -925,7 +927,7 @@ class ContinuousModeState extends State<_ContinuousMode>
     var segment = _segmentOfChapter(imageRef.chapter);
     var chapterChanged = reader.chapter != imageRef.chapter;
     if (segment != null && chapterChanged) {
-      reader.chapter = imageRef.chapter;
+      reader.controller.restoreChapter(imageRef.chapter);
       reader.images = segment.images;
       // Wait until the scroll/layout callback has finished before updating UI.
       Future.microtask(() {
@@ -990,7 +992,7 @@ class ContinuousModeState extends State<_ContinuousMode>
     _isNavigatingWaterfallLocation = true;
     setState(() {
       _setReaderLocation(imageRef);
-      reader.jumpToLastPageOnLoad = false;
+      reader.controller.setJumpToLastPage(false);
     });
     context.readerScaffold.update();
     SchedulerBinding.instance.addPostFrameCallback((_) {

@@ -257,3 +257,5 @@ LoadingState 的首次加载与手动重试共享同一尝试流程，每次尝�
 图片序号与显示页码转换统一使用无 UI 依赖的 ReaderPageLayout；持久化历史仍保存图片序号。画廊取图使用零基半开区间，布局重排保持原页首图可见；调用端不得重新实现首页单图、多图同页和章节末图历史规则。跨章节瀑布流及拆图坐标属于独立策略。
 
 章节坐标通过 ComicChapters.positionAt/chapterIndex 转换。ComicChapterPosition 明确源 ID、展开编号、组号和组内编号，历史键沿用原格式；不得用合并 allChapters 后的键序列推断跨组位置，因为不同分组可包含相同源 ID。图片与显示页转换继续交由 ReaderPageLayout。
+
+ReaderController 持有导航状态并提供 ReaderNavigationState 快照；不得导入 Flutter、全局设置或存储。视图导航通过 ReaderNavigationViewport，手势接口保留在 UI 层。ReaderLocation 仅为迁移期转发，后续迁移不得重新引入页面动画状态机；控制器必须随页面销毁以屏蔽迟到回调。
