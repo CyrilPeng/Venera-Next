@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'follow_updates_runtime.dart';
 
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
@@ -12,10 +12,7 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
-import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/translations.dart';
-import 'package:venera_next/foundation/global_state.dart';
-import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/features/follow_updates/follow_updates_manager.dart';
 
@@ -26,8 +23,7 @@ class FollowUpdatesWidget extends StatefulWidget {
   State<FollowUpdatesWidget> createState() => _FollowUpdatesWidgetState();
 }
 
-class _FollowUpdatesWidgetState
-    extends AutomaticGlobalState<FollowUpdatesWidget> {
+class _FollowUpdatesWidgetState extends State<FollowUpdatesWidget> {
   int _count = 0;
 
   List<FavoriteItemWithUpdateInfo> previewComics = [];
@@ -63,7 +59,14 @@ class _FollowUpdatesWidgetState
   @override
   void initState() {
     super.initState();
+    followUpdatesChanges.addListener(updateCount);
     updatePreviewData();
+  }
+
+  @override
+  void dispose() {
+    followUpdatesChanges.removeListener(updateCount);
+    super.dispose();
   }
 
   @override
@@ -146,9 +149,6 @@ class _FollowUpdatesWidgetState
       ),
     );
   }
-
-  @override
-  Object? get key => 'FollowUpdatesWidget';
 }
 
 class FollowUpdatesPage extends StatefulWidget {
@@ -158,7 +158,7 @@ class FollowUpdatesPage extends StatefulWidget {
   State<FollowUpdatesPage> createState() => _FollowUpdatesPageState();
 }
 
-class _FollowUpdatesPageState extends AutomaticGlobalState<FollowUpdatesPage> {
+class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
   String? get folder => appdata.settings["followUpdatesFolder"];
 
   var updatedComics = <FavoriteItemWithUpdateInfo>[];
@@ -192,11 +192,18 @@ class _FollowUpdatesPageState extends AutomaticGlobalState<FollowUpdatesPage> {
   @override
   void initState() {
     super.initState();
+    followUpdatesChanges.addListener(updateComics);
     if (folder != null) {
       allComics = LocalFavoritesManager().getComicsWithUpdatesInfo(folder!);
       sortComics();
       updatedComics = allComics.where((c) => c.hasNewUpdate).toList();
     }
+  }
+
+  @override
+  void dispose() {
+    followUpdatesChanges.removeListener(updateComics);
+    super.dispose();
   }
 
   @override
@@ -334,7 +341,7 @@ class _FollowUpdatesPageState extends AutomaticGlobalState<FollowUpdatesPage> {
                             );
                           }
                           LocalFavoritesManager().notifyChanges();
-                          _updateFollowUpdatesUI();
+                          notifyFollowUpdatesChanged();
                           appdata.saveData();
                         },
                       );
@@ -469,16 +476,16 @@ class _FollowUpdatesPageState extends AutomaticGlobalState<FollowUpdatesPage> {
   }
 
   void disable() {
-    FollowUpdatesService._cancelChecking?.call();
+    followUpdatesService.cancelChecking();
     FollowUpdateJob.cancelActive();
     appdata.settings["followUpdatesFolder"] = null;
     LocalFavoritesManager().refreshUpdateIds();
     appdata.saveData();
-    _updateFollowUpdatesUI();
+    notifyFollowUpdatesChanged();
   }
 
   void setFolder(String folder) async {
-    FollowUpdatesService._cancelChecking?.call();
+    followUpdatesService.cancelChecking();
     LocalFavoritesManager().prepareTableForFollowUpdates(folder);
 
     var count = LocalFavoritesManager().count(folder);
@@ -518,7 +525,7 @@ class _FollowUpdatesPageState extends AutomaticGlobalState<FollowUpdatesPage> {
   }
 
   void checkNow() async {
-    FollowUpdatesService._cancelChecking?.call();
+    followUpdatesService.cancelChecking();
 
     final job = FollowUpdateJob(folder!, true);
 
@@ -543,8 +550,7 @@ class _FollowUpdatesPageState extends AutomaticGlobalState<FollowUpdatesPage> {
       loadingController.close();
     }
     if (updated > 0 && mounted) {
-      GlobalState.findOrNull<_FollowUpdatesWidgetState>()?.updateCount();
-      updateComics();
+      notifyFollowUpdatesChanged();
     }
   }
 
@@ -562,74 +568,4 @@ class _FollowUpdatesPageState extends AutomaticGlobalState<FollowUpdatesPage> {
       updatedComics = allComics.where((c) => c.hasNewUpdate).toList();
     });
   }
-
-  @override
-  Object? get key => 'FollowUpdatesPage';
-}
-
-/// Background service for checking updates
-abstract class FollowUpdatesService {
-  static bool _isChecking = false;
-
-  static void Function()? _cancelChecking;
-
-  static bool _isInitialized = false;
-
-  static void _check() async {
-    if (_isChecking || FollowUpdateJob.isChecking) {
-      return;
-    }
-    var folder = appdata.settings["followUpdatesFolder"];
-    if (folder == null) {
-      return;
-    }
-    bool isCanceled = false;
-    _cancelChecking = () {
-      isCanceled = true;
-      FollowUpdateJob.cancelActive();
-    };
-
-    _isChecking = true;
-
-    int updated = 0;
-    try {
-      await DataSync().waitForDownload();
-      if (isCanceled || FollowUpdateJob.isChecking) {
-        return;
-      }
-      await for (var progress in updateFolder(folder, false)) {
-        if (isCanceled) {
-          return;
-        }
-        updated = progress.updated;
-      }
-    } catch (error, stack) {
-      Log.error('Check Updates', error, stack);
-    } finally {
-      _cancelChecking = null;
-      _isChecking = false;
-      if (updated > 0) {
-        _updateFollowUpdatesUI();
-      }
-    }
-  }
-
-  /// Initialize the checker.
-  static void initChecker() {
-    if (_isInitialized) return;
-    _isInitialized = true;
-    registerFollowUpdatesChangeListener(_updateFollowUpdatesUI);
-    _check();
-    DataSync().addListener(_updateFollowUpdatesUI);
-    // A short interval will not affect the performance since every comic has a check time.
-    Timer.periodic(const Duration(minutes: 10), (timer) {
-      _check();
-    });
-  }
-}
-
-/// Update the UI of follow updates.
-void _updateFollowUpdatesUI() {
-  GlobalState.findOrNull<_FollowUpdatesWidgetState>()?.updateCount();
-  GlobalState.findOrNull<_FollowUpdatesPageState>()?.updateComics();
 }

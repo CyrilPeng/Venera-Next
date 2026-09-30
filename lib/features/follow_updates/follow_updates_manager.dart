@@ -7,6 +7,7 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/request_scope.dart';
 
 import 'follow_update_queue.dart';
+import 'follow_update_task.dart';
 
 class ComicUpdateResult {
   final bool updated;
@@ -99,7 +100,7 @@ class UpdateProgress {
 }
 
 /// One application-wide check. Replacing a job cancels its queue and writes.
-class FollowUpdateJob {
+class FollowUpdateJob implements FollowUpdateTask {
   FollowUpdateJob(this.folder, this.ignoreCheckTime) {
     _controller = StreamController<UpdateProgress>(
       onListen: () => unawaited(_run()),
@@ -115,7 +116,10 @@ class FollowUpdateJob {
   bool _finished = false;
   late final StreamController<UpdateProgress> _controller;
   Stream<UpdateProgress> get progress => _controller.stream;
+  @override
+  Stream<int> get updatedCounts => progress.map((value) => value.updated);
   bool get isCancelled => _scope.isCancelled;
+  @override
   void cancel() {
     if (!_finished) _scope.cancel();
   }

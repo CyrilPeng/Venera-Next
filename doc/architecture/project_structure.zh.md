@@ -243,3 +243,5 @@ DataSync 构造无运行副作用，由运行时显式 start；dispose 禁止新
 交互事件由 `InteractiveBindings` 实例持有，主应用挂载后 start、卸载时 dispose。链接与文本分享通过 `EventSubscription` 串行处理，await 后必须检查有效性再导航。不得重新引入全局文本分享启动标记或无所有者的心跳/事件订阅。
 
 `BackgroundSync` 在主应用挂载后管理自动同步调度；WebDAV 源只执行检查/传输，不保存静态轮询定时器。DataSync.stop 保留本地变更观察以避免丢失 pending，dispose 才解除观察；停止调度不得中断已进入提交的传输。旧代数 tick 不得启动新调度的工作。
+
+追更后台检查从页面分离到 FollowUpdatesService，通过 follow_updates_api.dart 暴露无 UI 的窄边界。服务只能取消自身任务句柄；运行时负责定时器和外部通知监听的启停。页面订阅 followUpdatesChanges 并在 dispose 退订，不得重新使用全局 State 查找刷新追更页面或预览。

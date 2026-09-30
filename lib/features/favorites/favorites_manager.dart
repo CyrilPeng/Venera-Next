@@ -19,7 +19,9 @@ typedef FollowUpdatesChangeListener = void Function();
 
 FollowUpdatesChangeListener? _followUpdatesChangeListener;
 
-void registerFollowUpdatesChangeListener(FollowUpdatesChangeListener listener) {
+void registerFollowUpdatesChangeListener(
+  FollowUpdatesChangeListener? listener,
+) {
   _followUpdatesChangeListener = listener;
 }
 

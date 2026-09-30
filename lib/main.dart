@@ -1,3 +1,4 @@
+import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/app_runtime/background_sync.dart';
 import 'package:venera_next/app_runtime/interactive_bindings.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
@@ -90,6 +91,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       if (mounted) {
         _interactiveBindings.start();
         _backgroundSync.start();
+        startFollowUpdates();
       }
     });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -104,6 +106,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     App.registerForceRebuild(null);
     hideContentOverlay?.remove();
     hideContentOverlay = null;
+    stopFollowUpdates();
     _backgroundSync.stop();
     unawaited(_interactiveBindings.dispose());
     super.dispose();

@@ -15,7 +15,6 @@ import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/settings/settings.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
 import 'bootstrap_core.dart';
@@ -138,7 +137,6 @@ Future<void> _checkAppUpdates() async {
 
 void checkUpdates() {
   _checkAppUpdates();
-  FollowUpdatesService.initChecker();
 }
 
 void reloadComicSourcesForDebug() async {

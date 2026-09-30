@@ -239,7 +239,8 @@
     ]
   ],
   "business_entrypoints": [
-    "features/comic_source/comic_source_api.dart"
+    "features/comic_source/comic_source_api.dart",
+    "features/follow_updates/follow_updates_api.dart"
   ],
   "ui_files": [
     "app_shell/auth_page.dart",
