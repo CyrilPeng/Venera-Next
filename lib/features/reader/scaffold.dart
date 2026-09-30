@@ -18,7 +18,6 @@ import 'package:venera_next/features/reader/chapter_comments.dart';
 import 'package:venera_next/features/reader/chapters.dart';
 import 'package:venera_next/features/reader/eink_refresh.dart';
 import 'package:venera_next/features/reader/gesture.dart';
-import 'package:venera_next/features/reader/images.dart';
 import 'package:venera_next/features/reader/orientation.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -1007,28 +1006,9 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     var reader = context.reader;
     var imageViewController = context.reader.imageViewController;
 
-    bool needsSelection = false;
-    int? singleImageIndex;
-
-    if (imageViewController is GalleryModeState) {
-      var range = imageViewController.getCurrentPageImageRange();
-      if (range != null) {
-        var (startIndex, endIndex) = range;
-        int actualImageCount = endIndex - startIndex;
-        if (actualImageCount == 1) {
-          needsSelection = false;
-          singleImageIndex = startIndex;
-        } else {
-          needsSelection = true;
-        }
-      }
-    } else if (imageViewController is ContinuousModeState) {
-      needsSelection = false;
-      singleImageIndex = reader.page - 1;
-    }
-
-    if (!needsSelection && singleImageIndex != null) {
-      return singleImageIndex;
+    final range = imageViewController?.currentImageRange;
+    if (range != null && range.$2 - range.$1 == 1) {
+      return range.$1;
     } else {
       var location = await _showSelectImageOverlay();
       if (location == null) {

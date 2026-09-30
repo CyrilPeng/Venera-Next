@@ -763,6 +763,9 @@ enum ReaderMode {
 
 abstract interface class ReaderImageViewController
     implements ReaderNavigationViewport {
+  /// Zero-based, end-exclusive source images represented by the current page.
+  (int start, int end)? get currentImageRange;
+
   void handleDoubleTap(Offset location);
 
   void handleLongPressDown(Offset location);
