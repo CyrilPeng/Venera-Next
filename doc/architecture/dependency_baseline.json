@@ -239,6 +239,7 @@
     ]
   ],
   "business_entrypoints": [
+    "features/reader/volume_controller.dart",
     "features/reader/reader_session.dart",
     "features/history/image_favorite_actions.dart",
     "features/comic_source/comic_source_api.dart",

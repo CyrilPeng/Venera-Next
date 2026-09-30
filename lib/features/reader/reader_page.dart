@@ -24,6 +24,7 @@ import 'package:venera_next/features/reader/page_layout.dart';
 import 'package:venera_next/features/reader/image_position.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/features/reader/volume.dart';
+import 'package:venera_next/features/reader/volume_controller.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -89,7 +90,6 @@ class ReaderState extends State<Reader>
     with
         ReaderLocation,
         ReaderWindow,
-        ReaderVolumeListener,
         ReaderImagePerPageHandler,
         WidgetsBindingObserver {
   @override
@@ -401,6 +401,22 @@ class ReaderState extends State<Reader>
 
   void setImageCacheSize() => unawaited(_imageCachePolicy.configure());
 
+  late final _volumeController = ReaderVolumeController(
+    events: readerVolumeEvents,
+    nextPage: toNextPage,
+    previousPage: toPrevPage,
+    nextChapter: toNextChapter,
+    previousChapter: () => toPrevChapter(toLastPage: true),
+    onError: (error, stack) =>
+        Log.error('Reader', 'Volume navigation failed: $error', stack),
+  );
+
+  void handleVolumeEvent() {
+    if (App.isAndroid) unawaited(_volumeController.setEnabled(true));
+  }
+
+  void stopVolumeEvent() => unawaited(_volumeController.setEnabled(false));
+
   @override
   void dispose() {
     controller.dispose();
@@ -418,7 +434,7 @@ class ReaderState extends State<Reader>
     );
     focusNode.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    stopVolumeEvent();
+    unawaited(_volumeController.dispose());
     _imageCachePolicy.dispose();
     disposeReaderWindow();
     super.dispose();
@@ -575,48 +591,6 @@ abstract mixin class ReaderImagePerPageHandler {
       );
       _lastImagesPerPage = currentImagesPerPage;
       _lastOrientation = currentOrientation;
-    }
-  }
-}
-
-abstract mixin class ReaderVolumeListener {
-  bool toNextPage();
-
-  bool toPrevPage();
-
-  bool toNextChapter();
-
-  bool toPrevChapter({bool toLastPage = false});
-
-  VolumeListener? volumeListener;
-
-  void onDown() {
-    if (!toNextPage()) {
-      toNextChapter();
-    }
-  }
-
-  void onUp() {
-    if (!toPrevPage()) {
-      toPrevChapter(toLastPage: true);
-    }
-  }
-
-  void handleVolumeEvent() {
-    if (!App.isAndroid) {
-      // Currently only support Android
-      return;
-    }
-    if (volumeListener != null) {
-      volumeListener?.cancel();
-    }
-    volumeListener = VolumeListener(onDown: onDown, onUp: onUp)..listen();
-  }
-
-  void stopVolumeEvent() {
-    if (volumeListener != null) {
-      volumeListener?.cancel();
-      volumeListener = null;
     }
   }
 }

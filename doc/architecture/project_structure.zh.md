@@ -291,3 +291,5 @@ ImageFavoriteActions 是 history 领域的纯业务入口，通过回调访问�
 ReaderSession 拥有 ReaderHistoryWriter 与 ReadingSessionTracker，通过内容就绪和前台状态共同控制计时；Flutter 生命周期、自动阅读暂停与退出同步由适配端注入。退出先同步刷新待保存进度，再排空时长队列并通知应用一次，迟到内容/生命周期事件不能重启会话。已接受进度写入的数据库排序仍由存储层保证。
 
 ReaderImageCachePolicy 只负责内存分档与单个阅读器的查询有效性；内存插件、日志和 PaintingBinding 缓存由页面适配。退出恢复原 100 MB 上限且使未完成查询失效，重复配置仅接受最新结果。策略不取消底层平台 Future，也不提供跨阅读器的全局缓存仲裁。
+
+ReaderVolumeController 通过注入事件流和导航回调拥有订阅，不能依赖 Flutter 或页面。切换立即使旧输入失效，重连等待 StreamSubscription.cancel，退出停止后续订阅；音量上键在前章末页回退、下键在后章开头前进的策略保留。volume.dart 只适配 venera/volume 通道，页面判断 Android 支持并记录错误。Flutter EventChannel 的原生启停确认与启停错误仍由框架管理，不能把 Dart 取消 Future 当作原生确认。

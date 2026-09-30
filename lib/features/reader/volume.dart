@@ -1,31 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/services.dart';
 
-class VolumeListener {
-  static const channel = EventChannel('venera/volume');
+const _volumeChannel = EventChannel('venera/volume');
 
-  void Function()? onUp;
-
-  void Function()? onDown;
-
-  VolumeListener({this.onUp, this.onDown});
-
-  StreamSubscription? stream;
-
-  void listen() {
-    stream = channel.receiveBroadcastStream().listen(onEvent);
-  }
-
-  void onEvent(event) {
-    if (event == 1) {
-      onUp!();
-    } else if (event == 2) {
-      onDown!();
-    }
-  }
-
-  void cancel() {
-    stream?.cancel();
-  }
-}
+/// Android emits 1 for volume up and 2 for volume down.
+Stream<Object?> readerVolumeEvents() => _volumeChannel.receiveBroadcastStream();
