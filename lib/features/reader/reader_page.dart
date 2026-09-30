@@ -36,8 +36,6 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:window_manager/window_manager.dart';
 
-export 'reader_viewport.dart' show ReaderImageViewController;
-
 extension ReaderContext on BuildContext {
   ReaderState get reader => findAncestorStateOfType<ReaderState>()!;
 
@@ -88,19 +86,49 @@ class Reader extends StatefulWidget {
 }
 
 class ReaderState extends State<Reader>
-    with ReaderLocation, ReaderImagePerPageHandler, WidgetsBindingObserver {
+    with ReaderImagePerPageHandler, WidgetsBindingObserver {
+  late final controller = ReaderController(
+    pageCount: () => totalPages,
+    chapterCount: () => maxChapter,
+    animationEnabled: () => preferences.enablePageAnimation,
+    viewport: () => imageViewController,
+    onChanged: update,
+    onPageChanged: onPageChanged,
+    onError: (error, stack) =>
+        Log.error('Reader', 'Page navigation failed: $error', stack),
+  );
+
   @override
+  int get page => controller.state.page;
+  @override
+  set page(int value) => controller.setPage(value);
+  int get chapter => controller.state.chapter;
+  bool get jumpToLastPageOnLoad => controller.state.jumpToLastPageOnLoad;
+
+  ReaderImageViewController? imageViewController;
+
+  void setPage(int page) => controller.reportPage(page);
+  void resetPageAnimation() => controller.resetAnimation();
+  bool get isPageAnimating => controller.state.isAnimating;
+  bool toPage(int page, {bool animated = true}) =>
+      controller.toPage(page, animated: animated);
+  bool toNextPage() => toPage(page + 1);
+  bool toPrevPage() => toPage(page - 1);
+  bool toChapter(int chapter, {bool toLastPage = false}) =>
+      controller.toChapter(chapter, toLastPage: toLastPage);
+  bool toNextChapter() => toChapter(chapter + 1);
+  bool toPrevChapter({bool toLastPage = false}) =>
+      toChapter(chapter - 1, toLastPage: toLastPage);
+
   void update() {
     if (mounted) setState(() {});
   }
 
   /// The maximum page number for images only (excluding chapter comments page).
   /// This is used for display purposes and history recording.
-  @override
   int get maxPage => pageLayout.pageCount(images?.length);
 
   /// Total pages including chapter comments page (used for internal page control).
-  @override
   int get totalPages {
     var pages = maxPage;
     if (_shouldShowChapterCommentsAtEnd) pages++;
@@ -290,7 +318,6 @@ class ReaderState extends State<Reader>
     update();
   }
 
-  @override
   bool get isLoading => controller.content.isLoading;
 
   var focusNode = FocusNode();
@@ -499,10 +526,8 @@ class ReaderState extends State<Reader>
     imageViewController?.handleKeyEvent(event);
   }
 
-  @override
   int get maxChapter => widget.chapters?.length ?? 1;
 
-  @override
   void onPageChanged() {
     updateHistory();
   }
@@ -617,50 +642,6 @@ abstract mixin class ReaderImagePerPageHandler {
       _lastOrientation = currentOrientation;
     }
   }
-}
-
-abstract mixin class ReaderLocation {
-  late final controller = ReaderController(
-    pageCount: () => totalPages,
-    chapterCount: () => maxChapter,
-    animationEnabled: () => enablePageAnimation(cid, type),
-    viewport: () => imageViewController,
-    onChanged: update,
-    onPageChanged: onPageChanged,
-    onError: (error, stack) =>
-        Log.error('Reader', 'Page navigation failed: $error', stack),
-  );
-
-  int get page => controller.state.page;
-  set page(int value) => controller.setPage(value);
-  int get chapter => controller.state.chapter;
-  bool get jumpToLastPageOnLoad => controller.state.jumpToLastPageOnLoad;
-  int get maxPage;
-  int get totalPages;
-  int get maxChapter;
-  bool get isLoading;
-  String get cid;
-  ComicType get type;
-  void update();
-  void onPageChanged();
-
-  bool enablePageAnimation(String cid, ComicType type) =>
-      appdata.settings.readerSettings(cid, type.sourceKey).enablePageAnimation;
-
-  ReaderImageViewController? imageViewController;
-
-  void setPage(int page) => controller.reportPage(page);
-  void resetPageAnimation() => controller.resetAnimation();
-  bool get isPageAnimating => controller.state.isAnimating;
-  bool toPage(int page, {bool animated = true}) =>
-      controller.toPage(page, animated: animated);
-  bool toNextPage() => toPage(page + 1);
-  bool toPrevPage() => toPage(page - 1);
-  bool toChapter(int chapter, {bool toLastPage = false}) =>
-      controller.toChapter(chapter, toLastPage: toLastPage);
-  bool toNextChapter() => toChapter(chapter + 1);
-  bool toPrevChapter({bool toLastPage = false}) =>
-      toChapter(chapter - 1, toLastPage: toLastPage);
 }
 
 enum ReaderMode {

@@ -1,41 +1,41 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera_next/features/reader/reader_page.dart';
-import 'package:venera_next/foundation/comic_type.dart';
-import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/features/reader/reader_controller.dart';
 
 void main() {
   test('a completed replacement releases an unfinished animation', () async {
     final controller = _Controller();
-    final reader = _Location()..imageViewController = controller;
+    final reader = _navigation(controller);
     reader.toPage(150);
     reader.toPage(200);
     controller.animations[1].complete();
     await pumpEventQueue();
-    expect(reader.isPageAnimating, isFalse);
+    expect(reader.state.isAnimating, isFalse);
     reader.toPage(250);
     controller.animations[0].complete();
     await pumpEventQueue();
-    expect(reader.isPageAnimating, isTrue);
+    expect(reader.state.isAnimating, isTrue);
     controller.animations[2].complete();
     await pumpEventQueue();
-    expect(reader.isPageAnimating, isFalse);
+    expect(reader.state.isAnimating, isFalse);
+    reader.dispose();
   });
 
   test(
     'direct navigation cancels animation state and preserves destination',
     () async {
       final controller = _Controller();
-      final reader = _Location()..imageViewController = controller;
+      final reader = _navigation(controller);
       reader.toPage(150);
       reader.toPage(200, animated: false);
-      expect(reader.isPageAnimating, isFalse);
+      expect(reader.state.isAnimating, isFalse);
       expect(controller.destination, 200);
       controller.animations.single.complete();
       await pumpEventQueue();
-      expect(reader.page, 200);
-      expect(reader.isPageAnimating, isFalse);
+      expect(reader.state.page, 200);
+      expect(reader.state.isAnimating, isFalse);
+      reader.dispose();
     },
   );
 
@@ -43,49 +43,39 @@ void main() {
     test(
       'failed animation releases input (synchronous=$synchronous)',
       () async {
-        Log.isMuted = true;
-        try {
-          final controller = _Controller()..throwSynchronously = synchronous;
-          final reader = _Location()..imageViewController = controller;
-          reader.toPage(200);
-          if (!synchronous) {
-            controller.animations.single.completeError(
-              StateError('interrupted'),
-            );
-          }
-          await pumpEventQueue();
-          expect(reader.isPageAnimating, isFalse);
-        } finally {
-          Log.isMuted = false;
-          Log.clear();
+        final errors = <Object>[];
+        final controller = _Controller()..throwSynchronously = synchronous;
+        final reader = _navigation(
+          controller,
+          onError: (error, stack) => errors.add(error),
+        );
+        reader.toPage(200);
+        if (!synchronous) {
+          controller.animations.single.completeError(StateError('interrupted'));
         }
+        await pumpEventQueue();
+        expect(reader.state.isAnimating, isFalse);
+        expect(errors, hasLength(1));
+        reader.dispose();
       },
     );
   }
 }
 
-class _Location with ReaderLocation {
-  @override
-  int get maxPage => 300;
-  @override
-  int get totalPages => 300;
-  @override
-  int get maxChapter => 1;
-  @override
-  bool get isLoading => false;
-  @override
-  String get cid => 'book';
-  @override
-  ComicType get type => ComicType.local;
-  @override
-  bool enablePageAnimation(String cid, ComicType type) => true;
-  @override
-  void update() {}
-  @override
-  void onPageChanged() {}
-}
+ReaderController _navigation(
+  ReaderNavigationViewport viewport, {
+  void Function(Object, StackTrace)? onError,
+}) => ReaderController(
+  pageCount: () => 300,
+  chapterCount: () => 1,
+  animationEnabled: () => true,
+  viewport: () => viewport,
+  onChanged: () {},
+  onPageChanged: () {},
+  onError: onError ?? (error, stack) => fail('$error'),
+);
 
-class _Controller implements ReaderImageViewController {
+class _Controller implements ReaderNavigationViewport {
   final animations = <Completer<void>>[];
   bool throwSynchronously = false;
   int? destination;

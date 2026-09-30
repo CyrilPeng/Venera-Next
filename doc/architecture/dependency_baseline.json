@@ -239,6 +239,7 @@
     ]
   ],
   "business_entrypoints": [
+    "features/reader/reader_controller.dart",
     "features/reader/orientation_controller.dart",
     "features/reader/window_controller.dart",
     "features/reader/volume_controller.dart",

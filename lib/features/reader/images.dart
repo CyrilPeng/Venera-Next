@@ -1,3 +1,4 @@
+import 'package:venera_next/features/reader/reader_viewport.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -21,9 +22,6 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'continuous_view.dart';
-
-// Transitional exports for existing viewport consumers.
-export 'continuous_view.dart' show ContinuousModeState;
 
 class ReaderImages extends StatefulWidget {
   const ReaderImages({super.key});

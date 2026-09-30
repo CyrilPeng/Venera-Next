@@ -334,3 +334,10 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - ReaderOrientationScope 在应用 Navigator 外持有协调器，组件通过 inherited provider 获取句柄；main 与测试装配显式接入。枚举不再携带 DeviceOrientation，平台值转换/错误日志在 orientation.dart，协调器纳入业务依赖检查。
 - 保持系统→竖屏→横屏循环、仅 Android 启用及方向请求立即发出的既有语义，不因未完成平台 Future 阻塞退出恢复。新增 3 项协调器测试，加上原 11 项 Widget/通道测试共 14 项通过；全量 Windows Flutter 735 项通过。分析零错误/警告、23 个既有 info；结构、架构、Git 依赖及 12 项架构脚本测试通过。
 - 自动阅读测试只暂存作用域装配，原菜单/暂停等测试改动未提交。原生屏幕旋转、其他共享平台资源所有权、其余 P5、P6–P8 及设备/性能验收仍未完成。
+
+## P5：导航兼容层退出（2026-10-01）
+
+- 移除仅剩页面和测试使用的 ReaderLocation mixin，ReaderState 直接装配 ReaderController，设置读取复用 preferences；删除只为 mixin 提供的抽象成员和无其他调用的 enablePageAnimation 包装。
+- reader_page.dart 不再重导出 ReaderImageViewController，images.dart 不再重导出 ContinuousModeState；所有调用者改用独立协议或实际视图入口，保留页面现有对 UI 的导航适配方法。ReaderController 作为业务入口受依赖检查保护。
+- 导航测试直接使用 ReaderController/ReaderNavigationViewport，删除页面/ComicType/全局 Log 依赖，注入并断言错误报告并释放控制器。保持既有 4 项行为测试，不增加镜像测试；定向 15 项与全量 Windows Flutter 735 项通过。分析零错误/警告、23 个既有 info；结构、架构、Git 依赖及 12 项架构脚本测试通过。
+- 自动阅读测试只暂存 import 迁移，原有菜单/暂停修改继续未提交。ReaderState 的 UI 适配仍有待减少，页布局/历史映射、其他共享资源所有权、其余 P5、P6–P8 和平台/性能验收尚未完成。

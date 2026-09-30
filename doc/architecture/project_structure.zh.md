@@ -258,7 +258,7 @@ LoadingState 的首次加载与手动重试共享同一尝试流程，每次尝�
 
 章节坐标通过 ComicChapters.positionAt/chapterIndex 转换。ComicChapterPosition 明确源 ID、展开编号、组号和组内编号，历史键沿用原格式；不得用合并 allChapters 后的键序列推断跨组位置，因为不同分组可包含相同源 ID。图片与显示页转换继续交由 ReaderPageLayout。
 
-ReaderController 持有导航状态并提供 ReaderNavigationState 快照；不得导入 Flutter、全局设置或存储。视图导航通过 ReaderNavigationViewport，手势接口保留在 UI 层。ReaderLocation 仅为迁移期转发，后续迁移不得重新引入页面动画状态机；控制器必须随页面销毁以屏蔽迟到回调。
+ReaderController 持有导航状态并提供 ReaderNavigationState 快照；不得导入 Flutter、全局设置或存储。视图导航通过 ReaderNavigationViewport，手势接口保留在 UI 层。ReaderLocation 兼容 mixin 已删除，页面直接装配控制器，不得重新引入页面动画状态机；控制器必须随页面销毁以屏蔽迟到回调。
 
 ReaderImagePosition 表示源图片，ReaderPageLayout 转换显示页，WaterfallChapterFlow 转换跨章列表索引；后者反向定位必须校验章节 ID。ReaderImageSlice 的源/显示区域为归一化绘制偏移，不是新的源图片或历史页。历史只保存转换后的源图片序号，保持现有数据协议。
 
@@ -272,7 +272,7 @@ ReaderHistoryWriter 只负责单个阅读器的延迟保存和退出刷新调度
 
 WaterfallController 拥有章节插入/重置、预取/导航状态及请求作用域，连续视图只持有 WaterfallFlowView 查询协议。前插返回源图片数，由视图恢复滚动锚点；跳章和销毁使旧请求及帧回调失效。控制器不依赖 Flutter、ReaderState、全局图源或存储，实际访问由装配端注入。
 
-画廊通过 ReaderGalleryData 和 ReaderController 接收内容/配置与导航，不得查找祖先 ReaderState 或读取全局设置。images.dart 装配评论 Widget、界面回调与图片读取。ReaderImageViewController 独立于页面定义在 reader_viewport.dart；过渡页面导出供旧调用者使用，新视图应直接依赖协议。图片列表复用控制器快照，源图片处理页码语义不能在结构迁移中隐式改变。
+画廊通过 ReaderGalleryData 和 ReaderController 接收内容/配置与导航，不得查找祖先 ReaderState 或读取全局设置。images.dart 装配评论 Widget、界面回调与图片读取。ReaderImageViewController 独立于页面定义在 reader_viewport.dart；页面不再重导出该接口，调用者必须直接依赖协议。图片列表复用控制器快照，源图片处理页码语义不能在结构迁移中隐式改变。
 
 连续视图通过 ReaderContinuousData 接收设置，通过 ReaderController 读取当前章节/内容，章节加载和 UI 副作用使用显式回调。不得恢复祖先 ReaderState 或全局设置查找；跨章后的当前内容必须即时读取控制器，不能缓存成等待父级重建才更新的章节快照。images.dart 共享视口注册和图片读取适配。
 
@@ -297,3 +297,5 @@ ReaderVolumeController 通过注入事件流和导航回调拥有订阅，不能
 ReaderWindowController 拥有关闭监听与全屏请求队列，依赖注入的窗口 API、边框显示和导航回调，不查找 context。ReaderState 在依赖初始化时捕获祖先 WindowFrame 和根 Navigator，保留测试可覆盖的装配/释放入口。退出同步移除监听，再等待已接受的原生操作并恢复窗口模式；平台调用不能强制取消，共享桌面窗口在多个阅读器间的所有权仍需运行时仲裁。
 
 ReaderOrientationScope 必须位于 Navigator 外并由应用树管理生命周期；ReaderOrientationCoordinator 只依赖异步方向回调与错误报告，句柄替代静态 Widget State 所有权。ReaderOrientationState 是 Flutter 适配器，取得/释放句柄并刷新 UI。平台映射集中在 orientation.dart，业务枚举不得依赖 DeviceOrientation；无作用域的 Android 阅读器装配属于错误，不回退到隐藏全局实例。
+
+images.dart 不再重导出 ContinuousModeState；依赖具体视图实现的集成测试直接导入 continuous_view.dart。导航行为测试仅依赖 ReaderController/ReaderNavigationViewport 并注入错误报告，不得通过页面 mixin 或全局日志静音进行测试。

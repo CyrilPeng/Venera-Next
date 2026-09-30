@@ -1,3 +1,4 @@
+import 'package:venera_next/features/reader/reader_viewport.dart';
 import 'package:venera_next/features/reader/orientation.dart'
     show ReaderOrientationScope;
 import 'dart:async';
