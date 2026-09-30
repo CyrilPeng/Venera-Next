@@ -28,6 +28,7 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/network/images.dart';
+import 'package:venera_next/network/request_scope.dart';
 
 class ReaderImages extends StatefulWidget {
   const ReaderImages({super.key});
@@ -37,6 +38,7 @@ class ReaderImages extends StatefulWidget {
 }
 
 class ReaderImagesState extends State<ReaderImages> {
+  final _chapterRequests = RequestScope();
   String? error;
 
   bool inProgress = false;
@@ -53,6 +55,8 @@ class ReaderImagesState extends State<ReaderImages> {
 
   @override
   void dispose() {
+    _chapterRequests.cancel();
+    _chapterRequests.dispose();
     super.dispose();
     ImageDownloader.cancelAllLoadingImages();
   }
@@ -89,6 +93,7 @@ class ReaderImagesState extends State<ReaderImages> {
         reader.localPageOrderChecked = true;
       }
       final images = await loadReaderChapterImages(
+        scope: _chapterRequests,
         comicId: reader.cid,
         type: reader.type,
         chapter: reader.chapter,
@@ -727,6 +732,8 @@ class _ContinuousMode extends StatefulWidget {
 
 class ContinuousModeState extends State<_ContinuousMode>
     implements ReaderImageViewController, AutoReadingViewport {
+  final _chapterRequests = RequestScope();
+
   late ReaderState reader;
 
   var itemScrollController = ItemScrollController();
@@ -826,6 +833,7 @@ class ContinuousModeState extends State<_ContinuousMode>
 
   Future<List<String>> _loadChapterImages(int chapter) {
     return loadReaderChapterImages(
+      scope: _chapterRequests,
       comicId: reader.cid,
       type: reader.type,
       chapter: chapter,
@@ -1031,6 +1039,8 @@ class ContinuousModeState extends State<_ContinuousMode>
 
   @override
   void dispose() {
+    _chapterRequests.cancel();
+    _chapterRequests.dispose();
     itemPositionsListener.itemPositions.removeListener(onPositionChanged);
     super.dispose();
   }

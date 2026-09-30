@@ -5,6 +5,7 @@ import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
+import 'package:venera_next/network/request_scope.dart';
 
 class LocalComicFilesUnavailable implements Exception {
   const LocalComicFilesUnavailable(this.path);
@@ -22,13 +23,42 @@ class LocalComicFilesUnavailable implements Exception {
 
 /// Resolve downloaded chapters by ID, independently of the current source's
 /// chapter order. Database download records do not guarantee files still exist.
+/// Each call owns a child of [scope], propagating cancellation to source calls
+/// and checking it before publishing results or online recovery callbacks.
 Future<List<String>> loadReaderChapterImages({
   required String comicId,
   required ComicType type,
   required int chapter,
   required ComicChapters? chapters,
   void Function()? onOnlineFallback,
+  RequestScope? scope,
 }) async {
+  final request = RequestScope(parent: scope);
+  try {
+    return await request.run(
+      () => _loadReaderChapterImages(
+        comicId: comicId,
+        type: type,
+        chapter: chapter,
+        chapters: chapters,
+        onOnlineFallback: onOnlineFallback,
+        scope: request,
+      ),
+    );
+  } finally {
+    request.dispose();
+  }
+}
+
+Future<List<String>> _loadReaderChapterImages({
+  required String comicId,
+  required ComicType type,
+  required int chapter,
+  required ComicChapters? chapters,
+  required void Function()? onOnlineFallback,
+  required RequestScope scope,
+}) async {
+  scope.check();
   final chapterId = chapters?.ids.elementAtOrNull(chapter - 1);
   if (chapters != null && chapterId == null) {
     throw RangeError('Invalid chapter');
@@ -51,6 +81,7 @@ Future<List<String>> loadReaderChapterImages({
         type,
         chapterId ?? chapter,
       );
+      scope.check();
       if (images.isEmpty) {
         throw FileSystemException(
           'No local comic images found',
@@ -73,10 +104,12 @@ Future<List<String>> loadReaderChapterImages({
       missingLocalFiles = true;
     }
   }
+  scope.check();
   if (source?.loadComicPages == null) {
     throw 'Comic source is unavailable'.tl;
   }
   final result = await source!.loadComicPages!(comicId, chapterId);
+  scope.check();
   if (result.error) throw result.errorMessage!;
   if (missingLocalFiles) onOnlineFallback?.call();
   return result.data;
