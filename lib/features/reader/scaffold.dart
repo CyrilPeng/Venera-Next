@@ -28,6 +28,7 @@ import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/features/reader/image_export.dart';
+import 'package:venera_next/features/reader/settings_effects.dart';
 import 'package:venera_next/features/reader/image_selection.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -670,47 +671,40 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         currentReaderMode: () => context.reader.mode.key,
         isDetectingLayout: () => context.reader.isDetectingLayout,
         onDetectLayout: () => context.reader.detectLayout(force: true),
-        onChanged: (key) {
-          if (key == "readerMode") {
-            context.reader.applyReadingMode(
-              ReaderMode.fromKey(context.reader.preferences.readerMode),
-            );
-            addDragListener();
-            context.reader.detectLayout();
-          }
-          if (key == "enableTurnPageByVolumeKey") {
-            if (context.reader.preferences.enableTurnPageByVolumeKey) {
-              context.reader.handleVolumeEvent();
-            } else {
-              context.reader.stopVolumeEvent();
-            }
-          }
-          if (key == "quickCollectImage") {
-            addDragListener();
-          }
-          if (key.startsWith('eInkRefresh')) {
-            resetEInkRefreshCounter();
-          }
-          if (key.startsWith('readerBrightness')) {
-            update();
-          }
-          if (key == "showChapterComments" ||
-              key == "showChapterCommentsAtEnd") {
-            update();
-          }
-          if (key == "showSystemStatusBar") {
-            _applySystemUiMode();
-            update();
-          }
-          if (key == "showPageNumberInReader" ||
-              key == "enableClockAndBatteryInfoInReader") {
-            update();
-          }
-          context.reader.update();
-        },
+        onChanged: _onSettingChanged,
       ),
       width: 400,
     );
+  }
+
+  void _onSettingChanged(String key) {
+    for (final effect in readerSettingEffects(key)) {
+      if (!mounted) return;
+      switch (effect) {
+        case ReaderSettingEffect.applyMode:
+          context.reader.applyReadingMode(
+            ReaderMode.fromKey(context.reader.preferences.readerMode),
+          );
+        case ReaderSettingEffect.rebindImageGesture:
+          addDragListener();
+        case ReaderSettingEffect.detectLayout:
+          context.reader.detectLayout();
+        case ReaderSettingEffect.updateVolumeListener:
+          if (context.reader.preferences.enableTurnPageByVolumeKey) {
+            context.reader.handleVolumeEvent();
+          } else {
+            context.reader.stopVolumeEvent();
+          }
+        case ReaderSettingEffect.resetEInk:
+          resetEInkRefreshCounter();
+        case ReaderSettingEffect.updateSystemUi:
+          _applySystemUiMode();
+        case ReaderSettingEffect.rebuildShell:
+          update();
+        case ReaderSettingEffect.rebuildReader:
+          context.reader.update();
+      }
+    }
   }
 
   void _openSideBar(Widget widget, {double width = 400}) {

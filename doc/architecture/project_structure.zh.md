@@ -283,3 +283,5 @@ ReaderStatusInfo 拥有时钟与电量轮询，平台访问通过 ReaderBatteryR
 ReaderTopBar 只接收标题、动作与返回回调，ReaderBrightnessPanel 只接收数值与修改回调；scaffold 负责权限/可见性判断、设置范围与保存、导航和侧栏生命周期。面板不得重新查找阅读器 State 或直接写入设置。
 
 图片导出通过 ReaderImageExporter 编排，ReaderImageSelection 必须在读取前固定身份；外壳提供实际缓存/文件和平台操作，异步完成后不得用当前页面位置重命名已选图片。ReaderImageSelectionOverlay 独立持有覆盖层与等待者，替换/销毁必须结束等待；退出只阻止尚未交付的平台操作。
+
+readerSettingEffects 只解析设置通知的有序效果；ReaderPreferences 是固定键的唯一来源，前缀和未知键兼容规则显式保留。外壳执行效果时检查有效性，不得把 Widget 或平台调用移入规则模块；设置值读取仍由应用适配端完成。

@@ -173,3 +173,5 @@ ReaderStatusInfo owns clock/battery polling; ReaderBatteryRead injects platform 
 ReaderTopBar receives titles/actions/back callbacks; ReaderBrightnessPanel receives values/change callbacks. Scaffold owns availability/visibility, preference scope and persistence, navigation and sidebar lifecycle. Panels must not locate reader State or write settings directly.
 
 ReaderImageExporter coordinates exports using ReaderImageSelection identity captured before reading. The shell supplies cache/files and platform actions; never rename selected images using current page state after an await. ReaderImageSelectionOverlay owns its entry/waiter and completes on replacement/disposal. Exit prevents only platform operations not yet handed off.
+
+readerSettingEffects resolves ordered setting effects only. ReaderPreferences supplies fixed keys, with explicit prefix/unknown-key compatibility. The shell checks validity while applying effects; keep widgets/platform calls outside the policy module and read current values in the application adapter.
