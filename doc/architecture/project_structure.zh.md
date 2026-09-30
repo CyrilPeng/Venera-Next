@@ -263,3 +263,5 @@ ReaderController 持有导航状态并提供 ReaderNavigationState 快照；不�
 ReaderImagePosition 表示源图片，ReaderPageLayout 转换显示页，WaterfallChapterFlow 转换跨章列表索引；后者反向定位必须校验章节 ID。ReaderImageSlice 的源/显示区域为归一化绘制偏移，不是新的源图片或历史页。历史只保存转换后的源图片序号，保持现有数据协议。
 
 阅读加载/视图选择保留在 images.dart；gallery_view.dart 与 continuous_view.dart 分别承载画廊和连续/瀑布流适配，image_view_support.dart 共享图片辅助，chapter_swipe_indicator.dart 负责切章指示。菜单选图使用 ReaderImageViewController.currentImageRange，不依赖具体 State 类型；迁移期 State 导出不应被新业务代码使用。
+
+ChapterImageLoader 只依赖注入的章节访问和错误回调，禁止直接查找全局管理器。loadReaderChapterImages 是连接旧存储/图源的适配入口；稳定章节 ID 与已下载判断在适配层，本地优先/回退/取消在策略层。两层测试分别覆盖真实存储兼容和无全局依赖的行为。

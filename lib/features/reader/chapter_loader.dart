@@ -1,11 +1,11 @@
-import 'dart:io';
-
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/network/request_scope.dart';
+
+import 'chapter_image_loader.dart';
 
 class LocalComicFilesUnavailable implements Exception {
   const LocalComicFilesUnavailable(this.path);
@@ -33,32 +33,7 @@ Future<List<String>> loadReaderChapterImages({
   void Function()? onOnlineFallback,
   RequestScope? scope,
 }) async {
-  final request = RequestScope(parent: scope);
-  try {
-    return await request.run(
-      () => _loadReaderChapterImages(
-        comicId: comicId,
-        type: type,
-        chapter: chapter,
-        chapters: chapters,
-        onOnlineFallback: onOnlineFallback,
-        scope: request,
-      ),
-    );
-  } finally {
-    request.dispose();
-  }
-}
-
-Future<List<String>> _loadReaderChapterImages({
-  required String comicId,
-  required ComicType type,
-  required int chapter,
-  required ComicChapters? chapters,
-  required void Function()? onOnlineFallback,
-  required RequestScope scope,
-}) async {
-  scope.check();
+  scope?.check();
   final chapterId = chapters?.ids.elementAtOrNull(chapter - 1);
   if (chapters != null && chapterId == null) {
     throw RangeError('Invalid chapter');
@@ -73,44 +48,27 @@ Future<List<String>> _loadReaderChapterImages({
       (chapters == null
           ? local.chapters == null
           : local.downloadedChapters.contains(chapterId));
-  var missingLocalFiles = false;
-  if (type == ComicType.local || downloaded) {
-    try {
-      final images = await manager.getImages(
-        comicId,
-        type,
-        chapterId ?? chapter,
-      );
-      scope.check();
-      if (images.isEmpty) {
-        throw FileSystemException(
-          'No local comic images found',
-          local?.baseDir,
-        );
-      }
-      return images;
-    } on FileSystemException catch (error, stack) {
-      Log.error('Local chapter', {
-        'comicId': comicId,
-        'comicType': type.value,
-        'chapterId': chapterId,
-        'storageRoot': manager.path,
-        'comicDirectory': local?.baseDir,
-        'error': error.toString(),
-      }, stack);
-      if (source?.loadComicPages == null) {
-        throw LocalComicFilesUnavailable(error.path ?? local!.baseDir);
-      }
-      missingLocalFiles = true;
-    }
-  }
-  scope.check();
-  if (source?.loadComicPages == null) {
-    throw 'Comic source is unavailable'.tl;
-  }
-  final result = await source!.loadComicPages!(comicId, chapterId);
-  scope.check();
-  if (result.error) throw result.errorMessage!;
-  if (missingLocalFiles) onOnlineFallback?.call();
-  return result.data;
+  return ChapterImageLoader(
+    readLocal: type == ComicType.local || downloaded
+        ? () => manager.getImages(comicId, type, chapterId ?? chapter)
+        : null,
+    loadOnline: source?.loadComicPages == null
+        ? null
+        : () async {
+            final result = await source!.loadComicPages!(comicId, chapterId);
+            if (result.error) throw result.errorMessage!;
+            return result.data;
+          },
+    localPath: local?.baseDir ?? manager.path,
+    onLocalFailure: (error, stack) => Log.error('Local chapter', {
+      'comicId': comicId,
+      'comicType': type.value,
+      'chapterId': chapterId,
+      'storageRoot': manager.path,
+      'comicDirectory': local?.baseDir,
+      'error': error.toString(),
+    }, stack),
+    localUnavailable: LocalComicFilesUnavailable.new,
+    sourceUnavailable: 'Comic source is unavailable'.tl,
+  ).load(scope: scope, onOnlineFallback: onOnlineFallback);
 }
