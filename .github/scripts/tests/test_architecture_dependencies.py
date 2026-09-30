@@ -93,6 +93,16 @@ class ArchitectureDependenciesTest(unittest.TestCase):
             source.write_text("final color = store.appearance.color; final locale = appdata.settings['language'];")
             self.assertEqual(MODULE.application_settings_violations(lib), [])
 
+    def test_sync_configuration_rejects_raw_implicit_keys(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lib = Path(directory)
+            source = lib / 'features/sync/data_sync.dart'
+            source.parent.mkdir(parents=True)
+            source.write_text("final mode = appdata.implicitData['webdavSyncMode'];")
+            self.assertEqual(len(MODULE.application_settings_violations(lib)), 1)
+            source.write_text("final mode = preferences.configuration.mode;")
+            self.assertEqual(MODULE.application_settings_violations(lib), [])
+
 
 if __name__ == '__main__':
     unittest.main()

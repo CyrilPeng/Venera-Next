@@ -259,6 +259,29 @@ void main() {
   );
 
   scheduleTest(
+    'failed configuration keeps local edits made during its initial upload',
+    (clock, calls) async {
+      final sync = DataSync();
+      expect(sync.hasPendingChanges, isFalse);
+      DataSync.debugUploadOverride = () async {
+        sync.onDataChanged();
+        return const Res.error('denied');
+      };
+      final result = await sync.configure(
+        config: ['https://example.test/new', 'user', 'password'],
+        excludedFields: 'language',
+        syncMode: DataSyncMode.realtime,
+        minutes: 60,
+        initialUpload: true,
+      );
+      expect(result.error, isTrue);
+      expect(appdata.settings['webdav'], config);
+      expect(sync.hasPendingChanges, isTrue);
+      expect(DataSync.mode, DataSyncMode.scheduled);
+    },
+  );
+
+  scheduleTest(
     'saving manual mode cancels timer, and changing interval reschedules it',
     (clock, calls) async {
       final sync = DataSync();

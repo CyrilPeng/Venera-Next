@@ -147,6 +147,8 @@ def reader_settings_violations(lib):
 def application_settings_violations(lib):
     watched = {
         'main.dart': {'color', 'theme_mode'},
+        'features/sync/data_sync.dart': {'webdav', 'disableSyncFields', 'webdavSyncMode', 'webdavAutoSync', 'webdavSyncIntervalMinutes', 'webdavSyncLastAttempt', 'webdavSyncPending'},
+        'features/settings/app.dart': {'webdav', 'disableSyncFields'},
         'network/app_dio.dart': {'sni', 'ignoreBadCertificate', 'dnsOverrides', 'enableDnsOverrides'},
         'network/proxy.dart': {'proxy'},
         'features/local_comics/download.dart': {'downloadThreads'},
@@ -154,7 +156,7 @@ def application_settings_violations(lib):
         'features/settings/appearance.dart': {'color', 'theme_mode'},
     }
     errors = []
-    pattern = re.compile(r'''\bappdata\.settings\s*\[\s*['"]([^'"]+)['"]\s*\]''')
+    pattern = re.compile(r'''\bappdata\.(?:settings|implicitData)\s*\[\s*['"]([^'"]+)['"]\s*\]''')
     for name, keys in watched.items():
         source = lib / name
         if not source.exists():
