@@ -287,3 +287,5 @@ ReaderTopBar 只接收标题、动作与返回回调，ReaderBrightnessPanel 只
 readerSettingEffects 只解析设置通知的有序效果；ReaderPreferences 是固定键的唯一来源，前缀和未知键兼容规则显式保留。外壳执行效果时检查有效性，不得把 Widget 或平台调用移入规则模块；设置值读取仍由应用适配端完成。
 
 ImageFavoriteActions 是 history 领域的纯业务入口，通过回调访问存储；只依赖收藏模型与常量，不可传递导入 UI。阅读器适配选图、翻译、错误及提示，业务服务返回明确结果。原 history.dart 仅作为已有界面兼容入口，不得用于新收藏业务模块。
+
+ReaderSession 拥有 ReaderHistoryWriter 与 ReadingSessionTracker，通过内容就绪和前台状态共同控制计时；Flutter 生命周期、自动阅读暂停与退出同步由适配端注入。退出先同步刷新待保存进度，再排空时长队列并通知应用一次，迟到内容/生命周期事件不能重启会话。已接受进度写入的数据库排序仍由存储层保证。

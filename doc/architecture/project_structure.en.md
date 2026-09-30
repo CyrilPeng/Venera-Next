@@ -177,3 +177,5 @@ ReaderImageExporter coordinates exports using ReaderImageSelection identity capt
 readerSettingEffects resolves ordered setting effects only. ReaderPreferences supplies fixed keys, with explicit prefix/unknown-key compatibility. The shell checks validity while applying effects; keep widgets/platform calls outside the policy module and read current values in the application adapter.
 
 ImageFavoriteActions is a history business entry with injected storage callbacks, depending only on favorite models and constants. UI must not be transitively reachable. Reader adapters own selection, translation and feedback; actions return explicit outcomes. The existing history.dart UI barrel is not a dependency for new favorite business modules.
+
+ReaderSession owns ReaderHistoryWriter and ReadingSessionTracker and gates timing on both content readiness and foreground state. Flutter lifecycle, automatic-reading pause and exit synchronization use adapters. Exit flushes pending progress synchronously, drains duration writes and notifies the application once; late content/lifecycle events cannot restart it. Storage still owns ordering of accepted progress writes.

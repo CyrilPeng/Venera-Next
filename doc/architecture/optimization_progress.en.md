@@ -298,3 +298,10 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - Appending a favorite to an imported empty-eid chapter now assigns its resolved source ID and copies existing image identities to match. Previously the comparison expression performed no assignment. Page/key/automatic-cover metadata remains intact; nonempty ID conflicts still reject.
 - Two regressions cover identity alignment, lookup/removal, cover protection and unresolved IDs. Seven targeted tests pass; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass. The previous commit's 712-test full suite was not repeated for this localized fix.
 - This repairs the existing append path, not a bulk database migration. Untouched legacy records and broader compatibility/transaction review remain P6 work; the overall plan stays in progress.
+
+## P5: Reader session coordination and exit ordering (2026-10-01)
+
+- ReaderSession owns the existing duration tracker and history writer. Content readiness and foreground state jointly gate timing; automatic-reading pause and exit notifications are injected. The page adapts Flutter lifecycle, history fields and storage. The new business entry is audited for transitive UI dependencies.
+- Exit synchronously flushes pending progress, drains duration writes, then notifies synchronization once. Repeated disposal shares a Future; late content/lifecycle events are ignored. The page logs close notification errors. Accepted progress writes still belong to storage, so P6 ordering review remains required.
+- Four new coordination tests cover initial background/loading interleaving, duplicate readiness, exit draining, late events and write/close failures. Seventeen targeted tests and 718 full Windows Flutter tests pass; analysis has no errors/warnings and 24 existing infos; structure, architecture, Git dependency and 12 architecture-script tests pass.
+- Original menu/pause edits remain uncommitted. History mapping, window/volume/cache adapters, remaining P5, P6–P8 and device/performance acceptance remain outstanding.

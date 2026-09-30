@@ -14,6 +14,7 @@ import 'package:venera_next/features/reader/images.dart';
 import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
+import 'package:venera_next/features/reader/reader_session.dart';
 import 'package:venera_next/features/reader/history_writer.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
@@ -165,8 +166,7 @@ class ReaderState extends State<Reader>
     );
   }
 
-  late final ReadingSessionTracker _readingSession;
-  bool _readerContentReady = false;
+  late final ReaderSession _session;
   bool _hasPresentedImages = false;
   ComicLayoutProbe? _layoutProbe;
   final _sampledChapters = <String>{};
@@ -189,7 +189,7 @@ class ReaderState extends State<Reader>
     canAdvance: () {
       final viewport = imageViewController;
       return mounted &&
-          _readerContentReady &&
+          _session.contentReady &&
           !isLoading &&
           !isPageAnimating &&
           (ModalRoute.of(context)?.isCurrent ?? true) &&
@@ -323,16 +323,35 @@ class ReaderState extends State<Reader>
       appdata.settings.readerSettings(cid, type.sourceKey).readerMode,
     );
     history = widget.history;
-    _readingSession = ReadingSessionTracker(
-      onDuration: (duration) =>
-          HistoryManager().addReadDuration(widget.history, duration),
-      onError: (error, stackTrace) {
-        Log.error(
-          "Reader",
-          "Failed to save reading duration: $error",
-          stackTrace,
-        );
-      },
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _session = ReaderSession(
+      durations: ReadingSessionTracker(
+        onDuration: (duration) =>
+            HistoryManager().addReadDuration(widget.history, duration),
+        onError: (error, stack) => Log.error(
+          'Reader',
+          'Failed to save reading duration: $error',
+          stack,
+        ),
+      ),
+      progress: ReaderHistoryWriter(
+        write: () async {
+          final item = history;
+          if (item != null) await HistoryManager().addHistoryAsync(item);
+        },
+        flush: () {
+          final item = history;
+          if (item != null) HistoryManager().addHistory(item);
+        },
+        onError: (error, stack) => Log.error(
+          'Reader',
+          'Failed to save reading progress: $error',
+          stack,
+        ),
+      ),
+      pauseAutoReading: (paused) => autoReading.pause('lifecycle', paused),
+      onClosed: () => DataSync().onDataChanged(),
+      foreground: lifecycle == null || lifecycle == AppLifecycleState.resumed,
     );
     if (!appdata.settings
         .readerSettings(cid, type.sourceKey)
@@ -397,10 +416,9 @@ class ReaderState extends State<Reader>
       fullscreen();
     }
     autoReading.dispose();
-    _historyWriter.dispose();
     unawaited(
-      _readingSession.dispose().whenComplete(() {
-        DataSync().onDataChanged();
+      _session.dispose().catchError((Object error, StackTrace stack) {
+        Log.error('Reader', 'Failed to close reading session: $error', stack);
       }),
     );
     focusNode.dispose();
@@ -411,34 +429,13 @@ class ReaderState extends State<Reader>
     super.dispose();
   }
 
-  void onReaderContentLoading() {
-    _readerContentReady = false;
-    unawaited(_readingSession.pause());
-  }
+  void onReaderContentLoading() => _session.setContentReady(false);
 
-  void onReaderContentReady() {
-    _readerContentReady = true;
-    final lifecycleState = WidgetsBinding.instance.lifecycleState;
-    if (lifecycleState == null || lifecycleState == AppLifecycleState.resumed) {
-      _readingSession.start();
-    }
-  }
+  void onReaderContentReady() => _session.setContentReady(true);
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    autoReading.pause('lifecycle', state != AppLifecycleState.resumed);
-    switch (state) {
-      case AppLifecycleState.resumed:
-        if (_readerContentReady) {
-          _readingSession.start();
-        }
-        return;
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.hidden:
-      case AppLifecycleState.paused:
-      case AppLifecycleState.detached:
-        unawaited(_readingSession.pause());
-    }
+    _session.setForeground(state == AppLifecycleState.resumed);
   }
 
   @override
@@ -475,19 +472,6 @@ class ReaderState extends State<Reader>
     updateHistory();
   }
 
-  late final _historyWriter = ReaderHistoryWriter(
-    write: () async {
-      final item = history;
-      if (item != null) await HistoryManager().addHistoryAsync(item);
-    },
-    flush: () {
-      final item = history;
-      if (item != null) HistoryManager().addHistory(item);
-    },
-    onError: (error, stack) =>
-        Log.error('Reader', 'Failed to save reading progress: $error', stack),
-  );
-
   void updateHistory() {
     // Initial layout and orientation can update the viewport before images
     // arrive. Keep the saved image index intact until loading/migration ends.
@@ -510,7 +494,7 @@ class ReaderState extends State<Reader>
         history!.ep = imagePosition.chapter;
       }
       history!.time = DateTime.now();
-      _historyWriter.schedule();
+      _session.scheduleProgress();
     }
   }
 
