@@ -1,4 +1,3 @@
-import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/history_contract.dart';
@@ -43,6 +42,21 @@ class History implements Comic {
   /// Cumulative foreground reading time for this comic.
   int readDurationMs;
 
+  History({
+    required this.type,
+    required this.time,
+    required this.title,
+    required this.subtitle,
+    required this.cover,
+    required this.ep,
+    required this.page,
+    required this.id,
+    required this.readEpisode,
+    required this.maxPage,
+    required this.readDurationMs,
+    this.group,
+  });
+
   History.fromModel({
     required HistoryMixin model,
     required this.ep,
@@ -78,24 +92,6 @@ class History implements Comic {
   String toString() {
     return 'History{type: $type, time: $time, title: $title, subtitle: $subtitle, cover: $cover, ep: $ep, page: $page, id: $id}';
   }
-
-  History.fromRow(Row row)
-    : type = HistoryType(row["type"]),
-      time = DateTime.fromMillisecondsSinceEpoch(row["time"]),
-      title = row["title"],
-      subtitle = row["subtitle"],
-      cover = row["cover"],
-      ep = row["ep"],
-      page = row["page"],
-      id = row["id"],
-      readEpisode = Set<String>.from(
-        (row["readEpisode"] as String)
-            .split(',')
-            .where((element) => element != ""),
-      ),
-      maxPage = row["max_page"],
-      group = row["chapter_group"],
-      readDurationMs = (row["read_duration_ms"] as num).round();
 
   @override
   bool operator ==(Object other) {

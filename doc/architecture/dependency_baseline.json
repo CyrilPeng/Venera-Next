@@ -239,6 +239,8 @@
     ]
   ],
   "business_entrypoints": [
+    "features/history/history_repository.dart",
+    "features/history/history_row.dart",
     "features/history/history_api.dart",
     "features/reader/history_progress.dart",
     "features/reader/reader_controller.dart",

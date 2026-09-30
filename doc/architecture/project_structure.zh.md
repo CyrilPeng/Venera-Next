@@ -300,4 +300,6 @@ ReaderOrientationScope 必须位于 Navigator 外并由应用树管理生命周�
 
 images.dart 不再重导出 ContinuousModeState；依赖具体视图实现的集成测试直接导入 continuous_view.dart。导航行为测试仅依赖 ReaderController/ReaderNavigationViewport 并注入错误报告，不得通过页面 mixin 或全局日志静音进行测试。
 
-History 数据通过 history_api.dart 提供，history_model.dart 不导入 HistoryManager 或页面；旧 history.dart 对 UI 兼容导出数据入口，history_manager.dart 不再充当模型导出。applyReaderHistoryProgress 负责阅读坐标到历史字段的映射，页面仅在加载完成后调用并安排保存。旧字段、行构造器与描述格式暂时保留，后续存储分解不得隐式改变数据语义。
+History 数据通过 history_api.dart 提供，history_model.dart 不导入 HistoryManager 或页面；旧 history.dart 对 UI 兼容导出数据入口，history_manager.dart 不再充当模型导出。applyReaderHistoryProgress 负责阅读坐标到历史字段的映射，页面仅在加载完成后调用并安排保存。旧字段、fromMap 兼容构造器与描述格式暂时保留，后续存储分解不得隐式改变数据语义。
+
+HistoryRepository 在调用者拥有的 Database 上执行进度与时长事务，不管理连接、迁移、缓存或通知；historyFromRow 位于 history_row.dart，集中解码 SQLite 字段。History 模型不直接导入 SQLite，也不提供 fromRow。现有 schema、查询/删除和异步队列仍在 HistoryManager，后续继续迁移；不能通过新数据入口重新导出管理器或页面。

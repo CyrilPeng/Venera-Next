@@ -1,3 +1,5 @@
+import 'history_repository.dart';
+import 'history_row.dart';
 import 'history_model.dart';
 import 'dart:async';
 import 'dart:isolate';
@@ -80,106 +82,11 @@ class HistoryManager with ChangeNotifier {
     isInitialized = true;
   }
 
-  static const _insertHistorySql = """
-        insert or replace into history (id, title, subtitle, cover, time, type, ep, page, readEpisode, max_page, chapter_group)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-      """;
-
-  static const _updateHistorySql = """
-        update history set
-          title = ?,
-          subtitle = ?,
-          cover = ?,
-          time = ?,
-          ep = ?,
-          page = ?,
-          readEpisode = ?,
-          max_page = ?,
-          chapter_group = ?
-        where id = ? and type = ?;
-      """;
-
-  static const _insertReadDurationSql = """
-        insert or replace into history (id, title, subtitle, cover, time, type, ep, page, readEpisode, max_page, chapter_group, read_duration_ms)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-      """;
-
-  static const _incrementReadDurationSql = """
-        update history
-        set read_duration_ms = read_duration_ms + ?
-        where id = ? and type = ?;
-      """;
-
-  static List<Object?> _historyValues(History item) {
-    return [
-      item.id,
-      item.title,
-      item.subtitle,
-      item.cover,
-      item.time.millisecondsSinceEpoch,
-      item.type.value,
-      item.ep,
-      item.page,
-      item.readEpisode.join(','),
-      item.maxPage,
-      item.group,
-    ];
-  }
-
-  static void _runWriteTransaction(Database db, void Function() write) {
-    db.execute('BEGIN IMMEDIATE;');
-    try {
-      write();
-      db.execute('COMMIT;');
-    } catch (_) {
-      db.execute('ROLLBACK;');
-      rethrow;
-    }
-  }
-
-  // Legacy databases do not consistently expose a single-column UNIQUE(id).
-  static void _writeHistory(Database db, History item) {
-    _runWriteTransaction(db, () {
-      db.execute(_updateHistorySql, [
-        item.title,
-        item.subtitle,
-        item.cover,
-        item.time.millisecondsSinceEpoch,
-        item.ep,
-        item.page,
-        item.readEpisode.join(','),
-        item.maxPage,
-        item.group,
-        item.id,
-        item.type.value,
-      ]);
-      if (db.updatedRows == 0) {
-        db.execute(_insertHistorySql, _historyValues(item));
-      }
-    });
-  }
-
-  static void _writeReadDuration(Database db, History item, int durationMs) {
-    _runWriteTransaction(db, () {
-      db.execute(_incrementReadDurationSql, [
-        durationMs,
-        item.id,
-        item.type.value,
-      ]);
-      if (db.updatedRows == 0) {
-        db.execute(_insertReadDurationSql, [
-          ..._historyValues(item),
-          durationMs,
-        ]);
-      }
-    });
-  }
-
   static Future<void> _addHistoryAsync(String dbPath, History newItem) {
     return Isolate.run(() {
       var db = openSqliteDatabase(dbPath);
       try {
-        _writeHistory(db, newItem);
+        HistoryRepository(db).writeProgress(newItem);
       } finally {
         db.dispose();
       }
@@ -194,7 +101,7 @@ class HistoryManager with ChangeNotifier {
     return Isolate.run(() {
       var db = openSqliteDatabase(dbPath);
       try {
-        _writeReadDuration(db, item, durationMs);
+        HistoryRepository(db).addReadDuration(item, durationMs);
       } finally {
         db.dispose();
       }
@@ -257,7 +164,7 @@ class HistoryManager with ChangeNotifier {
   ///
   /// This function would be called when user start reading.
   void addHistory(History newItem) {
-    _writeHistory(_db, newItem);
+    HistoryRepository(_db).writeProgress(newItem);
     _cacheHistory(newItem);
     notifyListeners();
   }
@@ -360,7 +267,7 @@ class HistoryManager with ChangeNotifier {
     if (res.isEmpty) {
       return null;
     }
-    return History.fromRow(res.first);
+    return historyFromRow(res.first);
   }
 
   List<History> getAll() {
@@ -368,7 +275,7 @@ class HistoryManager with ChangeNotifier {
       select * from history
       order by time DESC;
     """);
-    return res.map((element) => History.fromRow(element)).toList();
+    return res.map((element) => historyFromRow(element)).toList();
   }
 
   /// 获取最近阅读的漫画
@@ -378,7 +285,7 @@ class HistoryManager with ChangeNotifier {
       order by time DESC
       limit 20;
     """);
-    return res.map((element) => History.fromRow(element)).toList();
+    return res.map((element) => historyFromRow(element)).toList();
   }
 
   /// 获取历史记录的数量
@@ -409,7 +316,7 @@ class HistoryManager with ChangeNotifier {
       where read_duration_ms > 0
       order by read_duration_ms desc, time desc;
     """);
-    return res.map(History.fromRow).toList();
+    return res.map(historyFromRow).toList();
   }
 
   void close() {
