@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
+import 'package:venera_next/foundation/reader_settings.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/init.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -476,6 +477,27 @@ class Settings with ChangeNotifier {
     }
     return _data['comicSpecificSettings']["$comicId@$sourceKey"]?["enabled"] ==
         true;
+  }
+
+  ReaderSettings get globalReaderSettings =>
+      ReaderSettings.resolve(global: _data);
+
+  /// Resolve an immutable snapshot without changing stored settings or scopes.
+  ReaderSettings readerSettings(String comicId, String sourceKey) {
+    Map? record(Object? container, String key) {
+      final value = container is Map ? container[key] : null;
+      return value is Map ? value : null;
+    }
+
+    final deviceId = _data['deviceId'];
+    return ReaderSettings.resolve(
+      global: _data,
+      device: deviceId is String && deviceId.isNotEmpty
+          ? record(_data['deviceSpecificSettings'], deviceId)
+          : null,
+      comic: record(_data['comicSpecificSettings'], '$comicId@$sourceKey'),
+      layout: comicLayout(comicId, sourceKey),
+    );
   }
 
   dynamic getReaderSetting(String comicId, String sourceKey, String key) {

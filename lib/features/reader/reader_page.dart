@@ -19,6 +19,7 @@ import 'package:venera_next/features/reader/volume.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/reader_settings.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -118,17 +119,13 @@ class ReaderState extends State<Reader>
     if (widget.chapters == null) return false;
     var source = ComicSource.find(type.sourceKey);
     if (source?.chapterCommentsLoader == null) return false;
-    return appdata.settings.getReaderSetting(
-              cid,
-              type.sourceKey,
-              'showChapterComments',
-            ) ==
+    return appdata.settings
+                .readerSettings(cid, type.sourceKey)
+                .showChapterComments ==
             true &&
-        appdata.settings.getReaderSetting(
-              cid,
-              type.sourceKey,
-              'showChapterCommentsAtEnd',
-            ) ==
+        appdata.settings
+                .readerSettings(cid, type.sourceKey)
+                .showChapterCommentsAtEnd ==
             true;
   }
 
@@ -172,19 +169,21 @@ class ReaderState extends State<Reader>
   ComicLayoutProbe? _layoutProbe;
   final _sampledChapters = <String>{};
 
-  dynamic readerSetting(String key) =>
-      appdata.settings.getReaderSetting(cid, type.sourceKey, key);
+  ReaderSettings get preferences =>
+      appdata.settings.readerSettings(cid, type.sourceKey);
 
   late final autoReading = AutoReadingController(
-    settings: () => AutoReadingSettings(
-      gallery: mode.isGallery,
-      pageInterval: (readerSetting('autoPageTurningInterval') as num)
-          .toDouble(),
-      pixelsPerSecond: (readerSetting('autoScrollSpeed') as num).toDouble(),
-      stepped: readerSetting('autoScrollStyle') == 'stepped',
-      stepsPerSecond: (readerSetting('autoScrollFrequency') as num).toDouble(),
-      pixelsPerStep: (readerSetting('autoScrollDistance') as num).toDouble(),
-    ),
+    settings: () {
+      final current = preferences;
+      return AutoReadingSettings(
+        gallery: mode.isGallery,
+        pageInterval: current.autoPageTurningInterval,
+        pixelsPerSecond: current.autoScrollSpeed,
+        stepped: current.autoScrollStyle == 'stepped',
+        stepsPerSecond: current.autoScrollFrequency,
+        pixelsPerStep: current.autoScrollDistance,
+      );
+    },
     canAdvance: () {
       final viewport = imageViewController;
       return mounted &&
@@ -196,7 +195,7 @@ class ReaderState extends State<Reader>
           (viewport as AutoReadingViewport).autoReadingReady;
     },
     advance: (distance) {
-      final across = readerSetting('autoReadingAcrossChapters') == true;
+      final across = preferences.autoReadingAcrossChapters;
       if (!mode.isGallery) {
         return (imageViewController as AutoReadingViewport).autoScroll(
           distance,
@@ -226,7 +225,7 @@ class ReaderState extends State<Reader>
   Future<void> saveReadingSettings() => appdata.saveData(false);
 
   bool get _usesAutomaticReadingMode =>
-      appdata.settings.getDeviceReaderSetting('autoReaderMode') == true &&
+      preferences.autoReaderMode &&
       appdata.settings.comicReaderModeOverride(cid, type.sourceKey) == null;
 
   bool get _shouldDetectLayout =>
@@ -270,9 +269,7 @@ class ReaderState extends State<Reader>
     if (detection.layout == ComicLayout.unknown || !_usesAutomaticReadingMode) {
       return;
     }
-    final next = ReaderMode.fromKey(
-      appdata.settings.resolveReaderMode(cid, type.sourceKey),
-    );
+    final next = ReaderMode.fromKey(preferences.readerMode);
     if (next == mode) return;
     applyReadingMode(next);
     showToast(
@@ -320,7 +317,7 @@ class ReaderState extends State<Reader>
       }
     }
     mode = ReaderMode.fromKey(
-      appdata.settings.getReaderSetting(cid, type.sourceKey, 'readerMode'),
+      appdata.settings.readerSettings(cid, type.sourceKey).readerMode,
     );
     history = widget.history;
     _readingSession = ReadingSessionTracker(
@@ -334,18 +331,14 @@ class ReaderState extends State<Reader>
         );
       },
     );
-    if (!appdata.settings.getReaderSetting(
-      cid,
-      type.sourceKey,
-      'showSystemStatusBar',
-    )) {
+    if (!appdata.settings
+        .readerSettings(cid, type.sourceKey)
+        .showSystemStatusBar) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
     }
-    if (appdata.settings.getReaderSetting(
-      cid,
-      type.sourceKey,
-      'enableTurnPageByVolumeKey',
-    )) {
+    if (appdata.settings
+        .readerSettings(cid, type.sourceKey)
+        .enableTurnPageByVolumeKey) {
       handleVolumeEvent();
     }
     setImageCacheSize();
@@ -623,29 +616,21 @@ abstract mixin class ReaderImagePerPageHandler {
     }
   }
 
-  bool showSingleImageOnFirstPage() => appdata.settings.getReaderSetting(
-    cid,
-    type.sourceKey,
-    'showSingleImageOnFirstPage',
-  );
+  bool showSingleImageOnFirstPage() => appdata.settings
+      .readerSettings(cid, type.sourceKey)
+      .showSingleImageOnFirstPage;
 
   /// The number of images displayed on one screen
   int get imagesPerPage {
     if (mode.isContinuous) return 1;
     if (isPortrait) {
-      return appdata.settings.getReaderSetting(
-            cid,
-            type.sourceKey,
-            'readerScreenPicNumberForPortrait',
-          ) ??
-          1;
+      return appdata.settings
+          .readerSettings(cid, type.sourceKey)
+          .readerScreenPicNumberForPortrait;
     } else {
-      return appdata.settings.getReaderSetting(
-            cid,
-            type.sourceKey,
-            'readerScreenPicNumberForLandscape',
-          ) ??
-          1;
+      return appdata.settings
+          .readerSettings(cid, type.sourceKey)
+          .readerScreenPicNumberForLandscape;
     }
   }
 
@@ -790,8 +775,8 @@ abstract mixin class ReaderLocation {
 
   void update();
 
-  bool enablePageAnimation(String cid, ComicType type) => appdata.settings
-      .getReaderSetting(cid, type.sourceKey, 'enablePageAnimation');
+  bool enablePageAnimation(String cid, ComicType type) =>
+      appdata.settings.readerSettings(cid, type.sourceKey).enablePageAnimation;
 
   ReaderImageViewController? imageViewController;
 

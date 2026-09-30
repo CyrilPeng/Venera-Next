@@ -61,6 +61,18 @@ class ArchitectureDependenciesTest(unittest.TestCase):
                          'business_entrypoints': ['missing.dart']}),
                          ['Missing business entry point: missing.dart'])
 
+    def test_reader_cannot_reintroduce_dynamic_setting_calls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lib = Path(directory)
+            reader = lib / 'features/reader'
+            reader.mkdir(parents=True)
+            source = reader / 'view.dart'
+            source.write_text("final value = settings.getReaderSetting(id, key, 'mode');")
+            self.assertEqual(MODULE.reader_settings_violations(lib),
+                             ['Reader must use typed settings: features/reader/view.dart'])
+            source.write_text("final value = reader.preferences.readerMode;")
+            self.assertEqual(MODULE.reader_settings_violations(lib), [])
+
 
 if __name__ == '__main__':
     unittest.main()

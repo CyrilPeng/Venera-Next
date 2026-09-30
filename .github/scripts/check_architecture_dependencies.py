@@ -129,6 +129,16 @@ def violations(graph, baseline):
     return errors
 
 
+def reader_settings_violations(lib):
+    """Keep migrated reader code on the typed preference boundary."""
+    errors = []
+    for source in sorted((lib / "features/reader").rglob("*.dart")):
+        text = uncomment(source.read_text(encoding="utf-8"))
+        if re.search(r"\b(?:getReaderSetting|getDeviceReaderSetting)\s*\(", text):
+            errors.append(f"Reader must use typed settings: {source.relative_to(lib).as_posix()}")
+    return errors
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", action="store_true")
@@ -136,6 +146,7 @@ def main():
     graph = graph_for(ROOT / "lib")
     baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
     errors = violations(graph, baseline)
+    errors.extend(reader_settings_violations(ROOT / "lib"))
     if args.report:
         print("Feature strongly connected components (including UI):")
         for component in cycles(feature_edges(graph)):

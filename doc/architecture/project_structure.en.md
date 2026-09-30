@@ -115,3 +115,5 @@ Comic sources expose `comic_source_api.dart` for models/services/runtime configu
 Local reading positions are resolved by a pure function in `local_reading.dart`; pages open readers through `routing/local_reading.dart`. `LocalComic` no longer navigates.
 
 CI also runs `check_architecture_dependencies.py` with `dependency_baseline.json` to reject new feature edges and transitive UI dependencies from enrolled business entry points. Aggregate cycles include UI navigation and are not business-only cycles. Enroll entry points incrementally; baseline changes require an explicit responsibility change.
+
+Reader runtime consumes immutable ReaderSettings snapshots from foundation/reader_settings.dart. Settings.readerSettings adapts existing storage; globalReaderSettings preserves global-only options. Dynamic getReaderSetting/getDeviceReaderSetting calls are forbidden in reader runtime. Compatibility APIs for other callers and settings forms remain for later P3 migration.

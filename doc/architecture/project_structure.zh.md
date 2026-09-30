@@ -225,3 +225,5 @@ test/features/<domain>/
 本地漫画阅读位置通过 `local_reading.dart` 的纯函数解析；页面调用 `routing/local_reading.dart` 打开阅读器，`LocalComic` 不承担导航。
 
 CI 同时运行 `check_architecture_dependencies.py`，按 `dependency_baseline.json` 禁止新增功能域依赖，并检查已登记业务入口的传递 UI 依赖。既有聚合图包含 UI 导航环，不能把该报告视为纯业务依赖图。业务入口逐步登记，基线变更必须伴随明确的职责调整。
+
+阅读器运行时通过 `foundation/reader_settings.dart` 的不可变 `ReaderSettings` 快照访问设置，`Settings.readerSettings` 负责对接原有存储，`globalReaderSettings` 保留全局选项的原有范围。阅读器不得调用动态 `getReaderSetting` / `getDeviceReaderSetting`；其他旧调用者及设置表单的兼容接口在 P3 后续任务中继续迁移。
