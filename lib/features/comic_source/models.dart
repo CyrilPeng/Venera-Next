@@ -330,6 +330,33 @@ class ArchiveInfo {
       id = json["id"];
 }
 
+/// One chapter expressed in source, flattened-reader and persisted coordinates.
+class ComicChapterPosition {
+  const ComicChapterPosition({
+    required this.id,
+    required this.index,
+    required this.chapter,
+    required this.group,
+    required this.groupLength,
+  });
+
+  final String id;
+
+  /// One-based chapter number across all groups.
+  final int index;
+
+  /// One-based chapter number within [group], or [index] when ungrouped.
+  final int chapter;
+
+  /// One-based group number; null for an ungrouped source.
+  final int? group;
+  final int groupLength;
+
+  bool get isFirstInGroup => chapter == 1;
+  bool get isLastInGroup => chapter == groupLength;
+  String get historyKey => group == null ? '$chapter' : '$group-$chapter';
+}
+
 class ComicChapters {
   final Map<String, String>? _chapters;
 
@@ -406,6 +433,48 @@ class ComicChapters {
   /// Get a group of chapters by index(0-based)
   Map<String, String> getGroupByIndex(int index) {
     return _groupedChapters!.values.elementAt(index);
+  }
+
+  /// Resolve a one-based flattened reader chapter without relying on ID order
+  /// in a merged map (different groups may contain the same source ID).
+  ComicChapterPosition positionAt(int index) {
+    if (index < 1) throw RangeError.range(index, 1, null, 'index');
+    if (!isGrouped) {
+      return ComicChapterPosition(
+        id: _chapters!.keys.elementAt(index - 1),
+        index: index,
+        chapter: index,
+        group: null,
+        groupLength: _chapters.length,
+      );
+    }
+    var remaining = index;
+    var group = 1;
+    for (final chapters in _groupedChapters!.values) {
+      if (remaining <= chapters.length) {
+        return ComicChapterPosition(
+          id: chapters.keys.elementAt(remaining - 1),
+          index: index,
+          chapter: remaining,
+          group: group,
+          groupLength: chapters.length,
+        );
+      }
+      remaining -= chapters.length;
+      group++;
+    }
+    throw RangeError('Chapter index out of range: $index');
+  }
+
+  /// Convert persisted group-relative coordinates to the reader's chapter.
+  /// A missing group already denotes a flattened chapter number.
+  int chapterIndex(int chapter, {int? group}) {
+    if (group == null) return chapter;
+    var index = chapter;
+    for (var i = 0; i < group - 1; i++) {
+      index += getGroupByIndex(i).length;
+    }
+    return index;
   }
 
   /// Get total number of chapters

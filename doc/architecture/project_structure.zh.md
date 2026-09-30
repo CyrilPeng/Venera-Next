@@ -255,3 +255,5 @@ DataSync 构造无运行副作用，由运行时显式 start；dispose 禁止新
 LoadingState 的首次加载与手动重试共享同一尝试流程，每次尝试持有 RequestScope；替换/卸载取消，结果与 onDataLoaded 完成后验证当前尝试身份。loadData/onDataLoaded 显式接收作用域，业务回调必须在 await 后先检查取消再发布副作用；不得恢复重复的未受控 then/setState 路径。
 
 图片序号与显示页码转换统一使用无 UI 依赖的 ReaderPageLayout；持久化历史仍保存图片序号。画廊取图使用零基半开区间，布局重排保持原页首图可见；调用端不得重新实现首页单图、多图同页和章节末图历史规则。跨章节瀑布流及拆图坐标属于独立策略。
+
+章节坐标通过 ComicChapters.positionAt/chapterIndex 转换。ComicChapterPosition 明确源 ID、展开编号、组号和组内编号，历史键沿用原格式；不得用合并 allChapters 后的键序列推断跨组位置，因为不同分组可包含相同源 ID。图片与显示页转换继续交由 ReaderPageLayout。

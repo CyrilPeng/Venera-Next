@@ -301,9 +301,10 @@ class ReaderState extends State<Reader>
       chapter = 1;
     }
     if (widget.initialChapterGroup != null) {
-      for (int i = 0; i < (widget.initialChapterGroup! - 1); i++) {
-        chapter += widget.chapters!.getGroupByIndex(i).length;
-      }
+      chapter = widget.chapters!.chapterIndex(
+        chapter,
+        group: widget.initialChapterGroup,
+      );
     }
     if (widget.initialPage != null) {
       page = widget.initialPage!;
@@ -490,15 +491,10 @@ class ReaderState extends State<Reader>
       history!.page = pageLayout.historyImage(page, images!.length);
       history!.maxPage = images?.length ?? 1;
       if (widget.chapters?.isGrouped ?? false) {
-        int g = 0;
-        int c = chapter;
-        while (c > widget.chapters!.getGroupByIndex(g).length) {
-          c -= widget.chapters!.getGroupByIndex(g).length;
-          g++;
-        }
-        history!.readEpisode.add('${g + 1}-$c');
-        history!.ep = c;
-        history!.group = g + 1;
+        final position = widget.chapters!.positionAt(chapter);
+        history!.readEpisode.add(position.historyKey);
+        history!.ep = position.chapter;
+        history!.group = position.group;
       } else {
         history!.readEpisode.add(chapter.toString());
         history!.ep = chapter;
@@ -512,39 +508,13 @@ class ReaderState extends State<Reader>
     }
   }
 
-  bool get isFirstChapterOfGroup {
-    if (widget.chapters?.isGrouped ?? false) {
-      int c = chapter - 1;
-      int g = 1;
-      while (c > 0) {
-        c -= widget.chapters!.getGroupByIndex(g - 1).length;
-        g++;
-      }
-      if (c == 0) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-    return chapter == 1;
-  }
+  bool get isFirstChapterOfGroup => widget.chapters?.isGrouped == true
+      ? widget.chapters!.positionAt(chapter).isFirstInGroup
+      : chapter == 1;
 
-  bool get isLastChapterOfGroup {
-    if (widget.chapters?.isGrouped ?? false) {
-      int c = chapter;
-      int g = 1;
-      while (c > 0) {
-        c -= widget.chapters!.getGroupByIndex(g - 1).length;
-        g++;
-      }
-      if (c == 0) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-    return chapter == maxChapter;
-  }
+  bool get isLastChapterOfGroup => widget.chapters?.isGrouped == true
+      ? widget.chapters!.positionAt(chapter).isLastInGroup
+      : chapter == maxChapter;
 
   /// Get the size of the reader.
   /// The size is not always the same as the size of the screen.
