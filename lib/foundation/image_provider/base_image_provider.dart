@@ -62,7 +62,7 @@ abstract class BaseImageProvider<T extends BaseImageProvider<T>>
   @override
   ImageStreamCompleter loadImage(T key, ImageDecoderCallback decode) {
     final chunkEvents = StreamController<ImageChunkEvent>();
-    return MultiFrameImageStreamCompleter(
+    return _CancellableImageStreamCompleter(
       codec: _loadBufferAsync(key, chunkEvents, decode),
       chunkEvents: chunkEvents.stream,
       scale: 1.0,
@@ -222,4 +222,32 @@ class _EmptyImageDataException implements Exception {
 
   @override
   String toString() => 'Empty image data after 3 attempts';
+}
+
+/// Cancellation is expected after the final consumer releases an image.
+class _CancellableImageStreamCompleter extends MultiFrameImageStreamCompleter {
+  _CancellableImageStreamCompleter({
+    required super.codec,
+    required super.chunkEvents,
+    required super.scale,
+    super.informationCollector,
+  });
+
+  @override
+  void reportError({
+    DiagnosticsNode? context,
+    required Object exception,
+    StackTrace? stack,
+    InformationCollector? informationCollector,
+    bool silent = false,
+  }) {
+    if (exception is _ImageLoadingStopException) return;
+    super.reportError(
+      context: context,
+      exception: exception,
+      stack: stack,
+      informationCollector: informationCollector,
+      silent: silent,
+    );
+  }
 }

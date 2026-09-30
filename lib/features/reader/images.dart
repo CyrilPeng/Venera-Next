@@ -16,6 +16,7 @@ import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/chapter_comments.dart';
 import 'package:venera_next/features/reader/chapter_loader.dart';
 import 'package:venera_next/features/reader/image_downloads.dart';
+import 'package:venera_next/features/reader/image_precache.dart';
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
@@ -28,7 +29,6 @@ import 'package:venera_next/foundation/image_provider/reader_image.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
-import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/request_scope.dart';
 
 class ReaderImages extends StatefulWidget {
@@ -59,7 +59,6 @@ class ReaderImagesState extends State<ReaderImages> {
     _chapterRequests.cancel();
     _chapterRequests.dispose();
     super.dispose();
-    ImageDownloader.cancelAllLoadingImages();
   }
 
   /// Handle jumping to last page when jumpToLastPageOnLoad is true
@@ -183,6 +182,7 @@ class _GalleryMode extends StatefulWidget {
 class GalleryModeState extends State<_GalleryMode>
     implements ReaderImageViewController, AutoReadingViewport {
   final _imageDownloads = ReaderImageDownloads();
+  final _imagePrecache = ReaderImagePrecache();
 
   late PageController controller;
 
@@ -236,6 +236,7 @@ class GalleryModeState extends State<_GalleryMode>
 
   @override
   void dispose() {
+    _imagePrecache.dispose();
     unawaited(_imageDownloads.dispose());
     super.dispose();
   }
@@ -321,7 +322,7 @@ class GalleryModeState extends State<_GalleryMode>
     var (startIndex, endIndex) = getPageImagesRange(page);
     for (int i = startIndex; i < endIndex; i++) {
       shouldPreCache
-          ? _precacheImage(i + 1, context)
+          ? _precacheImage(i + 1, context, _imagePrecache)
           : _preDownloadImage(i + 1, context, _imageDownloads);
     }
   }
@@ -1765,7 +1766,7 @@ class ContinuousModeState extends State<_ContinuousMode>
   }
 }
 
-ImageProvider _createImageProviderFromKey(
+ReaderImageProvider _createImageProviderFromKey(
   String imageKey,
   BuildContext context,
   int page,
@@ -1798,20 +1799,27 @@ ImageProvider _createImageProviderFromRef(
   );
 }
 
-ImageProvider _createImageProvider(int page, BuildContext context) {
+ReaderImageProvider _createImageProvider(int page, BuildContext context) {
   var reader = context.reader;
   var imageKey = reader.images![page - 1];
   return _createImageProviderFromKey(imageKey, context, page);
 }
 
 /// [_precacheImage] is used to precache the image for the given page.
-/// The image is cached using the flutter's [precacheImage] method.
+/// Its decoding listener belongs to the current gallery view.
 /// The image will be downloaded and decoded into memory.
-void _precacheImage(int page, BuildContext context) {
+void _precacheImage(
+  int page,
+  BuildContext context,
+  ReaderImagePrecache precache,
+) {
   if (page <= 0 || page > context.reader.images!.length) {
     return;
   }
-  precacheImage(_createImageProvider(page, context), context);
+  precache.preload(
+    _createImageProvider(page, context),
+    createLocalImageConfiguration(context),
+  );
 }
 
 /// [_preDownloadImage] is used to download the image for the given page.
