@@ -25,7 +25,19 @@ class WaterfallChapterSegment {
   });
 }
 
-class WaterfallChapterFlow {
+/// Read access for view adapters; chapter insertion/reset belongs to the owner.
+abstract interface class WaterfallFlowView {
+  List<WaterfallChapterSegment> get segments;
+  bool get isEmpty;
+  int get imageCount;
+  int? get firstChapter;
+  int? get lastChapter;
+  WaterfallChapterSegment? segmentOfChapter(int chapter);
+  WaterfallImageRef? imageRefAt(int index);
+  int? imageIndexOf(ReaderImagePosition position);
+}
+
+class WaterfallChapterFlow implements WaterfallFlowView {
   WaterfallChapterFlow({List<WaterfallChapterSegment>? segments}) {
     if (segments != null) {
       _segments.addAll(segments);
@@ -34,17 +46,23 @@ class WaterfallChapterFlow {
 
   final _segments = <WaterfallChapterSegment>[];
 
+  @override
   List<WaterfallChapterSegment> get segments => List.unmodifiable(_segments);
 
+  @override
   bool get isEmpty => _segments.isEmpty;
 
+  @override
   int get imageCount =>
       _segments.fold(0, (value, segment) => value + segment.images.length);
 
+  @override
   int? get firstChapter => _segments.firstOrNull?.chapter;
 
+  @override
   int? get lastChapter => _segments.lastOrNull?.chapter;
 
+  @override
   WaterfallChapterSegment? segmentOfChapter(int chapter) {
     for (var segment in _segments) {
       if (segment.chapter == chapter) return segment;
@@ -52,6 +70,7 @@ class WaterfallChapterFlow {
     return null;
   }
 
+  @override
   WaterfallImageRef? imageRefAt(int index) {
     if (index <= 0) return null;
     var remaining = index;
@@ -72,6 +91,7 @@ class WaterfallChapterFlow {
     return null;
   }
 
+  @override
   int? imageIndexOf(ReaderImagePosition position) {
     if (position.imageNumber <= 0) return null;
     var index = 1;

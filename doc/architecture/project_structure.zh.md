@@ -269,3 +269,5 @@ ChapterImageLoader 只依赖注入的章节访问和错误回调，禁止直接�
 ReaderController 同时持有 ReaderContentState，图片列表必须复制为不可变快照。加载以 ReaderContentLoad 身份提交，旧所有者只能取消自身尝试；布局准备期间不得提前解除加载。视图协调刷新，内容命令不在 build/init 中自行触发通知；已加载瀑布流章节通过 replaceChapterImages 激活。
 
 ReaderHistoryWriter 只负责单个阅读器的延迟保存和退出刷新调度，通过回调访问存储与错误报告。历史坐标转换留在适配端；销毁必须取消待触发定时器，不能取消或重复提交存储已接受的操作。数据库写入排序由存储层负责。
+
+WaterfallController 拥有章节插入/重置、预取/导航状态及请求作用域，连续视图只持有 WaterfallFlowView 查询协议。前插返回源图片数，由视图恢复滚动锚点；跳章和销毁使旧请求及帧回调失效。控制器不依赖 Flutter、ReaderState、全局图源或存储，实际访问由装配端注入。

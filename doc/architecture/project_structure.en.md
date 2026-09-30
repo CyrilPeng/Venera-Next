@@ -159,3 +159,5 @@ ChapterImageLoader depends only on injected chapter access and error callbacks, 
 ReaderController also owns ReaderContentState with copied immutable image lists. Loads commit by ReaderContentLoad identity; stale owners cannot cancel replacements. Keep loading active during layout preparation. Views coordinate rebuilds, so content commands do not emit notifications during build/init. Activate loaded waterfall chapters through replaceChapterImages.
 
 ReaderHistoryWriter owns one reader’s delayed saves and exit-flush scheduling through injected storage/error callbacks. Coordinate conversion stays in the adapter. Disposal cancels pending timers without cancelling or duplicating accepted storage operations; database ordering belongs to storage.
+
+WaterfallController owns chapter insertion/reset, prefetch/navigation state and request scopes; continuous views use the WaterfallFlowView query protocol. Prepending returns source-image count for view-owned anchor restoration. Navigation/disposal invalidate old requests and frame callbacks. The controller has no Flutter, ReaderState, global source or storage dependency; composition supplies access.

@@ -23,7 +23,7 @@ import 'package:venera_next/foundation/image_provider/reader_image.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
-import 'package:venera_next/network/request_scope.dart';
+import 'package:venera_next/features/reader/waterfall_controller.dart';
 
 import 'image_view_support.dart';
 import 'chapter_swipe_indicator.dart';
@@ -47,7 +47,6 @@ class ReaderContinuousView extends StatefulWidget {
 
 class ContinuousModeState extends State<ReaderContinuousView>
     implements ReaderImageViewController, AutoReadingViewport {
-  final _chapterRequests = RequestScope();
   final _imageDownloads = ReaderImageDownloads();
 
   @override
@@ -69,17 +68,29 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   late List<bool> cached;
 
-  final _waterfallFlow = WaterfallChapterFlow();
-
-  bool _isLoadingNextSegment = false;
-
-  bool _isLoadingPrevSegment = false;
+  late final _waterfall = WaterfallController(
+    maxChapter: reader.maxChapter,
+    load: (chapter, scope) => loadReaderChapterImages(
+      scope: scope,
+      comicId: reader.cid,
+      type: reader.type,
+      chapter: chapter,
+      chapters: reader.widget.chapters,
+      onOnlineFallback: reader.onLocalChapterRecoveredOnline,
+    ),
+    chapterId: (chapter) =>
+        reader.widget.chapters?.ids.elementAtOrNull(chapter - 1) ?? '0',
+    onChanged: () {
+      if (mounted) setState(() {});
+    },
+    onPreviousError: (error, stack) =>
+        Log.error('Reader', 'Failed to load previous chapter: $error', stack),
+  );
+  WaterfallFlowView get _waterfallFlow => _waterfall.flow;
 
   bool _isRestoringPrependedSegmentPosition = false;
 
   bool _isNavigatingWaterfallLocation = false;
-
-  String? _nextSegmentError;
 
   int get preCacheCount =>
       appdata.settings.globalReaderSettings.preloadImageCount;
@@ -123,7 +134,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
     if (!crossChapter || !_waterfallFlow.isEmpty || reader.images == null) {
       return;
     }
-    _waterfallFlow.addAfter(
+    _waterfall.initialize(
       WaterfallChapterSegment(
         chapter: reader.chapter,
         eid: reader.eid,
@@ -152,111 +163,35 @@ class ContinuousModeState extends State<ReaderContinuousView>
     return _waterfallFlow.imageRefAt(index);
   }
 
-  Future<List<String>> _loadChapterImages(int chapter) {
-    return loadReaderChapterImages(
-      scope: _chapterRequests,
-      comicId: reader.cid,
-      type: reader.type,
-      chapter: chapter,
-      chapters: reader.widget.chapters,
-      onOnlineFallback: reader.onLocalChapterRecoveredOnline,
+  Future<void> _ensureWaterfallImagesAfter(int current) async {
+    if (!crossChapter || !mounted) return;
+    await _waterfall.ensureAfter(
+      current: current,
+      threshold: math.max(preCacheCount, 1),
     );
   }
 
-  Future<void> _ensureWaterfallImagesAfter(int current) async {
-    if (!crossChapter || _isLoadingNextSegment || _nextSegmentError != null) {
+  Future<void> _ensureWaterfallImagesBefore(int current) async {
+    if (!crossChapter || !mounted) return;
+    final revision = _waterfall.revision;
+    final insertedCount = await _waterfall.ensureBefore(
+      current: current,
+      threshold: math.max(preCacheCount, 1),
+    );
+    if (!mounted || revision != _waterfall.revision || insertedCount == 0) {
       return;
     }
-    var threshold = math.max(preCacheCount, 1);
-    if (_flowImageCount - current >= threshold) return;
-    var nextChapter =
-        (_waterfallFlow.isEmpty
-            ? reader.chapter
-            : _waterfallFlow.lastChapter!) +
-        1;
-    if (nextChapter > reader.maxChapter) return;
-    setState(() => _isLoadingNextSegment = true);
-    var loaded = false;
-    try {
-      var images = await _loadChapterImages(nextChapter);
-      if (!mounted) return;
-      setState(() {
-        _waterfallFlow.addAfter(
-          WaterfallChapterSegment(
-            chapter: nextChapter,
-            eid:
-                reader.widget.chapters?.ids.elementAtOrNull(nextChapter - 1) ??
-                '0',
-            images: images,
-          ),
-        );
-        _nextSegmentError = null;
+    _isRestoringPrependedSegmentPosition = true;
+    setState(() {});
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || revision != _waterfall.revision) return;
+      itemScrollController.jumpTo(index: current + insertedCount);
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted && revision == _waterfall.revision) {
+          _isRestoringPrependedSegmentPosition = false;
+        }
       });
-      loaded = true;
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _nextSegmentError = e.toString());
-    } finally {
-      _isLoadingNextSegment = false;
-      if (mounted) setState(() {});
-      if (loaded && mounted && _flowImageCount - current < threshold) {
-        _ensureWaterfallImagesAfter(current);
-      }
-    }
-  }
-
-  Future<void> _ensureWaterfallImagesBefore(int current) async {
-    if (!crossChapter || _isLoadingPrevSegment) return;
-    var threshold = math.max(preCacheCount, 1);
-    if (current > threshold) return;
-    var prevChapter =
-        (_waterfallFlow.isEmpty
-            ? reader.chapter
-            : _waterfallFlow.firstChapter!) -
-        1;
-    if (prevChapter < 1) return;
-    _isLoadingPrevSegment = true;
-    var insertedCount = 0;
-    try {
-      var images = await _loadChapterImages(prevChapter);
-      if (!mounted) return;
-      _isRestoringPrependedSegmentPosition = true;
-      setState(() {
-        insertedCount = _waterfallFlow.addBefore(
-          WaterfallChapterSegment(
-            chapter: prevChapter,
-            eid:
-                reader.widget.chapters?.ids.elementAtOrNull(prevChapter - 1) ??
-                '0',
-            images: images,
-          ),
-        );
-      });
-      if (insertedCount == 0) {
-        _isRestoringPrependedSegmentPosition = false;
-      }
-    } catch (e) {
-      _isRestoringPrependedSegmentPosition = false;
-      if (!mounted) return;
-      Log.error("Reader", "Failed to load previous chapter", e);
-    } finally {
-      _isLoadingPrevSegment = false;
-      if (mounted) {
-        setState(() {});
-      }
-      if (mounted && insertedCount > 0) {
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            itemScrollController.jumpTo(index: current + insertedCount);
-            SchedulerBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                _isRestoringPrependedSegmentPosition = false;
-              }
-            });
-          }
-        });
-      }
-    }
+    });
   }
 
   void _setReaderLocation(WaterfallImageRef imageRef) {
@@ -289,22 +224,8 @@ class ContinuousModeState extends State<ReaderContinuousView>
   }
 
   Future<bool> _loadWaterfallNavigationChapter(int chapter) async {
-    if (_segmentOfChapter(chapter) != null) return true;
     try {
-      var images = await _loadChapterImages(chapter);
-      if (!mounted) return false;
-      setState(() {
-        _waterfallFlow.reset(
-          WaterfallChapterSegment(
-            chapter: chapter,
-            eid:
-                reader.widget.chapters?.ids.elementAtOrNull(chapter - 1) ?? '0',
-            images: images,
-          ),
-        );
-        _nextSegmentError = null;
-      });
-      return true;
+      return await _waterfall.navigate(chapter);
     } catch (e) {
       if (!mounted) return false;
       Log.error("Reader", "Failed to load chapter $chapter", e);
@@ -319,12 +240,18 @@ class ContinuousModeState extends State<ReaderContinuousView>
   }) async {
     final needsLoading = _segmentOfChapter(chapter) == null;
     if (needsLoading) reader.onReaderContentLoading();
+    _isRestoringPrependedSegmentPosition = false;
+    _isNavigatingWaterfallLocation = false;
+    final loading = _loadWaterfallNavigationChapter(chapter);
+    final revision = _waterfall.revision;
     try {
-      if (!await _loadWaterfallNavigationChapter(chapter) || !mounted) {
+      if (!await loading || !mounted || revision != _waterfall.revision) {
         return;
       }
     } finally {
-      if (needsLoading && mounted) reader.onReaderContentReady();
+      if (mounted && revision == _waterfall.revision) {
+        reader.onReaderContentReady();
+      }
     }
     var segment = _segmentOfChapter(chapter);
     if (segment == null || segment.images.isEmpty) return;
@@ -340,12 +267,12 @@ class ContinuousModeState extends State<ReaderContinuousView>
     });
     context.readerScaffold.update();
     SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || revision != _waterfall.revision) return;
       itemScrollController.jumpTo(index: index);
       _futurePosition = null;
       cacheImages(index);
       SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
+        if (mounted && revision == _waterfall.revision) {
           _isNavigatingWaterfallLocation = false;
         }
       });
@@ -368,8 +295,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   void dispose() {
-    _chapterRequests.cancel();
-    _chapterRequests.dispose();
+    _waterfall.dispose();
     unawaited(_imageDownloads.dispose());
     itemPositionsListener.itemPositions.removeListener(onPositionChanged);
     super.dispose();
@@ -454,7 +380,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
         if (crossChapter &&
             acrossChapters &&
             _waterfallFlow.lastChapter! < reader.maxChapter) {
-          if (_nextSegmentError != null) return AutoReadingStep.finished;
+          if (_waterfall.afterError != null) return AutoReadingStep.finished;
           _ensureWaterfallImagesAfter(_flowImageCount);
           return AutoReadingStep.waiting;
         }
@@ -546,7 +472,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   Widget _buildFlowEnd(BuildContext context) {
     if (!crossChapter) return const SizedBox();
-    if (_isLoadingNextSegment) {
+    if (_waterfall.loadingAfter) {
       return SizedBox(
         height: 96,
         child: Center(
@@ -565,10 +491,10 @@ class ContinuousModeState extends State<ReaderContinuousView>
         ),
       );
     }
-    if (_nextSegmentError != null) {
+    if (_waterfall.afterError != null) {
       return ClickInkWell(
         onTap: () {
-          setState(() => _nextSegmentError = null);
+          _waterfall.retryAfter();
           _ensureWaterfallImagesAfter(_flowImageCount);
         },
         child: SizedBox(
