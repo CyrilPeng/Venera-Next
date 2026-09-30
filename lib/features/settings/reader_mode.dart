@@ -1,3 +1,6 @@
+import 'package:venera_next/foundation/preferences.dart';
+import 'package:venera_next/foundation/reader_preferences.dart';
+import 'package:venera_next/foundation/reader_preference_store.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -45,14 +48,14 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
     if (mounted) setState(() {});
   }
 
-  void _setPreference(String key, Object value) {
-    if (appdata.settings.isDeviceSpecificSettingsEnabled()) {
-      appdata.settings.setDeviceReaderSetting(key, value);
-    } else {
-      appdata.settings[key] = value;
-    }
+  ReaderPreferenceStore get _store =>
+      ReaderPreferenceStore(settings: appdata.settings);
+
+  void _setPreference<T extends Object>(Preference<T> preference, T value) {
+    _store.write(preference, value);
     appdata.saveData();
     widget.onChanged?.call();
+    _refresh();
   }
 
   Future<void> _chooseMode({
@@ -95,8 +98,12 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
     if (mounted && selected != null) onSelected(selected);
   }
 
-  Widget _preference(String title, String key, {String? description}) {
-    final value = appdata.settings.getDeviceReaderSetting(key) as String;
+  Widget _preference(
+    String title,
+    Preference<String> preference, {
+    String? description,
+  }) {
+    final value = _store.read(preference);
     return ListTile(
       title: Text(title.tl),
       subtitle: Text(
@@ -109,7 +116,7 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
       onTap: () => _chooseMode(
         title: title.tl,
         value: value,
-        onSelected: (value) => _setPreference(key, value),
+        onSelected: (value) => _setPreference(preference, value),
       ),
     );
   }
@@ -117,7 +124,7 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
   @override
   Widget build(BuildContext context) {
     final settings = appdata.settings;
-    final auto = settings.getDeviceReaderSetting('autoReaderMode') == true;
+    final auto = _store.read(ReaderPreferences.autoReaderMode) == true;
     final cid = widget.comicId;
     final source = widget.sourceKey;
     if (cid == null || source == null) {
@@ -130,15 +137,19 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
                   .tl,
             ),
             value: auto,
-            onChanged: (value) => _setPreference('autoReaderMode', value),
+            onChanged: (value) =>
+                _setPreference(ReaderPreferences.autoReaderMode, value),
           ),
           if (auto) ...[
-            _preference('Paged comics', 'pagedReaderMode'),
-            _preference('Long-strip comics', 'longStripReaderMode'),
+            _preference('Paged comics', ReaderPreferences.pagedReaderMode),
+            _preference(
+              'Long-strip comics',
+              ReaderPreferences.longStripReaderMode,
+            ),
           ],
           _preference(
             auto ? 'When layout is unknown' : 'Default reading mode',
-            'readerMode',
+            ReaderPreferences.readerMode,
             description: auto
                 ? 'Used when there are too few images or their proportions are mixed.'
                 : null,

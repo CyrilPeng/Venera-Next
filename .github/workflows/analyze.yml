@@ -29,6 +29,7 @@ jobs:
           cache: true
       - run: python3 .github/scripts/release_version.py --check
       - run: python3 .github/scripts/check_structure_imports.py
+      - run: python3 .github/scripts/check_architecture_dependencies.py
       - run: python3 -m unittest discover -s .github/scripts/tests -p "test_*.py"
       - run: flutter pub get --enforce-lockfile
       - run: dart tool/check_git_dependencies.dart

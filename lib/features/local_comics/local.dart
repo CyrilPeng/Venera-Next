@@ -12,11 +12,9 @@ import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
 import 'package:venera_next/features/local_comics/download.dart';
-import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 
 import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/features/history/history.dart';
 
@@ -111,51 +109,6 @@ class LocalComic with HistoryMixin implements Comic {
 
   @override
   int? get maxPage => null;
-
-  void read() {
-    var history = HistoryManager().find(id, comicType);
-    int? firstDownloadedChapter;
-    int? firstDownloadedChapterGroup;
-    if (downloadedChapters.isNotEmpty && chapters != null) {
-      final chapters = this.chapters!;
-      if (chapters.isGrouped) {
-        for (int i = 0; i < chapters.groupCount; i++) {
-          var group = chapters.getGroupByIndex(i);
-          var keys = group.keys.toList();
-          for (int j = 0; j < keys.length; j++) {
-            var chapterId = keys[j];
-            if (downloadedChapters.contains(chapterId)) {
-              firstDownloadedChapter = j + 1;
-              firstDownloadedChapterGroup = i + 1;
-              break;
-            }
-          }
-        }
-      } else {
-        var keys = chapters.allChapters.keys;
-        for (int i = 0; i < keys.length; i++) {
-          if (downloadedChapters.contains(keys.elementAt(i))) {
-            firstDownloadedChapter = i + 1;
-            break;
-          }
-        }
-      }
-    }
-    App.rootContext.to(
-      () => Reader(
-        type: comicType,
-        cid: id,
-        name: title,
-        chapters: chapters,
-        initialChapter: history?.ep ?? firstDownloadedChapter,
-        initialPage: history?.page,
-        initialChapterGroup: history?.group ?? firstDownloadedChapterGroup,
-        history: history ?? History.fromModel(model: this, ep: 0, page: 0),
-        author: subtitle,
-        tags: tags,
-      ),
-    );
-  }
 
   @override
   HistoryType get historyType => comicType;
@@ -624,11 +577,25 @@ class LocalManager with ChangeNotifier {
     }
   }
 
-  Future<void> saveCurrentDownloadingTasks() async {
-    var tasks = downloadingTasks.map((e) => e.toJson()).toList();
-    await File(
-      FilePath.join(App.dataPath, 'downloading_tasks.json'),
-    ).writeAsString(jsonEncode(tasks));
+  Future<void> _downloadTaskWrites = Future.value();
+
+  /// Completes when all task snapshots queued so far have finished writing.
+  Future<void> get pendingDownloadTaskWrites => _downloadTaskWrites;
+
+  Future<void> saveCurrentDownloadingTasks() {
+    // Capture both path and snapshot before queuing: later mutations must not
+    // change the meaning of an already requested save.
+    final file = File(FilePath.join(App.dataPath, 'downloading_tasks.json'));
+    final data = jsonEncode(downloadingTasks.map((e) => e.toJson()).toList());
+    final write = _downloadTaskWrites.then((_) async {
+      await file.writeAsString(data);
+    });
+    // Keep subsequent writes usable after a failure. Awaiting callers still
+    // receive the original error through the returned future.
+    _downloadTaskWrites = write.catchError((Object error, StackTrace stack) {
+      Log.error('LocalManager', 'Failed to save download tasks: $error');
+    });
+    return write;
   }
 
   void restoreDownloadingTasks() {

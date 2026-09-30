@@ -48,7 +48,6 @@ void main() {
           App.cachePath = directory.path;
           Log.isMuted = true;
           LocalFavoritesManager.cache = _Favorites();
-          DataSync.debugDisableWindowCloseHandler = true;
           final settings = appdata.settings;
           settings['comicSpecificSettings'] = <String, dynamic>{};
           settings['deviceSpecificSettings'] = <String, dynamic>{};

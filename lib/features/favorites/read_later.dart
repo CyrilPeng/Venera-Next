@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/menu.dart';
+import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -21,36 +22,33 @@ class ReadLaterButton extends StatelessWidget {
       listenable: Listenable.merge([manager, appdata.settings]),
       builder: (context, _) {
         final included = manager.isInReadLater(comic.id, comic.type);
-        final label = included ? 'Remove from read later'.tl : 'Read later'.tl;
-        return Tooltip(
-          message: label,
-          child: TextButton.icon(
-            onPressed: () async {
-              try {
-                await manager.setReadLater(
-                  comic,
-                  included: !included,
-                  folderName: 'Read later'.tl,
+        return ComicDetailActionButton(
+          icon: const Icon(Icons.watch_later_outlined),
+          activeIcon: const Icon(Icons.bookmark_added),
+          isActive: included,
+          text: (included ? 'Remove from read later' : 'Read later').tl,
+          iconColor: context.useTextColor(Colors.orange),
+          onPressed: () async {
+            try {
+              await manager.setReadLater(
+                comic,
+                included: !included,
+                folderName: 'Read later'.tl,
+              );
+              if (context.mounted) {
+                onChanged?.call();
+                context.showMessage(
+                  message: included
+                      ? 'Removed from read later'.tl
+                      : 'Added to read later'.tl,
                 );
-                if (context.mounted) {
-                  onChanged?.call();
-                  context.showMessage(
-                    message: included
-                        ? 'Removed from read later'.tl
-                        : 'Added to read later'.tl,
-                  );
-                }
-              } catch (error) {
-                if (context.mounted) {
-                  context.showMessage(message: error.toString());
-                }
               }
-            },
-            icon: Icon(
-              included ? Icons.bookmark_added : Icons.watch_later_outlined,
-            ),
-            label: Text(label),
-          ),
+            } catch (error) {
+              if (context.mounted) {
+                context.showMessage(message: error.toString());
+              }
+            }
+          },
         );
       },
     );

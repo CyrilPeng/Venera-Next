@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:venera_next/routing/local_reading.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/menu.dart';
@@ -349,7 +350,7 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
                   c.id,
                   ComicType.fromKey(c.sourceKey),
                 )!;
-                comic.read();
+                openLocalComic(comic);
               }
             },
             menuBuilder: (c) {

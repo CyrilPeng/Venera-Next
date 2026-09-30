@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/reader_preferences.dart';
+import 'package:venera_next/foundation/reader_preference_store.dart';
 import 'dart:async';
 
 import 'package:battery_plus/battery_plus.dart';
@@ -43,6 +45,12 @@ class ReaderScaffold extends StatefulWidget {
 
 class ReaderScaffoldState extends State<ReaderScaffold>
     with ReaderOrientationState {
+  ReaderPreferenceStore get _settingsStore => ReaderPreferenceStore(
+    settings: appdata.settings,
+    comicId: context.reader.cid,
+    sourceKey: context.reader.type.sourceKey,
+  );
+
   bool _isOpen = false;
 
   bool _brightnessPanelOpen = false;
@@ -88,7 +96,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     if (!mounted) return;
 
     // 横向阅读的时候, 如果纵向滑就触发收藏, 纵向阅读的时候, 如果横向滑动就触发收藏
-    if (appdata.settings['quickCollectImage'] == 'Swipe') {
+    if (appdata.settings.globalReaderSettings.quickCollectImage == 'Swipe') {
       if (_imageFavoriteDragListener == null) {
         double distance = 0;
         _imageFavoriteDragListener = ReaderDragListener(
@@ -138,16 +146,8 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     super.dispose();
   }
 
-  dynamic _readerSetting(String key) {
-    return appdata.settings.getReaderSetting(
-      context.reader.cid,
-      context.reader.type.sourceKey,
-      key,
-    );
-  }
-
   void _applySystemUiMode() {
-    if (_isOpen || _readerSetting('showSystemStatusBar') == true) {
+    if (_isOpen || context.reader.preferences.showSystemStatusBar == true) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     } else {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
@@ -173,31 +173,15 @@ class ReaderScaffoldState extends State<ReaderScaffold>
       return;
     }
 
-    final settings = appdata.settings;
-    final comicId = context.reader.cid;
-    final sourceKey = context.reader.type.sourceKey;
-    final enabled = settings.getReaderSetting(
-      comicId,
-      sourceKey,
-      'eInkRefreshEnabled',
-    );
-    if (enabled != true) {
+    final settings = context.reader.preferences;
+    if (!settings.eInkRefreshEnabled) {
       _eInkRefreshController.reset();
       return;
     }
-
     _eInkRefreshController.onPageChanged(
-      interval:
-          (settings.getReaderSetting(comicId, sourceKey, 'eInkRefreshInterval')
-                  as num)
-              .round(),
-      durationMilliseconds:
-          (settings.getReaderSetting(comicId, sourceKey, 'eInkRefreshDuration')
-                  as num)
-              .round(),
-      style: EInkRefreshStyle.fromKey(
-        settings.getReaderSetting(comicId, sourceKey, 'eInkRefreshStyle'),
-      ),
+      interval: settings.eInkRefreshInterval,
+      durationMilliseconds: settings.eInkRefreshDuration,
+      style: EInkRefreshStyle.fromKey(settings.eInkRefreshStyle),
     );
   }
 
@@ -220,11 +204,12 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         if (!isOnChapterCommentsPage)
           Positioned.fill(
             child: ReaderBrightnessOverlay(
-              enabled: _readerSetting('readerBrightnessEnabled') == true,
-              brightness: _readerSetting('readerBrightness'),
+              enabled:
+                  context.reader.preferences.readerBrightnessEnabled == true,
+              brightness: context.reader.preferences.readerBrightness,
             ),
           ),
-        if (_readerSetting('showPageNumberInReader') == true &&
+        if (context.reader.preferences.showPageNumberInReader == true &&
             !isOnChapterCommentsPage)
           buildPageInfoText(),
         if (!isOnChapterCommentsPage) buildStatusInfo(),
@@ -544,11 +529,11 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         message: 'Reader brightness'.tl,
         child: IconButton(
           icon: Icon(
-            _readerSetting('readerBrightnessEnabled') == true
+            context.reader.preferences.readerBrightnessEnabled == true
                 ? Icons.brightness_4
                 : Icons.brightness_6,
           ),
-          color: _readerSetting('readerBrightnessEnabled') == true
+          color: context.reader.preferences.readerBrightnessEnabled == true
               ? context.colorScheme.primary
               : null,
           onPressed: () {
@@ -704,23 +689,19 @@ class ReaderScaffoldState extends State<ReaderScaffold>
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: ReaderBrightnessControl(
             compact: true,
-            enabled: _readerSetting('readerBrightnessEnabled') == true,
-            brightness: _readerSetting('readerBrightness'),
+            enabled: context.reader.preferences.readerBrightnessEnabled == true,
+            brightness: context.reader.preferences.readerBrightness,
             onEnabledChanged: (enabled) {
-              appdata.settings.setActiveReaderSetting(
-                context.reader.cid,
-                context.reader.type.sourceKey,
-                'readerBrightnessEnabled',
+              _settingsStore.write(
+                ReaderPreferences.readerBrightnessEnabled,
                 enabled,
               );
               setState(() {});
               appdata.saveData();
             },
             onBrightnessChanged: (brightness) {
-              appdata.settings.setActiveReaderSetting(
-                context.reader.cid,
-                context.reader.type.sourceKey,
-                'readerBrightness',
+              _settingsStore.write(
+                ReaderPreferences.readerBrightness,
                 brightness,
               );
               setState(() {});
@@ -788,7 +769,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
   }
 
   Widget buildStatusInfo() {
-    if (_readerSetting('enableClockAndBatteryInfoInReader') == true) {
+    if (context.reader.preferences.enableClockAndBatteryInfoInReader == true) {
       return Positioned(
         bottom: 13,
         right: 25,
@@ -854,23 +835,13 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         onChanged: (key) {
           if (key == "readerMode") {
             context.reader.applyReadingMode(
-              ReaderMode.fromKey(
-                appdata.settings.getReaderSetting(
-                  context.reader.cid,
-                  context.reader.type.sourceKey,
-                  key,
-                ),
-              ),
+              ReaderMode.fromKey(context.reader.preferences.readerMode),
             );
             addDragListener();
             context.reader.detectLayout();
           }
           if (key == "enableTurnPageByVolumeKey") {
-            if (appdata.settings.getReaderSetting(
-              context.reader.cid,
-              context.reader.type.sourceKey,
-              key,
-            )) {
+            if (context.reader.preferences.enableTurnPageByVolumeKey) {
               context.reader.handleVolumeEvent();
             } else {
               context.reader.stopVolumeEvent();
@@ -927,11 +898,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     if (context.reader.widget.chapters == null) return false;
 
     // Check if setting is enabled
-    var showChapterComments = appdata.settings.getReaderSetting(
-      context.reader.cid,
-      context.reader.type.sourceKey,
-      'showChapterComments',
-    );
+    var showChapterComments = context.reader.preferences.showChapterComments;
     if (showChapterComments != true) return false;
 
     // Check if comic source supports chapter comments

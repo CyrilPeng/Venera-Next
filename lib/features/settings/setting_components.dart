@@ -1,3 +1,6 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/preferences.dart';
+import 'package:venera_next/foundation/reader_preference_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_reorderable_grid_view/widgets/reorderable_builder.dart';
 import 'package:venera_next/components/button.dart';
@@ -10,10 +13,27 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
+PreferenceBinding<T> _readerBinding<T extends Object>(
+  Preference<T> preference,
+  String? comicId,
+  String? sourceKey,
+  bool device,
+) => ReaderPreferenceStore(
+  settings: appdata.settings,
+  comicId: comicId,
+  sourceKey: sourceKey,
+  scope: comicId != null
+      ? ReaderPreferenceScope.comic
+      : device
+      ? ReaderPreferenceScope.device
+      : ReaderPreferenceScope.global,
+).bind(preference);
+
 class SwitchSetting extends StatefulWidget {
   const SwitchSetting({
     super.key,
     required this.title,
+    this.binding,
     required this.settingKey,
     this.onChanged,
     this.subtitle,
@@ -21,6 +41,49 @@ class SwitchSetting extends StatefulWidget {
     this.comicSource,
     this.useDeviceSettings = false,
   });
+
+  factory SwitchSetting.preference({
+    Key? key,
+    required String title,
+    required Preference<bool> preference,
+    VoidCallback? onChanged,
+    String? subtitle,
+  }) => SwitchSetting(
+    key: key,
+    title: title,
+    settingKey: preference.key,
+    binding: GlobalPreferenceStore(appdata.settings).bind(preference),
+    onChanged: onChanged,
+    subtitle: subtitle,
+  );
+
+  factory SwitchSetting.reader({
+    Key? key,
+    required String title,
+    required Preference<bool> preference,
+    VoidCallback? onChanged,
+    String? comicId,
+    String? comicSource,
+    bool useDeviceSettings = false,
+    String? subtitle,
+  }) => SwitchSetting(
+    key: key,
+    title: title,
+    settingKey: preference.key,
+    binding: _readerBinding(
+      preference,
+      comicId,
+      comicSource,
+      useDeviceSettings,
+    ),
+    onChanged: onChanged,
+    comicId: comicId,
+    comicSource: comicSource,
+    useDeviceSettings: useDeviceSettings,
+    subtitle: subtitle,
+  );
+
+  final PreferenceBinding<bool>? binding;
 
   final String title;
 
@@ -43,15 +106,17 @@ class SwitchSetting extends StatefulWidget {
 class _SwitchSettingState extends State<SwitchSetting> {
   @override
   Widget build(BuildContext context) {
-    var value = widget.comicId != null
-        ? appdata.settings.getReaderSetting(
-            widget.comicId!,
-            widget.comicSource!,
-            widget.settingKey,
-          )
-        : widget.useDeviceSettings
-        ? appdata.settings.getDeviceReaderSetting(widget.settingKey)
-        : appdata.settings[widget.settingKey];
+    var value =
+        widget.binding?.read() ??
+        (widget.comicId != null
+            ? appdata.settings.getReaderSetting(
+                widget.comicId!,
+                widget.comicSource!,
+                widget.settingKey,
+              )
+            : widget.useDeviceSettings
+            ? appdata.settings.getDeviceReaderSetting(widget.settingKey)
+            : appdata.settings[widget.settingKey]);
 
     assert(value is bool);
 
@@ -62,7 +127,9 @@ class _SwitchSettingState extends State<SwitchSetting> {
         value: value,
         onChanged: (value) {
           setState(() {
-            if (widget.comicId != null) {
+            if (widget.binding != null) {
+              widget.binding!.write(value);
+            } else if (widget.comicId != null) {
               appdata.settings.setReaderSetting(
                 widget.comicId!,
                 widget.comicSource!,
@@ -88,6 +155,7 @@ class SelectSetting extends StatelessWidget {
   const SelectSetting({
     super.key,
     required this.title,
+    this.binding,
     required this.settingKey,
     required this.optionTranslation,
     this.onChanged,
@@ -96,6 +164,53 @@ class SelectSetting extends StatelessWidget {
     this.comicSource,
     this.useDeviceSettings = false,
   });
+
+  factory SelectSetting.preference({
+    Key? key,
+    required String title,
+    required Preference<String> preference,
+    VoidCallback? onChanged,
+    required Map<String, String> optionTranslation,
+    String? help,
+  }) => SelectSetting(
+    key: key,
+    title: title,
+    settingKey: preference.key,
+    binding: GlobalPreferenceStore(appdata.settings).bind(preference),
+    onChanged: onChanged,
+    optionTranslation: optionTranslation,
+    help: help,
+  );
+
+  factory SelectSetting.reader({
+    Key? key,
+    required String title,
+    required Preference<String> preference,
+    VoidCallback? onChanged,
+    String? comicId,
+    String? comicSource,
+    bool useDeviceSettings = false,
+    required Map<String, String> optionTranslation,
+    String? help,
+  }) => SelectSetting(
+    key: key,
+    title: title,
+    settingKey: preference.key,
+    binding: _readerBinding(
+      preference,
+      comicId,
+      comicSource,
+      useDeviceSettings,
+    ),
+    onChanged: onChanged,
+    comicId: comicId,
+    comicSource: comicSource,
+    useDeviceSettings: useDeviceSettings,
+    optionTranslation: optionTranslation,
+    help: help,
+  );
+
+  final PreferenceBinding<String>? binding;
 
   final String title;
 
@@ -122,6 +237,7 @@ class SelectSetting extends StatelessWidget {
           if (constraints.maxWidth < 450) {
             return _DoubleLineSelectSettings(
               title: title,
+              binding: binding,
               settingKey: settingKey,
               optionTranslation: optionTranslation,
               onChanged: onChanged,
@@ -133,6 +249,7 @@ class SelectSetting extends StatelessWidget {
           } else {
             return _EndSelectorSelectSetting(
               title: title,
+              binding: binding,
               settingKey: settingKey,
               optionTranslation: optionTranslation,
               onChanged: onChanged,
@@ -151,6 +268,7 @@ class SelectSetting extends StatelessWidget {
 class _DoubleLineSelectSettings extends StatefulWidget {
   const _DoubleLineSelectSettings({
     required this.title,
+    this.binding,
     required this.settingKey,
     required this.optionTranslation,
     this.onChanged,
@@ -159,6 +277,8 @@ class _DoubleLineSelectSettings extends StatefulWidget {
     this.comicSource,
     this.useDeviceSettings = false,
   });
+
+  final PreferenceBinding<String>? binding;
 
   final String title;
 
@@ -184,15 +304,17 @@ class _DoubleLineSelectSettings extends StatefulWidget {
 class _DoubleLineSelectSettingsState extends State<_DoubleLineSelectSettings> {
   @override
   Widget build(BuildContext context) {
-    var value = widget.comicId != null
-        ? appdata.settings.getReaderSetting(
-            widget.comicId!,
-            widget.comicSource!,
-            widget.settingKey,
-          )
-        : widget.useDeviceSettings
-        ? appdata.settings.getDeviceReaderSetting(widget.settingKey)
-        : appdata.settings[widget.settingKey];
+    var value =
+        widget.binding?.read() ??
+        (widget.comicId != null
+            ? appdata.settings.getReaderSetting(
+                widget.comicId!,
+                widget.comicSource!,
+                widget.settingKey,
+              )
+            : widget.useDeviceSettings
+            ? appdata.settings.getDeviceReaderSetting(widget.settingKey)
+            : appdata.settings[widget.settingKey]);
 
     return ListTile(
       title: Row(
@@ -254,7 +376,9 @@ class _DoubleLineSelectSettingsState extends State<_DoubleLineSelectSettings> {
         ).then((value) {
           if (value != null) {
             setState(() {
-              if (widget.comicId != null) {
+              if (widget.binding != null) {
+                widget.binding!.write(value);
+              } else if (widget.comicId != null) {
                 appdata.settings.setReaderSetting(
                   widget.comicId!,
                   widget.comicSource!,
@@ -282,6 +406,7 @@ class _DoubleLineSelectSettingsState extends State<_DoubleLineSelectSettings> {
 class _EndSelectorSelectSetting extends StatefulWidget {
   const _EndSelectorSelectSetting({
     required this.title,
+    this.binding,
     required this.settingKey,
     required this.optionTranslation,
     this.onChanged,
@@ -290,6 +415,8 @@ class _EndSelectorSelectSetting extends StatefulWidget {
     this.comicSource,
     this.useDeviceSettings = false,
   });
+
+  final PreferenceBinding<String>? binding;
 
   final String title;
 
@@ -316,15 +443,17 @@ class _EndSelectorSelectSettingState extends State<_EndSelectorSelectSetting> {
   @override
   Widget build(BuildContext context) {
     var options = widget.optionTranslation;
-    var value = widget.comicId != null
-        ? appdata.settings.getReaderSetting(
-            widget.comicId!,
-            widget.comicSource!,
-            widget.settingKey,
-          )
-        : widget.useDeviceSettings
-        ? appdata.settings.getDeviceReaderSetting(widget.settingKey)
-        : appdata.settings[widget.settingKey];
+    var value =
+        widget.binding?.read() ??
+        (widget.comicId != null
+            ? appdata.settings.getReaderSetting(
+                widget.comicId!,
+                widget.comicSource!,
+                widget.settingKey,
+              )
+            : widget.useDeviceSettings
+            ? appdata.settings.getDeviceReaderSetting(widget.settingKey)
+            : appdata.settings[widget.settingKey]);
     return ListTile(
       title: Row(
         children: [
@@ -363,7 +492,9 @@ class _EndSelectorSelectSettingState extends State<_EndSelectorSelectSetting> {
         onTap: (index) {
           setState(() {
             var value = options.keys.elementAt(index);
-            if (widget.comicId != null) {
+            if (widget.binding != null) {
+              widget.binding!.write(value);
+            } else if (widget.comicId != null) {
               appdata.settings.setReaderSetting(
                 widget.comicId!,
                 widget.comicSource!,
@@ -388,6 +519,7 @@ class SliderSetting extends StatefulWidget {
   const SliderSetting({
     super.key,
     required this.title,
+    this.binding,
     required this.settingsIndex,
     required this.interval,
     required this.min,
@@ -398,6 +530,55 @@ class SliderSetting extends StatefulWidget {
     this.useDeviceSettings = false,
     this.valueFormatter,
   });
+
+  factory SliderSetting.preference({
+    Key? key,
+    required String title,
+    required NumericPreference preference,
+    VoidCallback? onChanged,
+    String Function(double)? valueFormatter,
+  }) => SliderSetting(
+    key: key,
+    title: title,
+    settingsIndex: preference.key,
+    binding: GlobalPreferenceStore(appdata.settings).bind(preference),
+    onChanged: onChanged,
+    valueFormatter: valueFormatter,
+    interval: preference.step,
+    min: preference.min,
+    max: preference.max,
+  );
+
+  factory SliderSetting.reader({
+    Key? key,
+    required String title,
+    required NumericPreference preference,
+    VoidCallback? onChanged,
+    String? comicId,
+    String? comicSource,
+    bool useDeviceSettings = false,
+    String Function(double)? valueFormatter,
+  }) => SliderSetting(
+    key: key,
+    title: title,
+    settingsIndex: preference.key,
+    binding: _readerBinding(
+      preference,
+      comicId,
+      comicSource,
+      useDeviceSettings,
+    ),
+    onChanged: onChanged,
+    comicId: comicId,
+    comicSource: comicSource,
+    useDeviceSettings: useDeviceSettings,
+    valueFormatter: valueFormatter,
+    interval: preference.step,
+    min: preference.min,
+    max: preference.max,
+  );
+
+  final PreferenceBinding<num>? binding;
 
   final String title;
 
@@ -427,15 +608,18 @@ class _SliderSettingState extends State<SliderSetting> {
   @override
   Widget build(BuildContext context) {
     var value =
-        (widget.comicId != null
-                ? appdata.settings.getReaderSetting(
-                    widget.comicId!,
-                    widget.comicSource!,
-                    widget.settingsIndex,
-                  )
-                : widget.useDeviceSettings
-                ? appdata.settings.getDeviceReaderSetting(widget.settingsIndex)
-                : appdata.settings[widget.settingsIndex])
+        (widget.binding?.read() ??
+                (widget.comicId != null
+                    ? appdata.settings.getReaderSetting(
+                        widget.comicId!,
+                        widget.comicSource!,
+                        widget.settingsIndex,
+                      )
+                    : widget.useDeviceSettings
+                    ? appdata.settings.getDeviceReaderSetting(
+                        widget.settingsIndex,
+                      )
+                    : appdata.settings[widget.settingsIndex]))
             .toDouble();
     return ListTile(
       title: Text(widget.title, softWrap: true, maxLines: 2),
@@ -446,45 +630,27 @@ class _SliderSettingState extends State<SliderSetting> {
       subtitle: Slider(
         value: value,
         onChanged: (value) {
-          if (value.toInt() == value) {
-            setState(() {
-              if (widget.comicId != null) {
-                appdata.settings.setReaderSetting(
-                  widget.comicId!,
-                  widget.comicSource!,
-                  widget.settingsIndex,
-                  value.toInt(),
-                );
-              } else if (widget.useDeviceSettings) {
-                appdata.settings.setDeviceReaderSetting(
-                  widget.settingsIndex,
-                  value.toInt(),
-                );
-              } else {
-                appdata.settings[widget.settingsIndex] = value.toInt();
-              }
-              appdata.saveData();
-            });
-          } else {
-            setState(() {
-              if (widget.comicId != null) {
-                appdata.settings.setReaderSetting(
-                  widget.comicId!,
-                  widget.comicSource!,
-                  widget.settingsIndex,
-                  value,
-                );
-              } else if (widget.useDeviceSettings) {
-                appdata.settings.setDeviceReaderSetting(
-                  widget.settingsIndex,
-                  value,
-                );
-              } else {
-                appdata.settings[widget.settingsIndex] = value;
-              }
-              appdata.saveData();
-            });
-          }
+          setState(() {
+            final num stored = value.toInt() == value ? value.toInt() : value;
+            if (widget.binding != null) {
+              widget.binding!.write(stored);
+            } else if (widget.comicId != null) {
+              appdata.settings.setReaderSetting(
+                widget.comicId!,
+                widget.comicSource!,
+                widget.settingsIndex,
+                stored,
+              );
+            } else if (widget.useDeviceSettings) {
+              appdata.settings.setDeviceReaderSetting(
+                widget.settingsIndex,
+                stored,
+              );
+            } else {
+              appdata.settings[widget.settingsIndex] = stored;
+            }
+          });
+          appdata.saveData();
           widget.onChanged?.call();
         },
         divisions: ((widget.max - widget.min) / widget.interval).toInt(),

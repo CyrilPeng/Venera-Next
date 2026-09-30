@@ -168,6 +168,11 @@ class JsEngine with _JSEngineApi, Init {
       _engine!.evaluate(utf8.decode(jsInit), name: "<init>");
     } catch (e, s) {
       Log.error('JS Engine', 'JS Engine Init Error:\n$e\n$s');
+      _closed = true;
+      _engine?.close();
+      _engine?.port.close();
+      _engine = null;
+      rethrow;
     }
   }
 

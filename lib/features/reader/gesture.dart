@@ -5,7 +5,6 @@ import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/features/reader/clipboard_image.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/file_type.dart';
@@ -179,11 +178,7 @@ class ReaderGestureDetectorState
 
   bool _dragInProgress = false;
 
-  bool get _enableDoubleTapToZoom => appdata.settings.getReaderSetting(
-    reader.cid,
-    reader.type.sourceKey,
-    'enableDoubleTapToZoom',
-  );
+  bool get _enableDoubleTapToZoom => reader.preferences.enableDoubleTapToZoom;
 
   void onTapUp(TapUpDetails event) {
     if (event.globalPosition == Offset.zero &&
@@ -230,11 +225,7 @@ class ReaderGestureDetectorState
       if (reader.isOnChapterCommentsPage) {
         return;
       }
-      if (appdata.settings.getReaderSetting(
-        reader.cid,
-        reader.type.sourceKey,
-        'enableTapToTurnPages',
-      )) {
+      if (reader.preferences.enableTapToTurnPages) {
         bool isLeft = false, isRight = false, isTop = false, isBottom = false;
         final width = context.width;
         final height = context.height;
@@ -253,11 +244,7 @@ class ReaderGestureDetectorState
         bool isCenter = false;
         var prev = () => context.reader.toPrevPage();
         var next = () => context.reader.toNextPage();
-        if (appdata.settings.getReaderSetting(
-          reader.cid,
-          reader.type.sourceKey,
-          'reverseTapToTurnPages',
-        )) {
+        if (reader.preferences.reverseTapToTurnPages) {
           prev = () => context.reader.toNextPage();
           next = () => context.reader.toPrevPage();
         }
@@ -358,7 +345,7 @@ class ReaderGestureDetectorState
   }
 
   void onLongPressedDown(Offset location) {
-    _longPressAction = reader.readerSetting('longPressAction') as String;
+    _longPressAction = reader.preferences.longPressAction;
     switch (_longPressAction) {
       case 'zoom':
         reader.imageViewController?.handleLongPressDown(location);

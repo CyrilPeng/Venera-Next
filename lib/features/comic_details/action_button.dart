@@ -34,40 +34,51 @@ class ComicDetailActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: context.colorScheme.outlineVariant,
-          width: 0.6,
-        ),
-      ),
-      child: ClickInkWell(
-        onTap: () {
-          if (!(isLoading ?? false)) {
-            onPressed();
-          }
-        },
-        onLongPress: onLongPressed,
-        borderRadius: BorderRadius.circular(18),
-        child: IconTheme.merge(
-          data: IconThemeData(size: 20, color: iconColor),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isLoading ?? false)
-                const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 1.8),
-                )
-              else
-                (isActive ?? false) ? (activeIcon ?? icon) : icon,
-              const SizedBox(width: 8),
-              Text(text),
-            ],
-          ).paddingHorizontal(16),
+    final enabled = !(isLoading ?? false);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: ClickInkWell(
+            onTap: enabled ? onPressed : null,
+            onLongPress: enabled ? onLongPressed : null,
+            mouseCursor: enabled
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
+            borderRadius: BorderRadius.circular(18),
+            // Keep the compact outline inside the full-height touch target.
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: context.colorScheme.outlineVariant,
+                  width: 0.6,
+                ),
+              ),
+              child: IconTheme.merge(
+                data: IconThemeData(size: 20, color: iconColor),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!enabled)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 1.8),
+                      )
+                    else
+                      (isActive ?? false) ? (activeIcon ?? icon) : icon,
+                    const SizedBox(width: 8),
+                    Text(text),
+                  ],
+                ).paddingHorizontal(16),
+              ),
+            ),
+          ),
         ),
       ),
     );

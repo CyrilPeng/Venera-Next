@@ -3,56 +3,29 @@ import 'dart:async';
 import 'package:display_mode/display_mode.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_saf/flutter_saf.dart';
-import 'package:rhttp/rhttp.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/settings/settings.dart';
-import 'package:venera_next/features/sync/sync.dart';
-import 'package:venera_next/features/webdav_library/webdav_library.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
-import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/network/cookie_jar.dart';
-import 'package:venera_next/features/follow_updates/follow_updates.dart';
-import 'package:venera_next/routing/app_links.dart';
-import 'package:venera_next/routing/handle_text_share.dart';
-import 'package:venera_next/foundation/opencc.dart';
-import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
-extension _FutureInit<T> on Future<T> {
-  /// Prevent unhandled exception
-  ///
-  /// A unhandled exception occurred in init() will cause the app to crash.
-  Future<void> wait() async {
-    try {
-      await this;
-    } catch (e, s) {
-      Log.error("init", "$e\n$s");
-    }
-  }
-}
+import 'bootstrap_core.dart';
 
-Future<void> init() async {
-  await App.init().wait();
-  await SingleInstanceCookieJar.createInstance();
-  configureComicTypeSourceKeyResolver();
-  configureComicSourceDataSavedHandler(() async => DataSync().onDataChanged());
-  configureRuntimeComicSourcesProvider(
-    () => WebDavLibraryConfig.fromSettings().isValid
-        ? [WebDavLibrarySource.create()]
-        : const [],
-  );
+Future<void>? _interactiveInitialization;
+
+/// Compatibility entry point for interactive startup.
+Future<void> init() => _interactiveInitialization ??= _initializeInteractive();
+
+Future<void> _initializeInteractive() async {
+  await bootstrapCore();
   configureComicWidgets(
     comicPageBuilder:
         ({
@@ -84,32 +57,7 @@ Future<void> init() async {
       galleryColumns: favoriteGalleryColumns(),
     ),
   );
-  try {
-    var futures = [
-      Rhttp.init(),
-      App.initComponents([
-        HistoryManager().init,
-        LocalFavoritesManager().init,
-        LocalManager().init,
-      ]),
-      SAFTaskWorker().init().wait(),
-      AppTranslation.init().wait(),
-      TagsTranslation.readData().wait(),
-      JsEngine().init().wait(),
-      ComicSourceManager().init().wait(),
-      OpenCC.init(),
-    ];
-    await Future.wait(futures);
-  } catch (e, s) {
-    Log.error("init", "$e\n$s");
-  }
-  _checkOldConfigs();
-  DataSync();
-  WebDavLibrarySource.initializeAutoSync();
-  CacheManager().setLimitSize(appdata.settings['cacheSize']);
   if (App.isAndroid) {
-    handleLinks();
-    handleTextShare();
     try {
       await FlutterDisplayMode.setHighRefreshRate();
     } catch (e) {
@@ -119,14 +67,6 @@ Future<void> init() async {
   FlutterError.onError = (details) {
     Log.error("Unhandled Exception", "${details.exception}\n${details.stack}");
   };
-  if (App.isWindows) {
-    // Report to the monitor thread that the app is running
-    // https://github.com/CyrilPeng/venera-next/issues
-    Timer.periodic(const Duration(seconds: 1), (_) {
-      const methodChannel = MethodChannel('venera/method_channel');
-      methodChannel.invokeMethod("heartBeat");
-    });
-  }
 }
 
 ComicTileState _resolveComicTileState(Comic comic) {
@@ -181,27 +121,6 @@ Future<Uint8List?> _loadLocalCoverFallback(String sourceKey, String id) async {
   return data.isEmpty ? null : data;
 }
 
-void _checkOldConfigs() {
-  if (appdata.settings['searchSources'] == null) {
-    appdata.settings['searchSources'] = ComicSource.all()
-        .where((e) => e.searchPageData != null)
-        .map((e) => e.key)
-        .toList();
-  }
-
-  if (appdata.implicitData['webdavAutoSync'] == null) {
-    var webdavConfig = appdata.settings['webdav'];
-    if (webdavConfig is List &&
-        webdavConfig.length == 3 &&
-        webdavConfig.whereType<String>().length == 3) {
-      appdata.implicitData['webdavAutoSync'] = true;
-    } else {
-      appdata.implicitData['webdavAutoSync'] = false;
-    }
-    appdata.writeImplicitData();
-  }
-}
-
 Future<void> _checkAppUpdates() async {
   var lastCheck = appdata.implicitData['lastCheckUpdate'] ?? 0;
   var now = DateTime.now().millisecondsSinceEpoch;
@@ -210,7 +129,7 @@ Future<void> _checkAppUpdates() async {
   }
   appdata.implicitData['lastCheckUpdate'] = now;
   appdata.writeImplicitData();
-  ComicSourcePage.checkComicSourceUpdate();
+  SourceUpdateService.instance.checkUpdates();
   if (appdata.settings['checkUpdateOnStart']) {
     await checkUpdateUi(false, true);
   }
@@ -218,7 +137,6 @@ Future<void> _checkAppUpdates() async {
 
 void checkUpdates() {
   _checkAppUpdates();
-  FollowUpdatesService.initChecker();
 }
 
 void reloadComicSourcesForDebug() async {

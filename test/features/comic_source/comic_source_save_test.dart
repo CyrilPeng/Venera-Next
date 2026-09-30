@@ -80,7 +80,7 @@ void main() {
       manager.remove(key);
     });
 
-    final count = await ComicSourcePage.checkComicSourceUpdate();
+    final count = await SourceUpdateService.instance.checkUpdates();
 
     expect(count, 0);
     expect(ComicSourceManager().availableUpdates, isEmpty);

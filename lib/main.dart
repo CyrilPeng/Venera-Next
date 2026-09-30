@@ -1,4 +1,9 @@
+import 'package:venera_next/features/follow_updates/follow_updates.dart';
+import 'package:venera_next/app_runtime/background_sync.dart';
+import 'package:venera_next/app_runtime/interactive_bindings.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
+import 'package:venera_next/app_runtime/sync_window_binding.dart';
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flex_seed_scheme/flex_seed_scheme.dart';
@@ -76,13 +81,35 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  final _interactiveBindings = InteractiveBindings.platform();
+  final _backgroundSync = BackgroundSync.platform();
+
   @override
   void initState() {
     App.registerForceRebuild(forceRebuild);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _interactiveBindings.start();
+        _backgroundSync.start();
+        startFollowUpdates();
+      }
+    });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     WidgetsBinding.instance.addObserver(this);
     checkUpdates();
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    App.registerForceRebuild(null);
+    hideContentOverlay?.remove();
+    hideContentOverlay = null;
+    stopFollowUpdates();
+    _backgroundSync.stop();
+    unawaited(_interactiveBindings.dispose());
+    super.dispose();
   }
 
   bool isAuthPageActive = false;
@@ -150,7 +177,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   Color translateColorSetting() {
-    return switch (appdata.settings['color']) {
+    return switch (GlobalPreferenceStore(appdata.settings).appearance.color) {
       'red' => Colors.red,
       'pink' => Colors.pink,
       'purple' => Colors.purple,
@@ -233,7 +260,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     return DynamicColorBuilder(
       builder: (light, dark) {
         Color? primary, secondary, tertiary;
-        if (appdata.settings['color'] != 'system' ||
+        if (GlobalPreferenceStore(appdata.settings).appearance.color !=
+                'system' ||
             light == null ||
             dark == null) {
           primary = translateColorSetting();
@@ -249,7 +277,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           theme: getTheme(primary, secondary, tertiary, Brightness.light),
           navigatorKey: App.rootNavigatorKey,
           darkTheme: getTheme(primary, secondary, tertiary, Brightness.dark),
-          themeMode: switch (appdata.settings['theme_mode']) {
+          themeMode: switch (GlobalPreferenceStore(
+            appdata.settings,
+          ).appearance.themeMode) {
             'light' => ThemeMode.light,
             'dark' => ThemeMode.dark,
             _ => ThemeMode.system,
@@ -302,7 +332,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   child: MouseBackDetector(
                     onTapDown: App.pop,
                     child: WindowFrame(
-                      widget,
+                      SyncWindowBinding(child: widget, onExit: () => exit(0)),
                       debugAction: reloadComicSourcesForDebug,
                     ),
                   ),

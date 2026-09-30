@@ -43,7 +43,7 @@ void main() {
     requests = _SourceRequests();
     messages = [];
     Dio createDio() => Dio()..httpClientAdapter = requests;
-    ComicSourcePage.debugCreateDio = createDio;
+    ComicSourcePage.updateService = SourceUpdateService(createDio: createDio);
     SourceRepositories.debugCreateDio = createDio;
     registerShowMessageHandler((context, message) => messages.add(message));
   }
@@ -51,7 +51,7 @@ void main() {
   void tearDownScenario() {
     ComicSourceManager().remove('installed_source');
     previousSettings.forEach((key, value) => appdata.settings[key] = value);
-    ComicSourcePage.debugCreateDio = null;
+    ComicSourcePage.updateService = SourceUpdateService.instance;
     SourceRepositories.debugCreateDio = null;
     registerShowMessageHandler((context, message) {});
     Log.isMuted = previousLogMuted;
@@ -139,11 +139,13 @@ void main() {
       await pumpPage(tester);
       final source = install();
       var finished = false;
-      final running = ComicSourcePage.update(source, false).catchError((_) {});
+      final running = ComicSourcePage.updateService
+          .update(source)
+          .catchError((_) {});
       running.whenComplete(() => finished = true);
       await _pumpUntil(tester, () => requests.items.isNotEmpty);
       final conflict = expectLater(
-        ComicSourcePage.update(source, false),
+        ComicSourcePage.updateService.update(source),
         throwsA('Update already in progress'.tl),
       );
       // The first update fails with a network error, which is swallowed above.
@@ -305,7 +307,7 @@ void main() {
       addTearDown(tearDownScenario);
       final source = install();
       final result = expectLater(
-        ComicSourcePage.update(source, false),
+        ComicSourcePage.updateService.update(source),
         throwsA(isA<DioException>()),
       );
       await pumpEventQueue();

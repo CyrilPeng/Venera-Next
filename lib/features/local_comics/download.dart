@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
 import 'dart:isolate';
 
@@ -194,7 +195,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
   var tasks = <int, _ImageDownloadWrapper>{};
 
   int get _maxConcurrentTasks =>
-      (appdata.settings["downloadThreads"] as num).toInt();
+      GlobalPreferenceStore(appdata.settings).network.downloadThreads;
 
   Future<void>? _resumeFuture;
 

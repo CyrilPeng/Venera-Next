@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:flutter/services.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -19,10 +20,11 @@ Future<String?> getProxy() async {
 }
 
 Future<String?> _getProxy() async {
-  if ((appdata.settings['proxy'] as String).removeAllBlank == "direct") {
+  final configured = GlobalPreferenceStore(appdata.settings).network.proxy;
+  if (configured.removeAllBlank == "direct") {
     return null;
   }
-  if (appdata.settings['proxy'] != "system") return appdata.settings['proxy'];
+  if (configured != "system") return configured;
 
   String res;
   if (!App.isLinux) {

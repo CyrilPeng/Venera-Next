@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -5,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
+import 'package:venera_next/foundation/reader_settings.dart';
+import 'package:venera_next/foundation/reader_preferences.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/init.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -334,15 +337,14 @@ class Settings with ChangeNotifier {
   Settings._create();
 
   final _data = <String, dynamic>{
+    ...ReaderPreferences.storageDefaults,
+    ...applicationPreferenceDefaults,
     'comicDisplayMode': 'detailed', // detailed, brief
     'comicTileScale': 1.00, // 0.75-1.25
     'favoritesDisplayMode': 'list', // list, gallery
     'favoritesGalleryColumns': 0, // 0 means automatic, 2-6 are fixed
-    'color': 'system', // red, pink, purple, green, orange, blue
-    'theme_mode': 'system', // light, dark, system
     'newFavoriteAddTo': 'end', // start, end
     'moveFavoriteAfterRead': 'none', // none, end, start
-    'proxy': 'system', // direct, system, proxy string
     'explore_pages': [],
     'categories': [],
     'favorites': [],
@@ -354,39 +356,12 @@ class Settings with ChangeNotifier {
     'blockedWords': [],
     'blockedCommentWords': [],
     'defaultSearchTarget': null,
-    'autoPageTurningInterval': 5, // in seconds
-    'autoScrollStyle': 'smooth',
-    'autoScrollSpeed': 80,
-    'autoScrollFrequency': 2,
-    'autoScrollDistance': 40,
-    'autoReadingAcrossChapters': true,
-    'readerMode': 'waterfallTopToBottom', // values of [ReaderMode]
-    'autoReaderMode': false,
-    'pagedReaderMode': 'galleryRightToLeft',
-    'longStripReaderMode': 'continuousTopToBottom',
     'comicLayoutDetections': <String, dynamic>{},
-    'readerScreenPicNumberForLandscape': 1, // 1 - 5
-    'readerScreenPicNumberForPortrait': 1, // 1 - 5
-    'enableTapToTurnPages': true,
-    'reverseTapToTurnPages': false,
-    'enablePageAnimation': true,
-    'readerBrightnessEnabled': false,
-    'readerBrightness': 50, // 20 - 100
-    'eInkRefreshEnabled': false,
-    'eInkRefreshDuration': 100, // milliseconds
-    'eInkRefreshInterval': 1, // page changes
-    'eInkRefreshStyle': 'black', // black, white, whiteThenBlack
     'language': 'system', // system, zh-CN, zh-TW, en-US
     'cacheSize': 2048, // in MB
     'historyRetentionDays': 0, // 0 means disabled
-    'downloadThreads': 5,
     'enableLongPressToZoom': true,
-    'longPressAction':
-        null, // Resolve legacy zoom preference until explicitly set.
-    'longPressZoomPosition': "press", // press, center
     'checkUpdateOnStart': false,
-    'limitImageWidth': true,
-    'readerSideMargin': 0, // Percent on each side of the limited flow width.
     'webdav': [], // empty means not configured
     'webdavProxyEnabled': true,
     'backupWebdav': [], // empty means not configured
@@ -400,42 +375,24 @@ class Settings with ChangeNotifier {
     'dataVersion': 0,
     'quickFavorite': null,
     'readLaterFolder': null,
-    'enableTurnPageByVolumeKey': true,
-    'enableClockAndBatteryInfoInReader': true,
-    'quickCollectImage': 'No', // No, DoubleTap, Swipe
     'authorizationRequired': false,
     'onClickFavorite': 'viewDetail', // viewDetail, read
-    'enableDnsOverrides': false,
-    'dnsOverrides': {},
     'enableCustomImageProcessing': false,
     'customImageProcessing': defaultCustomImageProcessing,
-    'sni': true,
     'autoAddLanguageFilter': 'none', // none, chinese, english, japanese
     'comicSourceListUrl': "",
     'comicSourceRepositories': <Map<String, dynamic>>[],
     'comicSourceOrigins': <String, dynamic>{},
     'comicSourceRepositoriesMigrated': false,
-    'preloadImageCount': 4,
     'followUpdatesFolder': null,
     'initialPage': '0',
     'comicListDisplayMode': 'paging', // paging, continuous
-    'showPageNumberInReader': true,
-    'showSingleImageOnFirstPage': false,
-    'enableDoubleTapToZoom': true,
     'reverseChapterOrder': false,
-    'showSystemStatusBar': false,
     'comicSpecificSettings': <String, Map<String, dynamic>>{},
     'deviceSpecificSettings': <String, Map<String, dynamic>>{},
     'deviceId': '',
-    'ignoreBadCertificate': false,
-    'readerScrollSpeed': 1.0, // 0.5 - 3.0
     'localFavoritesFirst': true,
     'autoCloseFavoritePanel': false,
-    'showChapterComments': true, // show chapter comments in reader
-    'showChapterCommentsAtEnd':
-        false, // show chapter comments at end of chapter
-    'splitDualPage': false,
-    'splitDualPageInvert': false,
   };
 
   operator [](String key) {
@@ -476,6 +433,27 @@ class Settings with ChangeNotifier {
     }
     return _data['comicSpecificSettings']["$comicId@$sourceKey"]?["enabled"] ==
         true;
+  }
+
+  ReaderSettings get globalReaderSettings =>
+      ReaderSettings.resolve(global: _data);
+
+  /// Resolve an immutable snapshot without changing stored settings or scopes.
+  ReaderSettings readerSettings(String comicId, String sourceKey) {
+    Map? record(Object? container, String key) {
+      final value = container is Map ? container[key] : null;
+      return value is Map ? value : null;
+    }
+
+    final deviceId = _data['deviceId'];
+    return ReaderSettings.resolve(
+      global: _data,
+      device: deviceId is String && deviceId.isNotEmpty
+          ? record(_data['deviceSpecificSettings'], deviceId)
+          : null,
+      comic: record(_data['comicSpecificSettings'], '$comicId@$sourceKey'),
+      layout: comicLayout(comicId, sourceKey),
+    );
   }
 
   dynamic getReaderSetting(String comicId, String sourceKey, String key) {

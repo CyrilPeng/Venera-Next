@@ -29,7 +29,6 @@ void main() {
     previousSettings = jsonDecode(jsonEncode(appdata.toJson()['settings']));
     previousFavorites = LocalFavoritesManager.cache;
     LocalFavoritesManager.cache = _Favorites();
-    DataSync.debugDisableWindowCloseHandler = true;
     settings['autoReaderMode'] = true;
     settings['readerMode'] = 'galleryRightToLeft';
     settings['longStripReaderMode'] = 'continuousTopToBottom';

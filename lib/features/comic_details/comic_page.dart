@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shimmer_animation/shimmer_animation.dart';
+import 'package:venera_next/routing/local_reading.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/image.dart';
@@ -135,7 +136,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
             context.showMessage(message: "Local comic not found".tl);
             return;
           }
-          localComic.read();
+          openLocalComic(localComic);
         },
       );
     }

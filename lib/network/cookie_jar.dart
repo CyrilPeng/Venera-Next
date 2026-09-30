@@ -223,11 +223,13 @@ class SingleInstanceCookieJar extends CookieJarSql {
 
   static SingleInstanceCookieJar? instance;
 
-  static Future<SingleInstanceCookieJar> createInstance() async {
+  static Future<SingleInstanceCookieJar> createInstance({
+    String? directory,
+  }) async {
     if (instance != null) {
       return instance!;
     }
-    var dataPath = (await getApplicationSupportDirectory()).path;
+    var dataPath = directory ?? (await getApplicationSupportDirectory()).path;
     instance = SingleInstanceCookieJar("$dataPath/cookie.db");
     return instance!;
   }

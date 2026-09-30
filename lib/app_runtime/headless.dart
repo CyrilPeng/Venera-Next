@@ -2,13 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:venera_next/features/sync/sync.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 
-import 'init.dart';
+import 'bootstrap_core.dart';
+import 'headless_bindings.dart';
 
 void cliPrint(Map<String, dynamic> data) {
   print('[CLI PRINT] ${jsonEncode(data)}');
@@ -19,21 +20,36 @@ Future<void> runHeadlessMode(List<String> args) async {
   if (args.contains('--ignore-disheadless-log')) {
     Log.isMuted = true;
   }
-  if(Platform.isLinux || Platform.isMacOS){
+  if (Platform.isLinux || Platform.isMacOS) {
     Directory.current = Platform.environment['HOME']!;
   }
   // The first arg is '--headless', so we look at the next ones.
   var commandIndex = args.indexOf('--headless') + 1;
   if (commandIndex >= args.length) {
-    cliPrint({'status': 'error', 'message': 'No command provided for headless mode.'});
+    cliPrint({
+      'status': 'error',
+      'message': 'No command provided for headless mode.',
+    });
     exit(1);
   }
 
   // Need to initialize the app for some features to work
-  await init();
+  configureHeadlessBindings();
+  try {
+    await bootstrapCore();
+  } catch (error, stack) {
+    Log.error('Headless startup', error, stack);
+    cliPrint({
+      'status': 'error',
+      'message': 'Core initialization failed: $error',
+    });
+    exit(1);
+  }
 
   var command = args[commandIndex];
-  var subCommand = (commandIndex + 1 < args.length) ? args[commandIndex + 1] : null;
+  var subCommand = (commandIndex + 1 < args.length)
+      ? args[commandIndex + 1]
+      : null;
 
   switch (command) {
     case 'webdav':
@@ -42,18 +58,27 @@ Future<void> runHeadlessMode(List<String> args) async {
         await DataSync().uploadData();
         cliPrint({'status': 'success', 'message': 'Upload complete.'});
       } else if (subCommand == 'down') {
-        cliPrint({'status': 'running', 'message': 'Downloading WebDAV data...'});
+        cliPrint({
+          'status': 'running',
+          'message': 'Downloading WebDAV data...',
+        });
         await DataSync().downloadData();
         cliPrint({'status': 'success', 'message': 'Download complete.'});
       } else {
-        cliPrint({'status': 'error', 'message': 'Invalid webdav command. Use "up" or "down".'});
+        cliPrint({
+          'status': 'error',
+          'message': 'Invalid webdav command. Use "up" or "down".',
+        });
         exit(1);
       }
       break;
     case 'updatescript':
       if (subCommand == 'all') {
-        cliPrint({'status': 'running', 'message': 'Checking for comic source script updates...'});
-        await ComicSourcePage.checkComicSourceUpdate();
+        cliPrint({
+          'status': 'running',
+          'message': 'Checking for comic source script updates...',
+        });
+        await SourceUpdateService.instance.checkUpdates();
         var updates = ComicSourceManager().availableUpdates;
         if (updates.isEmpty) {
           cliPrint({'status': 'success', 'message': 'No updates found.'});
@@ -65,12 +90,7 @@ Future<void> runHeadlessMode(List<String> args) async {
           cliPrint({
             'status': 'running',
             'message': 'Updating all comic source scripts...',
-            'data': {
-              'total': total,
-              'current': 0,
-              'updated': 0,
-              'errors': 0,
-            }
+            'data': {'total': total, 'current': 0, 'updated': 0, 'errors': 0},
           });
           for (var key in updates.keys) {
             var source = ComicSource.find(key);
@@ -84,10 +104,10 @@ Future<void> runHeadlessMode(List<String> args) async {
                   'name': source.name,
                   'version': source.version,
                   'url': source.url,
-                }
+                },
               };
               try {
-                await ComicSourcePage.update(source, false);
+                await SourceUpdateService.instance.update(source);
                 updated++;
                 cliPrint({
                   'status': 'running',
@@ -99,10 +119,7 @@ Future<void> runHeadlessMode(List<String> args) async {
                 cliPrint({
                   'status': 'running',
                   'message': 'ProgressError',
-                  'data': {
-                    ...data,
-                    'error': e.toString(),
-                  },
+                  'data': {...data, 'error': e.toString()},
                 });
               }
             }
@@ -110,23 +127,28 @@ Future<void> runHeadlessMode(List<String> args) async {
           cliPrint({
             'status': 'success',
             'message': 'All scripts updated.',
-            'data': {
-              'total': total,
-              'updated': updated,
-              'errors': errors,
-            }
+            'data': {'total': total, 'updated': updated, 'errors': errors},
           });
         }
       } else {
-        cliPrint({'status': 'error', 'message': 'Invalid updatescript command. Use "all".'});
+        cliPrint({
+          'status': 'error',
+          'message': 'Invalid updatescript command. Use "all".',
+        });
         exit(1);
       }
       break;
     case 'updatesubscribe':
-      cliPrint({'status': 'running', 'message': 'Updating subscribed comics...'});
+      cliPrint({
+        'status': 'running',
+        'message': 'Updating subscribed comics...',
+      });
       var folder = appdata.settings["followUpdatesFolder"];
       if (folder == null) {
-        cliPrint({'status': 'error', 'message': 'Follow updates folder is not configured.'});
+        cliPrint({
+          'status': 'error',
+          'message': 'Follow updates folder is not configured.',
+        });
         exit(1);
       }
 
@@ -135,10 +157,12 @@ Future<void> runHeadlessMode(List<String> args) async {
         var id = args[updateIndex + 1];
         var type = args[updateIndex + 2];
         var comics = LocalFavoritesManager().getComicsWithUpdatesInfo(folder);
-        var comic = comics.firstWhere((c) => c.id == id && c.type.sourceKey == type);
-        
+        var comic = comics.firstWhere(
+          (c) => c.id == id && c.type.sourceKey == type,
+        );
+
         var result = await updateComic(comic, folder);
-        
+
         Map<String, dynamic> data = {
           'current': 1,
           'total': 1,
@@ -150,7 +174,7 @@ Future<void> runHeadlessMode(List<String> args) async {
             'type': comic.type.sourceKey,
             'updateTime': comic.updateTime,
             'tags': comic.tags,
-          }
+          },
         };
 
         var message = 'Progress';
@@ -159,11 +183,7 @@ Future<void> runHeadlessMode(List<String> args) async {
           data['error'] = result.errorMessage;
         }
 
-        cliPrint({
-          'status': 'running',
-          'message': message,
-          'data': data,
-        });
+        cliPrint({'status': 'running', 'message': message, 'data': data});
 
         cliPrint({
           'status': 'running',
@@ -172,7 +192,7 @@ Future<void> runHeadlessMode(List<String> args) async {
             'total': 1,
             'updated': result.updated ? 1 : 0,
             'errors': result.errorMessage != null ? 1 : 0,
-          }
+          },
         });
 
         await Future.delayed(const Duration(milliseconds: 500));
@@ -210,20 +230,12 @@ Future<void> runHeadlessMode(List<String> args) async {
             message = 'ProgressError';
             data['error'] = progress.errorMessage;
           }
-          cliPrint({
-            'status': 'running',
-            'message': message,
-            'data': data,
-          });
+          cliPrint({'status': 'running', 'message': message, 'data': data});
         }
         cliPrint({
           'status': 'running',
           'message': 'Update check complete.',
-          'data': {
-            'total': total,
-            'updated': updated,
-            'errors': errors,
-          }
+          'data': {'total': total, 'updated': updated, 'errors': errors},
         });
         await Future.delayed(const Duration(milliseconds: 500));
         var json = await getUpdatedComicsAsJson(folder);

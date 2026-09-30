@@ -149,20 +149,9 @@ class ReaderImagesState extends State<ReaderImages> {
       );
     } else {
       if (reader.mode.isGallery) {
-        var showComments =
-            appdata.settings.getReaderSetting(
-              reader.cid,
-              reader.type.sourceKey,
-              'showChapterComments',
-            ) ==
-            true;
+        var showComments = reader.preferences.showChapterComments == true;
         var showCommentsAtEnd =
-            appdata.settings.getReaderSetting(
-              reader.cid,
-              reader.type.sourceKey,
-              'showChapterCommentsAtEnd',
-            ) ==
-            true;
+            reader.preferences.showChapterCommentsAtEnd == true;
         return _GalleryMode(
           key: Key(
             '${reader.mode.key}_${reader.imagesPerPage}_${showComments}_$showCommentsAtEnd',
@@ -189,7 +178,8 @@ class GalleryModeState extends State<_GalleryMode>
     implements ReaderImageViewController, AutoReadingViewport {
   late PageController controller;
 
-  int get preCacheCount => appdata.settings["preloadImageCount"];
+  int get preCacheCount =>
+      appdata.settings.globalReaderSettings.preloadImageCount;
 
   var photoViewControllers = <int, PhotoViewController>{};
 
@@ -203,18 +193,8 @@ class GalleryModeState extends State<_GalleryMode>
     if (reader.widget.chapters == null) return false;
     var source = ComicSource.find(reader.type.sourceKey);
     if (source?.chapterCommentsLoader == null) return false;
-    return appdata.settings.getReaderSetting(
-              reader.cid,
-              reader.type.sourceKey,
-              'showChapterComments',
-            ) ==
-            true &&
-        appdata.settings.getReaderSetting(
-              reader.cid,
-              reader.type.sourceKey,
-              'showChapterCommentsAtEnd',
-            ) ==
-            true;
+    return reader.preferences.showChapterComments == true &&
+        reader.preferences.showChapterCommentsAtEnd == true;
   }
 
   int get totalImagePages {
@@ -582,7 +562,8 @@ class GalleryModeState extends State<_GalleryMode>
 
   @override
   void handleDoubleTap(Offset location) {
-    if (appdata.settings['quickCollectImage'] == 'DoubleTap') {
+    if (appdata.settings.globalReaderSettings.quickCollectImage ==
+        'DoubleTap') {
       context.readerScaffold.addImageFavorite();
       return;
     }
@@ -599,7 +580,7 @@ class GalleryModeState extends State<_GalleryMode>
     double target = photoViewController.getInitialScale!.call()! * 1.75;
     var size = reader.size;
     Offset zoomPosition;
-    if (reader.readerSetting('longPressZoomPosition') != 'center') {
+    if (reader.preferences.longPressZoomPosition != 'center') {
       zoomPosition = Offset(
         size.width / 2 - location.dx,
         size.height / 2 - location.dy,
@@ -774,7 +755,8 @@ class ContinuousModeState extends State<_ContinuousMode>
 
   String? _nextSegmentError;
 
-  int get preCacheCount => appdata.settings["preloadImageCount"];
+  int get preCacheCount =>
+      appdata.settings.globalReaderSettings.preloadImageCount;
 
   /// Whether the user was scrolling the page.
   /// The gesture detector has a delay to detect tap event.
@@ -801,21 +783,10 @@ class ContinuousModeState extends State<_ContinuousMode>
   bool get crossChapter => widget.crossChapter;
 
   bool get _splitWideImages =>
-      reader.mode.isTopToBottom &&
-      appdata.settings.getReaderSetting(
-            reader.cid,
-            reader.type.sourceKey,
-            'splitDualPage',
-          ) ==
-          true;
+      reader.mode.isTopToBottom && reader.preferences.splitDualPage == true;
 
   bool get _splitWideImagesInvert =>
-      appdata.settings.getReaderSetting(
-        reader.cid,
-        reader.type.sourceKey,
-        'splitDualPageInvert',
-      ) ==
-      true;
+      reader.preferences.splitDualPageInvert == true;
 
   int get _flowImageCount =>
       crossChapter ? _waterfallFlow.imageCount : reader.maxPage;
@@ -1172,14 +1143,8 @@ class ContinuousModeState extends State<_ContinuousMode>
     var old = _futurePosition;
     _futurePosition ??= currentLocation;
     double k = (_futurePosition! - currentLocation).abs() / 1600 + 1;
-    final customSpeed = appdata.settings.getReaderSetting(
-      context.reader.cid,
-      context.reader.type.sourceKey,
-      "readerScrollSpeed",
-    );
-    if (customSpeed is num) {
-      k *= customSpeed;
-    }
+    final customSpeed = context.reader.preferences.readerScrollSpeed;
+    k *= customSpeed;
     _futurePosition = _futurePosition! + offset * k;
     var beforeOffset = (_futurePosition! - currentLocation).abs();
     _futurePosition = _futurePosition!.clamp(
@@ -1572,25 +1537,14 @@ class ContinuousModeState extends State<_ContinuousMode>
     );
     var width = reader.size.width;
     var height = reader.size.height;
-    if (appdata.settings.getReaderSetting(
-              reader.cid,
-              reader.type.sourceKey,
-              'limitImageWidth',
-            ) ==
-            true &&
+    if (reader.preferences.limitImageWidth == true &&
         width / height > 0.7 &&
         reader.mode.isTopToBottom) {
       width = height * 0.7;
     }
     if (reader.mode.isTopToBottom) {
-      final margin = appdata.settings.getReaderSetting(
-        reader.cid,
-        reader.type.sourceKey,
-        'readerSideMargin',
-      );
-      final percent = margin is num && margin.isFinite
-          ? margin.clamp(0, 30)
-          : 0;
+      final margin = reader.preferences.readerSideMargin;
+      final percent = margin;
       // Resize the flow itself so images retain their aspect ratio and scroll
       // extents match the visible content, including waterfall and auto-reading.
       width *= 1 - percent * 2 / 100;
@@ -1640,7 +1594,8 @@ class ContinuousModeState extends State<_ContinuousMode>
 
   @override
   void handleDoubleTap(Offset location) {
-    if (appdata.settings['quickCollectImage'] == 'DoubleTap') {
+    if (appdata.settings.globalReaderSettings.quickCollectImage ==
+        'DoubleTap') {
       context.readerScaffold.addImageFavorite();
       return;
     }
@@ -1667,7 +1622,7 @@ class ContinuousModeState extends State<_ContinuousMode>
     double target = photoViewController.getInitialScale!.call()! * 1.75;
     var size = reader.size;
     Offset zoomPosition;
-    if (reader.readerSetting('longPressZoomPosition') != 'center') {
+    if (reader.preferences.longPressZoomPosition != 'center') {
       zoomPosition = Offset(
         size.width / 2 - location.dx,
         size.height / 2 - location.dy,

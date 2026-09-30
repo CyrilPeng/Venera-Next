@@ -1,90 +1,137 @@
+import 'dart:async';
 import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqlite3/sqlite3.dart';
-import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
+import 'package:venera_next/foundation/cache_scan.dart';
 
-bool _sqliteAvailable() {
-  try {
-    final db = sqlite3.openInMemory();
-    db.dispose();
-    return true;
-  } catch (_) {
-    return false;
-  }
+({CacheManager manager, Directory root}) fixture({
+  CacheScanner scanner = scanCacheDirectory,
+}) {
+  final root = Directory.systemTemp.createTempSync('venera-cache-');
+  final manager = CacheManager.open(
+    dataPath: root.path,
+    cacheRoot: root.path,
+    scanner: scanner,
+  );
+  addTearDown(() async {
+    await manager.dispose();
+    await root.delete(recursive: true);
+  });
+  return (manager: manager, root: root);
 }
 
 void main() {
-  test(
-    'checkCache resets checking flag after failure',
-    () async {
-      final dataDir = Directory.systemTemp.createTempSync('venera-cache-data-');
-      final cacheDir = Directory.systemTemp.createTempSync(
-        'venera-cache-cache-',
-      );
-      addTearDown(() {
-        CacheManager.resetForTesting();
-        if (dataDir.existsSync()) {
-          dataDir.deleteSync(recursive: true);
-        }
-        if (cacheDir.existsSync()) {
-          cacheDir.deleteSync(recursive: true);
-        }
-      });
+  test('construction does not scan and start shares one scan', () async {
+    var scans = 0;
+    final gate = Completer<CacheScanResult>();
+    final f = fixture(
+      scanner: (_, _) {
+        scans++;
+        return gate.future;
+      },
+    );
+    expect(scans, 0);
+    final first = f.manager.start();
+    expect(identical(first, f.manager.start()), isTrue);
+    await pumpEventQueue();
+    expect(scans, 1);
+    gate.complete(const CacheScanResult(0, []));
+    await first;
+  });
 
-      App.dataPath = dataDir.path;
-      App.cachePath = cacheDir.path;
-      CacheManager.debugDisableInitialScan = true;
-
-      final manager = CacheManager();
-      var checkCount = 0;
-      CacheManager.debugOnCheckCacheStart = () {
-        checkCount++;
-        if (checkCount == 1) {
-          throw StateError('forced cache check failure');
-        }
-      };
-
-      await expectLater(manager.checkCache(), throwsA(isA<StateError>()));
-
-      await manager.checkCache();
-
-      expect(checkCount, 2);
-    },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
-  );
+  test('scan failure keeps later writes usable', () async {
+    final f = fixture(scanner: (_, _) async => throw StateError('scan failed'));
+    await f.manager.start();
+    await f.manager.writeCache('key', [1, 2, 3]);
+    expect(f.manager.currentSize, 3);
+    expect(await (await f.manager.findCache('key'))!.readAsBytes(), [1, 2, 3]);
+  });
 
   test(
-    'initial scan failure falls back to tracked cache size',
+    'queued clear follows scan and write without restoring stale size',
     () async {
-      final dataDir = Directory.systemTemp.createTempSync('venera-cache-data-');
-      final cacheDir = Directory.systemTemp.createTempSync(
-        'venera-cache-cache-',
-      );
-      addTearDown(() {
-        CacheManager.resetForTesting();
-        if (dataDir.existsSync()) {
-          dataDir.deleteSync(recursive: true);
-        }
-        if (cacheDir.existsSync()) {
-          cacheDir.deleteSync(recursive: true);
-        }
-      });
-
-      App.dataPath = dataDir.path;
-      App.cachePath = cacheDir.path;
-      CacheManager.debugScanDirOverride = (dbPath, dir) {
-        throw StateError('forced scan failure');
-      };
-
-      final manager = CacheManager();
-      await manager.debugInitialScanTask;
-
-      await manager.writeCache('key', [1, 2, 3]);
-
-      expect(manager.currentSize, 3);
+      final gate = Completer<CacheScanResult>();
+      final f = fixture(scanner: (_, _) => gate.future);
+      final scanning = f.manager.start();
+      final bytes = [1, 2, 3];
+      final write = f.manager.writeCache('key', bytes);
+      bytes[0] = 9;
+      final clear = f.manager.clear();
+      gate.complete(const CacheScanResult(0, []));
+      await Future.wait([scanning, write, clear]);
+      expect(f.manager.currentSize, 0);
+      expect(await f.manager.findCache('key'), isNull);
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
   );
+
+  test('dispose drains accepted writes and rejects new work', () async {
+    final gate = Completer<CacheScanResult>();
+    final f = fixture(scanner: (_, _) => gate.future);
+    final scanning = f.manager.start();
+    final write = f.manager.writeCache('key', [1, 2]);
+    final closing = f.manager.dispose();
+    expect(identical(closing, f.manager.dispose()), isTrue);
+    await expectLater(f.manager.writeCache('late', [3]), throwsStateError);
+    gate.complete(const CacheScanResult(0, []));
+    await Future.wait([scanning, write, closing]);
+    final reopened = CacheManager.open(
+      dataPath: f.root.path,
+      cacheRoot: f.root.path,
+    );
+    try {
+      await reopened.start();
+      expect(await (await reopened.findCache('key'))!.readAsBytes(), [1, 2]);
+      expect(reopened.currentSize, 2);
+    } finally {
+      await reopened.dispose();
+    }
+  });
+
+  test('failed file write does not poison queued operations', () async {
+    final f = fixture();
+    final cache = Directory('${f.root.path}/cache');
+    await cache.delete();
+    final obstruction = File(cache.path)..writeAsStringSync('blocked');
+    await expectLater(
+      f.manager.writeCache('key', [1]),
+      throwsA(isA<FileSystemException>()),
+    );
+    await obstruction.delete();
+    await cache.create();
+    await f.manager.writeCache('key', [1]);
+    expect(await (await f.manager.findCache('key'))!.readAsBytes(), [1]);
+  });
+
+  test(
+    'real scan removes unmanaged files and preserves tracked data',
+    () async {
+      final f = fixture();
+      await f.manager.writeCache('key', [1, 2, 3]);
+      final unmanaged = File('${f.root.path}/cache/orphan')
+        ..writeAsStringSync('unused');
+      await f.manager.start();
+      expect(await unmanaged.exists(), isFalse);
+      expect(f.manager.currentSize, 3);
+      expect(await (await f.manager.findCache('key'))!.readAsBytes(), [
+        1,
+        2,
+        3,
+      ]);
+    },
+  );
+
+  test('owned cache paths and size limits are independent', () async {
+    final first = fixture();
+    final second = fixture();
+    await first.manager.writeCache('same', [1]);
+    await second.manager.writeCache('same', [2, 3]);
+    first.manager.setLimitSize(0);
+    await first.manager.checkCache();
+    expect(await first.manager.findCache('same'), isNull);
+    expect(first.manager.currentSize, 0);
+    expect(await (await second.manager.findCache('same'))!.readAsBytes(), [
+      2,
+      3,
+    ]);
+  });
 }

@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/sync_preference_store.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -263,20 +264,18 @@ class _WebdavSettingState extends State<_WebdavSetting> {
   @override
   void initState() {
     super.initState();
-    if (appdata.settings['webdav'] is! List) {
-      appdata.settings['webdav'] = [];
+    final config = SyncPreferenceStore(appdata).configuration;
+    if (config.excludedFields.trim().isNotEmpty) {
+      disableSync = config.excludedFields;
     }
-    if (appdata.settings['disableSyncFields'].trim().isNotEmpty) {
-      disableSync = appdata.settings['disableSyncFields'];
+    final connection = config.connection;
+    if (connection != null && !connection.isEmpty) {
+      url = connection.url;
+      user = connection.user;
+      pass = connection.password;
+      syncMode = config.mode;
     }
-    var configs = appdata.settings['webdav'] as List;
-    if (configs.length == 3 && configs.whereType<String>().length == 3) {
-      url = configs[0];
-      user = configs[1];
-      pass = configs[2];
-      syncMode = DataSync.mode;
-    }
-    syncInterval = DataSync.intervalMinutes;
+    syncInterval = config.intervalMinutes;
     urlController = TextEditingController(text: url);
     userController = TextEditingController(text: user);
     passController = TextEditingController(text: pass);

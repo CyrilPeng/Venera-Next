@@ -26,6 +26,9 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 ## Architecture
 
 - [项目结构约定](architecture/project_structure.zh.md) / [Project Structure](architecture/project_structure.en.md)
+- [架构与可维护性优化方案（待实施）](architecture/optimization_plan.zh.md) / [Architecture Optimization Plan (Proposed)](architecture/optimization_plan.en.md)
+
+- [架构优化执行记录](architecture/optimization_progress.zh.md) / [Optimization Progress](architecture/optimization_progress.en.md)
 
 ## Development and Builds
 

@@ -177,7 +177,7 @@ class _App {
 
   Function? _forceRebuildHandler;
 
-  void registerForceRebuild(Function handler) {
+  void registerForceRebuild(Function? handler) {
     _forceRebuildHandler = handler;
   }
 

@@ -217,3 +217,33 @@ test/features/<domain>/
 阅读器功能外部代码应通过 `features/reader/reader.dart` 引用阅读页面、加载入口、章节评论页和瀑布流模型，不应直接依赖 reader 内部实现文件。
 
 当前不再保留过渡例外；发现受限 import/export 时应通过移动代码、抽出回调或增加 `routing/` 薄适配层来恢复依赖方向。
+
+## 业务与 UI 入口增量迁移
+
+漫画源新增 `comic_source_api.dart`（模型、服务及运行时配置）和 `comic_source_ui.dart`（页面与首页摘要）。`comic_source.dart` 保留为兼容聚合入口；新的业务调用者使用 API 入口。更新检查/下载属于 `SourceUpdateService`，页面只处理交互，无头调用者直接使用服务。
+
+本地漫画阅读位置通过 `local_reading.dart` 的纯函数解析；页面调用 `routing/local_reading.dart` 打开阅读器，`LocalComic` 不承担导航。
+
+CI 同时运行 `check_architecture_dependencies.py`，按 `dependency_baseline.json` 禁止新增功能域依赖，并检查已登记业务入口的传递 UI 依赖。既有聚合图包含 UI 导航环，不能把该报告视为纯业务依赖图。业务入口逐步登记，基线变更必须伴随明确的职责调整。
+
+阅读器运行时通过 `foundation/reader_settings.dart` 的不可变 `ReaderSettings` 快照访问设置，`Settings.readerSettings` 负责对接原有存储，`globalReaderSettings` 保留全局选项的原有范围。阅读器不得调用动态 `getReaderSetting` / `getDeviceReaderSetting`；其他旧调用者及设置表单的兼容接口在 P3 后续任务中继续迁移。
+
+阅读设置字段由 `ReaderPreferences` 统一定义键、默认值、校验和滑块元数据。`ReaderPreferenceStore`/绑定负责有类型的作用域读写；阅读设置控件使用 `.reader` 构造入口，旧通用控件接口仅服务未迁移的其他设置域。运行时快照和 Appdata 初始默认值复用同一字段定义。
+
+通用字段与绑定协议位于 `foundation/preferences.dart`；全局网络/外观字段位于 `application_preferences.dart`，不可变读取模型位于 `application_configuration.dart`，存储通过 `GlobalPreferenceStore` 适配。已迁移页面使用 `.preference` 控件入口，网络/下载/主题消费端不再直接访问对应字符串键。阅读设置继续通过 `ReaderPreferenceStore` 保留范围继承。
+
+应用同步设置由 `foundation/sync_configuration.dart` 解析，`SyncPreferenceStore` 对接原有 settings/implicitData 并提供配置检查点。服务持有传输和回滚事务，适配器不主动持久化或启动定时器；设置预览保持只读。`DataSyncMode` 从原入口继续导出以兼容现有调用者。
+
+`Init.init()` 同一尝试仅执行一次，`ensureInit()` 等待显式启动并共享失败；`retryInit()` 是失败后重新执行的唯一入口。实现应在失败时清理部分资源，不得吞掉异常伪装为就绪。启动依赖不得形成自等待。
+
+DataSync 构造无运行副作用，由运行时显式 start；dispose 禁止新任务和迟到通知，已开始的传输继续收尾。窗口关闭等待逻辑仅在 app_runtime/SyncWindowBinding 中，由组件挂载/卸载管理监听；业务服务不得重新访问 WindowFrame 或根 context。
+
+启动边界：`bootstrap_core.dart` 组装实际核心服务，`core_bootstrap.dart` 定义可注入、单次执行的依赖顺序。`init.dart` 仅组装交互绑定与后台自动工作；`headless.dart` 仅初始化共享核心和无头 JS 适配，不得调用交互入口或启动窗口/自动同步。核心错误缓存，失败后不得自动重开已部分初始化的存储。旧域聚合入口的传递依赖仍按 P2/P6 逐步迁移。
+
+交互事件由 `InteractiveBindings` 实例持有，主应用挂载后 start、卸载时 dispose。链接与文本分享通过 `EventSubscription` 串行处理，await 后必须检查有效性再导航。不得重新引入全局文本分享启动标记或无所有者的心跳/事件订阅。
+
+`BackgroundSync` 在主应用挂载后管理自动同步调度；WebDAV 源只执行检查/传输，不保存静态轮询定时器。DataSync.stop 保留本地变更观察以避免丢失 pending，dispose 才解除观察；停止调度不得中断已进入提交的传输。旧代数 tick 不得启动新调度的工作。
+
+追更后台检查从页面分离到 FollowUpdatesService，通过 follow_updates_api.dart 暴露无 UI 的窄边界。服务只能取消自身任务句柄；运行时负责定时器和外部通知监听的启停。页面订阅 followUpdatesChanges 并在 dispose 退订，不得重新使用全局 State 查找刷新追更页面或预览。
+
+缓存管理器以实例保存路径、数据库、扫描器和操作队列；CacheManager.open 支持独立宿主，start 显式启动一次扫描，dispose 排空已接收操作后关闭。扫描器只返回结果，不访问全局缓存实例；缓存操作不得绕过队列或在未等待 dispose 完成时删除工作目录。

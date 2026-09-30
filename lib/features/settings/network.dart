@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
@@ -9,6 +11,8 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
+
+final _networkSettings = GlobalPreferenceStore(appdata.settings);
 
 class NetworkSettings extends StatefulWidget {
   const NetworkSettings({super.key});
@@ -31,12 +35,9 @@ class _NetworkSettingsState extends State<NetworkSettings> {
           title: "DNS Overrides".tl,
           builder: () => const _DNSOverrides(),
         ).toSliver(),
-        SliderSetting(
+        SliderSetting.preference(
           title: "Download Threads".tl,
-          settingsIndex: 'downloadThreads',
-          interval: 1,
-          min: 1,
-          max: 16,
+          preference: NetworkPreferences.downloadThreads,
         ).toSliver(),
       ],
     );
@@ -111,7 +112,7 @@ class _ProxySettingViewState extends State<_ProxySettingView> {
 
   @override
   void initState() {
-    var proxy = appdata.settings['proxy'];
+    final proxy = _networkSettings.read(NetworkPreferences.proxy);
     parseProxyString(proxy);
     super.initState();
   }
@@ -128,7 +129,7 @@ class _ProxySettingViewState extends State<_ProxySettingView> {
               type = v ?? type;
             });
             if (type != 'manual') {
-              appdata.settings['proxy'] = toProxyStr();
+              _networkSettings.write(NetworkPreferences.proxy, toProxyStr());
               appdata.saveData();
             }
           },
@@ -220,7 +221,7 @@ class _ProxySettingViewState extends State<_ProxySettingView> {
           FilledButton(
             onPressed: () {
               if (formKey.currentState?.validate() ?? false) {
-                appdata.settings['proxy'] = toProxyStr();
+                _networkSettings.write(NetworkPreferences.proxy, toProxyStr());
                 appdata.saveData();
                 App.rootContext.pop();
               }
@@ -245,13 +246,12 @@ class __DNSOverridesState extends State<_DNSOverrides> {
 
   @override
   void initState() {
-    for (var entry in (appdata.settings['dnsOverrides'] as Map).entries) {
-      if (entry.key is String && entry.value is String) {
-        overrides.add((
-          TextEditingController(text: entry.key),
-          TextEditingController(text: entry.value),
-        ));
-      }
+    for (var entry
+        in _networkSettings.read(NetworkPreferences.dnsOverrides).entries) {
+      overrides.add((
+        TextEditingController(text: entry.key),
+        TextEditingController(text: entry.value),
+      ));
     }
     super.initState();
   }
@@ -262,7 +262,7 @@ class __DNSOverridesState extends State<_DNSOverrides> {
     for (var entry in overrides) {
       map[entry.$1.text] = entry.$2.text;
     }
-    appdata.settings['dnsOverrides'] = map;
+    _networkSettings.write(NetworkPreferences.dnsOverrides, map);
     appdata.saveData();
     JsEngine().resetDio();
     super.dispose();
@@ -275,11 +275,14 @@ class __DNSOverridesState extends State<_DNSOverrides> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            SwitchSetting(
+            SwitchSetting.preference(
               title: "Enable DNS Overrides".tl,
-              settingKey: "enableDnsOverrides",
+              preference: NetworkPreferences.enableDnsOverrides,
             ),
-            SwitchSetting(title: "Server Name Indication", settingKey: "sni"),
+            SwitchSetting.preference(
+              title: "Server Name Indication",
+              preference: NetworkPreferences.sni,
+            ),
             const SizedBox(height: 8),
             Container(
               height: 1,

@@ -28,141 +28,47 @@ import 'source_repositories.dart';
 import 'source_repository_page.dart';
 import 'source_script_editor.dart';
 import 'source_import_dialog.dart';
+import 'source_update_service.dart';
 
 class ComicSourcePage extends StatelessWidget {
   const ComicSourcePage({super.key});
 
   @visibleForTesting
-  static Dio Function()? debugCreateDio;
-
-  static Dio _createDio() => debugCreateDio?.call() ?? AppDio();
-
-  static final _updating = <String, CancelToken>{};
-  static Future<int>? _checking;
-  static SourceUpdateCheck? lastUpdateCheck;
+  static SourceUpdateService updateService = SourceUpdateService.instance;
 
   static Future<void> update(
     ComicSource source, [
     bool showLoading = true,
   ]) async {
-    if (_updating.containsKey(source.key)) {
-      // An interactive duplicate tap stays silent because the loading dialog
-      // already owns the update. A batch caller must not mistake the skipped
-      // update for a success.
-      if (!showLoading) throw 'Update already in progress'.tl;
-      return;
-    }
-    final token = CancelToken();
-    _updating[source.key] = token;
-    Dio? dio;
+    final service = updateService;
+    if (!showLoading) return service.update(source);
+    if (service.isUpdating(source.key)) return;
+    final loadingContext = App.rootContext;
     LoadingDialogController? controller;
-    final loadingContext = showLoading ? App.rootContext : null;
-    void releaseUpdate() {
-      if (identical(_updating[source.key], token)) {
-        _updating.remove(source.key);
-      }
-    }
-
     try {
-      if (loadingContext != null) {
-        controller = showLoadingDialog(
-          loadingContext,
-          onCancel: () {
-            token.cancel();
-            releaseUpdate();
-          },
-          barrierDismissible: false,
+      controller = showLoadingDialog(
+        loadingContext,
+        onCancel: () => service.cancel(source.key),
+        barrierDismissible: false,
+      );
+      await service.update(
+        source,
+        onCommit: () {
+          if (loadingContext.mounted) controller?.close();
+        },
+      );
+    } catch (error) {
+      final context = App.rootNavigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        context.showMessage(
+          message: error is DioException
+              ? 'Network error'.tl
+              : error.toString(),
         );
       }
-      dio = _createDio();
-      final store = SourceRepositories.instance;
-      final origin = store.originFor(source.key);
-      final repository = store.find(origin?.repositoryId);
-      final url = await store.updateUrl(
-        source,
-        client: dio,
-        cancelToken: token,
-      );
-      if (token.isCancelled) return;
-      final res = await dio.get<String>(
-        url,
-        cancelToken: token,
-        options: Options(
-          responseType: ResponseType.plain,
-          headers: {'cache-time': 'no'},
-        ),
-      );
-      if (token.isCancelled) return;
-      await ComicSourceManager().replaceScript(
-        source,
-        res.data!,
-        validate: () {
-          if (token.isCancelled) throw token.cancelError!;
-          if (store.originFor(source.key)?.repositoryId !=
-                  origin?.repositoryId ||
-              store.originFor(source.key)?.url != origin?.url ||
-              ComicSource.find(source.key)?.filePath != source.filePath ||
-              (repository != null &&
-                  store.find(repository.id)?.url != repository.url)) {
-            throw 'Repository changed. Refresh the list and try again.'.tl;
-          }
-          // Once the serialized commit begins, the script must be replaced
-          // atomically. Cancellation is available while downloading or queued.
-          if (loadingContext?.mounted ?? false) controller?.close();
-        },
-        origin: repository == null
-            ? null
-            : SourceOrigin(
-                kind: 'repository',
-                repositoryId: repository.id,
-                repositoryName: repository.name,
-                url: url,
-              ),
-      );
-    } catch (e, stack) {
-      if (!token.isCancelled) {
-        Log.error('Update comic source', '$e\n$stack');
-        if (showLoading) {
-          final context = App.rootNavigatorKey.currentContext;
-          if (context != null && context.mounted) {
-            context.showMessage(
-              message: e is DioException ? 'Network error'.tl : e.toString(),
-            );
-          }
-        } else {
-          rethrow;
-        }
-      }
     } finally {
-      if (loadingContext?.mounted ?? false) controller?.close();
-      dio?.close();
-      releaseUpdate();
+      if (loadingContext.mounted) controller?.close();
     }
-  }
-
-  static Future<int> checkComicSourceUpdate() {
-    return _checking ??= _checkUpdates().whenComplete(() => _checking = null);
-  }
-
-  static Future<int> _checkUpdates() async {
-    ComicSourceManager().updateAvailableUpdates({});
-    final revision = SourceRepositories.instance.revision;
-    var result = await SourceRepositories.instance.checkUpdates(
-      ComicSource.all().where((source) => source.filePath.isNotEmpty).toList(),
-    );
-    if (revision != SourceRepositories.instance.revision) {
-      result = SourceUpdateCheck(
-        updates: {},
-        failures: ['Repository changed. Refresh the list and try again.'.tl],
-        checked: 0,
-        skipped: ComicSource.all().length,
-      );
-    }
-    lastUpdateCheck = result;
-    ComicSourceManager().updateAvailableUpdates(result.updates);
-    return result.updates.isEmpty && result.failures.isNotEmpty
-        ? -1
-        : result.updates.length;
   }
 
   @override
@@ -464,9 +370,9 @@ class _CheckUpdatesButtonState extends State<_CheckUpdatesButton> {
     if (isLoading) return;
     setState(() => isLoading = true);
     try {
-      await ComicSourcePage.checkComicSourceUpdate();
+      await ComicSourcePage.updateService.checkUpdates();
       if (!mounted) return;
-      final result = ComicSourcePage.lastUpdateCheck!;
+      final result = ComicSourcePage.updateService.lastUpdateCheck!;
       if (result.updates.isEmpty &&
           result.failures.isEmpty &&
           result.skipped == 0) {

@@ -153,16 +153,14 @@ void main() {
     );
     expect(find.text('Read later · 0'), findsOneWidget);
     await tester.runAsync(() async {
-      await tester.tap(find.widgetWithText(TextButton, 'Read later'));
+      await tester.tap(find.text('Read later'));
       await appdata.saveData(false);
     });
     await tester.pump();
     expect(find.text('Read later · 1'), findsOneWidget);
     expect(find.text('Remove from read later'), findsOneWidget);
     await tester.runAsync(() async {
-      await tester.tap(
-        find.widgetWithText(TextButton, 'Remove from read later'),
-      );
+      await tester.tap(find.text('Remove from read later'));
       await appdata.saveData(false);
       await manager.debugWaitForHashedIdsRefresh();
     });

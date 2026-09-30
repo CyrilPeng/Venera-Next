@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/scroll.dart';
@@ -19,9 +20,9 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
     return SmoothCustomScrollView(
       slivers: [
         SliverAppbar(title: Text("Appearance".tl)),
-        SelectSetting(
+        SelectSetting.preference(
           title: "Theme Mode".tl,
-          settingKey: "theme_mode",
+          preference: AppearancePreferences.themeMode,
           optionTranslation: {
             "system": "System".tl,
             "light": "Light".tl,
@@ -31,9 +32,9 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
             App.forceRebuild();
           },
         ).toSliver(),
-        SelectSetting(
+        SelectSetting.preference(
           title: "Theme Color".tl,
-          settingKey: "color",
+          preference: AppearancePreferences.color,
           optionTranslation: {
             "system": "System".tl,
             "red": "Red".tl,

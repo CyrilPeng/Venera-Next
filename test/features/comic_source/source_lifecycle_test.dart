@@ -8,6 +8,7 @@ import 'package:venera_next/features/comic_source/source_repositories.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/js_engine.dart';
+import 'package:venera_next/foundation/init.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/request_scope.dart';
 
@@ -63,6 +64,21 @@ void main() {
         Log.isMuted = false;
         directory.deleteSync(recursive: true);
       });
+
+      test(
+        'JS initialization failure is observable and can be explicitly retried',
+        () async {
+          JsEngine().dispose();
+          final engine = JsEngine();
+          JsEngine.cacheJsInit(utf8.encode('throw new Error("broken init");'));
+          await expectLater(engine.init(), throwsA(anything));
+          expect(engine.initializationState, InitializationState.failed);
+          JsEngine.cacheJsInit(await File('assets/init.js').readAsBytes());
+          await engine.retryInit();
+          expect(engine.initializationState, InitializationState.ready);
+          expect(engine.runCode('1 + 1'), 2);
+        },
+      );
 
       Future<ComicSource> install(String key) => manager.installScript(
         js: script(key),

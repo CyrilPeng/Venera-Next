@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -209,6 +210,42 @@ void main() {
     );
   });
 
+  test(
+    'download task saves preserve snapshot order and recover after failure',
+    () async {
+      final dataDir = Directory.systemTemp.createTempSync(
+        'venera-task-writes-',
+      );
+      final manager = LocalManager();
+      addTearDown(() async {
+        await manager.pendingDownloadTaskWrites;
+        await dataDir.delete(recursive: true);
+      });
+      App.dataPath = '${dataDir.path}/missing';
+      await expectLater(
+        manager.saveCurrentDownloadingTasks(),
+        throwsA(isA<FileSystemException>()),
+      );
+      App.dataPath = dataDir.path;
+      final task = ImagesDownloadTask(
+        source: ComicSource.find(sourceKey)!,
+        comicId: 'comic-1',
+      );
+      manager.downloadingTasks.add(task);
+      final first = manager.saveCurrentDownloadingTasks();
+      manager.downloadingTasks.clear();
+      final second = manager.saveCurrentDownloadingTasks();
+      await first;
+      await second;
+      expect(
+        jsonDecode(
+          await File('${dataDir.path}/downloading_tasks.json').readAsString(),
+        ),
+        isEmpty,
+      );
+    },
+  );
+
   test('ImagesDownloadTask cancel before path stops speed recorder', () async {
     final dataDir = Directory.systemTemp.createTempSync(
       'venera-download-data-',
@@ -217,7 +254,7 @@ void main() {
       'venera-download-cache-',
     );
     addTearDown(() async {
-      await pumpEventQueue();
+      await LocalManager().pendingDownloadTaskWrites;
       if (dataDir.existsSync()) {
         await dataDir.delete(recursive: true);
       }
@@ -237,7 +274,7 @@ void main() {
     expect(task.timer, isNotNull);
 
     task.cancel();
-    await pumpEventQueue();
+    await LocalManager().pendingDownloadTaskWrites;
 
     expect(task.timer, isNull);
     expect(LocalManager().downloadingTasks, isNot(contains(task)));
