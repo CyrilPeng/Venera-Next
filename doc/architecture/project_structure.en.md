@@ -169,3 +169,5 @@ Continuous views receive settings through ReaderContinuousData, active chapter/c
 progress_bar.dart presents the bottom bar, progress slider and page text through explicit values/callbacks; the slider owns its focus node. scaffold.dart decides chapter navigation, business actions, placement and menu lifecycle. Do not introduce ReaderState/global settings into progress components. ReaderBottomBar.height is the single bottom-bar height declaration.
 
 ReaderStatusInfo owns clock/battery polling; ReaderBatteryRead injects platform access returning ReaderBatterySnapshot. Scaffold controls visibility and placement only. Allow at most one read per dependency generation, reject results after disposal/replacement, and distinguish unsupported hardware from transient failure. Stop scheduling even when native Futures cannot be cancelled.
+
+ReaderTopBar receives titles/actions/back callbacks; ReaderBrightnessPanel receives values/change callbacks. Scaffold owns availability/visibility, preference scope and persistence, navigation and sidebar lifecycle. Panels must not locate reader State or write settings directly.

@@ -6,7 +6,7 @@ import 'package:venera_next/features/reader/status_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:venera_next/features/reader/progress_bar.dart';
-import 'package:venera_next/components/effects.dart';
+import 'package:venera_next/features/reader/top_bar.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/side_bar.dart';
@@ -23,8 +23,8 @@ import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
-import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/file_type.dart';
@@ -252,80 +252,30 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     );
   }
 
-  Widget buildTop() {
-    final epName = context.reader.widget.chapters?.titles.elementAtOrNull(
+  Widget buildTop() => ReaderTopBar(
+    title: context.reader.widget.name,
+    chapterTitle: context.reader.widget.chapters?.titles.elementAtOrNull(
       context.reader.chapter - 1,
-    );
-
-    return BlurEffect(
-      child: Container(
-        padding: EdgeInsets.only(top: context.padding.top),
-        decoration: BoxDecoration(
-          color: context.colorScheme.surface.toOpacity(0.92),
-          border: Border(
-            bottom: BorderSide(color: Colors.grey.toOpacity(0.5), width: 0.5),
+    ),
+    onBack: () => Navigator.of(context).maybePop(),
+    actions: [
+      if (shouldShowChapterComments())
+        Tooltip(
+          message: "Chapter Comments".tl,
+          child: IconButton(
+            icon: const Icon(Icons.comment),
+            onPressed: openChapterComments,
           ),
         ),
-        child: Padding(
-          padding: EdgeInsets.only(
-            left: context.padding.left,
-            right: context.padding.right,
-          ),
-          child: Row(
-            children: [
-              const SizedBox(width: 8),
-              const BackButton(),
-              const SizedBox(width: 8),
-              Expanded(
-                child: epName == null
-                    ? Text(
-                        context.reader.widget.name,
-                        style: ts.s18,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            context.reader.widget.name,
-                            style: ts.s16,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            epName,
-                            style: ts.s12,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-              ),
-              const SizedBox(width: 8),
-              if (shouldShowChapterComments())
-                Tooltip(
-                  message: "Chapter Comments".tl,
-                  child: IconButton(
-                    icon: const Icon(Icons.comment),
-                    onPressed: openChapterComments,
-                  ),
-                ),
-              Tooltip(
-                message: "Settings".tl,
-                child: IconButton(
-                  icon: const Icon(Icons.settings),
-                  onPressed: openSetting,
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ),
+      Tooltip(
+        message: "Settings".tl,
+        child: IconButton(
+          icon: const Icon(Icons.settings),
+          onPressed: openSetting,
         ),
       ),
-    );
-  }
+    ],
+  );
 
   bool isLiked() {
     return _findImageFavorite(context.reader.page) != null;
@@ -601,49 +551,20 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     );
   }
 
-  Widget buildBrightnessPanel() {
-    final panelWidth =
-        (MediaQuery.sizeOf(context).width -
-                context.padding.left -
-                context.padding.right -
-                32)
-            .clamp(0.0, 360.0);
-    return Material(
-      elevation: 8,
-      color: context.colorScheme.surface,
-      borderRadius: BorderRadius.circular(8),
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: panelWidth,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: ReaderBrightnessControl(
-            compact: true,
-            enabled: context.reader.preferences.readerBrightnessEnabled == true,
-            brightness: context.reader.preferences.readerBrightness,
-            onEnabledChanged: (enabled) {
-              _settingsStore.write(
-                ReaderPreferences.readerBrightnessEnabled,
-                enabled,
-              );
-              setState(() {});
-              appdata.saveData();
-            },
-            onBrightnessChanged: (brightness) {
-              _settingsStore.write(
-                ReaderPreferences.readerBrightness,
-                brightness,
-              );
-              setState(() {});
-            },
-            onBrightnessChangeEnd: (_) {
-              appdata.saveData();
-            },
-          ),
-        ),
-      ),
-    );
-  }
+  Widget buildBrightnessPanel() => ReaderBrightnessPanel(
+    enabled: context.reader.preferences.readerBrightnessEnabled == true,
+    brightness: context.reader.preferences.readerBrightness,
+    onEnabledChanged: (enabled) {
+      _settingsStore.write(ReaderPreferences.readerBrightnessEnabled, enabled);
+      setState(() {});
+      appdata.saveData();
+    },
+    onBrightnessChanged: (brightness) {
+      _settingsStore.write(ReaderPreferences.readerBrightness, brightness);
+      setState(() {});
+    },
+    onBrightnessChangeEnd: (_) => appdata.saveData(),
+  );
 
   Widget buildPageInfoText() {
     var epName =

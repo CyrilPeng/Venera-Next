@@ -113,3 +113,49 @@ class ReaderBrightnessControl extends StatelessWidget {
     );
   }
 }
+
+/// Compact settings panel; persistence and preference scope belong to its host.
+class ReaderBrightnessPanel extends StatelessWidget {
+  const ReaderBrightnessPanel({
+    super.key,
+    required this.enabled,
+    required this.brightness,
+    required this.onEnabledChanged,
+    required this.onBrightnessChanged,
+    required this.onBrightnessChangeEnd,
+  });
+  final bool enabled;
+  final Object? brightness;
+  final ValueChanged<bool> onEnabledChanged;
+  final ValueChanged<int> onBrightnessChanged;
+  final ValueChanged<int> onBrightnessChangeEnd;
+  @override
+  Widget build(BuildContext context) {
+    final panelWidth =
+        (MediaQuery.sizeOf(context).width -
+                MediaQuery.paddingOf(context).left -
+                MediaQuery.paddingOf(context).right -
+                32)
+            .clamp(0.0, 360.0);
+    return Material(
+      elevation: 8,
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        width: panelWidth,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: ReaderBrightnessControl(
+            compact: true,
+            enabled: enabled,
+            brightness: brightness,
+            onEnabledChanged: onEnabledChanged,
+            onBrightnessChanged: onBrightnessChanged,
+            onBrightnessChangeEnd: onBrightnessChangeEnd,
+          ),
+        ),
+      ),
+    );
+  }
+}

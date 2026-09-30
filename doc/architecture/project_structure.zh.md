@@ -279,3 +279,5 @@ WaterfallController 拥有章节插入/重置、预取/导航状态及请求作�
 progress_bar.dart 只负责底栏、进度滑块和页码文字展示，通过值与回调接收状态；滑块拥有自己的焦点节点。scaffold.dart 决定章节跳转、业务按钮、显示位置及菜单生命周期，不得向进度组件重新引入 ReaderState/全局设置依赖。底栏高度由 ReaderBottomBar.height 统一声明。
 
 ReaderStatusInfo 拥有时钟与电量轮询，平台访问通过 ReaderBatteryRead 注入并返回 ReaderBatterySnapshot；scaffold 只决定显示条件与位置。每个依赖代数最多一个电量请求，卸载/替换后不得发布旧结果，不支持与瞬时失败必须区分。底层平台 Future 不可取消时仍须停止后续调度。
+
+ReaderTopBar 只接收标题、动作与返回回调，ReaderBrightnessPanel 只接收数值与修改回调；scaffold 负责权限/可见性判断、设置范围与保存、导航和侧栏生命周期。面板不得重新查找阅读器 State 或直接写入设置。

@@ -263,3 +263,11 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - Explicit behavior corrections: an initial 0% is no longer treated as absent hardware, charging icons update even at unchanged charge level, and polling failures no longer escape unhandled. Clock formatting, icon thresholds, outlines and shell placement remain.
 - Four injected widget tests cover stalled reads/disposal, recovery, charging/zero level, dependency replacement, unsupported hardware and independent clock updates. All 699 Windows Flutter tests passed; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
 - Only scaffold architecture edits were staged; original menu/pause changes remain unstaged. Native battery behavior still needs device validation. Top menu, settings, image actions, session/platform adapters and P6–P8/performance acceptance remain unfinished.
+
+## P5: Top bar and brightness panel presentation boundary (2026-10-01)
+
+- ReaderTopBar receives comic/chapter titles, action widgets and a back callback without ReaderState, source or settings lookup. Scaffold composes comment/settings/lock actions and visibility, preserving navigation, safe areas and title ellipsis.
+- ReaderBrightnessPanel lives beside ReaderBrightnessControl in brightness.dart and accepts values plus toggle/change/end callbacks. The panel owns width/styling/compact controls; preference scope, immediate updates and persistence timing remain in the shell.
+- Existing brightness and seven-mode reading/pause tests cover the move. All 12 targeted and 699 Windows Flutter tests passed; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
+- Separate staged versions were generated from HEAD, excluding original menu-lock edits. Original top-bar vertical-padding and minimum-column-size edits moved with the code and remain unstaged in top_bar.dart; other existing edits also remain uncommitted.
+- Settings-change dispatch, image actions, session/platform adapters, P6–P8 and device/performance acceptance remain unfinished.
