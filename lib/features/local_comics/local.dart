@@ -577,11 +577,25 @@ class LocalManager with ChangeNotifier {
     }
   }
 
-  Future<void> saveCurrentDownloadingTasks() async {
-    var tasks = downloadingTasks.map((e) => e.toJson()).toList();
-    await File(
-      FilePath.join(App.dataPath, 'downloading_tasks.json'),
-    ).writeAsString(jsonEncode(tasks));
+  Future<void> _downloadTaskWrites = Future.value();
+
+  /// Completes when all task snapshots queued so far have finished writing.
+  Future<void> get pendingDownloadTaskWrites => _downloadTaskWrites;
+
+  Future<void> saveCurrentDownloadingTasks() {
+    // Capture both path and snapshot before queuing: later mutations must not
+    // change the meaning of an already requested save.
+    final file = File(FilePath.join(App.dataPath, 'downloading_tasks.json'));
+    final data = jsonEncode(downloadingTasks.map((e) => e.toJson()).toList());
+    final write = _downloadTaskWrites.then((_) async {
+      await file.writeAsString(data);
+    });
+    // Keep subsequent writes usable after a failure. Awaiting callers still
+    // receive the original error through the returned future.
+    _downloadTaskWrites = write.catchError((Object error, StackTrace stack) {
+      Log.error('LocalManager', 'Failed to save download tasks: $error');
+    });
+    return write;
   }
 
   void restoreDownloadingTasks() {
