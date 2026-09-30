@@ -15,6 +15,7 @@ import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/chapter_comments.dart';
 import 'package:venera_next/features/reader/chapter_loader.dart';
+import 'package:venera_next/features/reader/image_downloads.dart';
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
@@ -181,6 +182,8 @@ class _GalleryMode extends StatefulWidget {
 
 class GalleryModeState extends State<_GalleryMode>
     implements ReaderImageViewController, AutoReadingViewport {
+  final _imageDownloads = ReaderImageDownloads();
+
   late PageController controller;
 
   int get preCacheCount =>
@@ -229,6 +232,12 @@ class GalleryModeState extends State<_GalleryMode>
       context.readerScaffold.setFloatingButton(0);
     });
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_imageDownloads.dispose());
+    super.dispose();
   }
 
   @override
@@ -313,7 +322,7 @@ class GalleryModeState extends State<_GalleryMode>
     for (int i = startIndex; i < endIndex; i++) {
       shouldPreCache
           ? _precacheImage(i + 1, context)
-          : _preDownloadImage(i + 1, context);
+          : _preDownloadImage(i + 1, context, _imageDownloads);
     }
   }
 
@@ -733,6 +742,7 @@ class _ContinuousMode extends StatefulWidget {
 class ContinuousModeState extends State<_ContinuousMode>
     implements ReaderImageViewController, AutoReadingViewport {
   final _chapterRequests = RequestScope();
+  final _imageDownloads = ReaderImageDownloads();
 
   late ReaderState reader;
 
@@ -1041,6 +1051,7 @@ class ContinuousModeState extends State<_ContinuousMode>
   void dispose() {
     _chapterRequests.cancel();
     _chapterRequests.dispose();
+    unawaited(_imageDownloads.dispose());
     itemPositionsListener.itemPositions.removeListener(onPositionChanged);
     super.dispose();
   }
@@ -1196,17 +1207,18 @@ class ContinuousModeState extends State<_ContinuousMode>
   }
 
   void cacheImages(int current) {
+    if (!mounted) return;
     for (int i = current + 1; i <= current + preCacheCount; i++) {
       if (crossChapter) {
         var imageRef = _imageRefAt(i);
         if (imageRef == null) continue;
         var segment = _segmentOfChapter(imageRef.chapter);
         if (segment != null && !segment.cached.contains(imageRef.page)) {
-          _preDownloadImageRef(imageRef, context);
+          _preDownloadImageRef(imageRef, context, _imageDownloads);
           segment.cached.add(imageRef.page);
         }
       } else if (i <= reader.maxPage && !cached[i]) {
-        _preDownloadImage(i, context);
+        _preDownloadImage(i, context, _imageDownloads);
         cached[i] = true;
       }
     }
@@ -1804,7 +1816,11 @@ void _precacheImage(int page, BuildContext context) {
 
 /// [_preDownloadImage] is used to download the image for the given page.
 /// The image is downloaded using the [CacheManager] and saved to the local storage.
-void _preDownloadImage(int page, BuildContext context) {
+void _preDownloadImage(
+  int page,
+  BuildContext context,
+  ReaderImageDownloads downloads,
+) {
   if (page <= 0 || page > context.reader.images!.length) {
     return;
   }
@@ -1816,21 +1832,20 @@ void _preDownloadImage(int page, BuildContext context) {
   var cid = reader.cid;
   var eid = reader.eid;
   var sourceKey = reader.type.comicSource?.key;
-  ImageDownloader.loadComicImage(imageKey, sourceKey, cid, eid);
+  downloads.preload(imageKey, sourceKey, cid, eid);
 }
 
-void _preDownloadImageRef(WaterfallImageRef imageRef, BuildContext context) {
+void _preDownloadImageRef(
+  WaterfallImageRef imageRef,
+  BuildContext context,
+  ReaderImageDownloads downloads,
+) {
   if (imageRef.imageKey.startsWith("file://")) {
     return;
   }
   var reader = context.reader;
   var sourceKey = reader.type.comicSource?.key;
-  ImageDownloader.loadComicImage(
-    imageRef.imageKey,
-    sourceKey,
-    reader.cid,
-    imageRef.eid,
-  );
+  downloads.preload(imageRef.imageKey, sourceKey, reader.cid, imageRef.eid);
 }
 
 class _SwipeChangeChapterProgress extends StatefulWidget {

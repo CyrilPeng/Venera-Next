@@ -5,6 +5,7 @@ import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/network/images.dart';
+import 'package:venera_next/network/image_stream.dart';
 import 'base_image_provider.dart';
 import 'reader_image.dart' as image_provider;
 import 'package:venera_next/foundation/appdata.dart';
@@ -42,6 +43,7 @@ Future<dynamic> _waitForReaderImageProcessingResult(
     onCancel();
     checkStop();
   }
+  checkStop();
   return result ?? Uint8List(0);
 }
 
@@ -89,24 +91,17 @@ class ReaderImageProvider
         throw FileSystemException('File not found', file.path);
       }
     } else {
-      await for (var event in ImageDownloader.loadComicImage(
-        imageKey,
-        sourceKey,
-        cid,
-        eid,
-      )) {
-        checkStop();
-        chunkEvents.add(
+      imageBytes = await readImageStream(
+        ImageDownloader.loadComicImage(imageKey, sourceKey, cid, eid),
+        cancelSignal: BaseImageProvider.cancelSignalOf(checkStop),
+        checkStop: checkStop,
+        onProgress: (event) => chunkEvents.add(
           ImageChunkEvent(
             cumulativeBytesLoaded: event.currentBytes,
             expectedTotalBytes: event.totalBytes,
           ),
-        );
-        if (event.imageBytes != null) {
-          imageBytes = event.imageBytes;
-          break;
-        }
-      }
+        ),
+      );
     }
     if (imageBytes == null) {
       throw "Error: Empty response body.";
@@ -128,7 +123,11 @@ class ReaderImageProvider
         if (result is Uint8List) {
           imageBytes = result;
         } else if (result is Future) {
-          var futureResult = await result;
+          var futureResult = await _waitForReaderImageProcessingResult(
+            result,
+            () {},
+            checkStop,
+          );
           if (futureResult is Uint8List) {
             imageBytes = futureResult;
           }
@@ -142,7 +141,11 @@ class ReaderImageProvider
               onCancel = JSAutoFreeFunction(result['onCancel']);
             }
             if (onCancel == null) {
-              var futureImage = await image;
+              var futureImage = await _waitForReaderImageProcessingResult(
+                image,
+                () {},
+                checkStop,
+              );
               if (futureImage is Uint8List) {
                 imageBytes = futureImage;
               }
