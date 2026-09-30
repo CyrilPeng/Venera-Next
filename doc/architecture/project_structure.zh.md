@@ -305,3 +305,5 @@ History 数据通过 history_api.dart 提供，history_model.dart 不导入 Hist
 HistoryRepository 在调用者拥有的 Database 上管理表结构迁移、查询/删除与进度/时长事务，不管理连接、缓存或通知；historyFromRow 位于 history_row.dart，集中解码 SQLite 字段。History 模型不直接导入 SQLite，也不提供 fromRow。HistoryManager 保留异步队列、连接生命周期、缓存和通知，不再直接执行历史表 SQL；不能通过新数据入口重新导出管理器或页面。
 
 条件删除的业务判断由管理器注入仓储并在同一删除事务内执行，判断失败或任一删除失败必须整体回滚。保留期限由管理器计算截止时间，仓储保持严格小于比较；最近记录限制 20 条，时长榜按时长与阅读时间降序。
+
+HistoryCache 使用 (id, type) 作为身份索引及最近写入缓存的键，依赖注入式 identities/load 回调。写入仅重新查询该 ID 的实际来源集合，兼容单 ID 主键替换和旧复合身份表；刷新删除失效身份，关闭清空，保留原 10 条写入顺序淘汰策略。缓存返回前核对可变模型身份，不能用错误来源对象满足查询；缓存不是数据库 schema 迁移，也不解决写入排序。

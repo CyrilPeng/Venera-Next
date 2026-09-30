@@ -1,3 +1,4 @@
+import 'history_cache.dart';
 import 'history_repository.dart';
 import 'history_model.dart';
 import 'dart:async';
@@ -33,11 +34,10 @@ class HistoryManager with ChangeNotifier {
 
   int get length => _repository.count();
 
-  /// Cache of history ids. Improve the performance of find operation.
-  Map<String, bool>? _cachedHistoryIds;
-
-  /// Cache records recently modified by the app. Improve the performance of listeners.
-  final cachedHistories = <String, History>{};
+  late final _historyCache = HistoryCache(
+    identities: ({String? id}) => _repository.identities(id: id),
+    load: (id, type) => _repository.find(id, type),
+  );
 
   bool isInitialized = false;
 
@@ -124,17 +124,7 @@ class HistoryManager with ChangeNotifier {
     return _asyncHistoryQueue;
   }
 
-  void _cacheHistory(History newItem) {
-    if (_cachedHistoryIds == null) {
-      updateCache();
-    } else {
-      _cachedHistoryIds![newItem.id] = true;
-    }
-    cachedHistories[newItem.id] = newItem;
-    if (cachedHistories.length > 10) {
-      cachedHistories.remove(cachedHistories.keys.first);
-    }
-  }
+  void _cacheHistory(History item) => _historyCache.record(item);
 
   /// add history. if exists, update time.
   ///
@@ -175,31 +165,10 @@ class HistoryManager with ChangeNotifier {
     notifyListeners();
   }
 
-  void updateCache() {
-    _cachedHistoryIds = {};
-    for (final id in _repository.ids()) {
-      _cachedHistoryIds![id] = true;
-    }
-    for (var key in cachedHistories.keys.toList()) {
-      if (!_cachedHistoryIds!.containsKey(key)) {
-        cachedHistories.remove(key);
-      }
-    }
-  }
+  void updateCache() => _historyCache.refresh();
 
-  History? find(String id, ComicType type) {
-    if (_cachedHistoryIds == null) {
-      updateCache();
-    }
-    if (!_cachedHistoryIds!.containsKey(id)) {
-      return null;
-    }
-    if (cachedHistories.containsKey(id)) {
-      return cachedHistories[id];
-    }
-
-    return _repository.find(id, type.value);
-  }
+  History? find(String id, ComicType type) =>
+      _historyCache.find(id, type.value);
 
   List<History> getAll() => _repository.getAll();
   List<History> getRecent() => _repository.getRecent();
@@ -210,6 +179,7 @@ class HistoryManager with ChangeNotifier {
 
   void close() {
     isInitialized = false;
+    _historyCache.clear();
     _db.dispose();
   }
 

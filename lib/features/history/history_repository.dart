@@ -161,9 +161,14 @@ class HistoryRepository {
 
   void clear() => db.execute("delete from history;");
 
-  List<String> ids() => db
-      .select('select id from history;')
-      .map((row) => row['id'] as String)
+  List<(String, int)> identities({String? id}) => db
+      .select(
+        id == null
+            ? 'select id, type from history;'
+            : 'select id, type from history where id = ?;',
+        id == null ? const [] : [id],
+      )
+      .map((row) => (row['id'] as String, row['type'] as int))
       .toList();
 
   static const _insertHistorySql = """

@@ -1,3 +1,4 @@
+import 'package:venera_next/features/history/history_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/history/history_api.dart';
@@ -34,6 +35,78 @@ void main() {
   tearDown(() => db.dispose());
 
   test(
+    'cache distinguishes shared IDs by source and refresh evicts only deleted identity',
+    () {
+      final queriedIds = <String?>[];
+      final cache = HistoryCache(
+        identities: ({String? id}) {
+          queriedIds.add(id);
+          return repository.identities(id: id);
+        },
+        load: repository.find,
+      );
+      final a = item();
+      final b = item(type: 1)..title = 'Other source';
+      repository.writeProgress(a);
+      cache.record(a);
+      repository.writeProgress(b);
+      cache.record(b);
+      expect(identical(cache.find('shared', 0), a), isTrue);
+      expect(identical(cache.find('shared', 1), b), isTrue);
+      expect(cache.find('shared', 2), isNull);
+      expect(queriedIds, [null, 'shared']);
+      repository.remove('shared', 1);
+      cache.refresh();
+      expect(cache.find('shared', 1), isNull);
+      expect(identical(cache.find('shared', 0), a), isTrue);
+    },
+  );
+
+  test('cache observes source replacement under an id-only primary key', () {
+    db.execute('DROP TABLE history');
+    repository.initialize();
+    final cache = HistoryCache(
+      identities: repository.identities,
+      load: repository.find,
+    );
+    final a = item();
+    final b = item(type: 1);
+    repository.writeProgress(a);
+    cache.record(a);
+    repository.writeProgress(b);
+    cache.record(b);
+    expect(repository.count(), 1);
+    expect(cache.find('shared', 0), isNull);
+    expect(identical(cache.find('shared', 1), b), isTrue);
+    cache.clear();
+    expect(cache.find('shared', 0), isNull);
+    expect(cache.find('shared', 1)?.type.value, 1);
+  });
+
+  test(
+    'cache capacity remains ten and mutated identity never satisfies an old key',
+    () {
+      final cache = HistoryCache(
+        identities: repository.identities,
+        load: repository.find,
+      );
+      final values = List.generate(11, (index) => item()..id = '$index');
+      for (final value in values) {
+        repository.writeProgress(value);
+        cache.record(value);
+      }
+      expect(identical(cache.find('0', 0), values.first), isFalse);
+      expect(identical(cache.find('10', 0), values.last), isTrue);
+      values.last.id = 'changed';
+      expect(cache.find('10', 0)?.id, '10');
+      expect(cache.find('changed', 0), isNull);
+      repository.clear();
+      cache.clear();
+      expect(cache.find('0', 0), isNull);
+    },
+  );
+
+  test(
     'queries retain recent limits, duration ordering and retention boundary',
     () {
       for (var index = 0; index < 25; index++) {
@@ -44,7 +117,7 @@ void main() {
         if (index >= 23) repository.addReadDuration(value, 10);
       }
       expect(repository.count(), 25);
-      expect(repository.ids(), hasLength(25));
+      expect(repository.identities(), hasLength(25));
       expect(repository.getAll().first.id, '24');
       expect(
         repository.getRecent().map((value) => value.id),
@@ -67,7 +140,7 @@ void main() {
       expect(repository.getTotalReadDurationMs(), 0);
       repository.writeProgress(item());
       repository.clear();
-      expect(repository.ids(), isEmpty);
+      expect(repository.identities(), isEmpty);
     },
   );
 

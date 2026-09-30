@@ -239,6 +239,7 @@
     ]
   ],
   "business_entrypoints": [
+    "features/history/history_cache.dart",
     "features/history/history_repository.dart",
     "features/history/history_row.dart",
     "features/history/history_api.dart",
