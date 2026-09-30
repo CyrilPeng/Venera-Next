@@ -1,3 +1,4 @@
+import 'package:venera_next/app_runtime/interactive_bindings.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
 import 'package:venera_next/app_runtime/sync_window_binding.dart';
@@ -78,13 +79,28 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  final _interactiveBindings = InteractiveBindings.platform();
+
   @override
   void initState() {
     App.registerForceRebuild(forceRebuild);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _interactiveBindings.start();
+    });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     WidgetsBinding.instance.addObserver(this);
     checkUpdates();
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    App.registerForceRebuild(null);
+    hideContentOverlay?.remove();
+    hideContentOverlay = null;
+    unawaited(_interactiveBindings.dispose());
+    super.dispose();
   }
 
   bool isAuthPageActive = false;

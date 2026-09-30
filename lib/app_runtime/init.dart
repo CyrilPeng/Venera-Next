@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:display_mode/display_mode.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
-import 'package:flutter/services.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/comic_type.dart';
@@ -19,8 +18,6 @@ import 'package:venera_next/features/webdav_library/webdav_library.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
-import 'package:venera_next/routing/app_links.dart';
-import 'package:venera_next/routing/handle_text_share.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
 import 'bootstrap_core.dart';
@@ -66,8 +63,6 @@ Future<void> _initializeInteractive() async {
   DataSync().start();
   WebDavLibrarySource.initializeAutoSync();
   if (App.isAndroid) {
-    handleLinks();
-    handleTextShare();
     try {
       await FlutterDisplayMode.setHighRefreshRate();
     } catch (e) {
@@ -77,14 +72,6 @@ Future<void> _initializeInteractive() async {
   FlutterError.onError = (details) {
     Log.error("Unhandled Exception", "${details.exception}\n${details.stack}");
   };
-  if (App.isWindows) {
-    // Report to the monitor thread that the app is running
-    // https://github.com/CyrilPeng/venera-next/issues
-    Timer.periodic(const Duration(seconds: 1), (_) {
-      const methodChannel = MethodChannel('venera/method_channel');
-      methodChannel.invokeMethod("heartBeat");
-    });
-  }
 }
 
 ComicTileState _resolveComicTileState(Comic comic) {
