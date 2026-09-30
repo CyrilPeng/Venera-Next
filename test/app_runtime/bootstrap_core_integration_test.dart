@@ -45,11 +45,12 @@ void main() {
       expect(JsEngine().runCode('1 + 1'), 2);
       await appdata.saveData(false);
       await HistoryManager().waitForAsyncWrites();
-      await CacheManager().debugInitialScanTask;
+
       LocalManager.resetForTesting();
       HistoryManager().close();
       LocalFavoritesManager().close();
-      CacheManager.resetForTesting();
+      await CacheManager().dispose();
+      CacheManager.instance = null;
       SingleInstanceCookieJar.instance?.dispose();
       SingleInstanceCookieJar.instance = null;
       JsEngine().dispose();

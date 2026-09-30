@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_saf/flutter_saf.dart';
 import 'package:rhttp/rhttp.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
@@ -57,7 +59,10 @@ CoreBootstrap createCoreBootstrap({Future<void> Function()? environment}) =>
       ]).then((_) {}),
       finish: () async {
         _checkOldConfigs();
-        CacheManager().setLimitSize(appdata.settings['cacheSize']);
+        final cache = CacheManager();
+        cache.setLimitSize(appdata.settings['cacheSize']);
+        // The cache owns and drains this scan; UI startup need not await it.
+        unawaited(cache.start());
       },
     );
 

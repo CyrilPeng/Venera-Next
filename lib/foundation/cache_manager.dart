@@ -1,7 +1,7 @@
-import 'dart:isolate';
+import 'cache_scan.dart';
+import 'log.dart';
 
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
@@ -9,101 +9,55 @@ import 'package:venera_next/foundation/sqlite_connection.dart';
 import 'app.dart';
 
 class CacheManager {
-  static String get cachePath => '${App.cachePath}/cache';
-
   static CacheManager? instance;
 
-  @visibleForTesting
-  static Future<int> Function(String dbPath, String dir)? debugScanDirOverride;
+  /// The compatibility singleton resolves paths once; owned instances can use
+  /// independent directories and scanners without global test overrides.
+  factory CacheManager() => instance ??= CacheManager.open(
+    dataPath: App.dataPath,
+    cacheRoot: App.cachePath,
+  );
 
-  @visibleForTesting
-  static bool debugDisableInitialScan = false;
-
-  @visibleForTesting
-  static void Function()? debugOnCheckCacheStart;
-
-  @visibleForTesting
-  static void resetForTesting() {
-    instance?._db.dispose();
-    instance = null;
-    debugScanDirOverride = null;
-    debugDisableInitialScan = false;
-    debugOnCheckCacheStart = null;
-  }
-
-  late Database _db;
-
-  late String _dbPath;
-
+  late final Database _db;
+  final String _dbPath;
+  final String _cachePath;
+  final CacheScanner _scan;
+  Future<void> _operations = Future.value();
   Future<void>? _initialScanTask;
-
-  int? _currentSize;
-
-  /// size in bytes
-  int get currentSize => _currentSize ?? 0;
-
-  int dir = 0;
-
+  Future<void>? _disposal;
+  bool _closing = false;
+  int _currentSize = 0;
+  int get currentSize => _currentSize;
+  int _directoryIndex = 0;
   int _limitSize = 2 * 1024 * 1024 * 1024;
 
-  @visibleForTesting
-  Future<void>? get debugInitialScanTask => _initialScanTask;
-
-  static Future<int> _scanDir(String dbPath, String dir) async {
-    var res = await Isolate.run(() async {
-      int totalSize = 0;
-      List<String> unmanagedFiles = [];
-      var db = openSqliteDatabase(dbPath);
-      try {
-        await for (var file in Directory(dir).list(recursive: true)) {
-          if (file is File) {
-            var size = await file.length();
-            var segments = file.uri.pathSegments;
-            var name = segments.last;
-            var dir = segments.elementAtOrNull(segments.length - 2) ?? "*";
-            var res = db.select(
-              '''
-              SELECT * FROM cache
-              WHERE dir = ? AND name = ?
-            ''',
-              [dir, name],
-            );
-            if (res.isEmpty) {
-              unmanagedFiles.add(file.path);
-            } else {
-              totalSize += size;
-            }
-          }
-        }
-      } finally {
-        db.dispose();
-      }
-      return {'totalSize': totalSize, 'unmanagedFiles': unmanagedFiles};
-    });
-    // delete unmanaged files
-    // Only modify the database in the main isolate to avoid deadlock
-    for (var filePath in res['unmanagedFiles'] as List<String>) {
-      var file = File(filePath);
-      if (await file.exists()) {
-        await file.delete();
-      }
-      var segments = file.uri.pathSegments;
-      var name = segments.last;
-      var dir = segments.elementAtOrNull(segments.length - 2) ?? "*";
-      CacheManager()._db.execute(
-        '''
-        DELETE FROM cache
-        WHERE dir = ? AND name = ?
-      ''',
-        [dir, name],
-      );
-    }
-    return res['totalSize'] as int;
+  Future<T> _enqueue<T>(Future<T> Function() operation) {
+    if (_closing) return Future.error(StateError('CacheManager is closing'));
+    final next = _operations.then((_) => operation());
+    _operations = next.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return next;
   }
 
-  CacheManager._create() {
-    Directory(cachePath).createSync(recursive: true);
-    _dbPath = '${App.dataPath}/cache.db';
+  /// Start one initial scan. Later operations are ordered after it.
+  Future<void> start() {
+    if (_closing) return Future.error(StateError('CacheManager is closing'));
+    return _initialScanTask ??= _enqueue(_runInitialScan);
+  }
+
+  /// Finish accepted operations before closing SQLite. No new work is accepted.
+  Future<void> dispose() {
+    _closing = true;
+    return _disposal ??= _operations.then((_) => _db.dispose());
+  }
+
+  CacheManager.open({
+    required String dataPath,
+    required String cacheRoot,
+    CacheScanner scanner = scanCacheDirectory,
+  }) : _dbPath = '$dataPath/cache.db',
+       _cachePath = '$cacheRoot/cache',
+       _scan = scanner {
+    Directory(_cachePath).createSync(recursive: true);
     _db = openSqliteDatabase(_dbPath);
     _db.execute('''
       CREATE TABLE IF NOT EXISTS cache (
@@ -114,29 +68,36 @@ class CacheManager {
         type TEXT
       )
     ''');
-    if (debugDisableInitialScan) {
-      _currentSize = 0;
-      _initialScanTask = Future<void>.value();
-    } else {
-      _initialScanTask = _runInitialScan();
-    }
   }
 
   Future<void> _runInitialScan() async {
     try {
-      final scanDir = debugScanDirOverride ?? _scanDir;
-      _currentSize = await scanDir(_dbPath, cachePath);
-      await checkCache();
-    } catch (_) {
-      _currentSize = 0;
+      final result = await _scan(_dbPath, _cachePath);
+      _currentSize = result.totalSize;
+      for (final path in result.unmanagedFiles) {
+        final file = File(path);
+        final segments = file.uri.pathSegments;
+        final name = segments.last;
+        final directory = segments.elementAtOrNull(segments.length - 2) ?? '*';
+        // Recheck ownership before deleting a file reported by the scan.
+        if (_db.select('SELECT key FROM cache WHERE dir = ? AND name = ?', [
+          directory,
+          name,
+        ]).isNotEmpty) {
+          continue;
+        }
+        if (await file.exists()) await file.delete();
+      }
+      await _checkCache();
+    } catch (error, stack) {
+      // Preserve the size tracked by accepted writes when scanning fails.
+      Log.error('Cache scan', error, stack);
     }
   }
 
-  /// Get the singleton instance of CacheManager.
-  factory CacheManager() => instance ??= CacheManager._create();
-
   /// set cache size limit in MB
   void setLimitSize(int size) {
+    if (_closing) throw StateError('CacheManager is closing');
     _limitSize = size * 1024 * 1024;
   }
 
@@ -145,13 +106,21 @@ class CacheManager {
     String key,
     List<int> data, [
     int duration = 7 * 24 * 60 * 60 * 1000,
+  ]) {
+    final bytes = List<int>.of(data);
+    return _enqueue(() => _writeCache(key, bytes, duration));
+  }
+
+  Future<void> _writeCache(
+    String key,
+    List<int> data, [
+    int duration = 7 * 24 * 60 * 60 * 1000,
   ]) async {
-    await delete(key);
-    this.dir++;
-    this.dir %= 100;
-    var dir = this.dir;
+    await _delete(key);
+    _directoryIndex = (_directoryIndex + 1) % 100;
+    final dir = _directoryIndex;
     var name = md5.convert(key.codeUnits).toString();
-    var file = File('$cachePath/$dir/$name');
+    var file = File('$_cachePath/$dir/$name');
     await file.create(recursive: true);
     await file.writeAsBytes(data);
     var expires = DateTime.now().millisecondsSinceEpoch + duration;
@@ -161,17 +130,17 @@ class CacheManager {
     ''',
       [key, dir.toString(), name, expires],
     );
-    if (_currentSize != null) {
-      _currentSize = _currentSize! + data.length;
-    }
-    checkCacheIfRequired();
+    _currentSize += data.length;
+    if (_currentSize > _limitSize) await _checkCache();
   }
 
   /// Find cache by key.
   /// If cache is expired, it will be deleted and return null.
   /// If cache is not found, it will return null.
   /// If cache is found, it will return the file, and update the expires time.
-  Future<File?> findCache(String key) async {
+  Future<File?> findCache(String key) => _enqueue(() => _findCache(key));
+
+  Future<File?> _findCache(String key) async {
     var res = _db.select(
       '''
       SELECT * FROM cache
@@ -186,7 +155,7 @@ class CacheManager {
     var dir = row[1] as String;
     var name = row[2] as String;
     var expires = row[3] as int;
-    var file = File('$cachePath/$dir/$name');
+    var file = File('$_cachePath/$dir/$name');
     var now = DateTime.now().millisecondsSinceEpoch;
     if (expires < now) {
       // expired
@@ -226,103 +195,94 @@ class CacheManager {
     return null;
   }
 
-  bool _isChecking = false;
-
   /// Check cache size and delete expired cache.
   /// Only check cache if current size is greater than limit size.
-  void checkCacheIfRequired() {
-    if (_currentSize != null && _currentSize! > _limitSize) {
-      checkCache();
-    }
-  }
+  Future<void> checkCacheIfRequired() => _enqueue(() async {
+    if (_currentSize > _limitSize) await _checkCache();
+  });
 
   /// Check cache size and delete expired cache.
   /// If current size is greater than limit size,
   /// delete cache until current size is less than limit size.
-  Future<void> checkCache() async {
-    if (_isChecking) {
-      return;
-    }
-    _isChecking = true;
-    try {
-      debugOnCheckCacheStart?.call();
-      var res = _db.select(
-        '''
+  Future<void> checkCache() => _enqueue(_checkCache);
+
+  Future<void> _checkCache() async {
+    var res = _db.select(
+      '''
         SELECT * FROM cache
+        WHERE expires < ?
+      ''',
+      [DateTime.now().millisecondsSinceEpoch],
+    );
+    for (var row in res) {
+      var dir = row[1] as String;
+      var name = row[2] as String;
+      var file = File('$_cachePath/$dir/$name');
+      if (await file.exists()) {
+        var size = await file.length();
+        _currentSize = _currentSize - size;
+        await file.delete();
+      }
+    }
+    if (res.isNotEmpty) {
+      _db.execute(
+        '''
+        DELETE FROM cache
         WHERE expires < ?
       ''',
         [DateTime.now().millisecondsSinceEpoch],
       );
-      for (var row in res) {
-        var dir = row[1] as String;
-        var name = row[2] as String;
-        var file = File('$cachePath/$dir/$name');
-        if (await file.exists()) {
-          var size = await file.length();
-          _currentSize = _currentSize! - size;
-          await file.delete();
-        }
-      }
-      if (res.isNotEmpty) {
-        _db.execute(
-          '''
-        DELETE FROM cache
-        WHERE expires < ?
-      ''',
-          [DateTime.now().millisecondsSinceEpoch],
-        );
-      }
+    }
 
-      while (_currentSize != null && _currentSize! > _limitSize) {
-        var res = _db.select('''
+    while (_currentSize > _limitSize) {
+      var res = _db.select('''
           SELECT * FROM cache
           ORDER BY expires ASC
           limit 10
         ''');
-        if (res.isEmpty) {
-          // There are many files unmanaged by the cache manager.
-          // Clear all cache.
-          await Directory(cachePath).delete(recursive: true);
-          Directory(cachePath).createSync(recursive: true);
-          break;
-        }
-        for (var row in res) {
-          var key = row[0] as String;
-          var dir = row[1] as String;
-          var name = row[2] as String;
-          var file = File('$cachePath/$dir/$name');
-          if (await file.exists()) {
-            var size = await file.length();
-            await file.delete();
-            _db.execute(
-              '''
+      if (res.isEmpty) {
+        // There are many files unmanaged by the cache manager.
+        // Clear all cache.
+        await Directory(_cachePath).delete(recursive: true);
+        Directory(_cachePath).createSync(recursive: true);
+        break;
+      }
+      for (var row in res) {
+        var key = row[0] as String;
+        var dir = row[1] as String;
+        var name = row[2] as String;
+        var file = File('$_cachePath/$dir/$name');
+        if (await file.exists()) {
+          var size = await file.length();
+          await file.delete();
+          _db.execute(
+            '''
               DELETE FROM cache
               WHERE key = ?
             ''',
-              [key],
-            );
-            _currentSize = _currentSize! - size;
-            if (_currentSize! <= _limitSize) {
-              break;
-            }
-          } else {
-            _db.execute(
-              '''
-              DELETE FROM cache
-              WHERE key = ?
-            ''',
-              [key],
-            );
+            [key],
+          );
+          _currentSize = _currentSize - size;
+          if (_currentSize <= _limitSize) {
+            break;
           }
+        } else {
+          _db.execute(
+            '''
+              DELETE FROM cache
+              WHERE key = ?
+            ''',
+            [key],
+          );
         }
       }
-    } finally {
-      _isChecking = false;
     }
   }
 
   /// Delete cache by key.
-  Future<void> delete(String key) async {
+  Future<void> delete(String key) => _enqueue(() => _delete(key));
+
+  Future<void> _delete(String key) async {
     var res = _db.select(
       '''
       SELECT * FROM cache
@@ -336,7 +296,7 @@ class CacheManager {
     var row = res.first;
     var dir = row[1] as String;
     var name = row[2] as String;
-    var file = File('$cachePath/$dir/$name');
+    var file = File('$_cachePath/$dir/$name');
     var fileSize = 0;
     if (await file.exists()) {
       fileSize = await file.length();
@@ -349,15 +309,15 @@ class CacheManager {
     ''',
       [key],
     );
-    if (_currentSize != null) {
-      _currentSize = _currentSize! - fileSize;
-    }
+    _currentSize -= fileSize;
   }
 
   /// Delete all cache.
-  Future<void> clear() async {
-    await Directory(cachePath).delete(recursive: true);
-    Directory(cachePath).createSync(recursive: true);
+  Future<void> clear() => _enqueue(_clear);
+
+  Future<void> _clear() async {
+    await Directory(_cachePath).delete(recursive: true);
+    Directory(_cachePath).createSync(recursive: true);
     _db.execute('''
       DELETE FROM cache
     ''');
