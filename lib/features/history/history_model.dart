@@ -57,6 +57,22 @@ class History implements Comic {
     this.group,
   });
 
+  /// Detached values for a submitted storage operation, including read keys.
+  History copy() => History(
+    type: type,
+    time: time,
+    title: title,
+    subtitle: subtitle,
+    cover: cover,
+    ep: ep,
+    page: page,
+    id: id,
+    readEpisode: Set.of(readEpisode),
+    maxPage: maxPage,
+    readDurationMs: readDurationMs,
+    group: group,
+  );
+
   History.fromModel({
     required HistoryMixin model,
     required this.ep,

@@ -34,6 +34,30 @@ bool _sqliteAvailable() {
 }
 
 void main() {
+  test(
+    'history copies detach mutable read keys and preserve all stored fields',
+    () {
+      final original = _history('copy')
+        ..group = 3
+        ..readDurationMs = 75;
+      final copy = original.copy();
+      original.readEpisode.add('3-2');
+      original.page = 9;
+      expect(copy.readEpisode, {'1'});
+      expect(copy.page, 2);
+      expect(copy.group, 3);
+      expect(copy.readDurationMs, 75);
+      expect(copy.time, original.time);
+      expect(copy.title, original.title);
+      expect(copy.subtitle, original.subtitle);
+      expect(copy.cover, original.cover);
+      expect(copy.maxPage, original.maxPage);
+      expect(copy.type, original.type);
+      copy.readEpisode.add('other');
+      expect(original.readEpisode, {'1', '3-2'});
+    },
+  );
+
   test('History.fromMap defaults missing reading duration to zero', () {
     expect(_history('legacy-map').readDurationMs, 0);
   });
@@ -122,7 +146,7 @@ void main() {
   );
 
   test(
-    'addHistoryAsync queues concurrent writes and updates cache',
+    'queued writes capture values and cache only persisted identities',
     () async {
       final dataDir = Directory.systemTemp.createTempSync(
         'venera-history-data-',
@@ -152,18 +176,38 @@ void main() {
       final manager = HistoryManager();
       await manager.init();
 
-      final futures = List.generate(
-        5,
-        (index) => manager.addHistoryAsync(_history('comic-$index')),
-      );
+      final submitted = List.generate(5, (index) => _history('comic-$index'));
+      final futures = submitted.map(manager.addHistoryAsync).toList();
+      for (final value in submitted) {
+        value.id = 'mutated';
+        value.title = 'Not submitted';
+        value.page = 99;
+        value.readEpisode.add('999');
+      }
       await Future.wait(futures);
 
       expect(manager.count(), 5);
+      expect(manager.find('mutated', ComicType.local), isNull);
       for (var i = 0; i < 5; i++) {
         final saved = manager.find('comic-$i', ComicType.local);
         expect(saved, isNotNull);
         expect(saved!.title, 'Title comic-$i');
+        expect(saved.page, 2);
+        expect(saved.readEpisode, {'1'});
       }
+      final durationItem = _history('duration')..group = 2;
+      final durationWrite = manager.addReadDuration(
+        durationItem,
+        const Duration(milliseconds: 80),
+      );
+      durationItem.id = 'different';
+      durationItem.group = 9;
+      await durationWrite;
+      final savedDuration = manager.find('duration', ComicType.local)!;
+      expect(savedDuration.readDurationMs, 80);
+      expect(savedDuration.group, 2);
+      expect(durationItem.readDurationMs, 0);
+      expect(manager.find('different', ComicType.local), isNull);
     },
     skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
   );
@@ -202,6 +246,29 @@ void main() {
       final write = manager.addHistoryAsync(_history('comic-drained'));
       await manager.waitForAsyncWrites();
       await write;
+      var notifications = 0;
+      manager.addListener(() => notifications++);
+      final lateWrite = manager.addHistoryAsync(_history('old-lifetime'));
+      manager.close();
+      final reopened = Directory('${dataDir.path}/reopened')..createSync();
+      App.dataPath = reopened.path;
+      await manager.init();
+      final beforeCompletion = notifications;
+      await lateWrite;
+      expect(notifications, beforeCompletion);
+      expect(manager.count(), 0);
+      expect(manager.find('old-lifetime', ComicType.local), isNull);
+      final oldDatabase = sqlite3.open('${dataDir.path}/history.db');
+      try {
+        expect(
+          oldDatabase.select(
+            "SELECT id FROM history WHERE id = 'old-lifetime'",
+          ),
+          hasLength(1),
+        );
+      } finally {
+        oldDatabase.dispose();
+      }
       manager.close();
       HistoryManager.cache = null;
 

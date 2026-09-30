@@ -40,11 +40,13 @@ class HistoryManager with ChangeNotifier {
   );
 
   bool isInitialized = false;
+  int _generation = 0;
 
   Future<void> init() async {
     if (isInitialized) {
       return;
     }
+    ++_generation;
     _dbPath = "${App.dataPath}/history.db";
     _db = openSqliteDatabase(_dbPath);
 
@@ -88,7 +90,16 @@ class HistoryManager with ChangeNotifier {
 
   /// Create a isolate to add history to prevent blocking the UI thread.
   Future<void> addHistoryAsync(History newItem) {
-    return _enqueueAsyncWrite(() => _writeHistoryAsync(newItem));
+    final snapshot = newItem.copy();
+    final path = _dbPath;
+    final generation = _generation;
+    return _enqueueAsyncWrite(() async {
+      await _addHistoryAsync(path, snapshot);
+      if (isInitialized && generation == _generation) {
+        _cachePersistedHistory(snapshot);
+        notifyListeners();
+      }
+    });
   }
 
   Future<void> _enqueueAsyncWrite(Future<void> Function() write) {
@@ -102,21 +113,31 @@ class HistoryManager with ChangeNotifier {
     return next;
   }
 
-  Future<void> _writeHistoryAsync(History newItem) async {
-    await _addHistoryAsync(_dbPath, newItem);
-    _cacheHistory(newItem);
-    notifyListeners();
+  void _cachePersistedHistory(History snapshot) {
+    final stored = _repository.find(snapshot.id, snapshot.type.value);
+    if (stored == null) {
+      updateCache();
+    } else {
+      _cacheHistory(stored);
+    }
   }
 
   /// Atomically adds foreground reading time without replacing progress data.
   Future<void> addReadDuration(History item, Duration duration) {
     final durationMs = duration.inMilliseconds;
     if (durationMs <= 0) return Future.value();
+    final snapshot = item.copy();
+    final path = _dbPath;
+    final generation = _generation;
     return _enqueueAsyncWrite(() async {
-      await _addReadDurationAsync(_dbPath, item, durationMs);
-      item.readDurationMs += durationMs;
-      _cacheHistory(item);
-      notifyListeners();
+      await _addReadDurationAsync(path, snapshot, durationMs);
+      if (item.id == snapshot.id && item.type == snapshot.type) {
+        item.readDurationMs += durationMs;
+      }
+      if (isInitialized && generation == _generation) {
+        _cachePersistedHistory(snapshot);
+        notifyListeners();
+      }
     });
   }
 
@@ -178,6 +199,7 @@ class HistoryManager with ChangeNotifier {
   List<History> getAllByReadDuration() => _repository.getAllByReadDuration();
 
   void close() {
+    ++_generation;
     isInitialized = false;
     _historyCache.clear();
     _db.dispose();
