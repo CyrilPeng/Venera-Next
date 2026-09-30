@@ -271,3 +271,5 @@ ReaderController 同时持有 ReaderContentState，图片列表必须复制为�
 ReaderHistoryWriter 只负责单个阅读器的延迟保存和退出刷新调度，通过回调访问存储与错误报告。历史坐标转换留在适配端；销毁必须取消待触发定时器，不能取消或重复提交存储已接受的操作。数据库写入排序由存储层负责。
 
 WaterfallController 拥有章节插入/重置、预取/导航状态及请求作用域，连续视图只持有 WaterfallFlowView 查询协议。前插返回源图片数，由视图恢复滚动锚点；跳章和销毁使旧请求及帧回调失效。控制器不依赖 Flutter、ReaderState、全局图源或存储，实际访问由装配端注入。
+
+画廊通过 ReaderGalleryData 和 ReaderController 接收内容/配置与导航，不得查找祖先 ReaderState 或读取全局设置。images.dart 装配评论 Widget、界面回调与图片读取。ReaderImageViewController 独立于页面定义在 reader_viewport.dart；过渡页面导出供旧调用者使用，新视图应直接依赖协议。图片列表复用控制器快照，源图片处理页码语义不能在结构迁移中隐式改变。

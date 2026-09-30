@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/loading.dart';
@@ -7,12 +8,16 @@ import 'package:venera_next/features/reader/chapter_loader.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
+import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/reader/chapter_comments.dart';
+import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/cache_manager.dart';
 
 import 'gallery_view.dart';
+import 'gallery_data.dart';
 import 'continuous_view.dart';
 
 // Transitional exports for existing viewport consumers.
-export 'gallery_view.dart' show GalleryModeState;
 export 'continuous_view.dart' show ContinuousModeState;
 
 class ReaderImages extends StatefulWidget {
@@ -128,10 +133,67 @@ class ReaderImagesState extends State<ReaderImages> {
         var showComments = reader.preferences.showChapterComments == true;
         var showCommentsAtEnd =
             reader.preferences.showChapterCommentsAtEnd == true;
+        final preferences = reader.preferences;
+        final source = reader.type.comicSource;
+        final chapters = reader.widget.chapters;
         return ReaderGalleryView(
           key: Key(
             '${reader.mode.key}_${reader.imagesPerPage}_${showComments}_$showCommentsAtEnd',
           ),
+          data: ReaderGalleryData(
+            content: reader.controller.content,
+            layout: reader.pageLayout,
+            vertical: reader.mode == ReaderMode.galleryTopToBottom,
+            reverse: reader.mode == ReaderMode.galleryRightToLeft,
+            commentsAtEnd: reader.totalPages > reader.maxPage,
+            firstChapter: reader.isFirstChapterOfGroup,
+            lastChapter: reader.isLastChapterOfGroup,
+            preloadCount:
+                appdata.settings.globalReaderSettings.preloadImageCount,
+            doubleTapCollect:
+                appdata.settings.globalReaderSettings.quickCollectImage ==
+                'DoubleTap',
+            centerLongPressZoom: preferences.longPressZoomPosition == 'center',
+            pageAnimation: preferences.enablePageAnimation,
+            sourceKey: source?.key,
+            comicId: reader.cid,
+            chapterId: reader.eid,
+          ),
+          navigation: reader.controller,
+          onViewportChanged: (viewport, attached) {
+            if (attached) {
+              reader.imageViewController = viewport;
+            } else if (identical(reader.imageViewController, viewport)) {
+              reader.imageViewController = null;
+            }
+          },
+          onReady: () => context.readerScaffold.setFloatingButton(0),
+          onPageReported: (comments, refreshEInk) {
+            final scaffold = context.readerScaffold;
+            scaffold.update();
+            if (comments && scaffold.isOpen) scaffold.openOrClose();
+            if (refreshEInk) scaffold.requestEInkRefresh();
+          },
+          onChapterChanged: () => context.readerScaffold.requestEInkRefresh(),
+          onCollectImage: () => context.readerScaffold.addImageFavorite(),
+          readerSize: () => reader.size,
+          readImage: (key) async {
+            if (key.startsWith('file://')) {
+              return File(key.substring(7)).readAsBytes();
+            }
+            return (await CacheManager().findCache(
+              '$key@${reader.type.sourceKey}@${reader.cid}@${reader.eid}',
+            ))!.readAsBytes();
+          },
+          commentsBuilder: source == null || chapters == null
+              ? null
+              : (_) => EmbeddedChapterCommentsPage(
+                  comicId: reader.cid,
+                  epId: chapters.ids.elementAt(reader.chapter - 1),
+                  source: source,
+                  comicTitle: reader.widget.name,
+                  chapterTitle: chapters.titles.elementAt(reader.chapter - 1),
+                ),
         );
       } else {
         return ReaderContinuousView(

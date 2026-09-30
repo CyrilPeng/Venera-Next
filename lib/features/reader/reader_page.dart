@@ -16,6 +16,8 @@ import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
 import 'package:venera_next/features/reader/history_writer.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
+import 'package:venera_next/features/reader/reader_viewport.dart';
+
 import 'package:venera_next/features/reader/page_layout.dart';
 import 'package:venera_next/features/reader/image_position.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
@@ -29,6 +31,8 @@ import 'package:venera_next/foundation/comic_layout.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:window_manager/window_manager.dart';
+
+export 'reader_viewport.dart' show ReaderImageViewController;
 
 extension ReaderContext on BuildContext {
   ReaderState get reader => findAncestorStateOfType<ReaderState>()!;
@@ -752,25 +756,4 @@ enum ReaderMode {
     }
     return waterfallTopToBottom;
   }
-}
-
-abstract interface class ReaderImageViewController
-    implements ReaderNavigationViewport {
-  /// Zero-based, end-exclusive source images represented by the current page.
-  (int start, int end)? get currentImageRange;
-
-  void handleDoubleTap(Offset location);
-
-  void handleLongPressDown(Offset location);
-
-  void handleLongPressUp(Offset location);
-
-  void handleKeyEvent(KeyEvent event);
-
-  /// Returns true if the event is handled.
-  bool handleOnTap(Offset location);
-
-  Future<Uint8List?> getImageByOffset(Offset offset);
-
-  String? getImageKeyByOffset(Offset offset);
 }
