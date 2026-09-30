@@ -9,7 +9,6 @@ import 'package:venera_next/features/sync/sync.dart';
 void main() {
   setUp(() {
     DataSync.resetForTesting();
-    DataSync.debugDisableWindowCloseHandler = true;
     Log.isMuted = true;
     appdata.implicitData['webdavAutoSync'] = false;
   });
@@ -36,7 +35,7 @@ void main() {
       final second = sync.uploadData();
       final third = sync.uploadData();
       var waitCompleted = false;
-      final waitFuture = sync.debugWaitForUploadBeforeClose().then((_) {
+      final waitFuture = sync.waitForUpload().then((_) {
         waitCompleted = true;
       });
 
@@ -141,6 +140,31 @@ void main() {
     expect(sync.statusSnapshot.lastError, 'upload failed');
     expect(sync.isUploading, isFalse);
   });
+
+  test(
+    'dispose finishes active transfer without starting queued work or notifying',
+    () async {
+      final gate = Completer<Res<bool>>();
+      var uploads = 0;
+      DataSync.debugUploadOverride = () {
+        uploads++;
+        return gate.future;
+      };
+      final sync = DataSync();
+      var notifications = 0;
+      sync.addListener(() => notifications++);
+      final active = sync.uploadData();
+      final queued = sync.uploadData();
+      sync.dispose();
+      final before = notifications;
+      gate.complete(const Res(true));
+      expect((await active).success, isTrue);
+      expect((await queued).error, isTrue);
+      expect(uploads, 1);
+      expect(notifications, before);
+      expect((await sync.downloadData()).error, isTrue);
+    },
+  );
 
   test('downloadData converts thrown errors into failed results', () async {
     DataSync.debugDownloadOverride = () async {

@@ -104,7 +104,7 @@ Future<void> init() async {
     Log.error("init", "$e\n$s");
   }
   _checkOldConfigs();
-  DataSync();
+  DataSync().start();
   WebDavLibrarySource.initializeAutoSync();
   CacheManager().setLimitSize(appdata.settings['cacheSize']);
   if (App.isAndroid) {

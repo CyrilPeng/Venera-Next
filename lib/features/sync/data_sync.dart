@@ -4,8 +4,6 @@ import 'package:venera_next/foundation/sync_configuration.dart';
 import 'package:venera_next/foundation/sync_preference_store.dart';
 
 import 'package:flutter/foundation.dart';
-import 'package:venera_next/components/message.dart';
-import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -16,7 +14,6 @@ import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/network/webdav.dart';
 import 'package:venera_next/features/sync/app_data_transfer.dart';
 import 'package:venera_next/foundation/extensions.dart';
-import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/file_system.dart';
 
 export 'package:venera_next/foundation/sync_configuration.dart'
@@ -60,18 +57,19 @@ class DataSyncStatusSnapshot {
 }
 
 class DataSync with ChangeNotifier {
-  DataSync._() {
+  DataSync._();
+
+  bool _started = false;
+
+  /// Attach automatic synchronization once, after core services are ready.
+  void start() {
+    if (_disposed) throw StateError('Cannot start a disposed DataSync');
+    if (_started) return;
+    _started = true;
     appdata.registerSyncDataRequestHandler(onDataChanged);
     LocalFavoritesManager().addListener(onDataChanged);
     ComicSourceManager().addListener(onDataChanged);
     checkForAutomaticSync(startup: true);
-    if (App.isDesktop && !debugDisableWindowCloseHandler) {
-      Future.delayed(const Duration(seconds: 1), () {
-        if (_disposed) return;
-        var controller = WindowFrame.of(App.rootContext);
-        controller.addCloseListener(_handleWindowClose);
-      });
-    }
   }
 
   void onDataChanged() {
@@ -82,7 +80,10 @@ class DataSync with ChangeNotifier {
       _syncPreferences.pending = true;
       appdata.writeImplicitData();
     }
-    if (isEnabled && mode == DataSyncMode.realtime && !_configuring) {
+    if (_started &&
+        isEnabled &&
+        mode == DataSyncMode.realtime &&
+        !_configuring) {
       unawaited(uploadData());
     }
   }
@@ -114,7 +115,13 @@ class DataSync with ChangeNotifier {
   void checkForAutomaticSync({bool startup = false}) {
     _scheduleTimer?.cancel();
     _scheduleTimer = null;
-    if (_disposed || _configuring || !isEnabled || _activeTask != null) return;
+    if (!_started ||
+        _disposed ||
+        _configuring ||
+        !isEnabled ||
+        _activeTask != null) {
+      return;
+    }
     if (mode == DataSyncMode.realtime) {
       if (!startup &&
           _lastRealtimeCheck != null &&
@@ -149,6 +156,7 @@ class DataSync with ChangeNotifier {
     required int minutes,
     required bool initialUpload,
   }) async {
+    if (_disposed) return const Res.error('Sync service is disposed');
     if (_configuring) return const Res.error('Sync configuration is busy');
     _configuring = true;
     _scheduleTimer?.cancel();
@@ -196,29 +204,7 @@ class DataSync with ChangeNotifier {
     }
   }
 
-  bool _handleWindowClose() {
-    if (_isUploading) {
-      _showWindowCloseDialog();
-      return false;
-    }
-    return true;
-  }
-
-  void _showWindowCloseDialog() async {
-    showLoadingDialog(
-      App.rootContext,
-      cancelButtonText: "Shut Down".tl,
-      onCancel: () => exit(0),
-      barrierDismissible: false,
-      message: "Uploading data...".tl,
-    );
-    await _waitForUploadBeforeClose();
-    exit(0);
-  }
-
-  Future<void> _waitForUploadBeforeClose() async {
-    return _waitForTask(_DataSyncTask.upload);
-  }
+  Future<void> waitForUpload() => _waitForTask(_DataSyncTask.upload);
 
   Future<void> waitForDownload() async {
     return _waitForTask(_DataSyncTask.download);
@@ -250,20 +236,11 @@ class DataSync with ChangeNotifier {
   static Future<Res<bool>> Function()? debugDownloadOverride;
 
   @visibleForTesting
-  static bool debugDisableWindowCloseHandler = false;
-
-  @visibleForTesting
-  Future<void> debugWaitForUploadBeforeClose() {
-    return _waitForUploadBeforeClose();
-  }
-
-  @visibleForTesting
   static void resetForTesting() {
     instance?.dispose();
     instance = null;
     debugUploadOverride = null;
     debugDownloadOverride = null;
-    debugDisableWindowCloseHandler = false;
     debugNow = null;
   }
 
@@ -290,11 +267,14 @@ class DataSync with ChangeNotifier {
 
   @override
   void dispose() {
+    if (_disposed) return;
     _disposed = true;
     _scheduleTimer?.cancel();
-    appdata.registerSyncDataRequestHandler(null);
-    LocalFavoritesManager().removeListener(onDataChanged);
-    ComicSourceManager().removeListener(onDataChanged);
+    if (_started) {
+      appdata.registerSyncDataRequestHandler(null);
+      LocalFavoritesManager().removeListener(onDataChanged);
+      ComicSourceManager().removeListener(onDataChanged);
+    }
     super.dispose();
   }
 
@@ -321,6 +301,7 @@ class DataSync with ChangeNotifier {
   }
 
   Future<Res<bool>> uploadData() async {
+    if (_disposed) return const Res.error('Sync service is disposed');
     if (_activeTaskType == _DataSyncTask.download) {
       return const Res(true);
     }
@@ -331,6 +312,7 @@ class DataSync with ChangeNotifier {
   }
 
   Future<Res<bool>> downloadData() async {
+    if (_disposed) return const Res.error('Sync service is disposed');
     if (_activeTask != null) {
       return _schedulePendingTask(_DataSyncTask.download, _downloadDataNow);
     }
@@ -366,6 +348,9 @@ class DataSync with ChangeNotifier {
     _DataSyncTask task,
     Future<Res<bool>> Function() run,
   ) {
+    if (_disposed) {
+      return Future.value(const Res.error('Sync service is disposed'));
+    }
     late Future<Res<bool>> activeTask;
     activeTask = _runTask(task, run).whenComplete(() {
       if (identical(_activeTask, activeTask)) {
@@ -396,6 +381,7 @@ class DataSync with ChangeNotifier {
     notifyListeners();
     try {
       final result = await run();
+      if (_disposed) return result;
       if (result.error) {
         _lastError = result.errorMessage;
       } else if (hasConfiguration &&

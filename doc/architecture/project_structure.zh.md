@@ -235,3 +235,5 @@ CI 同时运行 `check_architecture_dependencies.py`，按 `dependency_baseline.
 应用同步设置由 `foundation/sync_configuration.dart` 解析，`SyncPreferenceStore` 对接原有 settings/implicitData 并提供配置检查点。服务持有传输和回滚事务，适配器不主动持久化或启动定时器；设置预览保持只读。`DataSyncMode` 从原入口继续导出以兼容现有调用者。
 
 `Init.init()` 同一尝试仅执行一次，`ensureInit()` 等待显式启动并共享失败；`retryInit()` 是失败后重新执行的唯一入口。实现应在失败时清理部分资源，不得吞掉异常伪装为就绪。启动依赖不得形成自等待。
+
+DataSync 构造无运行副作用，由运行时显式 start；dispose 禁止新任务和迟到通知，已开始的传输继续收尾。窗口关闭等待逻辑仅在 app_runtime/SyncWindowBinding 中，由组件挂载/卸载管理监听；业务服务不得重新访问 WindowFrame 或根 context。

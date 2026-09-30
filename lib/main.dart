@@ -1,5 +1,6 @@
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
+import 'package:venera_next/app_runtime/sync_window_binding.dart';
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flex_seed_scheme/flex_seed_scheme.dart';
@@ -306,7 +307,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   child: MouseBackDetector(
                     onTapDown: App.pop,
                     child: WindowFrame(
-                      widget,
+                      SyncWindowBinding(child: widget, onExit: () => exit(0)),
                       debugAction: reloadComicSourcesForDebug,
                     ),
                   ),

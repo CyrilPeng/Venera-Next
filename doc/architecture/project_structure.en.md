@@ -125,3 +125,5 @@ Shared fields and binding contracts live in `foundation/preferences.dart`; globa
 App sync settings are parsed by `foundation/sync_configuration.dart`; SyncPreferenceStore adapts existing settings/implicitData and captures rollback checkpoints. The service owns transfer/rollback transactions; the adapter neither persists nor starts timers. Settings previews are read-only. DataSyncMode remains exported by its original entry point for compatibility.
 
 Init.init executes an attempt once; ensureInit waits for explicit startup and shares failures. retryInit explicitly starts a new failed attempt. Implementations must clean up partial resources and propagate errors rather than report false readiness. Initialization dependencies must not wait on themselves.
+
+DataSync construction has no runtime side effects; the runtime explicitly calls start. Disposal prevents new tasks and late notifications while allowing active transfers to finish. Only app_runtime/SyncWindowBinding owns the window-close wait and its mounted listener lifecycle; the business service must not access WindowFrame or root context.
