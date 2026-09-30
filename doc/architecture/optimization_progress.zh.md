@@ -341,3 +341,10 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - reader_page.dart 不再重导出 ReaderImageViewController，images.dart 不再重导出 ContinuousModeState；所有调用者改用独立协议或实际视图入口，保留页面现有对 UI 的导航适配方法。ReaderController 作为业务入口受依赖检查保护。
 - 导航测试直接使用 ReaderController/ReaderNavigationViewport，删除页面/ComicType/全局 Log 依赖，注入并断言错误报告并释放控制器。保持既有 4 项行为测试，不增加镜像测试；定向 15 项与全量 Windows Flutter 735 项通过。分析零错误/警告、23 个既有 info；结构、架构、Git 依赖及 12 项架构脚本测试通过。
 - 自动阅读测试只暂存 import 迁移，原有菜单/暂停修改继续未提交。ReaderState 的 UI 适配仍有待减少，页布局/历史映射、其他共享资源所有权、其余 P5、P6–P8 和平台/性能验收尚未完成。
+
+## P5/P6：历史模型入口与阅读进度映射（2026-10-01）
+
+- History 从 history_manager.dart 分离至 history_model.dart，模型正文与原实现逐字核对一致。history_api.dart 提供无页面/管理器导出的数据入口，原 history.dart 继续导出模型；直接使用旧管理器文件获取模型的调用者已迁移，没有新增兼容重导出。
+- applyReaderHistoryProgress 集中显示页→源图片页码、展开章节→分组坐标、已读集合和时间映射，复用 ReaderPageLayout 与 ComicChapters.positionAt。页面保留加载保护和会话保存调度；两个新业务入口纳入依赖检查。
+- 新增 3 项测试覆盖重复章节 ID 的分组、末页/评论页、已有字段保留及空内容；连同加载保护定向 4 项通过，全量 Windows Flutter 738 项通过。分析零错误/警告、23 个既有 info；结构、架构、Git 依赖及 12 项架构脚本测试通过。原用户修改保持未提交。
+- 未改变既有空内容页码 0 或普通章节更新不清除 group 的行为，未改 schema。模型仍保留原 fromMap/fromRow 与展示描述；行映射/查询分离、持久化排序、其他 P5–P8 及平台/性能验收继续推进，不能据此宣称 P6 完成。

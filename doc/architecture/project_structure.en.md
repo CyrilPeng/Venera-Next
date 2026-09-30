@@ -189,3 +189,5 @@ ReaderWindowController owns the close listener and fullscreen request queue thro
 ReaderOrientationScope must wrap the Navigator and be owned by the application tree. ReaderOrientationCoordinator depends only on orientation/error callbacks and owns handles instead of static Widget States. ReaderOrientationState acquires/releases handles and refreshes UI. DeviceOrientation mapping stays in orientation.dart; the business enum has no platform dependency. Missing scope in an Android reader is an assembly error, with no hidden global fallback.
 
 Navigation behavior tests depend only on ReaderController/ReaderNavigationViewport and injected error reporting, without a page mixin or global log muting.
+
+History data is exposed through history_api.dart; history_model.dart imports no HistoryManager or pages. The legacy history.dart UI barrel exports the data entry; history_manager.dart no longer exports the model. applyReaderHistoryProgress maps reading coordinates to history fields, while the page gates loading and schedules persistence. Existing fields, row constructors and descriptions remain pending further storage decomposition without implicit data changes.

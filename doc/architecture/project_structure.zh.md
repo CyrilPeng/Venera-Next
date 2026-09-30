@@ -299,3 +299,5 @@ ReaderWindowController 拥有关闭监听与全屏请求队列，依赖注入的
 ReaderOrientationScope 必须位于 Navigator 外并由应用树管理生命周期；ReaderOrientationCoordinator 只依赖异步方向回调与错误报告，句柄替代静态 Widget State 所有权。ReaderOrientationState 是 Flutter 适配器，取得/释放句柄并刷新 UI。平台映射集中在 orientation.dart，业务枚举不得依赖 DeviceOrientation；无作用域的 Android 阅读器装配属于错误，不回退到隐藏全局实例。
 
 images.dart 不再重导出 ContinuousModeState；依赖具体视图实现的集成测试直接导入 continuous_view.dart。导航行为测试仅依赖 ReaderController/ReaderNavigationViewport 并注入错误报告，不得通过页面 mixin 或全局日志静音进行测试。
+
+History 数据通过 history_api.dart 提供，history_model.dart 不导入 HistoryManager 或页面；旧 history.dart 对 UI 兼容导出数据入口，history_manager.dart 不再充当模型导出。applyReaderHistoryProgress 负责阅读坐标到历史字段的映射，页面仅在加载完成后调用并安排保存。旧字段、行构造器与描述格式暂时保留，后续存储分解不得隐式改变数据语义。

@@ -21,7 +21,7 @@ import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
 
 import 'package:venera_next/features/reader/page_layout.dart';
-import 'package:venera_next/features/reader/image_position.dart';
+import 'package:venera_next/features/reader/history_progress.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/features/reader/volume.dart';
 import 'package:venera_next/features/reader/volume_controller.dart';
@@ -537,23 +537,15 @@ class ReaderState extends State<Reader>
     // arrive. Keep the saved image index intact until loading/migration ends.
     if (isLoading || images == null) return;
     if (history != null) {
-      final imagePosition = ReaderImagePosition(
+      applyReaderHistoryProgress(
+        history: history!,
+        page: page,
+        imageCount: images!.length,
         chapter: chapter,
-        chapterId: eid,
-        imageNumber: pageLayout.historyImage(page, images!.length),
+        chapters: widget.chapters,
+        layout: pageLayout,
+        time: DateTime.now(),
       );
-      history!.page = imagePosition.imageNumber;
-      history!.maxPage = images?.length ?? 1;
-      if (widget.chapters?.isGrouped ?? false) {
-        final position = widget.chapters!.positionAt(imagePosition.chapter);
-        history!.readEpisode.add(position.historyKey);
-        history!.ep = position.chapter;
-        history!.group = position.group;
-      } else {
-        history!.readEpisode.add(imagePosition.chapter.toString());
-        history!.ep = imagePosition.chapter;
-      }
-      history!.time = DateTime.now();
       _session.scheduleProgress();
     }
   }
