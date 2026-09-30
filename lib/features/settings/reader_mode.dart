@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/preferences.dart';
 import 'package:venera_next/foundation/reader_preferences.dart';
 import 'package:venera_next/foundation/reader_preference_store.dart';
 import 'package:flutter/material.dart';
@@ -50,10 +51,7 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
   ReaderPreferenceStore get _store =>
       ReaderPreferenceStore(settings: appdata.settings);
 
-  void _setPreference<T extends Object>(
-    ReaderPreference<T> preference,
-    T value,
-  ) {
+  void _setPreference<T extends Object>(Preference<T> preference, T value) {
     _store.write(preference, value);
     appdata.saveData();
     widget.onChanged?.call();
@@ -102,7 +100,7 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
 
   Widget _preference(
     String title,
-    ReaderPreference<String> preference, {
+    Preference<String> preference, {
     String? description,
   }) {
     final value = _store.read(preference);

@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -337,15 +338,13 @@ class Settings with ChangeNotifier {
 
   final _data = <String, dynamic>{
     ...ReaderPreferences.storageDefaults,
+    ...applicationPreferenceDefaults,
     'comicDisplayMode': 'detailed', // detailed, brief
     'comicTileScale': 1.00, // 0.75-1.25
     'favoritesDisplayMode': 'list', // list, gallery
     'favoritesGalleryColumns': 0, // 0 means automatic, 2-6 are fixed
-    'color': 'system', // red, pink, purple, green, orange, blue
-    'theme_mode': 'system', // light, dark, system
     'newFavoriteAddTo': 'end', // start, end
     'moveFavoriteAfterRead': 'none', // none, end, start
-    'proxy': 'system', // direct, system, proxy string
     'explore_pages': [],
     'categories': [],
     'favorites': [],
@@ -361,7 +360,6 @@ class Settings with ChangeNotifier {
     'language': 'system', // system, zh-CN, zh-TW, en-US
     'cacheSize': 2048, // in MB
     'historyRetentionDays': 0, // 0 means disabled
-    'downloadThreads': 5,
     'enableLongPressToZoom': true,
     'checkUpdateOnStart': false,
     'webdav': [], // empty means not configured
@@ -379,11 +377,8 @@ class Settings with ChangeNotifier {
     'readLaterFolder': null,
     'authorizationRequired': false,
     'onClickFavorite': 'viewDetail', // viewDetail, read
-    'enableDnsOverrides': false,
-    'dnsOverrides': {},
     'enableCustomImageProcessing': false,
     'customImageProcessing': defaultCustomImageProcessing,
-    'sni': true,
     'autoAddLanguageFilter': 'none', // none, chinese, english, japanese
     'comicSourceListUrl': "",
     'comicSourceRepositories': <Map<String, dynamic>>[],
@@ -396,7 +391,6 @@ class Settings with ChangeNotifier {
     'comicSpecificSettings': <String, Map<String, dynamic>>{},
     'deviceSpecificSettings': <String, Map<String, dynamic>>{},
     'deviceId': '',
-    'ignoreBadCertificate': false,
     'localFavoritesFirst': true,
     'autoCloseFavoritePanel': false,
   };

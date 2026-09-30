@@ -229,3 +229,5 @@ CI 同时运行 `check_architecture_dependencies.py`，按 `dependency_baseline.
 阅读器运行时通过 `foundation/reader_settings.dart` 的不可变 `ReaderSettings` 快照访问设置，`Settings.readerSettings` 负责对接原有存储，`globalReaderSettings` 保留全局选项的原有范围。阅读器不得调用动态 `getReaderSetting` / `getDeviceReaderSetting`；其他旧调用者及设置表单的兼容接口在 P3 后续任务中继续迁移。
 
 阅读设置字段由 `ReaderPreferences` 统一定义键、默认值、校验和滑块元数据。`ReaderPreferenceStore`/绑定负责有类型的作用域读写；阅读设置控件使用 `.reader` 构造入口，旧通用控件接口仅服务未迁移的其他设置域。运行时快照和 Appdata 初始默认值复用同一字段定义。
+
+通用字段与绑定协议位于 `foundation/preferences.dart`；全局网络/外观字段位于 `application_preferences.dart`，不可变读取模型位于 `application_configuration.dart`，存储通过 `GlobalPreferenceStore` 适配。已迁移页面使用 `.preference` 控件入口，网络/下载/主题消费端不再直接访问对应字符串键。阅读设置继续通过 `ReaderPreferenceStore` 保留范围继承。

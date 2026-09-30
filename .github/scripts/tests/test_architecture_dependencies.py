@@ -83,6 +83,16 @@ class ArchitectureDependenciesTest(unittest.TestCase):
             self.assertEqual(MODULE.reader_settings_violations(lib),
                              ['Reader must use typed settings: features/settings/reader.dart'])
 
+    def test_application_gate_only_covers_migrated_preferences(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lib = Path(directory)
+            source = lib / 'main.dart'
+            source.write_text("final color = appdata.settings['color']; final locale = appdata.settings['language'];")
+            self.assertEqual(MODULE.application_settings_violations(lib),
+                             ['Use typed application preferences: main.dart (color)'])
+            source.write_text("final color = store.appearance.color; final locale = appdata.settings['language'];")
+            self.assertEqual(MODULE.application_settings_violations(lib), [])
+
 
 if __name__ == '__main__':
     unittest.main()

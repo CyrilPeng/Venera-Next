@@ -144,6 +144,27 @@ def reader_settings_violations(lib):
     return errors
 
 
+def application_settings_violations(lib):
+    watched = {
+        'main.dart': {'color', 'theme_mode'},
+        'network/app_dio.dart': {'sni', 'ignoreBadCertificate', 'dnsOverrides', 'enableDnsOverrides'},
+        'network/proxy.dart': {'proxy'},
+        'features/local_comics/download.dart': {'downloadThreads'},
+        'features/settings/network.dart': {'proxy', 'dnsOverrides', 'enableDnsOverrides', 'sni', 'downloadThreads'},
+        'features/settings/appearance.dart': {'color', 'theme_mode'},
+    }
+    errors = []
+    pattern = re.compile(r'''\bappdata\.settings\s*\[\s*['"]([^'"]+)['"]\s*\]''')
+    for name, keys in watched.items():
+        source = lib / name
+        if not source.exists():
+            continue
+        used = set(pattern.findall(uncomment(source.read_text(encoding='utf-8'))))
+        for key in sorted(used & keys):
+            errors.append(f'Use typed application preferences: {name} ({key})')
+    return errors
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", action="store_true")
@@ -152,6 +173,7 @@ def main():
     baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
     errors = violations(graph, baseline)
     errors.extend(reader_settings_violations(ROOT / "lib"))
+    errors.extend(application_settings_violations(ROOT / "lib"))
     if args.report:
         print("Feature strongly connected components (including UI):")
         for component in cycles(feature_edges(graph)):

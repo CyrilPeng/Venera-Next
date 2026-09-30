@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -235,6 +236,7 @@ class AppDio with DioMixin {
 class RHttpAdapter implements HttpClientAdapter {
   Future<rhttp.ClientSettings> get settings async {
     var proxy = await getProxy();
+    final network = GlobalPreferenceStore(appdata.settings).network;
 
     return rhttp.ClientSettings(
       proxySettings: proxy == null
@@ -247,28 +249,14 @@ class RHttpAdapter implements HttpClientAdapter {
         keepAlivePing: Duration(seconds: 30),
       ),
       throwOnStatusCode: false,
-      dnsSettings: rhttp.DnsSettings.static(overrides: _getOverrides()),
+      dnsSettings: rhttp.DnsSettings.static(
+        overrides: network.effectiveDnsOverrides,
+      ),
       tlsSettings: rhttp.TlsSettings(
-        sni: appdata.settings['sni'] != false,
-        verifyCertificates: appdata.settings['ignoreBadCertificate'] != true,
+        sni: network.sni,
+        verifyCertificates: !network.ignoreBadCertificate,
       ),
     );
-  }
-
-  static Map<String, List<String>> _getOverrides() {
-    if (!appdata.settings['enableDnsOverrides'] == true) {
-      return {};
-    }
-    var config = appdata.settings["dnsOverrides"];
-    var result = <String, List<String>>{};
-    if (config is Map) {
-      for (var entry in config.entries) {
-        if (entry.key is String && entry.value is String) {
-          result[entry.key] = [entry.value];
-        }
-      }
-    }
-    return result;
   }
 
   @override

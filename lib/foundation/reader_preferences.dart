@@ -1,54 +1,4 @@
-/// Typed storage keys shared by settings forms and immutable reader snapshots.
-sealed class ReaderPreference<T extends Object> {
-  const ReaderPreference(this.key, this.defaultValue);
-  final String key;
-  final T defaultValue;
-  Object? get storageDefault => defaultValue;
-  T normalize(Object? value);
-}
-
-final class BoolReaderPreference extends ReaderPreference<bool> {
-  const BoolReaderPreference(super.key, super.defaultValue);
-  @override
-  bool normalize(Object? value) => value is bool ? value : defaultValue;
-}
-
-final class ChoiceReaderPreference extends ReaderPreference<String> {
-  const ChoiceReaderPreference(
-    super.key,
-    super.defaultValue,
-    this.choices, {
-    this.legacyNullDefault = false,
-  });
-  final List<String> choices;
-  final bool legacyNullDefault;
-  @override
-  Object? get storageDefault => legacyNullDefault ? null : defaultValue;
-  @override
-  String normalize(Object? value) =>
-      value is String && choices.contains(value) ? value : defaultValue;
-}
-
-final class NumericReaderPreference extends ReaderPreference<num> {
-  const NumericReaderPreference(
-    super.key,
-    super.defaultValue, {
-    required this.min,
-    required this.max,
-    required this.step,
-    this.integer = false,
-  });
-  final double min;
-  final double max;
-  final double step;
-  final bool integer;
-  @override
-  num normalize(Object? value) {
-    final number = value is num && value.isFinite ? value : defaultValue;
-    final bounded = number.toDouble().clamp(min, max);
-    return integer ? bounded.toInt() : bounded;
-  }
-}
+import 'preferences.dart';
 
 abstract final class ReaderPreferences {
   static const modes = [
@@ -60,49 +10,47 @@ abstract final class ReaderPreferences {
     'continuousLeftToRight',
     'continuousRightToLeft',
   ];
-  static const readerMode = ChoiceReaderPreference(
+  static const readerMode = ChoicePreference(
     'readerMode',
     'waterfallTopToBottom',
     modes,
   );
-  static const pagedReaderMode = ChoiceReaderPreference(
+  static const pagedReaderMode = ChoicePreference(
     'pagedReaderMode',
     'galleryRightToLeft',
     modes,
   );
-  static const longStripReaderMode = ChoiceReaderPreference(
+  static const longStripReaderMode = ChoicePreference(
     'longStripReaderMode',
     'continuousTopToBottom',
     modes,
   );
-  static const quickCollectImage = ChoiceReaderPreference(
-    'quickCollectImage',
+  static const quickCollectImage = ChoicePreference('quickCollectImage', 'No', [
     'No',
-    ['No', 'DoubleTap', 'Swipe'],
-  );
-  static const autoReaderMode = BoolReaderPreference('autoReaderMode', false);
-  static const longPressAction = ChoiceReaderPreference(
-    'longPressAction',
+    'DoubleTap',
+    'Swipe',
+  ]);
+  static const autoReaderMode = BoolPreference('autoReaderMode', false);
+  static const longPressAction = ChoicePreference('longPressAction', 'zoom', [
     'zoom',
-    ['zoom', 'autoReading', 'none'],
-    legacyNullDefault: true,
-  );
-  static const longPressZoomPosition = ChoiceReaderPreference(
+    'autoReading',
+    'none',
+  ], legacyNullDefault: true);
+  static const longPressZoomPosition = ChoicePreference(
     'longPressZoomPosition',
     'press',
     ['press', 'center'],
   );
-  static const autoScrollStyle = ChoiceReaderPreference(
-    'autoScrollStyle',
+  static const autoScrollStyle = ChoicePreference('autoScrollStyle', 'smooth', [
     'smooth',
-    ['smooth', 'stepped'],
-  );
-  static const eInkRefreshStyle = ChoiceReaderPreference(
+    'stepped',
+  ]);
+  static const eInkRefreshStyle = ChoicePreference(
     'eInkRefreshStyle',
     'black',
     ['black', 'white', 'whiteThenBlack'],
   );
-  static const autoPageTurningInterval = NumericReaderPreference(
+  static const autoPageTurningInterval = NumericPreference(
     'autoPageTurningInterval',
     5,
     min: 1,
@@ -110,7 +58,7 @@ abstract final class ReaderPreferences {
     step: 1,
     integer: false,
   );
-  static const autoScrollSpeed = NumericReaderPreference(
+  static const autoScrollSpeed = NumericPreference(
     'autoScrollSpeed',
     80,
     min: 10,
@@ -118,7 +66,7 @@ abstract final class ReaderPreferences {
     step: 10,
     integer: false,
   );
-  static const autoScrollFrequency = NumericReaderPreference(
+  static const autoScrollFrequency = NumericPreference(
     'autoScrollFrequency',
     2,
     min: 1,
@@ -126,7 +74,7 @@ abstract final class ReaderPreferences {
     step: 1,
     integer: false,
   );
-  static const autoScrollDistance = NumericReaderPreference(
+  static const autoScrollDistance = NumericPreference(
     'autoScrollDistance',
     40,
     min: 10,
@@ -134,7 +82,7 @@ abstract final class ReaderPreferences {
     step: 10,
     integer: false,
   );
-  static const readerScrollSpeed = NumericReaderPreference(
+  static const readerScrollSpeed = NumericPreference(
     'readerScrollSpeed',
     1,
     min: 0.5,
@@ -142,7 +90,7 @@ abstract final class ReaderPreferences {
     step: 0.1,
     integer: false,
   );
-  static const readerSideMargin = NumericReaderPreference(
+  static const readerSideMargin = NumericPreference(
     'readerSideMargin',
     0,
     min: 0,
@@ -150,7 +98,7 @@ abstract final class ReaderPreferences {
     step: 1,
     integer: false,
   );
-  static const readerBrightness = NumericReaderPreference(
+  static const readerBrightness = NumericPreference(
     'readerBrightness',
     50,
     min: 20,
@@ -158,7 +106,7 @@ abstract final class ReaderPreferences {
     step: 1,
     integer: false,
   );
-  static const readerScreenPicNumberForPortrait = NumericReaderPreference(
+  static const readerScreenPicNumberForPortrait = NumericPreference(
     'readerScreenPicNumberForPortrait',
     1,
     min: 1,
@@ -166,7 +114,7 @@ abstract final class ReaderPreferences {
     step: 1,
     integer: true,
   );
-  static const readerScreenPicNumberForLandscape = NumericReaderPreference(
+  static const readerScreenPicNumberForLandscape = NumericPreference(
     'readerScreenPicNumberForLandscape',
     1,
     min: 1,
@@ -174,7 +122,7 @@ abstract final class ReaderPreferences {
     step: 1,
     integer: true,
   );
-  static const eInkRefreshDuration = NumericReaderPreference(
+  static const eInkRefreshDuration = NumericPreference(
     'eInkRefreshDuration',
     100,
     min: 100,
@@ -182,7 +130,7 @@ abstract final class ReaderPreferences {
     step: 100,
     integer: true,
   );
-  static const eInkRefreshInterval = NumericReaderPreference(
+  static const eInkRefreshInterval = NumericPreference(
     'eInkRefreshInterval',
     1,
     min: 1,
@@ -190,7 +138,7 @@ abstract final class ReaderPreferences {
     step: 1,
     integer: true,
   );
-  static const preloadImageCount = NumericReaderPreference(
+  static const preloadImageCount = NumericPreference(
     'preloadImageCount',
     4,
     min: 1,
@@ -198,73 +146,70 @@ abstract final class ReaderPreferences {
     step: 1,
     integer: true,
   );
-  static const autoReadingAcrossChapters = BoolReaderPreference(
+  static const autoReadingAcrossChapters = BoolPreference(
     'autoReadingAcrossChapters',
     true,
   );
-  static const autoReadingPauseOnLongPress = BoolReaderPreference(
+  static const autoReadingPauseOnLongPress = BoolPreference(
     'autoReadingPauseOnLongPress',
     true,
   );
-  static const enableTapToTurnPages = BoolReaderPreference(
+  static const enableTapToTurnPages = BoolPreference(
     'enableTapToTurnPages',
     true,
   );
-  static const reverseTapToTurnPages = BoolReaderPreference(
+  static const reverseTapToTurnPages = BoolPreference(
     'reverseTapToTurnPages',
     false,
   );
-  static const enablePageAnimation = BoolReaderPreference(
+  static const enablePageAnimation = BoolPreference(
     'enablePageAnimation',
     true,
   );
-  static const readerBrightnessEnabled = BoolReaderPreference(
+  static const readerBrightnessEnabled = BoolPreference(
     'readerBrightnessEnabled',
     false,
   );
-  static const eInkRefreshEnabled = BoolReaderPreference(
-    'eInkRefreshEnabled',
-    false,
-  );
-  static const limitImageWidth = BoolReaderPreference('limitImageWidth', true);
-  static const enableTurnPageByVolumeKey = BoolReaderPreference(
+  static const eInkRefreshEnabled = BoolPreference('eInkRefreshEnabled', false);
+  static const limitImageWidth = BoolPreference('limitImageWidth', true);
+  static const enableTurnPageByVolumeKey = BoolPreference(
     'enableTurnPageByVolumeKey',
     true,
   );
-  static const enableClockAndBatteryInfoInReader = BoolReaderPreference(
+  static const enableClockAndBatteryInfoInReader = BoolPreference(
     'enableClockAndBatteryInfoInReader',
     true,
   );
-  static const showPageNumberInReader = BoolReaderPreference(
+  static const showPageNumberInReader = BoolPreference(
     'showPageNumberInReader',
     true,
   );
-  static const showSingleImageOnFirstPage = BoolReaderPreference(
+  static const showSingleImageOnFirstPage = BoolPreference(
     'showSingleImageOnFirstPage',
     false,
   );
-  static const enableDoubleTapToZoom = BoolReaderPreference(
+  static const enableDoubleTapToZoom = BoolPreference(
     'enableDoubleTapToZoom',
     true,
   );
-  static const showSystemStatusBar = BoolReaderPreference(
+  static const showSystemStatusBar = BoolPreference(
     'showSystemStatusBar',
     false,
   );
-  static const showChapterComments = BoolReaderPreference(
+  static const showChapterComments = BoolPreference(
     'showChapterComments',
     true,
   );
-  static const showChapterCommentsAtEnd = BoolReaderPreference(
+  static const showChapterCommentsAtEnd = BoolPreference(
     'showChapterCommentsAtEnd',
     false,
   );
-  static const splitDualPage = BoolReaderPreference('splitDualPage', false);
-  static const splitDualPageInvert = BoolReaderPreference(
+  static const splitDualPage = BoolPreference('splitDualPage', false);
+  static const splitDualPageInvert = BoolPreference(
     'splitDualPageInvert',
     false,
   );
-  static const all = <ReaderPreference<Object>>[
+  static const all = <Preference<Object>>[
     readerMode,
     pagedReaderMode,
     longStripReaderMode,

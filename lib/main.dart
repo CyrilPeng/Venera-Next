@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:dynamic_color/dynamic_color.dart';
@@ -150,7 +151,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   Color translateColorSetting() {
-    return switch (appdata.settings['color']) {
+    return switch (GlobalPreferenceStore(appdata.settings).appearance.color) {
       'red' => Colors.red,
       'pink' => Colors.pink,
       'purple' => Colors.purple,
@@ -233,7 +234,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     return DynamicColorBuilder(
       builder: (light, dark) {
         Color? primary, secondary, tertiary;
-        if (appdata.settings['color'] != 'system' ||
+        if (GlobalPreferenceStore(appdata.settings).appearance.color !=
+                'system' ||
             light == null ||
             dark == null) {
           primary = translateColorSetting();
@@ -249,7 +251,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           theme: getTheme(primary, secondary, tertiary, Brightness.light),
           navigatorKey: App.rootNavigatorKey,
           darkTheme: getTheme(primary, secondary, tertiary, Brightness.dark),
-          themeMode: switch (appdata.settings['theme_mode']) {
+          themeMode: switch (GlobalPreferenceStore(
+            appdata.settings,
+          ).appearance.themeMode) {
             'light' => ThemeMode.light,
             'dark' => ThemeMode.dark,
             _ => ThemeMode.system,

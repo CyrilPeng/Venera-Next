@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/preferences.dart';
 import 'comic_layout.dart';
 import 'reader_preferences.dart';
 
@@ -69,7 +70,7 @@ class ReaderSettings {
     for (final preference in ReaderPreferences.all) preference.key: preference,
   };
 
-  T read<T extends Object>(ReaderPreference<T> preference) =>
+  T read<T extends Object>(Preference<T> preference) =>
       preference.normalize(_values[preference.key]);
 
   String get readerMode => _values['readerMode'] as String;

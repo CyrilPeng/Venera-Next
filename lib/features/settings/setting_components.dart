@@ -1,4 +1,5 @@
-import 'package:venera_next/foundation/reader_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/preferences.dart';
 import 'package:venera_next/foundation/reader_preference_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_reorderable_grid_view/widgets/reorderable_builder.dart';
@@ -12,8 +13,8 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
-ReaderPreferenceBinding<T> _readerBinding<T extends Object>(
-  ReaderPreference<T> preference,
+PreferenceBinding<T> _readerBinding<T extends Object>(
+  Preference<T> preference,
   String? comicId,
   String? sourceKey,
   bool device,
@@ -41,10 +42,25 @@ class SwitchSetting extends StatefulWidget {
     this.useDeviceSettings = false,
   });
 
+  factory SwitchSetting.preference({
+    Key? key,
+    required String title,
+    required Preference<bool> preference,
+    VoidCallback? onChanged,
+    String? subtitle,
+  }) => SwitchSetting(
+    key: key,
+    title: title,
+    settingKey: preference.key,
+    binding: GlobalPreferenceStore(appdata.settings).bind(preference),
+    onChanged: onChanged,
+    subtitle: subtitle,
+  );
+
   factory SwitchSetting.reader({
     Key? key,
     required String title,
-    required ReaderPreference<bool> preference,
+    required Preference<bool> preference,
     VoidCallback? onChanged,
     String? comicId,
     String? comicSource,
@@ -67,7 +83,7 @@ class SwitchSetting extends StatefulWidget {
     subtitle: subtitle,
   );
 
-  final ReaderPreferenceBinding<bool>? binding;
+  final PreferenceBinding<bool>? binding;
 
   final String title;
 
@@ -149,10 +165,27 @@ class SelectSetting extends StatelessWidget {
     this.useDeviceSettings = false,
   });
 
+  factory SelectSetting.preference({
+    Key? key,
+    required String title,
+    required Preference<String> preference,
+    VoidCallback? onChanged,
+    required Map<String, String> optionTranslation,
+    String? help,
+  }) => SelectSetting(
+    key: key,
+    title: title,
+    settingKey: preference.key,
+    binding: GlobalPreferenceStore(appdata.settings).bind(preference),
+    onChanged: onChanged,
+    optionTranslation: optionTranslation,
+    help: help,
+  );
+
   factory SelectSetting.reader({
     Key? key,
     required String title,
-    required ReaderPreference<String> preference,
+    required Preference<String> preference,
     VoidCallback? onChanged,
     String? comicId,
     String? comicSource,
@@ -177,7 +210,7 @@ class SelectSetting extends StatelessWidget {
     help: help,
   );
 
-  final ReaderPreferenceBinding<String>? binding;
+  final PreferenceBinding<String>? binding;
 
   final String title;
 
@@ -245,7 +278,7 @@ class _DoubleLineSelectSettings extends StatefulWidget {
     this.useDeviceSettings = false,
   });
 
-  final ReaderPreferenceBinding<String>? binding;
+  final PreferenceBinding<String>? binding;
 
   final String title;
 
@@ -383,7 +416,7 @@ class _EndSelectorSelectSetting extends StatefulWidget {
     this.useDeviceSettings = false,
   });
 
-  final ReaderPreferenceBinding<String>? binding;
+  final PreferenceBinding<String>? binding;
 
   final String title;
 
@@ -498,10 +531,28 @@ class SliderSetting extends StatefulWidget {
     this.valueFormatter,
   });
 
+  factory SliderSetting.preference({
+    Key? key,
+    required String title,
+    required NumericPreference preference,
+    VoidCallback? onChanged,
+    String Function(double)? valueFormatter,
+  }) => SliderSetting(
+    key: key,
+    title: title,
+    settingsIndex: preference.key,
+    binding: GlobalPreferenceStore(appdata.settings).bind(preference),
+    onChanged: onChanged,
+    valueFormatter: valueFormatter,
+    interval: preference.step,
+    min: preference.min,
+    max: preference.max,
+  );
+
   factory SliderSetting.reader({
     Key? key,
     required String title,
-    required NumericReaderPreference preference,
+    required NumericPreference preference,
     VoidCallback? onChanged,
     String? comicId,
     String? comicSource,
@@ -527,7 +578,7 @@ class SliderSetting extends StatefulWidget {
     max: preference.max,
   );
 
-  final ReaderPreferenceBinding<num>? binding;
+  final PreferenceBinding<num>? binding;
 
   final String title;
 

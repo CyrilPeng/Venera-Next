@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/preferences.dart';
 import 'package:venera_next/foundation/reader_preferences.dart';
 import 'package:venera_next/foundation/reader_preference_store.dart';
 import 'package:flutter/material.dart';
@@ -59,7 +60,7 @@ class _ReaderSettingsState extends State<ReaderSettings> {
     sourceKey: widget.comicSource,
   );
 
-  T _value<T extends Object>(ReaderPreference<T> preference) {
+  T _value<T extends Object>(Preference<T> preference) {
     if (widget.comicId != null &&
         widget.comicSource != null &&
         identical(preference, ReaderPreferences.readerMode) &&
@@ -69,7 +70,7 @@ class _ReaderSettingsState extends State<ReaderSettings> {
     return _store.read(preference);
   }
 
-  T _deviceValue<T extends Object>(ReaderPreference<T> preference) =>
+  T _deviceValue<T extends Object>(Preference<T> preference) =>
       ReaderPreferenceStore(
         settings: appdata.settings,
         scope: ReaderPreferenceScope.device,

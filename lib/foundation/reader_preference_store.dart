@@ -1,5 +1,5 @@
+import 'package:venera_next/foundation/preferences.dart';
 import 'appdata.dart';
-import 'reader_preferences.dart';
 
 enum ReaderPreferenceScope { active, global, device, comic }
 
@@ -25,7 +25,7 @@ class ReaderPreferenceStore {
   final String? comicId;
   final String? sourceKey;
 
-  T read<T extends Object>(ReaderPreference<T> preference) {
+  T read<T extends Object>(Preference<T> preference) {
     final Object? raw;
     if (scope == ReaderPreferenceScope.global) {
       raw = settings[preference.key];
@@ -38,7 +38,7 @@ class ReaderPreferenceStore {
     return preference.normalize(raw);
   }
 
-  void write<T extends Object>(ReaderPreference<T> preference, T value) {
+  void write<T extends Object>(Preference<T> preference, T value) {
     final normalized = preference.normalize(value);
     // Preserve the existing slider JSON representation for whole numbers.
     final stored = normalized is num && normalized.toInt() == normalized
@@ -61,15 +61,18 @@ class ReaderPreferenceStore {
     }
   }
 
-  ReaderPreferenceBinding<T> bind<T extends Object>(
-    ReaderPreference<T> preference,
-  ) => ReaderPreferenceBinding(this, preference);
+  ReaderPreferenceBinding<T> bind<T extends Object>(Preference<T> preference) =>
+      ReaderPreferenceBinding(this, preference);
 }
 
-class ReaderPreferenceBinding<T extends Object> {
+class ReaderPreferenceBinding<T extends Object>
+    implements PreferenceBinding<T> {
   const ReaderPreferenceBinding(this.store, this.preference);
   final ReaderPreferenceStore store;
-  final ReaderPreference<T> preference;
+  @override
+  final Preference<T> preference;
+  @override
   T read() => store.read(preference);
+  @override
   void write(T value) => store.write(preference, value);
 }
