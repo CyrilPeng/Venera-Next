@@ -12,6 +12,7 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/side_bar.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/history/image_favorite_actions.dart';
 import 'package:venera_next/features/reader/brightness.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/chapter_comments.dart';
@@ -24,8 +25,6 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/consts.dart';
-import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/features/reader/image_export.dart';
 import 'package:venera_next/features/reader/settings_effects.dart';
@@ -281,20 +280,20 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     ],
   );
 
-  bool isLiked() {
-    return _findImageFavorite(context.reader.page) != null;
-  }
+  late final _imageFavorites = ImageFavoriteActions(
+    findComic: (id, sourceKey) => ImageFavoriteManager().find(id, sourceKey),
+    save: (comic) => ImageFavoriteManager().addOrUpdateOrDelete(comic),
+    remove: (image) => ImageFavoriteManager().deleteImageFavorite([image]),
+  );
 
-  ImageFavorite? _findImageFavorite(int page) {
-    final comic = ImageFavoriteManager().find(
-      context.reader.cid,
-      context.reader.type.sourceKey,
-    );
-    final ep = comic?.imageFavoritesEp
-        .where((e) => e.eid == context.reader.eid)
-        .firstOrNull;
-    return ep?.imageFavorites.where((image) => image.page == page).firstOrNull;
-  }
+  bool isLiked() =>
+      _imageFavorites.find(
+        context.reader.cid,
+        context.reader.type.sourceKey,
+        context.reader.eid,
+        context.reader.page,
+      ) !=
+      null;
 
   void addImageFavorite() async {
     try {
@@ -305,125 +304,66 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         );
         return;
       }
-      String id = context.reader.cid;
-      int ep = context.reader.chapter;
-      String eid = context.reader.eid;
-      String title = context.reader.history!.title;
-      String subTitle = context.reader.history!.subtitle;
-      int maxPage = context.reader.images!.length;
-      int? page = await selectImage();
-      if (!mounted || page == null) return;
-      page += 1;
-      String sourceKey = context.reader.type.sourceKey;
-      String imageKey = context.reader.images![page - 1];
-      List<String> tags = context.reader.widget.tags;
-      String author = context.reader.widget.author;
-
-      var epName =
-          context.reader.widget.chapters?.titles.elementAtOrNull(
-            context.reader.chapter - 1,
-          ) ??
-          "E${context.reader.chapter}";
-      var translatedTags = tags.map((e) => e.translateTagsToCN).toList();
-
-      final likedImage = _findImageFavorite(page);
-      if (likedImage != null) {
-        if (page == firstPage) {
-          if (!canUncollectImageFavorite(likedImage)) {
-            showToast(
-              message: "The cover cannot be uncollected here".tl,
-              context: context,
-            );
-            return;
-          }
-        }
-        ImageFavoriteManager().deleteImageFavorite([likedImage]);
-        showToast(
-          message: "Uncollected the image".tl,
-          context: context,
-          seconds: 1,
-        );
-      } else {
-        var imageFavoritesComic =
-            ImageFavoriteManager().find(id, sourceKey) ??
-            ImageFavoritesComic(
-              id,
-              [],
-              title,
-              sourceKey,
-              tags,
-              translatedTags,
-              DateTime.now(),
-              author,
-              {},
-              subTitle,
-              maxPage,
-            );
-        ImageFavorite imageFavorite = ImageFavorite(
-          page,
-          imageKey,
-          null,
-          eid,
-          id,
-          ep,
-          sourceKey,
-          epName,
-        );
-        ImageFavoritesEp? imageFavoritesEp = imageFavoritesComic
-            .imageFavoritesEp
-            .firstWhereOrNull((e) {
-              return e.ep == ep;
-            });
-        if (imageFavoritesEp == null) {
-          if (page != firstPage) {
-            var copy = imageFavorite.copyWith(
-              page: firstPage,
-              isAutoFavorite: true,
-              imageKey: context.reader.images![0],
-            );
-            // 不是第一页的话, 自动塞一个封面进去
-            imageFavoritesEp = ImageFavoritesEp(
-              eid,
-              ep,
-              [copy, imageFavorite],
-              epName,
-              maxPage,
-            );
-          } else {
-            imageFavoritesEp = ImageFavoritesEp(
-              eid,
-              ep,
-              [imageFavorite],
-              epName,
-              maxPage,
-            );
-          }
-          imageFavoritesComic.imageFavoritesEp.add(imageFavoritesEp);
-        } else {
-          if (imageFavoritesEp.eid != eid) {
-            // 空字符串说明是从pica导入的, 那我们就手动刷一遍保证一致
-            if (imageFavoritesEp.eid == "") {
-              imageFavoritesEp.eid == eid;
-            } else {
-              // 避免多章节漫画源的章节顺序发生变化, 如果情况比较多, 做一个以eid为准更新ep的功能
-              showToast(
-                message:
-                    "The chapter order of the comic may have changed, temporarily not supported for collection"
-                        .tl,
-                context: context,
-              );
-              return;
-            }
-          }
-          imageFavoritesEp.imageFavorites.add(imageFavorite);
-        }
-
-        ImageFavoriteManager().addOrUpdateOrDelete(imageFavoritesComic);
-        showToast(
-          message: "Successfully collected".tl,
-          context: context,
-          seconds: 1,
-        );
+      final id = context.reader.cid;
+      final ep = context.reader.chapter;
+      final eid = context.reader.eid;
+      final title = context.reader.history!.title;
+      final subtitle = context.reader.history!.subtitle;
+      final maxPage = context.reader.images!.length;
+      final index = await selectImage();
+      if (!mounted || index == null) return;
+      final reader = context.reader;
+      final result = _imageFavorites.toggle(
+        ImageFavoriteInput(
+          id: id,
+          sourceKey: reader.type.sourceKey,
+          eid: eid,
+          ep: ep,
+          epName:
+              reader.widget.chapters?.titles.elementAtOrNull(
+                reader.chapter - 1,
+              ) ??
+              "E${reader.chapter}",
+          title: title,
+          subtitle: subtitle,
+          author: reader.widget.author,
+          tags: reader.widget.tags,
+          translatedTags: reader.widget.tags
+              .map((e) => e.translateTagsToCN)
+              .toList(),
+          maxPage: maxPage,
+          page: index + 1,
+          imageKey: reader.images![index],
+          coverKey: reader.images![0],
+        ),
+      );
+      switch (result) {
+        case ImageFavoriteResult.protectedCover:
+          showToast(
+            message: "The cover cannot be uncollected here".tl,
+            context: context,
+          );
+          return;
+        case ImageFavoriteResult.chapterOrderChanged:
+          showToast(
+            message:
+                "The chapter order of the comic may have changed, temporarily not supported for collection"
+                    .tl,
+            context: context,
+          );
+          return;
+        case ImageFavoriteResult.collected:
+          showToast(
+            message: "Successfully collected".tl,
+            context: context,
+            seconds: 1,
+          );
+        case ImageFavoriteResult.uncollected:
+          showToast(
+            message: "Uncollected the image".tl,
+            context: context,
+            seconds: 1,
+          );
       }
       update();
     } catch (e, stackTrace) {

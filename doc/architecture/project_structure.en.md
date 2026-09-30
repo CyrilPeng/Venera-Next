@@ -175,3 +175,5 @@ ReaderTopBar receives titles/actions/back callbacks; ReaderBrightnessPanel recei
 ReaderImageExporter coordinates exports using ReaderImageSelection identity captured before reading. The shell supplies cache/files and platform actions; never rename selected images using current page state after an await. ReaderImageSelectionOverlay owns its entry/waiter and completes on replacement/disposal. Exit prevents only platform operations not yet handed off.
 
 readerSettingEffects resolves ordered setting effects only. ReaderPreferences supplies fixed keys, with explicit prefix/unknown-key compatibility. The shell checks validity while applying effects; keep widgets/platform calls outside the policy module and read current values in the application adapter.
+
+ImageFavoriteActions is a history business entry with injected storage callbacks, depending only on favorite models and constants. UI must not be transitively reachable. Reader adapters own selection, translation and feedback; actions return explicit outcomes. The existing history.dart UI barrel is not a dependency for new favorite business modules.

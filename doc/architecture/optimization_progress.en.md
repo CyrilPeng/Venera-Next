@@ -286,3 +286,9 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - The shell executes an exhaustive switch and checks mounted before every effect. Mode→gesture rebinding→layout detection→reader refresh and system-UI→shell refresh→reader refresh ordering remain; repeated shell-refresh conditions resolve to one effect.
 - Two rule tests cover all registered/future settings, final refresh/no duplicate effects, mode ordering and gesture-only changes avoiding mode/detection work. All 12 targeted and 708 Windows Flutter tests passed; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks passed.
 - Only this unit's scaffold changes were staged, preserving original menu/pause edits. String notifications remain a compatibility entry and platform/session effects remain adapters. Image collection, session/platform adapters, P6–P8 and device/performance acceptance continue.
+
+## P5: Image favorite business entry point (2026-10-01)
+
+- ImageFavoriteActions in history injects lookup, save, removal and clock. Cover protection/insertion, chapter-order rejection and toggling have no ReaderState, Widget or global manager dependency; the shell adapts selection, translation, storage and feedback.
+- The entry is protected by the business dependency audit. Storage format, notifications and error propagation remain unchanged. Four behavioral tests added; the full Windows Flutter log reports 712 passing tests, analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass.
+- Staging excludes original menu/pause edits. The legacy no-op assignment for imported empty chapter IDs is intentionally deferred to a separate fix. Selection snapshots, session/platform adapters, P6–P8 and device/performance acceptance remain outstanding.
