@@ -1,4 +1,5 @@
 import 'comic_layout.dart';
+import 'reader_preferences.dart';
 
 /// Immutable, validated effective settings. Storage keys remain compatible with
 /// existing JSON; UI and reading policies consume named, typed properties.
@@ -22,7 +23,7 @@ class ReaderSettings {
     for (final entry in _fields.entries) {
       final raw =
           (comicEnabled ? comic![entry.key] : null) ?? deviceValue(entry.key);
-      values[entry.key] = entry.value(raw);
+      values[entry.key] = entry.value.normalize(raw);
     }
 
     // Manual comic mode is independent of the other-settings switch. An
@@ -61,80 +62,15 @@ class ReaderSettings {
     return legacy is bool ? (legacy ? 'zoom' : 'none') : null;
   }
 
-  static Object _boolean(Object? value, bool fallback) =>
-      value is bool ? value : fallback;
+  static String _mode(Object? value) =>
+      ReaderPreferences.readerMode.normalize(value);
 
-  static double _number(
-    Object? value,
-    double fallback,
-    double min,
-    double max,
-  ) {
-    if (value is! num || !value.isFinite) return fallback;
-    return value.toDouble().clamp(min, max);
-  }
-
-  static int _integer(Object? value, int fallback, int min, int max) => _number(
-    value,
-    fallback.toDouble(),
-    min.toDouble(),
-    max.toDouble(),
-  ).toInt();
-
-  static String _choice(Object? value, String fallback, List<String> choices) =>
-      value is String && choices.contains(value) ? value : fallback;
-
-  static String _mode(Object? value) => _choice(value, 'waterfallTopToBottom', [
-    'waterfallTopToBottom',
-    'galleryLeftToRight',
-    'galleryRightToLeft',
-    'galleryTopToBottom',
-    'continuousTopToBottom',
-    'continuousLeftToRight',
-    'continuousRightToLeft',
-  ]);
-
-  static final Map<String, Object Function(Object?)> _fields = {
-    'quickCollectImage': (v) => _choice(v, 'No', ['No', 'DoubleTap', 'Swipe']),
-    'readerMode': _mode,
-    'autoReaderMode': (v) => _boolean(v, false),
-    'longPressAction': (v) =>
-        _choice(v, 'zoom', ['zoom', 'autoReading', 'none']),
-    'longPressZoomPosition': (v) => _choice(v, 'press', ['press', 'center']),
-    'autoScrollStyle': (v) => _choice(v, 'smooth', ['smooth', 'stepped']),
-    'eInkRefreshStyle': (v) =>
-        _choice(v, 'black', ['black', 'white', 'whiteThenBlack']),
-    'autoPageTurningInterval': (v) => _number(v, 5, 1, 20),
-    'autoScrollSpeed': (v) => _number(v, 80, 10, 1000),
-    'autoScrollFrequency': (v) => _number(v, 2, 1, 10),
-    'autoScrollDistance': (v) => _number(v, 40, 10, 500),
-    'readerScrollSpeed': (v) => _number(v, 1, 0.5, 3),
-    'readerSideMargin': (v) => _number(v, 0, 0, 30),
-    'readerBrightness': (v) => _number(v, 50, 20, 100),
-    'readerScreenPicNumberForPortrait': (v) => _integer(v, 1, 1, 5),
-    'readerScreenPicNumberForLandscape': (v) => _integer(v, 1, 1, 5),
-    'eInkRefreshDuration': (v) => _integer(v, 100, 100, 1500),
-    'eInkRefreshInterval': (v) => _integer(v, 1, 1, 10),
-    'preloadImageCount': (v) => _integer(v, 4, 1, 16),
-    'autoReadingAcrossChapters': (v) => _boolean(v, true),
-    'autoReadingPauseOnLongPress': (v) => _boolean(v, true),
-    'enableTapToTurnPages': (v) => _boolean(v, true),
-    'reverseTapToTurnPages': (v) => _boolean(v, false),
-    'enablePageAnimation': (v) => _boolean(v, true),
-    'readerBrightnessEnabled': (v) => _boolean(v, false),
-    'eInkRefreshEnabled': (v) => _boolean(v, false),
-    'limitImageWidth': (v) => _boolean(v, true),
-    'enableTurnPageByVolumeKey': (v) => _boolean(v, true),
-    'enableClockAndBatteryInfoInReader': (v) => _boolean(v, true),
-    'showPageNumberInReader': (v) => _boolean(v, true),
-    'showSingleImageOnFirstPage': (v) => _boolean(v, false),
-    'enableDoubleTapToZoom': (v) => _boolean(v, true),
-    'showSystemStatusBar': (v) => _boolean(v, false),
-    'showChapterComments': (v) => _boolean(v, true),
-    'showChapterCommentsAtEnd': (v) => _boolean(v, false),
-    'splitDualPage': (v) => _boolean(v, false),
-    'splitDualPageInvert': (v) => _boolean(v, false),
+  static final _fields = {
+    for (final preference in ReaderPreferences.all) preference.key: preference,
   };
+
+  T read<T extends Object>(ReaderPreference<T> preference) =>
+      preference.normalize(_values[preference.key]);
 
   String get readerMode => _values['readerMode'] as String;
   String get quickCollectImage => _values['quickCollectImage'] as String;

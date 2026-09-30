@@ -73,6 +73,16 @@ class ArchitectureDependenciesTest(unittest.TestCase):
             source.write_text("final value = reader.preferences.readerMode;")
             self.assertEqual(MODULE.reader_settings_violations(lib), [])
 
+    def test_reader_form_writes_use_typed_preferences(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lib = Path(directory)
+            settings = lib / 'features/settings'
+            settings.mkdir(parents=True)
+            source = settings / 'reader.dart'
+            source.write_text("settings.setActiveReaderSetting(id, source, 'key', value);")
+            self.assertEqual(MODULE.reader_settings_violations(lib),
+                             ['Reader must use typed settings: features/settings/reader.dart'])
+
 
 if __name__ == '__main__':
     unittest.main()

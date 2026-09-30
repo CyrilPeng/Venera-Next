@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/reader_preferences.dart';
+import 'package:venera_next/foundation/reader_preference_store.dart';
 import 'dart:async';
 
 import 'package:battery_plus/battery_plus.dart';
@@ -43,6 +45,12 @@ class ReaderScaffold extends StatefulWidget {
 
 class ReaderScaffoldState extends State<ReaderScaffold>
     with ReaderOrientationState {
+  ReaderPreferenceStore get _settingsStore => ReaderPreferenceStore(
+    settings: appdata.settings,
+    comicId: context.reader.cid,
+    sourceKey: context.reader.type.sourceKey,
+  );
+
   bool _isOpen = false;
 
   bool _brightnessPanelOpen = false;
@@ -684,20 +692,16 @@ class ReaderScaffoldState extends State<ReaderScaffold>
             enabled: context.reader.preferences.readerBrightnessEnabled == true,
             brightness: context.reader.preferences.readerBrightness,
             onEnabledChanged: (enabled) {
-              appdata.settings.setActiveReaderSetting(
-                context.reader.cid,
-                context.reader.type.sourceKey,
-                'readerBrightnessEnabled',
+              _settingsStore.write(
+                ReaderPreferences.readerBrightnessEnabled,
                 enabled,
               );
               setState(() {});
               appdata.saveData();
             },
             onBrightnessChanged: (brightness) {
-              appdata.settings.setActiveReaderSetting(
-                context.reader.cid,
-                context.reader.type.sourceKey,
-                'readerBrightness',
+              _settingsStore.write(
+                ReaderPreferences.readerBrightness,
                 brightness,
               );
               setState(() {});

@@ -132,9 +132,14 @@ def violations(graph, baseline):
 def reader_settings_violations(lib):
     """Keep migrated reader code on the typed preference boundary."""
     errors = []
-    for source in sorted((lib / "features/reader").rglob("*.dart")):
+    sources = set((lib / "features/reader").rglob("*.dart"))
+    sources.update(
+        source for name in ("reader.dart", "reader_mode.dart")
+        if (source := lib / "features/settings" / name).exists()
+    )
+    for source in sorted(sources):
         text = uncomment(source.read_text(encoding="utf-8"))
-        if re.search(r"\b(?:getReaderSetting|getDeviceReaderSetting)\s*\(", text):
+        if re.search(r"\b(?:getReaderSetting|getDeviceReaderSetting|setActiveReaderSetting)\s*\(", text):
             errors.append(f"Reader must use typed settings: {source.relative_to(lib).as_posix()}")
     return errors
 

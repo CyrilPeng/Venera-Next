@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/reader_preferences.dart';
+import 'package:venera_next/foundation/reader_preference_store.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/code.dart';
@@ -51,32 +53,38 @@ class _ReaderSettingsState extends State<ReaderSettings> {
     if (mounted) setState(() {});
   }
 
-  dynamic _value(String key) {
-    if (widget.comicId != null && widget.comicSource != null) {
-      if (key == 'readerMode' && widget.currentReaderMode != null) {
-        return widget.currentReaderMode!();
-      }
-      return appdata.settings.getReaderSetting(
-        widget.comicId!,
-        widget.comicSource!,
-        key,
-      );
+  ReaderPreferenceStore get _store => ReaderPreferenceStore(
+    settings: appdata.settings,
+    comicId: widget.comicId,
+    sourceKey: widget.comicSource,
+  );
+
+  T _value<T extends Object>(ReaderPreference<T> preference) {
+    if (widget.comicId != null &&
+        widget.comicSource != null &&
+        identical(preference, ReaderPreferences.readerMode) &&
+        widget.currentReaderMode != null) {
+      return preference.normalize(widget.currentReaderMode!());
     }
-    return appdata.settings.getDeviceReaderSetting(key);
+    return _store.read(preference);
   }
 
-  String get _activeReaderMode => _value('readerMode') as String;
+  T _deviceValue<T extends Object>(ReaderPreference<T> preference) =>
+      ReaderPreferenceStore(
+        settings: appdata.settings,
+        scope: ReaderPreferenceScope.device,
+      ).read(preference);
+
+  String get _activeReaderMode => _value(ReaderPreferences.readerMode);
 
   bool _usesMode(bool Function(String mode) matches) {
     if (matches(_activeReaderMode)) return true;
     if (widget.comicId != null ||
-        appdata.settings.getDeviceReaderSetting('autoReaderMode') != true) {
+        _deviceValue(ReaderPreferences.autoReaderMode) != true) {
       return false;
     }
-    return matches(
-          appdata.settings.getDeviceReaderSetting('pagedReaderMode'),
-        ) ||
-        matches(appdata.settings.getDeviceReaderSetting('longStripReaderMode'));
+    return matches(_deviceValue(ReaderPreferences.pagedReaderMode)) ||
+        matches(_deviceValue(ReaderPreferences.longStripReaderMode));
   }
 
   bool get _isVerticalFlowMode => _usesMode(
@@ -84,19 +92,14 @@ class _ReaderSettingsState extends State<ReaderSettings> {
   );
 
   bool _isChapterCommentsAtEndSupported() =>
-      _value('showChapterComments') == true &&
+      _value(ReaderPreferences.showChapterComments) == true &&
       _usesMode(
         (mode) => mode == 'galleryLeftToRight' || mode == 'galleryRightToLeft',
       );
 
   void _onShowChapterCommentsChanged() {
-    if (_value('showChapterComments') != true) {
-      appdata.settings.setActiveReaderSetting(
-        widget.comicId,
-        widget.comicSource,
-        'showChapterCommentsAtEnd',
-        false,
-      );
+    if (_value(ReaderPreferences.showChapterComments) != true) {
+      _store.write(ReaderPreferences.showChapterCommentsAtEnd, false);
       appdata.saveData();
     }
     setState(() {});
@@ -198,9 +201,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           ),
         if (comicId == null) _modeSettings(),
         const Divider().toSliver(),
-        SwitchSetting(
+        SwitchSetting.reader(
           title: "Tap to turn Pages".tl,
-          settingKey: "enableTapToTurnPages",
+          preference: ReaderPreferences.enableTapToTurnPages,
           onChanged: () {
             widget.onChanged?.call("enableTapToTurnPages");
           },
@@ -208,9 +211,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.reader(
           title: "Reverse tap to turn Pages".tl,
-          settingKey: "reverseTapToTurnPages",
+          preference: ReaderPreferences.reverseTapToTurnPages,
           onChanged: () {
             widget.onChanged?.call("reverseTapToTurnPages");
           },
@@ -218,9 +221,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.reader(
           title: "Page animation".tl,
-          settingKey: "enablePageAnimation",
+          preference: ReaderPreferences.enablePageAnimation,
           onChanged: () {
             widget.onChanged?.call("enablePageAnimation");
           },
@@ -229,26 +232,16 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
         ReaderBrightnessControl(
-          enabled: _value('readerBrightnessEnabled') == true,
-          brightness: _value('readerBrightness'),
+          enabled: _value(ReaderPreferences.readerBrightnessEnabled) == true,
+          brightness: _value(ReaderPreferences.readerBrightness),
           onEnabledChanged: (enabled) {
-            appdata.settings.setActiveReaderSetting(
-              widget.comicId,
-              widget.comicSource,
-              'readerBrightnessEnabled',
-              enabled,
-            );
+            _store.write(ReaderPreferences.readerBrightnessEnabled, enabled);
             setState(() {});
             appdata.saveData();
             widget.onChanged?.call('readerBrightnessEnabled');
           },
           onBrightnessChanged: (brightness) {
-            appdata.settings.setActiveReaderSetting(
-              widget.comicId,
-              widget.comicSource,
-              'readerBrightness',
-              brightness,
-            );
+            _store.write(ReaderPreferences.readerBrightness, brightness);
             setState(() {});
             widget.onChanged?.call('readerBrightness');
           },
@@ -256,12 +249,12 @@ class _ReaderSettingsState extends State<ReaderSettings> {
             appdata.saveData();
           },
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.reader(
           title: "E-Ink display refresh".tl,
           subtitle:
               "Flash the screen after page changes to reduce ghosting on E-Ink displays. Only applies to Gallery modes."
                   .tl,
-          settingKey: "eInkRefreshEnabled",
+          preference: ReaderPreferences.eInkRefreshEnabled,
           onChanged: () {
             setState(() {});
             widget.onChanged?.call("eInkRefreshEnabled");
@@ -271,15 +264,12 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
         SliverAnimatedVisibility(
-          visible: _value('eInkRefreshEnabled') == true,
+          visible: _value(ReaderPreferences.eInkRefreshEnabled) == true,
           child: Column(
             children: [
-              SliderSetting(
+              SliderSetting.reader(
                 title: "Refresh flash duration".tl,
-                settingsIndex: "eInkRefreshDuration",
-                interval: 100,
-                min: 100,
-                max: 1500,
+                preference: ReaderPreferences.eInkRefreshDuration,
                 valueFormatter: (value) => '${value.toInt()} ms',
                 onChanged: () {
                   widget.onChanged?.call("eInkRefreshDuration");
@@ -290,12 +280,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
                     : null,
                 useDeviceSettings: useDeviceSpecificSettings,
               ),
-              SliderSetting(
+              SliderSetting.reader(
                 title: "Refresh interval".tl,
-                settingsIndex: "eInkRefreshInterval",
-                interval: 1,
-                min: 1,
-                max: 10,
+                preference: ReaderPreferences.eInkRefreshInterval,
                 valueFormatter: (value) => value.toInt().toString(),
                 onChanged: () {
                   widget.onChanged?.call("eInkRefreshInterval");
@@ -306,9 +293,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
                     : null,
                 useDeviceSettings: useDeviceSpecificSettings,
               ),
-              SelectSetting(
+              SelectSetting.reader(
                 title: "Refresh flash style".tl,
-                settingKey: "eInkRefreshStyle",
+                preference: ReaderPreferences.eInkRefreshStyle,
                 optionTranslation: {
                   "black": "Black".tl,
                   "white": "White".tl,
@@ -326,21 +313,18 @@ class _ReaderSettingsState extends State<ReaderSettings> {
             ],
           ),
         ),
-        SliderSetting(
+        SliderSetting.reader(
           title: "Auto page turning interval (gallery)".tl,
-          settingsIndex: "autoPageTurningInterval",
-          interval: 1,
-          min: 1,
-          max: 20,
+          preference: ReaderPreferences.autoPageTurningInterval,
           valueFormatter: (value) => '${value.toInt()} s',
           onChanged: () => widget.onChanged?.call('autoPageTurningInterval'),
           comicId: isEnabledSpecificSettings ? widget.comicId : null,
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
-        SelectSetting(
+        SelectSetting.reader(
           title: 'Automatic scrolling (continuous and waterfall)'.tl,
-          settingKey: 'autoScrollStyle',
+          preference: ReaderPreferences.autoScrollStyle,
           optionTranslation: {
             'smooth': 'Smooth scrolling'.tl,
             'stepped': 'Step scrolling'.tl,
@@ -353,38 +337,29 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
-        if (_value('autoScrollStyle') == 'smooth')
-          SliderSetting(
+        if (_value(ReaderPreferences.autoScrollStyle) == 'smooth')
+          SliderSetting.reader(
             title: "Automatic scroll speed".tl,
-            settingsIndex: "autoScrollSpeed",
-            interval: 10,
-            min: 10,
-            max: 1000,
+            preference: ReaderPreferences.autoScrollSpeed,
             valueFormatter: (value) => '${value.toInt()} px/s',
             onChanged: () => widget.onChanged?.call('autoScrollSpeed'),
             comicId: isEnabledSpecificSettings ? widget.comicId : null,
             comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
             useDeviceSettings: useDeviceSpecificSettings,
           ).toSliver(),
-        if (_value('autoScrollStyle') == 'stepped') ...[
-          SliderSetting(
+        if (_value(ReaderPreferences.autoScrollStyle) == 'stepped') ...[
+          SliderSetting.reader(
             title: "Scroll steps per second".tl,
-            settingsIndex: "autoScrollFrequency",
-            interval: 1,
-            min: 1,
-            max: 10,
+            preference: ReaderPreferences.autoScrollFrequency,
             valueFormatter: (value) => '${value.toInt()} /s',
             onChanged: () => widget.onChanged?.call('autoScrollFrequency'),
             comicId: isEnabledSpecificSettings ? widget.comicId : null,
             comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
             useDeviceSettings: useDeviceSpecificSettings,
           ).toSliver(),
-          SliderSetting(
+          SliderSetting.reader(
             title: "Distance per scroll step".tl,
-            settingsIndex: "autoScrollDistance",
-            interval: 10,
-            min: 10,
-            max: 500,
+            preference: ReaderPreferences.autoScrollDistance,
             valueFormatter: (value) => '${value.toInt()} px',
             onChanged: () => widget.onChanged?.call('autoScrollDistance'),
             comicId: isEnabledSpecificSettings ? widget.comicId : null,
@@ -392,9 +367,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
             useDeviceSettings: useDeviceSpecificSettings,
           ).toSliver(),
         ],
-        SwitchSetting(
+        SwitchSetting.reader(
           title: 'Continue automatically to the next chapter'.tl,
-          settingKey: 'autoReadingAcrossChapters',
+          preference: ReaderPreferences.autoReadingAcrossChapters,
           onChanged: () => widget.onChanged?.call('autoReadingAcrossChapters'),
           comicId: isEnabledSpecificSettings ? widget.comicId : null,
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
@@ -402,14 +377,11 @@ class _ReaderSettingsState extends State<ReaderSettings> {
         ).toSliver(),
         SliverAnimatedVisibility(
           visible: _usesMode((mode) => mode.startsWith('gallery')),
-          child: SliderSetting(
+          child: SliderSetting.reader(
             title:
                 "The number of pic in screen for landscape (Only Gallery Mode)"
                     .tl,
-            settingsIndex: "readerScreenPicNumberForLandscape",
-            interval: 1,
-            min: 1,
-            max: 5,
+            preference: ReaderPreferences.readerScreenPicNumberForLandscape,
             onChanged: () {
               setState(() {});
               widget.onChanged?.call("readerScreenPicNumberForLandscape");
@@ -421,14 +393,11 @@ class _ReaderSettingsState extends State<ReaderSettings> {
         ),
         SliverAnimatedVisibility(
           visible: _usesMode((mode) => mode.startsWith('gallery')),
-          child: SliderSetting(
+          child: SliderSetting.reader(
             title:
                 "The number of pic in screen for portrait (Only Gallery Mode)"
                     .tl,
-            settingsIndex: "readerScreenPicNumberForPortrait",
-            interval: 1,
-            min: 1,
-            max: 5,
+            preference: ReaderPreferences.readerScreenPicNumberForPortrait,
             onChanged: () {
               widget.onChanged?.call("readerScreenPicNumberForPortrait");
             },
@@ -440,11 +409,13 @@ class _ReaderSettingsState extends State<ReaderSettings> {
         SliverAnimatedVisibility(
           visible:
               _usesMode((mode) => mode.startsWith('gallery')) &&
-              (_value('readerScreenPicNumberForLandscape') > 1 ||
-                  _value('readerScreenPicNumberForPortrait') > 1),
-          child: SwitchSetting(
+              (_value(ReaderPreferences.readerScreenPicNumberForLandscape) >
+                      1 ||
+                  _value(ReaderPreferences.readerScreenPicNumberForPortrait) >
+                      1),
+          child: SwitchSetting.reader(
             title: "Show single image on first page".tl,
-            settingKey: "showSingleImageOnFirstPage",
+            preference: ReaderPreferences.showSingleImageOnFirstPage,
             onChanged: () {
               widget.onChanged?.call("showSingleImageOnFirstPage");
             },
@@ -458,12 +429,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
             (mode) =>
                 mode.startsWith('continuous') || mode.startsWith('waterfall'),
           ),
-          child: SliderSetting(
+          child: SliderSetting.reader(
             title: "Mouse scroll speed".tl,
-            settingsIndex: "readerScrollSpeed",
-            interval: 0.1,
-            min: 0.5,
-            max: 3,
+            preference: ReaderPreferences.readerScrollSpeed,
             onChanged: () {
               widget.onChanged?.call("readerScrollSpeed");
             },
@@ -472,9 +440,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
             useDeviceSettings: useDeviceSpecificSettings,
           ),
         ),
-        SwitchSetting(
+        SwitchSetting.reader(
           title: 'Double tap to zoom'.tl,
-          settingKey: 'enableDoubleTapToZoom',
+          preference: ReaderPreferences.enableDoubleTapToZoom,
           onChanged: () {
             setState(() {});
             widget.onChanged?.call('enableDoubleTapToZoom');
@@ -483,9 +451,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
-        SelectSetting(
+        SelectSetting.reader(
           title: 'Long press action'.tl,
-          settingKey: 'longPressAction',
+          preference: ReaderPreferences.longPressAction,
           optionTranslation: {
             'zoom': 'Zoom image'.tl,
             'autoReading': 'Start or stop automatic reading'.tl,
@@ -500,10 +468,10 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
         SliverAnimatedVisibility(
-          visible: _value('longPressAction') == 'zoom',
-          child: SelectSetting(
+          visible: _value(ReaderPreferences.longPressAction) == 'zoom',
+          child: SelectSetting.reader(
             title: "Long press zoom position".tl,
-            settingKey: "longPressZoomPosition",
+            preference: ReaderPreferences.longPressZoomPosition,
             optionTranslation: {
               "press": "Press position".tl,
               "center": "Screen center".tl,
@@ -513,10 +481,10 @@ class _ReaderSettingsState extends State<ReaderSettings> {
             useDeviceSettings: useDeviceSpecificSettings,
           ),
         ),
-        SwitchSetting(
+        SwitchSetting.reader(
           title: 'Limit image width'.tl,
           subtitle: 'When using Continuous(Top to Bottom) mode'.tl,
-          settingKey: 'limitImageWidth',
+          preference: ReaderPreferences.limitImageWidth,
           onChanged: () {
             widget.onChanged?.call('limitImageWidth');
           },
@@ -526,12 +494,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
         ).toSliver(),
         SliverAnimatedVisibility(
           visible: _isVerticalFlowMode,
-          child: SliderSetting(
+          child: SliderSetting.reader(
             title: 'Side margins (each side)'.tl,
-            settingsIndex: 'readerSideMargin',
-            interval: 1,
-            min: 0,
-            max: 30,
+            preference: ReaderPreferences.readerSideMargin,
             valueFormatter: (value) => '${value.toInt()}%',
             onChanged: () => widget.onChanged?.call('readerSideMargin'),
             comicId: isEnabledSpecificSettings ? widget.comicId : null,
@@ -541,12 +506,12 @@ class _ReaderSettingsState extends State<ReaderSettings> {
         ),
         SliverAnimatedVisibility(
           visible: _isVerticalFlowMode,
-          child: SwitchSetting(
+          child: SwitchSetting.reader(
             title: 'Split dual pages'.tl,
             subtitle:
                 'Only applies to Continuous and Waterfall (Top to Bottom) modes'
                     .tl,
-            settingKey: 'splitDualPage',
+            preference: ReaderPreferences.splitDualPage,
             onChanged: () {
               setState(() {});
               widget.onChanged?.call('splitDualPage');
@@ -557,13 +522,15 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           ),
         ),
         SliverAnimatedVisibility(
-          visible: _isVerticalFlowMode && _value('splitDualPage') == true,
-          child: SwitchSetting(
+          visible:
+              _isVerticalFlowMode &&
+              _value(ReaderPreferences.splitDualPage) == true,
+          child: SwitchSetting.reader(
             title: 'Swap split dual page order'.tl,
             subtitle:
                 'Turn this on when the split page order does not match the reading direction'
                     .tl,
-            settingKey: 'splitDualPageInvert',
+            preference: ReaderPreferences.splitDualPageInvert,
             onChanged: () {
               widget.onChanged?.call('splitDualPageInvert');
             },
@@ -573,9 +540,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           ),
         ),
         if (App.isAndroid)
-          SwitchSetting(
+          SwitchSetting.reader(
             title: 'Turn page by volume keys'.tl,
-            settingKey: 'enableTurnPageByVolumeKey',
+            preference: ReaderPreferences.enableTurnPageByVolumeKey,
             onChanged: () {
               widget.onChanged?.call('enableTurnPageByVolumeKey');
             },
@@ -583,9 +550,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
             comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
             useDeviceSettings: useDeviceSpecificSettings,
           ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.reader(
           title: "Display time & battery info in reader".tl,
-          settingKey: "enableClockAndBatteryInfoInReader",
+          preference: ReaderPreferences.enableClockAndBatteryInfoInReader,
           onChanged: () {
             widget.onChanged?.call("enableClockAndBatteryInfoInReader");
           },
@@ -593,9 +560,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.reader(
           title: "Show system status bar".tl,
-          settingKey: "showSystemStatusBar",
+          preference: ReaderPreferences.showSystemStatusBar,
           onChanged: () {
             widget.onChanged?.call("showSystemStatusBar");
           },
@@ -603,9 +570,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
-        SelectSetting(
+        SelectSetting.reader(
           title: "Quick collect image".tl,
-          settingKey: "quickCollectImage",
+          preference: ReaderPreferences.quickCollectImage,
           optionTranslation: {
             "No": "Not enable".tl,
             "DoubleTap": "Double Tap".tl,
@@ -626,19 +593,16 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           callback: () => context.to(() => _CustomImageProcessing()),
           actionTitle: "Edit".tl,
         ).toSliver(),
-        SliderSetting(
+        SliderSetting.reader(
           title: "Number of images preloaded".tl,
-          settingsIndex: "preloadImageCount",
-          interval: 1,
-          min: 1,
-          max: 16,
+          preference: ReaderPreferences.preloadImageCount,
           comicId: isEnabledSpecificSettings ? widget.comicId : null,
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.reader(
           title: "Show Page Number".tl,
-          settingKey: "showPageNumberInReader",
+          preference: ReaderPreferences.showPageNumberInReader,
           onChanged: () {
             widget.onChanged?.call("showPageNumberInReader");
           },
@@ -646,9 +610,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
           useDeviceSettings: useDeviceSpecificSettings,
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.reader(
           title: "Show Chapter Comments".tl,
-          settingKey: "showChapterComments",
+          preference: ReaderPreferences.showChapterComments,
           onChanged: _onShowChapterCommentsChanged,
           comicId: isEnabledSpecificSettings ? widget.comicId : null,
           comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
@@ -656,9 +620,9 @@ class _ReaderSettingsState extends State<ReaderSettings> {
         ).toSliver(),
         SliverAnimatedVisibility(
           visible: _isChapterCommentsAtEndSupported(),
-          child: SwitchSetting(
+          child: SwitchSetting.reader(
             title: "Show Comments at Chapter End".tl,
-            settingKey: "showChapterCommentsAtEnd",
+            preference: ReaderPreferences.showChapterCommentsAtEnd,
             onChanged: () {
               widget.onChanged?.call("showChapterCommentsAtEnd");
             },
