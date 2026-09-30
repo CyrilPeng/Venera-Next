@@ -8,6 +8,8 @@ import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/image_processing.dart';
 
 import 'app_dio.dart';
+import 'request_scope.dart';
+import 'shared_request_stream.dart';
 
 typedef ThumbnailLoadingConfigResolver =
     FutureOr<Map<String, dynamic>> Function(String sourceKey, String url);
@@ -220,7 +222,7 @@ abstract class ImageDownloader {
   }
 
   static final _loadingImages =
-      <String, _StreamWrapper<ImageDownloadProgress>>{};
+      <String, SharedRequestStream<ImageDownloadProgress>>{};
 
   /// Cancel all loading images.
   static void cancelAllLoadingImages() {
@@ -247,9 +249,10 @@ abstract class ImageDownloader {
       _loadingImages.remove(cacheKey);
     }
     final debugLoader = debugLoadComicImageUnwrapped;
-    final stream = _StreamWrapper<ImageDownloadProgress>(
-      debugLoader?.call(imageKey, sourceKey, cid, eid) ??
-          _loadComicImage(imageKey, sourceKey, cid, eid),
+    final stream = SharedRequestStream<ImageDownloadProgress>(
+      (scope) =>
+          debugLoader?.call(imageKey, sourceKey, cid, eid) ??
+          _loadComicImage(imageKey, sourceKey, cid, eid, scope: scope),
       (wrapper) {
         if (identical(_loadingImages[cacheKey], wrapper)) {
           _loadingImages.remove(cacheKey);
@@ -277,25 +280,30 @@ abstract class ImageDownloader {
     String imageKey,
     String? sourceKey,
     String cid,
-    String eid,
-  ) async* {
+    String eid, {
+    RequestScope? scope,
+  }) async* {
+    scope?.check();
     final cacheKey = "$imageKey@$sourceKey@$cid@$eid";
     final cache = await CacheManager().findCache(cacheKey);
 
+    scope?.check();
     if (cache != null) {
       var data = await cache.readAsBytes();
+      scope?.check();
       yield ImageDownloadProgress(
         currentBytes: data.length,
         totalBytes: data.length,
         imageBytes: data,
       );
+      return;
     }
 
     JSInvokable? onLoadFailed;
 
     var configs = <String, dynamic>{};
     if (sourceKey != null) {
-      configs =
+      Future<Map<String, dynamic>> resolveConfig() async =>
           await _comicImageLoadingConfigResolver?.call(
             sourceKey,
             imageKey,
@@ -303,10 +311,14 @@ abstract class ImageDownloader {
             eid,
           ) ??
           {};
+      configs = scope == null
+          ? await resolveConfig()
+          : await scope.run(resolveConfig);
     }
     var retriesRemaining = 5;
     while (true) {
       try {
+        scope?.check();
         configs['headers'] ??= {'user-agent': webUA};
 
         final onLoadFailedConfig = configs['onLoadFailed'];
@@ -325,7 +337,9 @@ abstract class ImageDownloader {
         var req = await dio.request<ResponseBody>(
           configs['url'] ?? imageKey,
           data: configs['data'],
+          cancelToken: scope?.cancelToken,
         );
+        scope?.check();
         var stream = req.data?.stream ?? (throw "Error: Empty response body.");
         int? expectedBytes = req.data!.contentLength;
         if (expectedBytes == -1) {
@@ -333,6 +347,7 @@ abstract class ImageDownloader {
         }
         var buffer = <int>[];
         await for (var data in stream) {
+          scope?.check();
           buffer.addAll(data);
           yield ImageDownloadProgress(
             currentBytes: buffer.length,
@@ -363,7 +378,9 @@ abstract class ImageDownloader {
           data = newData;
         }
 
+        scope?.check();
         await CacheManager().writeCache(cacheKey, data);
+        scope?.check();
         yield ImageDownloadProgress(
           currentBytes: data.length,
           totalBytes: data.length,
@@ -371,6 +388,7 @@ abstract class ImageDownloader {
         );
         return;
       } catch (e) {
+        scope?.check();
         final onLoadFailedCallback = onLoadFailed;
         if (onLoadFailedCallback == null ||
             !_shouldRetryImageLoad(
@@ -394,100 +412,6 @@ abstract class ImageDownloader {
         }
       }
     }
-  }
-}
-
-/// A wrapper class for a stream that
-/// allows multiple listeners to listen to the same stream.
-class _StreamWrapper<T> {
-  final Stream<T> _stream;
-
-  final List<StreamController<T>> controllers = [];
-
-  final void Function(_StreamWrapper<T> wrapper) onClosed;
-
-  bool isClosed = false;
-
-  StreamSubscription<T>? _subscription;
-
-  _StreamWrapper(this._stream, this.onClosed) {
-    _listen();
-  }
-
-  void _listen() {
-    _subscription = _stream.listen(
-      (data) {
-        if (isClosed) {
-          return;
-        }
-        for (var controller in controllers) {
-          if (!controller.isClosed) {
-            controller.add(data);
-          }
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (isClosed) {
-          return;
-        }
-        for (var controller in controllers) {
-          if (!controller.isClosed) {
-            controller.addError(error, stackTrace);
-          }
-        }
-      },
-      onDone: _close,
-    );
-  }
-
-  void _close() {
-    if (isClosed) {
-      return;
-    }
-    isClosed = true;
-    for (var controller in controllers) {
-      if (!controller.isClosed) {
-        controller.close();
-      }
-    }
-    controllers.clear();
-    _subscription = null;
-    onClosed(this);
-  }
-
-  Stream<T> get stream {
-    if (isClosed) {
-      throw Exception('Stream is closed');
-    }
-    var controller = StreamController<T>();
-    controllers.add(controller);
-    controller.onCancel = () {
-      controllers.remove(controller);
-      if (controllers.isEmpty) {
-        cancel();
-      }
-    };
-    return controller.stream;
-  }
-
-  void cancel() {
-    if (isClosed) {
-      return;
-    }
-    isClosed = true;
-    for (var controller in controllers) {
-      if (!controller.isClosed) {
-        controller.close();
-      }
-    }
-    controllers.clear();
-    final subscription = _subscription;
-    _subscription = null;
-    onClosed(this);
-    if (subscription == null) {
-      return;
-    }
-    unawaited(subscription.cancel());
   }
 }
 

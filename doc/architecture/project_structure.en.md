@@ -137,3 +137,5 @@ BackgroundSync owns automatic scheduling while the app is mounted. WebDAV source
 FollowUpdatesService is separate from the page and exposes a UI-free narrow contract through follow_updates_api.dart. It cancels only owned task handles; runtime bindings own timers and external listeners. Views subscribe to followUpdatesChanges and unsubscribe in dispose; do not restore global State lookup to refresh follow-update pages/previews.
 
 CacheManager owns instance paths, database, scanner and operation queue. CacheManager.open supports independent hosts; start explicitly begins one scan and dispose drains accepted work before closing. Scanners return results without global manager access. Cache operations must not bypass the queue, and directory cleanup must await disposal.
+
+Shared image downloads use SharedRequestStream with an independent RequestScope. Actual subscriptions start the source; the last subscriber cancels source/HTTP work before releasing the source subscription. Consumers release their own subscriptions and must not parent shared requests to one caller scope. Cache hits complete without entering source or network loading.
