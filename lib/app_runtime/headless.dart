@@ -8,7 +8,8 @@ import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 
-import 'init.dart';
+import 'bootstrap_core.dart';
+import 'headless_bindings.dart';
 
 void cliPrint(Map<String, dynamic> data) {
   print('[CLI PRINT] ${jsonEncode(data)}');
@@ -33,7 +34,17 @@ Future<void> runHeadlessMode(List<String> args) async {
   }
 
   // Need to initialize the app for some features to work
-  await init();
+  configureHeadlessBindings();
+  try {
+    await bootstrapCore();
+  } catch (error, stack) {
+    Log.error('Headless startup', error, stack);
+    cliPrint({
+      'status': 'error',
+      'message': 'Core initialization failed: $error',
+    });
+    exit(1);
+  }
 
   var command = args[commandIndex];
   var subCommand = (commandIndex + 1 < args.length)

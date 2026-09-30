@@ -103,6 +103,18 @@ class ArchitectureDependenciesTest(unittest.TestCase):
             source.write_text("final mode = preferences.configuration.mode;")
             self.assertEqual(MODULE.application_settings_violations(lib), [])
 
+    def test_headless_cannot_restore_interactive_initialization(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lib = Path(directory)
+            source = lib / 'app_runtime/headless.dart'
+            source.parent.mkdir(parents=True)
+            source.write_text("import 'init.dart';")
+            self.assertEqual(len(MODULE.startup_violations(lib)), 1)
+            source.write_text("import 'bootstrap_core.dart'; void run() { DataSync().start(); }")
+            self.assertEqual(len(MODULE.startup_violations(lib)), 1)
+            source.write_text("import 'bootstrap_core.dart'; void run() { bootstrapCore(); }")
+            self.assertEqual(MODULE.startup_violations(lib), [])
+
 
 if __name__ == '__main__':
     unittest.main()

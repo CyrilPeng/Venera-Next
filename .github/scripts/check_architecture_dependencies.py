@@ -167,6 +167,23 @@ def application_settings_violations(lib):
     return errors
 
 
+def startup_violations(lib):
+    """Core/headless startup must not activate interactive runtime bindings."""
+    errors = []
+    for name in ('app_runtime/bootstrap_core.dart', 'app_runtime/headless.dart',
+                 'app_runtime/headless_bindings.dart'):
+        source = lib / name
+        if not source.exists():
+            continue
+        text = uncomment(source.read_text(encoding='utf-8'))
+        forbidden = r'App\.rootContext|WindowFrame|configureComicWidgets|initializeAutoSync|Timer\.periodic|DataSync\(\)\.start\('
+        if re.search(forbidden, text):
+            errors.append(f'Core/headless startup activates interactive behavior: {name}')
+        if name.endswith('headless.dart') and 'init.dart' in set(directives(text)):
+            errors.append(f'Headless startup imports interactive initialization: {name}')
+    return errors
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", action="store_true")
@@ -176,6 +193,7 @@ def main():
     errors = violations(graph, baseline)
     errors.extend(reader_settings_violations(ROOT / "lib"))
     errors.extend(application_settings_violations(ROOT / "lib"))
+    errors.extend(startup_violations(ROOT / "lib"))
     if args.report:
         print("Feature strongly connected components (including UI):")
         for component in cycles(feature_edges(graph)):

@@ -4,11 +4,8 @@ import 'package:display_mode/display_mode.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_saf/flutter_saf.dart';
-import 'package:rhttp/rhttp.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
@@ -20,39 +17,21 @@ import 'package:venera_next/features/settings/settings.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/features/webdav_library/webdav_library.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
-import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/network/cookie_jar.dart';
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/routing/app_links.dart';
 import 'package:venera_next/routing/handle_text_share.dart';
-import 'package:venera_next/foundation/opencc.dart';
-import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
-extension _FutureInit<T> on Future<T> {
-  /// Prevent unhandled exception
-  ///
-  /// A unhandled exception occurred in init() will cause the app to crash.
-  Future<void> wait() async {
-    try {
-      await this;
-    } catch (e, s) {
-      Log.error("init", "$e\n$s");
-    }
-  }
-}
+import 'bootstrap_core.dart';
 
-Future<void> init() async {
-  await App.init().wait();
-  await SingleInstanceCookieJar.createInstance();
-  configureComicTypeSourceKeyResolver();
-  configureComicSourceDataSavedHandler(() async => DataSync().onDataChanged());
-  configureRuntimeComicSourcesProvider(
-    () => WebDavLibraryConfig.fromSettings().isValid
-        ? [WebDavLibrarySource.create()]
-        : const [],
-  );
+Future<void>? _interactiveInitialization;
+
+/// Compatibility entry point for interactive startup.
+Future<void> init() => _interactiveInitialization ??= _initializeInteractive();
+
+Future<void> _initializeInteractive() async {
+  await bootstrapCore();
   configureComicWidgets(
     comicPageBuilder:
         ({
@@ -84,29 +63,8 @@ Future<void> init() async {
       galleryColumns: favoriteGalleryColumns(),
     ),
   );
-  try {
-    var futures = [
-      Rhttp.init(),
-      App.initComponents([
-        HistoryManager().init,
-        LocalFavoritesManager().init,
-        LocalManager().init,
-      ]),
-      SAFTaskWorker().init().wait(),
-      AppTranslation.init().wait(),
-      TagsTranslation.readData().wait(),
-      JsEngine().init().wait(),
-      ComicSourceManager().init().wait(),
-      OpenCC.init(),
-    ];
-    await Future.wait(futures);
-  } catch (e, s) {
-    Log.error("init", "$e\n$s");
-  }
-  _checkOldConfigs();
   DataSync().start();
   WebDavLibrarySource.initializeAutoSync();
-  CacheManager().setLimitSize(appdata.settings['cacheSize']);
   if (App.isAndroid) {
     handleLinks();
     handleTextShare();
@@ -179,27 +137,6 @@ Future<Uint8List?> _loadLocalCoverFallback(String sourceKey, String id) async {
   if (!await file.exists()) return null;
   final data = await file.readAsBytes();
   return data.isEmpty ? null : data;
-}
-
-void _checkOldConfigs() {
-  if (appdata.settings['searchSources'] == null) {
-    appdata.settings['searchSources'] = ComicSource.all()
-        .where((e) => e.searchPageData != null)
-        .map((e) => e.key)
-        .toList();
-  }
-
-  if (appdata.implicitData['webdavAutoSync'] == null) {
-    var webdavConfig = appdata.settings['webdav'];
-    if (webdavConfig is List &&
-        webdavConfig.length == 3 &&
-        webdavConfig.whereType<String>().length == 3) {
-      appdata.implicitData['webdavAutoSync'] = true;
-    } else {
-      appdata.implicitData['webdavAutoSync'] = false;
-    }
-    appdata.writeImplicitData();
-  }
 }
 
 Future<void> _checkAppUpdates() async {

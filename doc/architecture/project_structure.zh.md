@@ -237,3 +237,5 @@ CI 同时运行 `check_architecture_dependencies.py`，按 `dependency_baseline.
 `Init.init()` 同一尝试仅执行一次，`ensureInit()` 等待显式启动并共享失败；`retryInit()` 是失败后重新执行的唯一入口。实现应在失败时清理部分资源，不得吞掉异常伪装为就绪。启动依赖不得形成自等待。
 
 DataSync 构造无运行副作用，由运行时显式 start；dispose 禁止新任务和迟到通知，已开始的传输继续收尾。窗口关闭等待逻辑仅在 app_runtime/SyncWindowBinding 中，由组件挂载/卸载管理监听；业务服务不得重新访问 WindowFrame 或根 context。
+
+启动边界：`bootstrap_core.dart` 组装实际核心服务，`core_bootstrap.dart` 定义可注入、单次执行的依赖顺序。`init.dart` 仅组装交互绑定与后台自动工作；`headless.dart` 仅初始化共享核心和无头 JS 适配，不得调用交互入口或启动窗口/自动同步。核心错误缓存，失败后不得自动重开已部分初始化的存储。旧域聚合入口的传递依赖仍按 P2/P6 逐步迁移。
