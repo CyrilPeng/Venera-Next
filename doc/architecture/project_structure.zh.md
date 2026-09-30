@@ -302,4 +302,6 @@ images.dart 不再重导出 ContinuousModeState；依赖具体视图实现的集
 
 History 数据通过 history_api.dart 提供，history_model.dart 不导入 HistoryManager 或页面；旧 history.dart 对 UI 兼容导出数据入口，history_manager.dart 不再充当模型导出。applyReaderHistoryProgress 负责阅读坐标到历史字段的映射，页面仅在加载完成后调用并安排保存。旧字段、fromMap 兼容构造器与描述格式暂时保留，后续存储分解不得隐式改变数据语义。
 
-HistoryRepository 在调用者拥有的 Database 上执行进度与时长事务，不管理连接、迁移、缓存或通知；historyFromRow 位于 history_row.dart，集中解码 SQLite 字段。History 模型不直接导入 SQLite，也不提供 fromRow。现有 schema、查询/删除和异步队列仍在 HistoryManager，后续继续迁移；不能通过新数据入口重新导出管理器或页面。
+HistoryRepository 在调用者拥有的 Database 上管理表结构迁移、查询/删除与进度/时长事务，不管理连接、缓存或通知；historyFromRow 位于 history_row.dart，集中解码 SQLite 字段。History 模型不直接导入 SQLite，也不提供 fromRow。HistoryManager 保留异步队列、连接生命周期、缓存和通知，不再直接执行历史表 SQL；不能通过新数据入口重新导出管理器或页面。
+
+条件删除的业务判断由管理器注入仓储并在同一删除事务内执行，判断失败或任一删除失败必须整体回滚。保留期限由管理器计算截止时间，仓储保持严格小于比较；最近记录限制 20 条，时长榜按时长与阅读时间降序。

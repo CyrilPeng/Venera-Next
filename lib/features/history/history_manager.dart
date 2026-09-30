@@ -1,5 +1,4 @@
 import 'history_repository.dart';
-import 'history_row.dart';
 import 'history_model.dart';
 import 'dart:async';
 import 'dart:isolate';
@@ -30,7 +29,9 @@ class HistoryManager with ChangeNotifier {
 
   late String _dbPath;
 
-  int get length => _db.select("select count(*) from history;").first[0] as int;
+  HistoryRepository get _repository => HistoryRepository(_db);
+
+  int get length => _repository.count();
 
   /// Cache of history ids. Improve the performance of find operation.
   Map<String, bool>? _cachedHistoryIds;
@@ -47,32 +48,7 @@ class HistoryManager with ChangeNotifier {
     _dbPath = "${App.dataPath}/history.db";
     _db = openSqliteDatabase(_dbPath);
 
-    _db.execute("""
-        create table if not exists history  (
-          id text primary key,
-          title text,
-          subtitle text,
-          cover text,
-          time int,
-          type int,
-          ep int,
-          page int,
-          readEpisode text,
-          max_page int,
-          chapter_group int,
-          read_duration_ms integer not null default 0
-        );
-      """);
-
-    var columns = _db.select("PRAGMA table_info(history);");
-    if (!columns.any((element) => element["name"] == "chapter_group")) {
-      _db.execute("alter table history add column chapter_group int;");
-    }
-    if (!columns.any((element) => element["name"] == "read_duration_ms")) {
-      _db.execute(
-        "alter table history add column read_duration_ms integer not null default 0;",
-      );
-    }
+    _repository.initialize();
 
     notifyListeners();
     ImageFavoriteManager().init();
@@ -164,13 +140,13 @@ class HistoryManager with ChangeNotifier {
   ///
   /// This function would be called when user start reading.
   void addHistory(History newItem) {
-    HistoryRepository(_db).writeProgress(newItem);
+    _repository.writeProgress(newItem);
     _cacheHistory(newItem);
     notifyListeners();
   }
 
   void clearHistory() {
-    _db.execute("delete from history;");
+    _repository.clear();
     updateCache();
     notifyListeners();
   }
@@ -180,64 +156,29 @@ class HistoryManager with ChangeNotifier {
     final cutoff = DateTime.now()
         .subtract(Duration(days: retentionDays))
         .millisecondsSinceEpoch;
-    _db.execute(
-      """
-      delete from history
-      where time < ?;
-    """,
-      [cutoff],
-    );
+    _repository.clearBefore(cutoff);
     updateCache();
     notifyListeners();
   }
 
   void clearUnfavoritedHistory() {
-    _db.execute('BEGIN TRANSACTION;');
-    try {
-      final idAndTypes = _db.select("""
-      select id, type from history;
-    """);
-      for (var element in idAndTypes) {
-        final id = element["id"] as String;
-        final type = ComicType(element["type"] as int);
-        if (!LocalFavoritesManager().isExist(id, type)) {
-          _db.execute(
-            """
-          delete from history
-          where id == ? and type == ?;
-        """,
-            [id, type.value],
-          );
-        }
-      }
-      _db.execute('COMMIT;');
-    } catch (e) {
-      _db.execute('ROLLBACK;');
-      rethrow;
-    }
+    _repository.deleteWhere(
+      (id, type) => !LocalFavoritesManager().isExist(id, ComicType(type)),
+    );
     updateCache();
     notifyListeners();
   }
 
   void remove(String id, ComicType type) async {
-    _db.execute(
-      """
-      delete from history
-      where id == ? and type == ?;
-    """,
-      [id, type.value],
-    );
+    _repository.remove(id, type.value);
     updateCache();
     notifyListeners();
   }
 
   void updateCache() {
     _cachedHistoryIds = {};
-    var res = _db.select("""
-        select id from history;
-      """);
-    for (var element in res) {
-      _cachedHistoryIds![element["id"] as String] = true;
+    for (final id in _repository.ids()) {
+      _cachedHistoryIds![id] = true;
     }
     for (var key in cachedHistories.keys.toList()) {
       if (!_cachedHistoryIds!.containsKey(key)) {
@@ -257,67 +198,15 @@ class HistoryManager with ChangeNotifier {
       return cachedHistories[id];
     }
 
-    var res = _db.select(
-      """
-      select * from history
-      where id == ? and type == ?;
-    """,
-      [id, type.value],
-    );
-    if (res.isEmpty) {
-      return null;
-    }
-    return historyFromRow(res.first);
+    return _repository.find(id, type.value);
   }
 
-  List<History> getAll() {
-    var res = _db.select("""
-      select * from history
-      order by time DESC;
-    """);
-    return res.map((element) => historyFromRow(element)).toList();
-  }
-
-  /// 获取最近阅读的漫画
-  List<History> getRecent() {
-    var res = _db.select("""
-      select * from history
-      order by time DESC
-      limit 20;
-    """);
-    return res.map((element) => historyFromRow(element)).toList();
-  }
-
-  /// 获取历史记录的数量
-  int count() {
-    var res = _db.select("""
-      select count(*) from history;
-    """);
-    return res.first[0] as int;
-  }
-
-  int getTotalReadDurationMs() {
-    var res = _db.select("""
-      select coalesce(sum(read_duration_ms), 0) from history;
-    """);
-    return (res.first[0] as num).round();
-  }
-
-  int countWithReadDuration() {
-    var res = _db.select("""
-      select count(*) from history where read_duration_ms > 0;
-    """);
-    return (res.first[0] as num).round();
-  }
-
-  List<History> getAllByReadDuration() {
-    var res = _db.select("""
-      select * from history
-      where read_duration_ms > 0
-      order by read_duration_ms desc, time desc;
-    """);
-    return res.map(historyFromRow).toList();
-  }
+  List<History> getAll() => _repository.getAll();
+  List<History> getRecent() => _repository.getRecent();
+  int count() => _repository.count();
+  int getTotalReadDurationMs() => _repository.getTotalReadDurationMs();
+  int countWithReadDuration() => _repository.countWithReadDuration();
+  List<History> getAllByReadDuration() => _repository.getAllByReadDuration();
 
   void close() {
     isInitialized = false;
@@ -331,22 +220,9 @@ class HistoryManager with ChangeNotifier {
 
   void batchDeleteHistories(List<ComicID> histories) {
     if (histories.isEmpty) return;
-    _db.execute('BEGIN TRANSACTION;');
-    try {
-      for (var history in histories) {
-        _db.execute(
-          """
-          delete from history
-          where id == ? and type == ?;
-        """,
-          [history.id, history.type.value],
-        );
-      }
-      _db.execute('COMMIT;');
-    } catch (e) {
-      _db.execute('ROLLBACK;');
-      rethrow;
-    }
+    _repository.removeMany(
+      histories.map((history) => (history.id, history.type.value)),
+    );
     updateCache();
     notifyListeners();
   }
