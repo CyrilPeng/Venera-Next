@@ -251,3 +251,5 @@ DataSync 构造无运行副作用，由运行时显式 start；dispose 禁止新
 共享图片下载由 SharedRequestStream 持有独立 RequestScope；实际订阅触发源流，最后一个订阅退出时先取消图源/HTTP，再释放源订阅。调用者只能释放自己的订阅，不能把单个调用者的 RequestScope 作为共享请求的父作用域。图片缓存命中须直接完成，不再进入图源或网络加载。
 
 阅读器不得在卸载时调用全局图片取消。ReaderImageDownloads 管理预下载订阅，ReaderImagePrecache 管理解码预取监听；释放 pending 缓存时保留 live 消费者及已解码缓存，最终保活句柄由 Flutter 在帧末释放。正常图片取消不作为加载失败报告，真实错误保留原有处理。
+
+LoadingState 的首次加载与手动重试共享同一尝试流程，每次尝试持有 RequestScope；替换/卸载取消，结果与 onDataLoaded 完成后验证当前尝试身份。loadData/onDataLoaded 显式接收作用域，业务回调必须在 await 后先检查取消再发布副作用；不得恢复重复的未受控 then/setState 路径。

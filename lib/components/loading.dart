@@ -10,6 +10,7 @@ import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/network/cloudflare.dart';
+import 'package:venera_next/network/request_scope.dart';
 import 'package:venera_next/routing/cloudflare.dart';
 
 import 'appbar.dart';
@@ -143,26 +144,22 @@ abstract class LoadingState<T extends StatefulWidget, S extends Object>
 
   String? error;
 
-  Future<Res<S>> loadData();
+  RequestScope? _attempt;
 
-  Future<Res<S>> loadDataWithRetry() async {
-    int retry = 0;
-    while (true) {
-      var res = await loadData();
-      if (res.success) {
-        return res;
-      } else {
-        if (!mounted) return res;
-        if (retry >= 3) {
-          return res;
-        }
-        retry++;
-        await Future.delayed(const Duration(milliseconds: 200));
-      }
+  /// Implementations must check [scope] after awaits before publishing effects.
+  Future<Res<S>> loadData(RequestScope scope);
+
+  Future<Res<S>> _loadDataWithRetry(RequestScope scope) async {
+    for (var retry = 0; ; retry++) {
+      scope.check();
+      final result = await loadData(scope);
+      scope.check();
+      if (result.success || retry >= 3) return result;
+      await scope.wait(const Duration(milliseconds: 200));
     }
   }
 
-  FutureOr<void> onDataLoaded() {}
+  FutureOr<void> onDataLoaded(RequestScope scope) {}
 
   Widget buildContent(BuildContext context, S data);
 
@@ -176,25 +173,47 @@ abstract class LoadingState<T extends StatefulWidget, S extends Object>
     );
   }
 
+  bool _isCurrent(RequestScope scope) =>
+      mounted && identical(_attempt, scope) && !scope.isCancelled;
+
   void retry() {
+    if (!mounted) return;
+    _attempt?.cancel();
+    _attempt?.dispose();
+    final scope = _attempt = RequestScope();
     setState(() {
       isLoading = true;
       error = null;
     });
-    loadDataWithRetry().then((value) async {
-      if (value.success) {
-        data = value.data;
-        await onDataLoaded();
-        setState(() {
-          isLoading = false;
-        });
+    unawaited(_load(scope));
+  }
+
+  Future<void> _load(RequestScope scope) async {
+    try {
+      final result = await scope.run(() => _loadDataWithRetry(scope));
+      if (!_isCurrent(scope)) return;
+      if (result.success) {
+        data = result.data;
+        await scope.run(() => onDataLoaded(scope));
+        if (!_isCurrent(scope)) return;
+        setState(() => isLoading = false);
       } else {
         setState(() {
           isLoading = false;
-          error = value.errorMessage!;
+          error = result.errorMessage!;
         });
       }
-    });
+    } catch (exception, stack) {
+      if (!_isCurrent(scope)) return;
+      Log.error('Loading', exception, stack);
+      setState(() {
+        isLoading = false;
+        error = exception.toString();
+      });
+    } finally {
+      scope.dispose();
+      if (identical(_attempt, scope)) _attempt = null;
+    }
   }
 
   Widget buildError() {
@@ -204,25 +223,20 @@ abstract class LoadingState<T extends StatefulWidget, S extends Object>
   @override
   @mustCallSuper
   void initState() {
-    isLoading = true;
-    Future.microtask(() {
-      loadDataWithRetry().then((value) async {
-        if (!mounted) return;
-        if (value.success) {
-          data = value.data;
-          await onDataLoaded();
-          setState(() {
-            isLoading = false;
-          });
-        } else {
-          setState(() {
-            isLoading = false;
-            error = value.errorMessage!;
-          });
-        }
-      });
-    });
     super.initState();
+    isLoading = true;
+    scheduleMicrotask(() {
+      if (mounted && _attempt == null) retry();
+    });
+  }
+
+  @override
+  @mustCallSuper
+  void dispose() {
+    _attempt?.cancel();
+    _attempt?.dispose();
+    _attempt = null;
+    super.dispose();
   }
 
   @override
