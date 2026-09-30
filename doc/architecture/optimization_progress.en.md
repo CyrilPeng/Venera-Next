@@ -305,3 +305,10 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - Exit synchronously flushes pending progress, drains duration writes, then notifies synchronization once. Repeated disposal shares a Future; late content/lifecycle events are ignored. The page logs close notification errors. Accepted progress writes still belong to storage, so P6 ordering review remains required.
 - Four new coordination tests cover initial background/loading interleaving, duplicate readiness, exit draining, late events and write/close failures. Seventeen targeted tests and 718 full Windows Flutter tests pass; analysis has no errors/warnings and 24 existing infos; structure, architecture, Git dependency and 12 architecture-script tests pass.
 - Original menu/pause edits remain uncommitted. History mapping, window/volume/cache adapters, remaining P5, P6–P8 and device/performance acceptance remain outstanding.
+
+## P5: Memory-cache platform query lifetime (2026-10-01)
+
+- ReaderImageCachePolicy extracts thresholds and query lifetime with injected platform reads, cache writes and logging. Existing 1/2/4 GB thresholds, 100/200/300/500 MB limits and 100 MB exit reset are preserved.
+- Late memory results cannot enlarge the cache after exit. Only the newest query applies; exit is idempotent and prevents further reads. Null leaves the limit unchanged; current failures are logged and later attempts may retry. Native Futures are not aborted.
+- Four policy tests and all 722 Windows Flutter tests pass; analysis has no errors/warnings and 24 existing infos; structure, architecture and Git dependency checks pass. Changelog and boundaries are updated; original user edits remain uncommitted.
+- Cross-reader shared-cache arbitration and physical memory/performance checks remain open, along with volume cancellation/re-listening, window/orientation adapters, remaining P5, P6–P8 and device acceptance.

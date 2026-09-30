@@ -11,6 +11,7 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/reader/gesture.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/images.dart';
+import 'package:venera_next/features/reader/image_cache_policy.dart';
 import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
@@ -386,25 +387,19 @@ class ReaderState extends State<Reader>
     initReaderWindow();
   }
 
-  void setImageCacheSize() async {
-    var availableRAM = await MemoryInfo.getFreePhysicalMemorySize();
-    if (availableRAM == null) return;
-    int maxImageCacheSize;
-    if (availableRAM < 1 << 30) {
-      maxImageCacheSize = 100 << 20;
-    } else if (availableRAM < 2 << 30) {
-      maxImageCacheSize = 200 << 20;
-    } else if (availableRAM < 4 << 30) {
-      maxImageCacheSize = 300 << 20;
-    } else {
-      maxImageCacheSize = 500 << 20;
-    }
-    Log.info(
-      "Reader",
-      "Detect available RAM: $availableRAM, set image cache size to $maxImageCacheSize",
-    );
-    PaintingBinding.instance.imageCache.maximumSizeBytes = maxImageCacheSize;
-  }
+  late final _imageCachePolicy = ReaderImageCachePolicy(
+    readAvailableMemory: MemoryInfo.getFreePhysicalMemorySize,
+    setLimit: (bytes) =>
+        PaintingBinding.instance.imageCache.maximumSizeBytes = bytes,
+    onConfigured: (memory, limit) => Log.info(
+      'Reader',
+      'Detect available RAM: $memory, set image cache size to $limit',
+    ),
+    onError: (error, stack) =>
+        Log.error('Reader', 'Failed to size image cache: $error', stack),
+  );
+
+  void setImageCacheSize() => unawaited(_imageCachePolicy.configure());
 
   @override
   void dispose() {
@@ -424,7 +419,7 @@ class ReaderState extends State<Reader>
     focusNode.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     stopVolumeEvent();
-    PaintingBinding.instance.imageCache.maximumSizeBytes = 100 << 20;
+    _imageCachePolicy.dispose();
     disposeReaderWindow();
     super.dispose();
   }
