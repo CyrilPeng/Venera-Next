@@ -27,7 +27,8 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
-import 'package:venera_next/foundation/file_type.dart';
+import 'package:venera_next/features/reader/image_export.dart';
+import 'package:venera_next/features/reader/image_selection.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -132,6 +133,8 @@ class ReaderScaffoldState extends State<ReaderScaffold>
 
   @override
   void dispose() {
+    _imageExporter.dispose();
+    _selectionOverlay.dispose();
     _eInkRefreshController.dispose();
     super.dispose();
   }
@@ -308,7 +311,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
       String subTitle = context.reader.history!.subtitle;
       int maxPage = context.reader.images!.length;
       int? page = await selectImage();
-      if (page == null) return;
+      if (!mounted || page == null) return;
       page += 1;
       String sourceKey = context.reader.type.sourceKey;
       String imageKey = context.reader.images![page - 1];
@@ -600,30 +603,60 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     );
   }
 
-  void saveCurrentImage() async {
-    var result = await selectImageToData();
-    if (result == null) {
-      return;
-    }
-    var (imageIndex, data) = result;
-    var fileType = detectFileType(data);
-    // Save file name: ComicName_EP{chapter}_P{page}.{ext} to avoid conflict.
-    // The chapter index of different group is continuous, so we use chapter number is enough.
-    var filename =
-        "${context.reader.widget.name}_EP${context.reader.chapter}_P${imageIndex + 1}${fileType.ext}";
-    saveFile(data: data, filename: filename);
-  }
+  late final _imageExporter = ReaderImageExporter(
+    select: _selectImageForExport,
+    read: (selection) async {
+      if (selection.imageKey.startsWith('file://')) {
+        return File(selection.imageKey.substring(7)).readAsBytes();
+      }
+      final file = await CacheManager().findCache(selection.cacheKey);
+      if (file == null) throw StateError('Selected image is no longer cached');
+      return file.readAsBytes();
+    },
+    save: (image) async {
+      await saveFile(data: image.bytes, filename: image.filename);
+    },
+    share: (image) => Share.shareFile(
+      data: image.bytes,
+      filename: image.filename,
+      mime: image.type.mime,
+    ),
+    onError: (error, stack) {
+      Log.error('Reader', 'Failed to export image: $error', stack);
+      if (mounted) context.showMessage(message: error.toString());
+    },
+  );
 
-  void share() async {
-    var result = await selectImageToData();
-    if (result == null) {
-      return;
+  void saveCurrentImage() => unawaited(_imageExporter.export(sharing: false));
+  void share() => unawaited(_imageExporter.export(sharing: true));
+
+  Future<ReaderImageSelection?> _selectImageForExport() async {
+    final reader = context.reader;
+    final images = reader.images;
+    final chapter = reader.chapter;
+    final chapterId = reader.eid;
+    final title = reader.widget.name;
+    final comicId = reader.cid;
+    final sourceKey = reader.type.sourceKey;
+    final index = await selectImage();
+    if (!mounted ||
+        index == null ||
+        images == null ||
+        !identical(images, reader.images) ||
+        chapter != reader.chapter ||
+        index < 0 ||
+        index >= images.length) {
+      return null;
     }
-    var (imageIndex, data) = result;
-    var fileType = detectFileType(data);
-    var filename =
-        "${context.reader.widget.name}_EP${context.reader.chapter}_P${imageIndex + 1}${fileType.ext}";
-    Share.shareFile(data: data, filename: filename, mime: fileType.mime);
+    return ReaderImageSelection(
+      imageKey: images[index],
+      sourceKey: sourceKey,
+      comicId: comicId,
+      chapterId: chapterId,
+      title: title,
+      chapter: chapter,
+      imageNumber: index + 1,
+    );
   }
 
   void openSetting() {
@@ -810,134 +843,36 @@ class ReaderScaffoldState extends State<ReaderScaffold>
   /// The return value is the index of the selected image.
   Future<int?> selectImage() async {
     var reader = context.reader;
-    var imageViewController = context.reader.imageViewController;
+    var imageViewController = reader.imageViewController;
+    final images = reader.images;
+    final chapter = reader.chapter;
 
-    final range = imageViewController?.currentImageRange;
+    if (imageViewController == null || images == null) return null;
+    final range = imageViewController.currentImageRange;
     if (range != null && range.$2 - range.$1 == 1) {
-      return range.$1;
+      return range.$1 >= 0 && range.$2 <= images.length ? range.$1 : null;
     } else {
       var location = await _showSelectImageOverlay();
-      if (location == null) {
+      if (!mounted ||
+          location == null ||
+          !identical(imageViewController, reader.imageViewController) ||
+          !identical(images, reader.images) ||
+          chapter != reader.chapter) {
         return null;
       }
-      var imageKey = imageViewController!.getImageKeyByOffset(location);
+      var imageKey = imageViewController.getImageKeyByOffset(location);
       if (imageKey == null) {
         return null;
       }
-      return reader.images!.indexOf(imageKey);
+      final index = images.indexOf(imageKey);
+      return index < 0 ? null : index;
     }
   }
 
-  /// Same as [selectImage], but return the image data with its index.
-  /// Returns (imageIndex, imageData) or null if cancelled.
-  Future<(int, Uint8List)?> selectImageToData() async {
-    var i = await selectImage();
-    if (i == null) {
-      return null;
-    }
-    var imageKey = context.reader.images![i];
-    Uint8List data;
-    if (imageKey.startsWith("file://")) {
-      data = await File(imageKey.substring(7)).readAsBytes();
-    } else {
-      data = await (await CacheManager().findCache(
-        "$imageKey@${context.reader.type.sourceKey}@${context.reader.cid}@${context.reader.eid}",
-      ))!.readAsBytes();
-    }
-    return (i, data);
-  }
+  final _selectionOverlay = ReaderImageSelectionOverlay();
 
   Future<Offset?> _showSelectImageOverlay() {
-    if (_isOpen) {
-      openOrClose();
-    }
-
-    var completer = Completer<Offset?>();
-
-    var overlay = Overlay.of(context);
-    OverlayEntry? entry;
-    entry = OverlayEntry(
-      builder: (context) {
-        return Positioned.fill(
-          child: _SelectImageOverlayContent(
-            onTap: (offset) {
-              completer.complete(offset);
-              entry!.remove();
-            },
-            onDispose: () {
-              if (!completer.isCompleted) {
-                completer.complete(null);
-              }
-            },
-          ),
-        );
-      },
-    );
-    overlay.insert(entry);
-
-    return completer.future;
-  }
-}
-
-class _SelectImageOverlayContent extends StatefulWidget {
-  const _SelectImageOverlayContent({
-    required this.onTap,
-    required this.onDispose,
-  });
-
-  final void Function(Offset) onTap;
-
-  final void Function() onDispose;
-
-  @override
-  State<_SelectImageOverlayContent> createState() =>
-      _SelectImageOverlayContentState();
-}
-
-class _SelectImageOverlayContentState
-    extends State<_SelectImageOverlayContent> {
-  @override
-  void dispose() {
-    widget.onDispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapUp: (details) {
-        widget.onTap(details.globalPosition);
-      },
-      child: Container(
-        color: Colors.black.withAlpha(50),
-        child: Align(
-          alignment: Alignment(0, -0.8),
-          child: Container(
-            width: 232,
-            height: 42,
-            decoration: BoxDecoration(
-              color: context.colorScheme.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: context.colorScheme.outlineVariant),
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 8),
-                const Icon(Icons.info_outline),
-                const SizedBox(width: 16),
-                Text(
-                  "Click to select an image".tl,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: context.colorScheme.onSurface,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    if (_isOpen) openOrClose();
+    return _selectionOverlay.show(context);
   }
 }

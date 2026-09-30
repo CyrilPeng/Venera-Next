@@ -281,3 +281,5 @@ progress_bar.dart 只负责底栏、进度滑块和页码文字展示，通过�
 ReaderStatusInfo 拥有时钟与电量轮询，平台访问通过 ReaderBatteryRead 注入并返回 ReaderBatterySnapshot；scaffold 只决定显示条件与位置。每个依赖代数最多一个电量请求，卸载/替换后不得发布旧结果，不支持与瞬时失败必须区分。底层平台 Future 不可取消时仍须停止后续调度。
 
 ReaderTopBar 只接收标题、动作与返回回调，ReaderBrightnessPanel 只接收数值与修改回调；scaffold 负责权限/可见性判断、设置范围与保存、导航和侧栏生命周期。面板不得重新查找阅读器 State 或直接写入设置。
+
+图片导出通过 ReaderImageExporter 编排，ReaderImageSelection 必须在读取前固定身份；外壳提供实际缓存/文件和平台操作，异步完成后不得用当前页面位置重命名已选图片。ReaderImageSelectionOverlay 独立持有覆盖层与等待者，替换/销毁必须结束等待；退出只阻止尚未交付的平台操作。

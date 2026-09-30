@@ -171,3 +171,5 @@ progress_bar.dart presents the bottom bar, progress slider and page text through
 ReaderStatusInfo owns clock/battery polling; ReaderBatteryRead injects platform access returning ReaderBatterySnapshot. Scaffold controls visibility and placement only. Allow at most one read per dependency generation, reject results after disposal/replacement, and distinguish unsupported hardware from transient failure. Stop scheduling even when native Futures cannot be cancelled.
 
 ReaderTopBar receives titles/actions/back callbacks; ReaderBrightnessPanel receives values/change callbacks. Scaffold owns availability/visibility, preference scope and persistence, navigation and sidebar lifecycle. Panels must not locate reader State or write settings directly.
+
+ReaderImageExporter coordinates exports using ReaderImageSelection identity captured before reading. The shell supplies cache/files and platform actions; never rename selected images using current page state after an await. ReaderImageSelectionOverlay owns its entry/waiter and completes on replacement/disposal. Exit prevents only platform operations not yet handed off.
