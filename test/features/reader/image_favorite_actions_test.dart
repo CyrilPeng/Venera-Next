@@ -70,6 +70,38 @@ void main() {
     },
   );
 
+  test('adding to an imported chapter resolves existing image identities', () {
+    service.toggle(selection(eid: ''));
+    expect(stored!.imageFavoritesEp.single.eid, '');
+    expect(service.toggle(selection(page: 3)), ImageFavoriteResult.collected);
+    final chapter = stored!.imageFavoritesEp.single;
+    expect(chapter.eid, 'chapter');
+    expect(chapter.imageFavorites.map((image) => image.eid), [
+      'chapter',
+      'chapter',
+      'chapter',
+    ]);
+    expect(chapter.imageFavorites.map((image) => image.page), [1, 2, 3]);
+    expect(service.find('comic', 'source', '', 2), isNull);
+    expect(service.find('comic', 'source', 'chapter', 2)!.imageKey, 'image-2');
+    expect(
+      service.toggle(selection(page: 1)),
+      ImageFavoriteResult.protectedCover,
+    );
+    expect(service.toggle(selection(page: 2)), ImageFavoriteResult.uncollected);
+    expect(removed.single.eid, 'chapter');
+    expect(service.toggle(selection(page: 3)), ImageFavoriteResult.uncollected);
+    expect(chapter.imageFavorites.single.isAutoFavorite, isTrue);
+    expect(saves, 2);
+  });
+
+  test('an unresolved source ID leaves imported identities unchanged', () {
+    service.toggle(selection(eid: ''));
+    service.toggle(selection(page: 3, eid: ''));
+    expect(stored!.imageFavoritesEp.single.eid, '');
+    expect(stored!.images.every((image) => image.eid.isEmpty), isTrue);
+  });
+
   test('an explicitly collected first image can be removed', () {
     service.toggle(selection(page: 1));
     expect(stored!.imageFavoritesEp.single.imageFavorites, hasLength(1));

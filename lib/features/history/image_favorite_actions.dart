@@ -120,8 +120,14 @@ class ImageFavoriteActions {
       if (chapter.eid != data.eid && chapter.eid.isNotEmpty) {
         return ImageFavoriteResult.chapterOrderChanged;
       }
-      // Preserve legacy empty imported chapter IDs during the structural move.
-      // Their migration is a separate data-compatibility fix.
+      if (chapter.eid.isEmpty && data.eid.isNotEmpty) {
+        // Imported chapters have no source ID. Persist the resolved identity
+        // on the chapter and keep existing in-memory image identities aligned.
+        chapter.eid = data.eid;
+        chapter.imageFavorites = chapter.imageFavorites
+            .map((image) => image.copyWith(eid: data.eid))
+            .toList();
+      }
       chapter.imageFavorites.add(image);
     }
     save(comic);
