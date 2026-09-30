@@ -17,6 +17,7 @@ import 'package:venera_next/features/reader/chapter_comments.dart';
 import 'package:venera_next/features/reader/chapter_loader.dart';
 import 'package:venera_next/features/reader/image_downloads.dart';
 import 'package:venera_next/features/reader/image_precache.dart';
+import 'package:venera_next/features/reader/image_position.dart';
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
@@ -806,9 +807,11 @@ class ContinuousModeState extends State<_ContinuousMode>
     if (!crossChapter) {
       if (index <= 0 || index > reader.images!.length) return null;
       return WaterfallImageRef(
-        chapter: reader.chapter,
-        page: index,
-        eid: reader.eid,
+        position: ReaderImagePosition(
+          chapter: reader.chapter,
+          imageNumber: index,
+          chapterId: reader.eid,
+        ),
         imageKey: reader.images![index - 1],
         isFirstInSegment: index == 1,
       );
@@ -924,24 +927,32 @@ class ContinuousModeState extends State<_ContinuousMode>
   }
 
   void _setReaderLocation(WaterfallImageRef imageRef) {
-    var segment = _segmentOfChapter(imageRef.chapter);
-    var chapterChanged = reader.chapter != imageRef.chapter;
+    var segment = _segmentOfChapter(imageRef.position.chapter);
+    var chapterChanged = reader.chapter != imageRef.position.chapter;
     if (segment != null && chapterChanged) {
-      reader.controller.restoreChapter(imageRef.chapter);
+      reader.controller.restoreChapter(imageRef.position.chapter);
       reader.images = segment.images;
       // Wait until the scroll/layout callback has finished before updating UI.
       Future.microtask(() {
         if (mounted) reader.detectLayout();
       });
     }
-    if (chapterChanged || reader.page != imageRef.page) {
-      reader.setPage(imageRef.page);
+    if (chapterChanged || reader.page != imageRef.position.imageNumber) {
+      reader.setPage(imageRef.position.imageNumber);
     }
   }
 
   int? _waterfallIndexOfChapterPage(int chapter, int page) {
     if (!crossChapter) return page;
-    return _waterfallFlow.imageIndexOf(chapter: chapter, page: page);
+    final segment = _segmentOfChapter(chapter);
+    if (segment == null) return null;
+    return _waterfallFlow.imageIndexOf(
+      ReaderImagePosition(
+        chapter: chapter,
+        chapterId: segment.eid,
+        imageNumber: page,
+      ),
+    );
   }
 
   Future<bool> _loadWaterfallNavigationChapter(int chapter) async {
@@ -1187,10 +1198,11 @@ class ContinuousModeState extends State<_ContinuousMode>
       if (crossChapter) {
         var imageRef = _imageRefAt(i);
         if (imageRef == null) continue;
-        var segment = _segmentOfChapter(imageRef.chapter);
-        if (segment != null && !segment.cached.contains(imageRef.page)) {
+        var segment = _segmentOfChapter(imageRef.position.chapter);
+        if (segment != null &&
+            !segment.cached.contains(imageRef.position.imageNumber)) {
           _preDownloadImageRef(imageRef, context, _imageDownloads);
-          segment.cached.add(imageRef.page);
+          segment.cached.add(imageRef.position.imageNumber);
         }
       } else if (i <= reader.maxPage && !cached[i]) {
         _preDownloadImage(i, context, _imageDownloads);
@@ -1261,7 +1273,8 @@ class ContinuousModeState extends State<_ContinuousMode>
     if (!crossChapter || !imageRef.isFirstInSegment) {
       return const SizedBox();
     }
-    var isInitialChapter = imageRef.chapter == _waterfallFlow.firstChapter;
+    var isInitialChapter =
+        imageRef.position.chapter == _waterfallFlow.firstChapter;
     if (isInitialChapter) return const SizedBox();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -1278,7 +1291,7 @@ class ContinuousModeState extends State<_ContinuousMode>
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
             child: Text(
               'Continue to @chapter'.tlParams({
-                'chapter': _chapterTitle(imageRef.chapter),
+                'chapter': _chapterTitle(imageRef.position.chapter),
               }),
               style: TextStyle(
                 color: context.colorScheme.onSurfaceVariant,
@@ -1767,8 +1780,8 @@ ImageProvider _createImageProviderFromRef(
     imageRef.imageKey,
     reader.type.comicSource?.key,
     reader.cid,
-    imageRef.eid,
-    imageRef.page,
+    imageRef.position.chapterId,
+    imageRef.position.imageNumber,
     enableResize: reader.mode.isContinuous,
   );
 }
@@ -1827,7 +1840,12 @@ void _preDownloadImageRef(
   }
   var reader = context.reader;
   var sourceKey = reader.type.comicSource?.key;
-  downloads.preload(imageRef.imageKey, sourceKey, reader.cid, imageRef.eid);
+  downloads.preload(
+    imageRef.imageKey,
+    sourceKey,
+    reader.cid,
+    imageRef.position.chapterId,
+  );
 }
 
 class _SwipeChangeChapterProgress extends StatefulWidget {

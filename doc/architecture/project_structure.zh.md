@@ -259,3 +259,5 @@ LoadingState 的首次加载与手动重试共享同一尝试流程，每次尝�
 章节坐标通过 ComicChapters.positionAt/chapterIndex 转换。ComicChapterPosition 明确源 ID、展开编号、组号和组内编号，历史键沿用原格式；不得用合并 allChapters 后的键序列推断跨组位置，因为不同分组可包含相同源 ID。图片与显示页转换继续交由 ReaderPageLayout。
 
 ReaderController 持有导航状态并提供 ReaderNavigationState 快照；不得导入 Flutter、全局设置或存储。视图导航通过 ReaderNavigationViewport，手势接口保留在 UI 层。ReaderLocation 仅为迁移期转发，后续迁移不得重新引入页面动画状态机；控制器必须随页面销毁以屏蔽迟到回调。
+
+ReaderImagePosition 表示源图片，ReaderPageLayout 转换显示页，WaterfallChapterFlow 转换跨章列表索引；后者反向定位必须校验章节 ID。ReaderImageSlice 的源/显示区域为归一化绘制偏移，不是新的源图片或历史页。历史只保存转换后的源图片序号，保持现有数据协议。
