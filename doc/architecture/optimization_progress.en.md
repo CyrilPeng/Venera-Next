@@ -609,3 +609,10 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - Preserved descending title order, ascending/descending timestamps, LIKE wildcards/tag/subtitle matching with descending time, and first-result exact name lookup. The repository is covered by the business dependency gate. Added real SQLite coverage for identities, ordering/limits, bound parameters and unknown-sort fallback.
 - Nine targeted and 872 full Windows Flutter tests passed; analysis has no errors/warnings and 23 existing infos. Structure/architecture checks, 12 architecture-script tests, Git dependencies and unit formatting passed. Updated changelog/bilingual docs, preserving user changes.
 - Local writes, schema/natural-sort migration, directory management and download recovery remain in the manager pending further separation; remaining P0–P8 acceptance is incomplete.
+
+## P6: Local basic writes and migration-marker transactions (2026-10-02)
+
+- LocalRepository owns comics/natural_sort_migration initialization, numeric ID lookup per source, insert/replace and deletion. New markers and comic writes commit together; deletion of markers and comics is also transactional. The manager emits its existing notification only after success. Writes name columns explicitly and preserve schemas and existing migration progress.
+- Downloaded chapters merge into a new list, supporting const/immutable input without mutating caller models. New-before-old ordering and duplicate semantics remain. Added real SQLite failure injection for no orphan markers on insert failure, marker restoration on delete failure, retry, overridden IDs, source isolation and immutable inputs.
+- Ninety-two local-module and 873 full Windows Flutter tests passed. Analysis has no errors/warnings and 23 existing infos; structure/architecture, 12 architecture-script tests, Git dependencies and unit formatting passed. Updated changelog/bilingual docs, preserving user changes.
+- Natural-sort migration workflow, remaining chapter deletion/recovery SQL, connection lifecycle, directory/download responsibilities and remaining P0–P8 acceptance continue.

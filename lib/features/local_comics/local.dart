@@ -147,31 +147,7 @@ class LocalManager with ChangeNotifier {
 
   Future<void> init() async {
     _db = openSqliteDatabase('${App.dataPath}/local.db');
-    _db.execute('''
-      CREATE TABLE IF NOT EXISTS comics (
-        id TEXT NOT NULL,
-        title TEXT NOT NULL,
-        subtitle TEXT NOT NULL,
-        tags TEXT NOT NULL,
-        directory TEXT NOT NULL,
-        chapters TEXT NOT NULL,
-        cover TEXT NOT NULL,
-        comic_type INTEGER NOT NULL,
-        downloadedChapters TEXT NOT NULL,
-        created_at INTEGER,
-        PRIMARY KEY (id, comic_type)
-      );
-    ''');
-    _db.execute('''
-      CREATE TABLE IF NOT EXISTS natural_sort_migration (
-        id TEXT NOT NULL,
-        comic_type INTEGER NOT NULL,
-        history_time INTEGER,
-        old_page INTEGER,
-        new_page INTEGER,
-        PRIMARY KEY (id, comic_type)
-      );
-    ''');
+    _repository.initialize();
     if (File(FilePath.join(App.dataPath, 'local_path')).existsSync()) {
       path = File(FilePath.join(App.dataPath, 'local_path')).readAsStringSync();
       if (!directory.existsSync()) {
@@ -195,64 +171,16 @@ class LocalManager with ChangeNotifier {
     restoreDownloadingTasks();
   }
 
-  String findValidId(ComicType type) {
-    final res = _db.select(
-      '''
-      SELECT id FROM comics WHERE comic_type = ?
-      ORDER BY CAST(id AS INTEGER) DESC
-      LIMIT 1;
-      ''',
-      [type.value],
-    );
-    if (res.isEmpty) {
-      return '1';
-    }
-    return (int.parse((res.first[0])) + 1).toString();
-  }
+  String findValidId(ComicType type) => _repository.findValidId(type);
 
   Future<void> add(LocalComic comic, [String? id]) async {
-    var old = find(id ?? comic.id, comic.comicType);
-    if (old == null) {
-      // Newly imported books already use natural ordering.
-      _db.execute(
-        'INSERT OR REPLACE INTO natural_sort_migration (id, comic_type) VALUES (?, ?)',
-        [id ?? comic.id, comic.comicType.value],
-      );
-    }
-    var downloaded = comic.downloadedChapters;
-    if (old != null) {
-      downloaded.addAll(old.downloadedChapters);
-    }
-    _db.execute(
-      'INSERT OR REPLACE INTO comics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
-      [
-        id ?? comic.id,
-        comic.title,
-        comic.subtitle,
-        jsonEncode(comic.tags),
-        comic.directory,
-        jsonEncode(comic.chapters),
-        comic.cover,
-        comic.comicType.value,
-        jsonEncode(downloaded),
-        comic.createdAt.millisecondsSinceEpoch,
-      ],
-    );
+    _repository.add(comic, id);
     notifyListeners();
   }
 
   void remove(String id, ComicType comicType, {bool notify = true}) {
-    _db.execute(
-      'DELETE FROM natural_sort_migration WHERE id = ? AND comic_type = ?',
-      [id, comicType.value],
-    );
-    _db.execute('DELETE FROM comics WHERE id = ? AND comic_type = ?;', [
-      id,
-      comicType.value,
-    ]);
-    if (notify) {
-      notifyListeners();
-    }
+    _repository.remove(id, comicType);
+    if (notify) notifyListeners();
   }
 
   void removeComic(LocalComic comic) {
