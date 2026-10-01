@@ -44,6 +44,24 @@ class ArchiveDownloadTask extends DownloadTask {
   Future<void>? _stopFuture;
   Future<void>? _cleanup;
   Directory? _workspace;
+  String? _ownedOutputPath;
+  LocalManager? _outputManager;
+
+  Future<void> _clearOwnedOutput() async {
+    final outputPath = _ownedOutputPath;
+    if (outputPath == null) return;
+    // A successfully registered comic owns its files, even if cancellation
+    // arrived while a prior run was finishing. Use the original manager.
+    if (_outputManager!.find(id, comicType) != null) {
+      _ownedOutputPath = null;
+      _outputManager = null;
+      return;
+    }
+    final directory = Directory(outputPath);
+    if (await directory.exists()) await directory.delete(recursive: true);
+    _ownedOutputPath = null;
+    _outputManager = null;
+  }
 
   Future<void> _clearWorkspace() async {
     final workspace = _workspace;
@@ -97,7 +115,6 @@ class ArchiveDownloadTask extends DownloadTask {
 
   @override
   void cancel() {
-    final directoryPath = path;
     _stop();
     path = null;
     LocalManager().removeTask(this);
@@ -106,9 +123,7 @@ class ArchiveDownloadTask extends DownloadTask {
         () async {
           await stopped;
           await _clearWorkspace();
-          if (directoryPath != null) {
-            await Directory(directoryPath).deleteIgnoreError(recursive: true);
-          }
+          await _clearOwnedOutput();
         }().catchError((Object error, StackTrace stack) {
           Log.error('Download', error, stack);
         });
@@ -175,11 +190,17 @@ class ArchiveDownloadTask extends DownloadTask {
     notifyListeners();
     if (!_isCurrent(generation)) return;
     if (path == null) {
-      final dir = await LocalManager().findValidDirectory(
+      final manager = LocalManager();
+      final existing = manager.find(comic.id, comicType);
+      final dir = await manager.findValidDirectory(
         comic.id,
         comicType,
         comic.title,
       );
+      if (existing == null) {
+        _ownedOutputPath = dir.path;
+        _outputManager = manager;
+      }
       if (!_isCurrent(generation)) return;
       if (!(await dir.exists())) await dir.create();
       if (!_isCurrent(generation)) return;
@@ -224,6 +245,8 @@ class ArchiveDownloadTask extends DownloadTask {
     }
     if (!_isCurrent(generation)) return;
     LocalManager().completeTask(this);
+    _ownedOutputPath = null;
+    _outputManager = null;
     _isRunning = false;
     _speed = 0;
     await _clearWorkspace();

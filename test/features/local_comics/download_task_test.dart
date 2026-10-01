@@ -789,7 +789,6 @@ void main() {
       LocalManager.debugSkipComicSourceInit = true;
       final manager = LocalManager();
       await manager.init();
-      final output = Directory('${manager.path}/archive')..createSync();
       final gate = Completer<void>();
       String? archiveFilePath;
       final extracting = Completer<void>();
@@ -807,7 +806,7 @@ void main() {
           await gate.future;
           File('$path/cover.jpg').writeAsBytesSync([1]);
         },
-      )..path = output.path;
+      );
       manager.restorePausedDownloads([task]);
       addTearDown(() async {
         if (!gate.isCompleted) gate.complete();
@@ -819,6 +818,7 @@ void main() {
       });
       task.resume();
       await extracting.future.timeout(const Duration(seconds: 2));
+      final output = Directory(task.path!);
       task.cancel();
       await pumpEventQueue();
       expect(output.existsSync(), isTrue);
@@ -933,6 +933,120 @@ void main() {
       expect(File(paths['1']!).parent.existsSync(), isFalse);
       expect(manager.count, 2);
       expect(manager.downloadingTasks, isEmpty);
+    },
+  );
+
+  test(
+    'archive cancellation preserves registered and externally supplied output',
+    () async {
+      final root = Directory.systemTemp.createTempSync('archive-owned-output-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      final existing = Directory('${manager.path}/existing')..createSync();
+      final sentinel = File('${existing.path}/original.jpg')
+        ..writeAsBytesSync([7]);
+      final gate = Completer<void>();
+      final extracting = Completer<void>();
+      final task = ArchiveDownloadTask(
+        'https://example.invalid/registered.zip',
+        _archiveComic(sourceKey),
+        createDownloader: (url, path) => _ArchiveDownloader(
+          url,
+          path,
+          Stream.value(const DownloadingStatus(1, 1, 0, true)),
+        ),
+        extractArchive: (archive, path) async {
+          extracting.complete();
+          await gate.future;
+        },
+      );
+      await manager.add(
+        LocalComic(
+          id: task.id,
+          title: task.title,
+          subtitle: '',
+          tags: [],
+          directory: 'existing',
+          chapters: null,
+          cover: 'original.jpg',
+          comicType: task.comicType,
+          downloadedChapters: [],
+          createdAt: DateTime(2026),
+        ),
+      );
+      manager.restorePausedDownloads([task]);
+      addTearDown(() async {
+        if (!gate.isCompleted) gate.complete();
+        task.pause();
+        await task.pendingCleanup;
+        await manager.pendingDownloadTaskWrites;
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      task.resume();
+      await extracting.future.timeout(const Duration(seconds: 2));
+      task.cancel();
+      gate.complete();
+      await task.pendingCleanup;
+      expect(sentinel.readAsBytesSync(), [7]);
+      expect(manager.find(task.id, task.comicType), isNotNull);
+
+      final external = Directory('${root.path}/external')..createSync();
+      final borrowed = File('${external.path}/keep.txt')
+        ..writeAsStringSync('keep');
+      final supplied = ArchiveDownloadTask(
+        'https://example.invalid/external.zip',
+        _archiveComic(sourceKey, id: 'external'),
+      )..path = external.path;
+      manager.restorePausedDownloads([supplied]);
+      supplied.cancel();
+      await supplied.pendingCleanup;
+      expect(borrowed.readAsStringSync(), 'keep');
+    },
+  );
+
+  test(
+    'late cancellation after archive commit retains task-created library files',
+    () async {
+      final root = Directory.systemTemp.createTempSync(
+        'archive-committed-output-',
+      );
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      final task = ArchiveDownloadTask(
+        'https://example.invalid/book.zip',
+        _archiveComic(sourceKey),
+        createDownloader: (url, path) => _ArchiveDownloader(
+          url,
+          path,
+          Stream.value(const DownloadingStatus(1, 1, 0, true)),
+        ),
+        extractArchive: (archive, path) async {
+          File('$path/cover.jpg').writeAsBytesSync([9]);
+        },
+      );
+      manager.restorePausedDownloads([task]);
+      addTearDown(() async {
+        task.pause();
+        await task.pendingCleanup;
+        await manager.pendingDownloadTaskWrites;
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      task.resume();
+      await task.pendingRun;
+      final file = File('${task.path}/cover.jpg');
+      expect(manager.find(task.id, task.comicType), isNotNull);
+      task.cancel();
+      await task.pendingCleanup;
+      expect(file.readAsBytesSync(), [9]);
+      expect(manager.find(task.id, task.comicType), isNotNull);
     },
   );
 
