@@ -585,6 +585,128 @@ void main() {
     },
   );
 
+  test(
+    'resume waits for canceled image stream cleanup before starting again',
+    () async {
+      final root = Directory.systemTemp.createTempSync('download-drain-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      final started = [Completer<void>(), Completer<void>()];
+      final cancelGate = Completer<void>();
+      final controllers = [
+        StreamController<ImageDownloadProgress>(
+          onListen: () => started[0].complete(),
+          onCancel: () => cancelGate.future,
+        ),
+        StreamController<ImageDownloadProgress>(
+          onListen: () => started[1].complete(),
+        ),
+      ];
+      var streams = 0;
+      ImageDownloader.debugLoadComicImageUnwrapped =
+          (image, source, cid, eid) => controllers[streams++].stream;
+      final task = _pendingImageTask(sourceKey, root.path);
+      addTearDown(() async {
+        if (!cancelGate.isCompleted) cancelGate.complete();
+        task.pause();
+        await task.pendingCleanup;
+        await task.debugResumeFuture;
+        await LocalManager().pendingDownloadTaskWrites;
+        for (final controller in controllers) {
+          await controller.close();
+        }
+        root.deleteSync(recursive: true);
+      });
+      task.resume();
+      await started[0].future.timeout(const Duration(seconds: 2));
+      task.pause();
+      final oldRun = task.debugResumeFuture!;
+      task.resume();
+      await pumpEventQueue();
+      expect(streams, 1);
+      expect(task.timer, isNull);
+      cancelGate.complete();
+      await oldRun;
+      await started[1].future.timeout(const Duration(seconds: 2));
+      expect(streams, 2);
+      task.pause();
+      await task.pendingCleanup;
+      await task.debugResumeFuture;
+      expect(task.isError, isFalse);
+    },
+  );
+
+  test(
+    'cancel drains transfers and removes only unfinished normalized chapters',
+    () async {
+      final root = Directory.systemTemp.createTempSync(
+        'download-cancel-chapters-',
+      );
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      final task = _pendingImageTask(
+        sourceKey,
+        '${manager.path}/book',
+        chapters: ['kept', 'new/a'],
+      );
+      await manager.add(
+        LocalComic(
+          id: task.id,
+          title: 'Book',
+          subtitle: '',
+          tags: [],
+          directory: 'book',
+          chapters: const ComicChapters({'kept': 'Kept', 'new/a': 'New'}),
+          cover: '',
+          comicType: task.comicType,
+          downloadedChapters: ['kept'],
+          createdAt: DateTime(2026),
+        ),
+      );
+      final kept = Directory('${task.path}/kept')..createSync(recursive: true);
+      final unfinished = Directory('${task.path}/new_a')
+        ..createSync(recursive: true);
+      final retained = File('${kept.path}/page.jpg')..writeAsBytesSync([1]);
+      final started = Completer<void>();
+      final cancelGate = Completer<void>();
+      final controller = StreamController<ImageDownloadProgress>(
+        onListen: () => started.complete(),
+        onCancel: () => cancelGate.future,
+      );
+      ImageDownloader.debugLoadComicImageUnwrapped =
+          (image, source, cid, eid) => controller.stream;
+      manager.downloadingTasks.add(task);
+      addTearDown(() async {
+        if (!cancelGate.isCompleted) cancelGate.complete();
+        task.pause();
+        await task.pendingCleanup;
+        await task.debugResumeFuture;
+        await manager.pendingDownloadTaskWrites;
+        await controller.close();
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      task.resume();
+      await started.future.timeout(const Duration(seconds: 2));
+      task.cancel();
+      await pumpEventQueue();
+      expect(unfinished.existsSync(), isTrue);
+      expect(retained.existsSync(), isTrue);
+      expect(manager.downloadingTasks, isEmpty);
+      cancelGate.complete();
+      await task.pendingCleanup;
+      await task.debugResumeFuture;
+      expect(unfinished.existsSync(), isFalse);
+      expect(retained.existsSync(), isTrue);
+      expect(manager.find(task.id, task.comicType)!.downloadedChapters, [
+        'kept',
+      ]);
+    },
+  );
+
   test('ImagesDownloadTask cancel before path stops speed recorder', () async {
     final dataDir = Directory.systemTemp.createTempSync(
       'venera-download-data-',
@@ -705,3 +827,33 @@ class _CompletionTask extends DownloadTask {
     createdAt: DateTime(2026),
   );
 }
+
+ImagesDownloadTask _pendingImageTask(
+  String source,
+  String path, {
+  List<String>? chapters,
+}) => ImagesDownloadTask.fromJson({
+  'type': 'ImagesDownloadTask',
+  'source': source,
+  'comicId': 'pending',
+  'comic': {
+    'title': 'Pending',
+    'subtitle': '',
+    'cover': 'cover.jpg',
+    'description': '',
+    'tags': <String, List<String>>{},
+    'chapters': chapters == null ? null : {'kept': 'Kept', 'new/a': 'New'},
+    'sourceKey': source,
+    'comicId': 'pending',
+  },
+  'chapters': chapters,
+  'path': path,
+  'cover': 'cover.jpg',
+  'images': {
+    chapters == null ? '' : 'new/a': ['image'],
+  },
+  'downloadedCount': 0,
+  'totalCount': 1,
+  'index': 0,
+  'chapter': 0,
+})!;
