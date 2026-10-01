@@ -37,6 +37,80 @@ void main() {
   });
   tearDown(() => db.dispose());
 
+  test('folder limits preserve SQLite zero and negative semantics', () {
+    expect(repository.getFolderComics('first', limit: 1).single.id, 'other');
+    expect(repository.getFolderComics('first', limit: 0), isEmpty);
+    expect(repository.getFolderComics('first', limit: -1), hasLength(2));
+  });
+
+  test('record reorder isolates sources and rolls back partial failures', () {
+    db.execute("""CREATE TRIGGER reject_order BEFORE UPDATE ON second
+      WHEN NEW.type = 2 BEGIN SELECT RAISE(ABORT, 'blocked'); END;""");
+    expect(
+      () => repository.reorder('second', [('same', 2), ('same', 1)]),
+      throwsA(isA<SqliteException>()),
+    );
+    expect(repository.maxValue('second'), 1);
+    expect(
+      () => repository.reorder('second', [
+        ('missing', 0),
+        ('same', 1),
+        ('same', 2),
+      ]),
+      throwsA(isA<SqliteException>()),
+    );
+    expect(repository.minValue('second'), 0);
+    db.execute('DROP TRIGGER reject_order;');
+    repository.reorder('second', [('same', 2), ('same', 1)]);
+    expect(
+      repository.getFolderComics('second').map((item) => item.type.value),
+      [2, 1],
+    );
+    expect(repository.getFolderComics('first').first.id, 'other');
+  });
+
+  test('search preserves token matching, wildcard and identity semantics', () {
+    repository.migrateTranslatedTags(
+      repository.folderNames(),
+      (_) => 'translated',
+    );
+    expect(repository.searchInFolder('first', 'first').single.id, 'same');
+    expect(
+      repository.searchInFolder('first', 'translated First').single.id,
+      'same',
+    );
+    expect(repository.searchInFolder('first', 'translated first'), isEmpty);
+    expect(repository.searchInFolder('first', 'First translated'), isEmpty);
+    expect(repository.searchInFolder('first', '%'), hasLength(2));
+    expect(repository.searchInFolder('first', "' OR 1=1 --"), isEmpty);
+    expect(repository.searchInFolder('收藏 "A"', ''), isEmpty);
+    final all = repository.search(['first', 'second'], '');
+    expect(all, hasLength(3));
+    expect(
+      all.firstWhere((item) => item.id == 'same' && item.type.value == 1).name,
+      'First title',
+    );
+    expect(
+      repository.search(['first', 'second'], 'translated   First').single.name,
+      'First title',
+    );
+  });
+
+  test('global search keeps folder cutoff before secondary filtering', () {
+    repository.migrateTranslatedTags(
+      repository.folderNames(),
+      (_) => 'translated',
+    );
+    for (var i = 0; i < 201; i++) {
+      db.execute(
+        "INSERT INTO empty (id, type, name, author, tags, time, cover_path) VALUES (?, 1, 'bulk', '', '', 'time', '');",
+        ['$i'],
+      );
+    }
+    expect(repository.search(['empty', 'first'], 'bulk'), hasLength(201));
+    expect(repository.search(['empty', 'first'], ' First'), isEmpty);
+  });
+
   test(
     'metadata initialization and mixed-version tag migration are repeatable',
     () {

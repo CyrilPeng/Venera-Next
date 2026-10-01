@@ -327,8 +327,11 @@ class FavoritesRepository {
           as int? ??
       0;
 
-  List<FavoriteItem> getFolderComics(String folder) => db
-      .select('SELECT * FROM ${_table(folder)} ORDER BY display_order;')
+  List<FavoriteItem> getFolderComics(String folder, {int? limit}) => db
+      .select(
+        'SELECT * FROM ${_table(folder)} ORDER BY display_order${limit == null ? "" : " LIMIT ?"};',
+        limit == null ? [] : [limit],
+      )
       .map(favoriteItemFromRow)
       .toList();
 
@@ -347,6 +350,55 @@ class FavoritesRepository {
       for (final row in db.select('SELECT * FROM ${_table(folder)};'))
         FavoriteItemWithFolderInfo(favoriteItemFromRow(row), folder),
   ];
+
+  void reorder(
+    String folder,
+    Iterable<(String, int)> identities,
+  ) => _transaction(() {
+    var order = 0;
+    for (final (id, type) in identities) {
+      db.execute(
+        'UPDATE ${_table(folder)} SET display_order = ? WHERE id = ? AND type = ?;',
+        [order++, id, type],
+      );
+    }
+  });
+
+  List<FavoriteItem> _searchFirstToken(String folder, String token) => db
+      .select(
+        'SELECT * FROM ${_table(folder)} WHERE name LIKE ? OR author LIKE ? OR tags LIKE ? OR translated_tags LIKE ?;',
+        List.filled(4, '%$token%'),
+      )
+      .map(favoriteItemFromRow)
+      .toList();
+
+  static bool _matches(FavoriteItem item, String token) =>
+      item.name.contains(token) ||
+      item.author.contains(token) ||
+      item.tags.any((tag) => tag.contains(token));
+
+  List<FavoriteItem> searchInFolder(String folder, String keyword) {
+    final tokens = keyword.split(' ');
+    return _searchFirstToken(folder, tokens.first)
+        .where((item) => tokens.skip(1).every((token) => _matches(item, token)))
+        .toList();
+  }
+
+  List<FavoriteItem> search(Iterable<String> folders, String keyword) {
+    final tokens = keyword.split(' ');
+    final candidates = <FavoriteItem>{};
+    for (final folder in folders) {
+      candidates.addAll(_searchFirstToken(folder, tokens.first));
+      // Preserve the existing folder-level cutoff before secondary filtering.
+      if (candidates.length > 200) break;
+    }
+    return candidates.where((item) {
+      return tokens.skip(1).every((token) {
+        token = token.trim();
+        return token.isEmpty || _matches(item, token);
+      });
+    }).toList();
+  }
 
   bool comicExists(String folder, String id, int type) => db.select(
     'SELECT 1 FROM ${_table(folder)} WHERE id = ? AND type = ? LIMIT 1;',

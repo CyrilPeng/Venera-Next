@@ -143,11 +143,7 @@ class LocalFavoritesManager with ChangeNotifier {
   List<FavoriteItem> getReadLaterComics({int? limit}) {
     final folder = readLaterFolder;
     if (folder == null) return [];
-    final rows = _db.select(
-      'SELECT * FROM "$folder" ORDER BY display_order${limit == null ? '' : ' LIMIT ?'}',
-      limit == null ? [] : [limit],
-    );
-    return rows.map(favoriteItemFromRow).toList();
+    return _repository.getFolderComics(folder, limit: limit);
   }
 
   Future<void> setReadLater(
@@ -643,24 +639,15 @@ class LocalFavoritesManager with ChangeNotifier {
     if (!existsFolder(folder)) {
       throw Exception("Failed to reorder: folder not found");
     }
-    _db.execute("BEGIN TRANSACTION");
     try {
-      for (int i = 0; i < newFolder.length; i++) {
-        _db.execute(
-          """
-          update "$folder"
-          set display_order = ?
-          where id == ? and type == ?;
-        """,
-          [i, newFolder[i].id, newFolder[i].type.value],
-        );
-      }
+      _repository.reorder(
+        folder,
+        newFolder.map((item) => (item.id, item.type.value)),
+      );
     } catch (e) {
       Log.error("Reorder", e.toString());
-      _db.execute("ROLLBACK");
       return;
     }
-    _db.execute("COMMIT");
     notifyListeners();
   }
 
@@ -749,82 +736,11 @@ class LocalFavoritesManager with ChangeNotifier {
     notifyListeners();
   }
 
-  List<FavoriteItem> searchInFolder(String folder, String keyword) {
-    var keywordList = keyword.split(" ");
-    keyword = keywordList.first;
-    keyword = "%$keyword%";
-    var res = _db.select(
-      """
-      SELECT * FROM "$folder" 
-      WHERE name LIKE ? OR author LIKE ? OR tags LIKE ? OR translated_tags LIKE ?;
-    """,
-      [keyword, keyword, keyword, keyword],
-    );
-    var comics = res.map((e) => favoriteItemFromRow(e)).toList();
-    bool test(FavoriteItem comic, String keyword) {
-      if (comic.name.contains(keyword)) {
-        return true;
-      } else if (comic.author.contains(keyword)) {
-        return true;
-      } else if (comic.tags.any((element) => element.contains(keyword))) {
-        return true;
-      }
-      return false;
-    }
+  List<FavoriteItem> searchInFolder(String folder, String keyword) =>
+      _repository.searchInFolder(folder, keyword);
 
-    for (var i = 1; i < keywordList.length; i++) {
-      comics = comics
-          .where((element) => test(element, keywordList[i]))
-          .toList();
-    }
-    return comics;
-  }
-
-  List<FavoriteItem> search(String keyword) {
-    var keywordList = keyword.split(" ");
-    keyword = keywordList.first;
-    var comics = <FavoriteItem>{};
-    for (var table in folderNames) {
-      keyword = "%$keyword%";
-      var res = _db.select(
-        """
-        SELECT * FROM "$table" 
-        WHERE name LIKE ? OR author LIKE ? OR tags LIKE ? OR translated_tags LIKE ?;
-      """,
-        [keyword, keyword, keyword, keyword],
-      );
-      for (var comic in res) {
-        comics.add(favoriteItemFromRow(comic));
-      }
-      if (comics.length > 200) {
-        break;
-      }
-    }
-
-    bool test(FavoriteItem comic, String keyword) {
-      keyword = keyword.trim();
-      if (keyword.isEmpty) {
-        return true;
-      }
-      if (comic.name.contains(keyword)) {
-        return true;
-      } else if (comic.author.contains(keyword)) {
-        return true;
-      } else if (comic.tags.any((element) => element.contains(keyword))) {
-        return true;
-      }
-      return false;
-    }
-
-    return comics.where((element) {
-      for (var i = 1; i < keywordList.length; i++) {
-        if (!test(element, keywordList[i])) {
-          return false;
-        }
-      }
-      return true;
-    }).toList();
-  }
+  List<FavoriteItem> search(String keyword) =>
+      _repository.search(folderNames, keyword);
 
   void editTags(String id, String folder, List<String> tags) {
     _db.execute(
