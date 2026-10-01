@@ -35,6 +35,43 @@ void main() {
   });
   tearDown(() => db.dispose());
 
+  test('cross-folder deletion rolls back and reports only actual identities', () {
+    db.execute(
+      "CREATE TRIGGER reject_delete BEFORE DELETE ON second BEGIN SELECT RAISE(ABORT, 'rejected'); END;",
+    );
+    final ids = [('same', 1), ('same', 1), ('absent', 1)];
+    expect(
+      () => repository.deleteComics(['first', 'second'], ids),
+      throwsA(isA<SqliteException>()),
+    );
+    expect(repository.comicExists('first', 'same', 1), isTrue);
+    expect(repository.comicExists('second', 'same', 1), isTrue);
+    db.execute('DROP TRIGGER reject_delete;');
+    expect(repository.deleteComics(['first', 'second'], ids), {
+      'first': [('same', 1)],
+      'second': [('same', 1)],
+    });
+    expect(repository.comicExists('second', 'same', 2), isTrue);
+    expect(repository.deleteComics(['first', 'second'], ids), isEmpty);
+  });
+
+  test('folder drop rolls back when order cleanup fails', () {
+    db.execute("INSERT INTO folder_order VALUES ('first', 1);");
+    db.execute(
+      "CREATE TRIGGER reject_order_delete BEFORE DELETE ON folder_order BEGIN SELECT RAISE(ABORT, 'rejected'); END;",
+    );
+    expect(
+      () => repository.deleteFolder('first'),
+      throwsA(isA<SqliteException>()),
+    );
+    expect(repository.count('first'), 2);
+    expect(db.select('SELECT * FROM folder_order'), hasLength(1));
+    db.execute('DROP TRIGGER reject_order_delete;');
+    repository.deleteFolder('first');
+    expect(repository.folderNames(), isNot(contains('first')));
+    expect(db.select('SELECT * FROM folder_order'), isEmpty);
+  });
+
   test(
     'insertion selects explicit/front/end order and rejects duplicate identity',
     () {

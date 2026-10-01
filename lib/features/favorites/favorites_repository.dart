@@ -7,6 +7,26 @@ class FavoritesRepository {
   FavoritesRepository(this.db);
   final Database db;
 
+  Map<String, List<(String, int)>> deleteComics(
+    List<String> folders,
+    Iterable<(String, int)> identities,
+  ) => _transaction(() {
+    final requested = identities.toSet();
+    final removed = <String, List<(String, int)>>{};
+    for (final folder in folders) {
+      for (final (id, type) in requested) {
+        _removeRecord(folder, id, type);
+        if (db.updatedRows > 0) (removed[folder] ??= []).add((id, type));
+      }
+    }
+    return removed;
+  });
+
+  void deleteFolder(String folder) => _transaction(() {
+    db.execute('DROP TABLE ${_table(folder)};');
+    db.execute('DELETE FROM folder_order WHERE folder_name = ?;', [folder]);
+  });
+
   bool addComic(
     String folder,
     FavoriteItem item, {

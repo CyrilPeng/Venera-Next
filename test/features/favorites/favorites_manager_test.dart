@@ -72,6 +72,60 @@ Future<void> _withFavoritesManager(
 
 void main() {
   test(
+    'deletion preserves shared covers and failed batches leave caches untouched',
+    () async {
+      await _withFavoritesManager((manager) async {
+        manager.createFolder('delete_one');
+        manager.createFolder('delete_two');
+        final item = _favorite('shared-cover');
+        manager.addComic('delete_one', item);
+        manager.addComic('delete_two', item);
+        final directory = Directory('${App.dataPath}/favorite_cover')
+          ..createSync();
+        final cover = File(
+          '${directory.path}/${(item.id + item.type.value.toString()).hashCode}',
+        )..writeAsStringSync('cover');
+        final db = sqlite3.open('${App.dataPath}/local_favorite.db');
+        var notifications = 0;
+        void listener() => notifications++;
+        manager.addListener(listener);
+        try {
+          db.execute(
+            "CREATE TRIGGER reject_delete BEFORE DELETE ON delete_two BEGIN SELECT RAISE(ABORT, 'rejected'); END;",
+          );
+          manager.batchDeleteComicsInAllFolders([ComicID(item.type, item.id)]);
+          expect(notifications, 0);
+          expect(manager.folderComics('delete_one'), 1);
+          expect(manager.folderComics('delete_two'), 1);
+          expect(manager.isExist(item.id, item.type), isTrue);
+          expect(cover.readAsStringSync(), 'cover');
+          db.execute('DROP TRIGGER reject_delete;');
+          manager.batchDeleteComics('delete_one', [
+            item,
+            item,
+            _favorite('missing'),
+          ]);
+          expect(notifications, 1);
+          expect(manager.folderComics('delete_one'), 0);
+          expect(manager.isExist(item.id, item.type), isTrue);
+          expect(cover.existsSync(), isTrue);
+          manager.deleteComicWithId('delete_one', item.id, item.type);
+          expect(notifications, 1);
+          expect(manager.folderComics('delete_one'), 0);
+          manager.deleteComicWithId('delete_two', item.id, item.type);
+          expect(notifications, 2);
+          expect(manager.isExist(item.id, item.type), isFalse);
+          expect(cover.existsSync(), isFalse);
+        } finally {
+          manager.removeListener(listener);
+          db.dispose();
+        }
+      });
+    },
+    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+  );
+
+  test(
     'failed and same-folder transfers do not notify or change cached counts',
     () async {
       await _withFavoritesManager((manager) async {

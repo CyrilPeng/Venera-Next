@@ -613,16 +613,7 @@ class LocalFavoritesManager with ChangeNotifier {
   void deleteFolder(String name) {
     var wasFollowUpdatesFolder =
         appdata.settings['followUpdatesFolder'] == name;
-    _db.execute("""
-      drop table "$name";
-    """);
-    _db.execute(
-      """
-      delete from folder_order
-      where folder_name == ?;
-    """,
-      [name],
-    );
+    _repository.deleteFolder(name);
     counts.remove(name);
     for (final key in ['readLaterFolder', 'quickFavorite']) {
       if (appdata.settings[key] == name) {
@@ -640,91 +631,62 @@ class LocalFavoritesManager with ChangeNotifier {
     notifyListeners();
   }
 
-  void deleteComicWithId(String folder, String id, ComicType type) {
-    LocalFavoriteImageProvider.delete(id, type.value);
-    _db.execute(
-      """
-      delete from "$folder"
-      where id == ? and type == ?;
-    """,
-      [id, type.value],
-    );
-    if (counts[folder] != null) {
-      counts[folder] = counts[folder]! - 1;
-    } else {
-      counts[folder] = count(folder);
+  void _applyDeletedComics(Map<String, List<(String, int)>> removed) {
+    if (removed.isEmpty) return;
+    final identities = <(String, int)>{};
+    for (final entry in removed.entries) {
+      counts[entry.key] = count(entry.key);
+      for (final (id, type) in entry.value) {
+        reduceHashedId(id, type);
+        identities.add((id, type));
+      }
     }
-    reduceHashedId(id, type.value);
-    _syncFollowUpdatesIfAffected([folder]);
+    // A cover is shared across folders. Files cannot participate in SQLite
+    // rollback, so release them only after commit and the final reference.
+    final folders = folderNames;
+    for (final (id, type) in identities) {
+      if (_repository.findFolders(folders, id, type).isNotEmpty) continue;
+      try {
+        LocalFavoriteImageProvider.delete(id, type);
+      } catch (error, stack) {
+        Log.error('Favorite cover cleanup', error, stack);
+      }
+    }
+    _syncFollowUpdatesIfAffected(removed.keys);
     notifyListeners();
+  }
+
+  void deleteComicWithId(String folder, String id, ComicType type) {
+    _applyDeletedComics(_repository.deleteComics([folder], [(id, type.value)]));
   }
 
   void batchDeleteComics(String folder, List<FavoriteItem> comics) {
-    if (comics.isEmpty) {
-      return;
-    }
-    _db.execute("BEGIN TRANSACTION");
+    if (comics.isEmpty) return;
+    late Map<String, List<(String, int)>> removed;
     try {
-      for (var comic in comics) {
-        LocalFavoriteImageProvider.delete(comic.id, comic.type.value);
-        _db.execute(
-          """
-          delete from "$folder"
-          where id == ? and type == ?;
-        """,
-          [comic.id, comic.type.value],
-        );
-      }
-      if (counts[folder] != null) {
-        counts[folder] = counts[folder]! - comics.length;
-      } else {
-        counts[folder] = count(folder);
-      }
-    } catch (e) {
-      Log.error("Batch Delete Comics", e.toString());
-      _db.execute("ROLLBACK");
+      removed = _repository.deleteComics([
+        folder,
+      ], comics.map((comic) => (comic.id, comic.type.value)));
+    } catch (error) {
+      Log.error('Batch Delete Comics', error.toString());
       return;
     }
-    _db.execute("COMMIT");
-    for (var comic in comics) {
-      reduceHashedId(comic.id, comic.type.value);
-    }
-    _syncFollowUpdatesIfAffected([folder]);
-    notifyListeners();
+    _applyDeletedComics(removed);
   }
 
   void batchDeleteComicsInAllFolders(List<ComicID> comics) {
-    if (comics.isEmpty) {
-      return;
-    }
-    _db.execute("BEGIN TRANSACTION");
-    var folderNames = _repository.folderNames();
+    if (comics.isEmpty) return;
+    late Map<String, List<(String, int)>> removed;
     try {
-      for (var comic in comics) {
-        LocalFavoriteImageProvider.delete(comic.id, comic.type.value);
-        for (var folder in folderNames) {
-          _db.execute(
-            """
-            delete from "$folder"
-            where id == ? and type == ?;
-          """,
-            [comic.id, comic.type.value],
-          );
-        }
-      }
-    } catch (e) {
-      Log.error("Batch Delete Comics in All Folders", e.toString());
-      _db.execute("ROLLBACK");
+      removed = _repository.deleteComics(
+        folderNames,
+        comics.map((comic) => (comic.id, comic.type.value)),
+      );
+    } catch (error) {
+      Log.error('Batch Delete Comics in All Folders', error.toString());
       return;
     }
-    _db.execute("COMMIT");
-    initCounts();
-    for (var comic in comics) {
-      var hash = comic.id.hashCode ^ comic.type.value;
-      _hashedIds.remove(hash);
-    }
-    _syncFollowUpdatesIfAffected(folderNames);
-    notifyListeners();
+    _applyDeletedComics(removed);
   }
 
   Future<int> removeInvalid() async {

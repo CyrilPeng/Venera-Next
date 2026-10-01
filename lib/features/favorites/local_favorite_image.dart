@@ -23,7 +23,7 @@ class LocalFavoriteImageProvider
     var fileName = (id + intKey.toString()).hashCode.toString();
     var file = File(FilePath.join(App.dataPath, 'favorite_cover', fileName));
     if (file.existsSync()) {
-      file.delete();
+      file.deleteSync();
     }
   }
 
