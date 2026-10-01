@@ -298,7 +298,7 @@ class HistoryManager with ChangeNotifier {
   }
 
   void notifyChanges() {
-    updateCache();
+    _historyCache.refresh(invalidateRecords: true);
     notifyListeners();
   }
 

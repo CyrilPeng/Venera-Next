@@ -99,6 +99,35 @@ void main() {
     },
   );
 
+  test(
+    'external refresh invalidates values only after identity loading succeeds',
+    () {
+      var fail = false;
+      final cache = HistoryCache(
+        identities: ({String? id}) {
+          if (fail) throw StateError('injected identity read failure');
+          return repository.identities(id: id);
+        },
+        load: repository.find,
+      );
+      final original = item();
+      repository.importHistory(original);
+      cache.record(original);
+      repository.importHistory(
+        item()
+          ..title = 'Updated'
+          ..page = 9,
+      );
+      fail = true;
+      expect(() => cache.refresh(invalidateRecords: true), throwsStateError);
+      expect(cache.find('shared', 0), same(original));
+      fail = false;
+      cache.refresh(invalidateRecords: true);
+      expect(cache.find('shared', 0)!.title, 'Updated');
+      expect(cache.find('shared', 0)!.page, 9);
+    },
+  );
+
   test('cache observes source replacement under an id-only primary key', () {
     db.execute('DROP TABLE history');
     repository.initialize();

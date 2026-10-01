@@ -42,12 +42,19 @@ class HistoryCache {
   bool _contains((String, int) key) =>
       _known?[key.$1]?.contains(key.$2) ?? false;
 
-  void refresh() {
-    _known = {};
+  void refresh({bool invalidateRecords = false}) {
+    final known = <String, Set<int>>{};
     for (final (id, type) in identities()) {
-      (_known![id] ??= {}).add(type);
+      (known[id] ??= {}).add(type);
     }
-    _recent.removeWhere((key, _) => !_contains(key));
+    // Publish only a complete identity snapshot. A failed read must not turn
+    // existing cached records into an apparently empty or partial history.
+    _known = known;
+    if (invalidateRecords) {
+      _recent.clear();
+    } else {
+      _recent.removeWhere((key, _) => !_contains(key));
+    }
   }
 
   void clear() {

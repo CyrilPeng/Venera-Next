@@ -1,3 +1,4 @@
+import 'package:venera_next/features/history/history_repository.dart';
 import 'dart:io';
 import 'dart:async';
 
@@ -55,6 +56,44 @@ void main() {
         HistoryManager.cache = null;
         directory.deleteSync(recursive: true);
       });
+
+      test(
+        'external commit notification refreshes values before listeners run',
+        () async {
+          final original = _history('external');
+          await manager.addHistory(original);
+          expect(manager.find(original.id, original.type)!.page, 2);
+          final repository = HistoryRepository(manager.imageFavoritesDatabase);
+          final updated = original.copy()
+            ..title = 'Imported title'
+            ..page = 9;
+          repository.importHistory(updated);
+          var notifications = 0;
+          void changed() {
+            notifications++;
+            expect(
+              manager.find(original.id, original.type)!.title,
+              'Imported title',
+            );
+            expect(manager.find(original.id, original.type)!.page, 9);
+          }
+
+          manager.addListener(changed);
+          try {
+            manager.notifyChanges();
+            expect(notifications, 1);
+          } finally {
+            manager.removeListener(changed);
+          }
+          final later = updated.copy()..page = 10;
+          await manager.addHistory(later);
+          expect(manager.find(original.id, original.type)!.page, 10);
+          expect(
+            manager.find(original.id, original.type)!.title,
+            'Imported title',
+          );
+        },
+      );
 
       test(
         'source refresh preserves newer progress and later saves preserve metadata',
