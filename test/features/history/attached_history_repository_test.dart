@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/history/history_api.dart';
 import 'package:venera_next/features/history/history_repository.dart';
-import 'package:venera_next/features/history/image_favorites_models.dart';
 import 'package:venera_next/features/history/image_favorites_repository.dart';
 import 'package:venera_next/features/favorites/favorites_api.dart';
 import 'package:venera_next/features/favorites/favorites_repository.dart';

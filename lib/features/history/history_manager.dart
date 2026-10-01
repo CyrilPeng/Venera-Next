@@ -110,6 +110,29 @@ class HistoryManager with ChangeNotifier {
   Future<void> importHistory(History newItem) =>
       _writeHistory(newItem, replaceMetadata: true);
 
+  /// Serialize a synchronous external commit with accepted history writes.
+  /// The writer must finish its transaction before returning. Cache publication
+  /// and completion callbacks run without yielding to later queued mutations.
+  Future<void> importStorage(
+    void Function(String databasePath) write, {
+    required void Function() onCommitted,
+  }) {
+    if (!isInitialized) {
+      return Future.error(StateError('History database is closed'));
+    }
+    final generation = _generation;
+    final path = _dbPath;
+    return _enqueueAsyncWrite(() async {
+      if (!isInitialized || generation != _generation) {
+        throw StateError('History import belongs to a closed connection');
+      }
+      write(path);
+      _historyCache.refresh(invalidateRecords: true);
+      onCommitted();
+      notifyListeners();
+    });
+  }
+
   Future<void> _writeHistory(History newItem, {required bool replaceMetadata}) {
     final snapshot = newItem.copy();
     final path = _dbPath;

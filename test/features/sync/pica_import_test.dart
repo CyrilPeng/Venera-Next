@@ -83,7 +83,38 @@ void main() {
         }
 
         writePackage();
-        await importPicaData(package);
+        await favorites.debugWaitForHashedIdsRefresh();
+        var notifications = 0;
+        void changed() {
+          notifications++;
+          expect(favorites.folderComics('旧收藏 "A"'), 1);
+          expect(
+            history.find('history-id', ComicType('nhentai'.hashCode))?.page,
+            7,
+          );
+        }
+
+        favorites.addListener(changed);
+        history.addListener(changed);
+        history.imageFavoritesDatabase.execute(
+          "CREATE TRIGGER reject_import BEFORE INSERT ON history BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+        );
+        try {
+          await expectLater(
+            importPicaData(package),
+            throwsA(isA<SqliteException>()),
+          );
+          expect(favorites.existsFolder('旧收藏 "A"'), isFalse);
+          expect(favorites.findLinked('旧收藏 "A"'), (null, null));
+          expect(history.count(), 0);
+          expect(notifications, 0);
+          history.imageFavoritesDatabase.execute('DROP TRIGGER reject_import;');
+          await importPicaData(package);
+          expect(notifications, 2);
+        } finally {
+          favorites.removeListener(changed);
+          history.removeListener(changed);
+        }
         expect(
           favorites.getFolderComics('旧收藏 "A"').single.type.value,
           'picacg'.hashCode,

@@ -58,6 +58,31 @@ class LocalFavoritesManager with ChangeNotifier {
 
   late String _dbPath;
 
+  String get databasePath {
+    if (_database == null || _isClosed) {
+      throw StateError('Favorites database is closed');
+    }
+    return _dbPath;
+  }
+
+  /// Reconcile external additions before any import completion notifications.
+  void refreshImportedFavorites(Map<String, List<FavoriteItem>> folders) {
+    for (final folder in folders.keys) {
+      counts[folder] = count(folder);
+    }
+    _refreshIdentityCounts(
+      folders.values
+          .expand((items) => items)
+          .map((item) => (item.id, item.type.value)),
+    );
+    refreshUpdateIds();
+  }
+
+  void notifyImportedFavorites(Iterable<String> folders) {
+    _syncFollowUpdatesIfAffected(folders);
+    notifyListeners();
+  }
+
   Map<String, int> counts = {};
 
   final _identityIndex = FavoriteIdentityIndex();

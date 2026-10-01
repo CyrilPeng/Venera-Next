@@ -241,6 +241,7 @@
   "business_entrypoints": [
     "features/sync/legacy_pica_reader.dart",
     "features/sync/legacy_pica_data.dart",
+    "features/sync/pica_import_storage.dart",
     "features/sync/app_data_archive.dart",
     "features/sync/app_data_snapshot.dart",
     "features/favorites/favorites_repository.dart",

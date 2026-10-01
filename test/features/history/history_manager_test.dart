@@ -58,6 +58,63 @@ void main() {
       });
 
       test(
+        'external imports preserve queue order, failure recovery and connection ownership',
+        () async {
+          final original = _history('queued-import');
+          final first = manager.addHistory(original);
+          var committed = false;
+          final importing = manager.importStorage(
+            (path) {
+              final db = sqlite3.open(path);
+              try {
+                final repository = HistoryRepository(db);
+                expect(
+                  repository.find(original.id, original.type.value)!.page,
+                  2,
+                );
+                repository.importHistory(
+                  original.copy()
+                    ..page = 7
+                    ..title = 'Imported',
+                );
+              } finally {
+                db.dispose();
+              }
+            },
+            onCommitted: () {
+              committed = true;
+              expect(manager.find(original.id, original.type)!.page, 7);
+            },
+          );
+          final later = manager.addHistory(original.copy()..page = 9);
+          await Future.wait([first, importing, later]);
+          expect(committed, isTrue);
+          expect(manager.find(original.id, original.type)!.page, 9);
+          expect(manager.find(original.id, original.type)!.title, 'Imported');
+          var failedNotification = false;
+          await expectLater(
+            manager.importStorage(
+              (_) => throw StateError('injected'),
+              onCommitted: () => failedNotification = true,
+            ),
+            throwsStateError,
+          );
+          expect(failedNotification, isFalse);
+          await manager.addHistory(original.copy()..page = 10);
+          expect(manager.find(original.id, original.type)!.page, 10);
+          var staleWrite = false;
+          final stale = manager.importStorage(
+            (_) => staleWrite = true,
+            onCommitted: () {},
+          );
+          manager.close();
+          await expectLater(stale, throwsStateError);
+          expect(staleWrite, isFalse);
+          await manager.init();
+        },
+      );
+
+      test(
         'external commit notification refreshes values before listeners run',
         () async {
           final original = _history('external');
