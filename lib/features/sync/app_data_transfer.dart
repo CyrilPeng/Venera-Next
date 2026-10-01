@@ -1,4 +1,8 @@
 import 'dart:convert';
+import 'package:archive/archive_io.dart' as archive_io;
+import 'package:path/path.dart' as p;
+import 'package:uuid/uuid.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/file_replacement.dart';
 import 'dart:isolate';
 
@@ -15,40 +19,84 @@ import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:zip_flutter/zip_flutter.dart';
 
-Future<File> exportAppData([bool sync = true]) async {
-  var time = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-  var cacheFilePath = FilePath.join(App.cachePath, '$time.venera');
-  var cacheFile = File(cacheFilePath);
-  var dataPath = App.dataPath;
-  if (await cacheFile.exists()) {
-    await cacheFile.delete();
-  }
-  await Isolate.run(() {
-    var zipFile = ZipFile.open(cacheFilePath);
-    var historyFile = FilePath.join(dataPath, "history.db");
-    var localFavoriteFile = FilePath.join(dataPath, "local_favorite.db");
-    var appdata = FilePath.join(
-      dataPath,
-      sync ? "syncdata.json" : "appdata.json",
-    );
-    var cookies = FilePath.join(dataPath, "cookie.db");
-    zipFile.addFile("history.db", historyFile);
-    zipFile.addFile("local_favorite.db", localFavoriteFile);
-    zipFile.addFile("appdata.json", appdata);
-    zipFile.addFile("cookie.db", cookies);
-    for (var file in Directory(
-      FilePath.join(dataPath, "comic_source"),
-    ).listSync()) {
-      if (file is File) {
-        zipFile.addFile("comic_source/${file.name}", file.path);
+Future<File> exportAppData([bool sync = true]) =>
+    AppDataOperations.instance.run(() => _exportAppData(sync));
+
+Future<File> _exportAppData(bool sync) async {
+  final cacheFilePath = FilePath.join(
+    App.cachePath,
+    '${const Uuid().v4()}.venera',
+  );
+  final cacheFile = File(cacheFilePath);
+  final dataPath = App.dataPath;
+  try {
+    await Isolate.run(() {
+      final zipFile = ZipFile.open(cacheFilePath);
+      try {
+        final historyFile = FilePath.join(dataPath, 'history.db');
+        final localFavoriteFile = FilePath.join(dataPath, 'local_favorite.db');
+        final appdata = FilePath.join(
+          dataPath,
+          sync ? 'syncdata.json' : 'appdata.json',
+        );
+        final cookies = FilePath.join(dataPath, 'cookie.db');
+        zipFile.addFile('history.db', historyFile);
+        zipFile.addFile('local_favorite.db', localFavoriteFile);
+        zipFile.addFile('appdata.json', appdata);
+        zipFile.addFile('cookie.db', cookies);
+        for (final file in Directory(
+          FilePath.join(dataPath, 'comic_source'),
+        ).listSync()) {
+          if (file is File) {
+            zipFile.addFile('comic_source/${file.name}', file.path);
+          }
+        }
+      } finally {
+        zipFile.close();
       }
-    }
-    zipFile.close();
-  });
-  return cacheFile;
+    });
+    return cacheFile;
+  } catch (_) {
+    await cacheFile.deleteIgnoreError();
+    rethrow;
+  }
 }
 
-Future<void> importAppData(File file, [bool checkVersion = false]) async {
+// Decode ZIP content directly so custom .venera/.picadata extensions work.
+// The native extractor in zip_flutter 0.0.13 double-frees its callback argument.
+void _extractAppDataZip(String archivePath, String outputPath) {
+  final input = archive_io.InputFileStream(archivePath);
+  try {
+    final archive = archive_io.ZipDecoder().decodeStream(input);
+    for (final entry in archive) {
+      final name = entry.name.replaceAll('\\', '/');
+      final destination = p.normalize(p.join(outputPath, name));
+      if (entry.isSymbolicLink ||
+          p.isAbsolute(name) ||
+          !p.isWithin(p.absolute(outputPath), p.absolute(destination))) {
+        throw FormatException('Invalid app data archive entry: ${entry.name}');
+      }
+      if (entry.isDirectory) {
+        Directory(destination).createSync(recursive: true);
+      } else {
+        File(destination).parent.createSync(recursive: true);
+        final output = archive_io.OutputFileStream(destination);
+        try {
+          entry.writeContent(output);
+        } finally {
+          output.closeSync();
+        }
+      }
+    }
+  } finally {
+    input.closeSync();
+  }
+}
+
+Future<void> importAppData(File file, [bool checkVersion = false]) =>
+    AppDataOperations.instance.run(() => _importAppData(file, checkVersion));
+
+Future<void> _importAppData(File file, bool checkVersion) async {
   var cacheDirPath = FilePath.join(App.cachePath, 'temp_data');
   var cacheDir = Directory(cacheDirPath);
   var backupDir = Directory(
@@ -70,7 +118,7 @@ Future<void> importAppData(File file, [bool checkVersion = false]) async {
   cacheDir.createSync();
   try {
     await Isolate.run(() {
-      ZipFile.openAndExtract(file.path, cacheDirPath);
+      _extractAppDataZip(file.path, cacheDirPath);
     });
     var historyFile = cacheDir.joinFile("history.db");
     var localFavoriteFile = cacheDir.joinFile("local_favorite.db");
@@ -367,7 +415,10 @@ void _openCookieJarForImport() {
   );
 }
 
-Future<void> importPicaData(File file) async {
+Future<void> importPicaData(File file) =>
+    AppDataOperations.instance.run(() => _importPicaData(file));
+
+Future<void> _importPicaData(File file) async {
   var cacheDirPath = FilePath.join(App.cachePath, 'temp_data');
   var cacheDir = Directory(cacheDirPath);
   if (cacheDir.existsSync()) {
@@ -376,7 +427,7 @@ Future<void> importPicaData(File file) async {
   cacheDir.createSync();
   try {
     await Isolate.run(() {
-      ZipFile.openAndExtract(file.path, cacheDirPath);
+      _extractAppDataZip(file.path, cacheDirPath);
     });
     var localFavoriteFile = cacheDir.joinFile("local_favorite.db");
     if (localFavoriteFile.existsSync()) {

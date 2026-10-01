@@ -1,3 +1,4 @@
+import 'package:uuid/uuid.dart';
 import 'package:venera_next/foundation/sync_preference_store.dart';
 import 'dart:async';
 
@@ -149,10 +150,13 @@ class _AppSettingsState extends State<AppSettings> {
             var file = await selectFile(ext: ['venera', 'picadata']);
             if (file != null) {
               var cacheFile = File(
-                FilePath.join(App.cachePath, "import_data_temp"),
+                FilePath.join(
+                  App.cachePath,
+                  "import_data_${const Uuid().v4()}",
+                ),
               );
-              await file.saveTo(cacheFile.path);
               try {
+                await file.saveTo(cacheFile.path);
                 if (file.name.endsWith('picadata')) {
                   await importPicaData(cacheFile);
                 } else {

@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'favorite_identity_index.dart';
 import 'package:venera_next/foundation/file_replacement.dart';
 import 'favorites_repository.dart';
@@ -49,6 +50,7 @@ class LocalFavoritesManager with ChangeNotifier {
   Future<void>? _initialization;
   Future<void>? _closing;
   Future<void>? _clearing;
+  Future<void>? _clearRequest;
   final _pendingReads = <Future<void>>{};
   int _connectionGeneration = 0;
 
@@ -715,24 +717,31 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   Future<void> clearAll() {
-    final existing = _clearing;
+    final existing = _clearRequest;
     if (existing != null) return existing;
     if (_database == null || _isClosed) {
       return Future.error(StateError('Favorites database is closed'));
     }
     final path = _dbPath;
     final attempt = Completer<void>();
-    _clearing = attempt.future;
-    Future<void>.sync(() => _clearDatabase(path)).then(
-      (_) {
-        _clearing = null;
-        attempt.complete();
-      },
-      onError: (Object error, StackTrace stack) {
-        _clearing = null;
-        attempt.completeError(error, stack);
-      },
-    );
+    _clearRequest = attempt.future;
+    AppDataOperations.instance
+        .run(() async {
+          _clearing = attempt.future;
+          await _clearDatabase(path);
+        })
+        .then(
+          (_) {
+            _clearing = null;
+            _clearRequest = null;
+            attempt.complete();
+          },
+          onError: (Object error, StackTrace stack) {
+            _clearing = null;
+            _clearRequest = null;
+            attempt.completeError(error, stack);
+          },
+        );
     return attempt.future;
   }
 
