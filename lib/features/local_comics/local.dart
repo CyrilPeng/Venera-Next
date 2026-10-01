@@ -362,6 +362,10 @@ class LocalManager with ChangeNotifier {
     downloadingTasks.map((task) => task.toJson()),
   );
 
+  /// Install a fully decoded paused snapshot during initialization/recovery.
+  void restorePausedDownloads(Iterable<DownloadTask> tasks) =>
+      _downloadQueue.restorePausedTasks(tasks);
+
   void restoreDownloadingTasks() {
     try {
       final tasks = _downloadTaskStore.restore(
@@ -369,9 +373,7 @@ class LocalManager with ChangeNotifier {
         downloadTaskFromJson,
       );
       if (tasks != null) {
-        downloadingTasks
-          ..clear()
-          ..addAll(tasks);
+        restorePausedDownloads(tasks);
       }
     } catch (error, stack) {
       Log.error('LocalManager', error, stack);

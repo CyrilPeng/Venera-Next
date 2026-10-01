@@ -29,6 +29,62 @@ void main() {
     );
   });
 
+  test('task view rejects mutations but reflects service updates', () {
+    final view = queue.tasks;
+    final task = _Task('a', events);
+    expect(() => view.add(task), throwsUnsupportedError);
+    queue.add(task);
+    expect(view, [task]);
+    expect(() => view.clear(), throwsUnsupportedError);
+    expect(() => view[0] = _Task('b', events), throwsUnsupportedError);
+    queue.remove(task);
+    expect(view, isEmpty);
+  });
+
+  test(
+    'paused restoration is complete, silent and deduplicated by source identity',
+    () {
+      final first = _Task('a', events);
+      final other = _Task('a', events, type: 18);
+      queue.restorePausedTasks([first, _Task('a', events), other]);
+      expect(queue.tasks, [first, other]);
+      expect(identical(queue.tasks.first, first), isTrue);
+      expect(events, isEmpty);
+      Iterable<DownloadTask> broken() sync* {
+        yield _Task('new', events);
+        throw StateError('injected decode failure');
+      }
+
+      expect(() => queue.restorePausedTasks(broken()), throwsStateError);
+      expect(queue.tasks, [first, other]);
+      queue.restorePausedTasks(queue.tasks);
+      expect(queue.tasks, [first, other]);
+      queue.restorePausedTasks([]);
+      expect(queue.tasks, isEmpty);
+      expect(events, isEmpty);
+    },
+  );
+
+  test(
+    'restoration rejects active current or incoming tasks without changing state',
+    () {
+      final running = _Task('a', events);
+      queue.add(running);
+      events.clear();
+      expect(() => queue.restorePausedTasks([]), throwsStateError);
+      expect(queue.tasks, [running]);
+      running.pause();
+      final incoming = _Task('b', events)..resume();
+      events.clear();
+      expect(() => queue.restorePausedTasks([incoming]), throwsStateError);
+      expect(queue.tasks, [running]);
+      expect(events, isEmpty);
+      incoming.pause();
+      queue.restorePausedTasks([incoming]);
+      expect(queue.tasks, [incoming]);
+    },
+  );
+
   test(
     'pause listener removing the target cannot remove another task or reinsert it',
     () {

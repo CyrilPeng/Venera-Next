@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'download_task.dart';
 import 'local_comic_model.dart';
@@ -15,10 +16,31 @@ class DownloadQueue {
   final void Function() notifyChanged;
   final void Function() requestSave;
 
-  // Mutable compatibility view; production mutations go through this service.
-  final List<DownloadTask> tasks = [];
+  final List<DownloadTask> _tasks = [];
+  late final List<DownloadTask> tasks = UnmodifiableListView(_tasks);
   final _completing = Set<DownloadTask>.identity();
   int _revision = 0;
+
+  /// Publish a complete paused snapshot during initialization/recovery, without
+  /// starting tasks, notifying listeners or writing the snapshot back to disk.
+  void restorePausedTasks(Iterable<DownloadTask> restored) {
+    final revision = _revision;
+    final snapshot = <DownloadTask>[];
+    final identities = <(String, int)>{};
+    for (final task in restored) {
+      if (!task.isPaused) throw StateError('Cannot restore a running task');
+      if (identities.add((task.id, task.comicType.value))) snapshot.add(task);
+    }
+    if (revision != _revision ||
+        _completing.isNotEmpty ||
+        _tasks.any((task) => !task.isPaused)) {
+      throw StateError('Cannot replace an active or changed download queue');
+    }
+    _tasks
+      ..clear()
+      ..addAll(snapshot);
+    _revision++;
+  }
 
   bool contains(String id, ComicType type) =>
       tasks.any((task) => task.id == id && task.comicType == type);
@@ -33,7 +55,7 @@ class DownloadQueue {
 
   void add(DownloadTask task) {
     if (contains(task.id, task.comicType)) return;
-    tasks.add(task);
+    _tasks.add(task);
     final revision = ++_revision;
     _publish();
     _resumeIfUnchanged(revision);
@@ -49,7 +71,7 @@ class DownloadQueue {
       commitComic(comic);
       final index = _indexOf(task);
       if (index < 0) return;
-      tasks.removeAt(index);
+      _tasks.removeAt(index);
       final revision = ++_revision;
       _publish();
       _resumeIfUnchanged(revision);
@@ -66,7 +88,7 @@ class DownloadQueue {
   void remove(DownloadTask task) {
     final index = _indexOf(task);
     if (index < 0) return;
-    tasks.removeAt(index);
+    _tasks.removeAt(index);
     _revision++;
     _publish();
   }
@@ -82,8 +104,8 @@ class DownloadQueue {
     }
     final index = _indexOf(task);
     if (index <= 0) return;
-    tasks.removeAt(index);
-    tasks.insert(0, task);
+    _tasks.removeAt(index);
+    _tasks.insert(0, task);
     final revision = ++_revision;
     _publish();
     if (shouldResume) _resumeIfUnchanged(revision);

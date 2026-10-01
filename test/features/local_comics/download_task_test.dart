@@ -25,7 +25,6 @@ void main() {
   tearDown(() {
     ImageDownloader.debugLoadComicImageUnwrapped = null;
     ComicSourceManager().remove(sourceKey);
-    LocalManager().downloadingTasks.clear();
     LocalManager.resetForTesting();
   });
 
@@ -234,9 +233,9 @@ void main() {
         source: ComicSource.find(sourceKey)!,
         comicId: 'comic-1',
       );
-      manager.downloadingTasks.add(task);
+      manager.restorePausedDownloads([task]);
       final first = manager.saveCurrentDownloadingTasks();
-      manager.downloadingTasks.clear();
+      manager.restorePausedDownloads([]);
       final second = manager.saveCurrentDownloadingTasks();
       await first;
       await second;
@@ -268,7 +267,7 @@ void main() {
         source: ComicSource.find(sourceKey)!,
         comicId: 'restored',
       );
-      manager.downloadingTasks.add(existing);
+      manager.restorePausedDownloads([existing]);
       final file = File('${root.path}/downloading_tasks.json');
       final invalid = jsonEncode([
         restored.toJson(),
@@ -312,7 +311,7 @@ void main() {
       });
       final first = _CompletionTask('one');
       final next = _CompletionTask('two');
-      manager.downloadingTasks.addAll([first, next]);
+      manager.restorePausedDownloads([first, next]);
       await manager.saveCurrentDownloadingTasks();
       final file = File('${root.path}/downloading_tasks.json');
       final original = file.readAsStringSync();
@@ -386,7 +385,7 @@ void main() {
         LocalManager.resetForTesting();
         root.deleteSync(recursive: true);
       });
-      manager.downloadingTasks.add(task);
+      manager.restorePausedDownloads([task]);
       db.execute(
         "CREATE TRIGGER reject_completion BEFORE INSERT ON comics BEGIN SELECT RAISE(ABORT, 'injected'); END;",
       );
@@ -451,7 +450,7 @@ void main() {
         LocalManager.resetForTesting();
         root.deleteSync(recursive: true);
       });
-      manager.downloadingTasks.add(task);
+      manager.restorePausedDownloads([task]);
       task.resume();
       await task.debugResumeFuture;
       expect(task.isError, isTrue);
@@ -680,7 +679,7 @@ void main() {
       );
       ImageDownloader.debugLoadComicImageUnwrapped =
           (image, source, cid, eid) => controller.stream;
-      manager.downloadingTasks.add(task);
+      manager.restorePausedDownloads([task]);
       addTearDown(() async {
         if (!cancelGate.isCompleted) cancelGate.complete();
         task.pause();
@@ -734,7 +733,7 @@ void main() {
 
     final source = ComicSource.find(sourceKey)!;
     final task = ImagesDownloadTask(source: source, comicId: 'comic-1');
-    LocalManager().downloadingTasks.add(task);
+    LocalManager().restorePausedDownloads([task]);
 
     task.runRecorder();
     expect(task.timer, isNotNull);
