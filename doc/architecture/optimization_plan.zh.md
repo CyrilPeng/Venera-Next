@@ -1,5 +1,7 @@
 # 架构与可维护性优化方案
 
+当前逐项状态见 [验收清单](optimization_acceptance.zh.md)。本文原始待办或带日期记录保留其历史含义，不代表当前全部状态。
+
 English: [Architecture and Maintainability Optimization Plan](optimization_plan.en.md)
 
 日期：2026-09-30。状态：待实施方案。本文不表示相关重构已完成，也不构成发布日期承诺。

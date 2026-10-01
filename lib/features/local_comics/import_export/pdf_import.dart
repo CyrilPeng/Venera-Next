@@ -91,15 +91,24 @@ abstract final class PdfComicImporter {
     DocumentImportProgress? onProgress,
     DocumentImportCancellation? cancellation,
     Future<void> Function(LocalComic comic)? registerComic,
-  }) => LocalComicStorageGuard.instance.runImport(
-    () => _importDocument(
-      document,
-      title: title,
-      onProgress: onProgress,
-      cancellation: cancellation,
-      registerComic: registerComic,
-    ),
-  );
+  }) async {
+    var entered = false;
+    try {
+      return await LocalComicStorageGuard.instance.runImport(() {
+        entered = true;
+        return _importDocument(
+          document,
+          title: title,
+          onProgress: onProgress,
+          cancellation: cancellation,
+          registerComic: registerComic,
+        );
+      });
+    } catch (_) {
+      if (!entered) await document.dispose();
+      rethrow;
+    }
+  }
 
   static Future<LocalComic> _importDocument(
     PdfDocument document, {

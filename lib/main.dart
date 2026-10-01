@@ -46,6 +46,8 @@ void main(List<String> args) {
         runApp(const MyApp());
         if (App.isDesktop) {
           await windowManager.ensureInitialized();
+          // WindowFrame owns the async close flow, including native close events.
+          await windowManager.setPreventClose(true);
           windowManager.waitUntilReadyToShow().then((_) async {
             await windowManager.setTitleBarStyle(
               TitleBarStyle.hidden,
@@ -334,7 +336,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   child: MouseBackDetector(
                     onTapDown: App.pop,
                     child: WindowFrame(
-                      SyncWindowBinding(child: widget, onExit: () => exit(0)),
+                      SyncWindowBinding(child: widget),
                       debugAction: reloadComicSourcesForDebug,
                     ),
                   ),

@@ -26,11 +26,20 @@ class WindowFrameController extends InheritedWidget {
   /// Removes a close listener.
   final void Function(WindowCloseListener listener) removeCloseListener;
 
+  /// Final shutdown tasks run in reverse registration order after close guards.
+  final void Function(Future<void> Function() task) addExitTask, removeExitTask;
+  final void Function(Future<void> task) trackExitTask;
+  final VoidCallback forceExit;
+
   const WindowFrameController._create({
     required this.isWindowFrameHidden,
     required this.setWindowFrame,
     required this.addCloseListener,
     required this.removeCloseListener,
+    required this.addExitTask,
+    required this.removeExitTask,
+    required this.trackExitTask,
+    required this.forceExit,
     required super.child,
   });
 
@@ -41,11 +50,12 @@ class WindowFrameController extends InheritedWidget {
 }
 
 class WindowFrame extends StatefulWidget {
-  const WindowFrame(this.child, {this.debugAction, super.key});
+  const WindowFrame(this.child, {this.debugAction, this.onExit, super.key});
 
   final Widget child;
 
   final VoidCallback? debugAction;
+  final VoidCallback? onExit;
 
   @override
   State<WindowFrame> createState() => _WindowFrameState();
@@ -57,10 +67,29 @@ class WindowFrame extends StatefulWidget {
 
 typedef WindowCloseListener = bool Function();
 
-class _WindowFrameState extends State<WindowFrame> {
+class _WindowFrameState extends State<WindowFrame> with WindowListener {
   bool isWindowFrameHidden = false;
   bool useDarkTheme = false;
   var closeListeners = <WindowCloseListener>[];
+  final _exitTasks = <Future<void> Function()>[];
+  final _pendingExitTasks = <Future<void>>{};
+  bool _closing = false;
+  bool _exited = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (App.isDesktop) windowManager.addListener(this);
+  }
+
+  @override
+  void onWindowClose() => _onClose();
+
+  @override
+  void dispose() {
+    if (App.isDesktop) windowManager.removeListener(this);
+    super.dispose();
+  }
 
   /// Sets the visibility of the window frame.
   void setWindowFrame(bool show) {
@@ -80,13 +109,54 @@ class _WindowFrameState extends State<WindowFrame> {
     closeListeners.remove(listener);
   }
 
-  void _onClose() {
-    for (var listener in closeListeners) {
+  void _forceExit() {
+    if (!mounted || _exited) return;
+    _exited = true;
+    (widget.onExit ?? () => exit(0))();
+  }
+
+  void _trackExitTask(Future<void> task) {
+    late final Future<void> pending;
+    pending = task.whenComplete(() => _pendingExitTasks.remove(pending));
+    _pendingExitTasks.add(pending);
+    // Report failures even if no close attempt is currently waiting.
+    unawaited(pending.catchError(_reportExitError));
+  }
+
+  void _reportExitError(Object error, StackTrace stack) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        library: 'window shutdown',
+      ),
+    );
+  }
+
+  void _onClose() async {
+    if (_closing || _exited) return;
+    for (var listener in List.of(closeListeners)) {
       if (!listener()) {
         return;
       }
     }
-    exit(0);
+    _closing = true;
+    try {
+      // A disposed reader may already have detached its callback but still be
+      // saving. Drain it before application-level sync inspects pending uploads.
+      while (_pendingExitTasks.isNotEmpty) {
+        await Future.wait(_pendingExitTasks.toList());
+      }
+      for (final task in _exitTasks.reversed.toList()) {
+        if (!mounted || _exited) return;
+        if (_exitTasks.contains(task)) await task();
+      }
+      _forceExit();
+    } catch (error, stack) {
+      _reportExitError(error, stack);
+    } finally {
+      _closing = false;
+    }
   }
 
   @override
@@ -168,6 +238,10 @@ class _WindowFrameState extends State<WindowFrame> {
       setWindowFrame: setWindowFrame,
       addCloseListener: addCloseListener,
       removeCloseListener: removeCloseListener,
+      addExitTask: _exitTasks.add,
+      removeExitTask: _exitTasks.remove,
+      trackExitTask: _trackExitTask,
+      forceExit: _forceExit,
       child: body,
     );
   }

@@ -79,12 +79,21 @@ class ImageFavoritesProvider
     if (!file.existsSync()) {
       return null;
     }
-    return await file.readAsBytes();
+    try {
+      return await file.readAsBytes();
+    } on FileSystemException {
+      // Cache eviction may finish after the existence check above.
+      // A vanished entry is a miss; retain errors for entries still present.
+      if (!file.existsSync()) return null;
+      rethrow;
+    }
   }
 
   /// Delete a image favorite cache
   static Future<void> deleteFromCache(ImageFavorite imageFavorite) async {
-    var fileName = md5.convert(imageFavorite.imageKey.codeUnits).toString();
+    var fileName = md5
+        .convert(ImageFavoritesProvider(imageFavorite).key.codeUnits)
+        .toString();
     var file = File(FilePath.join(App.cachePath, 'image_favorites', fileName));
     if (file.existsSync()) {
       await file.delete();

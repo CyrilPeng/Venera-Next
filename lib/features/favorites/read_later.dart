@@ -1,3 +1,4 @@
+import 'favorite_models.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/menu.dart';

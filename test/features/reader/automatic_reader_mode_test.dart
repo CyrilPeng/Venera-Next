@@ -1,3 +1,4 @@
+import 'package:venera_next/features/history/history_api.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
 import 'package:venera_next/features/reader/orientation.dart'
     show ReaderOrientationScope;
@@ -10,7 +11,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/features/comic_source/models.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
-import 'package:venera_next/features/history/history_manager.dart';
 import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/features/sync/data_sync.dart';

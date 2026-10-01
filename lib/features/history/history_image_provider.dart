@@ -1,3 +1,4 @@
+import 'package:venera_next/features/history/history_api.dart';
 import 'dart:async' show Future;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -19,24 +20,29 @@ class HistoryImageProvider
 
   @override
   Future<Uint8List> load(chunkEvents, checkStop) async {
+    final id = history.id;
+    final type = history.type;
     var url = history.cover;
     if (!url.contains('/')) {
-      var localComic = LocalManager().find(history.id, history.type);
+      var localComic = LocalManager().find(id, type);
       if (localComic != null) {
         return localComic.coverFile.readAsBytes();
       }
-      var comicSource =
-          history.type.comicSource ?? (throw "Comic source not found.");
-      var comic = await comicSource.loadComicInfo!(history.id);
+      var comicSource = type.comicSource ?? (throw "Comic source not found.");
+      final updateMetadata = HistoryManager().metadataUpdaterFor(history);
+      var comic = await comicSource.loadComicInfo!(id);
       checkStop();
       url = comic.data.cover;
-      history.cover = url;
-      HistoryManager().addHistory(history);
+      final updated = await updateMetadata(cover: url);
+      if (updated && history.id == id && history.type == type) {
+        history.cover = url;
+      }
+      checkStop();
     }
     await for (var progress in ImageDownloader.loadThumbnail(
       url,
-      history.type.sourceKey,
-      history.id,
+      type.sourceKey,
+      id,
     )) {
       checkStop();
       chunkEvents.add(

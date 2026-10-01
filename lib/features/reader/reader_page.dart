@@ -21,7 +21,7 @@ import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
 
 import 'package:venera_next/features/reader/page_layout.dart';
-import 'package:venera_next/features/reader/image_position.dart';
+import 'package:venera_next/features/reader/history_progress.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/features/reader/volume.dart';
 import 'package:venera_next/features/reader/volume_controller.dart';
@@ -362,11 +362,7 @@ class ReaderState extends State<Reader>
       progress: ReaderHistoryWriter(
         write: () async {
           final item = history;
-          if (item != null) await HistoryManager().addHistoryAsync(item);
-        },
-        flush: () {
-          final item = history;
-          if (item != null) HistoryManager().addHistory(item);
+          if (item != null) await HistoryManager().addHistory(item);
         },
         onError: (error, stack) => Log.error(
           'Reader',
@@ -442,10 +438,18 @@ class ReaderState extends State<Reader>
   void stopVolumeEvent() => unawaited(_volumeController.setEnabled(false));
 
   ReaderWindowController? _windowController;
+  WindowFrameController? _exitFrame;
+
+  Future<void> _closeSession() =>
+      _session.dispose().catchError((Object error, StackTrace stack) {
+        Log.error('Reader', 'Failed to close reading session: $error', stack);
+      });
 
   void initReaderWindow() {
     if (!App.isDesktop || _windowController != null) return;
     final frame = WindowFrame.of(context);
+    _exitFrame = frame;
+    frame.addExitTask(_closeSession);
     final navigator = Navigator.of(context, rootNavigator: true);
     _windowController = ReaderWindowController(
       hide: windowManager.hide,
@@ -478,11 +482,10 @@ class ReaderState extends State<Reader>
     _layoutProbe = null;
     WidgetsBinding.instance.removeObserver(this);
     autoReading.dispose();
-    unawaited(
-      _session.dispose().catchError((Object error, StackTrace stack) {
-        Log.error('Reader', 'Failed to close reading session: $error', stack);
-      }),
-    );
+    final closing = _closeSession();
+    _exitFrame?.removeExitTask(_closeSession);
+    _exitFrame?.trackExitTask(closing);
+    unawaited(closing);
     focusNode.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     unawaited(_volumeController.dispose());
@@ -537,23 +540,15 @@ class ReaderState extends State<Reader>
     // arrive. Keep the saved image index intact until loading/migration ends.
     if (isLoading || images == null) return;
     if (history != null) {
-      final imagePosition = ReaderImagePosition(
+      applyReaderHistoryProgress(
+        history: history!,
+        page: page,
+        imageCount: images!.length,
         chapter: chapter,
-        chapterId: eid,
-        imageNumber: pageLayout.historyImage(page, images!.length),
+        chapters: widget.chapters,
+        layout: pageLayout,
+        time: DateTime.now(),
       );
-      history!.page = imagePosition.imageNumber;
-      history!.maxPage = images?.length ?? 1;
-      if (widget.chapters?.isGrouped ?? false) {
-        final position = widget.chapters!.positionAt(imagePosition.chapter);
-        history!.readEpisode.add(position.historyKey);
-        history!.ep = position.chapter;
-        history!.group = position.group;
-      } else {
-        history!.readEpisode.add(imagePosition.chapter.toString());
-        history!.ep = imagePosition.chapter;
-      }
-      history!.time = DateTime.now();
       _session.scheduleProgress();
     }
   }

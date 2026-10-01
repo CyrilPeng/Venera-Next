@@ -10,6 +10,7 @@ class _Selection extends FileSelection {
 
   int prepared = 0;
   int disposed = 0;
+  Future<void>? disposeGate;
 
   @override
   Future<File> prepare() async {
@@ -18,7 +19,10 @@ class _Selection extends FileSelection {
   }
 
   @override
-  Future<void> dispose() async => disposed++;
+  Future<void> dispose() async {
+    if (disposeGate != null) await disposeGate;
+    disposed++;
+  }
 }
 
 void main() {
@@ -31,6 +35,92 @@ void main() {
       tasks.dispose();
       Log.isMuted = muted;
     });
+  });
+
+  test(
+    'exit cancels queued work and drains active conversion and cleanup',
+    () async {
+      final conversion = Completer<void>();
+      final cleanup = Completer<void>();
+      final started = Completer<void>();
+      final batch = PdfImportBatch(
+        containsTitle: (_) => false,
+        importFile: (_, title, progress, cancellation) async {
+          started.complete();
+          await conversion.future;
+          cancellation.throwIfCancelled();
+        },
+      );
+      final activeFile = _Selection('Active.pdf')..disposeGate = cleanup.future;
+      final queuedFile = _Selection('Queued.pdf');
+      final active = tasks.add(files: [activeFile], batch: batch);
+      final queued = tasks.add(files: [queuedFile], batch: batch);
+      await started.future;
+      final preparing = tasks.prepareForExit();
+      addTearDown(() async {
+        if (!conversion.isCompleted) conversion.complete();
+        if (!cleanup.isCompleted) cleanup.complete();
+        (await preparing)();
+      });
+      expect(identical(preparing, tasks.prepareForExit()), isTrue);
+      expect(
+        () => tasks.add(files: [_Selection('Rejected.pdf')], batch: batch),
+        throwsStateError,
+      );
+      expect((await queued.done).count(PdfImportStatus.cancelled), 1);
+      expect(queuedFile.prepared, 0);
+      expect(queuedFile.disposed, 1);
+      var ready = false;
+      preparing.then((_) => ready = true);
+      conversion.complete();
+      await pumpEventQueue();
+      expect(ready, isFalse);
+      expect(active.isFinished, isFalse);
+      cleanup.complete();
+      final release = await preparing;
+      expect((await active.done).count(PdfImportStatus.cancelled), 1);
+      expect(activeFile.disposed, 1);
+      release();
+      final nextPreparation = tasks.prepareForExit();
+      final releaseNext = await nextPreparation;
+      release();
+      expect(
+        () => tasks.add(files: [_Selection('StillRejected.pdf')], batch: batch),
+        throwsStateError,
+      );
+      releaseNext();
+      final next = tasks.add(
+        files: [_Selection('Next.pdf')],
+        batch: PdfImportBatch(
+          containsTitle: (_) => false,
+          importFile: (_, title, progress, cancellation) async {},
+        ),
+      );
+      expect((await next.done).count(PdfImportStatus.imported), 1);
+    },
+  );
+
+  test('exit preserves an import already in its commit phase', () async {
+    final gate = Completer<void>();
+    final started = Completer<void>();
+    final task = tasks.add(
+      files: [_Selection('Committing.pdf')],
+      batch: PdfImportBatch(
+        containsTitle: (_) => false,
+        importFile: (_, title, progress, cancellation) async {
+          started.complete();
+          await gate.future;
+          // The importer has passed its final cancellation check and commits.
+        },
+      ),
+    );
+    await started.future;
+    final preparing = tasks.prepareForExit();
+    gate.complete();
+    final release = await preparing;
+    expect((await task.done).count(PdfImportStatus.imported), 1);
+    expect(tasks.activeCount, 0);
+    release();
   });
 
   test(

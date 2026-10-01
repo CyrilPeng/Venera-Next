@@ -4,7 +4,7 @@ import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
-import 'package:venera_next/features/local_comics/download.dart';
+import 'package:venera_next/features/local_comics/download_task.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -20,33 +20,33 @@ class DownloadingPage extends StatefulWidget {
 class _DownloadingPageState extends State<DownloadingPage> {
   DownloadTask? firstTask;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    firstTask = LocalManager().downloadingTasks.firstOrNull;
-    firstTask?.addListener(update);
-  }
+  late final LocalManager manager = LocalManager();
 
   @override
   void initState() {
-    LocalManager().addListener(update);
     super.initState();
+    manager.addListener(update);
+    _syncFirstTask();
   }
 
   @override
   void dispose() {
-    LocalManager().removeListener(update);
+    manager.removeListener(update);
     firstTask?.removeListener(update);
     super.dispose();
   }
 
-  void update() {
-    var currentFirstTask = LocalManager().downloadingTasks.firstOrNull;
-    if (currentFirstTask != firstTask) {
+  void _syncFirstTask() {
+    final currentFirstTask = manager.downloadingTasks.firstOrNull;
+    if (!identical(currentFirstTask, firstTask)) {
       firstTask?.removeListener(update);
       firstTask = currentFirstTask;
       firstTask?.addListener(update);
     }
+  }
+
+  void update() {
+    _syncFirstTask();
     if (mounted) {
       setState(() {});
     }
@@ -57,7 +57,7 @@ class _DownloadingPageState extends State<DownloadingPage> {
     return PopUpWidgetScaffold(
       title: "",
       body: ListView.builder(
-        itemCount: LocalManager().downloadingTasks.length + 1,
+        itemCount: manager.downloadingTasks.length + 1,
         itemBuilder: (BuildContext context, int i) {
           if (i == 0) {
             return buildTop();
@@ -65,8 +65,9 @@ class _DownloadingPageState extends State<DownloadingPage> {
           i--;
 
           return _DownloadTaskTile(
-            key: ValueKey(LocalManager().downloadingTasks[i]),
-            task: LocalManager().downloadingTasks[i],
+            key: ValueKey(manager.downloadingTasks[i]),
+            task: manager.downloadingTasks[i],
+            manager: manager,
           );
         },
       ),
@@ -75,10 +76,11 @@ class _DownloadingPageState extends State<DownloadingPage> {
 
   Widget buildTop() {
     int speed = 0;
-    if (LocalManager().downloadingTasks.isNotEmpty) {
-      speed = LocalManager().downloadingTasks.first.speed;
+    if (manager.downloadingTasks.isNotEmpty) {
+      speed = manager.downloadingTasks.first.speed;
     }
-    var first = LocalManager().downloadingTasks.firstOrNull;
+    var first = manager.downloadingTasks.firstOrNull;
+    final resumePending = manager.isDownloadResumePending;
     return Container(
       height: 48,
       decoration: BoxDecoration(
@@ -91,14 +93,15 @@ class _DownloadingPageState extends State<DownloadingPage> {
       ),
       child: Row(
         children: [
-          if (first?.isPaused == true)
+          if (first?.isPaused == true && !resumePending)
             Text("Paused".tl, style: ts.s18.bold)
           else if (first?.isError == true)
             Text("Error".tl, style: ts.s18.bold)
           else
             Text("${bytesToReadableString(speed)}/s", style: ts.s18.bold),
           const Spacer(),
-          if (first?.isPaused == true || first?.isError == true)
+          if (!resumePending &&
+              (first?.isPaused == true || first?.isError == true))
             OutlinedButton(
               child: Row(
                 children: [
@@ -108,7 +111,7 @@ class _DownloadingPageState extends State<DownloadingPage> {
                 ],
               ),
               onPressed: () {
-                first!.resume();
+                manager.resumeDownload(first!);
               },
             )
           else if (first != null)
@@ -121,7 +124,7 @@ class _DownloadingPageState extends State<DownloadingPage> {
                 ],
               ),
               onPressed: () {
-                first.pause();
+                manager.pauseDownload(first);
               },
             ),
         ],
@@ -131,9 +134,14 @@ class _DownloadingPageState extends State<DownloadingPage> {
 }
 
 class _DownloadTaskTile extends StatefulWidget {
-  const _DownloadTaskTile({required this.task, super.key});
+  const _DownloadTaskTile({
+    required this.task,
+    required this.manager,
+    super.key,
+  });
 
   final DownloadTask task;
+  final LocalManager manager;
 
   @override
   State<_DownloadTaskTile> createState() => _DownloadTaskTileState();
@@ -158,7 +166,7 @@ class _DownloadTaskTileState extends State<_DownloadTaskTile> {
   @override
   void didUpdateWidget(covariant _DownloadTaskTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.task != widget.task) {
+    if (!identical(oldWidget.task, widget.task)) {
       task.removeListener(update);
       task = widget.task;
       task.addListener(update);
@@ -212,14 +220,14 @@ class _DownloadTaskTileState extends State<_DownloadTaskTile> {
                           icon: Icons.close,
                           text: "Cancel".tl,
                           onClick: () {
-                            widget.task.cancel();
+                            widget.manager.cancelDownload(widget.task);
                           },
                         ),
                         MenuEntry(
                           icon: Icons.vertical_align_top,
                           text: "Move To First".tl,
                           onClick: () {
-                            LocalManager().moveToFirst(widget.task);
+                            widget.manager.moveToFirst(widget.task);
                           },
                         ),
                       ],

@@ -1,4 +1,13 @@
-import 'dart:convert';
+import 'local_comic_model.dart';
+import 'local_repository.dart';
+import 'local_chapter_storage.dart';
+import 'local_deletion_paths.dart';
+import 'download_task_store.dart';
+import 'download_directory_allocator.dart';
+import 'local_sort_type.dart';
+export 'local_sort_type.dart';
+export 'local_comic_model.dart';
+import 'dart:async';
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
@@ -11,7 +20,9 @@ import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
-import 'package:venera_next/features/local_comics/download.dart';
+import 'download_task.dart';
+import 'download_queue.dart';
+import 'download_task_codec.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 
 import 'package:venera_next/foundation/app.dart';
@@ -19,112 +30,20 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/features/history/history.dart';
 
 import 'local_storage_guard.dart';
+import 'local_storage_migration.dart';
 
 export 'local_comic_image.dart';
 
-class LocalComic with HistoryMixin implements Comic {
-  @override
-  final String id;
-
-  @override
-  final String title;
-
-  @override
-  final String subtitle;
-
-  @override
-  final List<String> tags;
-
-  /// The name of the directory where the comic is stored
-  final String directory;
-
-  /// key: chapter id, value: chapter title
-  ///
-  /// chapter id is the name of the directory in `LocalManager.path/$directory`
-  final ComicChapters? chapters;
-
-  bool get hasChapters => chapters != null;
-
-  /// relative path to the cover image
-  @override
-  final String cover;
-
-  final ComicType comicType;
-
-  final List<String> downloadedChapters;
-
-  final DateTime createdAt;
-
-  const LocalComic({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    required this.tags,
-    required this.directory,
-    required this.chapters,
-    required this.cover,
-    required this.comicType,
-    required this.downloadedChapters,
-    required this.createdAt,
-  });
-
-  LocalComic.fromRow(Row row)
-    : id = row[0] as String,
-      title = row[1] as String,
-      subtitle = row[2] as String,
-      tags = List.from(jsonDecode(row[3] as String)),
-      directory = row[4] as String,
-      chapters = ComicChapters.fromJsonOrNull(jsonDecode(row[5] as String)),
-      cover = row[6] as String,
-      comicType = ComicType(row[7] as int),
-      downloadedChapters = List.from(jsonDecode(row[8] as String)),
-      createdAt = DateTime.fromMillisecondsSinceEpoch(row[9] as int);
-
+extension LocalComicFiles on LocalComic {
   File get coverFile => File(FilePath.join(baseDir, cover));
 
-  String get baseDir => (directory.contains('/') || directory.contains('\\'))
-      ? directory
-      : FilePath.join(LocalManager().path, directory);
-
-  @override
-  String get description => "";
-
-  @override
-  String get sourceKey =>
-      comicType == ComicType.local ? "local" : comicType.sourceKey;
-
-  @override
-  Map<String, dynamic> toJson() {
-    return {
-      "title": title,
-      "cover": cover,
-      "id": id,
-      "subTitle": subtitle,
-      "tags": tags,
-      "description": description,
-      "sourceKey": sourceKey,
-      "chapters": chapters?.toJson(),
-    };
-  }
-
-  @override
-  int? get maxPage => null;
-
-  @override
-  HistoryType get historyType => comicType;
-
-  @override
-  String? get subTitle => subtitle;
-
-  @override
-  String? get language => null;
-
-  @override
-  String? get favoriteId => null;
-
-  @override
-  double? get stars => null;
+  String get baseDir => _resolveComicDirectory(directory, LocalManager().path);
 }
+
+String _resolveComicDirectory(String directory, String libraryPath) =>
+    (directory.contains('/') || directory.contains('\\'))
+    ? directory
+    : FilePath.join(libraryPath, directory);
 
 class LocalManager with ChangeNotifier {
   static LocalManager? _instance;
@@ -143,13 +62,37 @@ class LocalManager with ChangeNotifier {
     debugSkipComicSourceInit = false;
   }
 
-  LocalManager._();
+  LocalManager._({
+    Database Function(String)? openDatabase,
+    Future<void> Function()? initializeSources,
+  }) : _openDatabase = openDatabase ?? openSqliteDatabase,
+       _initializeSources = initializeSources;
+
+  @visibleForTesting
+  factory LocalManager.forTesting({
+    required Database Function(String) openDatabase,
+    required Future<void> Function() initializeSources,
+  }) => LocalManager._(
+    openDatabase: openDatabase,
+    initializeSources: initializeSources,
+  );
+
+  final Database Function(String) _openDatabase;
+  final Future<void> Function()? _initializeSources;
+  Future<void>? _initialization;
+  Database? _database;
+  bool _disposed = false;
 
   factory LocalManager() {
     return _instance ??= LocalManager._();
   }
 
-  late Database _db;
+  Database get _db =>
+      _database ?? (throw StateError('Local manager is not initialized'));
+
+  void _checkNotDisposed() {
+    if (_disposed) throw StateError('Local manager is disposed');
+  }
 
   /// path to the directory where all the comics are stored
   late String path;
@@ -168,35 +111,56 @@ class LocalManager with ChangeNotifier {
   // return error message if failed
   Future<String?> setNewPath(String newPath) async {
     try {
-      return await LocalComicStorageGuard.instance.runExclusive(
-        () => _setNewPath(newPath),
-      );
+      return await runWithExclusiveStorage(() => _setNewPath(newPath));
     } on LocalComicStorageBusy catch (error) {
       return error.message.tl;
     }
   }
 
-  Future<String?> _setNewPath(String newPath) async {
-    var newDir = Directory(newPath);
-    if (!await newDir.exists()) {
-      return "Directory does not exist";
+  /// Migration/recovery may not reinterpret directories owned by queued tasks.
+  Future<T> runWithExclusiveStorage<T>(
+    Future<T> Function() action,
+  ) => LocalComicStorageGuard.instance.runExclusive(() async {
+    if (downloadingTasks.isNotEmpty || _downloadQueue.isSuspended) {
+      throw const LocalComicStorageBusy(
+        'Wait for downloads to finish or cancel them before changing the local library.',
+      );
     }
-    if (!await newDir.list().isEmpty) {
-      return "Directory is not empty";
-    }
+    final stopped = _downloadQueue.suspend(notify: false);
     try {
-      await copyDirectoryIsolate(directory, newDir);
-      await File(
-        FilePath.join(App.dataPath, 'local_path'),
-      ).writeAsString(newPath);
-    } catch (e, s) {
-      Log.error("IO", e, s);
-      return e.toString();
+      await stopped;
+      return await action();
+    } finally {
+      _downloadQueue.releaseSuspension(stopped, notify: false);
     }
-    await directory.deleteContents(recursive: true);
-    path = newPath;
-    _checkNoMedia();
-    return null;
+  });
+
+  Future<String?> _setNewPath(String newPath) async {
+    try {
+      final result =
+          await LocalStorageMigration(
+            copyContents: copyDirectoryIsolate,
+            publishPath: (value) => path = value,
+            reportCleanupError: (error, stack) => Log.error('IO', error, stack),
+            canonicalPath: (directory) => directory is AndroidDirectory
+                ? Future.value(directory.path)
+                : directory.resolveSymbolicLinks(),
+          ).migrate(
+            source: directory,
+            destination: Directory(newPath),
+            pathFile: File(FilePath.join(App.dataPath, 'local_path')),
+          );
+      if (result != null) return result;
+      try {
+        _checkNoMedia();
+      } catch (error, stack) {
+        Log.error('IO', error, stack);
+      }
+      return null;
+    } catch (error, stack) {
+      Log.error('IO', error, stack);
+      return error.toString();
+    }
   }
 
   Future<String> findDefaultPath() async {
@@ -235,33 +199,27 @@ class LocalManager with ChangeNotifier {
     }
   }
 
-  Future<void> init() async {
-    _db = openSqliteDatabase('${App.dataPath}/local.db');
-    _db.execute('''
-      CREATE TABLE IF NOT EXISTS comics (
-        id TEXT NOT NULL,
-        title TEXT NOT NULL,
-        subtitle TEXT NOT NULL,
-        tags TEXT NOT NULL,
-        directory TEXT NOT NULL,
-        chapters TEXT NOT NULL,
-        cover TEXT NOT NULL,
-        comic_type INTEGER NOT NULL,
-        downloadedChapters TEXT NOT NULL,
-        created_at INTEGER,
-        PRIMARY KEY (id, comic_type)
-      );
-    ''');
-    _db.execute('''
-      CREATE TABLE IF NOT EXISTS natural_sort_migration (
-        id TEXT NOT NULL,
-        comic_type INTEGER NOT NULL,
-        history_time INTEGER,
-        old_page INTEGER,
-        new_page INTEGER,
-        PRIMARY KEY (id, comic_type)
-      );
-    ''');
+  Future<void> init() {
+    if (_disposed) return Future.error(StateError('Local manager is disposed'));
+    return _initialization ??= _initialize().catchError((
+      Object error,
+      StackTrace stack,
+    ) {
+      final database = _database;
+      _database = null;
+      try {
+        database?.dispose();
+      } catch (closeError, closeStack) {
+        Log.error('LocalManager', closeError, closeStack);
+      }
+      _initialization = null;
+      Error.throwWithStackTrace(error, stack);
+    });
+  }
+
+  Future<void> _initialize() async {
+    _database = _openDatabase('${App.dataPath}/local.db');
+    _repository.initialize();
     if (File(FilePath.join(App.dataPath, 'local_path')).existsSync()) {
       path = File(FilePath.join(App.dataPath, 'local_path')).readAsStringSync();
       if (!directory.existsSync()) {
@@ -270,6 +228,7 @@ class LocalManager with ChangeNotifier {
     } else {
       path = await findDefaultPath();
     }
+    _checkNotDisposed();
     try {
       if (!directory.existsSync()) {
         await directory.create();
@@ -277,146 +236,54 @@ class LocalManager with ChangeNotifier {
     } catch (e, s) {
       Log.error("IO", "Failed to create local folder: $e", s);
     }
+    _checkNotDisposed();
     await _checkPathValidation();
+    _checkNotDisposed();
     _checkNoMedia();
-    if (!debugSkipComicSourceInit) {
+    if (_initializeSources != null) {
+      await _initializeSources();
+    } else if (!debugSkipComicSourceInit) {
       await ComicSourceManager().ensureInit();
     }
+    _checkNotDisposed();
     restoreDownloadingTasks();
   }
 
-  String findValidId(ComicType type) {
-    final res = _db.select(
-      '''
-      SELECT id FROM comics WHERE comic_type = ?
-      ORDER BY CAST(id AS INTEGER) DESC
-      LIMIT 1;
-      ''',
-      [type.value],
-    );
-    if (res.isEmpty) {
-      return '1';
-    }
-    return (int.parse((res.first[0])) + 1).toString();
-  }
+  String findValidId(ComicType type) => _repository.findValidId(type);
 
   Future<void> add(LocalComic comic, [String? id]) async {
-    var old = find(id ?? comic.id, comic.comicType);
-    if (old == null) {
-      // Newly imported books already use natural ordering.
-      _db.execute(
-        'INSERT OR REPLACE INTO natural_sort_migration (id, comic_type) VALUES (?, ?)',
-        [id ?? comic.id, comic.comicType.value],
-      );
-    }
-    var downloaded = comic.downloadedChapters;
-    if (old != null) {
-      downloaded.addAll(old.downloadedChapters);
-    }
-    _db.execute(
-      'INSERT OR REPLACE INTO comics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
-      [
-        id ?? comic.id,
-        comic.title,
-        comic.subtitle,
-        jsonEncode(comic.tags),
-        comic.directory,
-        jsonEncode(comic.chapters),
-        comic.cover,
-        comic.comicType.value,
-        jsonEncode(downloaded),
-        comic.createdAt.millisecondsSinceEpoch,
-      ],
-    );
+    _repository.add(comic, id);
     notifyListeners();
   }
 
   void remove(String id, ComicType comicType, {bool notify = true}) {
-    _db.execute(
-      'DELETE FROM natural_sort_migration WHERE id = ? AND comic_type = ?',
-      [id, comicType.value],
-    );
-    _db.execute('DELETE FROM comics WHERE id = ? AND comic_type = ?;', [
-      id,
-      comicType.value,
-    ]);
-    if (notify) {
-      notifyListeners();
-    }
+    _repository.remove(id, comicType);
+    if (notify) notifyListeners();
   }
 
   void removeComic(LocalComic comic) {
     remove(comic.id, comic.comicType);
   }
 
-  List<LocalComic> getComics(LocalSortType sortType) {
-    var res = _db.select('''
-      SELECT * FROM comics
-      ORDER BY
-        ${sortType.value == 'name' ? 'title' : 'created_at'}
-        ${sortType.value == 'time_asc' ? 'ASC' : 'DESC'}
-      ;
-    ''');
-    return res.map((row) => LocalComic.fromRow(row)).toList();
-  }
+  LocalRepository get _repository => LocalRepository(_db);
 
-  LocalComic? find(String id, ComicType comicType) {
-    final res = _db.select(
-      'SELECT * FROM comics WHERE id = ? AND comic_type = ?;',
-      [id, comicType.value],
-    );
-    if (res.isEmpty) {
-      return null;
-    }
-    return LocalComic.fromRow(res.first);
-  }
+  List<LocalComic> getComics(LocalSortType sortType) =>
+      _repository.getComics(sortType);
+  LocalComic? find(String id, ComicType comicType) =>
+      _repository.find(id, comicType);
+  List<LocalComic> getRecent() => _repository.getRecent();
+  int get count => _repository.count;
+  LocalComic? findByName(String name) => _repository.findByName(name);
+  List<LocalComic> search(String keyword) => _repository.search(keyword);
 
   @override
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    final database = _database;
+    _database = null;
     super.dispose();
-    _db.dispose();
-  }
-
-  List<LocalComic> getRecent() {
-    final res = _db.select('''
-      SELECT * FROM comics
-      ORDER BY created_at DESC
-      LIMIT 20;
-    ''');
-    return res.map((row) => LocalComic.fromRow(row)).toList();
-  }
-
-  int get count {
-    final res = _db.select('''
-      SELECT COUNT(*) FROM comics;
-    ''');
-    return res.first[0] as int;
-  }
-
-  LocalComic? findByName(String name) {
-    final res = _db.select(
-      '''
-      SELECT * FROM comics
-      WHERE title = ? OR directory = ?;
-    ''',
-      [name, name],
-    );
-    if (res.isEmpty) {
-      return null;
-    }
-    return LocalComic.fromRow(res.first);
-  }
-
-  List<LocalComic> search(String keyword) {
-    final res = _db.select(
-      '''
-      SELECT * FROM comics
-      WHERE title LIKE ? OR tags LIKE ? OR subtitle LIKE ?
-      ORDER BY created_at DESC;
-    ''',
-      ['%$keyword%', '%$keyword%', '%$keyword%'],
-    );
-    return res.map((row) => LocalComic.fromRow(row)).toList();
+    database?.dispose();
   }
 
   Future<List<String>> getImages(String id, ComicType type, Object ep) async {
@@ -429,7 +296,7 @@ class LocalManager with ChangeNotifier {
       var cid = ep is int
           ? comic.chapters!.ids.elementAt(ep - 1)
           : (ep as String);
-      cid = getChapterDirectoryName(cid);
+      cid = localChapterDirectoryName(cid);
       directory = Directory(FilePath.join(directory.path, cid));
     }
     var files = <File>[];
@@ -452,13 +319,11 @@ class LocalManager with ChangeNotifier {
   /// be resumed without interpreting an already converted page a second time.
   Future<void> migrateLegacyPageOrder(History history) async {
     if (history.type != ComicType.local) return;
-    final key = [history.id, history.type.value];
-    var rows = _db.select(
-      'SELECT * FROM natural_sort_migration WHERE id = ? AND comic_type = ?',
-      key,
-    );
-    if (rows.isEmpty) {
-      var page = history.page;
+    final oldPage = history.page;
+    final historyTime = history.time.millisecondsSinceEpoch;
+    var migration = _repository.findPageMigration(history.id, history.type);
+    if (migration == null) {
+      var page = oldPage;
       if (history.ep > 0 && page > 0) {
         var chapter = history.ep;
         final chapters = find(history.id, ComicType.local)?.chapters;
@@ -469,23 +334,30 @@ class LocalManager with ChangeNotifier {
         final legacy = images.toList()..sort(compareLegacyComicFileNames);
         if (page <= legacy.length) page = images.indexOf(legacy[page - 1]) + 1;
       }
-      _db.execute('INSERT INTO natural_sort_migration VALUES (?, ?, ?, ?, ?)', [
-        ...key,
-        history.time.millisecondsSinceEpoch,
-        history.page,
-        page,
-      ]);
-      rows = _db.select(
-        'SELECT * FROM natural_sort_migration WHERE id = ? AND comic_type = ?',
-        key,
+      migration = _repository.recordPageMigration(
+        history.id,
+        history.type,
+        LocalPageMigration(historyTime, oldPage, page),
       );
     }
-    final migration = rows.single;
-    if (migration['history_time'] == history.time.millisecondsSinceEpoch &&
-        migration['old_page'] == history.page &&
-        migration['new_page'] != history.page) {
-      history.page = migration['new_page'] as int;
-      HistoryManager().addHistory(history);
+    if (migration.historyTime == history.time.millisecondsSinceEpoch &&
+        migration.oldPage == history.page &&
+        migration.newPage != null &&
+        migration.newPage != history.page) {
+      final previousPage = history.page;
+      final convertedPage = migration.newPage!;
+      history.page = convertedPage;
+      try {
+        await HistoryManager().addHistory(history);
+      } catch (_) {
+        // Keep the persisted mapping for retry without leaving this instance
+        // looking successfully converted after a failed history write.
+        if (history.page == convertedPage &&
+            history.time.millisecondsSinceEpoch == migration.historyTime) {
+          history.page = previousPage;
+        }
+        rethrow;
+      }
     }
   }
 
@@ -522,254 +394,233 @@ class LocalManager with ChangeNotifier {
     );
   }
 
-  List<DownloadTask> downloadingTasks = [];
+  late final _downloadQueue = DownloadQueue(
+    commitComic: (comic) => _repository.add(comic),
+    notifyChanged: notifyListeners,
+    requestSave: saveCurrentDownloadingTasks,
+    reportError: (error, stack) => Log.error('DownloadQueue', error, stack),
+  );
 
-  bool isDownloading(String id, ComicType type) {
-    return downloadingTasks.any(
-      (element) => element.id == id && element.comicType == type,
-    );
-  }
+  List<DownloadTask> get downloadingTasks => _downloadQueue.tasks;
 
-  Future<Directory> findValidDirectory(
+  bool isDownloading(String id, ComicType type) =>
+      _downloadQueue.contains(id, type);
+
+  late final _downloadDirectories = DownloadDirectoryAllocator(
+    rootPath: () => path,
+    findRegisteredPath: (id, type) {
+      final comic = find(id, type);
+      return comic == null ? null : FilePath.join(path, comic.directory);
+    },
+  );
+
+  Future<DownloadDirectoryAllocation> allocateDownloadDirectory(
     String id,
     ComicType type,
     String name,
-  ) async {
-    var comic = find(id, type);
-    if (comic != null) {
-      return Directory(FilePath.join(path, comic.directory));
+  ) => _downloadDirectories.allocate(id, type, name);
+
+  void completeTask(DownloadTask task) => _downloadQueue.complete(task);
+
+  void removeTask(DownloadTask task) => _downloadQueue.remove(task);
+
+  bool get isDownloadResumePending => _downloadQueue.isResumePending;
+
+  Future<void> cancelDownload(DownloadTask task) => _downloadQueue.cancel(task);
+
+  void resumeDownload(DownloadTask task) => _downloadQueue.resume(task);
+
+  Future<void> pauseDownload(DownloadTask task) => _downloadQueue.pause(task);
+
+  Future<void> moveToFirst(DownloadTask task) =>
+      _downloadQueue.moveToFirst(task);
+
+  /// Do not initialize a library just to close a window that never used it.
+  /// Keep the queue suspended on success until exit or explicit release.
+  static Future<VoidCallback> prepareDownloadsForExit() async {
+    final manager = _instance;
+    if (manager == null) return () {};
+    final initialization = manager._initialization;
+    if (initialization != null) await initialization;
+    var storage = LocalComicStorageGuard.instance.pendingExclusive;
+    while (storage != null) {
+      await storage;
+      storage = LocalComicStorageGuard.instance.pendingExclusive;
     }
-    const comicDirectoryMaxLength = 80;
-    if (name.length > comicDirectoryMaxLength) {
-      name = name.substring(0, comicDirectoryMaxLength);
-    }
-    var dir = findValidDirectoryName(path, name);
-    return Directory(FilePath.join(path, dir)).create().then((value) => value);
-  }
-
-  void completeTask(DownloadTask task) {
-    add(task.toLocalComic());
-    downloadingTasks.remove(task);
-    notifyListeners();
-    saveCurrentDownloadingTasks();
-    downloadingTasks.firstOrNull?.resume();
-  }
-
-  void removeTask(DownloadTask task) {
-    downloadingTasks.remove(task);
-    notifyListeners();
-    saveCurrentDownloadingTasks();
-  }
-
-  void moveToFirst(DownloadTask task) {
-    if (downloadingTasks.first != task) {
-      var shouldResume = !downloadingTasks.first.isPaused;
-      downloadingTasks.first.pause();
-      downloadingTasks.remove(task);
-      downloadingTasks.insert(0, task);
-      notifyListeners();
-      saveCurrentDownloadingTasks();
-      if (shouldResume) {
-        downloadingTasks.first.resume();
-      }
+    final preparation = manager._downloadQueue.suspend();
+    try {
+      await preparation;
+      await manager.saveCurrentDownloadingTasks();
+      await manager.pendingDownloadTaskWrites;
+      return () => manager._downloadQueue.releaseSuspension(preparation);
+    } catch (_) {
+      manager._downloadQueue.releaseSuspension(preparation);
+      rethrow;
     }
   }
 
-  Future<void> _downloadTaskWrites = Future.value();
+  final _downloadTaskStore = DownloadTaskStore(
+    onError: (error, stack) => Log.error('LocalManager', error, stack),
+  );
 
   /// Completes when all task snapshots queued so far have finished writing.
-  Future<void> get pendingDownloadTaskWrites => _downloadTaskWrites;
+  Future<void> get pendingDownloadTaskWrites =>
+      _downloadTaskStore.pendingWrites;
 
-  Future<void> saveCurrentDownloadingTasks() {
-    // Capture both path and snapshot before queuing: later mutations must not
-    // change the meaning of an already requested save.
-    final file = File(FilePath.join(App.dataPath, 'downloading_tasks.json'));
-    final data = jsonEncode(downloadingTasks.map((e) => e.toJson()).toList());
-    final write = _downloadTaskWrites.then((_) async {
-      await file.writeAsString(data);
-    });
-    // Keep subsequent writes usable after a failure. Awaiting callers still
-    // receive the original error through the returned future.
-    _downloadTaskWrites = write.catchError((Object error, StackTrace stack) {
-      Log.error('LocalManager', 'Failed to save download tasks: $error');
-    });
-    return write;
-  }
+  Future<void> saveCurrentDownloadingTasks() => _downloadTaskStore.save(
+    FilePath.join(App.dataPath, 'downloading_tasks.json'),
+    downloadingTasks.map((task) => task.toJson()),
+  );
+
+  /// Install a fully decoded paused snapshot during initialization/recovery.
+  void restorePausedDownloads(Iterable<DownloadTask> tasks) =>
+      _downloadQueue.restorePausedTasks(tasks);
 
   void restoreDownloadingTasks() {
-    var file = File(FilePath.join(App.dataPath, 'downloading_tasks.json'));
-    if (file.existsSync()) {
-      try {
-        var tasks = jsonDecode(file.readAsStringSync());
-        for (var e in tasks) {
-          var task = DownloadTask.fromJson(e);
-          if (task != null) {
-            downloadingTasks.add(task);
-          }
-        }
-      } catch (e) {
-        file.delete();
-        Log.error("LocalManager", "Failed to restore downloading tasks: $e");
+    try {
+      final tasks = _downloadTaskStore.restore(
+        FilePath.join(App.dataPath, 'downloading_tasks.json'),
+        downloadTaskFromJson,
+      );
+      if (tasks != null) {
+        restorePausedDownloads(tasks);
       }
+    } catch (error, stack) {
+      Log.error('LocalManager', error, stack);
     }
   }
 
-  void addTask(DownloadTask task) {
-    downloadingTasks.add(task);
-    notifyListeners();
-    saveCurrentDownloadingTasks();
-    downloadingTasks.first.resume();
-  }
+  void addTask(DownloadTask task) => _downloadQueue.add(task);
 
-  void deleteComic(LocalComic c, [bool removeFileOnDisk = true]) {
-    if (removeFileOnDisk) {
-      var dir = Directory(FilePath.join(path, c.directory));
-      dir.deleteIgnoreError(recursive: true);
-    }
+  Future<void> deleteComic(LocalComic c, [bool removeFileOnDisk = true]) =>
+      runWithExclusiveStorage(() => _deleteComic(c, removeFileOnDisk));
+
+  Future<void> _deleteComic(LocalComic c, bool removeFileOnDisk) async {
+    final current = find(c.id, c.comicType);
+    if (current == null) return;
+    c = current;
     // Deleting a local comic means that it's no longer available, thus both favorite and history should be deleted.
     if (c.comicType == ComicType.local) {
-      if (HistoryManager().find(c.id, c.comicType) != null) {
-        HistoryManager().remove(c.id, c.comicType);
-      }
+      // Always queue deletion: an earlier progress write may still be pending.
+      await HistoryManager().remove(c.id, c.comicType);
       var folders = LocalFavoritesManager().find(c.id, c.comicType);
       for (var f in folders) {
         LocalFavoritesManager().deleteComicWithId(f, c.id, c.comicType);
       }
     }
     remove(c.id, c.comicType);
+    if (removeFileOnDisk) {
+      await _deleteUnreferencedDirectories([Directory(c.baseDir)]);
+    }
   }
 
-  void deleteComicChapters(LocalComic c, List<String> chapters) {
+  Future<void> deleteComicChapters(LocalComic c, List<String> chapters) =>
+      runWithExclusiveStorage(() => _deleteComicChapters(c, chapters));
+
+  Future<void> _deleteComicChapters(LocalComic c, List<String> chapters) async {
+    final current = find(c.id, c.comicType);
+    if (current == null) return;
+    c = current;
     if (chapters.isEmpty) {
       return;
     }
-    var newDownloadedChapters = c.downloadedChapters
-        .where((e) => !chapters.contains(e))
-        .toList();
-    if (newDownloadedChapters.isNotEmpty) {
-      _db.execute(
-        'UPDATE comics SET downloadedChapters = ? WHERE id = ? AND comic_type = ?;',
-        [jsonEncode(newDownloadedChapters), c.id, c.comicType.value],
-      );
-    } else {
-      _db.execute('DELETE FROM comics WHERE id = ? AND comic_type = ?;', [
-        c.id,
-        c.comicType.value,
-      ]);
-    }
+    _repository.removeChapters(c.id, c.comicType, chapters);
+    final directories = localChapterDirectoriesToDelete(
+      removed: chapters,
+      retained: find(c.id, c.comicType)?.downloadedChapters ?? const [],
+    );
     var shouldRemovedDirs = <Directory>[];
-    for (var chapter in chapters) {
-      var dir = Directory(
-        FilePath.join(c.baseDir, getChapterDirectoryName(chapter)),
-      );
+    for (final directory in directories) {
+      var dir = Directory(FilePath.join(c.baseDir, directory));
       if (dir.existsSync()) {
         shouldRemovedDirs.add(dir);
       }
     }
     if (shouldRemovedDirs.isNotEmpty) {
-      _deleteDirectories(shouldRemovedDirs);
+      await _deleteUnreferencedDirectories(shouldRemovedDirs, chapterOwner: c);
     }
     notifyListeners();
   }
 
-  void batchDeleteComics(
+  Future<void> batchDeleteComics(
     List<LocalComic> comics, [
     bool removeFileOnDisk = true,
     bool removeFavoriteAndHistory = true,
-  ]) {
+  ]) => runWithExclusiveStorage(
+    () =>
+        _batchDeleteComics(comics, removeFileOnDisk, removeFavoriteAndHistory),
+  );
+
+  Future<void> _batchDeleteComics(
+    List<LocalComic> comics,
+    bool removeFileOnDisk,
+    bool removeFavoriteAndHistory,
+  ) async {
+    comics = [for (final comic in comics) ?find(comic.id, comic.comicType)];
     if (comics.isEmpty) {
       return;
     }
 
     var shouldRemovedDirs = <Directory>[];
-    _db.execute('BEGIN TRANSACTION;');
     try {
-      for (var c in comics) {
+      for (final comic in comics) {
         if (removeFileOnDisk) {
-          var dir = Directory(FilePath.join(path, c.directory));
+          final dir = Directory(comic.baseDir);
           if (dir.existsSync()) {
             shouldRemovedDirs.add(dir);
           }
         }
-        _db.execute('DELETE FROM comics WHERE id = ? AND comic_type = ?;', [
-          c.id,
-          c.comicType.value,
-        ]);
       }
+      _repository.removeAll(comics);
     } catch (e, s) {
       Log.error("LocalManager", "Failed to batch delete comics: $e", s);
-      _db.execute('ROLLBACK;');
-      return;
+      rethrow;
     }
-    _db.execute('COMMIT;');
 
     var comicIDs = comics.map((e) => ComicID(e.comicType, e.id)).toList();
 
     if (removeFavoriteAndHistory) {
       LocalFavoritesManager().batchDeleteComicsInAllFolders(comicIDs);
-      HistoryManager().batchDeleteHistories(comicIDs);
+      await HistoryManager().batchDeleteHistories(comicIDs);
     }
 
     notifyListeners();
 
     if (removeFileOnDisk) {
-      _deleteDirectories(shouldRemovedDirs);
+      await _deleteUnreferencedDirectories(shouldRemovedDirs);
     }
   }
 
-  /// Deletes the directories in a separate isolate to avoid blocking the UI thread.
-  static void _deleteDirectories(List<Directory> directories) {
-    Isolate.run(() async {
+  /// Protect remaining registrations before handing paths to filesystem cleanup.
+  Future<void> _deleteUnreferencedDirectories(
+    List<Directory> directories, {
+    LocalComic? chapterOwner,
+  }) async {
+    final retained = _repository.directoryReferences(
+      excluding: chapterOwner == null
+          ? null
+          : (chapterOwner.id, chapterOwner.comicType),
+    );
+    final paths = localDirectoriesToDelete(
+      candidates: directories.map((directory) => directory.path),
+      retained: retained.map(
+        (directory) => _resolveComicDirectory(directory, path),
+      ),
+      libraryPath: path,
+    );
+    if (paths.isNotEmpty) {
+      await _deleteDirectories(paths.map(Directory.new).toList());
+    }
+  }
+
+  static Future<void> _deleteDirectories(List<Directory> directories) async {
+    await Isolate.run(() async {
       await SAFTaskWorker().init();
       for (var dir in directories) {
-        try {
-          if (dir.existsSync()) {
-            await dir.delete(recursive: true);
-          }
-        } catch (e) {
-          continue;
+        if (dir.existsSync()) {
+          await dir.delete(recursive: true);
         }
       }
     });
-  }
-
-  static String getChapterDirectoryName(String name) {
-    var builder = StringBuffer();
-    for (var i = 0; i < name.length; i++) {
-      var char = name[i];
-      if (char == '/' ||
-          char == '\\' ||
-          char == ':' ||
-          char == '*' ||
-          char == '?' ||
-          char == '"' ||
-          char == '<' ||
-          char == '>' ||
-          char == '|') {
-        builder.write('_');
-      } else {
-        builder.write(char);
-      }
-    }
-    return builder.toString();
-  }
-}
-
-enum LocalSortType {
-  name("name"),
-  timeAsc("time_asc"),
-  timeDesc("time_desc");
-
-  final String value;
-
-  const LocalSortType(this.value);
-
-  static LocalSortType fromString(String value) {
-    for (var type in values) {
-      if (type.value == value) {
-        return type;
-      }
-    }
-    return name;
   }
 }

@@ -20,8 +20,7 @@ void main() {
           onDuration: (duration) async => writes.add(duration),
         ),
         progress: ReaderHistoryWriter(
-          write: () async => fail('pending progress must flush on exit'),
-          flush: () => flushes++,
+          write: () async => flushes++,
           onError: (error, stack) => fail('$error'),
         ),
         pauseAutoReading: paused.add,
@@ -70,8 +69,7 @@ void main() {
           },
         ),
         progress: ReaderHistoryWriter(
-          write: () async => events.add('write'),
-          flush: () => events.add('flush'),
+          write: () async => events.add('flush'),
           onError: (error, stack) => fail('$error'),
         ),
         pauseAutoReading: (_) => events.add('pause'),
@@ -109,8 +107,7 @@ void main() {
           onError: (error, stack) => errors.add('duration'),
         ),
         progress: ReaderHistoryWriter(
-          write: () async {},
-          flush: () => throw StateError('progress'),
+          write: () async => throw StateError('progress'),
           onError: (error, stack) => errors.add('progress'),
         ),
         pauseAutoReading: (_) {},
@@ -132,11 +129,7 @@ void main() {
       var calls = 0;
       final session = ReaderSession(
         durations: ReadingSessionTracker(onDuration: (_) async {}),
-        progress: ReaderHistoryWriter(
-          write: () async {},
-          flush: () {},
-          onError: (_, _) {},
-        ),
+        progress: ReaderHistoryWriter(write: () async {}, onError: (_, _) {}),
         pauseAutoReading: (_) {},
         onClosed: () {
           calls++;
@@ -149,4 +142,41 @@ void main() {
       expect(calls, 1);
     },
   );
+
+  testWidgets('sync waits for progress even when duration finishes first', (
+    tester,
+  ) async {
+    final progress = Completer<void>();
+    var elapsed = Duration.zero;
+    final durations = <Duration>[];
+    var closed = false;
+    final session = ReaderSession(
+      durations: ReadingSessionTracker(
+        elapsedNow: () => elapsed,
+        onDuration: (duration) async => durations.add(duration),
+      ),
+      progress: ReaderHistoryWriter(
+        write: () => progress.future,
+        onError: (_, _) {},
+      ),
+      pauseAutoReading: (_) {},
+      onClosed: () => closed = true,
+      foreground: true,
+    );
+    session.setContentReady(true);
+    elapsed = const Duration(seconds: 3);
+    session.scheduleProgress();
+    await tester.pump(const Duration(seconds: 1));
+    final closing = session.dispose();
+    elapsed = const Duration(seconds: 100);
+    await tester.pump();
+    expect(durations, [const Duration(seconds: 3)]);
+    expect(closed, isFalse);
+    progress.completeError(
+      StateError('failed progress is reported and drained'),
+    );
+    await tester.pump();
+    await closing;
+    expect(closed, isTrue);
+  });
 }

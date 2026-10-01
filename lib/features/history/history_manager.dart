@@ -1,3 +1,6 @@
+import 'history_cache.dart';
+import 'history_repository.dart';
+import 'history_model.dart';
 import 'dart:async';
 import 'dart:isolate';
 
@@ -6,156 +9,15 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/comic_type.dart';
-import 'package:venera_next/foundation/history_contract.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/image_favorites.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/throttled_task_runner.dart';
-import 'package:venera_next/foundation/translations.dart';
 
-class History implements Comic {
-  HistoryType type;
-
-  DateTime time;
-
-  @override
-  String title;
-
-  @override
-  String subtitle;
-
-  @override
-  String cover;
-
-  /// index of chapters. 1-based.
-  int ep;
-
-  /// index of pages. 1-based.
-  int page;
-
-  /// index of chapter groups. 1-based.
-  /// If [group] is not null, [ep] is the index of chapter in the group.
-  int? group;
-
-  @override
-  String id;
-
-  /// readEpisode is a set of episode numbers that have been read.
-  /// For normal chapters, it is a set of chapter numbers.
-  /// For grouped chapters, it is a set of strings in the format of "group_number-chapter_number".
-  /// 1-based.
-  Set<String> readEpisode;
-
-  @override
-  int? maxPage;
-
-  /// Cumulative foreground reading time for this comic.
-  int readDurationMs;
-
-  History.fromModel({
-    required HistoryMixin model,
-    required this.ep,
-    required this.page,
-    this.group,
-    Set<String>? readChapters,
-    DateTime? time,
-    this.readDurationMs = 0,
-  }) : type = model.historyType,
-       title = model.title,
-       subtitle = model.subTitle ?? '',
-       cover = model.cover,
-       id = model.id,
-       readEpisode = readChapters ?? <String>{},
-       time = time ?? DateTime.now();
-
-  History.fromMap(Map<String, dynamic> map)
-    : type = HistoryType(map["type"]),
-      time = DateTime.fromMillisecondsSinceEpoch(map["time"]),
-      title = map["title"],
-      subtitle = map["subtitle"],
-      cover = map["cover"],
-      ep = map["ep"],
-      page = map["page"],
-      id = map["id"],
-      readEpisode = Set<String>.from(
-        (map["readEpisode"] as List<dynamic>?)?.toSet() ?? const <String>{},
-      ),
-      maxPage = map["max_page"],
-      readDurationMs = (map["read_duration_ms"] as num?)?.round() ?? 0;
-
-  @override
-  String toString() {
-    return 'History{type: $type, time: $time, title: $title, subtitle: $subtitle, cover: $cover, ep: $ep, page: $page, id: $id}';
-  }
-
-  History.fromRow(Row row)
-    : type = HistoryType(row["type"]),
-      time = DateTime.fromMillisecondsSinceEpoch(row["time"]),
-      title = row["title"],
-      subtitle = row["subtitle"],
-      cover = row["cover"],
-      ep = row["ep"],
-      page = row["page"],
-      id = row["id"],
-      readEpisode = Set<String>.from(
-        (row["readEpisode"] as String)
-            .split(',')
-            .where((element) => element != ""),
-      ),
-      maxPage = row["max_page"],
-      group = row["chapter_group"],
-      readDurationMs = (row["read_duration_ms"] as num).round();
-
-  @override
-  bool operator ==(Object other) {
-    return other is History && type == other.type && id == other.id;
-  }
-
-  @override
-  int get hashCode => Object.hash(id, type);
-
-  @override
-  String get description {
-    var res = "";
-    if (group != null) {
-      res += "${"Group @group".tlParams({"group": group!})} - ";
-    }
-    if (ep >= 1) {
-      res += "Chapter @ep".tlParams({"ep": ep});
-    }
-    if (page >= 1) {
-      if (ep >= 1) {
-        res += " - ";
-      }
-      res += "Page @page".tlParams({"page": page});
-    }
-    return res;
-  }
-
-  @override
-  String? get favoriteId => null;
-
-  @override
-  String? get language => null;
-
-  @override
-  String get sourceKey => type == ComicType.local
-      ? 'local'
-      : type.comicSource?.key ?? "Unknown:${type.value}";
-
-  @override
-  double? get stars => null;
-
-  @override
-  List<String>? get tags => null;
-
-  @override
-  Map<String, dynamic> toJson() {
-    throw UnimplementedError();
-  }
-}
+typedef HistoryMetadataUpdater =
+    Future<bool> Function({String? title, String? subtitle, String? cover});
 
 class HistoryManager with ChangeNotifier {
   static HistoryManager? cache;
@@ -171,158 +33,50 @@ class HistoryManager with ChangeNotifier {
 
   late String _dbPath;
 
-  int get length => _db.select("select count(*) from history;").first[0] as int;
+  HistoryRepository get _repository => HistoryRepository(_db);
 
-  /// Cache of history ids. Improve the performance of find operation.
-  Map<String, bool>? _cachedHistoryIds;
+  int get length => _repository.count();
 
-  /// Cache records recently modified by the app. Improve the performance of listeners.
-  final cachedHistories = <String, History>{};
+  late final _historyCache = HistoryCache(
+    identities: ({String? id}) => _repository.identities(id: id),
+    load: (id, type) => _repository.find(id, type),
+  );
 
   bool isInitialized = false;
+  int _generation = 0;
 
   Future<void> init() async {
     if (isInitialized) {
       return;
     }
+    ++_generation;
     _dbPath = "${App.dataPath}/history.db";
     _db = openSqliteDatabase(_dbPath);
 
-    _db.execute("""
-        create table if not exists history  (
-          id text primary key,
-          title text,
-          subtitle text,
-          cover text,
-          time int,
-          type int,
-          ep int,
-          page int,
-          readEpisode text,
-          max_page int,
-          chapter_group int,
-          read_duration_ms integer not null default 0
-        );
-      """);
-
-    var columns = _db.select("PRAGMA table_info(history);");
-    if (!columns.any((element) => element["name"] == "chapter_group")) {
-      _db.execute("alter table history add column chapter_group int;");
-    }
-    if (!columns.any((element) => element["name"] == "read_duration_ms")) {
-      _db.execute(
-        "alter table history add column read_duration_ms integer not null default 0;",
-      );
-    }
+    _repository.initialize();
 
     notifyListeners();
     ImageFavoriteManager().init();
-    clearExpiredHistory(
+    isInitialized = true;
+    await clearExpiredHistory(
       (appdata.settings['historyRetentionDays'] as num?)?.round() ?? 0,
     );
-    isInitialized = true;
   }
 
-  static const _insertHistorySql = """
-        insert or replace into history (id, title, subtitle, cover, time, type, ep, page, readEpisode, max_page, chapter_group)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-      """;
-
-  static const _updateHistorySql = """
-        update history set
-          title = ?,
-          subtitle = ?,
-          cover = ?,
-          time = ?,
-          ep = ?,
-          page = ?,
-          readEpisode = ?,
-          max_page = ?,
-          chapter_group = ?
-        where id = ? and type = ?;
-      """;
-
-  static const _insertReadDurationSql = """
-        insert or replace into history (id, title, subtitle, cover, time, type, ep, page, readEpisode, max_page, chapter_group, read_duration_ms)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-      """;
-
-  static const _incrementReadDurationSql = """
-        update history
-        set read_duration_ms = read_duration_ms + ?
-        where id = ? and type = ?;
-      """;
-
-  static List<Object?> _historyValues(History item) {
-    return [
-      item.id,
-      item.title,
-      item.subtitle,
-      item.cover,
-      item.time.millisecondsSinceEpoch,
-      item.type.value,
-      item.ep,
-      item.page,
-      item.readEpisode.join(','),
-      item.maxPage,
-      item.group,
-    ];
-  }
-
-  static void _runWriteTransaction(Database db, void Function() write) {
-    db.execute('BEGIN IMMEDIATE;');
-    try {
-      write();
-      db.execute('COMMIT;');
-    } catch (_) {
-      db.execute('ROLLBACK;');
-      rethrow;
-    }
-  }
-
-  // Legacy databases do not consistently expose a single-column UNIQUE(id).
-  static void _writeHistory(Database db, History item) {
-    _runWriteTransaction(db, () {
-      db.execute(_updateHistorySql, [
-        item.title,
-        item.subtitle,
-        item.cover,
-        item.time.millisecondsSinceEpoch,
-        item.ep,
-        item.page,
-        item.readEpisode.join(','),
-        item.maxPage,
-        item.group,
-        item.id,
-        item.type.value,
-      ]);
-      if (db.updatedRows == 0) {
-        db.execute(_insertHistorySql, _historyValues(item));
-      }
-    });
-  }
-
-  static void _writeReadDuration(Database db, History item, int durationMs) {
-    _runWriteTransaction(db, () {
-      db.execute(_incrementReadDurationSql, [
-        durationMs,
-        item.id,
-        item.type.value,
-      ]);
-      if (db.updatedRows == 0) {
-        db.execute(_insertReadDurationSql, [
-          ..._historyValues(item),
-          durationMs,
-        ]);
-      }
-    });
-  }
-
-  static Future<void> _addHistoryAsync(String dbPath, History newItem) {
+  static Future<void> _addHistoryAsync(
+    String dbPath,
+    History newItem,
+    bool replaceMetadata,
+  ) {
     return Isolate.run(() {
       var db = openSqliteDatabase(dbPath);
       try {
-        _writeHistory(db, newItem);
+        final repository = HistoryRepository(db);
+        if (replaceMetadata) {
+          repository.importHistory(newItem);
+        } else {
+          repository.writeProgress(newItem);
+        }
       } finally {
         db.dispose();
       }
@@ -337,7 +91,7 @@ class HistoryManager with ChangeNotifier {
     return Isolate.run(() {
       var db = openSqliteDatabase(dbPath);
       try {
-        _writeReadDuration(db, item, durationMs);
+        HistoryRepository(db).addReadDuration(item, durationMs);
       } finally {
         db.dispose();
       }
@@ -345,246 +99,238 @@ class HistoryManager with ChangeNotifier {
   }
 
   Future<void> _asyncHistoryQueue = Future.value();
+  int _pendingWrites = 0;
 
-  /// Create a isolate to add history to prevent blocking the UI thread.
-  Future<void> addHistoryAsync(History newItem) {
-    return _enqueueAsyncWrite(() => _writeHistoryAsync(newItem));
+  bool get hasPendingWrites => _pendingWrites != 0;
+
+  /// Submit a detached progress snapshot to the ordered mutation queue.
+  Future<void> addHistory(History newItem) =>
+      _writeHistory(newItem, replaceMetadata: false);
+
+  Future<void> importHistory(History newItem) =>
+      _writeHistory(newItem, replaceMetadata: true);
+
+  /// Serialize a synchronous external commit with accepted history writes.
+  /// The writer must finish its transaction before returning. Cache publication
+  /// and completion callbacks run without yielding to later queued mutations.
+  Future<void> importStorage(
+    void Function(String databasePath) write, {
+    required void Function() onCommitted,
+  }) {
+    if (!isInitialized) {
+      return Future.error(StateError('History database is closed'));
+    }
+    final generation = _generation;
+    final path = _dbPath;
+    return _enqueueAsyncWrite(() async {
+      if (!isInitialized || generation != _generation) {
+        throw StateError('History import belongs to a closed connection');
+      }
+      write(path);
+      _historyCache.refresh(invalidateRecords: true);
+      onCommitted();
+      notifyListeners();
+    });
   }
 
-  Future<void> _enqueueAsyncWrite(Future<void> Function() write) {
-    final next = _asyncHistoryQueue.then(
-      (_) => write(),
-      onError: (_) => write(),
-    );
-    _asyncHistoryQueue = next.catchError((Object error, StackTrace stackTrace) {
-      Log.error("History", error, stackTrace);
+  Future<void> _writeHistory(History newItem, {required bool replaceMetadata}) {
+    final snapshot = newItem.copy();
+    final path = _dbPath;
+    final generation = _generation;
+    return _enqueueAsyncWrite(() async {
+      await _addHistoryAsync(path, snapshot, replaceMetadata);
+      if (isInitialized && generation == _generation) {
+        _cachePersistedHistory(snapshot.id, snapshot.type.value);
+        notifyListeners();
+      }
     });
+  }
+
+  Future<T> _enqueueAsyncWrite<T>(Future<T> Function() write) {
+    _pendingWrites++;
+    final next = _asyncHistoryQueue.then((_) => write()).whenComplete(() {
+      _pendingWrites--;
+    });
+    _asyncHistoryQueue = next.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {
+        Log.error("History", error, stackTrace);
+      },
+    );
     return next;
   }
 
-  Future<void> _writeHistoryAsync(History newItem) async {
-    await _addHistoryAsync(_dbPath, newItem);
-    _cacheHistory(newItem);
-    notifyListeners();
+  void _cachePersistedHistory(String id, int type) {
+    final stored = _repository.find(id, type);
+    if (stored == null) {
+      updateCache();
+    } else {
+      _cacheHistory(stored);
+    }
   }
 
   /// Atomically adds foreground reading time without replacing progress data.
   Future<void> addReadDuration(History item, Duration duration) {
     final durationMs = duration.inMilliseconds;
     if (durationMs <= 0) return Future.value();
+    final snapshot = item.copy();
+    final path = _dbPath;
+    final generation = _generation;
     return _enqueueAsyncWrite(() async {
-      await _addReadDurationAsync(_dbPath, item, durationMs);
-      item.readDurationMs += durationMs;
-      _cacheHistory(item);
-      notifyListeners();
+      await _addReadDurationAsync(path, snapshot, durationMs);
+      if (item.id == snapshot.id && item.type == snapshot.type) {
+        item.readDurationMs += durationMs;
+      }
+      if (isInitialized && generation == _generation) {
+        _cachePersistedHistory(snapshot.id, snapshot.type.value);
+        notifyListeners();
+      }
     });
   }
 
-  Future<void> waitForAsyncWrites() {
-    return _asyncHistoryQueue;
+  Future<void> waitForAsyncWrites() async {
+    do {
+      final accepted = _asyncHistoryQueue;
+      await accepted;
+      if (identical(accepted, _asyncHistoryQueue)) return;
+    } while (true);
   }
 
-  void _cacheHistory(History newItem) {
-    if (_cachedHistoryIds == null) {
-      updateCache();
-    } else {
-      _cachedHistoryIds![newItem.id] = true;
+  /// Capture this before starting a metadata request. Late responses cannot
+  /// target a reopened database or follow mutation of the caller's identity.
+  HistoryMetadataUpdater metadataUpdaterFor(History item) {
+    final id = item.id;
+    final type = item.type.value;
+    final generation = _generation;
+    final path = isInitialized ? _dbPath : null;
+    return ({String? title, String? subtitle, String? cover}) {
+      if (path == null || !isInitialized || generation != _generation) {
+        return Future.value(false);
+      }
+      return _enqueueAsyncWrite(() async {
+        final changed = await _updateMetadataAsync(
+          path,
+          id,
+          type,
+          title: title,
+          subtitle: subtitle,
+          cover: cover,
+        );
+        if (changed && isInitialized && generation == _generation) {
+          _cachePersistedHistory(id, type);
+          notifyListeners();
+        }
+        return changed;
+      });
+    };
+  }
+
+  static Future<bool> _updateMetadataAsync(
+    String path,
+    String id,
+    int type, {
+    String? title,
+    String? subtitle,
+    String? cover,
+  }) => Isolate.run(() {
+    final db = openSqliteDatabase(path);
+    try {
+      return HistoryRepository(db).updateMetadata(
+        id,
+        type,
+        title: title,
+        subtitle: subtitle,
+        cover: cover,
+      );
+    } finally {
+      db.dispose();
     }
-    cachedHistories[newItem.id] = newItem;
-    if (cachedHistories.length > 10) {
-      cachedHistories.remove(cachedHistories.keys.first);
+  });
+
+  void _cacheHistory(History item) => _historyCache.record(item);
+
+  static Future<void> _mutateDatabase(
+    String path,
+    void Function(HistoryRepository) mutate,
+  ) => Isolate.run(() {
+    final db = openSqliteDatabase(path);
+    try {
+      mutate(HistoryRepository(db));
+    } finally {
+      db.dispose();
     }
+  });
+
+  Future<void> _delete(void Function(HistoryRepository) mutate) {
+    final path = _dbPath;
+    final generation = _generation;
+    return _enqueueAsyncWrite(() async {
+      await _mutateDatabase(path, mutate);
+      if (isInitialized && generation == _generation) {
+        updateCache();
+        notifyListeners();
+      }
+    });
   }
 
-  /// add history. if exists, update time.
-  ///
-  /// This function would be called when user start reading.
-  void addHistory(History newItem) {
-    _writeHistory(_db, newItem);
-    _cacheHistory(newItem);
-    notifyListeners();
-  }
+  Future<void> clearHistory() => _delete((repository) => repository.clear());
 
-  void clearHistory() {
-    _db.execute("delete from history;");
-    updateCache();
-    notifyListeners();
-  }
-
-  void clearExpiredHistory(int retentionDays) {
-    if (retentionDays <= 0) return;
+  Future<void> clearExpiredHistory(int retentionDays) {
+    if (retentionDays <= 0) return Future.value();
     final cutoff = DateTime.now()
         .subtract(Duration(days: retentionDays))
         .millisecondsSinceEpoch;
-    _db.execute(
-      """
-      delete from history
-      where time < ?;
-    """,
-      [cutoff],
+    return _delete((repository) => repository.clearBefore(cutoff));
+  }
+
+  Future<void> clearUnfavoritedHistory() {
+    // The user's deletion decision uses the favorite identities at submission.
+    // Do not read a potentially closed/reopened favorites manager in an isolate.
+    final favorites = LocalFavoritesManager()
+        .getAllComics()
+        .map((item) => (item.id, item.type.value))
+        .toSet();
+    return _delete(
+      (repository) =>
+          repository.deleteWhere((id, type) => !favorites.contains((id, type))),
     );
-    updateCache();
-    notifyListeners();
   }
 
-  void clearUnfavoritedHistory() {
-    _db.execute('BEGIN TRANSACTION;');
-    try {
-      final idAndTypes = _db.select("""
-      select id, type from history;
-    """);
-      for (var element in idAndTypes) {
-        final id = element["id"] as String;
-        final type = ComicType(element["type"] as int);
-        if (!LocalFavoritesManager().isExist(id, type)) {
-          _db.execute(
-            """
-          delete from history
-          where id == ? and type == ?;
-        """,
-            [id, type.value],
-          );
-        }
-      }
-      _db.execute('COMMIT;');
-    } catch (e) {
-      _db.execute('ROLLBACK;');
-      rethrow;
-    }
-    updateCache();
-    notifyListeners();
+  Future<void> remove(String id, ComicType type) {
+    final value = type.value;
+    return _delete((repository) => repository.remove(id, value));
   }
 
-  void remove(String id, ComicType type) async {
-    _db.execute(
-      """
-      delete from history
-      where id == ? and type == ?;
-    """,
-      [id, type.value],
-    );
-    updateCache();
-    notifyListeners();
-  }
+  void updateCache() => _historyCache.refresh();
 
-  void updateCache() {
-    _cachedHistoryIds = {};
-    var res = _db.select("""
-        select id from history;
-      """);
-    for (var element in res) {
-      _cachedHistoryIds![element["id"] as String] = true;
-    }
-    for (var key in cachedHistories.keys.toList()) {
-      if (!_cachedHistoryIds!.containsKey(key)) {
-        cachedHistories.remove(key);
-      }
-    }
-  }
+  History? find(String id, ComicType type) =>
+      _historyCache.find(id, type.value);
 
-  History? find(String id, ComicType type) {
-    if (_cachedHistoryIds == null) {
-      updateCache();
-    }
-    if (!_cachedHistoryIds!.containsKey(id)) {
-      return null;
-    }
-    if (cachedHistories.containsKey(id)) {
-      return cachedHistories[id];
-    }
-
-    var res = _db.select(
-      """
-      select * from history
-      where id == ? and type == ?;
-    """,
-      [id, type.value],
-    );
-    if (res.isEmpty) {
-      return null;
-    }
-    return History.fromRow(res.first);
-  }
-
-  List<History> getAll() {
-    var res = _db.select("""
-      select * from history
-      order by time DESC;
-    """);
-    return res.map((element) => History.fromRow(element)).toList();
-  }
-
-  /// 获取最近阅读的漫画
-  List<History> getRecent() {
-    var res = _db.select("""
-      select * from history
-      order by time DESC
-      limit 20;
-    """);
-    return res.map((element) => History.fromRow(element)).toList();
-  }
-
-  /// 获取历史记录的数量
-  int count() {
-    var res = _db.select("""
-      select count(*) from history;
-    """);
-    return res.first[0] as int;
-  }
-
-  int getTotalReadDurationMs() {
-    var res = _db.select("""
-      select coalesce(sum(read_duration_ms), 0) from history;
-    """);
-    return (res.first[0] as num).round();
-  }
-
-  int countWithReadDuration() {
-    var res = _db.select("""
-      select count(*) from history where read_duration_ms > 0;
-    """);
-    return (res.first[0] as num).round();
-  }
-
-  List<History> getAllByReadDuration() {
-    var res = _db.select("""
-      select * from history
-      where read_duration_ms > 0
-      order by read_duration_ms desc, time desc;
-    """);
-    return res.map(History.fromRow).toList();
-  }
+  List<History> getAll() => _repository.getAll();
+  List<History> getRecent() => _repository.getRecent();
+  int count() => _repository.count();
+  int getTotalReadDurationMs() => _repository.getTotalReadDurationMs();
+  int countWithReadDuration() => _repository.countWithReadDuration();
+  List<History> getAllByReadDuration() => _repository.getAllByReadDuration();
 
   void close() {
+    ++_generation;
     isInitialized = false;
+    _historyCache.clear();
     _db.dispose();
   }
 
   void notifyChanges() {
-    updateCache();
+    _historyCache.refresh(invalidateRecords: true);
     notifyListeners();
   }
 
-  void batchDeleteHistories(List<ComicID> histories) {
-    if (histories.isEmpty) return;
-    _db.execute('BEGIN TRANSACTION;');
-    try {
-      for (var history in histories) {
-        _db.execute(
-          """
-          delete from history
-          where id == ? and type == ?;
-        """,
-          [history.id, history.type.value],
-        );
-      }
-      _db.execute('COMMIT;');
-    } catch (e) {
-      _db.execute('ROLLBACK;');
-      rethrow;
-    }
-    updateCache();
-    notifyListeners();
+  Future<void> batchDeleteHistories(List<ComicID> histories) {
+    if (histories.isEmpty) return Future.value();
+    final identities = histories
+        .map((item) => (item.id, item.type.value))
+        .toList();
+    return _delete((repository) => repository.removeMany(identities));
   }
 
   /// Refresh history info from comic source.
@@ -613,11 +359,13 @@ class HistoryManager with ChangeNotifier {
       return false;
     }
 
+    final id = history.id;
+    final updateMetadata = metadataUpdaterFor(history);
     final waitRetry = retryDelay ?? Future<void>.delayed;
     int retries = 3;
     while (true) {
       try {
-        var res = await comicSource.loadComicInfo!(history.id);
+        var res = await comicSource.loadComicInfo!(id);
         if (res.error) {
           retries--;
           if (retries == 0) {
@@ -628,24 +376,11 @@ class HistoryManager with ChangeNotifier {
         }
 
         var comicDetails = res.data;
-        // Update history info while keeping reading progress
-        var updatedHistory = History.fromMap({
-          'type': history.type.value,
-          'time': history.time.millisecondsSinceEpoch,
-          'title': comicDetails.title,
-          'subtitle': comicDetails.subTitle ?? '',
-          'cover': comicDetails.cover,
-          'ep': history.ep,
-          'page': history.page,
-          'id': history.id,
-          'readEpisode': history.readEpisode.toList(),
-          'max_page': history.maxPage,
-          'read_duration_ms': history.readDurationMs,
-        });
-        updatedHistory.group = history.group;
-
-        addHistory(updatedHistory);
-        return true;
+        return await updateMetadata(
+          title: comicDetails.title,
+          subtitle: comicDetails.subTitle ?? '',
+          cover: comicDetails.cover,
+        );
       } catch (e, s) {
         Log.error("History", "Exception while refreshing history info: $e\n$s");
         retries--;

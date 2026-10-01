@@ -1,3 +1,4 @@
+export 'history_api.dart';
 export '../../foundation/history_contract.dart';
 export 'history_image_provider.dart';
 export 'image_favorites.dart';
