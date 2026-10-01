@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
+import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -408,6 +409,182 @@ void main() {
     },
   );
 
+  test(
+    'snapshot failure becomes retryable error and late failure preserves pause',
+    () async {
+      final root = Directory.systemTemp.createTempSync(
+        'download-snapshot-error-',
+      );
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      final blocker = Directory('${root.path}/downloading_tasks.json')
+        ..createSync();
+      final task = ImagesDownloadTask.fromJson({
+        'type': 'ImagesDownloadTask',
+        'source': sourceKey,
+        'comicId': 'finished',
+        'comic': {
+          'title': 'Finished',
+          'subtitle': '',
+          'cover': 'cover.jpg',
+          'description': '',
+          'tags': <String, List<String>>{},
+          'chapters': null,
+          'sourceKey': sourceKey,
+          'comicId': 'finished',
+        },
+        'chapters': null,
+        'path': root.path,
+        'cover': 'cover.jpg',
+        'images': {'': <String>[]},
+        'downloadedCount': 0,
+        'totalCount': 0,
+        'index': 0,
+        'chapter': 1,
+      })!;
+      addTearDown(() async {
+        task.pause();
+        await manager.pendingDownloadTaskWrites;
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      manager.downloadingTasks.add(task);
+      task.resume();
+      await task.debugResumeFuture;
+      expect(task.isError, isTrue);
+      expect(task.isPaused, isTrue);
+      expect(task.timer, isNull);
+      expect(manager.downloadingTasks, [task]);
+      expect(manager.count, 0);
+
+      task.resume();
+      task.pause();
+      await task.debugResumeFuture;
+      expect(task.isError, isFalse);
+      expect(task.isPaused, isTrue);
+      expect(task.timer, isNull);
+
+      blocker.deleteSync();
+      task.resume();
+      await task.debugResumeFuture;
+      await manager.pendingDownloadTaskWrites;
+      expect(task.isError, isFalse);
+      expect(task.timer, isNull);
+      expect(manager.downloadingTasks, isEmpty);
+      expect(manager.find(task.id, task.comicType), isNotNull);
+    },
+  );
+
+  test(
+    'late metadata failure from a paused run cannot stop a newer run',
+    () async {
+      final first = Completer<Res<ComicDetails>>();
+      final second = Completer<Res<ComicDetails>>();
+      var calls = 0;
+      final source = _testSource(
+        sourceKey,
+        loadComicInfo: (id) {
+          calls++;
+          return calls == 1 ? first.future : second.future;
+        },
+      );
+      final task = ImagesDownloadTask(source: source, comicId: 'one');
+      addTearDown(task.pause);
+      task.resume();
+      final obsolete = task.debugResumeFuture!;
+      task.pause();
+      task.resume();
+      expect(calls, 2);
+      first.complete(Res.error('obsolete request'));
+      await obsolete;
+      expect(task.isError, isFalse);
+      expect(task.isPaused, isFalse);
+      expect(task.timer, isNotNull);
+      task.pause();
+      second.complete(Res.error('paused request'));
+      await task.debugResumeFuture;
+      expect(task.isError, isFalse);
+      expect(task.isPaused, isTrue);
+      expect(task.timer, isNull);
+    },
+  );
+
+  test(
+    'paused chapter-list fetch cannot publish a partial list to a newer run',
+    () async {
+      final root = Directory.systemTemp.createTempSync('download-list-run-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      final results = [
+        Completer<Res<List<String>>>(),
+        Completer<Res<List<String>>>(),
+      ];
+      final started = [Completer<void>(), Completer<void>()];
+      var calls = 0;
+      ComicSourceManager().remove(sourceKey);
+      ComicSourceManager().add(
+        _testSource(
+          sourceKey,
+          loadComicPages: (id, ep) {
+            final index = calls++;
+            started[index].complete();
+            return results[index].future;
+          },
+        ),
+      );
+      final task = ImagesDownloadTask.fromJson({
+        'type': 'ImagesDownloadTask',
+        'source': sourceKey,
+        'comicId': 'one',
+        'comic': {
+          'title': 'One',
+          'subtitle': '',
+          'cover': 'cover.jpg',
+          'description': '',
+          'tags': <String, List<String>>{},
+          'chapters': {'a': 'A'},
+          'sourceKey': sourceKey,
+          'comicId': 'one',
+        },
+        'chapters': null,
+        'path': root.path,
+        'cover': 'cover.jpg',
+        'images': null,
+        'downloadedCount': 0,
+        'totalCount': 0,
+        'index': 0,
+        'chapter': 0,
+      })!;
+      addTearDown(() async {
+        task.pause();
+        for (final pending in results) {
+          if (!pending.isCompleted) pending.complete(Res.error('test ended'));
+        }
+        await task.debugResumeFuture;
+        await LocalManager().pendingDownloadTaskWrites;
+        root.deleteSync(recursive: true);
+      });
+      task.resume();
+      final obsolete = task.debugResumeFuture!;
+      await started[0].future.timeout(const Duration(seconds: 2));
+      task.pause();
+      task.resume();
+      await started[1].future.timeout(const Duration(seconds: 2));
+      results[0].complete(Res(['obsolete-image']));
+      await obsolete;
+      expect(task.toJson()['images'], isNull);
+      expect(task.isPaused, isFalse);
+      task.pause();
+      results[1].complete(Res(<String>[]));
+      await task.debugResumeFuture;
+      expect(task.toJson()['images'], isNull);
+      expect(task.isError, isFalse);
+    },
+  );
+
   test('ImagesDownloadTask cancel before path stops speed recorder', () async {
     final dataDir = Directory.systemTemp.createTempSync(
       'venera-download-data-',
@@ -443,7 +620,11 @@ void main() {
   });
 }
 
-ComicSource _testSource(String key, {LoadComicFunc? loadComicInfo}) {
+ComicSource _testSource(
+  String key, {
+  LoadComicFunc? loadComicInfo,
+  LoadComicPagesFunc? loadComicPages,
+}) {
   return ComicSource(
     'Test Source',
     key,
@@ -456,7 +637,7 @@ ComicSource _testSource(String key, {LoadComicFunc? loadComicInfo}) {
     null,
     loadComicInfo,
     null,
-    null,
+    loadComicPages,
     null,
     null,
     '',

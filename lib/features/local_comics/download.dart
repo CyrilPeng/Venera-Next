@@ -105,6 +105,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
 
   @override
   void cancel() {
+    _runGeneration++;
     _isRunning = false;
     _wakeRetryDelay();
     stopRecorder();
@@ -145,25 +146,25 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
 
   @override
   void pause() {
-    if (isPaused) {
-      return;
-    }
-    _isRunning = false;
+    if (isPaused) return;
     _message = "Paused".tl;
+    _stopRun();
+    notifyListeners();
+  }
+
+  void _stopRun() {
+    _runGeneration++;
+    _isRunning = false;
     _currentSpeed = 0;
     _wakeRetryDelay();
-    var shouldMove = <int>[];
-    for (var entry in tasks.entries) {
-      if (!entry.value.isComplete) {
-        entry.value.cancel();
-        shouldMove.add(entry.key);
-      }
-    }
-    for (var i in shouldMove) {
-      tasks.remove(i);
+    final pending = tasks.entries
+        .where((entry) => !entry.value.isComplete)
+        .toList();
+    for (final entry in pending) {
+      entry.value.cancel();
+      tasks.remove(entry.key);
     }
     stopRecorder();
-    notifyListeners();
   }
 
   @override
@@ -197,6 +198,11 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
   int get _maxConcurrentTasks =>
       GlobalPreferenceStore(appdata.settings).network.downloadThreads;
 
+  int _runGeneration = 0;
+
+  bool _isCurrentRun(int generation) =>
+      _isRunning && generation == _runGeneration;
+
   Future<void>? _resumeFuture;
 
   @visibleForTesting
@@ -224,15 +230,20 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     });
   }
 
-  Future<Res<T>> _runDownloadStepWithRetry<T>(Future<T> Function() task) {
+  Future<Res<T>> _runDownloadStepWithRetry<T>(
+    int generation,
+    Future<T> Function() task,
+  ) {
     return _runWithRetry(
       task,
       delay: _waitRetryDelay,
-      shouldContinue: () => _isRunning,
+      shouldContinue: () => _isCurrentRun(generation),
     );
   }
 
   void _scheduleTasks() {
+    if (!_isRunning) return;
+    final generation = _runGeneration;
     var images = _images![_images!.keys.elementAt(_chapter)]!;
     var downloading = 0;
     for (var i = _index; i < images.length; i++) {
@@ -272,7 +283,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
       );
       tasks[i] = task;
       task.wait().then((task) {
-        if (task.isComplete) {
+        if (task.isComplete && _isCurrentRun(generation)) {
           _scheduleTasks();
         }
       });
@@ -283,20 +294,31 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
   @override
   void resume() {
     if (_isRunning) return;
-    _resumeFuture = _resume();
+    final generation = ++_runGeneration;
+    _resumeFuture = _resume(generation).catchError((
+      Object error,
+      StackTrace stack,
+    ) {
+      if (!_isCurrentRun(generation)) return;
+      Log.error('Download', error, stack);
+      // Snapshot/filesystem failures must stop prefetch and timers as well as
+      // the main loop, while leaving the queued task available for retry.
+      _setError('Error: $error');
+    });
   }
 
-  Future<void> _resume() async {
+  Future<void> _resume(int generation) async {
     _isError = false;
     _message = "Resuming...".tl;
     _isRunning = true;
     notifyListeners();
+    if (!_isCurrentRun(generation)) return;
     runRecorder();
 
     if (comic == null) {
       _message = "Fetching comic info...".tl;
       notifyListeners();
-      var res = await _runDownloadStepWithRetry(() async {
+      var res = await _runDownloadStepWithRetry(generation, () async {
         var r = await source.loadComicInfo!(comicId);
         if (r.error) {
           throw r.errorMessage!;
@@ -304,7 +326,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
           return r.data;
         }
       });
-      if (!_isRunning) {
+      if (!_isCurrentRun(generation)) {
         return;
       }
       if (res.error) {
@@ -322,11 +344,14 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
           comicType,
           comic!.title,
         );
+        if (!_isCurrentRun(generation)) return;
         if (!(await dir.exists())) {
           await dir.create();
         }
+        if (!_isCurrentRun(generation)) return;
         path = dir.path;
       } catch (e, s) {
+        if (!_isCurrentRun(generation)) return;
         Log.error("Download", e.toString(), s);
         _setError("Error: $e");
         return;
@@ -334,11 +359,12 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     }
 
     await LocalManager().saveCurrentDownloadingTasks();
+    if (!_isCurrentRun(generation)) return;
 
     if (_cover == null) {
       _message = "Downloading cover...".tl;
       notifyListeners();
-      var res = await _runDownloadStepWithRetry(() async {
+      var res = await _runDownloadStepWithRetry(generation, () async {
         Uint8List? data;
         await for (var progress in ImageDownloader.loadThumbnail(
           comic!.cover,
@@ -356,7 +382,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
         file.writeAsBytesSync(data);
         return "file://${file.path}";
       });
-      if (!_isRunning) {
+      if (!_isCurrentRun(generation)) {
         return;
       }
       if (res.error) {
@@ -368,13 +394,14 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
         notifyListeners();
       }
       await LocalManager().saveCurrentDownloadingTasks();
+      if (!_isCurrentRun(generation)) return;
     }
 
     if (_images == null) {
       if (comic!.chapters == null) {
         _message = "Fetching image list...".tl;
         notifyListeners();
-        var res = await _runDownloadStepWithRetry(() async {
+        var res = await _runDownloadStepWithRetry(generation, () async {
           var r = await source.loadComicPages!(comicId, null);
           if (r.error) {
             throw r.errorMessage!;
@@ -382,7 +409,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
             return r.data;
           }
         });
-        if (!_isRunning) {
+        if (!_isCurrentRun(generation)) {
           return;
         }
         if (res.error) {
@@ -394,8 +421,8 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
           _totalCount = _images!['']!.length;
         }
       } else {
-        _images = {};
-        _totalCount = 0;
+        final fetchedImages = <String, List<String>>{};
+        var totalCount = 0;
         int cpCount = 0;
         int totalCpCount =
             chapters?.length ?? comic!.chapters!.allChapters.length;
@@ -403,16 +430,12 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
           if (chapters != null && !chapters!.contains(i)) {
             continue;
           }
-          if (_images![i] != null) {
-            _totalCount += _images![i]!.length;
-            continue;
-          }
           _message = "Fetching image list (@a/@b)...".tlParams({
             "a": cpCount,
             "b": totalCpCount,
           });
           notifyListeners();
-          var res = await _runDownloadStepWithRetry(() async {
+          var res = await _runDownloadStepWithRetry(generation, () async {
             var r = await source.loadComicPages!(comicId, i);
             if (r.error) {
               throw r.errorMessage!;
@@ -420,7 +443,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
               return r.data;
             }
           });
-          if (!_isRunning) {
+          if (!_isCurrentRun(generation)) {
             return;
           }
           if (res.error) {
@@ -428,14 +451,20 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
             _setError("Error: ${res.errorMessage}");
             return;
           } else {
-            _images![i] = res.data;
-            _totalCount += _images![i]!.length;
+            fetchedImages[i] = res.data;
+            totalCount += res.data.length;
+            cpCount++;
           }
         }
+        // Publish only a complete list owned by this run. A paused partial
+        // fetch must not look ready to the next resume attempt.
+        _images = fetchedImages;
+        _totalCount = totalCount;
       }
       _message = "$_downloadedCount/$_totalCount";
       notifyListeners();
       await LocalManager().saveCurrentDownloadingTasks();
+      if (!_isCurrentRun(generation)) return;
     }
 
     while (_chapter < _images!.length) {
@@ -445,7 +474,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
         _scheduleTasks();
         var task = tasks[_index]!;
         await task.wait();
-        if (isPaused) {
+        if (!_isCurrentRun(generation)) {
           return;
         }
         if (task.error != null) {
@@ -457,18 +486,13 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
         _downloadedCount++;
         _message = "$_downloadedCount/$_totalCount";
         await LocalManager().saveCurrentDownloadingTasks();
+        if (!_isCurrentRun(generation)) return;
       }
       _index = 0;
       _chapter++;
     }
 
-    try {
-      LocalManager().completeTask(this);
-    } catch (error, stack) {
-      Log.error('Download', error, stack);
-      _setError('Error: $error');
-      return;
-    }
+    LocalManager().completeTask(this);
     _isRunning = false;
     stopRecorder();
   }
@@ -480,11 +504,10 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
   }
 
   void _setError(String message) {
-    _isRunning = false;
+    _stopRun();
     _isError = true;
     _message = message;
     notifyListeners();
-    stopRecorder();
   }
 
   @override
