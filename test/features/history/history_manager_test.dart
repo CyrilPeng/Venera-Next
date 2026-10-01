@@ -6,6 +6,8 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/favorites/favorites.dart';
+import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/res.dart';
 
 History _history(String id) {
@@ -34,6 +36,168 @@ bool _sqliteAvailable() {
 }
 
 void main() {
+  group(
+    'ordered history mutations',
+    () {
+      late Directory directory;
+      late HistoryManager manager;
+      setUp(() async {
+        directory = Directory.systemTemp.createTempSync('history-order-');
+        App.dataPath = directory.path;
+        App.cachePath = directory.path;
+        manager = HistoryManager();
+        await manager.init();
+      });
+      tearDown(() async {
+        await manager.waitForAsyncWrites();
+        manager.close();
+        HistoryManager.cache = null;
+        directory.deleteSync(recursive: true);
+      });
+
+      test(
+        'latest progress and deletes follow earlier accepted writes',
+        () async {
+          final first = _history('same')..page = 3;
+          final last = first.copy()..page = 8;
+          final writes = [
+            manager.addHistory(first),
+            manager.addReadDuration(first, const Duration(milliseconds: 42)),
+            manager.addHistory(last),
+          ];
+          expect(manager.hasPendingWrites, isTrue);
+          await Future.wait(writes);
+          expect(manager.find('same', ComicType.local)!.page, 8);
+          expect(manager.find('same', ComicType.local)!.readDurationMs, 42);
+          final rewriting = manager.addHistory(first);
+          final deleting = manager.remove('same', ComicType.local);
+          await Future.wait([rewriting, deleting]);
+          expect(manager.find('same', ComicType.local), isNull);
+          final batchWrite = manager.addHistory(_history('batch'));
+          final ids = [ComicID(ComicType.local, 'batch')];
+          final batchDelete = manager.batchDeleteHistories(ids);
+          ids.clear();
+          await Future.wait([batchWrite, batchDelete]);
+          expect(manager.count(), 0);
+          expect(manager.hasPendingWrites, isFalse);
+        },
+      );
+
+      test('failed writes do not poison later queued mutations', () async {
+        final db = sqlite3.open('${directory.path}/history.db');
+        try {
+          db.execute("""
+          CREATE TRIGGER reject_bad BEFORE INSERT ON history
+          WHEN NEW.id = 'bad' BEGIN SELECT RAISE(ABORT, 'rejected'); END;
+        """);
+          final failure = expectLater(
+            manager.addHistory(_history('bad')),
+            throwsA(isA<SqliteException>()),
+          );
+          final following = manager.addHistory(_history('good'));
+          await failure;
+          await following;
+          await manager.waitForAsyncWrites();
+          expect(manager.getAll().map((item) => item.id), ['good']);
+          expect(manager.hasPendingWrites, isFalse);
+        } finally {
+          db.dispose();
+        }
+      });
+
+      test(
+        'unfavorited deletion uses submission-time favorite identities',
+        () async {
+          final previousFolder = appdata.settings['followUpdatesFolder'];
+          final previousQuick = appdata.settings['quickFavorite'];
+          final favorites = LocalFavoritesManager();
+          await favorites.init();
+          try {
+            final folder = favorites.createFolder('kept');
+            favorites.addComic(
+              folder,
+              FavoriteItem(
+                id: 'favorite',
+                name: 'Favorite',
+                author: '',
+                coverPath: '',
+                type: ComicType.local,
+                tags: [],
+              ),
+            );
+            final writes = [
+              manager.addHistory(_history('favorite')),
+              manager.addHistory(_history('not-favorite')),
+            ];
+            final clear = manager.clearUnfavoritedHistory();
+            favorites.deleteComicWithId(folder, 'favorite', ComicType.local);
+            await Future.wait([...writes, clear]);
+            expect(manager.getAll().map((item) => item.id), ['favorite']);
+          } finally {
+            await favorites.debugWaitForHashedIdsRefresh();
+            await appdata.saveData(false);
+            favorites.close();
+            LocalFavoritesManager.cache = null;
+            appdata.settings['followUpdatesFolder'] = previousFolder;
+            appdata.settings['quickFavorite'] = previousQuick;
+          }
+        },
+      );
+
+      test('retention and clear run after queued writes', () async {
+        final fresh = _history('fresh')..time = DateTime.now();
+        await Future.wait([
+          manager.addHistory(_history('old')),
+          manager.addHistory(fresh),
+          manager.clearExpiredHistory(1),
+        ]);
+        expect(manager.getAll().map((item) => item.id), ['fresh']);
+        await Future.wait([
+          manager.addHistory(_history('another')),
+          manager.clearHistory(),
+        ]);
+        expect(manager.count(), 0);
+      });
+
+      test('drain includes writes submitted by completion listeners', () async {
+        var added = false;
+        manager.addListener(() {
+          if (!added) {
+            added = true;
+            manager.addHistory(_history('listener'));
+          }
+        });
+        final first = manager.addHistory(_history('first'));
+        await manager.waitForAsyncWrites();
+        await first;
+        expect(manager.hasPendingWrites, isFalse);
+        expect(manager.find('listener', ComicType.local), isNotNull);
+      });
+
+      test(
+        'queued deletion keeps its database after close and reopen',
+        () async {
+          final writing = manager.addHistory(_history('old-database'));
+          final deleting = manager.remove('old-database', ComicType.local);
+          manager.close();
+          final reopened = Directory('${directory.path}/new')..createSync();
+          App.dataPath = reopened.path;
+          await manager.init();
+          await manager.addHistory(_history('new-database'));
+          await Future.wait([writing, deleting]);
+          expect(manager.getAll().map((item) => item.id), ['new-database']);
+          final old = sqlite3.open('${directory.path}/history.db');
+          try {
+            expect(old.select('SELECT * FROM history'), isEmpty);
+          } finally {
+            old.dispose();
+          }
+        },
+      );
+    },
+    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+  );
+
   test(
     'history copies detach mutable read keys and preserve all stored fields',
     () {
@@ -105,7 +269,7 @@ void main() {
   });
 
   test(
-    'addHistoryAsync writes through an isolate-owned sqlite connection',
+    'addHistory writes through an isolate-owned sqlite connection',
     () async {
       final dataDir = Directory.systemTemp.createTempSync(
         'venera-history-data-',
@@ -135,7 +299,7 @@ void main() {
       final manager = HistoryManager();
       await manager.init();
 
-      await manager.addHistoryAsync(_history('comic-1'));
+      await manager.addHistory(_history('comic-1'));
 
       final saved = manager.find('comic-1', ComicType.local);
       expect(saved, isNotNull);
@@ -177,7 +341,7 @@ void main() {
       await manager.init();
 
       final submitted = List.generate(5, (index) => _history('comic-$index'));
-      final futures = submitted.map(manager.addHistoryAsync).toList();
+      final futures = submitted.map(manager.addHistory).toList();
       for (final value in submitted) {
         value.id = 'mutated';
         value.title = 'Not submitted';
@@ -243,12 +407,12 @@ void main() {
       final manager = HistoryManager();
       await manager.init();
 
-      final write = manager.addHistoryAsync(_history('comic-drained'));
+      final write = manager.addHistory(_history('comic-drained'));
       await manager.waitForAsyncWrites();
       await write;
       var notifications = 0;
       manager.addListener(() => notifications++);
-      final lateWrite = manager.addHistoryAsync(_history('old-lifetime'));
+      final lateWrite = manager.addHistory(_history('old-lifetime'));
       manager.close();
       final reopened = Directory('${dataDir.path}/reopened')..createSync();
       App.dataPath = reopened.path;
@@ -435,9 +599,9 @@ void main() {
       await manager.init();
 
       final existing = _history('legacy-comic')..page = 7;
-      manager.addHistory(existing);
+      await manager.addHistory(existing);
       await manager.addReadDuration(existing, const Duration(seconds: 15));
-      await manager.addHistoryAsync(_history('new-comic'));
+      await manager.addHistory(_history('new-comic'));
       await manager.waitForAsyncWrites();
 
       final db = sqlite3.open('${dataDir.path}/history.db');
@@ -492,8 +656,8 @@ void main() {
 
       final first = _history('comic-first');
       final second = _history('comic-second');
-      manager.addHistory(first);
-      manager.addHistory(second);
+      await manager.addHistory(first);
+      await manager.addHistory(second);
 
       await Future.wait([
         manager.addReadDuration(first, const Duration(seconds: 40)),
@@ -502,7 +666,7 @@ void main() {
       ]);
       first.page = 8;
       first.maxPage = 12;
-      await manager.addHistoryAsync(first);
+      await manager.addHistory(first);
       await manager.waitForAsyncWrites();
 
       final db = sqlite3.open('${dataDir.path}/history.db');

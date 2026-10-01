@@ -32,7 +32,7 @@ class HistoryImageProvider
       checkStop();
       url = comic.data.cover;
       history.cover = url;
-      HistoryManager().addHistory(history);
+      await HistoryManager().addHistory(history);
     }
     await for (var progress in ImageDownloader.loadThumbnail(
       url,

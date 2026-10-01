@@ -8,16 +8,13 @@ import 'dart:async';
 class ReaderHistoryWriter {
   ReaderHistoryWriter({
     required Future<void> Function() write,
-    required FutureOr<void> Function() flush,
     required void Function(Object, StackTrace) onError,
     Duration delay = const Duration(seconds: 1),
   }) : _write = write,
-       _flush = flush,
        _onError = onError,
        _delay = delay;
 
   final Future<void> Function() _write;
-  final FutureOr<void> Function() _flush;
   final void Function(Object, StackTrace) _onError;
   final Duration _delay;
   Timer? _timer;
@@ -49,7 +46,7 @@ class ReaderHistoryWriter {
     _timer = null;
     if (pending != null) {
       pending.cancel();
-      _submit(_flush);
+      _submit(_write);
     }
     return _closing = Future.wait(_pending.toList()).then((_) {});
   }

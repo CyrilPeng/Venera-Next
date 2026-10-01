@@ -39,7 +39,7 @@ void main() {
     );
     await local.add(comic);
     history = History.fromModel(model: comic, ep: 1, page: 2);
-    HistoryManager().addHistory(history);
+    await HistoryManager().addHistory(history);
   });
   tearDown(() {
     HistoryManager().close();

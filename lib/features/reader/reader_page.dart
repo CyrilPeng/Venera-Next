@@ -362,11 +362,7 @@ class ReaderState extends State<Reader>
       progress: ReaderHistoryWriter(
         write: () async {
           final item = history;
-          if (item != null) await HistoryManager().addHistoryAsync(item);
-        },
-        flush: () {
-          final item = history;
-          if (item != null) HistoryManager().addHistory(item);
+          if (item != null) await HistoryManager().addHistory(item);
         },
         onError: (error, stack) => Log.error(
           'Reader',
@@ -442,10 +438,18 @@ class ReaderState extends State<Reader>
   void stopVolumeEvent() => unawaited(_volumeController.setEnabled(false));
 
   ReaderWindowController? _windowController;
+  WindowFrameController? _exitFrame;
+
+  Future<void> _closeSession() =>
+      _session.dispose().catchError((Object error, StackTrace stack) {
+        Log.error('Reader', 'Failed to close reading session: $error', stack);
+      });
 
   void initReaderWindow() {
     if (!App.isDesktop || _windowController != null) return;
     final frame = WindowFrame.of(context);
+    _exitFrame = frame;
+    frame.addExitTask(_closeSession);
     final navigator = Navigator.of(context, rootNavigator: true);
     _windowController = ReaderWindowController(
       hide: windowManager.hide,
@@ -478,11 +482,10 @@ class ReaderState extends State<Reader>
     _layoutProbe = null;
     WidgetsBinding.instance.removeObserver(this);
     autoReading.dispose();
-    unawaited(
-      _session.dispose().catchError((Object error, StackTrace stack) {
-        Log.error('Reader', 'Failed to close reading session: $error', stack);
-      }),
-    );
+    final closing = _closeSession();
+    _exitFrame?.removeExitTask(_closeSession);
+    _exitFrame?.trackExitTask(closing);
+    unawaited(closing);
     focusNode.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     unawaited(_volumeController.dispose());

@@ -54,10 +54,10 @@ class HistoryManager with ChangeNotifier {
 
     notifyListeners();
     ImageFavoriteManager().init();
-    clearExpiredHistory(
+    isInitialized = true;
+    await clearExpiredHistory(
       (appdata.settings['historyRetentionDays'] as num?)?.round() ?? 0,
     );
-    isInitialized = true;
   }
 
   static Future<void> _addHistoryAsync(String dbPath, History newItem) {
@@ -87,9 +87,12 @@ class HistoryManager with ChangeNotifier {
   }
 
   Future<void> _asyncHistoryQueue = Future.value();
+  int _pendingWrites = 0;
 
-  /// Create a isolate to add history to prevent blocking the UI thread.
-  Future<void> addHistoryAsync(History newItem) {
+  bool get hasPendingWrites => _pendingWrites != 0;
+
+  /// Submit a detached progress snapshot to the ordered mutation queue.
+  Future<void> addHistory(History newItem) {
     final snapshot = newItem.copy();
     final path = _dbPath;
     final generation = _generation;
@@ -103,10 +106,10 @@ class HistoryManager with ChangeNotifier {
   }
 
   Future<void> _enqueueAsyncWrite(Future<void> Function() write) {
-    final next = _asyncHistoryQueue.then(
-      (_) => write(),
-      onError: (_) => write(),
-    );
+    _pendingWrites++;
+    final next = _asyncHistoryQueue.then((_) => write()).whenComplete(() {
+      _pendingWrites--;
+    });
     _asyncHistoryQueue = next.catchError((Object error, StackTrace stackTrace) {
       Log.error("History", error, stackTrace);
     });
@@ -141,49 +144,66 @@ class HistoryManager with ChangeNotifier {
     });
   }
 
-  Future<void> waitForAsyncWrites() {
-    return _asyncHistoryQueue;
+  Future<void> waitForAsyncWrites() async {
+    do {
+      final accepted = _asyncHistoryQueue;
+      await accepted;
+      if (identical(accepted, _asyncHistoryQueue)) return;
+    } while (true);
   }
 
   void _cacheHistory(History item) => _historyCache.record(item);
 
-  /// add history. if exists, update time.
-  ///
-  /// This function would be called when user start reading.
-  void addHistory(History newItem) {
-    _repository.writeProgress(newItem);
-    _cacheHistory(newItem);
-    notifyListeners();
+  static Future<void> _mutateDatabase(
+    String path,
+    void Function(HistoryRepository) mutate,
+  ) => Isolate.run(() {
+    final db = openSqliteDatabase(path);
+    try {
+      mutate(HistoryRepository(db));
+    } finally {
+      db.dispose();
+    }
+  });
+
+  Future<void> _delete(void Function(HistoryRepository) mutate) {
+    final path = _dbPath;
+    final generation = _generation;
+    return _enqueueAsyncWrite(() async {
+      await _mutateDatabase(path, mutate);
+      if (isInitialized && generation == _generation) {
+        updateCache();
+        notifyListeners();
+      }
+    });
   }
 
-  void clearHistory() {
-    _repository.clear();
-    updateCache();
-    notifyListeners();
-  }
+  Future<void> clearHistory() => _delete((repository) => repository.clear());
 
-  void clearExpiredHistory(int retentionDays) {
-    if (retentionDays <= 0) return;
+  Future<void> clearExpiredHistory(int retentionDays) {
+    if (retentionDays <= 0) return Future.value();
     final cutoff = DateTime.now()
         .subtract(Duration(days: retentionDays))
         .millisecondsSinceEpoch;
-    _repository.clearBefore(cutoff);
-    updateCache();
-    notifyListeners();
+    return _delete((repository) => repository.clearBefore(cutoff));
   }
 
-  void clearUnfavoritedHistory() {
-    _repository.deleteWhere(
-      (id, type) => !LocalFavoritesManager().isExist(id, ComicType(type)),
+  Future<void> clearUnfavoritedHistory() {
+    // The user's deletion decision uses the favorite identities at submission.
+    // Do not read a potentially closed/reopened favorites manager in an isolate.
+    final favorites = LocalFavoritesManager()
+        .getAllComics()
+        .map((item) => (item.id, item.type.value))
+        .toSet();
+    return _delete(
+      (repository) =>
+          repository.deleteWhere((id, type) => !favorites.contains((id, type))),
     );
-    updateCache();
-    notifyListeners();
   }
 
-  void remove(String id, ComicType type) async {
-    _repository.remove(id, type.value);
-    updateCache();
-    notifyListeners();
+  Future<void> remove(String id, ComicType type) {
+    final value = type.value;
+    return _delete((repository) => repository.remove(id, value));
   }
 
   void updateCache() => _historyCache.refresh();
@@ -210,13 +230,12 @@ class HistoryManager with ChangeNotifier {
     notifyListeners();
   }
 
-  void batchDeleteHistories(List<ComicID> histories) {
-    if (histories.isEmpty) return;
-    _repository.removeMany(
-      histories.map((history) => (history.id, history.type.value)),
-    );
-    updateCache();
-    notifyListeners();
+  Future<void> batchDeleteHistories(List<ComicID> histories) {
+    if (histories.isEmpty) return Future.value();
+    final identities = histories
+        .map((item) => (item.id, item.type.value))
+        .toList();
+    return _delete((repository) => repository.removeMany(identities));
   }
 
   /// Refresh history info from comic source.
@@ -276,7 +295,7 @@ class HistoryManager with ChangeNotifier {
         });
         updatedHistory.group = history.group;
 
-        addHistory(updatedHistory);
+        await addHistory(updatedHistory);
         return true;
       } catch (e, s) {
         Log.error("History", "Exception while refreshing history info: $e\n$s");

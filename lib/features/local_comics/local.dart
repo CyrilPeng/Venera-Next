@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
 
@@ -485,7 +486,7 @@ class LocalManager with ChangeNotifier {
         migration['old_page'] == history.page &&
         migration['new_page'] != history.page) {
       history.page = migration['new_page'] as int;
-      HistoryManager().addHistory(history);
+      await HistoryManager().addHistory(history);
     }
   }
 
@@ -628,9 +629,8 @@ class LocalManager with ChangeNotifier {
     }
     // Deleting a local comic means that it's no longer available, thus both favorite and history should be deleted.
     if (c.comicType == ComicType.local) {
-      if (HistoryManager().find(c.id, c.comicType) != null) {
-        HistoryManager().remove(c.id, c.comicType);
-      }
+      // Always queue deletion: an earlier progress write may still be pending.
+      unawaited(HistoryManager().remove(c.id, c.comicType));
       var folders = LocalFavoritesManager().find(c.id, c.comicType);
       for (var f in folders) {
         LocalFavoritesManager().deleteComicWithId(f, c.id, c.comicType);
@@ -707,7 +707,7 @@ class LocalManager with ChangeNotifier {
 
     if (removeFavoriteAndHistory) {
       LocalFavoritesManager().batchDeleteComicsInAllFolders(comicIDs);
-      HistoryManager().batchDeleteHistories(comicIDs);
+      unawaited(HistoryManager().batchDeleteHistories(comicIDs));
     }
 
     notifyListeners();

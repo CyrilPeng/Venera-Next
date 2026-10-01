@@ -20,8 +20,7 @@ void main() {
           onDuration: (duration) async => writes.add(duration),
         ),
         progress: ReaderHistoryWriter(
-          write: () async => fail('pending progress must flush on exit'),
-          flush: () => flushes++,
+          write: () async => flushes++,
           onError: (error, stack) => fail('$error'),
         ),
         pauseAutoReading: paused.add,
@@ -70,8 +69,7 @@ void main() {
           },
         ),
         progress: ReaderHistoryWriter(
-          write: () async => events.add('write'),
-          flush: () => events.add('flush'),
+          write: () async => events.add('flush'),
           onError: (error, stack) => fail('$error'),
         ),
         pauseAutoReading: (_) => events.add('pause'),
@@ -109,8 +107,7 @@ void main() {
           onError: (error, stack) => errors.add('duration'),
         ),
         progress: ReaderHistoryWriter(
-          write: () async {},
-          flush: () => throw StateError('progress'),
+          write: () async => throw StateError('progress'),
           onError: (error, stack) => errors.add('progress'),
         ),
         pauseAutoReading: (_) {},
@@ -132,11 +129,7 @@ void main() {
       var calls = 0;
       final session = ReaderSession(
         durations: ReadingSessionTracker(onDuration: (_) async {}),
-        progress: ReaderHistoryWriter(
-          write: () async {},
-          flush: () {},
-          onError: (_, _) {},
-        ),
+        progress: ReaderHistoryWriter(write: () async {}, onError: (_, _) {}),
         pauseAutoReading: (_) {},
         onClosed: () {
           calls++;
@@ -164,7 +157,6 @@ void main() {
       ),
       progress: ReaderHistoryWriter(
         write: () => progress.future,
-        flush: () => fail('already submitted progress must not flush again'),
         onError: (_, _) {},
       ),
       pauseAutoReading: (_) {},
