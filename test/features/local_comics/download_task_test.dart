@@ -12,6 +12,7 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/network/images.dart';
+import 'package:venera_next/network/file_downloader.dart';
 
 void main() {
   const sourceKey = 'download_task_test_source';
@@ -711,6 +712,151 @@ void main() {
     },
   );
 
+  test(
+    'archive resume drains stale extraction and ignores its late failure',
+    () async {
+      final root = Directory.systemTemp.createTempSync('archive-generation-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      final output = Directory('${manager.path}/archive')..createSync();
+      final firstExtraction = Completer<void>();
+      final extracting = Completer<void>();
+      var transfers = 0;
+      var extractions = 0;
+      final task = ArchiveDownloadTask(
+        'https://example.invalid/book.zip',
+        _archiveComic(sourceKey),
+        createDownloader: (url, path) {
+          transfers++;
+          return _ArchiveDownloader(
+            url,
+            path,
+            Stream.value(const DownloadingStatus(1, 1, 0, true)),
+          );
+        },
+        extractArchive: (archive, path) async {
+          extractions++;
+          if (extractions == 1) {
+            extracting.complete();
+            await firstExtraction.future;
+          }
+          File('$path/cover.jpg').writeAsBytesSync([1]);
+        },
+      )..path = output.path;
+      manager.restorePausedDownloads([task]);
+      addTearDown(() async {
+        if (!firstExtraction.isCompleted) firstExtraction.complete();
+        task.pause();
+        await task.pendingCleanup;
+        await manager.pendingDownloadTaskWrites;
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      task.resume();
+      await extracting.future.timeout(const Duration(seconds: 2));
+      final previous = task.pendingRun;
+      task.pause();
+      task.resume();
+      await pumpEventQueue();
+      expect(transfers, 1);
+      firstExtraction.completeError(StateError('obsolete extraction'));
+      await previous;
+      await task.pendingRun;
+      await manager.pendingDownloadTaskWrites;
+      expect(transfers, 2);
+      expect(task.isError, isFalse);
+      expect(task.isPaused, isTrue);
+      expect(task.speed, 0);
+      expect(manager.find(task.id, task.comicType), isNotNull);
+      expect(manager.downloadingTasks, isEmpty);
+    },
+  );
+
+  test(
+    'archive cancellation waits for extraction before deleting its directory',
+    () async {
+      final root = Directory.systemTemp.createTempSync('archive-cancel-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      final output = Directory('${manager.path}/archive')..createSync();
+      final gate = Completer<void>();
+      final extracting = Completer<void>();
+      final task = ArchiveDownloadTask(
+        'https://example.invalid/book.zip',
+        _archiveComic(sourceKey),
+        createDownloader: (url, path) => _ArchiveDownloader(
+          url,
+          path,
+          Stream.value(const DownloadingStatus(1, 1, 0, true)),
+        ),
+        extractArchive: (archive, path) async {
+          extracting.complete();
+          await gate.future;
+          File('$path/cover.jpg').writeAsBytesSync([1]);
+        },
+      )..path = output.path;
+      manager.restorePausedDownloads([task]);
+      addTearDown(() async {
+        if (!gate.isCompleted) gate.complete();
+        task.pause();
+        await task.pendingCleanup;
+        await manager.pendingDownloadTaskWrites;
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      task.resume();
+      await extracting.future.timeout(const Duration(seconds: 2));
+      task.cancel();
+      await pumpEventQueue();
+      expect(output.existsSync(), isTrue);
+      expect(manager.downloadingTasks, isEmpty);
+      gate.complete();
+      await task.pendingCleanup;
+      expect(output.existsSync(), isFalse);
+      expect(task.path, isNull);
+      expect(task.isError, isFalse);
+      expect(manager.count, 0);
+    },
+  );
+
+  test(
+    'archive transport failure is retryable and does not escape async void',
+    () async {
+      final root = Directory.systemTemp.createTempSync('archive-error-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      final task = ArchiveDownloadTask(
+        'https://example.invalid/book.zip',
+        _archiveComic(sourceKey),
+        createDownloader: (url, path) => _ArchiveDownloader(
+          url,
+          path,
+          Stream.error(StateError('injected transport')),
+        ),
+      )..path = root.path;
+      addTearDown(() async {
+        task.pause();
+        await task.pendingCleanup;
+        root.deleteSync(recursive: true);
+      });
+      task.resume();
+      await task.pendingRun;
+      expect(task.isError, isTrue);
+      expect(task.isPaused, isTrue);
+      expect(task.speed, 0);
+      task.resume();
+      await task.pendingRun;
+      expect(task.isError, isTrue);
+      expect(task.isPaused, isTrue);
+    },
+  );
+
   test('ImagesDownloadTask cancel before path stops speed recorder', () async {
     final dataDir = Directory.systemTemp.createTempSync(
       'venera-download-data-',
@@ -861,3 +1007,21 @@ ImagesDownloadTask _pendingImageTask(
   'index': 0,
   'chapter': 0,
 })!;
+
+ComicDetails _archiveComic(String source) => ComicDetails.fromJson({
+  'title': 'Archive',
+  'subtitle': '',
+  'cover': 'cover.jpg',
+  'description': '',
+  'tags': <String, List<String>>{},
+  'chapters': null,
+  'sourceKey': source,
+  'comicId': 'archive',
+});
+
+class _ArchiveDownloader extends FileDownloader {
+  _ArchiveDownloader(super.url, super.savePath, this.statuses);
+  final Stream<DownloadingStatus> statuses;
+  @override
+  Stream<DownloadingStatus> start() => statuses;
+}
