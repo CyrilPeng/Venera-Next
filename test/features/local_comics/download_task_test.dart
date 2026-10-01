@@ -725,12 +725,15 @@ void main() {
       final firstExtraction = Completer<void>();
       final extracting = Completer<void>();
       var transfers = 0;
+      final transferPaths = <String>[];
       var extractions = 0;
       final task = ArchiveDownloadTask(
         'https://example.invalid/book.zip',
         _archiveComic(sourceKey),
         createDownloader: (url, path) {
           transfers++;
+          transferPaths.add(path);
+          File(path).writeAsStringSync('zip');
           return _ArchiveDownloader(
             url,
             path,
@@ -767,6 +770,8 @@ void main() {
       await task.pendingRun;
       await manager.pendingDownloadTaskWrites;
       expect(transfers, 2);
+      expect(transferPaths[0], transferPaths[1]);
+      expect(File(transferPaths[0]).parent.existsSync(), isFalse);
       expect(task.isError, isFalse);
       expect(task.isPaused, isTrue);
       expect(task.speed, 0);
@@ -786,6 +791,7 @@ void main() {
       await manager.init();
       final output = Directory('${manager.path}/archive')..createSync();
       final gate = Completer<void>();
+      String? archiveFilePath;
       final extracting = Completer<void>();
       final task = ArchiveDownloadTask(
         'https://example.invalid/book.zip',
@@ -796,6 +802,7 @@ void main() {
           Stream.value(const DownloadingStatus(1, 1, 0, true)),
         ),
         extractArchive: (archive, path) async {
+          archiveFilePath = archive;
           extracting.complete();
           await gate.future;
           File('$path/cover.jpg').writeAsBytesSync([1]);
@@ -819,6 +826,7 @@ void main() {
       gate.complete();
       await task.pendingCleanup;
       expect(output.existsSync(), isFalse);
+      expect(File(archiveFilePath!).parent.existsSync(), isFalse);
       expect(task.path, isNull);
       expect(task.isError, isFalse);
       expect(manager.count, 0);
@@ -854,6 +862,77 @@ void main() {
       await task.pendingRun;
       expect(task.isError, isTrue);
       expect(task.isPaused, isTrue);
+    },
+  );
+
+  test(
+    'parallel archive tasks own different temporary files and clean only themselves',
+    () async {
+      final root = Directory.systemTemp.createTempSync('archive-isolation-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      final paths = <String, String>{};
+      final started = [Completer<void>(), Completer<void>()];
+      final gates = [Completer<void>(), Completer<void>()];
+      ArchiveDownloadTask makeTask(int index) {
+        final output = Directory('${manager.path}/archive-$index')
+          ..createSync();
+        return ArchiveDownloadTask(
+          'https://example.invalid/$index.zip',
+          _archiveComic(sourceKey, id: 'archive-$index'),
+          createDownloader: (url, path) {
+            paths['$index'] = path;
+            File(path).writeAsStringSync('zip-$index');
+            File('$path.download').writeAsStringSync('resume-$index');
+            return _ArchiveDownloader(
+              url,
+              path,
+              Stream.value(const DownloadingStatus(1, 1, 0, true)),
+            );
+          },
+          extractArchive: (archive, outputPath) async {
+            started[index].complete();
+            await gates[index].future;
+            expect(File(archive).readAsStringSync(), 'zip-$index');
+            File('$outputPath/cover.jpg').writeAsBytesSync([1]);
+          },
+        )..path = output.path;
+      }
+
+      final tasks = [makeTask(0), makeTask(1)];
+      manager.restorePausedDownloads(tasks);
+      addTearDown(() async {
+        for (final gate in gates) {
+          if (!gate.isCompleted) gate.complete();
+        }
+        for (final task in tasks) {
+          task.pause();
+          await task.pendingCleanup;
+        }
+        await manager.pendingDownloadTaskWrites;
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      for (final task in tasks) {
+        task.resume();
+      }
+      await Future.wait(
+        started.map((started) => started.future),
+      ).timeout(const Duration(seconds: 2));
+      expect(paths['0'], isNot(paths['1']));
+      gates[0].complete();
+      await tasks[0].pendingRun;
+      expect(File(paths['0']!).parent.existsSync(), isFalse);
+      expect(File(paths['1']!).readAsStringSync(), 'zip-1');
+      expect(File('${paths['1']}.download').existsSync(), isTrue);
+      gates[1].complete();
+      await tasks[1].pendingRun;
+      expect(File(paths['1']!).parent.existsSync(), isFalse);
+      expect(manager.count, 2);
+      expect(manager.downloadingTasks, isEmpty);
     },
   );
 
@@ -1008,16 +1087,17 @@ ImagesDownloadTask _pendingImageTask(
   'chapter': 0,
 })!;
 
-ComicDetails _archiveComic(String source) => ComicDetails.fromJson({
-  'title': 'Archive',
-  'subtitle': '',
-  'cover': 'cover.jpg',
-  'description': '',
-  'tags': <String, List<String>>{},
-  'chapters': null,
-  'sourceKey': source,
-  'comicId': 'archive',
-});
+ComicDetails _archiveComic(String source, {String id = 'archive'}) =>
+    ComicDetails.fromJson({
+      'title': 'Archive',
+      'subtitle': '',
+      'cover': 'cover.jpg',
+      'description': '',
+      'tags': <String, List<String>>{},
+      'chapters': null,
+      'sourceKey': source,
+      'comicId': id,
+    });
 
 class _ArchiveDownloader extends FileDownloader {
   _ArchiveDownloader(super.url, super.savePath, this.statuses);

@@ -43,6 +43,20 @@ class ArchiveDownloadTask extends DownloadTask {
   Future<void>? _runFuture;
   Future<void>? _stopFuture;
   Future<void>? _cleanup;
+  Directory? _workspace;
+
+  Future<void> _clearWorkspace() async {
+    final workspace = _workspace;
+    if (workspace == null) return;
+    try {
+      if (await workspace.exists()) await workspace.delete(recursive: true);
+      if (identical(_workspace, workspace)) _workspace = null;
+    } catch (error, stack) {
+      // A completed database commit remains successful if temporary cleanup
+      // fails. Retain the path so a later cleanup can retry.
+      Log.error('Download', error, stack);
+    }
+  }
 
   bool _isCurrent(int generation) => _isRunning && generation == _generation;
 
@@ -91,6 +105,7 @@ class ArchiveDownloadTask extends DownloadTask {
     _cleanup =
         () async {
           await stopped;
+          await _clearWorkspace();
           if (directoryPath != null) {
             await Directory(directoryPath).deleteIgnoreError(recursive: true);
           }
@@ -171,9 +186,13 @@ class ArchiveDownloadTask extends DownloadTask {
       path = dir.path;
     }
     final outputPath = path!;
-    final archiveFile = File(
-      FilePath.join(App.dataPath, "archive_downloading.zip"),
-    );
+    // Retain this task-owned workspace across pause/resume for range-download
+    // sidecars, but never share it with another task or task instance.
+    final workspace = _workspace ??= await Directory(
+      App.cachePath,
+    ).createTemp('archive-download-');
+    if (!_isCurrent(generation)) return;
+    final archiveFile = File(FilePath.join(workspace.path, 'download.zip'));
     Log.info("Download", "Downloading $archiveUrl");
     final downloader = _downloader = _createDownloader(
       archiveUrl,
@@ -204,24 +223,26 @@ class ArchiveDownloadTask extends DownloadTask {
       return;
     }
     if (!_isCurrent(generation)) return;
-    await archiveFile.deleteIgnoreError();
-    if (!_isCurrent(generation)) return;
     LocalManager().completeTask(this);
     _isRunning = false;
     _speed = 0;
+    await _clearWorkspace();
   }
 
   static Future<void> _extractArchive(String archive, String outDir) async {
     var out = Directory(outDir);
     if (out is AndroidDirectory) {
       // Saf directory can't be accessed by native code.
-      var cacheDir = FilePath.join(App.cachePath, "archive_downloading");
-      Directory(cacheDir).forceCreateSync();
-      await Isolate.run(() {
-        ZipFile.openAndExtract(archive, cacheDir);
-      });
-      await copyDirectoryIsolate(Directory(cacheDir), Directory(outDir));
-      await Directory(cacheDir).deleteIgnoreError(recursive: true);
+      final staging = await File(archive).parent.createTemp('extract-');
+      try {
+        final cacheDir = staging.path;
+        await Isolate.run(() {
+          ZipFile.openAndExtract(archive, cacheDir);
+        });
+        await copyDirectoryIsolate(staging, out);
+      } finally {
+        await staging.deleteIgnoreError(recursive: true);
+      }
     } else {
       await Isolate.run(() {
         ZipFile.openAndExtract(archive, outDir);

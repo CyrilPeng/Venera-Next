@@ -397,3 +397,5 @@ DownloadQueue 使用修订号区分同步监听器触发的嵌套队列变更，
 DownloadQueue 的任务列表现为稳定的 UnmodifiableListView，实际列表私有，队列增删和修订号不能被外部直接修改。restorePausedTasks 先完整收集输入、校验暂停状态并按 id/type 保留首个任务，再静默发布；拒绝覆盖运行/完成中的队列或恢复期间已经变化的队列。LocalManager.restorePausedDownloads 用于安装已解码快照，文件恢复和测试均走同一入口；不启动、不通知也不回写恢复数据。调用方仍需负责暂停后底层清理的等待，恢复入口不是取消/释放活动任务的替代。
 
 ArchiveDownloadTask 接受下载器工厂和解压函数作为适配依赖，默认仍使用 FileDownloader 与原 ZIP/SAF 解压。每轮运行持有代次，状态、解压返回、文件清理和入库前检查归属；恢复等待上一轮运行/停止/目录清理，取消捕获旧路径并等待解压结束后删除。pendingRun/pendingCleanup 提供完成信号，异步主流程统一捕获错误。临时 archive_downloading.zip 和 SAF 缓存目录仍为原共享布局，跨任务实例隔离与已存在漫画目录的取消策略继续处理。
+
+压缩包下载为每个任务实例在 App.cachePath 创建独立 archive-download-* 暂存目录，ZIP 与 FileDownloader 续传旁文件同属该目录；暂停/重试复用，成功入库或取消等待结束后清理。清理失败保留路径并记录，不将已提交漫画改标失败。SAF 解压使用该 ZIP 父目录下的独立 extract-* 子目录并在 finally 清理，不再使用全局 archive_downloading 路径。旧无归属暂存文件不自动迁移/删除；临时工作区不写入持久化任务格式，不新增压缩包重启恢复承诺。
