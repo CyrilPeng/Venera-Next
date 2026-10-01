@@ -80,6 +80,7 @@ class ArchiveDownloadTask extends DownloadTask {
 
   Future<void> get pendingRun => _runFuture ?? Future.value();
 
+  @override
   Future<void> get pendingCleanup =>
       Future.wait<void>([?_runFuture, ?_stopFuture, ?_cleanup]).then((_) {});
 

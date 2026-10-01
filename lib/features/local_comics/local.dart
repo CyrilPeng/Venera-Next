@@ -320,6 +320,7 @@ class LocalManager with ChangeNotifier {
     commitComic: (comic) => _repository.add(comic),
     notifyChanged: notifyListeners,
     requestSave: saveCurrentDownloadingTasks,
+    reportError: (error, stack) => Log.error('DownloadQueue', error, stack),
   );
 
   List<DownloadTask> get downloadingTasks => _downloadQueue.tasks;
@@ -345,7 +346,8 @@ class LocalManager with ChangeNotifier {
 
   void removeTask(DownloadTask task) => _downloadQueue.remove(task);
 
-  void moveToFirst(DownloadTask task) => _downloadQueue.moveToFirst(task);
+  Future<void> moveToFirst(DownloadTask task) =>
+      _downloadQueue.moveToFirst(task);
 
   final _downloadTaskStore = DownloadTaskStore(
     onError: (error, stack) => Log.error('LocalManager', error, stack),

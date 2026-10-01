@@ -1476,6 +1476,8 @@ ComicSource _testSource(
 }
 
 class _CompletionTask extends DownloadTask {
+  @override
+  Future<void> get pendingCleanup => Future.value();
   _CompletionTask(this.id);
   @override
   final String id;

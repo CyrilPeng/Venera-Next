@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/local_comics/download_queue.dart';
 import 'package:venera_next/features/local_comics/download_task.dart';
@@ -26,8 +27,90 @@ void main() {
         onNotify?.call();
       },
       requestSave: () => events.add('save'),
+      reportError: (error, stack) => events.add('error:$error'),
     );
   });
+
+  test(
+    'move publishes immediately but all automatic starts wait for cleanup',
+    () async {
+      final gate = Completer<void>();
+      final first = _Task('a', events)..cleanup = gate.future;
+      final target = _Task('b', events);
+      queue.add(first);
+      queue.add(target);
+      events.clear();
+      final moved = queue.moveToFirst(target);
+      expect(queue.tasks.first, target);
+      expect(events, ['pause:a', 'notify', 'save']);
+      expect(() => queue.restorePausedTasks([]), throwsStateError);
+      queue.add(_Task('c', events));
+      await pumpEventQueue();
+      expect(events.where((event) => event.startsWith('resume:')), isEmpty);
+      gate.complete();
+      await moved;
+      await pumpEventQueue();
+      expect(events.where((event) => event.startsWith('resume:')), [
+        'resume:b',
+      ]);
+    },
+  );
+
+  test(
+    'overlapping moves retain running intent and wait for every old stop',
+    () async {
+      final gates = [Completer<void>(), Completer<void>()];
+      final first = _Task('a', events)..cleanup = gates[0].future;
+      final second = _Task('b', events)..cleanup = gates[1].future;
+      final last = _Task('c', events);
+      queue.add(first);
+      queue.add(second);
+      queue.add(last);
+      events.clear();
+      final moveSecond = queue.moveToFirst(second);
+      final moveLast = queue.moveToFirst(last);
+      gates[1].complete();
+      await pumpEventQueue();
+      expect(events.where((event) => event.startsWith('resume:')), isEmpty);
+      gates[0].complete();
+      await Future.wait([moveSecond, moveLast]);
+      await pumpEventQueue();
+      expect(queue.tasks.first, last);
+      expect(events.where((event) => event.startsWith('resume:')), [
+        'resume:c',
+      ]);
+    },
+  );
+
+  for (final throwsDuringPause in [false, true]) {
+    test(
+      'failed stop prevents automatic start (pause throws: $throwsDuringPause)',
+      () async {
+        final gate = Completer<void>();
+        final first = _Task('a', events);
+        if (throwsDuringPause) {
+          first.onPause = () => throw StateError('stop failed');
+        } else {
+          first.cleanup = gate.future;
+        }
+        final target = _Task('b', events);
+        queue.add(first);
+        queue.add(target);
+        events.clear();
+        final moved = queue.moveToFirst(target);
+        final failed = expectLater(moved, throwsStateError);
+        if (!throwsDuringPause) gate.completeError(StateError('stop failed'));
+        await failed;
+        await pumpEventQueue();
+        expect(events.where((event) => event.startsWith('resume:')), isEmpty);
+        expect(
+          events.where((event) => event.startsWith('error:')),
+          hasLength(1),
+        );
+        expect(queue.tasks.first, target);
+      },
+    );
+  }
 
   test('task view rejects mutations but reflects service updates', () {
     final view = queue.tasks;
@@ -87,7 +170,7 @@ void main() {
 
   test(
     'pause listener removing the target cannot remove another task or reinsert it',
-    () {
+    () async {
       final first = _Task('a', events);
       final target = _Task('b', events);
       final last = _Task('c', events);
@@ -96,7 +179,7 @@ void main() {
       queue.add(last);
       first.onPause = () => queue.remove(target);
       events.clear();
-      queue.moveToFirst(target);
+      await queue.moveToFirst(target);
       expect(queue.tasks, [first, last]);
       expect(events, ['pause:a', 'notify', 'save']);
       expect(last.isPaused, isTrue);
@@ -175,24 +258,24 @@ void main() {
 
   test(
     'move preserves running or paused state and ignores missing or first task',
-    () {
+    () async {
       final first = _Task('a', events);
       final second = _Task('b', events);
-      queue.moveToFirst(first);
+      await queue.moveToFirst(first);
       expect(events, isEmpty);
       queue.add(first);
       queue.add(second);
       events.clear();
-      queue.moveToFirst(second);
+      await queue.moveToFirst(second);
       expect(queue.tasks, [second, first]);
       expect(events, ['pause:a', 'notify', 'save', 'resume:b']);
       events.clear();
-      queue.moveToFirst(second);
-      queue.moveToFirst(_Task('b', events));
+      await queue.moveToFirst(second);
+      await queue.moveToFirst(_Task('b', events));
       expect(events, isEmpty);
       second.pause();
       events.clear();
-      queue.moveToFirst(first);
+      await queue.moveToFirst(first);
       expect(queue.tasks, [first, second]);
       expect(events, ['pause:b', 'notify', 'save']);
       expect(first.isPaused, isTrue);
@@ -238,6 +321,9 @@ class _Task extends DownloadTask {
   final String id;
   @override
   final ComicType comicType;
+  Future<void>? cleanup;
+  @override
+  Future<void> get pendingCleanup => cleanup ?? Future.value();
   bool _paused = true;
   void Function()? onPause;
   @override

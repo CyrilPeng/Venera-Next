@@ -17,6 +17,9 @@ abstract class DownloadTask with ChangeNotifier {
 
   void pause();
 
+  /// Work already accepted by pause/cancel, including transfer and file cleanup.
+  Future<void> get pendingCleanup;
+
   void resume();
 
   String get title;

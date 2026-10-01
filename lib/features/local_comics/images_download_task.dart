@@ -127,6 +127,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
   Future<void>? _pendingStops;
 
   /// Drain image transfer cancellation and any directory cleanup already queued.
+  @override
   Future<void> get pendingCleanup => _pendingStops ?? Future.value();
 
   @override

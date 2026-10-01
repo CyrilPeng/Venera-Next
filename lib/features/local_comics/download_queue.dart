@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:async';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'download_task.dart';
 import 'local_comic_model.dart';
@@ -10,11 +11,15 @@ class DownloadQueue {
     required this.commitComic,
     required this.notifyChanged,
     required this.requestSave,
+    required this.reportError,
   });
 
   final void Function(LocalComic) commitComic;
   final void Function() notifyChanged;
   final void Function() requestSave;
+  final void Function(Object, StackTrace) reportError;
+  Future<void>? _pendingStop;
+  int? _scheduledResumeRevision;
 
   final List<DownloadTask> _tasks = [];
   late final List<DownloadTask> tasks = UnmodifiableListView(_tasks);
@@ -31,7 +36,8 @@ class DownloadQueue {
       if (!task.isPaused) throw StateError('Cannot restore a running task');
       if (identities.add((task.id, task.comicType.value))) snapshot.add(task);
     }
-    if (revision != _revision ||
+    if (_pendingStop != null ||
+        revision != _revision ||
         _completing.isNotEmpty ||
         _tasks.any((task) => !task.isPaused)) {
       throw StateError('Cannot replace an active or changed download queue');
@@ -82,7 +88,22 @@ class DownloadQueue {
 
   void _resumeIfUnchanged(int revision) {
     // A nested queue operation owns the final scheduling decision.
-    if (revision == _revision) tasks.firstOrNull?.resume();
+    if (revision != _revision) return;
+    final stop = _pendingStop;
+    if (stop == null) {
+      _scheduledResumeRevision = null;
+      tasks.firstOrNull?.resume();
+    } else {
+      _scheduledResumeRevision = revision;
+      unawaited(
+        stop
+            .then<void>(
+              (_) => _resumeIfUnchanged(revision),
+              onError: (Object error, StackTrace stack) {},
+            )
+            .catchError(reportError),
+      );
+    }
   }
 
   void remove(DownloadTask task) {
@@ -93,21 +114,54 @@ class DownloadQueue {
     _publish();
   }
 
-  void moveToFirst(DownloadTask task) {
-    if (_indexOf(task) <= 0) return;
+  Future<void> moveToFirst(DownloadTask task) {
+    if (_indexOf(task) <= 0) return Future.value();
     final first = tasks.first;
-    final shouldResume = !first.isPaused;
+    final shouldResume =
+        !first.isPaused || _scheduledResumeRevision == _revision;
     final beforePause = _revision;
-    first.pause();
+    final stopped = _pauseBeforeScheduling(first);
     if (beforePause != _revision || !identical(tasks.firstOrNull, first)) {
-      return;
+      return stopped;
     }
     final index = _indexOf(task);
-    if (index <= 0) return;
+    if (index <= 0) return stopped;
     _tasks.removeAt(index);
     _tasks.insert(0, task);
     final revision = ++_revision;
     _publish();
     if (shouldResume) _resumeIfUnchanged(revision);
+    return stopped;
+  }
+
+  Future<void> _pauseBeforeScheduling(DownloadTask task) {
+    final previous = _pendingStop;
+    final gate = Completer<void>();
+    final stopped = _pendingStop = gate.future;
+    // UI callers may ignore the result; failures are also sent to the owner.
+    stopped.ignore();
+    void finish([Object? error, StackTrace? stack]) {
+      if (identical(_pendingStop, stopped)) _pendingStop = null;
+      if (error == null) {
+        gate.complete();
+      } else {
+        gate.completeError(error, stack);
+        reportError(error, stack!);
+      }
+    }
+
+    // Install the barrier before pause can notify/reenter queue operations.
+    try {
+      task.pause();
+      unawaited(
+        Future.wait<void>([?previous, task.pendingCleanup]).then<void>(
+          (_) => finish(),
+          onError: (Object error, StackTrace stack) => finish(error, stack),
+        ),
+      );
+    } catch (error, stack) {
+      scheduleMicrotask(() => finish(error, stack));
+    }
+    return stopped;
   }
 }
