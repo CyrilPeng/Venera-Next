@@ -104,7 +104,7 @@ Future<void> importAppData(File file, [bool checkVersion = false]) async {
       );
     }
     if (await localFavoriteFile.exists()) {
-      _closeLocalFavoritesManagerForImport();
+      await _closeLocalFavoritesManagerForImport();
       reloadLocalFavorites = true;
       await _replaceFileForImport(
         source: localFavoriteFile,
@@ -308,7 +308,7 @@ Future<void> _rollbackImport({
     await _closeHistoryManagerForImport();
   }
   if (reloadLocalFavorites) {
-    _closeLocalFavoritesManagerForImport();
+    await _closeLocalFavoritesManagerForImport();
   }
   if (reloadCookies) {
     _closeCookieJarForImport();
@@ -345,12 +345,8 @@ Future<void> _closeHistoryManagerForImport() async {
   }
 }
 
-void _closeLocalFavoritesManagerForImport() {
-  try {
-    LocalFavoritesManager.cache?.close();
-  } catch (_) {
-    // ignore partially initialized managers
-  }
+Future<void> _closeLocalFavoritesManagerForImport() async {
+  await LocalFavoritesManager.cache?.closeAndWait();
 }
 
 void _closeCookieJarForImport() {

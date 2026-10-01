@@ -53,7 +53,7 @@ Future<void> _withFavoritesManager(
     if (manager != null) {
       await manager.debugWaitForHashedIdsRefresh();
       try {
-        manager.close();
+        await manager.closeAndWait();
       } catch (_) {
         // ignore cleanup failures in partially initialized tests
       }
@@ -71,6 +71,98 @@ Future<void> _withFavoritesManager(
 }
 
 void main() {
+  test(
+    'close drains all readers and rejects stale results before reopening',
+    () async {
+      await _withFavoritesManager((manager) async {
+        manager.createFolder('drain');
+        manager.addComic('drain', _favorite('old'));
+        await manager.debugWaitForHashedIdsRefresh();
+        final reads = [
+          manager.getFolderComicsAsync('drain'),
+          manager.getAllComicsAsync(),
+          manager.getFolderComicsAsync('drain'),
+        ];
+        final failures = reads
+            .map((read) => expectLater(read, throwsStateError))
+            .toList();
+        manager.refreshHashedIds();
+        manager.refreshHashedIds();
+        final closing = manager.closeAndWait();
+        expect(identical(closing, manager.closeAndWait()), isTrue);
+        expect(manager.totalComics, 0);
+        await closing;
+        await Future.wait(failures);
+        final path = '${App.dataPath}/local_favorite.db';
+        File(path).renameSync('$path.closed');
+        await expectLater(
+          manager.getFolderComicsAsync('drain'),
+          throwsStateError,
+        );
+        await expectLater(manager.getAllComicsAsync(), throwsStateError);
+        expect(File(path).existsSync(), isFalse);
+        File('$path.closed').renameSync(path);
+        await manager.init();
+        expect((await manager.getFolderComicsAsync('drain')).single.id, 'old');
+      });
+    },
+    skip: !_sqliteAvailable(),
+  );
+
+  test('initialization waits for draining readers', () async {
+    await _withFavoritesManager((manager) async {
+      manager.createFolder('drain-reopen');
+      await manager.debugWaitForHashedIdsRefresh();
+      final read = manager.getAllComicsAsync();
+      final failure = expectLater(read, throwsStateError);
+      final closing = manager.closeAndWait();
+      final reopened = manager.init();
+      await closing;
+      await failure;
+      await reopened;
+      expect(manager.folderNames, contains('drain-reopen'));
+    });
+  }, skip: !_sqliteAvailable());
+
+  test(
+    'clear shares one operation, drains readers and uses its owned path',
+    () async {
+      await _withFavoritesManager((manager) async {
+        manager.createFolder('clear-me');
+        manager.addComic('clear-me', _favorite('old'));
+        await manager.debugWaitForHashedIdsRefresh();
+        final ownedPath = App.dataPath;
+        final other = Directory.systemTemp.createTempSync(
+          'favorites-clear-other-',
+        );
+        final otherFile = File('${other.path}/local_favorite.db')
+          ..writeAsStringSync('untouched');
+        try {
+          final reading = manager.getAllComicsAsync();
+          final readFailure = expectLater(reading, throwsStateError);
+          App.dataPath = other.path;
+          final clearing = manager.clearAll();
+          expect(identical(clearing, manager.clearAll()), isTrue);
+          await expectLater(manager.init(), throwsStateError);
+          App.dataPath = ownedPath;
+          expect(identical(clearing, manager.init()), isTrue);
+          await clearing;
+          await readFailure;
+          expect(manager.folderNames, [
+            LocalFavoritesManager.trackingFolderName,
+          ]);
+          expect(manager.totalComics, 0);
+          expect(otherFile.readAsStringSync(), 'untouched');
+          expect(await manager.getAllComicsAsync(), isEmpty);
+        } finally {
+          App.dataPath = ownedPath;
+          other.deleteSync(recursive: true);
+        }
+      });
+    },
+    skip: !_sqliteAvailable(),
+  );
+
   test(
     'initialization reuses its future and close is repeatable',
     () async {

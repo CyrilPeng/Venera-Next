@@ -46,6 +46,9 @@ class LocalFavoritesManager with ChangeNotifier {
       _database ?? (throw StateError('Favorites database is closed'));
 
   Future<void>? _initialization;
+  Future<void>? _closing;
+  Future<void>? _clearing;
+  final _pendingReads = <Future<void>>{};
   int _connectionGeneration = 0;
 
   FavoritesRepository get _repository => FavoritesRepository(_db);
@@ -73,7 +76,24 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   Future<void> init() =>
-      _startInitialization('${App.dataPath}/local_favorite.db');
+      _initializeAfterTransitions('${App.dataPath}/local_favorite.db');
+
+  Future<void> _initializeAfterTransitions(String path) {
+    final clearing = _clearing;
+    if (clearing != null) {
+      if (path != _dbPath) {
+        return Future.error(
+          StateError('Favorites is clearing a different data path'),
+        );
+      }
+      return clearing;
+    }
+    final closing = _closing;
+    if (closing != null) {
+      return closing.then((_) => _initializeAfterTransitions(path));
+    }
+    return _startInitialization(path);
+  }
 
   Future<void> _startInitialization(String path) {
     final existing = _initialization;
@@ -234,7 +254,7 @@ class LocalFavoritesManager with ChangeNotifier {
       return;
     }
     late Future<void> refresh;
-    refresh = _initHashedIds(folders, _dbPath).then(
+    refresh = _runRead((path) => _initHashedIds(folders, path)).then(
       (value) {
         if (_isClosed || !identical(_hashedIdsRefresh, refresh)) {
           return;
@@ -245,7 +265,9 @@ class LocalFavoritesManager with ChangeNotifier {
       },
       onError: (Object error, StackTrace stackTrace) {
         _identityIndex.failRefresh(generation);
-        Log.error("LocalFavoritesManager", error, stackTrace);
+        if (!_isClosed && identical(_hashedIdsRefresh, refresh)) {
+          Log.error("LocalFavoritesManager", error, stackTrace);
+        }
       },
     );
     _hashedIdsRefresh = refresh;
@@ -327,6 +349,27 @@ class LocalFavoritesManager with ChangeNotifier {
   List<FavoriteItem> getFolderComics(String folder) =>
       _repository.getFolderComics(folder);
 
+  Future<T> _runRead<T>(Future<T> Function(String path) read) {
+    if (_database == null || _isClosed) {
+      return Future.error(StateError('Favorites database is closed'));
+    }
+    final generation = _connectionGeneration;
+    final path = _dbPath;
+    final result = Future<T>.sync(() => read(path)).then((value) {
+      if (generation != _connectionGeneration || _isClosed) {
+        throw StateError('Favorites read belongs to a closed connection');
+      }
+      return value;
+    });
+    // Observe completion for draining without consuming the caller's error.
+    late Future<void> settled;
+    settled = result
+        .then<void>((_) {}, onError: (Object error, StackTrace stack) {})
+        .whenComplete(() => _pendingReads.remove(settled));
+    _pendingReads.add(settled);
+    return result;
+  }
+
   static Future<List<FavoriteItem>> _getFolderComicsAsync(
     String folder,
     String dbPath,
@@ -343,7 +386,7 @@ class LocalFavoritesManager with ChangeNotifier {
 
   /// Start a new isolate to get the comics in the folder
   Future<List<FavoriteItem>> getFolderComicsAsync(String folder) {
-    return _getFolderComicsAsync(folder, _dbPath);
+    return _runRead((path) => _getFolderComicsAsync(folder, path));
   }
 
   List<FavoriteItem> getAllComics() => _repository.getAllComics(folderNames);
@@ -364,7 +407,11 @@ class LocalFavoritesManager with ChangeNotifier {
 
   /// Start a new isolate to get all the comics
   Future<List<FavoriteItem>> getAllComicsAsync() {
-    return _getAllComicsAsync(folderNames, _dbPath);
+    if (_database == null || _isClosed) {
+      return Future.error(StateError('Favorites database is closed'));
+    }
+    final folders = folderNames;
+    return _runRead((path) => _getAllComicsAsync(folders, path));
   }
 
   void addTagTo(String folder, String id, String tag) {
@@ -666,11 +713,30 @@ class LocalFavoritesManager with ChangeNotifier {
     return count;
   }
 
-  Future<void> clearAll() async {
+  Future<void> clearAll() {
+    final existing = _clearing;
+    if (existing != null) return existing;
+    if (_database == null || _isClosed) {
+      return Future.error(StateError('Favorites database is closed'));
+    }
     final path = _dbPath;
-    close();
-    File(path).deleteSync();
-    await _startInitialization(path);
+    final attempt = Completer<void>();
+    _clearing = attempt.future;
+    Future<void>.sync(() async {
+      await _closeAndWait();
+      File(path).deleteSync();
+      await _startInitialization(path);
+    }).then(
+      (_) {
+        _clearing = null;
+        attempt.complete();
+      },
+      onError: (Object error, StackTrace stack) {
+        _clearing = null;
+        attempt.completeError(error, stack);
+      },
+    );
+    return attempt.future;
   }
 
   void reorder(List<FavoriteItem> newFolder, String folder) async {
@@ -868,6 +934,32 @@ class LocalFavoritesManager with ChangeNotifier {
       _notifyFollowUpdatesChanged();
       notifyListeners();
     }
+  }
+
+  /// Close immediately, then wait for all accepted reads to release connections.
+  Future<void> closeAndWait() {
+    final clearing = _clearing;
+    if (clearing != null) {
+      return clearing.then(
+        (_) => _closeAndWait(),
+        onError: (Object error, StackTrace stack) => _closeAndWait(),
+      );
+    }
+    return _closeAndWait();
+  }
+
+  Future<void> _closeAndWait() {
+    final existing = _closing;
+    if (existing != null) return existing;
+    close();
+    late Future<void> closing;
+    closing = Future.wait(List<Future<void>>.of(_pendingReads))
+        .then<void>((_) {})
+        .whenComplete(() {
+          if (identical(_closing, closing)) _closing = null;
+        });
+    _closing = closing;
+    return closing;
   }
 
   void close() {
