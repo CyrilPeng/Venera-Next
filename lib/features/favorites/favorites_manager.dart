@@ -597,35 +597,9 @@ class LocalFavoritesManager with ChangeNotifier {
       throw Exception("Target folder does not exist");
     }
 
-    var res = _db.select(
-      """
-    select * from "$targetFolder"
-    where id == ? and type == ?;
-  """,
-      [id, type.value],
-    );
-
-    if (res.isNotEmpty) {
+    if (!_repository.moveFavorite(sourceFolder, targetFolder, id, type.value)) {
       return;
     }
-
-    _db.execute(
-      """
-      insert into "$targetFolder" (id, name, author, type, tags, cover_path, time, display_order)
-      select id, name, author, type, tags, cover_path, time, ?
-      from "$sourceFolder"
-      where id == ? and type == ?;
-    """,
-      [minValue(targetFolder) - 1, id, type.value],
-    );
-
-    _db.execute(
-      """
-    delete from "$sourceFolder"
-    where id == ? and type == ?;
-    """,
-      [id, type.value],
-    );
 
     counts[targetFolder] = count(targetFolder);
     counts[sourceFolder] = count(sourceFolder);
@@ -644,40 +618,20 @@ class LocalFavoritesManager with ChangeNotifier {
     if (!existsFolder(targetFolder)) {
       throw Exception("Target folder does not exist");
     }
-    if (items.isEmpty) {
+    if (items.isEmpty || sourceFolder == targetFolder) {
       return;
     }
 
-    _db.execute("BEGIN TRANSACTION");
-    var displayOrder = maxValue(targetFolder) + 1;
     try {
-      for (var item in items) {
-        _db.execute(
-          """
-          insert or ignore into "$targetFolder" (id, name, author, type, tags, cover_path, time, display_order)
-          select id, name, author, type, tags, cover_path, time, ?
-          from "$sourceFolder"
-          where id == ? and type == ?;
-        """,
-          [displayOrder, item.id, item.type.value],
-        );
-
-        _db.execute(
-          """
-          delete from "$sourceFolder"
-          where id == ? and type == ?;
-        """,
-          [item.id, item.type.value],
-        );
-
-        displayOrder++;
-      }
+      _repository.moveMany(
+        sourceFolder,
+        targetFolder,
+        items.map((item) => (item.id, item.type.value)),
+      );
     } catch (e) {
       Log.error("Batch Move Favorites", e.toString());
-      _db.execute("ROLLBACK");
       return;
     }
-    _db.execute("COMMIT");
 
     // Update counts
     counts[targetFolder] = count(targetFolder);
@@ -699,33 +653,20 @@ class LocalFavoritesManager with ChangeNotifier {
     if (!existsFolder(targetFolder)) {
       throw Exception("Target folder does not exist");
     }
-    if (items.isEmpty) {
+    if (items.isEmpty || sourceFolder == targetFolder) {
       return;
     }
 
-    _db.execute("BEGIN TRANSACTION");
-    var displayOrder = maxValue(targetFolder) + 1;
     try {
-      for (var item in items) {
-        _db.execute(
-          """
-          insert or ignore into "$targetFolder" (id, name, author, type, tags, cover_path, time, display_order)
-          select id, name, author, type, tags, cover_path, time, ?
-          from "$sourceFolder"
-          where id == ? and type == ?;
-        """,
-          [displayOrder, item.id, item.type.value],
-        );
-
-        displayOrder++;
-      }
+      _repository.copyMany(
+        sourceFolder,
+        targetFolder,
+        items.map((item) => (item.id, item.type.value)),
+      );
     } catch (e) {
       Log.error("Batch Copy Favorites", e.toString());
-      _db.execute("ROLLBACK");
       return;
     }
-
-    _db.execute("COMMIT");
 
     // Update counts
     counts[targetFolder] = count(targetFolder);

@@ -2,10 +2,95 @@ import 'package:sqlite3/sqlite3.dart';
 import 'favorite_models.dart';
 import 'favorite_row.dart';
 
-/// Favorite queries on a caller-owned connection; no cache or notifications.
+/// Favorite persistence on a caller-owned connection; no cache or notifications.
 class FavoritesRepository {
   FavoritesRepository(this.db);
   final Database db;
+
+  T _transaction<T>(T Function() action) {
+    db.execute('BEGIN TRANSACTION;');
+    try {
+      final result = action();
+      db.execute('COMMIT;');
+      return result;
+    } catch (_) {
+      db.execute('ROLLBACK;');
+      rethrow;
+    }
+  }
+
+  void _copyRecord(
+    String source,
+    String target,
+    String id,
+    int type,
+    int order, {
+    required bool ignoreExisting,
+  }) {
+    db.execute(
+      '''
+      INSERT ${ignoreExisting ? 'OR IGNORE ' : ''}INTO ${_table(target)}
+        (id, name, author, type, tags, cover_path, time, display_order)
+      SELECT id, name, author, type, tags, cover_path, time, ?
+      FROM ${_table(source)} WHERE id = ? AND type = ?;
+    ''',
+      [order, id, type],
+    );
+  }
+
+  void _removeRecord(String folder, String id, int type) {
+    db.execute('DELETE FROM ${_table(folder)} WHERE id = ? AND type = ?;', [
+      id,
+      type,
+    ]);
+  }
+
+  /// Single moves leave the source intact when the destination already exists.
+  bool moveFavorite(String source, String target, String id, int type) =>
+      _transaction(() {
+        if (comicExists(target, id, type)) return false;
+        _copyRecord(
+          source,
+          target,
+          id,
+          type,
+          minValue(target) - 1,
+          ignoreExisting: false,
+        );
+        _removeRecord(source, id, type);
+        return true;
+      });
+
+  void moveMany(
+    String source,
+    String target,
+    Iterable<(String, int)> identities,
+  ) => _transferMany(source, target, identities, removeSource: true);
+
+  void copyMany(
+    String source,
+    String target,
+    Iterable<(String, int)> identities,
+  ) => _transferMany(source, target, identities, removeSource: false);
+
+  void _transferMany(
+    String source,
+    String target,
+    Iterable<(String, int)> identities, {
+    required bool removeSource,
+  }) {
+    if (source == target) return;
+    _transaction(() {
+      var order = maxValue(target) + 1;
+      for (final (id, type) in identities) {
+        _copyRecord(source, target, id, type, order, ignoreExisting: true);
+        // Batch moves preserve the existing merge policy: keep destination
+        // metadata on conflicts and remove the matching source record.
+        if (removeSource) _removeRecord(source, id, type);
+        order++;
+      }
+    });
+  }
 
   static String _table(String folder) => '"${folder.replaceAll('"', '""')}"';
 

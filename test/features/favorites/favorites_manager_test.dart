@@ -72,6 +72,70 @@ Future<void> _withFavoritesManager(
 
 void main() {
   test(
+    'failed and same-folder transfers do not notify or change cached counts',
+    () async {
+      await _withFavoritesManager((manager) async {
+        manager.createFolder('transfer_source');
+        manager.createFolder('transfer_target');
+        final items = [_favorite('a'), _favorite('b')];
+        for (final item in items) {
+          manager.addComic('transfer_source', item);
+        }
+        final db = sqlite3.open('${App.dataPath}/local_favorite.db');
+        try {
+          db.execute(
+            "CREATE TRIGGER reject_transfer BEFORE INSERT ON transfer_target WHEN NEW.id = 'b' BEGIN SELECT RAISE(ABORT, 'rejected'); END;",
+          );
+          var notifications = 0;
+          void listener() => notifications++;
+          manager.addListener(listener);
+          try {
+            manager.batchMoveFavorites(
+              'transfer_source',
+              'transfer_target',
+              items,
+            );
+            manager.batchCopyFavorites(
+              'transfer_source',
+              'transfer_target',
+              items,
+            );
+            manager.batchMoveFavorites(
+              'transfer_source',
+              'transfer_source',
+              items,
+            );
+            manager.batchCopyFavorites(
+              'transfer_source',
+              'transfer_source',
+              items,
+            );
+            expect(notifications, 0);
+            expect(manager.folderComics('transfer_source'), 2);
+            expect(manager.folderComics('transfer_target'), 0);
+            expect(manager.count('transfer_source'), 2);
+            expect(manager.count('transfer_target'), 0);
+            db.execute('DROP TRIGGER reject_transfer;');
+            manager.batchMoveFavorites(
+              'transfer_source',
+              'transfer_target',
+              items,
+            );
+            expect(notifications, 1);
+            expect(manager.folderComics('transfer_source'), 0);
+            expect(manager.folderComics('transfer_target'), 2);
+          } finally {
+            manager.removeListener(listener);
+          }
+        } finally {
+          db.dispose();
+        }
+      });
+    },
+    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+  );
+
+  test(
     'isolate queries match synchronous folder order and aggregate identity',
     () async {
       await _withFavoritesManager((manager) async {
