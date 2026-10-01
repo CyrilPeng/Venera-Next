@@ -72,6 +72,116 @@ Future<void> _withFavoritesManager(
 
 void main() {
   test(
+    'initialization reuses its future and close is repeatable',
+    () async {
+      await _withFavoritesManager((manager) async {
+        manager.createFolder('lifecycle');
+        final item = _favorite('kept');
+        manager.addComic('lifecycle', item);
+        final ready = manager.init();
+        expect(identical(ready, manager.init()), isTrue);
+        await ready;
+        expect(manager.isExist(item.id, item.type), isTrue);
+        await manager.debugWaitForHashedIdsRefresh();
+        manager.close();
+        manager.close();
+        expect(manager.totalComics, 0);
+        expect(manager.counts, isEmpty);
+        expect(() => manager.folderNames, throwsStateError);
+        final first = manager.init();
+        final second = manager.init();
+        expect(identical(first, second), isTrue);
+        await first;
+        await manager.debugWaitForHashedIdsRefresh();
+        expect(manager.isExist(item.id, item.type), isTrue);
+        expect(manager.counts['lifecycle'], 1);
+        manager.close();
+        final finishing = manager.init();
+        final finishingRead = manager.debugWaitForHashedIdsRefresh();
+        final closed = expectLater(finishing, throwsStateError);
+        manager.close();
+        await closed;
+        await finishingRead;
+        await manager.init();
+      });
+    },
+    skip: !_sqliteAvailable(),
+  );
+
+  test(
+    'failed migration releases connection and allows explicit retry',
+    () async {
+      await _withFavoritesManager((manager) async {
+        await manager.debugWaitForHashedIdsRefresh();
+        manager.close();
+        final path = '${App.dataPath}/local_favorite.db';
+        final db = sqlite3.open(path);
+        db.execute('DROP TABLE folder_order;');
+        db.execute('CREATE TABLE folder_order (invalid TEXT);');
+        db.dispose();
+        final first = manager.init();
+        final second = manager.init();
+        expect(identical(first, second), isTrue);
+        await expectLater(first, throwsA(isA<SqliteException>()));
+        expect(() => manager.folderNames, throwsStateError);
+        // Windows will reject renaming a file with an unreleased SQLite handle.
+        File(path).renameSync('$path.failed');
+        File('$path.failed').renameSync(path);
+        final repaired = sqlite3.open(path);
+        repaired.execute('DROP TABLE folder_order;');
+        repaired.dispose();
+        await manager.init();
+        expect(
+          manager.folderNames,
+          contains(LocalFavoritesManager.trackingFolderName),
+        );
+      });
+    },
+    skip: !_sqliteAvailable(),
+  );
+
+  test(
+    'closed initialization cannot dispose a reopened connection',
+    () async {
+      await _withFavoritesManager((manager) async {
+        await manager.debugWaitForHashedIdsRefresh();
+        manager.close();
+        appdata.settings['quickFavorite'] = 'missing-folder';
+        final closing = manager.init();
+        final failure = expectLater(closing, throwsStateError);
+        manager.close();
+        final reopened = manager.init();
+        await failure;
+        await reopened;
+        manager.createFolder('reopened');
+        expect(manager.folderNames, contains('reopened'));
+        expect(identical(reopened, manager.init()), isTrue);
+      });
+    },
+    skip: !_sqliteAvailable(),
+  );
+
+  test(
+    'ready manager rejects implicit data path switching',
+    () async {
+      await _withFavoritesManager((manager) async {
+        final originalPath = App.dataPath;
+        final other = Directory.systemTemp.createTempSync('favorites-other-');
+        try {
+          App.dataPath = other.path;
+          await expectLater(manager.init(), throwsStateError);
+          expect(File('${other.path}/local_favorite.db').existsSync(), isFalse);
+          expect(manager.folderNames, isNotEmpty);
+        } finally {
+          App.dataPath = originalPath;
+          other.deleteSync(recursive: true);
+        }
+      });
+    },
+    skip: !_sqliteAvailable(),
+  );
+
+  test(
     'colliding legacy hashes retain independent favorite and update state',
     () async {
       await _withFavoritesManager((manager) async {

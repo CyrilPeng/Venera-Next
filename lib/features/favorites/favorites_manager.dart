@@ -1,6 +1,7 @@
 import 'favorite_identity_index.dart';
 import 'favorites_repository.dart';
 import 'favorite_models.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
 
@@ -39,13 +40,19 @@ class LocalFavoritesManager with ChangeNotifier {
 
   static LocalFavoritesManager? cache;
 
-  late Database _db;
+  Database? _database;
+
+  Database get _db =>
+      _database ?? (throw StateError('Favorites database is closed'));
+
+  Future<void>? _initialization;
+  int _connectionGeneration = 0;
 
   FavoritesRepository get _repository => FavoritesRepository(_db);
 
   late String _dbPath;
 
-  late Map<String, int> counts;
+  Map<String, int> counts = {};
 
   final _identityIndex = FavoriteIdentityIndex();
 
@@ -55,7 +62,7 @@ class LocalFavoritesManager with ChangeNotifier {
 
   Future<void>? _hashedIdsRefresh;
 
-  bool _isClosed = false;
+  bool _isClosed = true;
 
   int get totalComics {
     return _identityIndex.length;
@@ -65,54 +72,104 @@ class LocalFavoritesManager with ChangeNotifier {
     return counts[folder] ?? 0;
   }
 
-  Future<void> init() async {
-    _isClosed = false;
-    _identityIndex.clear();
-    counts = {};
-    _dbPath = "${App.dataPath}/local_favorite.db";
-    final databaseExisted = File(_dbPath).existsSync();
-    _db = openSqliteDatabase(_dbPath);
-    _repository.initializeMetadata();
-    var folderNames = _repository.folderNames();
-    final foldersToMigrate = List<String>.from(folderNames);
-    folderNames = _ensureTrackingFolder(
-      folderNames,
-      createIfMissing: !databaseExisted,
+  Future<void> init() =>
+      _startInitialization('${App.dataPath}/local_favorite.db');
+
+  Future<void> _startInitialization(String path) {
+    final existing = _initialization;
+    if (existing != null) {
+      if (_dbPath != path) {
+        return Future.error(
+          StateError('Close favorites before changing its data path'),
+        );
+      }
+      return existing;
+    }
+    final attempt = Completer<void>();
+    _initialization = attempt.future;
+    _dbPath = path;
+    final generation = ++_connectionGeneration;
+    Future<void>.sync(() => _initialize(path, generation)).then(
+      (_) {
+        if (generation != _connectionGeneration) {
+          attempt.completeError(
+            StateError('Favorites initialization was closed'),
+          );
+        } else {
+          attempt.complete();
+        }
+      },
+      onError: (Object error, StackTrace stack) {
+        if (identical(_initialization, attempt.future)) {
+          _initialization = null;
+        }
+        attempt.completeError(error, stack);
+      },
     );
-    _repository.migrateTranslatedTags(foldersToMigrate, _translateTags);
-    if (App.isInitialized) {
-      await appdata.ensureInit();
+    return attempt.future;
+  }
+
+  void _checkInitialization(int generation) {
+    if (_connectionGeneration != generation) {
+      throw StateError('Favorites initialization was closed');
     }
-    var settingsChanged = false;
-    final configuredTrackingFolder = appdata.settings['followUpdatesFolder'];
-    final trackingFolder =
-        configuredTrackingFolder is String &&
-            folderNames.contains(configuredTrackingFolder)
-        ? configuredTrackingFolder
-        : !databaseExisted && folderNames.contains(trackingFolderName)
-        ? trackingFolderName
-        : null;
-    if (configuredTrackingFolder != trackingFolder) {
-      appdata.settings['followUpdatesFolder'] = trackingFolder;
-      settingsChanged = true;
-    }
-    if (trackingFolder != null) {
-      prepareTableForFollowUpdates(trackingFolder, false);
-    }
-    final quickFavorite = appdata.settings['quickFavorite'];
-    if (quickFavorite is! String || !folderNames.contains(quickFavorite)) {
-      final fallbackQuickFavorite =
-          !databaseExisted && folderNames.contains(trackingFolderName)
+  }
+
+  Future<void> _initialize(String path, int generation) async {
+    Database? database;
+    var published = false;
+    try {
+      if (App.isInitialized) await appdata.ensureInit();
+      _checkInitialization(generation);
+      final databaseExisted = File(path).existsSync();
+      database = openSqliteDatabase(path);
+      final repository = FavoritesRepository(database);
+      repository.initializeMetadata();
+      final folders = repository.folderNames();
+      repository.migrateTranslatedTags(folders, _translateTags);
+      if (!databaseExisted && folders.isEmpty) {
+        repository.createFolder(trackingFolderName);
+        folders.add(trackingFolderName);
+      }
+      final configuredTrackingFolder = appdata.settings['followUpdatesFolder'];
+      final trackingFolder =
+          configuredTrackingFolder is String &&
+              folders.contains(configuredTrackingFolder)
+          ? configuredTrackingFolder
+          : !databaseExisted && folders.contains(trackingFolderName)
           ? trackingFolderName
           : null;
-      if (quickFavorite != fallbackQuickFavorite) {
-        appdata.settings['quickFavorite'] = fallbackQuickFavorite;
-        settingsChanged = true;
+      if (trackingFolder != null) {
+        repository.prepareForFollowUpdates(trackingFolder, clearData: false);
       }
-    }
-    initCounts();
-    if (settingsChanged) {
-      await appdata.saveData(false);
+      final quickFavorite = appdata.settings['quickFavorite'];
+      final nextQuickFavorite =
+          quickFavorite is String && folders.contains(quickFavorite)
+          ? quickFavorite
+          : !databaseExisted && folders.contains(trackingFolderName)
+          ? trackingFolderName
+          : null;
+      final settingsChanged =
+          configuredTrackingFolder != trackingFolder ||
+          quickFavorite != nextQuickFavorite;
+      _checkInitialization(generation);
+      _database = database;
+      published = true;
+      _isClosed = false;
+      _identityIndex.clear();
+      counts = {};
+      appdata.settings['followUpdatesFolder'] = trackingFolder;
+      appdata.settings['quickFavorite'] = nextQuickFavorite;
+      if (settingsChanged) await appdata.saveData(false);
+      _checkInitialization(generation);
+      initCounts();
+    } catch (_) {
+      if (!published) {
+        database?.dispose();
+      } else if (identical(_database, database)) {
+        close();
+      }
+      rethrow;
     }
   }
 
@@ -167,17 +224,6 @@ class LocalFavoritesManager with ChangeNotifier {
       deleteComicWithId(folder, comic.id, comic.type);
     }
     await appdata.saveData();
-  }
-
-  List<String> _ensureTrackingFolder(
-    List<String> folderNames, {
-    required bool createIfMissing,
-  }) {
-    if (createIfMissing && folderNames.isEmpty) {
-      createFolder(trackingFolderName);
-      return _repository.folderNames();
-    }
-    return folderNames;
   }
 
   void _refreshHashedIds(List<String> folders) {
@@ -621,9 +667,10 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   Future<void> clearAll() async {
-    _db.dispose();
-    File("${App.dataPath}/local_favorite.db").deleteSync();
-    await init();
+    final path = _dbPath;
+    close();
+    File(path).deleteSync();
+    await _startInitialization(path);
   }
 
   void reorder(List<FavoriteItem> newFolder, String folder) async {
@@ -824,12 +871,16 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   void close() {
+    _connectionGeneration++;
+    _initialization = null;
     _isClosed = true;
     _identityIndex.clear();
     _updatedIds.clear();
     _updatedIdsFolder = null;
     counts.clear();
-    _db.dispose();
+    final database = _database;
+    _database = null;
+    database?.dispose();
   }
 
   void notifyChanges() {

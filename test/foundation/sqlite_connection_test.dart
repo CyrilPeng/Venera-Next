@@ -27,6 +27,25 @@ bool _sqliteAvailable() {
 void main() {
   final sqliteAvailable = _sqliteAvailable();
 
+  test('failed PRAGMA setup releases a corrupt database file', () {
+    final dir = Directory.systemTemp.createTempSync('sqlite-corrupt-');
+    try {
+      final path = '${dir.path}/corrupt.db';
+      File(path).writeAsBytesSync(List.filled(4096, 42));
+      expect(() => openSqliteDatabase(path), throwsA(isA<SqliteException>()));
+      File(path).renameSync('$path.failed');
+      _initializeDatabase(path);
+      final db = openSqliteDatabase(path);
+      try {
+        expect(db.select('SELECT value FROM items;').single['value'], 'seed');
+      } finally {
+        db.dispose();
+      }
+    } finally {
+      dir.deleteSync(recursive: true);
+    }
+  }, skip: !sqliteAvailable);
+
   test(
     'openSqliteDatabase sets DELETE journal mode, NORMAL synchronous, and busy_timeout',
     () {
