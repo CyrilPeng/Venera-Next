@@ -288,7 +288,7 @@ readerSettingEffects 只解析设置通知的有序效果；ReaderPreferences �
 
 ImageFavoriteActions 是 history 领域的纯业务入口，通过回调访问存储；只依赖收藏模型与常量，不可传递导入 UI。阅读器适配选图、翻译、错误及提示，业务服务返回明确结果。原 history.dart 仅作为已有界面兼容入口，不得用于新收藏业务模块。
 
-ReaderSession 拥有 ReaderHistoryWriter 与 ReadingSessionTracker，通过内容就绪和前台状态共同控制计时；Flutter 生命周期、自动阅读暂停与退出同步由适配端注入。退出先同步刷新待保存进度，再排空时长队列并通知应用一次，迟到内容/生命周期事件不能重启会话。已接受进度写入的数据库排序仍由存储层保证。
+ReaderSession 拥有 ReaderHistoryWriter 与 ReadingSessionTracker，通过内容就绪和前台状态共同控制计时；Flutter 生命周期、自动阅读暂停与退出同步由适配端注入。退出立即提交待保存进度并停止计时，等待所有已接受的进度（含退出刷新）和时长写入完成，再通知应用一次；迟到内容/生命周期事件不能重启会话。ReaderHistoryWriter.dispose 返回同一个完成 Future，存储错误由注入回调报告。退出适配当前仍同步落盘，与异步进度写入的数据库排序及桌面最终退出等待仍待统一。
 
 ReaderImageCachePolicy 只负责内存分档与单个阅读器的查询有效性；内存插件、日志和 PaintingBinding 缓存由页面适配。退出恢复原 100 MB 上限且使未完成查询失效，重复配置仅接受最新结果。策略不取消底层平台 Future，也不提供跨阅读器的全局缓存仲裁。
 

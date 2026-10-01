@@ -68,8 +68,8 @@ void main() {
     expect(attempts, 3);
     expect(errors, hasLength(2));
     writer.schedule();
-    writer.dispose();
-    writer.dispose();
+    await writer.dispose();
+    await writer.dispose();
     expect(errors, hasLength(3));
   });
 
@@ -96,5 +96,43 @@ void main() {
     accepted.completeError(StateError('storage failure after exit'));
     await tester.pump();
     expect(errors, hasLength(1));
+  });
+
+  testWidgets('exit drains every accepted write and an asynchronous flush', (
+    tester,
+  ) async {
+    final first = Completer<void>();
+    final second = Completer<void>();
+    final flushed = Completer<void>();
+    var writes = 0;
+    var flushes = 0;
+    var closed = false;
+    final writer = ReaderHistoryWriter(
+      write: () => ++writes == 1 ? first.future : second.future,
+      flush: () {
+        flushes++;
+        return flushed.future;
+      },
+      onError: (error, stack) => fail('$error'),
+    );
+    writer.schedule();
+    await tester.pump(const Duration(seconds: 1));
+    writer.schedule();
+    await tester.pump(const Duration(seconds: 1));
+    writer.schedule();
+    final closing = writer.dispose();
+    unawaited(closing.then((_) => closed = true));
+    expect(identical(closing, writer.dispose()), isTrue);
+    expect(flushes, 1);
+    writer.schedule();
+    second.complete();
+    flushed.complete();
+    await tester.pump(const Duration(seconds: 2));
+    expect(writes, 2);
+    expect(closed, isFalse);
+    first.complete();
+    await tester.pump();
+    await closing;
+    expect(closed, isTrue);
   });
 }

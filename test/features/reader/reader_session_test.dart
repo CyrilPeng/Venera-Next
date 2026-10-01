@@ -149,4 +149,42 @@ void main() {
       expect(calls, 1);
     },
   );
+
+  testWidgets('sync waits for progress even when duration finishes first', (
+    tester,
+  ) async {
+    final progress = Completer<void>();
+    var elapsed = Duration.zero;
+    final durations = <Duration>[];
+    var closed = false;
+    final session = ReaderSession(
+      durations: ReadingSessionTracker(
+        elapsedNow: () => elapsed,
+        onDuration: (duration) async => durations.add(duration),
+      ),
+      progress: ReaderHistoryWriter(
+        write: () => progress.future,
+        flush: () => fail('already submitted progress must not flush again'),
+        onError: (_, _) {},
+      ),
+      pauseAutoReading: (_) {},
+      onClosed: () => closed = true,
+      foreground: true,
+    );
+    session.setContentReady(true);
+    elapsed = const Duration(seconds: 3);
+    session.scheduleProgress();
+    await tester.pump(const Duration(seconds: 1));
+    final closing = session.dispose();
+    elapsed = const Duration(seconds: 100);
+    await tester.pump();
+    expect(durations, [const Duration(seconds: 3)]);
+    expect(closed, isFalse);
+    progress.completeError(
+      StateError('failed progress is reported and drained'),
+    );
+    await tester.pump();
+    await closing;
+    expect(closed, isTrue);
+  });
 }

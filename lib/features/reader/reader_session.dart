@@ -54,13 +54,15 @@ class ReaderSession {
     if (!_disposed) _progress.schedule();
   }
 
-  /// Flush pending progress synchronously, drain accepted duration writes, then
-  /// notify the application once. Storage still owns accepted progress writes.
+  /// Submit pending progress immediately and stop the duration clock, then
+  /// drain both writers before notifying the application once.
   Future<void> dispose() {
     if (_closing != null) return _closing!;
     _disposed = true;
     _contentReady = false;
-    _progress.dispose();
-    return _closing = _durations.dispose().whenComplete(_onClosed);
+    return _closing = Future.wait([
+      _progress.dispose(),
+      _durations.dispose(),
+    ]).whenComplete(_onClosed).then((_) {});
   }
 }
