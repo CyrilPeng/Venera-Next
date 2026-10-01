@@ -4,7 +4,7 @@ import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
-import 'package:venera_next/features/local_comics/download.dart';
+import 'package:venera_next/features/local_comics/download_task.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/translations.dart';

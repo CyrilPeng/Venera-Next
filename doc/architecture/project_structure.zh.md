@@ -387,3 +387,5 @@ ImagesDownloadTask 每轮 resume 持有运行代次；暂停、取消及错误�
 图片传输包装器的 cancel 返回稳定的取消 Future，wait 在取消时等待流关闭和已开始的文件写入结束，不再因 isCancelled 提前返回。ImagesDownloadTask 汇总停止任务，恢复前等待清理；pendingCleanup 提供已排队的传输/目录清理完成信号。取消时捕获原目录及章节选择，先停止预取，再移出队列，等待停止后删除未登记章节并使用既有章节目录映射，保留已登记章节。封面请求、压缩包任务和跨实例同目录互斥仍待完善。
 
 local_chapter_storage 提供不依赖全局或 IO 的目录映射与清理选择规则，纳入业务依赖检查。读取、下载、取消和章节删除共同使用，原 LocalManager.getChapterDirectoryName 已在仓库调用迁移后删除。映射保持旧格式；清理按映射后的目录身份保护保留章节，保守合并大小写及尾部点/空格别名、去重，并排除空/点路径。区分大小写的文件系统上可能保留额外的歧义目录，后续扫描清理不能直接绕过这些保护。
+
+下载实现已按职责拆分：download_task 为只依赖 ChangeNotifier、漫画类型与本地模型的任务契约，纳入业务依赖门禁；images_download_task 与 archive_download_task 分别持有图片及 ZIP 下载逻辑，互不导入。download_task_codec 持有既有快照解码分派，管理器不再通过任务基类的静态工厂解码。下载列表直接导入契约，download.dart 作为仍有调用者的统一导出入口。实现类仍依赖 LocalManager 和漫画源运行时，后续继续注入与队列服务拆分；此处不声明实现层循环已消除。

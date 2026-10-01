@@ -18,7 +18,8 @@ import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
-import 'package:venera_next/features/local_comics/download.dart';
+import 'download_task.dart';
+import 'download_task_codec.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 
 import 'package:venera_next/foundation/app.dart';
@@ -385,7 +386,7 @@ class LocalManager with ChangeNotifier {
     try {
       final tasks = _downloadTaskStore.restore(
         FilePath.join(App.dataPath, 'downloading_tasks.json'),
-        DownloadTask.fromJson,
+        downloadTaskFromJson,
       );
       if (tasks != null) {
         downloadingTasks
