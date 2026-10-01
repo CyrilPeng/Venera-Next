@@ -317,15 +317,7 @@ class LocalFavoritesManager with ChangeNotifier {
       find(item.id, item.type);
 
   void updateOrder(List<String> folders) {
-    for (int i = 0; i < folders.length; i++) {
-      _db.execute(
-        """
-        insert or replace into folder_order (folder_name, order_value)
-        values (?, ?);
-      """,
-        [folders[i], i],
-      );
-    }
+    _repository.updateOrder(folders);
     notifyListeners();
   }
 
@@ -381,14 +373,7 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   void addTagTo(String folder, String id, String tag) {
-    _db.execute(
-      """
-      update "$folder"
-      set tags = '$tag,' || tags
-      where id == ?
-    """,
-      [id],
-    );
+    _repository.addTagTo(folder, id, tag);
     notifyListeners();
   }
 
@@ -511,67 +496,15 @@ class LocalFavoritesManager with ChangeNotifier {
     if (!existsFolder(folder)) {
       throw Exception("Folder does not exists");
     }
-    var res = _db.select(
-      """
-      select * from "$folder"
-      where id == ? and type == ?;
-    """,
-      [comic.id, comic.type.value],
+    final added = _repository.addComic(
+      folder,
+      comic,
+      translatedTags: _translateTags(comic.tags),
+      append: appdata.settings['newFavoriteAddTo'] == "end",
+      order: order,
+      updateTime: updateTime,
     );
-    if (res.isNotEmpty) {
-      return false;
-    }
-    var translatedTags = _translateTags(comic.tags);
-    final params = [
-      comic.id,
-      comic.name,
-      comic.author,
-      comic.type.value,
-      comic.tags.join(","),
-      comic.coverPath,
-      comic.time,
-      translatedTags,
-    ];
-    if (order != null) {
-      _db.execute(
-        """
-        insert into "$folder" (id, name, author, type, tags, cover_path, time, translated_tags, display_order)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?);
-      """,
-        [...params, order],
-      );
-    } else if (appdata.settings['newFavoriteAddTo'] == "end") {
-      _db.execute(
-        """
-        insert into "$folder" (id, name, author, type, tags, cover_path, time, translated_tags, display_order)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?);
-      """,
-        [...params, maxValue(folder) + 1],
-      );
-    } else {
-      _db.execute(
-        """
-        insert into "$folder" (id, name, author, type, tags, cover_path, time, translated_tags, display_order)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?);
-      """,
-        [...params, minValue(folder) - 1],
-      );
-    }
-    if (updateTime != null) {
-      var columns = _db.select("""
-      pragma table_info("$folder");
-    """);
-      if (columns.any((element) => element["name"] == "last_update_time")) {
-        _db.execute(
-          """
-          update "$folder"
-          set last_update_time = ?
-          where id == ? and type == ?;
-        """,
-          [updateTime, comic.id, comic.type.value],
-        );
-      }
-    }
+    if (!added) return false;
     if (counts[folder] == null) {
       counts[folder] = count(folder);
     } else {
@@ -1049,21 +982,7 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   void updateInfo(String folder, FavoriteItem comic, [bool notify = true]) {
-    _db.execute(
-      """
-      update "$folder"
-      set name = ?, author = ?, cover_path = ?, tags = ?
-      where id == ? and type == ?;
-    """,
-      [
-        comic.name,
-        comic.author,
-        comic.coverPath,
-        comic.tags.join(","),
-        comic.id,
-        comic.type.value,
-      ],
-    );
+    _repository.updateInfo(folder, comic);
     if (notify) {
       notifyListeners();
     }

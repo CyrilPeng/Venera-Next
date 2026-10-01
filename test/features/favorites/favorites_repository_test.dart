@@ -36,6 +36,116 @@ void main() {
   tearDown(() => db.dispose());
 
   test(
+    'insertion selects explicit/front/end order and rejects duplicate identity',
+    () {
+      db.execute('ALTER TABLE first ADD COLUMN translated_tags TEXT;');
+      final item = repository.findComic('first', 'same', 1)!..id = 'new';
+      expect(
+        repository.addComic(
+          'first',
+          item,
+          translatedTags: 'translated',
+          append: true,
+          updateTime: 'ignored on legacy table',
+        ),
+        isTrue,
+      );
+      expect(repository.maxValue('first'), 21);
+      expect(
+        repository.addComic('first', item, translatedTags: '', append: false),
+        isFalse,
+      );
+      item.id = 'front';
+      expect(
+        repository.addComic('first', item, translatedTags: '', append: false),
+        isTrue,
+      );
+      expect(repository.minValue('first'), -4);
+      item.id = 'explicit';
+      repository.addComic(
+        'first',
+        item,
+        translatedTags: '',
+        append: false,
+        order: 100,
+      );
+      expect(repository.maxValue('first'), 100);
+      expect(repository.findComic('first', 'new', 1)!.time, 'old time');
+      expect(
+        db
+            .select("SELECT translated_tags FROM first WHERE id = 'new'")
+            .single['translated_tags'],
+        'translated',
+      );
+    },
+  );
+
+  test('optional update time failure rolls back insertion and permits retry', () {
+    db.execute('ALTER TABLE first ADD COLUMN translated_tags TEXT;');
+    db.execute('ALTER TABLE first ADD COLUMN last_update_time TEXT;');
+    db.execute(
+      "CREATE TRIGGER reject_time BEFORE UPDATE OF last_update_time ON first BEGIN SELECT RAISE(ABORT, 'rejected'); END;",
+    );
+    final item = repository.findComic('first', 'same', 1)!..id = 'new';
+    bool add() => repository.addComic(
+      'first',
+      item,
+      translatedTags: '',
+      append: true,
+      updateTime: '2026-10-01',
+    );
+    expect(add, throwsA(isA<SqliteException>()));
+    expect(repository.findComic('first', 'new', 1), isNull);
+    db.execute('DROP TRIGGER reject_time;');
+    expect(add(), isTrue);
+    expect(
+      db
+          .select("SELECT last_update_time FROM first WHERE id = 'new'")
+          .single['last_update_time'],
+      '2026-10-01',
+    );
+  });
+
+  test('folder reorder failure rolls back earlier rows', () {
+    db.execute(
+      "CREATE TRIGGER reject_order BEFORE INSERT ON folder_order WHEN NEW.folder_name = 'second' BEGIN SELECT RAISE(ABORT, 'rejected'); END;",
+    );
+    expect(
+      () => repository.updateOrder(['first', 'second']),
+      throwsA(isA<SqliteException>()),
+    );
+    expect(db.select('SELECT * FROM folder_order'), isEmpty);
+    db.execute('DROP TRIGGER reject_order;');
+    repository.updateOrder(['second', 'first']);
+    expect(
+      db
+          .select(
+            "SELECT order_value FROM folder_order WHERE folder_name = 'first'",
+          )
+          .single['order_value'],
+      1,
+    );
+  });
+
+  test(
+    'tag values are bound and information updates preserve order and time',
+    () {
+      repository.addTagTo('second', 'same', "author's");
+      expect(repository.findComic('second', 'same', 1)!.tags, ["author's"]);
+      expect(repository.findComic('second', 'same', 2)!.tags, ["author's"]);
+      final item = repository.findComic('second', 'same', 1)!
+        ..name = 'Changed'
+        ..tags = ['b']
+        ..time = 'not submitted';
+      repository.updateInfo('second', item);
+      expect(repository.findComic('second', 'same', 1)!.name, 'Changed');
+      expect(repository.findComic('second', 'same', 2)!.name, 'Other source');
+      expect(repository.findComic('second', 'same', 1)!.time, 'old time');
+      expect(repository.minValue('second'), 0);
+    },
+  );
+
+  test(
     'single move prepends and leaves duplicate destination/source intact',
     () {
       expect(repository.moveFavorite('first', 'second', 'same', 1), isFalse);

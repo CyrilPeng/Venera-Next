@@ -7,6 +7,77 @@ class FavoritesRepository {
   FavoritesRepository(this.db);
   final Database db;
 
+  bool addComic(
+    String folder,
+    FavoriteItem item, {
+    required String translatedTags,
+    required bool append,
+    int? order,
+    String? updateTime,
+  }) => _transaction(() {
+    if (comicExists(folder, item.id, item.type.value)) return false;
+    final position =
+        order ?? (append ? maxValue(folder) + 1 : minValue(folder) - 1);
+    db.execute(
+      '''
+      INSERT INTO ${_table(folder)}
+        (id, name, author, type, tags, cover_path, time, translated_tags, display_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+    ''',
+      [
+        item.id,
+        item.name,
+        item.author,
+        item.type.value,
+        item.tags.join(','),
+        item.coverPath,
+        item.time,
+        translatedTags,
+        position,
+      ],
+    );
+    if (updateTime != null &&
+        db
+            .select('PRAGMA table_info(${_table(folder)});')
+            .any((row) => row['name'] == 'last_update_time')) {
+      db.execute(
+        'UPDATE ${_table(folder)} SET last_update_time = ? WHERE id = ? AND type = ?;',
+        [updateTime, item.id, item.type.value],
+      );
+    }
+    return true;
+  });
+
+  void updateOrder(List<String> folders) => _transaction(() {
+    for (var i = 0; i < folders.length; i++) {
+      db.execute(
+        'INSERT OR REPLACE INTO folder_order (folder_name, order_value) VALUES (?, ?);',
+        [folders[i], i],
+      );
+    }
+  });
+
+  void addTagTo(String folder, String id, String tag) {
+    db.execute('UPDATE ${_table(folder)} SET tags = ? || tags WHERE id = ?;', [
+      '$tag,',
+      id,
+    ]);
+  }
+
+  void updateInfo(String folder, FavoriteItem item) {
+    db.execute(
+      'UPDATE ${_table(folder)} SET name = ?, author = ?, cover_path = ?, tags = ? WHERE id = ? AND type = ?;',
+      [
+        item.name,
+        item.author,
+        item.coverPath,
+        item.tags.join(','),
+        item.id,
+        item.type.value,
+      ],
+    );
+  }
+
   T _transaction<T>(T Function() action) {
     db.execute('BEGIN TRANSACTION;');
     try {
