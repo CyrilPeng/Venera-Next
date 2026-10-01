@@ -19,6 +19,7 @@ import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
 import 'download_task.dart';
+import 'download_queue.dart';
 import 'download_task_codec.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 
@@ -314,13 +315,16 @@ class LocalManager with ChangeNotifier {
     );
   }
 
-  List<DownloadTask> downloadingTasks = [];
+  late final _downloadQueue = DownloadQueue(
+    commitComic: (comic) => _repository.add(comic),
+    notifyChanged: notifyListeners,
+    requestSave: saveCurrentDownloadingTasks,
+  );
 
-  bool isDownloading(String id, ComicType type) {
-    return downloadingTasks.any(
-      (element) => element.id == id && element.comicType == type,
-    );
-  }
+  List<DownloadTask> get downloadingTasks => _downloadQueue.tasks;
+
+  bool isDownloading(String id, ComicType type) =>
+      _downloadQueue.contains(id, type);
 
   Future<Directory> findValidDirectory(
     String id,
@@ -339,35 +343,11 @@ class LocalManager with ChangeNotifier {
     return Directory(FilePath.join(path, dir)).create().then((value) => value);
   }
 
-  void completeTask(DownloadTask task) {
-    // Commit before removing the resumable task or notifying consumers. Calling
-    // async add() without awaiting it would turn a failed write into lost work.
-    _repository.add(task.toLocalComic());
-    downloadingTasks.remove(task);
-    notifyListeners();
-    saveCurrentDownloadingTasks();
-    downloadingTasks.firstOrNull?.resume();
-  }
+  void completeTask(DownloadTask task) => _downloadQueue.complete(task);
 
-  void removeTask(DownloadTask task) {
-    downloadingTasks.remove(task);
-    notifyListeners();
-    saveCurrentDownloadingTasks();
-  }
+  void removeTask(DownloadTask task) => _downloadQueue.remove(task);
 
-  void moveToFirst(DownloadTask task) {
-    if (downloadingTasks.first != task) {
-      var shouldResume = !downloadingTasks.first.isPaused;
-      downloadingTasks.first.pause();
-      downloadingTasks.remove(task);
-      downloadingTasks.insert(0, task);
-      notifyListeners();
-      saveCurrentDownloadingTasks();
-      if (shouldResume) {
-        downloadingTasks.first.resume();
-      }
-    }
-  }
+  void moveToFirst(DownloadTask task) => _downloadQueue.moveToFirst(task);
 
   final _downloadTaskStore = DownloadTaskStore(
     onError: (error, stack) => Log.error('LocalManager', error, stack),
@@ -398,12 +378,7 @@ class LocalManager with ChangeNotifier {
     }
   }
 
-  void addTask(DownloadTask task) {
-    downloadingTasks.add(task);
-    notifyListeners();
-    saveCurrentDownloadingTasks();
-    downloadingTasks.first.resume();
-  }
+  void addTask(DownloadTask task) => _downloadQueue.add(task);
 
   void deleteComic(LocalComic c, [bool removeFileOnDisk = true]) {
     if (removeFileOnDisk) {

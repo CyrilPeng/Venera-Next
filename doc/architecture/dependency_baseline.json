@@ -239,6 +239,7 @@
     ]
   ],
   "business_entrypoints": [
+    "features/local_comics/download_queue.dart",
     "features/local_comics/download_task.dart",
     "features/local_comics/local_chapter_storage.dart",
     "features/local_comics/download_task_store.dart",
