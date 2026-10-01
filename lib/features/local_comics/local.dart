@@ -1,10 +1,10 @@
 import 'local_comic_model.dart';
 import 'local_repository.dart';
+import 'download_task_store.dart';
 import 'local_sort_type.dart';
 export 'local_sort_type.dart';
 export 'local_comic_model.dart';
 import 'dart:async';
-import 'dart:convert';
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
@@ -365,42 +365,32 @@ class LocalManager with ChangeNotifier {
     }
   }
 
-  Future<void> _downloadTaskWrites = Future.value();
+  final _downloadTaskStore = DownloadTaskStore(
+    onError: (error, stack) => Log.error('LocalManager', error, stack),
+  );
 
   /// Completes when all task snapshots queued so far have finished writing.
-  Future<void> get pendingDownloadTaskWrites => _downloadTaskWrites;
+  Future<void> get pendingDownloadTaskWrites =>
+      _downloadTaskStore.pendingWrites;
 
-  Future<void> saveCurrentDownloadingTasks() {
-    // Capture both path and snapshot before queuing: later mutations must not
-    // change the meaning of an already requested save.
-    final file = File(FilePath.join(App.dataPath, 'downloading_tasks.json'));
-    final data = jsonEncode(downloadingTasks.map((e) => e.toJson()).toList());
-    final write = _downloadTaskWrites.then((_) async {
-      await file.writeAsString(data);
-    });
-    // Keep subsequent writes usable after a failure. Awaiting callers still
-    // receive the original error through the returned future.
-    _downloadTaskWrites = write.catchError((Object error, StackTrace stack) {
-      Log.error('LocalManager', 'Failed to save download tasks: $error');
-    });
-    return write;
-  }
+  Future<void> saveCurrentDownloadingTasks() => _downloadTaskStore.save(
+    FilePath.join(App.dataPath, 'downloading_tasks.json'),
+    downloadingTasks.map((task) => task.toJson()),
+  );
 
   void restoreDownloadingTasks() {
-    var file = File(FilePath.join(App.dataPath, 'downloading_tasks.json'));
-    if (file.existsSync()) {
-      try {
-        var tasks = jsonDecode(file.readAsStringSync());
-        for (var e in tasks) {
-          var task = DownloadTask.fromJson(e);
-          if (task != null) {
-            downloadingTasks.add(task);
-          }
-        }
-      } catch (e) {
-        file.delete();
-        Log.error("LocalManager", "Failed to restore downloading tasks: $e");
+    try {
+      final tasks = _downloadTaskStore.restore(
+        FilePath.join(App.dataPath, 'downloading_tasks.json'),
+        DownloadTask.fromJson,
+      );
+      if (tasks != null) {
+        downloadingTasks
+          ..clear()
+          ..addAll(tasks);
       }
+    } catch (error, stack) {
+      Log.error('LocalManager', error, stack);
     }
   }
 

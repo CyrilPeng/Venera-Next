@@ -246,6 +246,51 @@ void main() {
     },
   );
 
+  test(
+    'restoration publishes only complete snapshots and does not duplicate tasks',
+    () async {
+      final root = Directory.systemTemp.createTempSync('download-restore-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      final manager = LocalManager();
+      addTearDown(() async {
+        await manager.pendingDownloadTaskWrites;
+        root.deleteSync(recursive: true);
+      });
+      final existing = ImagesDownloadTask(
+        source: ComicSource.find(sourceKey)!,
+        comicId: 'existing',
+      );
+      final restored = ImagesDownloadTask(
+        source: ComicSource.find(sourceKey)!,
+        comicId: 'restored',
+      );
+      manager.downloadingTasks.add(existing);
+      final file = File('${root.path}/downloading_tasks.json');
+      final invalid = jsonEncode([
+        restored.toJson(),
+        {'type': 'ImagesDownloadTask', 'source': 'missing'},
+      ]);
+      file.writeAsStringSync(invalid);
+      manager.restoreDownloadingTasks();
+      expect(manager.downloadingTasks, [existing]);
+      expect(file.readAsStringSync(), invalid);
+      file.writeAsStringSync(
+        jsonEncode([
+          restored.toJson(),
+          {'type': 'unknown'},
+        ]),
+      );
+      manager.restoreDownloadingTasks();
+      manager.restoreDownloadingTasks();
+      expect(manager.downloadingTasks.map((task) => task.id), ['restored']);
+      expect(manager.downloadingTasks.single.isPaused, isTrue);
+      file.writeAsStringSync('[]');
+      manager.restoreDownloadingTasks();
+      expect(manager.downloadingTasks, isEmpty);
+    },
+  );
+
   test('ImagesDownloadTask cancel before path stops speed recorder', () async {
     final dataDir = Directory.systemTemp.createTempSync(
       'venera-download-data-',
