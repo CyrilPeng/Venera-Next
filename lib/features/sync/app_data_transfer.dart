@@ -1,11 +1,8 @@
-import 'app_data_snapshot.dart';
+import 'app_data_archive.dart';
 import 'dart:convert';
-import 'package:archive/archive_io.dart' as archive_io;
-import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/file_replacement.dart';
-import 'dart:isolate';
 
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -18,7 +15,6 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/cookie_jar.dart';
 import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/file_system.dart';
-import 'package:zip_flutter/zip_flutter.dart';
 
 Future<File> exportAppData([bool sync = true]) =>
     AppDataOperations.instance.run(() => _exportAppData(sync));
@@ -43,64 +39,13 @@ Future<File> _exportAppData(bool sync) async {
     }
   }
   final settingsJson = jsonEncode(archiveData);
-  final snapshotDirectory = Directory(
-    App.cachePath,
-  ).createTempSync('.app_data_export_');
-  final snapshotPath = snapshotDirectory.path;
-  try {
-    await Isolate.run(() async {
-      final entries = await createAppDataSnapshot(
-        dataPath,
-        snapshotPath,
-        settingsJson: settingsJson,
-      );
-      final zipFile = ZipFile.open(cacheFilePath);
-      try {
-        for (final name in entries) {
-          zipFile.addFile(name, FilePath.join(snapshotPath, name));
-        }
-      } finally {
-        zipFile.close();
-      }
-    });
-    return cacheFile;
-  } catch (_) {
-    await cacheFile.deleteIgnoreError();
-    rethrow;
-  } finally {
-    await snapshotDirectory.deleteIgnoreError(recursive: true);
-  }
-}
-
-// Decode ZIP content directly so custom .venera/.picadata extensions work.
-// The native extractor in zip_flutter 0.0.13 double-frees its callback argument.
-void _extractAppDataZip(String archivePath, String outputPath) {
-  final input = archive_io.InputFileStream(archivePath);
-  try {
-    final archive = archive_io.ZipDecoder().decodeStream(input);
-    for (final entry in archive) {
-      final name = entry.name.replaceAll('\\', '/');
-      final destination = p.normalize(p.join(outputPath, name));
-      if (entry.isSymbolicLink ||
-          p.isAbsolute(name) ||
-          !p.isWithin(p.absolute(outputPath), p.absolute(destination))) {
-        throw FormatException('Invalid app data archive entry: ${entry.name}');
-      }
-      if (entry.isDirectory) {
-        Directory(destination).createSync(recursive: true);
-      } else {
-        File(destination).parent.createSync(recursive: true);
-        final output = archive_io.OutputFileStream(destination);
-        try {
-          entry.writeContent(output);
-        } finally {
-          output.closeSync();
-        }
-      }
-    }
-  } finally {
-    input.closeSync();
-  }
+  await AppDataArchive.create(
+    dataPath: dataPath,
+    cachePath: App.cachePath,
+    destinationPath: cacheFilePath,
+    settingsJson: settingsJson,
+  );
+  return cacheFile;
 }
 
 Future<void> importAppData(File file, [bool checkVersion = false]) =>
@@ -127,9 +72,7 @@ Future<void> _importAppData(File file, bool checkVersion) async {
   }
   cacheDir.createSync();
   try {
-    await Isolate.run(() {
-      _extractAppDataZip(file.path, cacheDirPath);
-    });
+    await AppDataArchive.extract(file.path, cacheDirPath);
     var historyFile = cacheDir.joinFile("history.db");
     var localFavoriteFile = cacheDir.joinFile("local_favorite.db");
     var appdataFile = cacheDir.joinFile("appdata.json");
@@ -436,9 +379,7 @@ Future<void> _importPicaData(File file) async {
   }
   cacheDir.createSync();
   try {
-    await Isolate.run(() {
-      _extractAppDataZip(file.path, cacheDirPath);
-    });
+    await AppDataArchive.extract(file.path, cacheDirPath);
     var localFavoriteFile = cacheDir.joinFile("local_favorite.db");
     if (localFavoriteFile.existsSync()) {
       var db = sqlite3.open(localFavoriteFile.path);
