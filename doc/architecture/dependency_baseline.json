@@ -239,6 +239,8 @@
     ]
   ],
   "business_entrypoints": [
+    "features/local_comics/local_comic_model.dart",
+    "features/local_comics/local_comic_row.dart",
     "features/sync/legacy_pica_reader.dart",
     "features/sync/legacy_pica_data.dart",
     "features/sync/pica_import_storage.dart",

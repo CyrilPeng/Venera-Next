@@ -1,3 +1,6 @@
+import 'local_comic_model.dart';
+import 'local_comic_row.dart';
+export 'local_comic_model.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
@@ -23,108 +26,12 @@ import 'local_storage_guard.dart';
 
 export 'local_comic_image.dart';
 
-class LocalComic with HistoryMixin implements Comic {
-  @override
-  final String id;
-
-  @override
-  final String title;
-
-  @override
-  final String subtitle;
-
-  @override
-  final List<String> tags;
-
-  /// The name of the directory where the comic is stored
-  final String directory;
-
-  /// key: chapter id, value: chapter title
-  ///
-  /// chapter id is the name of the directory in `LocalManager.path/$directory`
-  final ComicChapters? chapters;
-
-  bool get hasChapters => chapters != null;
-
-  /// relative path to the cover image
-  @override
-  final String cover;
-
-  final ComicType comicType;
-
-  final List<String> downloadedChapters;
-
-  final DateTime createdAt;
-
-  const LocalComic({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    required this.tags,
-    required this.directory,
-    required this.chapters,
-    required this.cover,
-    required this.comicType,
-    required this.downloadedChapters,
-    required this.createdAt,
-  });
-
-  LocalComic.fromRow(Row row)
-    : id = row[0] as String,
-      title = row[1] as String,
-      subtitle = row[2] as String,
-      tags = List.from(jsonDecode(row[3] as String)),
-      directory = row[4] as String,
-      chapters = ComicChapters.fromJsonOrNull(jsonDecode(row[5] as String)),
-      cover = row[6] as String,
-      comicType = ComicType(row[7] as int),
-      downloadedChapters = List.from(jsonDecode(row[8] as String)),
-      createdAt = DateTime.fromMillisecondsSinceEpoch(row[9] as int);
-
+extension LocalComicFiles on LocalComic {
   File get coverFile => File(FilePath.join(baseDir, cover));
 
   String get baseDir => (directory.contains('/') || directory.contains('\\'))
       ? directory
       : FilePath.join(LocalManager().path, directory);
-
-  @override
-  String get description => "";
-
-  @override
-  String get sourceKey =>
-      comicType == ComicType.local ? "local" : comicType.sourceKey;
-
-  @override
-  Map<String, dynamic> toJson() {
-    return {
-      "title": title,
-      "cover": cover,
-      "id": id,
-      "subTitle": subtitle,
-      "tags": tags,
-      "description": description,
-      "sourceKey": sourceKey,
-      "chapters": chapters?.toJson(),
-    };
-  }
-
-  @override
-  int? get maxPage => null;
-
-  @override
-  HistoryType get historyType => comicType;
-
-  @override
-  String? get subTitle => subtitle;
-
-  @override
-  String? get language => null;
-
-  @override
-  String? get favoriteId => null;
-
-  @override
-  double? get stars => null;
 }
 
 class LocalManager with ChangeNotifier {
@@ -358,7 +265,7 @@ class LocalManager with ChangeNotifier {
         ${sortType.value == 'time_asc' ? 'ASC' : 'DESC'}
       ;
     ''');
-    return res.map((row) => LocalComic.fromRow(row)).toList();
+    return res.map((row) => localComicFromRow(row)).toList();
   }
 
   LocalComic? find(String id, ComicType comicType) {
@@ -369,7 +276,7 @@ class LocalManager with ChangeNotifier {
     if (res.isEmpty) {
       return null;
     }
-    return LocalComic.fromRow(res.first);
+    return localComicFromRow(res.first);
   }
 
   @override
@@ -384,7 +291,7 @@ class LocalManager with ChangeNotifier {
       ORDER BY created_at DESC
       LIMIT 20;
     ''');
-    return res.map((row) => LocalComic.fromRow(row)).toList();
+    return res.map((row) => localComicFromRow(row)).toList();
   }
 
   int get count {
@@ -405,7 +312,7 @@ class LocalManager with ChangeNotifier {
     if (res.isEmpty) {
       return null;
     }
-    return LocalComic.fromRow(res.first);
+    return localComicFromRow(res.first);
   }
 
   List<LocalComic> search(String keyword) {
@@ -417,7 +324,7 @@ class LocalManager with ChangeNotifier {
     ''',
       ['%$keyword%', '%$keyword%', '%$keyword%'],
     );
-    return res.map((row) => LocalComic.fromRow(row)).toList();
+    return res.map((row) => localComicFromRow(row)).toList();
   }
 
   Future<List<String>> getImages(String id, ComicType type, Object ep) async {
