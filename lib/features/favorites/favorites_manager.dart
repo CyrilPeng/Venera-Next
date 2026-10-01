@@ -1,3 +1,5 @@
+import 'favorite_models.dart';
+import 'favorite_row.dart';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:isolate';
@@ -27,192 +29,6 @@ void registerFollowUpdatesChangeListener(
 
 void _notifyFollowUpdatesChanged() {
   _followUpdatesChangeListener?.call();
-}
-
-String _getTimeString(DateTime time) {
-  return time.toIso8601String().replaceFirst("T", " ").substring(0, 19);
-}
-
-class FavoriteItem implements Comic {
-  String name;
-  String author;
-  ComicType type;
-  @override
-  List<String> tags;
-  @override
-  String id;
-  String coverPath;
-  late String time;
-
-  FavoriteItem({
-    required this.id,
-    required this.name,
-    required this.coverPath,
-    required this.author,
-    required this.type,
-    required this.tags,
-    DateTime? favoriteTime,
-  }) {
-    var t = favoriteTime ?? DateTime.now();
-    time = _getTimeString(t);
-  }
-
-  FavoriteItem.fromRow(Row row)
-    : name = row["name"],
-      author = row["author"],
-      type = ComicType(row["type"]),
-      tags = (row["tags"] as String).split(","),
-      id = row["id"],
-      coverPath = row["cover_path"],
-      time = row["time"] {
-    tags.remove("");
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return other is FavoriteItem && other.id == id && other.type == type;
-  }
-
-  @override
-  int get hashCode => id.hashCode ^ type.hashCode;
-
-  @override
-  String toString() {
-    var s = "FavoriteItem: $name $author $coverPath $hashCode $tags";
-    if (s.length > 100) {
-      return s.substring(0, 100);
-    }
-    return s;
-  }
-
-  @override
-  String get cover => coverPath;
-
-  @override
-  String get description {
-    var time = this.time.substring(0, 10);
-    return appdata.settings['comicDisplayMode'] == 'detailed'
-        ? "$time | ${type == ComicType.local ? 'local' : type.comicSource?.name ?? "Unknown"}"
-        : "${type.comicSource?.name ?? "Unknown"} | $time";
-  }
-
-  @override
-  String? get favoriteId => null;
-
-  @override
-  String? get language => null;
-
-  @override
-  int? get maxPage => null;
-
-  @override
-  String get sourceKey => type == ComicType.local
-      ? 'local'
-      : type.comicSource?.key ?? "Unknown:${type.value}";
-
-  @override
-  double? get stars => null;
-
-  @override
-  String? get subtitle => author;
-
-  @override
-  String get title => name;
-
-  @override
-  Map<String, dynamic> toJson() {
-    return {
-      "name": name,
-      "author": author,
-      "type": type.value,
-      "tags": tags,
-      "id": id,
-      "coverPath": coverPath,
-    };
-  }
-
-  static FavoriteItem fromJson(Map<String, dynamic> json) {
-    var type = json["type"] as int;
-    if (type == 0 && json['coverPath'].toString().startsWith('http')) {
-      type = 'picacg'.hashCode;
-    } else if (type == 1) {
-      type = 'ehentai'.hashCode;
-    } else if (type == 2) {
-      type = 'jm'.hashCode;
-    } else if (type == 3) {
-      type = 'hitomi'.hashCode;
-    } else if (type == 4) {
-      type = 'wnacg'.hashCode;
-    } else if (type == 6) {
-      type = 'nhentai'.hashCode;
-    }
-    return FavoriteItem(
-      id: json["id"] ?? json['target'],
-      name: json["name"],
-      author: json["author"],
-      coverPath: json["coverPath"],
-      type: ComicType(type),
-      tags: List<String>.from(json["tags"] ?? []),
-    );
-  }
-}
-
-class FavoriteItemWithFolderInfo extends FavoriteItem {
-  String folder;
-
-  FavoriteItemWithFolderInfo(FavoriteItem item, this.folder)
-    : super(
-        id: item.id,
-        name: item.name,
-        coverPath: item.coverPath,
-        author: item.author,
-        type: item.type,
-        tags: item.tags,
-      );
-}
-
-class FavoriteItemWithUpdateInfo extends FavoriteItem {
-  String? updateTime;
-
-  DateTime? lastCheckTime;
-
-  bool hasNewUpdate;
-
-  FavoriteItemWithUpdateInfo(
-    FavoriteItem item,
-    this.updateTime,
-    this.hasNewUpdate,
-    int? lastCheckTime,
-  ) : lastCheckTime = lastCheckTime == null
-          ? null
-          : DateTime.fromMillisecondsSinceEpoch(lastCheckTime),
-      super(
-        id: item.id,
-        name: item.name,
-        coverPath: item.coverPath,
-        author: item.author,
-        type: item.type,
-        tags: item.tags,
-      );
-
-  @override
-  String get description {
-    var updateTime = this.updateTime ?? "Unknown";
-    var sourceName = type.comicSource?.name ?? "Unknown";
-    return "$updateTime | $sourceName";
-  }
-
-  @override
-  operator ==(Object other) {
-    return other is FavoriteItemWithUpdateInfo &&
-        other.updateTime == updateTime &&
-        other.hasNewUpdate == hasNewUpdate &&
-        super == other;
-  }
-
-  @override
-  int get hashCode =>
-      super.hashCode ^ updateTime.hashCode ^ hasNewUpdate.hashCode;
 }
 
 class LocalFavoritesManager with ChangeNotifier {
@@ -364,7 +180,7 @@ class LocalFavoritesManager with ChangeNotifier {
       'SELECT * FROM "$folder" ORDER BY display_order${limit == null ? '' : ' LIMIT ?'}',
       limit == null ? [] : [limit],
     );
-    return rows.map(FavoriteItem.fromRow).toList();
+    return rows.map(favoriteItemFromRow).toList();
   }
 
   Future<void> setReadLater(
@@ -601,7 +417,7 @@ class LocalFavoritesManager with ChangeNotifier {
         select * from "$folder"
         ORDER BY display_order;
       """);
-    return rows.map((element) => FavoriteItem.fromRow(element)).toList();
+    return rows.map((element) => favoriteItemFromRow(element)).toList();
   }
 
   static Future<List<FavoriteItem>> _getFolderComicsAsync(
@@ -615,7 +431,7 @@ class LocalFavoritesManager with ChangeNotifier {
           select * from "$folder"
           ORDER BY display_order;
         """);
-        return rows.map((element) => FavoriteItem.fromRow(element)).toList();
+        return rows.map((element) => favoriteItemFromRow(element)).toList();
       } finally {
         db.dispose();
       }
@@ -633,7 +449,7 @@ class LocalFavoritesManager with ChangeNotifier {
       var comics = _db.select("""
         select * from "$folder";
       """);
-      res.addAll(comics.map((element) => FavoriteItem.fromRow(element)));
+      res.addAll(comics.map((element) => favoriteItemFromRow(element)));
     }
     return res.toList();
   }
@@ -650,7 +466,7 @@ class LocalFavoritesManager with ChangeNotifier {
           var comics = db.select("""
             select * from "$folder";
           """);
-          res.addAll(comics.map((element) => FavoriteItem.fromRow(element)));
+          res.addAll(comics.map((element) => favoriteItemFromRow(element)));
         }
         return res.toList();
       } finally {
@@ -685,7 +501,7 @@ class LocalFavoritesManager with ChangeNotifier {
       res.addAll(
         comics.map(
           (element) =>
-              FavoriteItemWithFolderInfo(FavoriteItem.fromRow(element), folder),
+              FavoriteItemWithFolderInfo(favoriteItemFromRow(element), folder),
         ),
       );
     }
@@ -801,7 +617,7 @@ class LocalFavoritesManager with ChangeNotifier {
     if (res.isEmpty) {
       throw Exception("Comic not found");
     }
-    return FavoriteItem.fromRow(res.first);
+    return favoriteItemFromRow(res.first);
   }
 
   String _translateTags(List<String> tags) {
@@ -1331,7 +1147,7 @@ class LocalFavoritesManager with ChangeNotifier {
     """,
       [keyword, keyword, keyword, keyword],
     );
-    var comics = res.map((e) => FavoriteItem.fromRow(e)).toList();
+    var comics = res.map((e) => favoriteItemFromRow(e)).toList();
     bool test(FavoriteItem comic, String keyword) {
       if (comic.name.contains(keyword)) {
         return true;
@@ -1365,7 +1181,7 @@ class LocalFavoritesManager with ChangeNotifier {
         [keyword, keyword, keyword, keyword],
       );
       for (var comic in res) {
-        comics.add(FavoriteItem.fromRow(comic));
+        comics.add(favoriteItemFromRow(comic));
       }
       if (comics.length > 200) {
         break;
@@ -1450,7 +1266,7 @@ class LocalFavoritesManager with ChangeNotifier {
     return jsonEncode({
       "info": "Generated by VeneraNext",
       "name": folder,
-      "comics": res.map((e) => FavoriteItem.fromRow(e).toJson()).toList(),
+      "comics": res.map((e) => favoriteItemFromRow(e).toJson()).toList(),
     });
   }
 
@@ -1581,7 +1397,7 @@ class LocalFavoritesManager with ChangeNotifier {
     return res
         .map(
           (e) => FavoriteItemWithUpdateInfo(
-            FavoriteItem.fromRow(e),
+            favoriteItemFromRow(e),
             e['last_update_time'],
             e['has_new_update'] == 1,
             e['last_check_time'],
@@ -1600,7 +1416,7 @@ class LocalFavoritesManager with ChangeNotifier {
     return res
         .map(
           (e) => FavoriteItemWithUpdateInfo(
-            FavoriteItem.fromRow(e),
+            favoriteItemFromRow(e),
             e['last_update_time'],
             e['has_new_update'] == 1,
             e['last_check_time'],

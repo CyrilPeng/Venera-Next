@@ -399,3 +399,10 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - importHistory 明确表示导入，在同一事务中更新进度和信息；从原 addHistory 迁移导入调用，继续保留原时长导入策略，未修改 schema。事务内信息更新失败会回滚先前的进度更新。
 - 新增 3 项管理器测试和 2 项仓储测试，覆盖网络请求期间翻页、之后再次保存、对象身份变化、删除/重开、导入时长保留、来源隔离、空值语义和事务回滚。全量 Windows Flutter 765 项通过；空值写法按 lint 修正后，定向 29 项再次通过。最终分析零错误/警告、23 个既有 info；结构、架构和 Git 依赖检查通过。
 - CHANGELOG 与双语边界文档同步，原用户修改继续未提交。未增加同一数据库记录删除后重建的版本识别或请求间新旧仲裁；模型展示/fromMap、收藏/本地库/WebDAV/同步分解及其余 P5–P8、平台/性能验收仍未完成。
+
+## P6：收藏模型与 SQLite 行解码分离（2026-10-01）
+
+- FavoriteItem、FavoriteItemWithFolderInfo、FavoriteItemWithUpdateInfo 及时间格式化迁至 favorite_models.dart；favorites_api.dart 仅导出模型，favorites.dart 保持旧聚合入口，直接使用管理器文件取得模型的同域调用已迁移。
+- 移除 FavoriteItem.fromRow，favoriteItemFromRow 集中解码 12 处 SQLite 读取；FavoriteItem.withTime 接受原始时间，不解析或重新生成旧数据。除显式存储构造入口外，提取后的模型正文与原实现逐字核对一致。
+- 新增 3 项兼容测试覆盖原始时间、仅移除首个空标签、重复标签、旧 JSON 来源映射/target 回退、时间截断及导出字段；连同管理器测试定向 12 项通过，全量 Windows Flutter 768 项通过。分析零错误/警告、23 个既有 info；结构/架构/Git 依赖检查、12 项架构脚本及 2 项结构脚本测试通过。
+- 新数据入口和行映射纳入业务依赖检查，跨域模型 import 指向 favorites_api；CHANGELOG/双语边界文档同步，原用户修改未提交。模型仍读取全局展示设置，派生模型时间/集合共享行为未改；收藏 SQL、缓存与追更、本地库/WebDAV/同步分解及其余 P5–P8、设备/性能验收继续推进。

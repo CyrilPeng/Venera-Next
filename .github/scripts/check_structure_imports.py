@@ -639,6 +639,10 @@ FEATURE_ENTRYPOINT_TARGETS = {
         "favorites",
         "favorites.dart",
     ),
+    _feature_path("favorites", "favorite_models.dart"): _feature_path(
+        "favorites",
+        "favorites_api.dart",
+    ),
     _feature_path("favorites", "favorites_page.dart"): _feature_path(
         "favorites",
         "favorites.dart",

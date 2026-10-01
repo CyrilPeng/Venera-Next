@@ -313,3 +313,5 @@ HistoryCache 使用 (id, type) 作为身份索引及最近写入缓存的键，�
 桌面启动在显示窗口前启用 window_manager 的关闭拦截，WindowFrame 挂载期间监听原生 close 事件，统一进入关闭守卫与异步退出任务流程；卸载移除监听。主动强制关闭只调用一次进程退出。此路径覆盖插件窗口 close，不能推断系统关机、macOS 应用 Quit 或进程强杀均会等待。
 
 历史进度写入只更新阅读时间、章节/分组、页码、已读集合与最大页数，已存在行的标题/作者/封面和累计时长不得被进度快照覆盖；新记录仍使用完整初始化数据。metadataUpdaterFor 必须在网络请求前取得，固定目标身份与数据库代次，响应只更新提供的信息字段，不插入缺失行，未提供字段保持原值，空字符串可显式清空。信息刷新与封面补齐使用该入口；importHistory 在同一事务内明确替换进度及信息，继续保留原导入的时长策略。
+
+收藏数据入口为 favorites_api.dart，只导出 favorite_models.dart 中的三种收藏模型；旧 favorites.dart 继续聚合 UI 与管理器，favorites_manager.dart 不再隐式导出模型。跨域模型调用通过数据入口，同域可直接导入实现。favoriteItemFromRow 只在 favorite_row.dart 解码 SQLite Row，FavoriteItem.withTime 接收原始时间字符串，不在读取时解析或重建时间。现有 JSON 来源映射、标签仅移除首个空项、派生模型构造及展示设置读取保持原行为，后续变更须明确兼容策略；SQL/缓存/追更编排继续由管理器持有，尚待拆分。
