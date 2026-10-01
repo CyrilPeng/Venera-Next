@@ -448,7 +448,7 @@ Future<void> importPicaData(File file) async {
       var db = sqlite3.open(historyFile.path);
       try {
         for (var comic in db.select("SELECT * FROM history;")) {
-          await HistoryManager().addHistory(
+          await HistoryManager().importHistory(
             History.fromMap({
               "type": switch (comic['type']) {
                 0 => 'picacg'.hashCode,

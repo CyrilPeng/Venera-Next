@@ -176,11 +176,30 @@ class HistoryRepository {
         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
       """;
 
+  /// Metadata refreshes never replace progress or recreate deleted records.
+  bool updateMetadata(
+    String id,
+    int type, {
+    String? title,
+    String? subtitle,
+    String? cover,
+  }) {
+    final fields = <String, String>{
+      'title': ?title,
+      'subtitle': ?subtitle,
+      'cover': ?cover,
+    };
+    if (fields.isEmpty) return false;
+    db.execute(
+      'UPDATE history SET ${fields.keys.map((field) => '$field = ?').join(', ')} '
+      'WHERE id = ? AND type = ?;',
+      [...fields.values, id, type],
+    );
+    return db.updatedRows > 0;
+  }
+
   static const _updateHistorySql = """
         update history set
-          title = ?,
-          subtitle = ?,
-          cover = ?,
           time = ?,
           ep = ?,
           page = ?,
@@ -229,12 +248,17 @@ class HistoryRepository {
   }
 
   // Legacy databases do not consistently expose a single-column UNIQUE(id).
-  void writeProgress(History item) {
+  void writeProgress(History item) =>
+      _writeHistory(item, replaceMetadata: false);
+
+  /// Imports deliberately replace metadata as well as progress. Duration keeps
+  /// the existing import policy and is not replaced by a progress snapshot.
+  void importHistory(History item) =>
+      _writeHistory(item, replaceMetadata: true);
+
+  void _writeHistory(History item, {required bool replaceMetadata}) {
     _runWriteTransaction(db, () {
       db.execute(_updateHistorySql, [
-        item.title,
-        item.subtitle,
-        item.cover,
         item.time.millisecondsSinceEpoch,
         item.ep,
         item.page,
@@ -246,6 +270,14 @@ class HistoryRepository {
       ]);
       if (db.updatedRows == 0) {
         db.execute(_insertHistorySql, _historyValues(item));
+      } else if (replaceMetadata) {
+        updateMetadata(
+          item.id,
+          item.type.value,
+          title: item.title,
+          subtitle: item.subtitle,
+          cover: item.cover,
+        );
       }
     });
   }

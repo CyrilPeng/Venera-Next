@@ -16,6 +16,9 @@ import 'package:venera_next/foundation/sqlite_connection.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/throttled_task_runner.dart';
 
+typedef HistoryMetadataUpdater =
+    Future<bool> Function({String? title, String? subtitle, String? cover});
+
 class HistoryManager with ChangeNotifier {
   static HistoryManager? cache;
 
@@ -60,11 +63,20 @@ class HistoryManager with ChangeNotifier {
     );
   }
 
-  static Future<void> _addHistoryAsync(String dbPath, History newItem) {
+  static Future<void> _addHistoryAsync(
+    String dbPath,
+    History newItem,
+    bool replaceMetadata,
+  ) {
     return Isolate.run(() {
       var db = openSqliteDatabase(dbPath);
       try {
-        HistoryRepository(db).writeProgress(newItem);
+        final repository = HistoryRepository(db);
+        if (replaceMetadata) {
+          repository.importHistory(newItem);
+        } else {
+          repository.writeProgress(newItem);
+        }
       } finally {
         db.dispose();
       }
@@ -92,32 +104,41 @@ class HistoryManager with ChangeNotifier {
   bool get hasPendingWrites => _pendingWrites != 0;
 
   /// Submit a detached progress snapshot to the ordered mutation queue.
-  Future<void> addHistory(History newItem) {
+  Future<void> addHistory(History newItem) =>
+      _writeHistory(newItem, replaceMetadata: false);
+
+  Future<void> importHistory(History newItem) =>
+      _writeHistory(newItem, replaceMetadata: true);
+
+  Future<void> _writeHistory(History newItem, {required bool replaceMetadata}) {
     final snapshot = newItem.copy();
     final path = _dbPath;
     final generation = _generation;
     return _enqueueAsyncWrite(() async {
-      await _addHistoryAsync(path, snapshot);
+      await _addHistoryAsync(path, snapshot, replaceMetadata);
       if (isInitialized && generation == _generation) {
-        _cachePersistedHistory(snapshot);
+        _cachePersistedHistory(snapshot.id, snapshot.type.value);
         notifyListeners();
       }
     });
   }
 
-  Future<void> _enqueueAsyncWrite(Future<void> Function() write) {
+  Future<T> _enqueueAsyncWrite<T>(Future<T> Function() write) {
     _pendingWrites++;
     final next = _asyncHistoryQueue.then((_) => write()).whenComplete(() {
       _pendingWrites--;
     });
-    _asyncHistoryQueue = next.catchError((Object error, StackTrace stackTrace) {
-      Log.error("History", error, stackTrace);
-    });
+    _asyncHistoryQueue = next.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {
+        Log.error("History", error, stackTrace);
+      },
+    );
     return next;
   }
 
-  void _cachePersistedHistory(History snapshot) {
-    final stored = _repository.find(snapshot.id, snapshot.type.value);
+  void _cachePersistedHistory(String id, int type) {
+    final stored = _repository.find(id, type);
     if (stored == null) {
       updateCache();
     } else {
@@ -138,7 +159,7 @@ class HistoryManager with ChangeNotifier {
         item.readDurationMs += durationMs;
       }
       if (isInitialized && generation == _generation) {
-        _cachePersistedHistory(snapshot);
+        _cachePersistedHistory(snapshot.id, snapshot.type.value);
         notifyListeners();
       }
     });
@@ -151,6 +172,57 @@ class HistoryManager with ChangeNotifier {
       if (identical(accepted, _asyncHistoryQueue)) return;
     } while (true);
   }
+
+  /// Capture this before starting a metadata request. Late responses cannot
+  /// target a reopened database or follow mutation of the caller's identity.
+  HistoryMetadataUpdater metadataUpdaterFor(History item) {
+    final id = item.id;
+    final type = item.type.value;
+    final generation = _generation;
+    final path = isInitialized ? _dbPath : null;
+    return ({String? title, String? subtitle, String? cover}) {
+      if (path == null || !isInitialized || generation != _generation) {
+        return Future.value(false);
+      }
+      return _enqueueAsyncWrite(() async {
+        final changed = await _updateMetadataAsync(
+          path,
+          id,
+          type,
+          title: title,
+          subtitle: subtitle,
+          cover: cover,
+        );
+        if (changed && isInitialized && generation == _generation) {
+          _cachePersistedHistory(id, type);
+          notifyListeners();
+        }
+        return changed;
+      });
+    };
+  }
+
+  static Future<bool> _updateMetadataAsync(
+    String path,
+    String id,
+    int type, {
+    String? title,
+    String? subtitle,
+    String? cover,
+  }) => Isolate.run(() {
+    final db = openSqliteDatabase(path);
+    try {
+      return HistoryRepository(db).updateMetadata(
+        id,
+        type,
+        title: title,
+        subtitle: subtitle,
+        cover: cover,
+      );
+    } finally {
+      db.dispose();
+    }
+  });
 
   void _cacheHistory(History item) => _historyCache.record(item);
 
@@ -264,11 +336,13 @@ class HistoryManager with ChangeNotifier {
       return false;
     }
 
+    final id = history.id;
+    final updateMetadata = metadataUpdaterFor(history);
     final waitRetry = retryDelay ?? Future<void>.delayed;
     int retries = 3;
     while (true) {
       try {
-        var res = await comicSource.loadComicInfo!(history.id);
+        var res = await comicSource.loadComicInfo!(id);
         if (res.error) {
           retries--;
           if (retries == 0) {
@@ -279,24 +353,11 @@ class HistoryManager with ChangeNotifier {
         }
 
         var comicDetails = res.data;
-        // Update history info while keeping reading progress
-        var updatedHistory = History.fromMap({
-          'type': history.type.value,
-          'time': history.time.millisecondsSinceEpoch,
-          'title': comicDetails.title,
-          'subtitle': comicDetails.subTitle ?? '',
-          'cover': comicDetails.cover,
-          'ep': history.ep,
-          'page': history.page,
-          'id': history.id,
-          'readEpisode': history.readEpisode.toList(),
-          'max_page': history.maxPage,
-          'read_duration_ms': history.readDurationMs,
-        });
-        updatedHistory.group = history.group;
-
-        await addHistory(updatedHistory);
-        return true;
+        return await updateMetadata(
+          title: comicDetails.title,
+          subtitle: comicDetails.subTitle ?? '',
+          cover: comicDetails.cover,
+        );
       } catch (e, s) {
         Log.error("History", "Exception while refreshing history info: $e\n$s");
         retries--;

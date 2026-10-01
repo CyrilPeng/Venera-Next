@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -54,6 +55,111 @@ void main() {
         HistoryManager.cache = null;
         directory.deleteSync(recursive: true);
       });
+
+      test(
+        'source refresh preserves newer progress and later saves preserve metadata',
+        () async {
+          const key = 'history_metadata_test';
+          final response = Completer<Res<ComicDetails>>();
+          final requested = <String>[];
+          ComicSourceManager().add(
+            _source(
+              key,
+              loadComicInfo: (id) {
+                requested.add(id);
+                return response.future;
+              },
+            ),
+          );
+          addTearDown(() => ComicSourceManager().remove(key));
+          final stale = _history('original')..type = ComicType.fromKey(key);
+          await manager.addHistory(stale);
+          final refreshing = manager.refreshHistoryInfo(stale);
+          final progress = stale.copy()
+            ..page = 9
+            ..ep = 4
+            ..group = 2
+            ..maxPage = 80
+            ..time = DateTime(2026, 10, 2)
+            ..readEpisode.add('2-4');
+          await manager.addHistory(progress);
+          await manager.addReadDuration(
+            progress,
+            const Duration(milliseconds: 80),
+          );
+          stale.id = 'mutated';
+          response.complete(
+            Res(
+              ComicDetails.fromJson({
+                'title': 'Refreshed',
+                'subtitle': 'New author',
+                'cover': 'new-cover',
+                'tags': <String, dynamic>{},
+                'sourceKey': key,
+                'comicId': 'original',
+              }),
+            ),
+          );
+          expect(await refreshing, isTrue);
+          expect(requested, ['original']);
+          var stored = manager.find('original', progress.type)!;
+          expect(stored.title, 'Refreshed');
+          expect(stored.subtitle, 'New author');
+          expect(stored.cover, 'new-cover');
+          expect(stored.page, 9);
+          expect(stored.ep, 4);
+          expect(stored.group, 2);
+          expect(stored.maxPage, 80);
+          expect(stored.time, progress.time);
+          expect(stored.readEpisode, {'1', '2-4'});
+          expect(stored.readDurationMs, 80);
+          progress.page = 10;
+          await manager.addHistory(progress);
+          stored = manager.find('original', progress.type)!;
+          expect(stored.page, 10);
+          expect(stored.title, 'Refreshed');
+          expect(stored.cover, 'new-cover');
+        },
+      );
+
+      test(
+        'metadata refresh does not recreate deletion or follow database reopen',
+        () async {
+          final item = _history('deleted');
+          await manager.addHistory(item);
+          final update = manager.metadataUpdaterFor(item);
+          final deletion = manager.remove(item.id, item.type);
+          expect(await update(title: 'Late title'), isFalse);
+          await deletion;
+          expect(manager.count(), 0);
+          manager.close();
+          final reopened = Directory('${directory.path}/new')..createSync();
+          App.dataPath = reopened.path;
+          await manager.init();
+          await manager.addHistory(item);
+          expect(await update(cover: 'Old lifetime'), isFalse);
+          expect(manager.find(item.id, item.type)!.cover, 'cover.jpg');
+        },
+      );
+
+      test(
+        'import explicitly replaces metadata and progress while retaining duration',
+        () async {
+          final item = _history('import');
+          await manager.addHistory(item);
+          await manager.addReadDuration(item, const Duration(milliseconds: 50));
+          final imported = item.copy()
+            ..page = 7
+            ..title = 'Imported'
+            ..cover = 'import-cover';
+          await manager.importHistory(imported);
+          final stored = manager.find(item.id, item.type)!;
+          expect(stored.title, 'Imported');
+          expect(stored.cover, 'import-cover');
+          expect(stored.page, 7);
+          expect(stored.readDurationMs, 50);
+        },
+      );
 
       test(
         'latest progress and deletes follow earlier accepted writes',

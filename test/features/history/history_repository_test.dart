@@ -34,6 +34,43 @@ void main() {
   });
   tearDown(() => db.dispose());
 
+  test('metadata updates only supplied fields on the requested source', () {
+    repository.writeProgress(item());
+    repository.writeProgress(item(type: 1));
+    expect(
+      repository.updateMetadata('shared', 0, cover: '', subtitle: ''),
+      isTrue,
+    );
+    final stored = repository.find('shared', 0)!;
+    expect(stored.title, 'Book');
+    expect(stored.subtitle, '');
+    expect(stored.cover, '');
+    expect(stored.page, 3);
+    expect(stored.time.millisecondsSinceEpoch, 1000);
+    expect(repository.find('shared', 1)!.cover, 'cover');
+    expect(repository.updateMetadata('absent', 0, title: 'No insert'), isFalse);
+    expect(repository.updateMetadata('shared', 0), isFalse);
+    expect(repository.count(), 2);
+  });
+
+  test('failed imported metadata rolls back its preceding progress update', () {
+    repository.writeProgress(item());
+    db.execute(
+      "CREATE TRIGGER reject_metadata BEFORE UPDATE OF title ON history BEGIN SELECT RAISE(ABORT, 'rejected'); END;",
+    );
+    expect(
+      () => repository.importHistory(
+        item()
+          ..page = 9
+          ..title = 'Import',
+      ),
+      throwsA(isA<SqliteException>()),
+    );
+    final stored = repository.find('shared', 0)!;
+    expect(stored.page, 3);
+    expect(stored.title, 'Book');
+  });
+
   test(
     'cache distinguishes shared IDs by source and refresh evicts only deleted identity',
     () {
