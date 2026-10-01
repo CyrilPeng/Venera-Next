@@ -351,6 +351,32 @@ class FavoritesRepository {
         FavoriteItemWithFolderInfo(favoriteItemFromRow(row), folder),
   ];
 
+  Map<(String, int), int> referenceCounts(
+    Iterable<String> folders,
+    Iterable<(String, int)> requested,
+  ) {
+    final identities = requested.toSet().toList();
+    final counts = <(String, int), int>{};
+    // Keep each statement below legacy SQLite's 999 bound-variable limit.
+    for (final folder in folders) {
+      for (var start = 0; start < identities.length; start += 400) {
+        final chunk = identities.skip(start).take(400).toList();
+        final placeholders = List.filled(chunk.length, '(?, ?)').join(',');
+        final rows = db.select(
+          'SELECT id, type FROM ${_table(folder)} WHERE (id, type) IN (VALUES $placeholders);',
+          [
+            for (final (id, type) in chunk) ...[id, type],
+          ],
+        );
+        for (final row in rows) {
+          final identity = (row['id'] as String, row['type'] as int);
+          counts[identity] = (counts[identity] ?? 0) + 1;
+        }
+      }
+    }
+    return counts;
+  }
+
   List<(String, int)> identities(
     String folder, {
     bool updatedOnly = false,

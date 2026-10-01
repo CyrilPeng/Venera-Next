@@ -72,6 +72,79 @@ Future<void> _withFavoritesManager(
 
 void main() {
   test(
+    'colliding legacy hashes retain independent favorite and update state',
+    () async {
+      await _withFavoritesManager((manager) async {
+        manager.createFolder('identity-test');
+        manager.createFolder('identity-copy');
+        appdata.settings['followUpdatesFolder'] = 'identity-test';
+        manager.prepareTableForFollowUpdates('identity-test');
+        final first = _favorite('collision-first');
+        final secondType = first.id.hashCode ^ 'collision-second'.hashCode;
+        final second = FavoriteItem(
+          id: 'collision-second',
+          name: 'Second',
+          coverPath: 'second.jpg',
+          author: '',
+          type: ComicType(secondType),
+          tags: [],
+        );
+        expect(
+          first.id.hashCode ^ first.type.value,
+          second.id.hashCode ^ second.type.value,
+        );
+        manager.addComic('identity-test', first);
+        manager.addComic('identity-test', second);
+        manager.refreshHashedIds();
+        // Commit both additions and removals while a snapshot is in flight.
+        manager.addComic('identity-copy', first);
+        manager.updateUpdateTime('identity-test', first.id, first.type, 'v1');
+        expect(manager.hasNewUpdate(second.id, second.type), isFalse);
+        manager.updateUpdateTime('identity-test', second.id, second.type, 'v2');
+        manager.markAsRead(first.id, first.type);
+        expect(manager.hasNewUpdate(second.id, second.type), isTrue);
+        manager.deleteComicWithId('identity-test', first.id, first.type);
+        expect(manager.isExist(first.id, first.type), isTrue);
+        await manager.debugWaitForHashedIdsRefresh();
+        expect(manager.totalComics, 2);
+        manager.deleteFolder('identity-copy');
+        expect(manager.isExist(first.id, first.type), isFalse);
+        expect(manager.isExist(second.id, second.type), isTrue);
+        expect(manager.totalComics, 1);
+        expect(manager.hasNewUpdate(second.id, second.type), isTrue);
+      });
+    },
+    skip: !_sqliteAvailable(),
+  );
+
+  test(
+    'batch merge corrects reference counts before notification',
+    () async {
+      await _withFavoritesManager((manager) async {
+        manager.createFolder('merge-source');
+        manager.createFolder('merge-target');
+        final item = _favorite('merge-id');
+        manager.addComic('merge-source', item);
+        manager.addComic('merge-target', item);
+        await manager.debugWaitForHashedIdsRefresh();
+        manager.refreshHashedIds();
+        manager.batchMoveFavorites('merge-source', 'merge-target', [item]);
+        var notifications = 0;
+        manager.addListener(() {
+          notifications++;
+          expect(manager.isExist(item.id, item.type), isFalse);
+          expect(manager.totalComics, 0);
+        });
+        manager.deleteComicWithId('merge-target', item.id, item.type);
+        expect(notifications, 1);
+        await manager.debugWaitForHashedIdsRefresh();
+        expect(manager.totalComics, 0);
+      });
+    },
+    skip: !_sqliteAvailable(),
+  );
+
+  test(
     'read failure preserves cache and notifications until commit',
     () async {
       final oldMovement = appdata.settings['moveFavoriteAfterRead'];

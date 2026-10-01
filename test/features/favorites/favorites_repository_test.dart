@@ -37,6 +37,22 @@ void main() {
   });
   tearDown(() => db.dispose());
 
+  test('reference counts batch identities and preserve full source keys', () {
+    final requested = <(String, int)>[
+      for (var i = 0; i < 405; i++) ('missing-$i', 1),
+      ('same', 1),
+      ('same', 2),
+      ('same', 1),
+      ('other', 1),
+    ];
+    expect(
+      repository.referenceCounts(['first', 'second', '收藏 "A"'], requested),
+      {('same', 1): 2, ('same', 2): 1, ('other', 1): 1},
+    );
+    expect(repository.referenceCounts(['first'], []), isEmpty);
+    expect(repository.referenceCounts([], requested), isEmpty);
+  });
+
   test('read movement is atomic across folders and preserves other sources', () {
     repository.prepareForFollowUpdates('first', clearData: false);
     db.execute('UPDATE first SET has_new_update = 1;');

@@ -1,3 +1,4 @@
+import 'favorite_identity_index.dart';
 import 'favorites_repository.dart';
 import 'favorite_models.dart';
 import 'dart:convert';
@@ -46,9 +47,9 @@ class LocalFavoritesManager with ChangeNotifier {
 
   late Map<String, int> counts;
 
-  var _hashedIds = <int, int>{};
+  final _identityIndex = FavoriteIdentityIndex();
 
-  var _updatedIds = <int>{};
+  var _updatedIds = <(String, int)>{};
 
   String? _updatedIdsFolder;
 
@@ -57,7 +58,7 @@ class LocalFavoritesManager with ChangeNotifier {
   bool _isClosed = false;
 
   int get totalComics {
-    return _hashedIds.length;
+    return _identityIndex.length;
   }
 
   int folderComics(String folder) {
@@ -66,6 +67,7 @@ class LocalFavoritesManager with ChangeNotifier {
 
   Future<void> init() async {
     _isClosed = false;
+    _identityIndex.clear();
     counts = {};
     _dbPath = "${App.dataPath}/local_favorite.db";
     final databaseExisted = File(_dbPath).existsSync();
@@ -179,8 +181,9 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   void _refreshHashedIds(List<String> folders) {
+    final generation = _identityIndex.beginRefresh();
     if (folders.isEmpty) {
-      _hashedIds = {};
+      _identityIndex.completeRefresh(generation, {});
       _hashedIdsRefresh = Future.value();
       return;
     }
@@ -190,10 +193,12 @@ class LocalFavoritesManager with ChangeNotifier {
         if (_isClosed || !identical(_hashedIdsRefresh, refresh)) {
           return;
         }
-        _hashedIds = value;
-        notifyListeners();
+        if (_identityIndex.completeRefresh(generation, value)) {
+          notifyListeners();
+        }
       },
       onError: (Object error, StackTrace stackTrace) {
+        _identityIndex.failRefresh(generation);
         Log.error("LocalFavoritesManager", error, stackTrace);
       },
     );
@@ -213,10 +218,7 @@ class LocalFavoritesManager with ChangeNotifier {
       return;
     }
     _updatedIdsFolder = folder;
-    _updatedIds = _repository
-        .identities(folder, updatedOnly: true)
-        .map((identity) => identity.$1.hashCode ^ identity.$2)
-        .toSet();
+    _updatedIds = _repository.identities(folder, updatedOnly: true).toSet();
   }
 
   void _syncFollowUpdatesIfAffected(Iterable<String> folders) {
@@ -228,32 +230,29 @@ class LocalFavoritesManager with ChangeNotifier {
     _notifyFollowUpdatesChanged();
   }
 
-  void reduceHashedId(String id, int type) {
-    var hash = id.hashCode ^ type;
-    if (_hashedIds.containsKey(hash)) {
-      if (_hashedIds[hash]! > 1) {
-        _hashedIds[hash] = _hashedIds[hash]! - 1;
-      } else {
-        _hashedIds.remove(hash);
-      }
+  void _refreshIdentityCounts(Iterable<(String, int)> identities) {
+    final requested = identities.toSet();
+    final counts = _repository.referenceCounts(folderNames, requested);
+    for (final identity in requested) {
+      _identityIndex.setCount(identity, counts[identity] ?? 0);
     }
   }
 
-  static Future<Map<int, int>> _initHashedIds(
+  static Future<Map<(String, int), int>> _initHashedIds(
     List<String> folders,
     String dbPath,
   ) {
     return Isolate.run(() {
       var db = openSqliteDatabase(dbPath);
       try {
-        var hashedIds = <int, int>{};
+        var identities = <(String, int), int>{};
         for (var folder in folders) {
           for (final (id, type) in FavoritesRepository(db).identities(folder)) {
-            var hash = id.hashCode ^ type;
-            hashedIds[hash] = (hashedIds[hash] ?? 0) + 1;
+            final identity = (id, type);
+            identities[identity] = (identities[identity] ?? 0) + 1;
           }
         }
-        return hashedIds;
+        return identities;
       } finally {
         db.dispose();
       }
@@ -423,8 +422,7 @@ class LocalFavoritesManager with ChangeNotifier {
     } else {
       counts[folder] = counts[folder]! + 1;
     }
-    var hash = comic.id.hashCode ^ comic.type.value;
-    _hashedIds[hash] = (_hashedIds[hash] ?? 0) + 1;
+    _refreshIdentityCounts([(comic.id, comic.type.value)]);
     _syncFollowUpdatesIfAffected([folder]);
     notifyListeners();
     return true;
@@ -449,6 +447,7 @@ class LocalFavoritesManager with ChangeNotifier {
 
     counts[targetFolder] = count(targetFolder);
     counts[sourceFolder] = count(sourceFolder);
+    _refreshIdentityCounts([(id, type.value)]);
     _syncFollowUpdatesIfAffected([sourceFolder, targetFolder]);
     notifyListeners();
   }
@@ -482,7 +481,7 @@ class LocalFavoritesManager with ChangeNotifier {
     // Update counts
     counts[targetFolder] = count(targetFolder);
     counts[sourceFolder] = count(sourceFolder);
-    refreshHashedIds();
+    _refreshIdentityCounts(items.map((item) => (item.id, item.type.value)));
     _syncFollowUpdatesIfAffected([sourceFolder, targetFolder]);
 
     notifyListeners();
@@ -516,7 +515,7 @@ class LocalFavoritesManager with ChangeNotifier {
 
     // Update counts
     counts[targetFolder] = count(targetFolder);
-    refreshHashedIds();
+    _refreshIdentityCounts(items.map((item) => (item.id, item.type.value)));
     _syncFollowUpdatesIfAffected([targetFolder]);
 
     notifyListeners();
@@ -526,6 +525,7 @@ class LocalFavoritesManager with ChangeNotifier {
   void deleteFolder(String name) {
     var wasFollowUpdatesFolder =
         appdata.settings['followUpdatesFolder'] == name;
+    final removedIdentities = _repository.identities(name);
     _repository.deleteFolder(name);
     counts.remove(name);
     for (final key in ['readLaterFolder', 'quickFavorite']) {
@@ -534,6 +534,7 @@ class LocalFavoritesManager with ChangeNotifier {
         appdata.saveData();
       }
     }
+    _refreshIdentityCounts(removedIdentities);
     refreshHashedIds();
     if (wasFollowUpdatesFolder) {
       appdata.settings['followUpdatesFolder'] = null;
@@ -550,10 +551,10 @@ class LocalFavoritesManager with ChangeNotifier {
     for (final entry in removed.entries) {
       counts[entry.key] = count(entry.key);
       for (final (id, type) in entry.value) {
-        reduceHashedId(id, type);
         identities.add((id, type));
       }
     }
+    _refreshIdentityCounts(identities);
     // A cover is shared across folders. Files cannot participate in SQLite
     // rollback, so release them only after commit and the final reference.
     final folders = folderNames;
@@ -653,6 +654,7 @@ class LocalFavoritesManager with ChangeNotifier {
     _repository.renameFolder(before, after);
     counts[after] = counts[before] ?? 0;
     counts.remove(before);
+    refreshHashedIds();
     for (final key in ['readLaterFolder', 'quickFavorite']) {
       if (appdata.settings[key] == before) {
         appdata.settings[key] = after;
@@ -689,7 +691,7 @@ class LocalFavoritesManager with ChangeNotifier {
           : null,
     );
     if (changed.contains(followUpdatesFolder)) {
-      _updatedIds.remove(id.hashCode ^ type.value);
+      _updatedIds.remove((id, type.value));
       _notifyFollowUpdatesChanged();
     }
     notifyListeners();
@@ -707,8 +709,7 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   bool isExist(String id, ComicType type) {
-    var hash = id.hashCode ^ type.value;
-    return _hashedIds.containsKey(hash);
+    return _identityIndex.contains(id, type.value);
   }
 
   bool hasNewUpdate(String id, ComicType type) {
@@ -716,7 +717,7 @@ class LocalFavoritesManager with ChangeNotifier {
     if (folder is! String || folder != _updatedIdsFolder) {
       return false;
     }
-    return _updatedIds.contains(id.hashCode ^ type.value);
+    return _updatedIds.contains((id, type.value));
   }
 
   void updateInfo(String folder, FavoriteItem comic, [bool notify = true]) {
@@ -782,11 +783,11 @@ class LocalFavoritesManager with ChangeNotifier {
     );
     if (appdata.settings['followUpdatesFolder'] == folder) {
       _updatedIdsFolder = folder;
-      var hash = id.hashCode ^ type.value;
+      final identity = (id, type.value);
       if (hasNewUpdate) {
-        _updatedIds.add(hash);
+        _updatedIds.add(identity);
       } else {
-        _updatedIds.remove(hash);
+        _updatedIds.remove(identity);
       }
     }
   }
@@ -815,7 +816,7 @@ class LocalFavoritesManager with ChangeNotifier {
       return;
     }
     _repository.markAsRead(folder, id, type.value);
-    _updatedIds.remove(id.hashCode ^ type.value);
+    _updatedIds.remove((id, type.value));
     if (notify) {
       _notifyFollowUpdatesChanged();
       notifyListeners();
@@ -824,6 +825,10 @@ class LocalFavoritesManager with ChangeNotifier {
 
   void close() {
     _isClosed = true;
+    _identityIndex.clear();
+    _updatedIds.clear();
+    _updatedIdsFolder = null;
+    counts.clear();
     _db.dispose();
   }
 
