@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/directory_replacement.dart';
 import 'pica_import.dart';
 import 'app_data_archive.dart';
 import 'dart:convert';
@@ -208,7 +209,6 @@ class _ImportReplacement {
   _ImportReplacement._({
     required this.targetPath,
     required this.backupPath,
-    required this.wasExisting,
     required this.isDirectory,
   });
 
@@ -220,7 +220,6 @@ class _ImportReplacement {
     return _ImportReplacement._(
       targetPath: targetPath,
       backupPath: FilePath.join(backupDir.path, backupName),
-      wasExisting: File(targetPath).existsSync(),
       isDirectory: false,
     );
   }
@@ -233,17 +232,16 @@ class _ImportReplacement {
     return _ImportReplacement._(
       targetPath: targetPath,
       backupPath: FilePath.join(backupDir.path, backupName),
-      wasExisting: Directory(targetPath).existsSync(),
       isDirectory: true,
     );
   }
 
   final String targetPath;
   final String backupPath;
-  final bool wasExisting;
   final bool isDirectory;
 
   FileReplacement? _fileReplacement;
+  DirectoryReplacement? _directoryReplacement;
 
   void backup() {
     if (!isDirectory) {
@@ -252,16 +250,14 @@ class _ImportReplacement {
       _fileReplacement = replacement;
       return;
     }
-    if (!wasExisting) return;
-    Directory(targetPath).renameSync(backupPath);
+    final replacement = DirectoryReplacement(targetPath, backupPath);
+    replacement.backup();
+    _directoryReplacement = replacement;
   }
 
   void restore() {
     if (isDirectory) {
-      Directory(targetPath).deleteIfExistsSync(recursive: true);
-      if (wasExisting && Directory(backupPath).existsSync()) {
-        Directory(backupPath).renameSync(targetPath);
-      }
+      _directoryReplacement!.restore();
     } else {
       _fileReplacement!.restore();
     }
