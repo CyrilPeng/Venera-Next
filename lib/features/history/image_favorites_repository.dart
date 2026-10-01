@@ -6,13 +6,15 @@ import 'image_favorites_row.dart';
 
 /// Image favorite storage on a caller-owned connection, without cache or UI.
 class ImageFavoritesRepository {
-  ImageFavoritesRepository(this.db);
+  ImageFavoritesRepository(this.db, {String schema = 'main'})
+    : _table = '"${schema.replaceAll('"', '""')}"."image_favorites"';
   final Database db;
+  final String _table;
 
   /// 检查表image_favorites是否存在, 不存在则创建
   void initialize() {
     db.execute(
-      "CREATE TABLE IF NOT EXISTS image_favorites ("
+      "CREATE TABLE IF NOT EXISTS $_table ("
       "id TEXT,"
       "title TEXT NOT NULL,"
       "sub_title TEXT,"
@@ -35,7 +37,7 @@ class ImageFavoritesRepository {
     if (favorite.imageFavoritesEp.isEmpty) {
       db.execute(
         """
-      delete from image_favorites
+      delete from $_table
       where id == ? and source_key == ?;
     """,
         [favorite.id, favorite.sourceKey],
@@ -84,7 +86,7 @@ class ImageFavoritesRepository {
       }
       db.execute(
         """
-      insert or replace into image_favorites(id, title, sub_title, author, tags, translated_tags, time, max_page, source_key, image_favorites_ep, other)
+      insert or replace into $_table(id, title, sub_title, author, tags, translated_tags, time, max_page, source_key, image_favorites_ep, other)
       values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """,
         [
@@ -107,11 +109,11 @@ class ImageFavoritesRepository {
   List<ImageFavoritesComic> getAll([String? keyword]) {
     ResultSet res;
     if (keyword == null || keyword == "") {
-      res = db.select("select * from image_favorites;");
+      res = db.select("select * from $_table;");
     } else {
       res = db.select(
         """
-    select * from image_favorites
+    select * from $_table
     WHERE title LIKE ?
     OR sub_title LIKE ?
     OR LOWER(tags) LIKE LOWER(?)
@@ -127,7 +129,7 @@ class ImageFavoritesRepository {
   ImageFavoritesComic? find(String id, String sourceKey) {
     var row = db.select(
       """
-    select * from image_favorites
+    select * from $_table
     where id == ? and source_key == ?;
     """,
       [id, sourceKey],
@@ -138,8 +140,7 @@ class ImageFavoritesRepository {
     return imageFavoritesComicFromRow(row.first);
   }
 
-  int count() =>
-      db.select('SELECT count(*) FROM image_favorites;').first[0] as int;
+  int count() => db.select('SELECT count(*) FROM $_table;').first[0] as int;
 
   void saveAll(Iterable<ImageFavoritesComic> comics) =>
       runSqliteTransaction(db, () {
