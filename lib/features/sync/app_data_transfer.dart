@@ -1,3 +1,4 @@
+import 'app_data_snapshot.dart';
 import 'dart:convert';
 import 'package:archive/archive_io.dart' as archive_io;
 import 'package:path/path.dart' as p;
@@ -29,27 +30,34 @@ Future<File> _exportAppData(bool sync) async {
   );
   final cacheFile = File(cacheFilePath);
   final dataPath = App.dataPath;
+  await HistoryManager.cache?.waitForAsyncWrites();
+  await appdata.saveData(false);
+  final archiveData =
+      jsonDecode(jsonEncode(appdata.toJson())) as Map<String, dynamic>;
+  if (sync) {
+    final settings = archiveData['settings'] as Map<String, dynamic>;
+    for (final field in appdata.splitField(
+      settings['disableSyncFields'] as String,
+    )) {
+      settings.remove(field);
+    }
+  }
+  final settingsJson = jsonEncode(archiveData);
+  final snapshotDirectory = Directory(
+    App.cachePath,
+  ).createTempSync('.app_data_export_');
+  final snapshotPath = snapshotDirectory.path;
   try {
-    await Isolate.run(() {
+    await Isolate.run(() async {
+      final entries = await createAppDataSnapshot(
+        dataPath,
+        snapshotPath,
+        settingsJson: settingsJson,
+      );
       final zipFile = ZipFile.open(cacheFilePath);
       try {
-        final historyFile = FilePath.join(dataPath, 'history.db');
-        final localFavoriteFile = FilePath.join(dataPath, 'local_favorite.db');
-        final appdata = FilePath.join(
-          dataPath,
-          sync ? 'syncdata.json' : 'appdata.json',
-        );
-        final cookies = FilePath.join(dataPath, 'cookie.db');
-        zipFile.addFile('history.db', historyFile);
-        zipFile.addFile('local_favorite.db', localFavoriteFile);
-        zipFile.addFile('appdata.json', appdata);
-        zipFile.addFile('cookie.db', cookies);
-        for (final file in Directory(
-          FilePath.join(dataPath, 'comic_source'),
-        ).listSync()) {
-          if (file is File) {
-            zipFile.addFile('comic_source/${file.name}', file.path);
-          }
+        for (final name in entries) {
+          zipFile.addFile(name, FilePath.join(snapshotPath, name));
         }
       } finally {
         zipFile.close();
@@ -59,6 +67,8 @@ Future<File> _exportAppData(bool sync) async {
   } catch (_) {
     await cacheFile.deleteIgnoreError();
     rethrow;
+  } finally {
+    await snapshotDirectory.deleteIgnoreError(recursive: true);
   }
 }
 
