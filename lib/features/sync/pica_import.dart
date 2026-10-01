@@ -1,4 +1,3 @@
-import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
@@ -6,7 +5,7 @@ import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'app_data_archive.dart';
-import 'legacy_pica_reader.dart';
+import 'legacy_pica_data.dart';
 
 Future<void> importLegacyPicaArchive(
   File file, {
@@ -20,13 +19,13 @@ Future<void> importLegacyPicaArchive(
   cacheDir.createSync();
   try {
     await AppDataArchive.extract(file.path, cacheDirPath);
-    var localFavoriteFile = cacheDir.joinFile("local_favorite.db");
-    if (localFavoriteFile.existsSync()) {
-      var db = sqlite3.open(localFavoriteFile.path, mode: OpenMode.readOnly);
+    final data = LegacyPicaData.read(
+      cacheDirPath,
+      sourceAvailable: (key) => ComicSource.find(key) != null,
+    );
+    if (data.folders.isNotEmpty || data.links.isNotEmpty) {
       try {
-        final reader = LegacyPicaReader(db);
-        final folderNames = reader.favoriteFolders();
-        for (final link in reader.folderLinks()) {
+        for (final link in data.links) {
           if (LocalFavoritesManager().findLinked(link.folder).$1 != null) {
             continue;
           }
@@ -40,33 +39,26 @@ Future<void> importLegacyPicaArchive(
             Log.error(e.toString(), stack);
           }
         }
-        for (var folderName in folderNames) {
+        for (final folderName in data.folders.keys) {
           if (!LocalFavoritesManager().existsFolder(folderName)) {
             LocalFavoritesManager().createFolder(folderName);
           }
-          for (final comic in reader.favorites(folderName)) {
+          for (final comic in data.folders[folderName]!) {
             LocalFavoritesManager().addComic(folderName, comic);
           }
         }
       } catch (e) {
         Log.error("Import Data", "Failed to import local favorite: $e");
-      } finally {
-        db.dispose();
       }
     }
-    var historyFile = cacheDir.joinFile("history.db");
-    if (historyFile.existsSync()) {
-      var db = sqlite3.open(historyFile.path, mode: OpenMode.readOnly);
+    if (data.history.isNotEmpty || data.images.isNotEmpty) {
       try {
-        final reader = LegacyPicaReader(db);
-        for (final comic in reader.history()) {
+        for (final comic in data.history) {
           await HistoryManager().importHistory(comic);
         }
         List<ImageFavoritesComic> imageFavoritesComicList =
             ImageFavoriteManager().comics;
-        for (final comic in reader.images(
-          sourceAvailable: (key) => ComicSource.find(key) != null,
-        )) {
+        for (final comic in data.images) {
           final sourceKey = comic.sourceKey;
           final id = comic.id;
           final page = comic.page;
@@ -129,8 +121,6 @@ Future<void> importLegacyPicaArchive(
         }
       } catch (e, stack) {
         Log.error("Import Data", "Failed to import history: $e", stack);
-      } finally {
-        db.dispose();
       }
     }
   } finally {

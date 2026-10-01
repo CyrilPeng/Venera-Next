@@ -120,4 +120,132 @@ void main() {
       }
     },
   );
+  test('invalid late source records fail before any destination writes', () async {
+    final root = Directory.systemTemp.createTempSync('pica-preflight-');
+    final previousTracking = appdata.settings['followUpdatesFolder'];
+    final previousQuick = appdata.settings['quickFavorite'];
+    LocalFavoritesManager.cache = null;
+    HistoryManager.cache = null;
+    final favorites = LocalFavoritesManager();
+    final history = HistoryManager();
+    var notifications = 0;
+    void changed() => notifications++;
+    try {
+      App.dataPath = (Directory('${root.path}/data')..createSync()).path;
+      App.cachePath = (Directory('${root.path}/cache')..createSync()).path;
+      await favorites.init();
+      await history.init();
+      favorites.createFolder('existing');
+      favorites.addComic(
+        'existing',
+        FavoriteItem(
+          id: 'keep',
+          name: 'original',
+          coverPath: '',
+          author: '',
+          type: ComicType('picacg'.hashCode),
+          tags: [],
+        ),
+      );
+      await favorites.debugWaitForHashedIdsRefresh();
+      favorites.addListener(changed);
+      history.addListener(changed);
+      final source = sqlite3.open('${root.path}/source.db');
+      try {
+        source.execute(
+          'CREATE TABLE folder_sync (folder_name TEXT, key TEXT, sync_data TEXT);',
+        );
+        source.execute(
+          'CREATE TABLE imported (target TEXT, type INT, name TEXT, author TEXT, cover_path TEXT, tags TEXT);',
+        );
+        source.execute(
+          "INSERT INTO imported VALUES ('new', 0, 'new title', '', '', '');",
+        );
+        source.execute(
+          "INSERT INTO imported VALUES ('bad', 0, 'bad title', '', '', NULL);",
+        );
+      } finally {
+        source.dispose();
+      }
+      final legacyHistory = sqlite3.open('${root.path}/history.db');
+      try {
+        legacyHistory.execute(
+          'CREATE TABLE history (target TEXT, type INT, max_page INT, ep INT, page INT, time INT, title TEXT, subtitle TEXT, cover TEXT);',
+        );
+        legacyHistory.execute(
+          "INSERT INTO history VALUES ('new-history', 0, 10, 'invalid', 2, 1234, 'title', '', '');",
+        );
+        legacyHistory.execute(
+          'CREATE TABLE image_favorites (id TEXT, ep INT, page INT, title TEXT);',
+        );
+        legacyHistory.execute(
+          "INSERT INTO image_favorites VALUES (NULL, 1, 1, 'invalid image');",
+        );
+      } finally {
+        legacyHistory.dispose();
+      }
+      final package = File('${root.path}/legacy.picadata');
+      void writePackage() {
+        final archive = Archive();
+        for (final (name, path) in [
+          ('local_favorite.db', '${root.path}/source.db'),
+          ('history.db', '${root.path}/history.db'),
+        ]) {
+          final bytes = File(path).readAsBytesSync();
+          archive.addFile(ArchiveFile(name, bytes.length, bytes));
+        }
+        package.writeAsBytesSync(ZipEncoder().encode(archive));
+      }
+
+      Future<void> expectUnchanged() async {
+        writePackage();
+        await expectLater(importPicaData(package), throwsA(isA<TypeError>()));
+        expect(favorites.existsFolder('imported'), isFalse);
+        expect(favorites.getFolderComics('existing').single.id, 'keep');
+        expect(history.count(), 0);
+        expect(notifications, 0);
+        expect(Directory('${App.cachePath}/temp_data').existsSync(), isFalse);
+      }
+
+      await expectUnchanged();
+      final repairFavorites = sqlite3.open('${root.path}/source.db');
+      try {
+        repairFavorites.execute("DELETE FROM imported WHERE target = 'bad';");
+      } finally {
+        repairFavorites.dispose();
+      }
+      await expectUnchanged();
+      final repairHistory = sqlite3.open('${root.path}/history.db');
+      try {
+        repairHistory.execute('UPDATE history SET ep = 1;');
+      } finally {
+        repairHistory.dispose();
+      }
+      await expectUnchanged();
+      final repairImages = sqlite3.open('${root.path}/history.db');
+      try {
+        repairImages.execute('DELETE FROM image_favorites;');
+      } finally {
+        repairImages.dispose();
+      }
+      writePackage();
+      await importPicaData(package);
+      expect(favorites.getFolderComics('imported').single.id, 'new');
+      expect(favorites.getFolderComics('existing').single.id, 'keep');
+      expect(history.count(), 1);
+      expect(notifications, greaterThan(0));
+    } finally {
+      favorites.removeListener(changed);
+      history.removeListener(changed);
+      await history.waitForAsyncWrites();
+      if (history.isInitialized) history.close();
+      await favorites.closeAndWait();
+      await appdata.saveData(false);
+      HistoryManager.cache = null;
+      LocalFavoritesManager.cache = null;
+      appdata.settings['followUpdatesFolder'] = previousTracking;
+      appdata.settings['quickFavorite'] = previousQuick;
+      root.deleteSync(recursive: true);
+    }
+  });
 }
