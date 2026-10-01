@@ -245,6 +245,7 @@
     "features/sync/app_data_archive.dart",
     "features/sync/app_data_snapshot.dart",
     "features/favorites/favorites_repository.dart",
+    "features/favorites/read_later_service.dart",
     "features/history/image_favorites_repository.dart",
     "features/history/image_favorites_row.dart",
     "features/favorites/favorites_api.dart",

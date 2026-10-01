@@ -1,3 +1,4 @@
+import 'read_later_service.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'favorite_identity_index.dart';
 import 'package:venera_next/foundation/file_replacement.dart';
@@ -235,44 +236,35 @@ class LocalFavoritesManager with ChangeNotifier {
 
   static const String trackingFolderName = "追更";
 
-  String? get readLaterFolder {
-    final folder = appdata.settings['readLaterFolder'];
-    return folder is String && existsFolder(folder) ? folder : null;
-  }
+  late final _readLater = ReadLaterService(
+    repository: () => _repository,
+    configuredFolder: () => appdata.settings['readLaterFolder'],
+    selectFolder: (folder) => appdata.settings['readLaterFolder'] = folder,
+    createFolder: (folder) {
+      createFolder(folder);
+    },
+    addFirst: (folder, comic) {
+      addComic(folder, comic, minValue(folder) - 1);
+    },
+    remove: (folder, id, type) {
+      deleteComicWithId(folder, id, type);
+    },
+    saveSettings: () => appdata.saveData(),
+  );
 
-  bool isInReadLater(String id, ComicType type) {
-    final folder = readLaterFolder;
-    return folder != null && comicExists(folder, id, type);
-  }
+  String? get readLaterFolder => _readLater.folder;
 
-  List<FavoriteItem> getReadLaterComics({int? limit}) {
-    final folder = readLaterFolder;
-    if (folder == null) return [];
-    return _repository.getFolderComics(folder, limit: limit);
-  }
+  bool isInReadLater(String id, ComicType type) =>
+      _readLater.contains(id, type);
+
+  List<FavoriteItem> getReadLaterComics({int? limit}) =>
+      _readLater.comics(limit: limit);
 
   Future<void> setReadLater(
     FavoriteItem comic, {
     required bool included,
     required String folderName,
-  }) async {
-    var folder = readLaterFolder;
-    if (included) {
-      if (folder == null) {
-        folder = folderName;
-        var suffix = 2;
-        while (existsFolder(folder!)) {
-          folder = '$folderName (${suffix++})';
-        }
-        createFolder(folder);
-        appdata.settings['readLaterFolder'] = folder;
-      }
-      addComic(folder, comic, minValue(folder) - 1);
-    } else if (folder != null && comicExists(folder, comic.id, comic.type)) {
-      deleteComicWithId(folder, comic.id, comic.type);
-    }
-    await appdata.saveData();
-  }
+  }) => _readLater.set(comic, included: included, folderName: folderName);
 
   void _refreshHashedIds(List<String> folders) {
     final generation = _identityIndex.beginRefresh();
