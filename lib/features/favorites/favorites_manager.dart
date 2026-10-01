@@ -1,4 +1,5 @@
 import 'favorite_identity_index.dart';
+import 'package:venera_next/foundation/file_replacement.dart';
 import 'favorites_repository.dart';
 import 'favorite_models.dart';
 import 'dart:async';
@@ -722,11 +723,7 @@ class LocalFavoritesManager with ChangeNotifier {
     final path = _dbPath;
     final attempt = Completer<void>();
     _clearing = attempt.future;
-    Future<void>.sync(() async {
-      await _closeAndWait();
-      File(path).deleteSync();
-      await _startInitialization(path);
-    }).then(
+    Future<void>.sync(() => _clearDatabase(path)).then(
       (_) {
         _clearing = null;
         attempt.complete();
@@ -737,6 +734,69 @@ class LocalFavoritesManager with ChangeNotifier {
       },
     );
     return attempt.future;
+  }
+
+  Future<void> _clearDatabase(String path) async {
+    final previousTracking = appdata.settings['followUpdatesFolder'];
+    final previousQuick = appdata.settings['quickFavorite'];
+    await _closeAndWait();
+    Directory? backupDirectory;
+    FileReplacement? replacement;
+    var prepared = false;
+    try {
+      backupDirectory = File(path).parent.createTempSync('.favorite_clear_');
+      replacement = FileReplacement(
+        path,
+        '${backupDirectory.path}/local_favorite.db',
+      );
+      replacement.backup();
+      prepared = true;
+      await _startInitialization(path);
+    } catch (error, stack) {
+      try {
+        await _closeAndWait();
+        if (prepared) replacement!.restore();
+        appdata.settings['followUpdatesFolder'] = previousTracking;
+        appdata.settings['quickFavorite'] = previousQuick;
+        await _startInitialization(path);
+        await appdata.saveData(false);
+      } catch (recoveryError, recoveryStack) {
+        Log.error(
+          'Clear favorites',
+          'Recovery failed: $recoveryError. Original data is at $path or ${replacement?.backupFile.path}.',
+          recoveryStack,
+        );
+      }
+      // An unsuccessful restore must retain its backup for manual recovery.
+      if (replacement == null || !replacement.backupFile.existsSync()) {
+        _removeClearBackupDirectory(backupDirectory);
+      }
+      Error.throwWithStackTrace(error, stack);
+    }
+    try {
+      replacement.commit();
+      _removeClearBackupDirectory(backupDirectory);
+    } catch (error, stack) {
+      // Clearing succeeded; a cleanup failure must not roll back the new DB.
+      Log.error(
+        'Clear favorites',
+        'Backup cleanup failed at ${replacement.backupFile.path}: $error',
+        stack,
+      );
+    }
+  }
+
+  void _removeClearBackupDirectory(Directory? directory) {
+    if (directory == null || !directory.existsSync()) return;
+    try {
+      directory.deleteSync();
+    } catch (error, stack) {
+      Log.error(
+        'Clear favorites',
+        'Could not remove backup directory ${directory.path}: $error',
+        stack,
+      );
+    }
   }
 
   void reorder(List<FavoriteItem> newFolder, String folder) async {

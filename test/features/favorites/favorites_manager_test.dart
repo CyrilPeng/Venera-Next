@@ -72,6 +72,50 @@ Future<void> _withFavoritesManager(
 
 void main() {
   test(
+    'failed clear restores original database and settings then permits retry',
+    () async {
+      await _withFavoritesManager((manager) async {
+        manager.createFolder('preserved');
+        manager.addComic('preserved', _favorite('original'));
+        appdata.settings['followUpdatesFolder'] = 'preserved';
+        appdata.settings['quickFavorite'] = 'preserved';
+        manager.prepareTableForFollowUpdates('preserved');
+        manager.updateUpdateTime(
+          'preserved',
+          'original',
+          ComicType.local,
+          'v1',
+        );
+        await appdata.saveData(false);
+        final blockedWrite = Directory('${App.dataPath}/appdata.json.tmp')
+          ..createSync();
+        try {
+          await expectLater(
+            manager.clearAll(),
+            throwsA(isA<FileSystemException>()),
+          );
+          expect(manager.getFolderComics('preserved').single.id, 'original');
+          expect(appdata.settings['followUpdatesFolder'], 'preserved');
+          expect(appdata.settings['quickFavorite'], 'preserved');
+          expect(manager.hasNewUpdate('original', ComicType.local), isTrue);
+        } finally {
+          blockedWrite.deleteSync();
+        }
+        await manager.clearAll();
+        expect(manager.folderNames, [LocalFavoritesManager.trackingFolderName]);
+        expect(manager.getAllComics(), isEmpty);
+        expect(
+          Directory(App.dataPath).listSync().where(
+            (entry) => entry.path.contains('.favorite_clear_'),
+          ),
+          isEmpty,
+        );
+      });
+    },
+    skip: !_sqliteAvailable(),
+  );
+
+  test(
     'close drains all readers and rejects stale results before reopening',
     () async {
       await _withFavoritesManager((manager) async {

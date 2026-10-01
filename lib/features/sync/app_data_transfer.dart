@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:venera_next/foundation/file_replacement.dart';
 import 'dart:isolate';
 
 import 'package:sqlite3/sqlite3.dart';
@@ -205,7 +206,7 @@ Map<String, dynamic> _decodeImportAppdata(String content) {
 }
 
 class _ImportReplacement {
-  const _ImportReplacement._({
+  _ImportReplacement._({
     required this.targetPath,
     required this.backupPath,
     required this.wasExisting,
@@ -243,13 +244,17 @@ class _ImportReplacement {
   final bool wasExisting;
   final bool isDirectory;
 
+  FileReplacement? _fileReplacement;
+
   void backup() {
-    if (!wasExisting) return;
-    if (isDirectory) {
-      Directory(targetPath).renameSync(backupPath);
-    } else {
-      File(targetPath).renameSync(backupPath);
+    if (!isDirectory) {
+      final replacement = FileReplacement(targetPath, backupPath);
+      replacement.backup();
+      _fileReplacement = replacement;
+      return;
     }
+    if (!wasExisting) return;
+    Directory(targetPath).renameSync(backupPath);
   }
 
   void restore() {
@@ -259,10 +264,7 @@ class _ImportReplacement {
         Directory(backupPath).renameSync(targetPath);
       }
     } else {
-      File(targetPath).deleteIfExistsSync();
-      if (wasExisting && File(backupPath).existsSync()) {
-        File(backupPath).renameSync(targetPath);
-      }
+      _fileReplacement!.restore();
     }
   }
 }
