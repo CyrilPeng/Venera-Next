@@ -11,6 +11,7 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
+import 'package:venera_next/features/local_comics/download_directory_allocator.dart';
 import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/file_downloader.dart';
 
@@ -29,6 +30,195 @@ void main() {
     LocalManager.resetForTesting();
   });
 
+  for (final resumeAfterAllocation in [false, true]) {
+    test(
+      'image allocation drains before ${resumeAfterAllocation ? "resume" : "cancel"}',
+      () async {
+        final root = Directory.systemTemp.createTempSync(
+          'image-owned-allocation-',
+        );
+        App.dataPath = root.path;
+        App.cachePath = root.path;
+        LocalManager.debugSkipComicSourceInit = true;
+        final manager = LocalManager();
+        await manager.init();
+        final allocated = Completer<DownloadDirectoryAllocation>();
+        final release = Completer<void>();
+        final thumbnailStarted = Completer<void>();
+        final thumbnail = StreamController<ImageDownloadProgress>(
+          onListen: () => thumbnailStarted.complete(),
+        );
+        var allocations = 0;
+        final task = ImagesDownloadTask(
+          source: ComicSource.find(sourceKey)!,
+          comicId: 'owned',
+          comic: _archiveComic(sourceKey, id: 'owned'),
+          allocateDirectory: (id, type, title) async {
+            allocations++;
+            final output = await manager.allocateDownloadDirectory(
+              id,
+              type,
+              title,
+            );
+            allocated.complete(output);
+            await release.future;
+            return output;
+          },
+          loadThumbnail: (url, source) => thumbnail.stream,
+        );
+        manager.restorePausedDownloads([task]);
+        addTearDown(() async {
+          if (!release.isCompleted) release.complete();
+          task.pause();
+          await task.pendingCleanup;
+          await task.debugResumeFuture;
+          if (!thumbnailStarted.isCompleted) thumbnail.stream.listen((_) {});
+          await thumbnail.close();
+          await manager.pendingDownloadTaskWrites;
+          LocalManager.resetForTesting();
+          root.deleteSync(recursive: true);
+        });
+        task.resume();
+        final output = await allocated.future.timeout(
+          const Duration(seconds: 2),
+        );
+        expect(task.path, isNull);
+        final oldRun = task.debugResumeFuture;
+        if (resumeAfterAllocation) {
+          task.pause();
+          task.resume();
+        } else {
+          task.cancel();
+        }
+        var drained = false;
+        final cleanup = task.pendingCleanup.then((_) => drained = true);
+        await pumpEventQueue();
+        expect(drained, isFalse);
+        expect(output.directory.existsSync(), isTrue);
+        expect(thumbnailStarted.isCompleted, isFalse);
+        release.complete();
+        await cleanup;
+        await oldRun;
+        if (resumeAfterAllocation) {
+          await thumbnailStarted.future.timeout(const Duration(seconds: 2));
+          expect(task.path, output.directory.path);
+          expect(allocations, 1);
+          task.cancel();
+          await task.pendingCleanup;
+          await task.debugResumeFuture;
+        }
+        expect(output.directory.existsSync(), isFalse);
+        expect(task.path, isNull);
+        expect(manager.downloadingTasks, isEmpty);
+      },
+    );
+  }
+
+  test(
+    'image cancellation preserves supplied and restored output without matching ownership',
+    () async {
+      final root = Directory.systemTemp.createTempSync(
+        'image-borrowed-output-',
+      );
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      addTearDown(() async {
+        await manager.pendingDownloadTaskWrites;
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      for (final restored in [false, true]) {
+        final directory = Directory('${root.path}/external-$restored')
+          ..createSync();
+        final chapter = Directory('${directory.path}/new_a')..createSync();
+        final file = File('${chapter.path}/keep.jpg')..writeAsBytesSync([7]);
+        final task = restored
+            ? _pendingImageTask(sourceKey, directory.path, chapters: ['new/a'])
+            : (ImagesDownloadTask(
+                source: ComicSource.find(sourceKey)!,
+                comicId: 'external',
+                comic: _archiveComic(sourceKey, id: 'external'),
+                chapters: ['new/a'],
+              )..path = directory.path);
+        manager.restorePausedDownloads([task]);
+        task.cancel();
+        await task.pendingCleanup;
+        expect(file.readAsBytesSync(), [7]);
+        expect(manager.downloadingTasks, isEmpty);
+        await manager.add(
+          LocalComic(
+            id: task.id,
+            title: 'Registered elsewhere',
+            subtitle: '',
+            tags: [],
+            directory: 'registered',
+            chapters: const ComicChapters({'new/a': 'New'}),
+            cover: '',
+            comicType: task.comicType,
+            downloadedChapters: [],
+            createdAt: DateTime(2026),
+          ),
+        );
+        manager.restorePausedDownloads([task]);
+        task.cancel();
+        await task.pendingCleanup;
+        expect(file.readAsBytesSync(), [7]);
+      }
+    },
+  );
+
+  test(
+    'late image cancellation retains newly allocated committed output',
+    () async {
+      final root = Directory.systemTemp.createTempSync(
+        'image-committed-output-',
+      );
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      final source = _testSource(
+        sourceKey,
+        loadComicPages: (id, ep) async => Res(<String>[]),
+      );
+      final bytes = Uint8List.fromList([0xff, 0xd8, 0xff, 0xe0]);
+      final task = ImagesDownloadTask(
+        source: source,
+        comicId: 'committed',
+        comic: _archiveComic(sourceKey, id: 'committed'),
+        loadThumbnail: (url, source) => Stream.value(
+          ImageDownloadProgress(
+            currentBytes: bytes.length,
+            totalBytes: bytes.length,
+            imageBytes: bytes,
+          ),
+        ),
+      );
+      manager.restorePausedDownloads([task]);
+      addTearDown(() async {
+        task.pause();
+        await task.pendingCleanup;
+        await task.debugResumeFuture;
+        await manager.pendingDownloadTaskWrites;
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      task.resume();
+      await task.debugResumeFuture;
+      final comic = manager.find(task.id, task.comicType)!;
+      final cover = File('${task.path}/${comic.cover}');
+      task.cancel();
+      await task.pendingCleanup;
+      expect(cover.readAsBytesSync(), bytes);
+      expect(manager.find(task.id, task.comicType), isNotNull);
+      expect(task.isError, isFalse);
+    },
+  );
+
   for (final resumeAfterPause in [false, true]) {
     test(
       'thumbnail ${resumeAfterPause ? "resume" : "cancel"} drains cancellation and discards old bytes',
@@ -41,7 +231,6 @@ void main() {
         LocalManager.debugSkipComicSourceInit = true;
         final manager = LocalManager();
         await manager.init();
-        final output = Directory('${manager.path}/thumbnail')..createSync();
         final started = Completer<void>();
         final cancelStarted = Completer<void>();
         final release = Completer<void>();
@@ -63,7 +252,7 @@ void main() {
           comic: _archiveComic(sourceKey, id: 'thumbnail'),
           loadThumbnail: (url, source) =>
               ++loads == 1 ? first.stream : second.stream,
-        )..path = output.path;
+        );
         manager.restorePausedDownloads([task]);
         addTearDown(() async {
           if (!release.isCompleted) release.complete();
@@ -79,6 +268,7 @@ void main() {
         });
         task.resume();
         await started.future.timeout(const Duration(seconds: 2));
+        final output = Directory(task.path!);
         first.add(
           ImageDownloadProgress(
             currentBytes: 4,

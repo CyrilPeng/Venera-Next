@@ -407,3 +407,5 @@ ImagesDownloadTask 持有封面 StreamIterator，停止时将取消 Future 纳�
 图片任务取消固定原管理器与章节输入，等待传输停止后才查询最新漫画登记并计算章节清理目录，以保护等待期间首次入库或新增的章节。该复核不提供跨实例文件/数据库原子性；无登记输出的所有权和并发目录互斥仍需继续收敛。
 
 下载目录分配由 download_directory_allocator.dart 的 DownloadDirectoryAllocator 管理：注入库路径/已登记目录查询，串行选择和创建，已有空目录、文件及链接均为占用，返回目录与新建标记。LocalManager.allocateDownloadDirectory 为两类下载任务提供入口，原 findValidDirectory 已删除；压缩包按返回标记记录清理所有权。服务纳入业务边界，串行范围仅限同一管理器的下载请求，不替代跨进程或导入/删除互斥。
+
+ImagesDownloadTask 将目录分配 Future 纳入停止等待，记录新建输出及原管理器。暂停后的迟到分配供恢复复用；取消等待分配与传输后，仅整目录清理自有未入库输出，成功提交释放所有权。外部/恢复路径不推断所有权；章节清理需与当前登记目录匹配。可注入分配适配器，默认委托管理器，不改变快照字段。

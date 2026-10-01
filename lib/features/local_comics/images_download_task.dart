@@ -1,6 +1,7 @@
 import 'local_chapter_storage.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
+import 'package:path/path.dart' as p;
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:venera_next/features/comic_storage/comic_storage.dart';
@@ -17,6 +18,7 @@ import 'package:venera_next/foundation/file_type.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 
 import 'download_task.dart';
+import 'download_directory_allocator.dart';
 
 class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
   final ComicSource source;
@@ -44,39 +46,79 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     this.chapters,
     this.comicTitle,
     Stream<ImageDownloadProgress> Function(String, String)? loadThumbnail,
-  }) : _loadThumbnail = loadThumbnail ?? ImageDownloader.loadThumbnail;
+    Future<DownloadDirectoryAllocation> Function(String, ComicType, String)?
+    allocateDirectory,
+  }) : _loadThumbnail = loadThumbnail ?? ImageDownloader.loadThumbnail,
+       _allocateDirectory = allocateDirectory;
 
   final Stream<ImageDownloadProgress> Function(String, String) _loadThumbnail;
   StreamIterator<ImageDownloadProgress>? _thumbnail;
+  final Future<DownloadDirectoryAllocation> Function(String, ComicType, String)?
+  _allocateDirectory;
+  Future<void>? _allocationFuture;
+  String? _ownedOutputPath;
+  LocalManager? _outputManager;
+
+  Future<void> _allocateOutput() async {
+    final manager = _outputManager = LocalManager();
+    final allocation =
+        await (_allocateDirectory ?? manager.allocateDownloadDirectory)(
+          comicId,
+          comicType,
+          comic!.title,
+        );
+    final directory = allocation.directory;
+    if (allocation.isNew) _ownedOutputPath = directory.path;
+    if (!await directory.exists()) await directory.create();
+    // Pause/resume and cancellation drain this operation before reusing or
+    // cleaning its result, including a result returned after pause/cancel.
+    path = directory.path;
+  }
 
   @override
   void cancel() {
     final directoryPath = path;
-    final manager = LocalManager();
+    final manager = _outputManager ?? LocalManager();
     final removedChapters = List<String>.of(chapters ?? const []);
     _stopRun();
     manager.removeTask(this);
-    if (directoryPath == null) return;
+    if (directoryPath == null &&
+        _allocationFuture == null &&
+        _ownedOutputPath == null) {
+      return;
+    }
     final stopped = _pendingStops;
     _pendingStops =
         () async {
           if (stopped != null) await stopped;
           // Registration may change while transfer cancellation is draining.
           // Query the original manager only when cleanup is ready to run.
+          final cleanupPath = _ownedOutputPath ?? directoryPath ?? path;
+          if (cleanupPath == null) return;
           final local = manager.find(id, comicType);
           if (local == null) {
-            await Directory(directoryPath).deleteIgnoreError(recursive: true);
-          } else {
+            if (_ownedOutputPath != cleanupPath) return;
+            final directory = Directory(cleanupPath);
+            if (await directory.exists()) {
+              await directory.delete(recursive: true);
+            }
+          } else if (p.equals(
+            p.absolute(FilePath.join(manager.path, local.directory)),
+            p.absolute(cleanupPath),
+          )) {
             final removedDirectories = localChapterDirectoriesToDelete(
               removed: removedChapters,
               retained: local.downloadedChapters,
             );
             for (final directory in removedDirectories) {
               await Directory(
-                FilePath.join(directoryPath, directory),
+                FilePath.join(cleanupPath, directory),
               ).deleteIgnoreError(recursive: true);
             }
           }
+          if (path == cleanupPath) path = null;
+          _ownedOutputPath = null;
+          _outputManager = null;
         }().catchError((Object error, StackTrace stack) {
           Log.error('Download', error, stack);
         });
@@ -111,8 +153,9 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
         .toList();
     final thumbnail = _thumbnail;
     _thumbnail = null;
-    if (pending.isNotEmpty || thumbnail != null) {
+    if (pending.isNotEmpty || thumbnail != null || _allocationFuture != null) {
       final stops = [
+        ?_allocationFuture,
         if (thumbnail != null) thumbnail.cancel(),
         ?_pendingStops,
         for (final entry in pending) entry.value.cancel(),
@@ -305,18 +348,15 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
 
     if (path == null) {
       try {
-        final allocation = await LocalManager().allocateDownloadDirectory(
-          comicId,
-          comicType,
-          comic!.title,
-        );
-        final dir = allocation.directory;
-        if (!_isCurrentRun(generation)) return;
-        if (!(await dir.exists())) {
-          await dir.create();
+        final allocation = _allocationFuture = _allocateOutput();
+        try {
+          await allocation;
+        } finally {
+          if (identical(_allocationFuture, allocation)) {
+            _allocationFuture = null;
+          }
         }
         if (!_isCurrentRun(generation)) return;
-        path = dir.path;
       } catch (e, s) {
         if (!_isCurrentRun(generation)) return;
         Log.error("Download", e.toString(), s);
@@ -469,6 +509,8 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     }
 
     LocalManager().completeTask(this);
+    _ownedOutputPath = null;
+    _outputManager = null;
     _isRunning = false;
     stopRecorder();
   }
