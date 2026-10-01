@@ -602,3 +602,10 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - local_comic_row decodes actual column names instead of SELECT positions. Five manager query paths share it, preserving downloadedChapters, chapter JSON, timestamps and malformed JSON errors. Model/mapper are covered by the business dependency gate; manager SQL still needs repository extraction.
 - Added real SQLite reordered-column and malformed-JSON coverage. Nine targeted local model/manager/reading/natural-sort and 871 full Windows Flutter tests passed. Analysis has no errors/warnings and 23 existing infos; structure/architecture, 12 architecture-script tests and Git dependencies passed. Updated changelog/bilingual docs, preserving user changes.
 - Local queries/migrations, directory access, download queues and recovery remain to be separated. This does not complete P6 or remaining P0–P8 work.
+
+## P6: Local query repository (2026-10-01)
+
+- LocalRepository owns list queries, full-source identity lookup, recent 20 items, count, exact title/directory lookup and search, sharing local_comic_row. The manager retains its public entrypoints and connection ownership. LocalSortType moves to a separate file re-exported by the existing entrypoint, avoiding a repository dependency on the manager.
+- Preserved descending title order, ascending/descending timestamps, LIKE wildcards/tag/subtitle matching with descending time, and first-result exact name lookup. The repository is covered by the business dependency gate. Added real SQLite coverage for identities, ordering/limits, bound parameters and unknown-sort fallback.
+- Nine targeted and 872 full Windows Flutter tests passed; analysis has no errors/warnings and 23 existing infos. Structure/architecture checks, 12 architecture-script tests, Git dependencies and unit formatting passed. Updated changelog/bilingual docs, preserving user changes.
+- Local writes, schema/natural-sort migration, directory management and download recovery remain in the manager pending further separation; remaining P0–P8 acceptance is incomplete.

@@ -1,5 +1,7 @@
 import 'local_comic_model.dart';
-import 'local_comic_row.dart';
+import 'local_repository.dart';
+import 'local_sort_type.dart';
+export 'local_sort_type.dart';
 export 'local_comic_model.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -257,74 +259,21 @@ class LocalManager with ChangeNotifier {
     remove(comic.id, comic.comicType);
   }
 
-  List<LocalComic> getComics(LocalSortType sortType) {
-    var res = _db.select('''
-      SELECT * FROM comics
-      ORDER BY
-        ${sortType.value == 'name' ? 'title' : 'created_at'}
-        ${sortType.value == 'time_asc' ? 'ASC' : 'DESC'}
-      ;
-    ''');
-    return res.map((row) => localComicFromRow(row)).toList();
-  }
+  LocalRepository get _repository => LocalRepository(_db);
 
-  LocalComic? find(String id, ComicType comicType) {
-    final res = _db.select(
-      'SELECT * FROM comics WHERE id = ? AND comic_type = ?;',
-      [id, comicType.value],
-    );
-    if (res.isEmpty) {
-      return null;
-    }
-    return localComicFromRow(res.first);
-  }
+  List<LocalComic> getComics(LocalSortType sortType) =>
+      _repository.getComics(sortType);
+  LocalComic? find(String id, ComicType comicType) =>
+      _repository.find(id, comicType);
+  List<LocalComic> getRecent() => _repository.getRecent();
+  int get count => _repository.count;
+  LocalComic? findByName(String name) => _repository.findByName(name);
+  List<LocalComic> search(String keyword) => _repository.search(keyword);
 
   @override
   void dispose() {
     super.dispose();
     _db.dispose();
-  }
-
-  List<LocalComic> getRecent() {
-    final res = _db.select('''
-      SELECT * FROM comics
-      ORDER BY created_at DESC
-      LIMIT 20;
-    ''');
-    return res.map((row) => localComicFromRow(row)).toList();
-  }
-
-  int get count {
-    final res = _db.select('''
-      SELECT COUNT(*) FROM comics;
-    ''');
-    return res.first[0] as int;
-  }
-
-  LocalComic? findByName(String name) {
-    final res = _db.select(
-      '''
-      SELECT * FROM comics
-      WHERE title = ? OR directory = ?;
-    ''',
-      [name, name],
-    );
-    if (res.isEmpty) {
-      return null;
-    }
-    return localComicFromRow(res.first);
-  }
-
-  List<LocalComic> search(String keyword) {
-    final res = _db.select(
-      '''
-      SELECT * FROM comics
-      WHERE title LIKE ? OR tags LIKE ? OR subtitle LIKE ?
-      ORDER BY created_at DESC;
-    ''',
-      ['%$keyword%', '%$keyword%', '%$keyword%'],
-    );
-    return res.map((row) => localComicFromRow(row)).toList();
   }
 
   Future<List<String>> getImages(String id, ComicType type, Object ep) async {
@@ -659,24 +608,5 @@ class LocalManager with ChangeNotifier {
       }
     }
     return builder.toString();
-  }
-}
-
-enum LocalSortType {
-  name("name"),
-  timeAsc("time_asc"),
-  timeDesc("time_desc");
-
-  final String value;
-
-  const LocalSortType(this.value);
-
-  static LocalSortType fromString(String value) {
-    for (var type in values) {
-      if (type.value == value) {
-        return type;
-      }
-    }
-    return name;
   }
 }

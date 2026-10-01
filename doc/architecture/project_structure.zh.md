@@ -369,3 +369,5 @@ FavoriteUpdatesService 保存当前已加载追更目录和完整 (id,type) 身�
 单目录收藏 JSON 由 favorite_folder_import 校验并完整解码/翻译，再在一个仓储外层事务内选择重名后缀、建表和插入。管理器 fromJson 保留入口，移除逐行异常吞噬，成功后通过导入缓存协调一次发布通知。服务使用现有模型/仓储及注入翻译，不引用页面或全局管理器。解析/SQL 失败不留下目录，提交后缓存错误属于独立后续阶段，不能当作事务回滚。
 
 local_comic_model 保存本地漫画数据及 Comic/HistoryMixin 契约，local_comic_row 负责按列名从 SQLite 解码。local.dart 重导出模型，LocalComicFiles 扩展提供仍依赖 LocalManager.path 的 baseDir/coverFile，使模型本身不持有全局路径依赖。现有入口调用兼容；直接导入纯模型不会获得文件访问扩展。SQL/连接/迁移仍由 LocalManager 拥有，后续继续仓储拆分。
+
+LocalRepository 在调用方拥有的 SQLite 连接上提供本地漫画查询，通过 local_comic_row 解码；LocalSortType 独立且原 local/local_comics 入口继续导出。LocalManager 的查询入口委托仓储，保留连接/目录/下载和写入职责。仓储不改变名称降序、最近 20 条、时间排序、LIKE 和精确查找语义。
