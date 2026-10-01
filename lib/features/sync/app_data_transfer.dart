@@ -174,9 +174,9 @@ Future<void> _importAppData(File file, bool checkVersion) async {
     }
     Error.throwWithStackTrace(error, stackTrace);
   } finally {
-    cacheDir.deleteIgnoreError(recursive: true);
+    await cacheDir.deleteIgnoreError(recursive: true);
     if (success || rolledBack) {
-      backupDir.deleteIgnoreError(recursive: true);
+      await backupDir.deleteIgnoreError(recursive: true);
     }
   }
 }

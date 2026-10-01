@@ -56,6 +56,6 @@ Future<void> importLegacyPicaArchive(
       },
     );
   } finally {
-    cacheDir.deleteIgnoreError(recursive: true);
+    await cacheDir.deleteIgnoreError(recursive: true);
   }
 }
