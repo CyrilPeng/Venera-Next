@@ -8,7 +8,7 @@ import 'package:venera_next/features/local_comics/local_comics.dart';
 
 const _testComicType = ComicType(9001);
 
-LocalComic _localComic(String id) {
+LocalComic _localComic(String id, {List<String> downloaded = const []}) {
   return LocalComic(
     id: id,
     title: 'Local $id',
@@ -18,7 +18,7 @@ LocalComic _localComic(String id) {
     chapters: null,
     cover: 'cover.jpg',
     comicType: _testComicType,
-    downloadedChapters: const [],
+    downloadedChapters: downloaded,
     createdAt: DateTime(2026, 1, 1),
   );
 }
@@ -34,6 +34,85 @@ bool _sqliteAvailable() {
 }
 
 void main() {
+  test(
+    'deletions notify after storage succeeds and retain files on failure',
+    () async {
+      final root = Directory.systemTemp.createTempSync('local-delete-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.resetForTesting();
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      final db = sqlite3.open('${root.path}/local.db');
+      addTearDown(() {
+        db.dispose();
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      final first = _localComic('first', downloaded: const ['a', 'b']);
+      final second = _localComic('second');
+      await manager.add(first);
+      await manager.add(second);
+      final chapter = Directory('${manager.path}/first/a')
+        ..createSync(recursive: true);
+      final file = File('${chapter.path}/page.jpg')..writeAsBytesSync([1]);
+      var notifications = 0;
+      manager.addListener(() => notifications++);
+      db.execute(
+        "CREATE TRIGGER reject_update BEFORE UPDATE ON comics BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+      );
+      expect(
+        () => manager.deleteComicChapters(first, ['a']),
+        throwsA(isA<SqliteException>()),
+      );
+      expect(file.existsSync(), isTrue);
+      expect(notifications, 0);
+      db.execute('DROP TRIGGER reject_update;');
+      db.execute(
+        "CREATE TRIGGER reject_second BEFORE DELETE ON comics WHEN OLD.id = 'second' BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+      );
+      manager.batchDeleteComics([first, second], true, false);
+      expect(manager.count, 2);
+      expect(file.existsSync(), isTrue);
+      expect(notifications, 0);
+      db.execute('DROP TRIGGER reject_second;');
+      manager.batchDeleteComics([first, second], false, false);
+      expect(manager.count, 0);
+      expect(db.select('SELECT * FROM natural_sort_migration'), isEmpty);
+      expect(file.existsSync(), isTrue);
+      expect(notifications, 1);
+    },
+  );
+
+  test(
+    'chapter deletion uses latest download state before notifying',
+    () async {
+      final root = Directory.systemTemp.createTempSync('local-chapter-delete-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.resetForTesting();
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      addTearDown(() {
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      final stale = _localComic('1', downloaded: const ['a']);
+      await manager.add(stale);
+      await manager.add(_localComic('1', downloaded: const ['new']));
+      var notifications = 0;
+      manager.addListener(() {
+        notifications++;
+        expect(manager.find('1', stale.comicType)!.downloadedChapters, ['new']);
+      });
+      manager.deleteComicChapters(stale, ['a']);
+      expect(notifications, 1);
+      expect(stale.downloadedChapters, ['a']);
+    },
+  );
+
   test(
     'getImages filters non-images and sorts numeric page names',
     () async {

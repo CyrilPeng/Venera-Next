@@ -126,7 +126,38 @@ class LocalRepository {
     );
   });
 
-  void remove(String id, ComicType type) => runSqliteTransaction(db, () {
+  void remove(String id, ComicType type) =>
+      runSqliteTransaction(db, () => _remove(id, type));
+
+  void removeAll(Iterable<LocalComic> comics) => runSqliteTransaction(db, () {
+    for (final comic in comics) {
+      _remove(comic.id, comic.comicType);
+    }
+  });
+
+  /// Read the current stored chapters so stale UI models cannot discard a
+  /// chapter downloaded after the page was opened.
+  void removeChapters(String id, ComicType type, List<String> chapters) {
+    if (chapters.isEmpty) return;
+    final selected = chapters.toSet();
+    runSqliteTransaction(db, () {
+      final comic = find(id, type);
+      if (comic == null) return;
+      final remaining = comic.downloadedChapters
+          .where((chapter) => !selected.contains(chapter))
+          .toList();
+      if (remaining.isEmpty) {
+        _remove(id, type);
+      } else {
+        db.execute(
+          'UPDATE comics SET downloadedChapters = ? WHERE id = ? AND comic_type = ?',
+          [jsonEncode(remaining), id, type.value],
+        );
+      }
+    });
+  }
+
+  void _remove(String id, ComicType type) {
     db.execute(
       'DELETE FROM natural_sort_migration WHERE id = ? AND comic_type = ?',
       [id, type.value],
@@ -135,7 +166,7 @@ class LocalRepository {
       id,
       type.value,
     ]);
-  });
+  }
 
   List<LocalComic> getComics(LocalSortType sortType) {
     var res = db.select('''

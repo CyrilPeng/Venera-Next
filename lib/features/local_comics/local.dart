@@ -432,20 +432,7 @@ class LocalManager with ChangeNotifier {
     if (chapters.isEmpty) {
       return;
     }
-    var newDownloadedChapters = c.downloadedChapters
-        .where((e) => !chapters.contains(e))
-        .toList();
-    if (newDownloadedChapters.isNotEmpty) {
-      _db.execute(
-        'UPDATE comics SET downloadedChapters = ? WHERE id = ? AND comic_type = ?;',
-        [jsonEncode(newDownloadedChapters), c.id, c.comicType.value],
-      );
-    } else {
-      _db.execute('DELETE FROM comics WHERE id = ? AND comic_type = ?;', [
-        c.id,
-        c.comicType.value,
-      ]);
-    }
+    _repository.removeChapters(c.id, c.comicType, chapters);
     var shouldRemovedDirs = <Directory>[];
     for (var chapter in chapters) {
       var dir = Directory(
@@ -471,26 +458,20 @@ class LocalManager with ChangeNotifier {
     }
 
     var shouldRemovedDirs = <Directory>[];
-    _db.execute('BEGIN TRANSACTION;');
     try {
-      for (var c in comics) {
+      for (final comic in comics) {
         if (removeFileOnDisk) {
-          var dir = Directory(FilePath.join(path, c.directory));
+          final dir = Directory(FilePath.join(path, comic.directory));
           if (dir.existsSync()) {
             shouldRemovedDirs.add(dir);
           }
         }
-        _db.execute('DELETE FROM comics WHERE id = ? AND comic_type = ?;', [
-          c.id,
-          c.comicType.value,
-        ]);
       }
+      _repository.removeAll(comics);
     } catch (e, s) {
       Log.error("LocalManager", "Failed to batch delete comics: $e", s);
-      _db.execute('ROLLBACK;');
       return;
     }
-    _db.execute('COMMIT;');
 
     var comicIDs = comics.map((e) => ComicID(e.comicType, e.id)).toList();
 
