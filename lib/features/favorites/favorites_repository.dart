@@ -7,6 +7,54 @@ class FavoritesRepository {
   FavoritesRepository(this.db);
   final Database db;
 
+  void createFolder(String folder) {
+    db.execute('''
+      CREATE TABLE ${_table(folder)} (
+        id TEXT, name TEXT, author TEXT, type INT, tags TEXT, cover_path TEXT,
+        time TEXT, display_order INT, translated_tags TEXT,
+        PRIMARY KEY (id, type)
+      );
+    ''');
+  }
+
+  void renameFolder(String before, String after) => _transaction(() {
+    db.execute('ALTER TABLE ${_table(before)} RENAME TO ${_table(after)};');
+    db.execute(
+      'UPDATE folder_order SET folder_name = ? WHERE folder_name = ?;',
+      [after, before],
+    );
+    db.execute(
+      'UPDATE folder_sync SET folder_name = ? WHERE folder_name = ?;',
+      [after, before],
+    );
+  });
+
+  void linkFolderToNetwork(String folder, String source, String networkFolder) {
+    db.execute(
+      'INSERT OR REPLACE INTO folder_sync (folder_name, source_key, source_folder) VALUES (?, ?, ?);',
+      [folder, source, networkFolder],
+    );
+  }
+
+  bool isLinkedToNetworkFolder(
+    String folder,
+    String source,
+    String networkFolder,
+  ) => db.select(
+    'SELECT 1 FROM folder_sync WHERE folder_name = ? AND source_key = ? AND source_folder = ?;',
+    [folder, source, networkFolder],
+  ).isNotEmpty;
+
+  (String?, String?) findLinked(String folder) {
+    final rows = db.select(
+      'SELECT source_key, source_folder FROM folder_sync WHERE folder_name = ?;',
+      [folder],
+    );
+    return rows.isEmpty
+        ? (null, null)
+        : (rows.first['source_key'], rows.first['source_folder']);
+  }
+
   Map<String, List<(String, int)>> deleteComics(
     List<String> folders,
     Iterable<(String, int)> identities,
@@ -25,6 +73,7 @@ class FavoritesRepository {
   void deleteFolder(String folder) => _transaction(() {
     db.execute('DROP TABLE ${_table(folder)};');
     db.execute('DELETE FROM folder_order WHERE folder_name = ?;', [folder]);
+    db.execute('DELETE FROM folder_sync WHERE folder_name = ?;', [folder]);
   });
 
   bool addComic(

@@ -409,63 +409,26 @@ class LocalFavoritesManager with ChangeNotifier {
         throw Exception("Folder is existing");
       }
     }
-    _db.execute("""
-      create table "$name"(
-        id text,
-        name TEXT,
-        author TEXT,
-        type int,
-        tags TEXT,
-        cover_path TEXT,
-        time TEXT,
-        display_order int,
-        translated_tags TEXT,
-        primary key (id, type)
-      );
-    """);
-    notifyListeners();
+    _repository.createFolder(name);
     counts[name] = 0;
+    notifyListeners();
     return name;
   }
 
-  void linkFolderToNetwork(String folder, String source, String networkFolder) {
-    _db.execute(
-      """
-      insert or replace into folder_sync (folder_name, source_key, source_folder)
-      values (?, ?, ?);
-    """,
-      [folder, source, networkFolder],
-    );
-  }
+  void linkFolderToNetwork(
+    String folder,
+    String source,
+    String networkFolder,
+  ) => _repository.linkFolderToNetwork(folder, source, networkFolder);
 
   bool isLinkedToNetworkFolder(
     String folder,
     String source,
     String networkFolder,
-  ) {
-    var res = _db.select(
-      """
-      select * from folder_sync
-      where folder_name == ? and source_key == ? and source_folder == ?;
-    """,
-      [folder, source, networkFolder],
-    );
-    return res.isNotEmpty;
-  }
+  ) => _repository.isLinkedToNetworkFolder(folder, source, networkFolder);
 
-  (String?, String?) findLinked(String folder) {
-    var res = _db.select(
-      """
-      select * from folder_sync
-      where folder_name == ?;
-    """,
-      [folder],
-    );
-    if (res.isEmpty) {
-      return (null, null);
-    }
-    return (res.first["source_key"], res.first["source_folder"]);
-  }
+  (String?, String?) findLinked(String folder) =>
+      _repository.findLinked(folder);
 
   bool comicExists(String folder, String id, ComicType type) =>
       _repository.comicExists(folder, id, type.value);
@@ -746,26 +709,7 @@ class LocalFavoritesManager with ChangeNotifier {
     }
     var wasFollowUpdatesFolder =
         appdata.settings['followUpdatesFolder'] == before;
-    _db.execute("""
-      ALTER TABLE "$before"
-      RENAME TO "$after";
-    """);
-    _db.execute(
-      """
-      update folder_order
-      set folder_name = ?
-      where folder_name == ?;
-    """,
-      [after, before],
-    );
-    _db.execute(
-      """
-      update folder_sync
-      set folder_name = ?
-      where folder_name == ?;
-    """,
-      [after, before],
-    );
+    _repository.renameFolder(before, after);
     counts[after] = counts[before] ?? 0;
     counts.remove(before);
     for (final key in ['readLaterFolder', 'quickFavorite']) {

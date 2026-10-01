@@ -72,6 +72,46 @@ Future<void> _withFavoritesManager(
 
 void main() {
   test(
+    'folder notifications see counts and failed rename preserves settings',
+    () async {
+      await _withFavoritesManager((manager) async {
+        const source = 'metadata-source';
+        var notifications = 0;
+        void listener() {
+          notifications++;
+          expect(manager.counts[source], 0);
+          expect(manager.existsFolder(source), isTrue);
+        }
+
+        manager.addListener(listener);
+        manager.createFolder(source);
+        expect(notifications, 1);
+        appdata.settings['quickFavorite'] = source;
+        manager.linkFolderToNetwork(source, 'key', 'remote');
+        final db = sqlite3.open('${App.dataPath}/local_favorite.db');
+        try {
+          db.execute(
+            "CREATE TRIGGER reject_rename BEFORE UPDATE ON folder_sync BEGIN SELECT RAISE(ABORT, 'rejected'); END;",
+          );
+          expect(
+            () => manager.rename(source, 'new-name'),
+            throwsA(isA<SqliteException>()),
+          );
+          expect(notifications, 1);
+          expect(appdata.settings['quickFavorite'], source);
+          expect(manager.counts[source], 0);
+          expect(manager.existsFolder('new-name'), isFalse);
+          expect(manager.findLinked(source), ('key', 'remote'));
+        } finally {
+          manager.removeListener(listener);
+          db.dispose();
+        }
+      });
+    },
+    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+  );
+
+  test(
     'deletion preserves shared covers and failed batches leave caches untouched',
     () async {
       await _withFavoritesManager((manager) async {

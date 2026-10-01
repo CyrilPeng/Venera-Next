@@ -11,7 +11,9 @@ void main() {
     db.execute(
       'CREATE TABLE folder_order (folder_name TEXT, order_value INT);',
     );
-    db.execute('CREATE TABLE folder_sync (folder_name TEXT);');
+    db.execute(
+      'CREATE TABLE folder_sync (folder_name TEXT PRIMARY KEY, source_key TEXT, source_folder TEXT);',
+    );
     for (final name in ['first', 'second', 'empty', '收藏 "A"']) {
       final table = '"${name.replaceAll('"', '""')}"';
       db.execute('''CREATE TABLE $table (
@@ -34,6 +36,75 @@ void main() {
     );
   });
   tearDown(() => db.dispose());
+
+  test(
+    'folder rename preserves order and replaces exact network associations',
+    () {
+      db.execute("INSERT INTO folder_order VALUES ('first', 8);");
+      repository.linkFolderToNetwork('first', 'source', "remote's folder");
+      repository.linkFolderToNetwork('first', 'updated', 'remote');
+      expect(
+        repository.isLinkedToNetworkFolder(
+          'first',
+          'source',
+          "remote's folder",
+        ),
+        isFalse,
+      );
+      repository.renameFolder('first', 'renamed');
+      expect(repository.count('renamed'), 2);
+      expect(repository.findLinked('first'), (null, null));
+      expect(repository.findLinked('renamed'), ('updated', 'remote'));
+      expect(
+        db
+            .select(
+              "SELECT order_value FROM folder_order WHERE folder_name = 'renamed'",
+            )
+            .single['order_value'],
+        8,
+      );
+      repository.deleteFolder('renamed');
+      repository.createFolder('renamed');
+      expect(repository.count('renamed'), 0);
+      expect(repository.findLinked('renamed'), (null, null));
+    },
+  );
+
+  for (final deleting in [false, true]) {
+    test(
+      'network metadata failure rolls back folder changes; delete=$deleting',
+      () {
+        db.execute("INSERT INTO folder_order VALUES ('first', 8);");
+        repository.linkFolderToNetwork('first', 'source', 'remote');
+        db.execute(
+          "CREATE TRIGGER reject_sync BEFORE ${deleting ? 'DELETE' : 'UPDATE'} ON folder_sync BEGIN SELECT RAISE(ABORT, 'rejected'); END;",
+        );
+        void change() {
+          if (deleting) {
+            repository.deleteFolder('first');
+          } else {
+            repository.renameFolder('first', 'renamed');
+          }
+        }
+
+        expect(change, throwsA(isA<SqliteException>()));
+        expect(repository.count('first'), 2);
+        expect(repository.folderNames(), isNot(contains('renamed')));
+        expect(repository.findLinked('first'), ('source', 'remote'));
+        expect(
+          db
+              .select(
+                "SELECT order_value FROM folder_order WHERE folder_name = 'first'",
+              )
+              .single['order_value'],
+          8,
+        );
+        db.execute('DROP TRIGGER reject_sync;');
+        change();
+        expect(repository.folderNames(), isNot(contains('first')));
+      },
+    );
+  }
 
   test('cross-folder deletion rolls back and reports only actual identities', () {
     db.execute(
