@@ -72,50 +72,14 @@ class LocalFavoritesManager with ChangeNotifier {
     _dbPath = "${App.dataPath}/local_favorite.db";
     final databaseExisted = File(_dbPath).existsSync();
     _db = openSqliteDatabase(_dbPath);
-    _db.execute("""
-      create table if not exists folder_order (
-        folder_name text primary key,
-        order_value int
-      );
-    """);
-    _db.execute("""
-      create table if not exists folder_sync (
-        folder_name text primary key,
-        source_key text,
-        source_folder text
-      );
-    """);
+    _repository.initializeMetadata();
     var folderNames = _repository.folderNames();
     final foldersToMigrate = List<String>.from(folderNames);
     folderNames = _ensureTrackingFolder(
       folderNames,
       createIfMissing: !databaseExisted,
     );
-    for (var folder in foldersToMigrate) {
-      var columns = _db.select("""
-        pragma table_info("$folder");
-      """);
-      if (!columns.any((element) => element["name"] == "translated_tags")) {
-        _db.execute("""
-          alter table "$folder"
-          add column translated_tags TEXT;
-        """);
-        var comics = getFolderComics(folder);
-        for (var comic in comics) {
-          var translatedTags = _translateTags(comic.tags);
-          _db.execute(
-            """
-            update "$folder"
-            set translated_tags = ?
-            where id == ? and type == ?;
-          """,
-            [translatedTags, comic.id, comic.type.value],
-          );
-        }
-      } else {
-        break;
-      }
-    }
+    _repository.migrateTranslatedTags(foldersToMigrate, _translateTags);
     if (App.isInitialized) {
       await appdata.ensureInit();
     }
@@ -929,34 +893,7 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   void prepareTableForFollowUpdates(String table, [bool clearData = true]) {
-    // check if the table has the column "last_update_time" "has_new_update" "last_check_time"
-    var columns = _db.select("""
-      pragma table_info("$table");
-    """);
-    if (!columns.any((element) => element["name"] == "last_update_time")) {
-      _db.execute("""
-        alter table "$table"
-        add column last_update_time TEXT;
-      """);
-    }
-    if (!columns.any((element) => element["name"] == "has_new_update")) {
-      _db.execute("""
-        alter table "$table"
-        add column has_new_update int;
-      """);
-    }
-    if (clearData) {
-      _db.execute("""
-        update "$table"
-        set has_new_update = 0;
-      """);
-    }
-    if (!columns.any((element) => element["name"] == "last_check_time")) {
-      _db.execute("""
-        alter table "$table"
-        add column last_check_time int;
-      """);
-    }
+    _repository.prepareForFollowUpdates(table, clearData: clearData);
     if (appdata.settings['followUpdatesFolder'] == table) {
       refreshUpdateIds();
     }

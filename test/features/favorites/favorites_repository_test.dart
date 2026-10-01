@@ -38,6 +38,103 @@ void main() {
   tearDown(() => db.dispose());
 
   test(
+    'metadata initialization and mixed-version tag migration are repeatable',
+    () {
+      db.execute('DROP TABLE folder_order;');
+      db.execute('DROP TABLE folder_sync;');
+      repository.initializeMetadata();
+      repository.initializeMetadata();
+      db.execute('ALTER TABLE first ADD COLUMN translated_tags TEXT;');
+      db.execute("UPDATE first SET translated_tags = 'preserved';");
+      var translations = 0;
+      String translate(List<String> tags) {
+        translations++;
+        return 'translated:${tags.join('|')}';
+      }
+
+      repository.migrateTranslatedTags(['first', 'second'], translate);
+      expect(translations, 2);
+      expect(
+        db
+            .select('SELECT translated_tags FROM first')
+            .map((row) => row['translated_tags']),
+        everyElement('preserved'),
+      );
+      expect(
+        db
+            .select('SELECT translated_tags FROM second')
+            .map((row) => row['translated_tags']),
+        everyElement('translated:'),
+      );
+      repository.migrateTranslatedTags(['first', 'second'], translate);
+      expect(translations, 2);
+      expect(repository.folderNames(), containsAll(['first', 'second']));
+    },
+  );
+
+  test('tag backfill failure rolls back schema and data across folders', () {
+    var calls = 0;
+    expect(
+      () => repository.migrateTranslatedTags(['first', 'second'], (_) {
+        if (++calls == 3) throw StateError('translation failed');
+        return 'translated';
+      }),
+      throwsStateError,
+    );
+    for (final folder in ['first', 'second']) {
+      expect(
+        db.select('PRAGMA table_info("$folder")').map((row) => row['name']),
+        isNot(contains('translated_tags')),
+      );
+    }
+    repository.migrateTranslatedTags(['first', 'second'], (_) => 'retry');
+    expect(
+      db
+          .select('SELECT translated_tags FROM second')
+          .map((row) => row['translated_tags']),
+      everyElement('retry'),
+    );
+  });
+
+  test('follow-update migration preserves values and rolls back failed reset', () {
+    repository.prepareForFollowUpdates('first', clearData: false);
+    db.execute(
+      "UPDATE first SET last_update_time = 'old', has_new_update = 1, last_check_time = 123;",
+    );
+    repository.prepareForFollowUpdates('first', clearData: false);
+    expect(
+      db.select('SELECT has_new_update FROM first').first['has_new_update'],
+      1,
+    );
+    repository.prepareForFollowUpdates('first', clearData: true);
+    final stored = db
+        .select(
+          'SELECT last_update_time, has_new_update, last_check_time FROM first',
+        )
+        .first;
+    expect(stored['last_update_time'], 'old');
+    expect(stored['last_check_time'], 123);
+    expect(stored['has_new_update'], 0);
+    db.execute(
+      "CREATE TRIGGER reject_reset BEFORE UPDATE ON second BEGIN SELECT RAISE(ABORT, 'rejected'); END;",
+    );
+    expect(
+      () => repository.prepareForFollowUpdates('second', clearData: true),
+      throwsA(isA<SqliteException>()),
+    );
+    expect(
+      db.select('PRAGMA table_info(second)').map((row) => row['name']),
+      isNot(contains('last_update_time')),
+    );
+    db.execute('DROP TRIGGER reject_reset;');
+    repository.prepareForFollowUpdates('second', clearData: false);
+    expect(
+      db.select('SELECT has_new_update FROM second').first['has_new_update'],
+      isNull,
+    );
+  });
+
+  test(
     'folder rename preserves order and replaces exact network associations',
     () {
       db.execute("INSERT INTO folder_order VALUES ('first', 8);");

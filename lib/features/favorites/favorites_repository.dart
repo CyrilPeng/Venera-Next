@@ -7,6 +7,55 @@ class FavoritesRepository {
   FavoritesRepository(this.db);
   final Database db;
 
+  void initializeMetadata() => _transaction(() {
+    db.execute(
+      'CREATE TABLE IF NOT EXISTS folder_order (folder_name TEXT PRIMARY KEY, order_value INT);',
+    );
+    db.execute(
+      'CREATE TABLE IF NOT EXISTS folder_sync (folder_name TEXT PRIMARY KEY, source_key TEXT, source_folder TEXT);',
+    );
+  });
+
+  Set<String> _columns(String folder) => db
+      .select('PRAGMA table_info(${_table(folder)});')
+      .map((row) => row['name'] as String)
+      .toSet();
+
+  void migrateTranslatedTags(
+    List<String> folders,
+    String Function(List<String>) translate,
+  ) => _transaction(() {
+    for (final folder in folders) {
+      if (_columns(folder).contains('translated_tags')) continue;
+      db.execute(
+        'ALTER TABLE ${_table(folder)} ADD COLUMN translated_tags TEXT;',
+      );
+      for (final item in getFolderComics(folder)) {
+        db.execute(
+          'UPDATE ${_table(folder)} SET translated_tags = ? WHERE id = ? AND type = ?;',
+          [translate(item.tags), item.id, item.type.value],
+        );
+      }
+    }
+  });
+
+  void prepareForFollowUpdates(String folder, {required bool clearData}) =>
+      _transaction(() {
+        final columns = _columns(folder);
+        for (final (name, type) in [
+          ('last_update_time', 'TEXT'),
+          ('has_new_update', 'INT'),
+          ('last_check_time', 'INT'),
+        ]) {
+          if (!columns.contains(name)) {
+            db.execute('ALTER TABLE ${_table(folder)} ADD COLUMN $name $type;');
+          }
+        }
+        if (clearData) {
+          db.execute('UPDATE ${_table(folder)} SET has_new_update = 0;');
+        }
+      });
+
   void createFolder(String folder) {
     db.execute('''
       CREATE TABLE ${_table(folder)} (
