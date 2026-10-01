@@ -401,3 +401,5 @@ ArchiveDownloadTask 接受下载器工厂和解压函数作为适配依赖，默
 压缩包下载为每个任务实例在 App.cachePath 创建独立 archive-download-* 暂存目录，ZIP 与 FileDownloader 续传旁文件同属该目录；暂停/重试复用，成功入库或取消等待结束后清理。清理失败保留路径并记录，不将已提交漫画改标失败。SAF 解压使用该 ZIP 父目录下的独立 extract-* 子目录并在 finally 清理，不再使用全局 archive_downloading 路径。旧无归属暂存文件不自动迁移/删除；临时工作区不写入持久化任务格式，不新增压缩包重启恢复承诺。
 
 压缩包任务仅对正常分配中新建的输出目录记录所有权；已有漫画及外部指定/恢复路径不自动获得清理权限。取消等待运行结束后，使用原管理器复核登记状态并清理未入库的自有目录；成功提交后释放所有权。该保护不提供解压覆盖已有文件的回滚，也未解决跨实例目录分配互斥。
+
+ImagesDownloadTask 持有封面 StreamIterator，停止时将取消 Future 纳入 pendingCleanup，恢复与目录清理等待旧订阅结束；写文件前复核运行代次并丢弃旧数据。可选构造器适配器默认使用 ImageDownloader.loadThumbnail，不改变快照字段。该边界管理任务订阅，不承诺底层各平台 HTTP 连接立即终止。

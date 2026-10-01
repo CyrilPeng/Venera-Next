@@ -43,7 +43,11 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     this.comic,
     this.chapters,
     this.comicTitle,
-  });
+    Stream<ImageDownloadProgress> Function(String, String)? loadThumbnail,
+  }) : _loadThumbnail = loadThumbnail ?? ImageDownloader.loadThumbnail;
+
+  final Stream<ImageDownloadProgress> Function(String, String) _loadThumbnail;
+  StreamIterator<ImageDownloadProgress>? _thumbnail;
 
   @override
   void cancel() {
@@ -103,8 +107,11 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     final pending = tasks.entries
         .where((entry) => !entry.value.isComplete)
         .toList();
-    if (pending.isNotEmpty) {
+    final thumbnail = _thumbnail;
+    _thumbnail = null;
+    if (pending.isNotEmpty || thumbnail != null) {
       final stops = [
+        if (thumbnail != null) thumbnail.cancel(),
         ?_pendingStops,
         for (final entry in pending) entry.value.cancel(),
       ];
@@ -323,14 +330,23 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
       notifyListeners();
       var res = await _runDownloadStepWithRetry(generation, () async {
         Uint8List? data;
-        await for (var progress in ImageDownloader.loadThumbnail(
-          comic!.cover,
-          source.key,
-        )) {
-          if (progress.imageBytes != null) {
-            data = progress.imageBytes;
+        final thumbnail = StreamIterator(
+          _loadThumbnail(comic!.cover, source.key),
+        );
+        _thumbnail = thumbnail;
+        try {
+          while (await thumbnail.moveNext()) {
+            if (!_isCurrentRun(generation)) return null;
+            final progress = thumbnail.current;
+            if (progress.imageBytes != null) data = progress.imageBytes;
           }
+        } finally {
+          await thumbnail.cancel();
+          if (identical(_thumbnail, thumbnail)) _thumbnail = null;
         }
+        // A stream may already have produced bytes when cancellation starts.
+        // Never write those bytes into a canceled or replacement run's path.
+        if (!_isCurrentRun(generation)) return null;
         if (data == null) {
           throw "Failed to download cover";
         }

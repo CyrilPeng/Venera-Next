@@ -29,6 +29,95 @@ void main() {
     LocalManager.resetForTesting();
   });
 
+  for (final resumeAfterPause in [false, true]) {
+    test(
+      'thumbnail ${resumeAfterPause ? "resume" : "cancel"} drains cancellation and discards old bytes',
+      () async {
+        final root = Directory.systemTemp.createTempSync(
+          'thumbnail-lifecycle-',
+        );
+        App.dataPath = root.path;
+        App.cachePath = root.path;
+        LocalManager.debugSkipComicSourceInit = true;
+        final manager = LocalManager();
+        await manager.init();
+        final output = Directory('${manager.path}/thumbnail')..createSync();
+        final started = Completer<void>();
+        final cancelStarted = Completer<void>();
+        final release = Completer<void>();
+        final restarted = Completer<void>();
+        var loads = 0;
+        final first = StreamController<ImageDownloadProgress>(
+          onListen: () => started.complete(),
+          onCancel: () {
+            cancelStarted.complete();
+            return release.future;
+          },
+        );
+        final second = StreamController<ImageDownloadProgress>(
+          onListen: () => restarted.complete(),
+        );
+        final task = ImagesDownloadTask(
+          source: ComicSource.find(sourceKey)!,
+          comicId: 'thumbnail',
+          comic: _archiveComic(sourceKey, id: 'thumbnail'),
+          loadThumbnail: (url, source) =>
+              ++loads == 1 ? first.stream : second.stream,
+        )..path = output.path;
+        manager.restorePausedDownloads([task]);
+        addTearDown(() async {
+          if (!release.isCompleted) release.complete();
+          task.pause();
+          await task.pendingCleanup;
+          await task.debugResumeFuture;
+          await first.close();
+          if (loads < 2) second.stream.listen((_) {});
+          await second.close();
+          await manager.pendingDownloadTaskWrites;
+          LocalManager.resetForTesting();
+          root.deleteSync(recursive: true);
+        });
+        task.resume();
+        await started.future.timeout(const Duration(seconds: 2));
+        first.add(
+          ImageDownloadProgress(
+            currentBytes: 4,
+            totalBytes: 4,
+            imageBytes: Uint8List.fromList([0xff, 0xd8, 0xff, 0xe0]),
+          ),
+        );
+        await pumpEventQueue();
+        final oldRun = task.debugResumeFuture;
+        if (resumeAfterPause) {
+          task.pause();
+          task.resume();
+        } else {
+          task.cancel();
+        }
+        await cancelStarted.future.timeout(const Duration(seconds: 2));
+        var cleaned = false;
+        final cleanup = task.pendingCleanup.then((_) => cleaned = true);
+        await pumpEventQueue();
+        expect(cleaned, isFalse);
+        expect(output.existsSync(), isTrue);
+        expect(output.listSync(), isEmpty);
+        expect(loads, 1);
+        release.complete();
+        await cleanup;
+        await oldRun;
+        if (resumeAfterPause) {
+          await restarted.future.timeout(const Duration(seconds: 2));
+          expect(loads, 2);
+          expect(output.listSync(), isEmpty);
+          task.cancel();
+          await task.pendingCleanup;
+        }
+        expect(output.existsSync(), isFalse);
+        expect(task.isError, isFalse);
+      },
+    );
+  }
+
   test('ImagesDownloadTask pause cancels active image stream', () async {
     final dataDir = Directory.systemTemp.createTempSync(
       'venera-download-data-',
