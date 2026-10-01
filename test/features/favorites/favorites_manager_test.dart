@@ -72,6 +72,73 @@ Future<void> _withFavoritesManager(
 
 void main() {
   test(
+    'read failure preserves cache and notifications until commit',
+    () async {
+      final oldMovement = appdata.settings['moveFavoriteAfterRead'];
+      final oldReadLater = appdata.settings['readLaterFolder'];
+      try {
+        await _withFavoritesManager((manager) async {
+          manager.createFolder('tracking-read');
+          manager.createFolder('read-copy');
+          manager.createFolder('read-later');
+          appdata.settings['followUpdatesFolder'] = 'tracking-read';
+          appdata.settings['readLaterFolder'] = 'read-later';
+          appdata.settings['moveFavoriteAfterRead'] = 'end';
+          manager.prepareTableForFollowUpdates('tracking-read');
+          final comic = _favorite('read-id');
+          for (final folder in ['tracking-read', 'read-copy', 'read-later']) {
+            manager.addComic(folder, comic, -1);
+          }
+          manager.updateUpdateTime('tracking-read', comic.id, comic.type, 'v1');
+          await manager.debugWaitForHashedIdsRefresh();
+          var notifications = 0;
+          manager.addListener(() => notifications++);
+          final db = sqlite3.open('${App.dataPath}/local_favorite.db');
+          try {
+            db.execute(
+              """CREATE TRIGGER reject_read BEFORE UPDATE ON "read-copy" BEGIN SELECT RAISE(ABORT, 'blocked'); END;""",
+            );
+            expect(
+              () => manager.onRead(comic.id, comic.type),
+              throwsA(isA<SqliteException>()),
+            );
+            expect(manager.hasNewUpdate(comic.id, comic.type), isTrue);
+            expect(notifications, 0);
+            expect(
+              db
+                  .select('SELECT display_order FROM "tracking-read"')
+                  .single['display_order'],
+              -1,
+            );
+            db.execute('DROP TRIGGER reject_read;');
+            manager.onRead(comic.id, comic.type);
+            expect(manager.hasNewUpdate(comic.id, comic.type), isFalse);
+            expect(notifications, 1);
+            expect(
+              db
+                  .select('SELECT display_order FROM "read-copy"')
+                  .single['display_order'],
+              0,
+            );
+            expect(
+              db
+                  .select('SELECT display_order FROM "read-later"')
+                  .single['display_order'],
+              -1,
+            );
+          } finally {
+            db.dispose();
+          }
+        });
+      } finally {
+        appdata.settings['moveFavoriteAfterRead'] = oldMovement;
+        appdata.settings['readLaterFolder'] = oldReadLater;
+      }
+    },
+    skip: !_sqliteAvailable(),
+  );
+
+  test(
     'folder notifications see counts and failed rename preserves settings',
     () async {
       await _withFavoritesManager((manager) async {

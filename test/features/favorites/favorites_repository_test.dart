@@ -37,6 +37,152 @@ void main() {
   });
   tearDown(() => db.dispose());
 
+  test('read movement is atomic across folders and preserves other sources', () {
+    repository.prepareForFollowUpdates('first', clearData: false);
+    db.execute('UPDATE first SET has_new_update = 1;');
+    db.execute(
+      "CREATE TRIGGER reject_read BEFORE UPDATE ON second BEGIN SELECT RAISE(ABORT, 'blocked'); END;",
+    );
+    expect(
+      () => repository.recordRead(
+        ['first', 'second'],
+        'same',
+        1,
+        time: 'new time',
+        movement: 'start',
+        trackingFolder: 'first',
+      ),
+      throwsA(isA<SqliteException>()),
+    );
+    expect(repository.findComic('first', 'same', 1)!.time, 'old time');
+    expect(repository.maxValue('first'), 20);
+    expect(repository.countUpdates('first'), 2);
+    db.execute('DROP TRIGGER reject_read;');
+    expect(
+      repository.recordRead(
+        ['first', 'second'],
+        'same',
+        1,
+        time: 'new time',
+        movement: 'start',
+        trackingFolder: 'first',
+      ),
+      ['first', 'second'],
+    );
+    expect(repository.minValue('first'), -4);
+    expect(repository.minValue('second'), -1);
+    expect(repository.findComic('second', 'same', 2)!.time, 'old time');
+    expect(repository.countUpdates('first'), 1);
+    repository.recordRead(
+      ['first'],
+      'same',
+      1,
+      time: 'later',
+      movement: 'end',
+      trackingFolder: 'first',
+    );
+    expect(repository.maxValue('first'), -2);
+    repository.recordRead(
+      ['first'],
+      'same',
+      1,
+      time: 'latest',
+      movement: 'unknown',
+      trackingFolder: null,
+    );
+    expect(repository.maxValue('first'), -2);
+    expect(repository.findComic('first', 'same', 1)!.time, 'latest');
+    expect(
+      repository.recordRead(
+        ['first'],
+        'missing',
+        1,
+        time: 'ignored',
+        movement: 'start',
+        trackingFolder: null,
+      ),
+      isEmpty,
+    );
+  });
+
+  test(
+    'tracking comparison, checks and acknowledgement isolate identities',
+    () {
+      repository.prepareForFollowUpdates('second', clearData: false);
+      expect(
+        repository.getComicsWithUpdatesInfo('second').first.updateTime,
+        isNull,
+      );
+      expect(
+        repository.getComicsWithUpdatesInfo('second').first.lastCheckTime,
+        isNull,
+      );
+      expect(
+        repository.updateUpdateTime('second', 'same', 1, 'v1', 10),
+        isTrue,
+      );
+      expect(repository.identities('second', updatedOnly: true), [('same', 1)]);
+      expect(repository.countUpdates('second'), 1);
+      final info = repository
+          .getComicsWithUpdatesInfo('second', updatedOnly: true)
+          .single;
+      expect(info.updateTime, 'v1');
+      expect(info.lastCheckTime!.millisecondsSinceEpoch, 10);
+      repository.updateCheckTime('second', 'same', 1, 20);
+      expect(repository.countUpdates('second'), 1);
+      expect(
+        repository.updateUpdateTime('second', 'same', 1, 'v1', 30),
+        isFalse,
+      );
+      expect(repository.countUpdates('second'), 0);
+      repository.updateUpdateTime('second', 'same', 1, 'v2', 40);
+      repository.updateUpdateTime('second', 'same', 2, 'v2', 50);
+      repository.markAsRead('second', 'same', 1);
+      expect(repository.identities('second', updatedOnly: true), [('same', 2)]);
+      expect(repository.identities('second'), [('same', 1), ('same', 2)]);
+    },
+  );
+
+  test('tracking failure leaves fields unchanged and permits retry', () {
+    repository.prepareForFollowUpdates('first', clearData: false);
+    repository.updateUpdateTime('first', 'same', 1, 'before', 10);
+    db.execute(
+      "CREATE TRIGGER reject_tracking BEFORE UPDATE ON first BEGIN SELECT RAISE(ABORT, 'blocked'); END;",
+    );
+    expect(
+      () => repository.updateUpdateTime('first', 'same', 1, 'after', 20),
+      throwsA(isA<SqliteException>()),
+    );
+    final info = repository
+        .getComicsWithUpdatesInfo('first', updatedOnly: true)
+        .single;
+    expect(info.updateTime, 'before');
+    expect(info.lastCheckTime!.millisecondsSinceEpoch, 10);
+    db.execute('DROP TRIGGER reject_tracking;');
+    expect(
+      () => repository.updateUpdateTime('first', 'missing', 1, 'v1', 20),
+      throwsStateError,
+    );
+    expect(
+      repository.updateUpdateTime('first', 'same', 1, 'after', 30),
+      isTrue,
+    );
+  });
+
+  test(
+    'tag replacement retains ID-only policy and export retains raw time',
+    () {
+      repository.editTags('second', 'same', ["quote'", 'tag']);
+      final exported = repository.exportComics('second');
+      expect(exported, hasLength(2));
+      expect(exported.map((item) => item.time), everyElement('old time'));
+      for (final item in exported) {
+        expect(item.tags, ["quote'", 'tag']);
+      }
+      expect(repository.exportComics('收藏 "A"'), isEmpty);
+    },
+  );
+
   test('folder limits preserve SQLite zero and negative semantics', () {
     expect(repository.getFolderComics('first', limit: 1).single.id, 'other');
     expect(repository.getFolderComics('first', limit: 0), isEmpty);

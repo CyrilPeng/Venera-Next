@@ -12,3 +12,11 @@ FavoriteItem favoriteItemFromRow(Row row) => FavoriteItem.withTime(
   coverPath: row['cover_path'],
   time: row['time'],
 );
+
+FavoriteItemWithUpdateInfo favoriteItemWithUpdateInfoFromRow(Row row) =>
+    FavoriteItemWithUpdateInfo(
+      favoriteItemFromRow(row),
+      row['last_update_time'],
+      row['has_new_update'] == 1,
+      row['last_check_time'],
+    );

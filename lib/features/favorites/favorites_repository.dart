@@ -351,6 +351,105 @@ class FavoritesRepository {
         FavoriteItemWithFolderInfo(favoriteItemFromRow(row), folder),
   ];
 
+  List<(String, int)> identities(
+    String folder, {
+    bool updatedOnly = false,
+  }) => db
+      .select(
+        'SELECT id, type FROM ${_table(folder)}${updatedOnly ? " WHERE has_new_update = 1" : ""};',
+      )
+      .map((row) => (row['id'] as String, row['type'] as int))
+      .toList();
+
+  List<FavoriteItem> exportComics(String folder) => db
+      .select('SELECT * FROM ${_table(folder)};')
+      .map(favoriteItemFromRow)
+      .toList();
+
+  void editTags(String folder, String id, List<String> tags) {
+    db.execute('UPDATE ${_table(folder)} SET tags = ? WHERE id = ?;', [
+      tags.join(','),
+      id,
+    ]);
+  }
+
+  /// Returns folders actually changed, only after all writes commit.
+  List<String> recordRead(
+    Iterable<String> folders,
+    String id,
+    int type, {
+    required String time,
+    required String? movement,
+    required String? trackingFolder,
+  }) => _transaction(() {
+    final changed = <String>[];
+    for (final folder in folders) {
+      if (!comicExists(folder, id, type)) continue;
+      final position = switch (movement) {
+        'start' => minValue(folder) - 1,
+        'end' => maxValue(folder) + 1,
+        _ => null,
+      };
+      db.execute(
+        'UPDATE ${_table(folder)} SET ${position == null ? "" : "display_order = ?, "}${folder == trackingFolder ? "has_new_update = 0, " : ""}time = ? WHERE id = ? AND type = ?;',
+        [?position, time, id, type],
+      );
+      changed.add(folder);
+    }
+    return changed;
+  });
+
+  bool updateUpdateTime(
+    String folder,
+    String id,
+    int type,
+    String updateTime,
+    int checkedAt,
+  ) => _transaction(() {
+    final oldTime = db.select(
+      'SELECT last_update_time FROM ${_table(folder)} WHERE id = ? AND type = ?;',
+      [id, type],
+    ).first['last_update_time'];
+    final changed = oldTime != updateTime;
+    db.execute(
+      'UPDATE ${_table(folder)} SET last_update_time = ?, has_new_update = ?, last_check_time = ? WHERE id = ? AND type = ?;',
+      [updateTime, changed ? 1 : 0, checkedAt, id, type],
+    );
+    return changed;
+  });
+
+  void updateCheckTime(String folder, String id, int type, int checkedAt) {
+    db.execute(
+      'UPDATE ${_table(folder)} SET last_check_time = ? WHERE id = ? AND type = ?;',
+      [checkedAt, id, type],
+    );
+  }
+
+  int countUpdates(String folder) =>
+      db
+              .select(
+                'SELECT COUNT(*) AS c FROM ${_table(folder)} WHERE has_new_update = 1;',
+              )
+              .first['c']
+          as int;
+
+  List<FavoriteItemWithUpdateInfo> getComicsWithUpdatesInfo(
+    String folder, {
+    bool updatedOnly = false,
+  }) => db
+      .select(
+        'SELECT * FROM ${_table(folder)}${updatedOnly ? " WHERE has_new_update = 1" : ""};',
+      )
+      .map(favoriteItemWithUpdateInfoFromRow)
+      .toList();
+
+  void markAsRead(String folder, String id, int type) {
+    db.execute(
+      'UPDATE ${_table(folder)} SET has_new_update = 0 WHERE id = ? AND type = ?;',
+      [id, type],
+    );
+  }
+
   void reorder(
     String folder,
     Iterable<(String, int)> identities,
