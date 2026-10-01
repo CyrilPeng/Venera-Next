@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/sqlite_transaction.dart';
 import 'history_row.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'history_model.dart';
@@ -100,31 +101,25 @@ class HistoryRepository {
     return historyFromRow(res.first);
   }
 
-  void deleteWhere(bool Function(String id, int type) shouldDelete) {
-    db.execute('BEGIN TRANSACTION;');
-    try {
-      final idAndTypes = db.select("""
+  void deleteWhere(bool Function(String id, int type) shouldDelete) =>
+      runSqliteTransaction(db, () {
+        final idAndTypes = db.select("""
       select id, type from history;
     """);
-      for (var element in idAndTypes) {
-        final id = element["id"] as String;
-        final type = element["type"] as int;
-        if (shouldDelete(id, type)) {
-          db.execute(
-            """
+        for (var element in idAndTypes) {
+          final id = element["id"] as String;
+          final type = element["type"] as int;
+          if (shouldDelete(id, type)) {
+            db.execute(
+              """
           delete from history
           where id == ? and type == ?;
         """,
-            [id, type],
-          );
+              [id, type],
+            );
+          }
         }
-      }
-      db.execute('COMMIT;');
-    } catch (e) {
-      db.execute('ROLLBACK;');
-      rethrow;
-    }
-  }
+      });
 
   void remove(String id, int type) {
     db.execute(
@@ -136,18 +131,12 @@ class HistoryRepository {
     );
   }
 
-  void removeMany(Iterable<(String, int)> identities) {
-    db.execute('BEGIN TRANSACTION;');
-    try {
-      for (final (id, type) in identities) {
-        remove(id, type);
-      }
-      db.execute('COMMIT;');
-    } catch (_) {
-      db.execute('ROLLBACK;');
-      rethrow;
-    }
-  }
+  void removeMany(Iterable<(String, int)> identities) =>
+      runSqliteTransaction(db, () {
+        for (final (id, type) in identities) {
+          remove(id, type);
+        }
+      });
 
   void clearBefore(int cutoff) {
     db.execute(
@@ -236,17 +225,6 @@ class HistoryRepository {
     ];
   }
 
-  static void _runWriteTransaction(Database db, void Function() write) {
-    db.execute('BEGIN IMMEDIATE;');
-    try {
-      write();
-      db.execute('COMMIT;');
-    } catch (_) {
-      db.execute('ROLLBACK;');
-      rethrow;
-    }
-  }
-
   // Legacy databases do not consistently expose a single-column UNIQUE(id).
   void writeProgress(History item) =>
       _writeHistory(item, replaceMetadata: false);
@@ -257,7 +235,7 @@ class HistoryRepository {
       _writeHistory(item, replaceMetadata: true);
 
   void _writeHistory(History item, {required bool replaceMetadata}) {
-    _runWriteTransaction(db, () {
+    runSqliteTransaction(db, () {
       db.execute(_updateHistorySql, [
         item.time.millisecondsSinceEpoch,
         item.ep,
@@ -279,11 +257,11 @@ class HistoryRepository {
           cover: item.cover,
         );
       }
-    });
+    }, immediate: true);
   }
 
   void addReadDuration(History item, int durationMs) {
-    _runWriteTransaction(db, () {
+    runSqliteTransaction(db, () {
       db.execute(_incrementReadDurationSql, [
         durationMs,
         item.id,
@@ -295,6 +273,6 @@ class HistoryRepository {
           durationMs,
         ]);
       }
-    });
+    }, immediate: true);
   }
 }

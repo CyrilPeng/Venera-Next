@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/sqlite_transaction.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'favorite_models.dart';
 import 'favorite_row.dart';
@@ -196,17 +197,7 @@ class FavoritesRepository {
     );
   }
 
-  T _transaction<T>(T Function() action) {
-    db.execute('BEGIN TRANSACTION;');
-    try {
-      final result = action();
-      db.execute('COMMIT;');
-      return result;
-    } catch (_) {
-      db.execute('ROLLBACK;');
-      rethrow;
-    }
-  }
+  T _transaction<T>(T Function() action) => runSqliteTransaction(db, action);
 
   void _copyRecord(
     String source,

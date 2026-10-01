@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/sqlite_transaction.dart';
 import 'dart:convert';
 import 'package:sqlite3/sqlite3.dart';
 import 'image_favorites_models.dart';
@@ -140,16 +141,10 @@ class ImageFavoritesRepository {
   int count() =>
       db.select('SELECT count(*) FROM image_favorites;').first[0] as int;
 
-  void saveAll(Iterable<ImageFavoritesComic> comics) {
-    db.execute('BEGIN IMMEDIATE;');
-    try {
-      for (final comic in comics) {
-        save(comic);
-      }
-      db.execute('COMMIT;');
-    } catch (_) {
-      db.execute('ROLLBACK;');
-      rethrow;
-    }
-  }
+  void saveAll(Iterable<ImageFavoritesComic> comics) =>
+      runSqliteTransaction(db, () {
+        for (final comic in comics) {
+          save(comic);
+        }
+      }, immediate: true);
 }
