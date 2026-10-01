@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -71,6 +72,51 @@ Future<void> _withFavoritesManager(
 }
 
 void main() {
+  test(
+    'folder JSON import publishes complete counts once and malformed input not at all',
+    () async {
+      await _withFavoritesManager((manager) async {
+        await manager.debugWaitForHashedIdsRefresh();
+        var notifications = 0;
+        void changed() {
+          notifications++;
+          expect(manager.folderComics('JSON import'), 2);
+          expect(manager.isExist('json-a', const ComicType(17)), isTrue);
+          expect(manager.isExist('json-b', const ComicType(17)), isTrue);
+        }
+
+        manager.addListener(changed);
+        try {
+          final a = _favorite('json-a')..type = const ComicType(17);
+          final b = _favorite('json-b')..type = const ComicType(17);
+          expect(
+            () => manager.fromJson(
+              jsonEncode({
+                'name': 'JSON import',
+                'comics': [
+                  a.toJson(),
+                  {'name': 'bad'},
+                ],
+              }),
+            ),
+            throwsA(isA<TypeError>()),
+          );
+          expect(manager.existsFolder('JSON import'), isFalse);
+          expect(notifications, 0);
+          manager.fromJson(
+            jsonEncode({
+              'name': 'JSON import',
+              'comics': [a.toJson(), b.toJson()],
+            }),
+          );
+          expect(notifications, 1);
+        } finally {
+          manager.removeListener(changed);
+        }
+      });
+    },
+  );
+
   test(
     'tracking folder switch does not relabel old cached identities',
     () async {

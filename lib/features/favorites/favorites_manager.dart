@@ -1,3 +1,4 @@
+import 'favorite_folder_import.dart';
 import 'favorite_updates_service.dart';
 import 'read_later_service.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
@@ -926,26 +927,14 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   void fromJson(String json) {
-    var data = jsonDecode(json);
-    var folder = data["name"];
-    if (folder == null || folder is! String) {
-      throw "Invalid data";
-    }
-    if (existsFolder(folder)) {
-      int i = 0;
-      while (existsFolder("$folder($i)")) {
-        i++;
-      }
-      folder = "$folder($i)";
-    }
-    createFolder(folder);
-    for (var comic in data["comics"]) {
-      try {
-        addComic(folder, FavoriteItem.fromJson(comic));
-      } catch (e) {
-        Log.error("Import Data", e.toString());
-      }
-    }
+    final (folder, comics) = importFavoriteFolder(
+      json,
+      _repository,
+      append: appdata.settings['newFavoriteAddTo'] == 'end',
+      translateTags: _translateTags,
+    );
+    refreshImportedFavorites({folder: comics});
+    notifyImportedFavorites([folder]);
   }
 
   void prepareTableForFollowUpdates(String table, [bool clearData = true]) {
