@@ -72,6 +72,44 @@ Future<void> _withFavoritesManager(
 
 void main() {
   test(
+    'isolate queries match synchronous folder order and aggregate identity',
+    () async {
+      await _withFavoritesManager((manager) async {
+        manager.createFolder('one');
+        manager.createFolder('two');
+        manager.addComic('one', _favorite('later'), 10);
+        manager.addComic('one', _favorite('first'), -5);
+        manager.addComic('two', _favorite('first'), 0);
+        final syncFolder = manager.getFolderComics('one');
+        final asyncFolder = await manager.getFolderComicsAsync('one');
+        expect(
+          asyncFolder.map((item) => item.toJson()),
+          syncFolder.map((item) => item.toJson()),
+        );
+        expect(asyncFolder.map((item) => item.id), ['first', 'later']);
+        expect(
+          asyncFolder.map((item) => item.time),
+          syncFolder.map((item) => item.time),
+        );
+        expect(
+          (await manager.getAllComicsAsync()).map((item) => item.toJson()),
+          manager.getAllComics().map((item) => item.toJson()),
+        );
+        expect(manager.getAllComics(), hasLength(2));
+        expect(
+          await manager.findWithModel(_favorite('first')),
+          manager.find('first', ComicType.local),
+        );
+        expect(
+          () => manager.getComic('one', 'missing', ComicType.local),
+          throwsException,
+        );
+      });
+    },
+    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+  );
+
+  test(
     'init creates tracking folder and selects it for follow updates',
     () async {
       final dataDir = Directory.systemTemp.createTempSync(

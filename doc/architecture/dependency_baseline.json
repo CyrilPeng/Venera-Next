@@ -239,6 +239,7 @@
     ]
   ],
   "business_entrypoints": [
+    "features/favorites/favorites_repository.dart",
     "features/favorites/favorites_api.dart",
     "features/favorites/favorite_row.dart",
     "features/history/history_cache.dart",

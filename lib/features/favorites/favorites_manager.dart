@@ -1,3 +1,4 @@
+import 'favorites_repository.dart';
 import 'favorite_models.dart';
 import 'favorite_row.dart';
 import 'dart:collection';
@@ -41,6 +42,8 @@ class LocalFavoritesManager with ChangeNotifier {
 
   late Database _db;
 
+  FavoritesRepository get _repository => FavoritesRepository(_db);
+
   late String _dbPath;
 
   late Map<String, int> counts;
@@ -82,7 +85,7 @@ class LocalFavoritesManager with ChangeNotifier {
         source_folder text
       );
     """);
-    var folderNames = _getFolderNamesWithDB();
+    var folderNames = _repository.folderNames();
     final foldersToMigrate = List<String>.from(folderNames);
     folderNames = _ensureTrackingFolder(
       folderNames,
@@ -212,7 +215,7 @@ class LocalFavoritesManager with ChangeNotifier {
   }) {
     if (createIfMissing && folderNames.isEmpty) {
       createFolder(trackingFolderName);
-      return _getFolderNamesWithDB();
+      return _repository.folderNames();
     }
     return folderNames;
   }
@@ -307,72 +310,11 @@ class LocalFavoritesManager with ChangeNotifier {
     });
   }
 
-  List<String> find(String id, ComicType type) {
-    var res = <String>[];
-    for (var folder in folderNames) {
-      var rows = _db.select(
-        """
-        select * from "$folder"
-        where id == ? and type == ?;
-      """,
-        [id, type.value],
-      );
-      if (rows.isNotEmpty) {
-        res.add(folder);
-      }
-    }
-    return res;
-  }
+  List<String> find(String id, ComicType type) =>
+      _repository.findFolders(folderNames, id, type.value);
 
-  Future<List<String>> findWithModel(FavoriteItem item) async {
-    var res = <String>[];
-    for (var folder in folderNames) {
-      var rows = _db.select(
-        """
-        select * from "$folder"
-        where id == ? and type == ?;
-      """,
-        [item.id, item.type.value],
-      );
-      if (rows.isNotEmpty) {
-        res.add(folder);
-      }
-    }
-    return res;
-  }
-
-  List<String> _getTablesWithDB() {
-    final tables = _db
-        .select("SELECT name FROM sqlite_master WHERE type='table';")
-        .map((element) => element["name"] as String)
-        .toList();
-    return tables;
-  }
-
-  List<String> _getFolderNamesWithDB() {
-    final folders = _getTablesWithDB();
-    folders.remove('folder_sync');
-    folders.remove('folder_order');
-    var folderToOrder = <String, int>{};
-    for (var folder in folders) {
-      var res = _db.select(
-        """
-        select * from folder_order
-        where folder_name == ?;
-      """,
-        [folder],
-      );
-      if (res.isNotEmpty) {
-        folderToOrder[folder] = res.first["order_value"];
-      } else {
-        folderToOrder[folder] = 0;
-      }
-    }
-    folders.sort((a, b) {
-      return folderToOrder[a]! - folderToOrder[b]!;
-    });
-    return folders;
-  }
+  Future<List<String>> findWithModel(FavoriteItem item) async =>
+      find(item.id, item.type);
 
   void updateOrder(List<String> folders) {
     for (int i = 0; i < folders.length; i++) {
@@ -387,38 +329,16 @@ class LocalFavoritesManager with ChangeNotifier {
     notifyListeners();
   }
 
-  int count(String folderName) {
-    return _db.select("""
-      select count(*) as c
-      from "$folderName"
-    """).first["c"];
-  }
+  int count(String folderName) => _repository.count(folderName);
 
-  List<String> get folderNames => _getFolderNamesWithDB();
+  List<String> get folderNames => _repository.folderNames();
 
-  int maxValue(String folder) {
-    return _db.select("""
-        SELECT MAX(display_order) AS max_value
-        FROM "$folder";
-      """).firstOrNull?["max_value"] ??
-        0;
-  }
+  int maxValue(String folder) => _repository.maxValue(folder);
 
-  int minValue(String folder) {
-    return _db.select("""
-        SELECT MIN(display_order) AS min_value
-        FROM "$folder";
-      """).firstOrNull?["min_value"] ??
-        0;
-  }
+  int minValue(String folder) => _repository.minValue(folder);
 
-  List<FavoriteItem> getFolderComics(String folder) {
-    var rows = _db.select("""
-        select * from "$folder"
-        ORDER BY display_order;
-      """);
-    return rows.map((element) => favoriteItemFromRow(element)).toList();
-  }
+  List<FavoriteItem> getFolderComics(String folder) =>
+      _repository.getFolderComics(folder);
 
   static Future<List<FavoriteItem>> _getFolderComicsAsync(
     String folder,
@@ -427,11 +347,7 @@ class LocalFavoritesManager with ChangeNotifier {
     return Isolate.run(() {
       var db = openSqliteDatabase(dbPath);
       try {
-        var rows = db.select("""
-          select * from "$folder"
-          ORDER BY display_order;
-        """);
-        return rows.map((element) => favoriteItemFromRow(element)).toList();
+        return FavoritesRepository(db).getFolderComics(folder);
       } finally {
         db.dispose();
       }
@@ -443,16 +359,7 @@ class LocalFavoritesManager with ChangeNotifier {
     return _getFolderComicsAsync(folder, _dbPath);
   }
 
-  List<FavoriteItem> getAllComics() {
-    var res = <FavoriteItem>{};
-    for (final folder in folderNames) {
-      var comics = _db.select("""
-        select * from "$folder";
-      """);
-      res.addAll(comics.map((element) => favoriteItemFromRow(element)));
-    }
-    return res.toList();
-  }
+  List<FavoriteItem> getAllComics() => _repository.getAllComics(folderNames);
 
   static Future<List<FavoriteItem>> _getAllComicsAsync(
     List<String> folders,
@@ -461,14 +368,7 @@ class LocalFavoritesManager with ChangeNotifier {
     return Isolate.run(() {
       var db = openSqliteDatabase(dbPath);
       try {
-        var res = <FavoriteItem>{};
-        for (final folder in folders) {
-          var comics = db.select("""
-            select * from "$folder";
-          """);
-          res.addAll(comics.map((element) => favoriteItemFromRow(element)));
-        }
-        return res.toList();
+        return FavoritesRepository(db).getAllComics(folders);
       } finally {
         db.dispose();
       }
@@ -492,21 +392,8 @@ class LocalFavoritesManager with ChangeNotifier {
     notifyListeners();
   }
 
-  List<FavoriteItemWithFolderInfo> allComics() {
-    var res = <FavoriteItemWithFolderInfo>[];
-    for (final folder in folderNames) {
-      var comics = _db.select("""
-        select * from "$folder";
-      """);
-      res.addAll(
-        comics.map(
-          (element) =>
-              FavoriteItemWithFolderInfo(favoriteItemFromRow(element), folder),
-        ),
-      );
-    }
-    return res;
-  }
+  List<FavoriteItemWithFolderInfo> allComics() =>
+      _repository.allComics(folderNames);
 
   bool existsFolder(String name) {
     return folderNames.contains(name);
@@ -595,30 +482,12 @@ class LocalFavoritesManager with ChangeNotifier {
     return (res.first["source_key"], res.first["source_folder"]);
   }
 
-  bool comicExists(String folder, String id, ComicType type) {
-    var res = _db.select(
-      """
-      select * from "$folder"
-      where id == ? and type == ?;
-    """,
-      [id, type.value],
-    );
-    return res.isNotEmpty;
-  }
+  bool comicExists(String folder, String id, ComicType type) =>
+      _repository.comicExists(folder, id, type.value);
 
-  FavoriteItem getComic(String folder, String id, ComicType type) {
-    var res = _db.select(
-      """
-      select * from "$folder"
-      where id == ? and type == ?;
-    """,
-      [id, type.value],
-    );
-    if (res.isEmpty) {
-      throw Exception("Comic not found");
-    }
-    return favoriteItemFromRow(res.first);
-  }
+  FavoriteItem getComic(String folder, String id, ComicType type) =>
+      _repository.findComic(folder, id, type.value) ??
+      (throw Exception("Comic not found"));
 
   String _translateTags(List<String> tags) {
     var res = <String>[];
@@ -955,7 +824,7 @@ class LocalFavoritesManager with ChangeNotifier {
       return;
     }
     _db.execute("BEGIN TRANSACTION");
-    var folderNames = _getFolderNamesWithDB();
+    var folderNames = _repository.folderNames();
     try {
       for (var comic in comics) {
         LocalFavoriteImageProvider.delete(comic.id, comic.type.value);
