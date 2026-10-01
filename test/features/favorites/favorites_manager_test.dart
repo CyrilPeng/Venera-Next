@@ -72,6 +72,43 @@ Future<void> _withFavoritesManager(
 
 void main() {
   test(
+    'tracking folder switch does not relabel old cached identities',
+    () async {
+      final previous = appdata.settings['followUpdatesFolder'];
+      try {
+        await _withFavoritesManager((manager) async {
+          for (final folder in ['track-a', 'track-b']) {
+            manager.createFolder(folder);
+            manager.prepareTableForFollowUpdates(folder);
+          }
+          final old = _favorite('old');
+          final first = _favorite('first');
+          final second = _favorite('second');
+          manager.addComic('track-a', old);
+          manager.addComic('track-b', first);
+          manager.addComic('track-b', second);
+          appdata.settings['followUpdatesFolder'] = 'track-a';
+          manager.refreshUpdateIds();
+          manager.updateUpdateTime('track-a', old.id, old.type, 'v1');
+          manager.updateUpdateTime('track-b', first.id, first.type, 'v1');
+          expect(manager.hasNewUpdate(old.id, old.type), isTrue);
+          appdata.settings['followUpdatesFolder'] = 'track-b';
+          expect(manager.hasNewUpdate(old.id, old.type), isFalse);
+          manager.updateUpdateTime('track-b', second.id, second.type, 'v1');
+          expect(manager.hasNewUpdate(old.id, old.type), isFalse);
+          expect(manager.hasNewUpdate(first.id, first.type), isTrue);
+          expect(manager.hasNewUpdate(second.id, second.type), isTrue);
+          manager.markAsRead(first.id, first.type, notify: false);
+          expect(manager.hasNewUpdate(first.id, first.type), isFalse);
+          expect(manager.hasNewUpdate(second.id, second.type), isTrue);
+        });
+      } finally {
+        appdata.settings['followUpdatesFolder'] = previous;
+      }
+    },
+  );
+
+  test(
     'failed clear restores original database and settings then permits retry',
     () async {
       await _withFavoritesManager((manager) async {

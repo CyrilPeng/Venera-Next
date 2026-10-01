@@ -1,3 +1,4 @@
+import 'favorite_updates_service.dart';
 import 'read_later_service.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'favorite_identity_index.dart';
@@ -88,9 +89,10 @@ class LocalFavoritesManager with ChangeNotifier {
 
   final _identityIndex = FavoriteIdentityIndex();
 
-  var _updatedIds = <(String, int)>{};
-
-  String? _updatedIdsFolder;
+  late final _updates = FavoriteUpdatesService(
+    repository: () => _repository,
+    folder: () => appdata.settings['followUpdatesFolder'],
+  );
 
   Future<void>? _hashedIdsRefresh;
 
@@ -298,16 +300,7 @@ class LocalFavoritesManager with ChangeNotifier {
     await _hashedIdsRefresh;
   }
 
-  void refreshUpdateIds() {
-    var folder = appdata.settings['followUpdatesFolder'];
-    if (folder is! String || !existsFolder(folder)) {
-      _updatedIds = {};
-      _updatedIdsFolder = null;
-      return;
-    }
-    _updatedIdsFolder = folder;
-    _updatedIds = _repository.identities(folder, updatedOnly: true).toSet();
-  }
+  void refreshUpdateIds() => _updates.refresh();
 
   void _syncFollowUpdatesIfAffected(Iterable<String> folders) {
     var folder = appdata.settings['followUpdatesFolder'];
@@ -890,7 +883,7 @@ class LocalFavoritesManager with ChangeNotifier {
           : null,
     );
     if (changed.contains(followUpdatesFolder)) {
-      _updatedIds.remove((id, type.value));
+      _updates.recordCommittedRead(id, type.value);
       _notifyFollowUpdatesChanged();
     }
     notifyListeners();
@@ -911,13 +904,8 @@ class LocalFavoritesManager with ChangeNotifier {
     return _identityIndex.contains(id, type.value);
   }
 
-  bool hasNewUpdate(String id, ComicType type) {
-    var folder = appdata.settings['followUpdatesFolder'];
-    if (folder is! String || folder != _updatedIdsFolder) {
-      return false;
-    }
-    return _updatedIds.contains((id, type.value));
-  }
+  bool hasNewUpdate(String id, ComicType type) =>
+      _updates.contains(id, type.value);
 
   void updateInfo(String folder, FavoriteItem comic, [bool notify = true]) {
     _repository.updateInfo(folder, comic);
@@ -980,15 +968,7 @@ class LocalFavoritesManager with ChangeNotifier {
       updateTime,
       DateTime.now().millisecondsSinceEpoch,
     );
-    if (appdata.settings['followUpdatesFolder'] == folder) {
-      _updatedIdsFolder = folder;
-      final identity = (id, type.value);
-      if (hasNewUpdate) {
-        _updatedIds.add(identity);
-      } else {
-        _updatedIds.remove(identity);
-      }
-    }
+    _updates.recordCommittedUpdate(folder, id, type.value, hasNewUpdate);
   }
 
   void updateCheckTime(String folder, String id, ComicType type) =>
@@ -1015,7 +995,7 @@ class LocalFavoritesManager with ChangeNotifier {
       return;
     }
     _repository.markAsRead(folder, id, type.value);
-    _updatedIds.remove((id, type.value));
+    _updates.recordCommittedRead(id, type.value);
     if (notify) {
       _notifyFollowUpdatesChanged();
       notifyListeners();
@@ -1053,8 +1033,7 @@ class LocalFavoritesManager with ChangeNotifier {
     _initialization = null;
     _isClosed = true;
     _identityIndex.clear();
-    _updatedIds.clear();
-    _updatedIdsFolder = null;
+    _updates.clear();
     counts.clear();
     final database = _database;
     _database = null;
