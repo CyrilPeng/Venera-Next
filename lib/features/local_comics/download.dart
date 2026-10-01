@@ -462,7 +462,14 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
       _chapter++;
     }
 
-    LocalManager().completeTask(this);
+    try {
+      LocalManager().completeTask(this);
+    } catch (error, stack) {
+      Log.error('Download', error, stack);
+      _setError('Error: $error');
+      return;
+    }
+    _isRunning = false;
     stopRecorder();
   }
 
@@ -929,7 +936,13 @@ class ArchiveDownloadTask extends DownloadTask {
 
     await archiveFile.deleteIgnoreError();
 
-    LocalManager().completeTask(this);
+    try {
+      LocalManager().completeTask(this);
+    } catch (error) {
+      _setError('Error: $error');
+      return;
+    }
+    _isRunning = false;
   }
 
   static Future<void> _extractArchive(String archive, String outDir) async {

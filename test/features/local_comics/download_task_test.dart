@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqlite3/sqlite3.dart';
+import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -291,6 +293,121 @@ void main() {
     },
   );
 
+  test(
+    'completion commits before queue notification and advancing the next task',
+    () async {
+      final root = Directory.systemTemp.createTempSync('download-complete-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      final db = sqlite3.open('${root.path}/local.db');
+      addTearDown(() async {
+        await manager.pendingDownloadTaskWrites;
+        db.dispose();
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      final first = _CompletionTask('one');
+      final next = _CompletionTask('two');
+      manager.downloadingTasks.addAll([first, next]);
+      await manager.saveCurrentDownloadingTasks();
+      final file = File('${root.path}/downloading_tasks.json');
+      final original = file.readAsStringSync();
+      var notifications = 0;
+      manager.addListener(() {
+        notifications++;
+        expect(manager.find(first.id, first.comicType), isNotNull);
+        expect(manager.downloadingTasks, [next]);
+        expect(next.resumes, 0);
+      });
+      db.execute(
+        "CREATE TRIGGER reject_completion BEFORE INSERT ON comics BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+      );
+      expect(
+        () => manager.completeTask(first),
+        throwsA(isA<SqliteException>()),
+      );
+      await manager.pendingDownloadTaskWrites;
+      expect(manager.downloadingTasks, [first, next]);
+      expect(manager.count, 0);
+      expect(db.select('SELECT * FROM natural_sort_migration'), isEmpty);
+      expect(file.readAsStringSync(), original);
+      expect(notifications, 0);
+      expect(next.resumes, 0);
+      db.execute('DROP TRIGGER reject_completion;');
+      manager.completeTask(first);
+      await manager.pendingDownloadTaskWrites;
+      expect(notifications, 1);
+      expect(next.resumes, 1);
+      expect(jsonDecode(file.readAsStringSync()).single['id'], 'two');
+    },
+  );
+
+  test(
+    'image completion write failure stops recorder and retains a retryable task',
+    () async {
+      final root = Directory.systemTemp.createTempSync('image-complete-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      final db = sqlite3.open('${root.path}/local.db');
+      final task = ImagesDownloadTask.fromJson({
+        'type': 'ImagesDownloadTask',
+        'source': sourceKey,
+        'comicId': 'finished',
+        'comic': {
+          'title': 'Finished',
+          'subtitle': '',
+          'cover': 'cover.jpg',
+          'description': '',
+          'tags': <String, List<String>>{},
+          'chapters': null,
+          'sourceKey': sourceKey,
+          'comicId': 'finished',
+        },
+        'chapters': null,
+        'path': root.path,
+        'cover': 'cover.jpg',
+        'images': {'': <String>[]},
+        'downloadedCount': 0,
+        'totalCount': 0,
+        'index': 0,
+        'chapter': 1,
+      })!;
+      addTearDown(() async {
+        task.pause();
+        await manager.pendingDownloadTaskWrites;
+        db.dispose();
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      });
+      manager.downloadingTasks.add(task);
+      db.execute(
+        "CREATE TRIGGER reject_completion BEFORE INSERT ON comics BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+      );
+      task.resume();
+      await task.debugResumeFuture;
+      expect(task.isError, isTrue);
+      expect(task.isPaused, isTrue);
+      expect(task.timer, isNull);
+      expect(manager.downloadingTasks, [task]);
+      expect(manager.count, 0);
+      db.execute('DROP TRIGGER reject_completion;');
+      task.resume();
+      await task.debugResumeFuture;
+      await manager.pendingDownloadTaskWrites;
+      expect(task.isError, isFalse);
+      expect(task.isPaused, isTrue);
+      expect(task.timer, isNull);
+      expect(manager.downloadingTasks, isEmpty);
+      expect(manager.find(task.id, task.comicType), isNotNull);
+    },
+  );
+
   test('ImagesDownloadTask cancel before path stops speed recorder', () async {
     final dataDir = Directory.systemTemp.createTempSync(
       'venera-download-data-',
@@ -361,5 +478,49 @@ ComicSource _testSource(String key, {LoadComicFunc? loadComicInfo}) {
     false,
     null,
     null,
+  );
+}
+
+class _CompletionTask extends DownloadTask {
+  _CompletionTask(this.id);
+  @override
+  final String id;
+  int resumes = 0;
+  @override
+  ComicType get comicType => const ComicType(17);
+  @override
+  String get title => id;
+  @override
+  String? get cover => null;
+  @override
+  String get message => '';
+  @override
+  bool get isError => false;
+  @override
+  bool get isPaused => true;
+  @override
+  double get progress => 1;
+  @override
+  int get speed => 0;
+  @override
+  void cancel() {}
+  @override
+  void pause() {}
+  @override
+  void resume() => resumes++;
+  @override
+  Map<String, dynamic> toJson() => {'id': id};
+  @override
+  LocalComic toLocalComic() => LocalComic(
+    id: id,
+    title: id,
+    subtitle: '',
+    tags: [],
+    directory: id,
+    chapters: null,
+    cover: '',
+    comicType: comicType,
+    downloadedChapters: [],
+    createdAt: DateTime(2026),
   );
 }

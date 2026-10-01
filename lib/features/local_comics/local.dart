@@ -338,7 +338,9 @@ class LocalManager with ChangeNotifier {
   }
 
   void completeTask(DownloadTask task) {
-    add(task.toLocalComic());
+    // Commit before removing the resumable task or notifying consumers. Calling
+    // async add() without awaiting it would turn a failed write into lost work.
+    _repository.add(task.toLocalComic());
     downloadingTasks.remove(task);
     notifyListeners();
     saveCurrentDownloadingTasks();
