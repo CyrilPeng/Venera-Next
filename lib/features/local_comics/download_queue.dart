@@ -17,6 +17,8 @@ class DownloadQueue {
 
   // Mutable compatibility view; production mutations go through this service.
   final List<DownloadTask> tasks = [];
+  final _completing = Set<DownloadTask>.identity();
+  int _revision = 0;
 
   bool contains(String id, ComicType type) =>
       tasks.any((task) => task.id == id && task.comicType == type);
@@ -32,36 +34,58 @@ class DownloadQueue {
   void add(DownloadTask task) {
     if (contains(task.id, task.comicType)) return;
     tasks.add(task);
+    final revision = ++_revision;
     _publish();
-    tasks.firstOrNull?.resume();
+    _resumeIfUnchanged(revision);
   }
 
   void complete(DownloadTask task) {
-    final index = _indexOf(task);
-    if (index < 0) return;
-    // A failed commit leaves the resumable task in place, with no notification
-    // or snapshot update. Only the exact queued instance may complete work.
-    commitComic(task.toLocalComic());
-    tasks.removeAt(index);
-    _publish();
-    tasks.firstOrNull?.resume();
+    if (_indexOf(task) < 0 || !_completing.add(task)) return;
+    try {
+      final comic = task.toLocalComic();
+      if (_indexOf(task) < 0) return;
+      // Commit adapters and task methods may synchronously reenter the queue.
+      // Never reuse an index captured before calling them.
+      commitComic(comic);
+      final index = _indexOf(task);
+      if (index < 0) return;
+      tasks.removeAt(index);
+      final revision = ++_revision;
+      _publish();
+      _resumeIfUnchanged(revision);
+    } finally {
+      _completing.remove(task);
+    }
+  }
+
+  void _resumeIfUnchanged(int revision) {
+    // A nested queue operation owns the final scheduling decision.
+    if (revision == _revision) tasks.firstOrNull?.resume();
   }
 
   void remove(DownloadTask task) {
     final index = _indexOf(task);
     if (index < 0) return;
     tasks.removeAt(index);
+    _revision++;
     _publish();
   }
 
   void moveToFirst(DownloadTask task) {
+    if (_indexOf(task) <= 0) return;
+    final first = tasks.first;
+    final shouldResume = !first.isPaused;
+    final beforePause = _revision;
+    first.pause();
+    if (beforePause != _revision || !identical(tasks.firstOrNull, first)) {
+      return;
+    }
     final index = _indexOf(task);
     if (index <= 0) return;
-    final shouldResume = !tasks.first.isPaused;
-    tasks.first.pause();
     tasks.removeAt(index);
     tasks.insert(0, task);
+    final revision = ++_revision;
     _publish();
-    if (shouldResume) tasks.firstOrNull?.resume();
+    if (shouldResume) _resumeIfUnchanged(revision);
   }
 }

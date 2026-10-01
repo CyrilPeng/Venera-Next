@@ -8,17 +8,94 @@ void main() {
   late List<String> events;
   late DownloadQueue queue;
   late bool failCommit;
+  void Function()? onCommit;
+  void Function()? onNotify;
   setUp(() {
     events = [];
     failCommit = false;
+    onCommit = null;
+    onNotify = null;
     queue = DownloadQueue(
       commitComic: (comic) {
         events.add('commit:${comic.id}');
         if (failCommit) throw StateError('injected');
+        onCommit?.call();
       },
-      notifyChanged: () => events.add('notify'),
+      notifyChanged: () {
+        events.add('notify');
+        onNotify?.call();
+      },
       requestSave: () => events.add('save'),
     );
+  });
+
+  test(
+    'pause listener removing the target cannot remove another task or reinsert it',
+    () {
+      final first = _Task('a', events);
+      final target = _Task('b', events);
+      final last = _Task('c', events);
+      queue.add(first);
+      queue.add(target);
+      queue.add(last);
+      first.onPause = () => queue.remove(target);
+      events.clear();
+      queue.moveToFirst(target);
+      expect(queue.tasks, [first, last]);
+      expect(events, ['pause:a', 'notify', 'save']);
+      expect(last.isPaused, isTrue);
+    },
+  );
+
+  test(
+    'nested notification mutation owns scheduling and outer add does not resume twice',
+    () {
+      final first = _Task('a', events);
+      final second = _Task('b', events);
+      onNotify = () {
+        onNotify = null;
+        queue.add(second);
+      };
+      queue.add(first);
+      expect(queue.tasks, [first, second]);
+      expect(events.where((event) => event.startsWith('resume:')), [
+        'resume:a',
+      ]);
+    },
+  );
+
+  test(
+    'completion recalculates task index after commit callback changes queue',
+    () {
+      final first = _Task('a', events);
+      final target = _Task('b', events);
+      final last = _Task('c', events);
+      queue.add(first);
+      queue.add(target);
+      queue.add(last);
+      onCommit = () => queue.remove(first);
+      events.clear();
+      queue.complete(target);
+      expect(queue.tasks, [last]);
+      expect(events, [
+        'commit:b',
+        'notify',
+        'save',
+        'notify',
+        'save',
+        'resume:c',
+      ]);
+    },
+  );
+
+  test('same task completion cannot recursively commit twice', () {
+    final task = _Task('a', events);
+    queue.add(task);
+    onCommit = () => queue.complete(task);
+    events.clear();
+    queue.complete(task);
+    expect(queue.tasks, isEmpty);
+    expect(events, ['commit:a', 'notify', 'save']);
   });
 
   test(
@@ -106,6 +183,7 @@ class _Task extends DownloadTask {
   @override
   final ComicType comicType;
   bool _paused = true;
+  void Function()? onPause;
   @override
   bool get isPaused => _paused;
   @override
@@ -126,6 +204,7 @@ class _Task extends DownloadTask {
   void pause() {
     _paused = true;
     events.add('pause:$id');
+    onPause?.call();
   }
 
   @override
