@@ -1,3 +1,4 @@
+import 'local_chapter_storage.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
 import 'dart:isolate';
@@ -109,11 +110,10 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     final local = directoryPath == null
         ? null
         : LocalManager().find(id, comicType);
-    final removedChapters = chapters
-        ?.where(
-          (chapter) => !(local?.downloadedChapters.contains(chapter) ?? false),
-        )
-        .toList();
+    final removedDirectories = localChapterDirectoriesToDelete(
+      removed: chapters ?? const [],
+      retained: local?.downloadedChapters ?? const [],
+    );
     _stopRun();
     LocalManager().removeTask(this);
     if (directoryPath == null) return;
@@ -124,12 +124,9 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
           if (local == null) {
             await Directory(directoryPath).deleteIgnoreError(recursive: true);
           } else {
-            for (final chapter in removedChapters ?? <String>[]) {
+            for (final directory in removedDirectories) {
               await Directory(
-                FilePath.join(
-                  directoryPath,
-                  LocalManager.getChapterDirectoryName(chapter),
-                ),
+                FilePath.join(directoryPath, directory),
               ).deleteIgnoreError(recursive: true);
             }
           }
@@ -279,9 +276,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
         saveTo = Directory(
           FilePath.join(
             path!,
-            LocalManager.getChapterDirectoryName(
-              _images!.keys.elementAt(_chapter),
-            ),
+            localChapterDirectoryName(_images!.keys.elementAt(_chapter)),
           ),
         );
         if (!saveTo.existsSync()) {

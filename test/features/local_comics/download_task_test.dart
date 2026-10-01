@@ -650,7 +650,7 @@ void main() {
       final task = _pendingImageTask(
         sourceKey,
         '${manager.path}/book',
-        chapters: ['kept', 'new/a'],
+        chapters: ['kept', 'shared:a', 'new/a', '..'],
       );
       await manager.add(
         LocalComic(
@@ -662,7 +662,7 @@ void main() {
           chapters: const ComicChapters({'kept': 'Kept', 'new/a': 'New'}),
           cover: '',
           comicType: task.comicType,
-          downloadedChapters: ['kept'],
+          downloadedChapters: ['kept', 'shared/a'],
           createdAt: DateTime(2026),
         ),
       );
@@ -670,6 +670,8 @@ void main() {
       final unfinished = Directory('${task.path}/new_a')
         ..createSync(recursive: true);
       final retained = File('${kept.path}/page.jpg')..writeAsBytesSync([1]);
+      final shared = Directory('${task.path}/shared_a')..createSync();
+      final sharedFile = File('${shared.path}/page.jpg')..writeAsBytesSync([2]);
       final started = Completer<void>();
       final cancelGate = Completer<void>();
       final controller = StreamController<ImageDownloadProgress>(
@@ -695,14 +697,17 @@ void main() {
       await pumpEventQueue();
       expect(unfinished.existsSync(), isTrue);
       expect(retained.existsSync(), isTrue);
+      expect(sharedFile.existsSync(), isTrue);
       expect(manager.downloadingTasks, isEmpty);
       cancelGate.complete();
       await task.pendingCleanup;
       await task.debugResumeFuture;
       expect(unfinished.existsSync(), isFalse);
       expect(retained.existsSync(), isTrue);
+      expect(sharedFile.existsSync(), isTrue);
       expect(manager.find(task.id, task.comicType)!.downloadedChapters, [
         'kept',
+        'shared/a',
       ]);
     },
   );

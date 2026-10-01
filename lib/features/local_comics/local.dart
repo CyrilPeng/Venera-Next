@@ -1,5 +1,6 @@
 import 'local_comic_model.dart';
 import 'local_repository.dart';
+import 'local_chapter_storage.dart';
 import 'download_task_store.dart';
 import 'local_sort_type.dart';
 export 'local_sort_type.dart';
@@ -214,7 +215,7 @@ class LocalManager with ChangeNotifier {
       var cid = ep is int
           ? comic.chapters!.ids.elementAt(ep - 1)
           : (ep as String);
-      cid = getChapterDirectoryName(cid);
+      cid = localChapterDirectoryName(cid);
       directory = Directory(FilePath.join(directory.path, cid));
     }
     var files = <File>[];
@@ -425,11 +426,13 @@ class LocalManager with ChangeNotifier {
       return;
     }
     _repository.removeChapters(c.id, c.comicType, chapters);
+    final directories = localChapterDirectoriesToDelete(
+      removed: chapters,
+      retained: find(c.id, c.comicType)?.downloadedChapters ?? const [],
+    );
     var shouldRemovedDirs = <Directory>[];
-    for (var chapter in chapters) {
-      var dir = Directory(
-        FilePath.join(c.baseDir, getChapterDirectoryName(chapter)),
-      );
+    for (final directory in directories) {
+      var dir = Directory(FilePath.join(c.baseDir, directory));
       if (dir.existsSync()) {
         shouldRemovedDirs.add(dir);
       }
@@ -493,26 +496,5 @@ class LocalManager with ChangeNotifier {
         }
       }
     });
-  }
-
-  static String getChapterDirectoryName(String name) {
-    var builder = StringBuffer();
-    for (var i = 0; i < name.length; i++) {
-      var char = name[i];
-      if (char == '/' ||
-          char == '\\' ||
-          char == ':' ||
-          char == '*' ||
-          char == '?' ||
-          char == '"' ||
-          char == '<' ||
-          char == '>' ||
-          char == '|') {
-        builder.write('_');
-      } else {
-        builder.write(char);
-      }
-    }
-    return builder.toString();
   }
 }
