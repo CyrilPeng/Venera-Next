@@ -2,6 +2,7 @@ import 'local_comic_model.dart';
 import 'local_repository.dart';
 import 'local_chapter_storage.dart';
 import 'download_task_store.dart';
+import 'download_directory_allocator.dart';
 import 'local_sort_type.dart';
 export 'local_sort_type.dart';
 export 'local_comic_model.dart';
@@ -326,22 +327,19 @@ class LocalManager with ChangeNotifier {
   bool isDownloading(String id, ComicType type) =>
       _downloadQueue.contains(id, type);
 
-  Future<Directory> findValidDirectory(
+  late final _downloadDirectories = DownloadDirectoryAllocator(
+    rootPath: () => path,
+    findRegisteredPath: (id, type) {
+      final comic = find(id, type);
+      return comic == null ? null : FilePath.join(path, comic.directory);
+    },
+  );
+
+  Future<DownloadDirectoryAllocation> allocateDownloadDirectory(
     String id,
     ComicType type,
     String name,
-  ) async {
-    var comic = find(id, type);
-    if (comic != null) {
-      return Directory(FilePath.join(path, comic.directory));
-    }
-    const comicDirectoryMaxLength = 80;
-    if (name.length > comicDirectoryMaxLength) {
-      name = name.substring(0, comicDirectoryMaxLength);
-    }
-    var dir = findValidDirectoryName(path, name);
-    return Directory(FilePath.join(path, dir)).create().then((value) => value);
-  }
+  ) => _downloadDirectories.allocate(id, type, name);
 
   void completeTask(DownloadTask task) => _downloadQueue.complete(task);
 

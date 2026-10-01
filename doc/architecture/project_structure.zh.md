@@ -405,3 +405,5 @@ ArchiveDownloadTask 接受下载器工厂和解压函数作为适配依赖，默
 ImagesDownloadTask 持有封面 StreamIterator，停止时将取消 Future 纳入 pendingCleanup，恢复与目录清理等待旧订阅结束；写文件前复核运行代次并丢弃旧数据。可选构造器适配器默认使用 ImageDownloader.loadThumbnail，不改变快照字段。该边界管理任务订阅，不承诺底层各平台 HTTP 连接立即终止。
 
 图片任务取消固定原管理器与章节输入，等待传输停止后才查询最新漫画登记并计算章节清理目录，以保护等待期间首次入库或新增的章节。该复核不提供跨实例文件/数据库原子性；无登记输出的所有权和并发目录互斥仍需继续收敛。
+
+下载目录分配由 download_directory_allocator.dart 的 DownloadDirectoryAllocator 管理：注入库路径/已登记目录查询，串行选择和创建，已有空目录、文件及链接均为占用，返回目录与新建标记。LocalManager.allocateDownloadDirectory 为两类下载任务提供入口，原 findValidDirectory 已删除；压缩包按返回标记记录清理所有权。服务纳入业务边界，串行范围仅限同一管理器的下载请求，不替代跨进程或导入/删除互斥。

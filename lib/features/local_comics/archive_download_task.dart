@@ -191,13 +191,13 @@ class ArchiveDownloadTask extends DownloadTask {
     if (!_isCurrent(generation)) return;
     if (path == null) {
       final manager = LocalManager();
-      final existing = manager.find(comic.id, comicType);
-      final dir = await manager.findValidDirectory(
+      final allocation = await manager.allocateDownloadDirectory(
         comic.id,
         comicType,
         comic.title,
       );
-      if (existing == null) {
+      final dir = allocation.directory;
+      if (allocation.isNew) {
         _ownedOutputPath = dir.path;
         _outputManager = manager;
       }

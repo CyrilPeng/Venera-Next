@@ -305,11 +305,12 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
 
     if (path == null) {
       try {
-        var dir = await LocalManager().findValidDirectory(
+        final allocation = await LocalManager().allocateDownloadDirectory(
           comicId,
           comicType,
           comic!.title,
         );
+        final dir = allocation.directory;
         if (!_isCurrentRun(generation)) return;
         if (!(await dir.exists())) {
           await dir.create();
