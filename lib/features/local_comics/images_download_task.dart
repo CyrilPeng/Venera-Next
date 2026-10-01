@@ -52,23 +52,25 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
   @override
   void cancel() {
     final directoryPath = path;
-    final local = directoryPath == null
-        ? null
-        : LocalManager().find(id, comicType);
-    final removedDirectories = localChapterDirectoriesToDelete(
-      removed: chapters ?? const [],
-      retained: local?.downloadedChapters ?? const [],
-    );
+    final manager = LocalManager();
+    final removedChapters = List<String>.of(chapters ?? const []);
     _stopRun();
-    LocalManager().removeTask(this);
+    manager.removeTask(this);
     if (directoryPath == null) return;
     final stopped = _pendingStops;
     _pendingStops =
         () async {
           if (stopped != null) await stopped;
+          // Registration may change while transfer cancellation is draining.
+          // Query the original manager only when cleanup is ready to run.
+          final local = manager.find(id, comicType);
           if (local == null) {
             await Directory(directoryPath).deleteIgnoreError(recursive: true);
           } else {
+            final removedDirectories = localChapterDirectoriesToDelete(
+              removed: removedChapters,
+              retained: local.downloadedChapters,
+            );
             for (final directory in removedDirectories) {
               await Directory(
                 FilePath.join(directoryPath, directory),

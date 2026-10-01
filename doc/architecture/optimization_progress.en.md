@@ -720,3 +720,10 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - An optional constructor loader defaults to ImageDownloader.loadThumbnail without changing snapshots. Two controlled-stream regressions cover delayed cancellation, cleanup/resume waiting and discarded old bytes. The initial fixture timed out closing an unlistened stream; the corrected fixture passed rerun.
 - All 134 local-module and 915 full Windows Flutter tests passed; analysis has no errors/warnings and 23 existing infos. Structure/architecture, 12 script tests, Git dependencies and formatting passed. Updated changelog/bilingual structure/progress, preserving user edits.
 - This validates task subscription ownership, not immediate termination of every platform HTTP connection. Image output ownership, manager shutdown draining, snapshot consistency and remaining P0–P8 acceptance continue.
+
+## P6: Recheck registration before image cancellation cleanup (2026-10-02)
+
+- Cancellation captures the original manager and a copied chapter selection, then reads comic registration/downloaded chapters after transfers stop. Cleanup uses that current record instead of the stale pre-cancellation snapshot, preserving existing directory mapping and alias protection.
+- Two real-directory regressions cover initial comic registration and additional chapter registration while stream cancellation is pending. Both retain newly registered page files; existing unfinished-chapter deletion coverage still verifies actual cleanup.
+- Unregistered image output ownership, cross-instance allocation/deletion exclusion and manager shutdown remain open. This recheck is not an atomic database/filesystem transaction; remaining P0–P8 acceptance continues.
+- All 136 local-module and 917 full Windows Flutter tests passed; analysis has no errors/warnings and 23 existing infos. Structure/architecture, 12 script tests, Git dependencies and formatting passed. Updated changelog and bilingual structure/progress, preserving user edits.

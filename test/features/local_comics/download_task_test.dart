@@ -725,6 +725,75 @@ void main() {
     },
   );
 
+  for (final registeredBeforeCancel in [false, true]) {
+    test(
+      'cancel preserves chapters registered during draining (existing: $registeredBeforeCancel)',
+      () async {
+        final root = Directory.systemTemp.createTempSync(
+          'download-late-register-',
+        );
+        App.dataPath = root.path;
+        App.cachePath = root.path;
+        LocalManager.debugSkipComicSourceInit = true;
+        final manager = LocalManager();
+        await manager.init();
+        final task = _pendingImageTask(
+          sourceKey,
+          '${manager.path}/book',
+          chapters: ['new/a'],
+        );
+        LocalComic record(List<String> downloaded) => LocalComic(
+          id: task.id,
+          title: 'Book',
+          subtitle: '',
+          tags: [],
+          directory: 'book',
+          chapters: const ComicChapters({'new/a': 'New'}),
+          cover: '',
+          comicType: task.comicType,
+          downloadedChapters: downloaded,
+          createdAt: DateTime(2026),
+        );
+        if (registeredBeforeCancel) await manager.add(record([]));
+        final chapter = Directory('${task.path}/new_a')
+          ..createSync(recursive: true);
+        final page = File('${chapter.path}/page.jpg')..writeAsBytesSync([3]);
+        final started = Completer<void>();
+        final release = Completer<void>();
+        final controller = StreamController<ImageDownloadProgress>(
+          onListen: () => started.complete(),
+          onCancel: () => release.future,
+        );
+        ImageDownloader.debugLoadComicImageUnwrapped =
+            (image, source, cid, eid) => controller.stream;
+        manager.restorePausedDownloads([task]);
+        addTearDown(() async {
+          if (!release.isCompleted) release.complete();
+          task.pause();
+          await task.pendingCleanup;
+          await task.debugResumeFuture;
+          await manager.pendingDownloadTaskWrites;
+          await controller.close();
+          LocalManager.resetForTesting();
+          root.deleteSync(recursive: true);
+        });
+        task.resume();
+        await started.future.timeout(const Duration(seconds: 2));
+        task.cancel();
+        await pumpEventQueue();
+        await manager.add(record(['new/a']));
+        release.complete();
+        await task.pendingCleanup;
+        await task.debugResumeFuture;
+        expect(page.readAsBytesSync(), [3]);
+        expect(manager.find(task.id, task.comicType)!.downloadedChapters, [
+          'new/a',
+        ]);
+        expect(manager.downloadingTasks, isEmpty);
+      },
+    );
+  }
+
   test(
     'cancel drains transfers and removes only unfinished normalized chapters',
     () async {
