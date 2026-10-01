@@ -48,6 +48,46 @@ void main() {
     root.deleteSync(recursive: true);
   });
 
+  test('concurrent conversions reuse the first mapping', () async {
+    final db = sqlite3.open('${root.path}/local.db');
+    db.execute('DELETE FROM natural_sort_migration');
+    db.dispose();
+    final second = history.copy();
+    await Future.wait([
+      local.migrateLegacyPageOrder(history),
+      local.migrateLegacyPageOrder(second),
+    ]);
+    expect(history.page, 3);
+    expect(second.page, 3);
+    expect(HistoryManager().find('1', ComicType.local)!.page, 3);
+  });
+
+  test(
+    'failed history write preserves mapping and permits same-object retry',
+    () async {
+      final localDb = sqlite3.open('${root.path}/local.db');
+      localDb.execute('DELETE FROM natural_sort_migration');
+      localDb.dispose();
+      final historyDb = sqlite3.open('${root.path}/history.db');
+      try {
+        historyDb.execute(
+          "CREATE TRIGGER reject_migration BEFORE UPDATE ON history BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+        );
+        await expectLater(
+          local.migrateLegacyPageOrder(history),
+          throwsA(isA<SqliteException>()),
+        );
+        expect(history.page, 2);
+        historyDb.execute('DROP TRIGGER reject_migration;');
+        await local.migrateLegacyPageOrder(history);
+        expect(history.page, 3);
+        expect(HistoryManager().find('1', ComicType.local)!.page, 3);
+      } finally {
+        historyDb.dispose();
+      }
+    },
+  );
+
   test('new imports retain their natural page number', () async {
     await local.migrateLegacyPageOrder(history);
     expect(history.page, 2);

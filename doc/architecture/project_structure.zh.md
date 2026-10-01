@@ -373,3 +373,5 @@ local_comic_model 保存本地漫画数据及 Comic/HistoryMixin 契约，local_
 LocalRepository 在调用方拥有的 SQLite 连接上提供本地漫画查询，通过 local_comic_row 解码；LocalSortType 独立且原 local/local_comics 入口继续导出。LocalManager 的查询入口委托仓储，保留连接/目录/下载和写入职责。仓储不改变名称降序、最近 20 条、时间排序、LIKE 和精确查找语义。
 
 LocalRepository 进一步拥有本地表初始化、ID 分配查询和基础新增/删除事务；自然排序标记与漫画记录保持同事务，旧书更新不重置迁移进度。章节合并使用独立列表，保留顺序/重复项，避免修改调用方模型。LocalManager 保留通知、文件系统与剩余迁移/章节恢复协调；这些流程中尚存的 SQL 后续继续迁移。
+
+自然排序页码映射的查询和首次写入已归 LocalRepository，使用 LocalPageMigration 表达可空的新导入标记。首次持久化记录优先，避免异步图片枚举期间的并发重复插入覆盖已有映射。LocalManager 保留文件排序与历史写入协调；先保存映射再写历史，失败恢复未被后续更新的内存页码供重试。跨库事务和连接切换仍不在本单元范围。

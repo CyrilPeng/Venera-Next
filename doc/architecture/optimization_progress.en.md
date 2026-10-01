@@ -616,3 +616,10 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - Downloaded chapters merge into a new list, supporting const/immutable input without mutating caller models. New-before-old ordering and duplicate semantics remain. Added real SQLite failure injection for no orphan markers on insert failure, marker restoration on delete failure, retry, overridden IDs, source isolation and immutable inputs.
 - Ninety-two local-module and 873 full Windows Flutter tests passed. Analysis has no errors/warnings and 23 existing infos; structure/architecture, 12 architecture-script tests, Git dependencies and unit formatting passed. Updated changelog/bilingual docs, preserving user changes.
 - Natural-sort migration workflow, remaining chapter deletion/recovery SQL, connection lifecycle, directory/download responsibilities and remaining P0–P8 acceptance continue.
+
+## P6: Natural-sort migration persistence and retry (2026-10-02)
+
+- LocalRepository owns mapping reads/first writes using LocalPageMigration, including nullable new-import markers. Explicit columns and transactional conflict handling preserve the first complete-identity record after concurrent image enumeration.
+- The manager retains image sorting/history coordination, captures old page/time before enumeration, and persists mappings before history. Failed history writes restore a still-matching in-memory conversion for same-object retry. Tests cover concurrent callers, real history UPDATE failure/retry, repository write failure, source isolation and new-import markers. The initial injection incorrectly targeted INSERT; switching to the actual UPDATE path verified failure handling.
+- All 95 local-module and 876 full Windows Flutter tests passed. Analysis has no errors/warnings and 23 existing infos; structure/architecture, 12 script tests, Git dependencies and unit formatting passed. Updated changelog and bilingual structure/progress docs; user edits preserved.
+- This unit does not add local/history cross-database atomicity or complete connection switching, chapter deletion/recovery, directory/download responsibilities or remaining P0–P8 acceptance.

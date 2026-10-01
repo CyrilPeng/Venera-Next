@@ -237,13 +237,11 @@ class LocalManager with ChangeNotifier {
   /// be resumed without interpreting an already converted page a second time.
   Future<void> migrateLegacyPageOrder(History history) async {
     if (history.type != ComicType.local) return;
-    final key = [history.id, history.type.value];
-    var rows = _db.select(
-      'SELECT * FROM natural_sort_migration WHERE id = ? AND comic_type = ?',
-      key,
-    );
-    if (rows.isEmpty) {
-      var page = history.page;
+    final oldPage = history.page;
+    final historyTime = history.time.millisecondsSinceEpoch;
+    var migration = _repository.findPageMigration(history.id, history.type);
+    if (migration == null) {
+      var page = oldPage;
       if (history.ep > 0 && page > 0) {
         var chapter = history.ep;
         final chapters = find(history.id, ComicType.local)?.chapters;
@@ -254,23 +252,30 @@ class LocalManager with ChangeNotifier {
         final legacy = images.toList()..sort(compareLegacyComicFileNames);
         if (page <= legacy.length) page = images.indexOf(legacy[page - 1]) + 1;
       }
-      _db.execute('INSERT INTO natural_sort_migration VALUES (?, ?, ?, ?, ?)', [
-        ...key,
-        history.time.millisecondsSinceEpoch,
-        history.page,
-        page,
-      ]);
-      rows = _db.select(
-        'SELECT * FROM natural_sort_migration WHERE id = ? AND comic_type = ?',
-        key,
+      migration = _repository.recordPageMigration(
+        history.id,
+        history.type,
+        LocalPageMigration(historyTime, oldPage, page),
       );
     }
-    final migration = rows.single;
-    if (migration['history_time'] == history.time.millisecondsSinceEpoch &&
-        migration['old_page'] == history.page &&
-        migration['new_page'] != history.page) {
-      history.page = migration['new_page'] as int;
-      await HistoryManager().addHistory(history);
+    if (migration.historyTime == history.time.millisecondsSinceEpoch &&
+        migration.oldPage == history.page &&
+        migration.newPage != null &&
+        migration.newPage != history.page) {
+      final previousPage = history.page;
+      final convertedPage = migration.newPage!;
+      history.page = convertedPage;
+      try {
+        await HistoryManager().addHistory(history);
+      } catch (_) {
+        // Keep the persisted mapping for retry without leaving this instance
+        // looking successfully converted after a failed history write.
+        if (history.page == convertedPage &&
+            history.time.millisecondsSinceEpoch == migration.historyTime) {
+          history.page = previousPage;
+        }
+        rethrow;
+      }
     }
   }
 

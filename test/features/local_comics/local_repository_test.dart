@@ -6,6 +6,65 @@ import 'package:venera_next/features/local_comics/local_sort_type.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 
 void main() {
+  test(
+    'page mappings preserve first writer, null markers and source identity',
+    () {
+      final db = sqlite3.openInMemory();
+      final repository = LocalRepository(db)..initialize();
+      try {
+        expect(repository.findPageMigration('1', ComicType.local), isNull);
+        repository.recordPageMigration(
+          '1',
+          ComicType.local,
+          const LocalPageMigration(10, 2, 3),
+        );
+        final kept = repository.recordPageMigration(
+          '1',
+          ComicType.local,
+          const LocalPageMigration(20, 3, 2),
+        );
+        expect([kept.historyTime, kept.oldPage, kept.newPage], [10, 2, 3]);
+        repository.recordPageMigration(
+          '1',
+          const ComicType(17),
+          const LocalPageMigration(null, null, null),
+        );
+        final marker = repository.recordPageMigration(
+          '1',
+          const ComicType(17),
+          const LocalPageMigration(10, 2, 3),
+        );
+        expect(marker.historyTime, isNull);
+        expect(marker.newPage, isNull);
+        db.execute(
+          "CREATE TRIGGER reject_mapping BEFORE INSERT ON natural_sort_migration BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+        );
+        expect(
+          () => repository.recordPageMigration(
+            '2',
+            ComicType.local,
+            const LocalPageMigration(10, 2, 3),
+          ),
+          throwsA(isA<SqliteException>()),
+        );
+        expect(repository.findPageMigration('2', ComicType.local), isNull);
+        db.execute('DROP TRIGGER reject_mapping;');
+        expect(
+          repository
+              .recordPageMigration(
+                '2',
+                ComicType.local,
+                const LocalPageMigration(10, 2, 3),
+              )
+              .newPage,
+          3,
+        );
+      } finally {
+        db.dispose();
+      }
+    },
+  );
+
   test('writes and migration markers commit together without mutating chapters', () {
     final db = sqlite3.openInMemory();
     final repository = LocalRepository(db)..initialize();

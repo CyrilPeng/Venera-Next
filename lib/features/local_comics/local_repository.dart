@@ -6,7 +6,16 @@ import 'local_comic_model.dart';
 import 'local_comic_row.dart';
 import 'local_sort_type.dart';
 
-/// Local comic queries on a caller-owned connection.
+/// A persisted page conversion; null fields mark an already natural-sorted book.
+class LocalPageMigration {
+  const LocalPageMigration(this.historyTime, this.oldPage, this.newPage);
+
+  final int? historyTime;
+  final int? oldPage;
+  final int? newPage;
+}
+
+/// Local comic persistence on a caller-owned connection.
 class LocalRepository {
   LocalRepository(this.db);
   final Database db;
@@ -36,6 +45,40 @@ class LocalRepository {
         PRIMARY KEY (id, comic_type)
       );
     ''');
+  });
+
+  LocalPageMigration? findPageMigration(String id, ComicType type) {
+    final rows = db.select(
+      'SELECT history_time, old_page, new_page FROM natural_sort_migration WHERE id = ? AND comic_type = ?',
+      [id, type.value],
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.single;
+    return LocalPageMigration(
+      row['history_time'] as int?,
+      row['old_page'] as int?,
+      row['new_page'] as int?,
+    );
+  }
+
+  /// The first persisted mapping wins, including a new-import marker inserted
+  /// while the caller was asynchronously enumerating images.
+  LocalPageMigration recordPageMigration(
+    String id,
+    ComicType type,
+    LocalPageMigration migration,
+  ) => runSqliteTransaction(db, () {
+    db.execute(
+      'INSERT INTO natural_sort_migration (id, comic_type, history_time, old_page, new_page) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id, comic_type) DO NOTHING',
+      [
+        id,
+        type.value,
+        migration.historyTime,
+        migration.oldPage,
+        migration.newPage,
+      ],
+    );
+    return findPageMigration(id, type)!;
   });
 
   String findValidId(ComicType type) {
