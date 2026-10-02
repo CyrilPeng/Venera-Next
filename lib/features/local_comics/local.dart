@@ -29,6 +29,7 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/features/history/history.dart';
 
 import 'local_storage_guard.dart';
+import 'local_storage_migration.dart';
 
 export 'local_comic_image.dart';
 
@@ -115,26 +116,31 @@ class LocalManager with ChangeNotifier {
   }
 
   Future<String?> _setNewPath(String newPath) async {
-    var newDir = Directory(newPath);
-    if (!await newDir.exists()) {
-      return "Directory does not exist";
-    }
-    if (!await newDir.list().isEmpty) {
-      return "Directory is not empty";
-    }
     try {
-      await copyDirectoryIsolate(directory, newDir);
-      await File(
-        FilePath.join(App.dataPath, 'local_path'),
-      ).writeAsString(newPath);
-    } catch (e, s) {
-      Log.error("IO", e, s);
-      return e.toString();
+      final result =
+          await LocalStorageMigration(
+            copyContents: copyDirectoryIsolate,
+            publishPath: (value) => path = value,
+            reportCleanupError: (error, stack) => Log.error('IO', error, stack),
+            canonicalPath: (directory) => directory is AndroidDirectory
+                ? Future.value(directory.path)
+                : directory.resolveSymbolicLinks(),
+          ).migrate(
+            source: directory,
+            destination: Directory(newPath),
+            pathFile: File(FilePath.join(App.dataPath, 'local_path')),
+          );
+      if (result != null) return result;
+      try {
+        _checkNoMedia();
+      } catch (error, stack) {
+        Log.error('IO', error, stack);
+      }
+      return null;
+    } catch (error, stack) {
+      Log.error('IO', error, stack);
+      return error.toString();
     }
-    await directory.deleteContents(recursive: true);
-    path = newPath;
-    _checkNoMedia();
-    return null;
   }
 
   Future<String> findDefaultPath() async {
