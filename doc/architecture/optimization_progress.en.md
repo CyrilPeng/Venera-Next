@@ -842,3 +842,10 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - Changelog and bilingual structure/progress synchronized; user changes preserved. Directory/EhViewer imports, general deletion exclusion, archive/EPUB exit draining and remaining P0–P8 architecture/platform/performance acceptance remain unfinished.
 
 - Final full Windows Flutter suite: 973 passed. Analysis: no errors/warnings, 23 existing infos; structure, architecture, 12 script tests, Git dependencies and formatting passed.
+
+## P4/P6: Directory import protection and recovery registration boundary (2026-10-02)
+
+- Directory/EhViewer entries acquire import protection after path selection, covering scanning, copying and registration without reserving storage while a picker is open. Public registerComics protects copying/registration for ordinary import flows; nested import counts still prevent migration.
+- Recovery already owns exclusive storage and now calls private _registerComics, avoiding waiting on its own exclusive operation through the public entry. The internal method requires caller-owned import/recovery protection. EhViewer database closing moves to finally, including scan failures.
+- Three real-directory/database widget tests cover waiting for exclusive work before direct/copy registration and completing actual recovery without self-deadlock. Full Windows Flutter suite: 976 passed; final local wiring verification: 189 passed. Analysis: no errors/warnings, 23 existing infos; structure, architecture, 12 script tests, Git dependencies and formatting passed.
+- Changelog and bilingual structure/progress synchronized; user changes preserved. System picker/EhViewer real database fixtures were not added. Directory output versus downloads/deletion, import exit draining and remaining architecture/platform/performance work continue; P6 is not complete.

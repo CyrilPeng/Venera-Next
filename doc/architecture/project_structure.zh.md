@@ -433,3 +433,5 @@ EpubComicImporter.import 的解压、输出、可选 registerComic 回调及缓�
 CBZ.import 使用每次独立临时目录，_importExtracted 处理解包后的布局/复制，外层 finally 清理完整工作目录。封面复制必须等待；输出若被目录、文件或链接占用则拒绝，只有新建输出在复制/解析失败时可回收。旧页码/章节协议保持；注册与存储互斥、跨进程排他创建不由本单元保证。
 
 CBZ.import 将临时目录、解压、输出、注册回调与清理统一放入 LocalComicStorageGuard.runImport；回调失败回收新建输出，数据库回滚属于调用方。ImportComic 的单本/批量入口逐本在保护范围内注册；WebDAV 默认恢复同样传入注册回调，等待入库后再统计成功。注入导入适配器需自行保证相应写入协议；目录导入、其他删除和退出等待仍有独立工作。
+
+ImportComic 的目录/EhViewer 流程在选定路径后持有导入保护，公开 registerComics 保护复制及注册。恢复扫描持有独占保护时直接调用私有 _registerComics，避免公开入口等待自己的独占完成；该内部方法要求调用方已有存储保护。EhViewer 扫描数据库在 finally 关闭。此边界阻止迁移/恢复与导入交错，不等于下载/删除或全应用退出已统一协调。

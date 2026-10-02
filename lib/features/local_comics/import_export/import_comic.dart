@@ -182,6 +182,16 @@ class ImportComic {
       return false;
     }
 
+    return LocalComicStorageGuard.instance.runImport(
+      () => _importEhViewer(dbFile, comicSrc, imported),
+    );
+  }
+
+  Future<bool> _importEhViewer(
+    FileSelectResult dbFile,
+    Directory comicSrc,
+    Map<String?, List<LocalComic>> imported,
+  ) async {
     bool cancelled = false;
     var controller = showLoadingDialog(
       App.rootContext,
@@ -191,70 +201,72 @@ class ImportComic {
     );
 
     try {
-      var db = sql.sqlite3.open(dbFile.path);
-
-      Future<List<LocalComic>> validateComics(List<sql.Row> comics) async {
-        List<LocalComic> imported = [];
-        for (var comic in comics) {
-          if (cancelled) {
-            return imported;
+      final db = sql.sqlite3.open(dbFile.path);
+      try {
+        Future<List<LocalComic>> validateComics(List<sql.Row> comics) async {
+          List<LocalComic> imported = [];
+          for (var comic in comics) {
+            if (cancelled) {
+              return imported;
+            }
+            var comicDir = Directory(
+              FilePath.join(comicSrc.path, comic['DIRNAME'] as String),
+            );
+            String titleJP = comic['TITLE_JPN'] == null
+                ? ""
+                : comic['TITLE_JPN'] as String;
+            String title = titleJP == "" ? comic['TITLE'] as String : titleJP;
+            int timeStamp = comic['TIME'] as int;
+            DateTime downloadTime = timeStamp != 0
+                ? DateTime.fromMillisecondsSinceEpoch(timeStamp)
+                : DateTime.now();
+            var comicObj = await _checkSingleComic(
+              comicDir,
+              title: title,
+              tags: [
+                //1 >> x
+                [
+                  "MISC",
+                  "DOUJINSHI",
+                  "MANGA",
+                  "ARTISTCG",
+                  "GAMECG",
+                  "IMAGE SET",
+                  "COSPLAY",
+                  "ASIAN PORN",
+                  "NON-H",
+                  "WESTERN",
+                ][(log(comic['CATEGORY'] as int) / ln2).floor()],
+              ],
+              createTime: downloadTime,
+            );
+            if (comicObj == null) {
+              continue;
+            }
+            imported.add(comicObj);
           }
-          var comicDir = Directory(
-            FilePath.join(comicSrc.path, comic['DIRNAME'] as String),
-          );
-          String titleJP = comic['TITLE_JPN'] == null
-              ? ""
-              : comic['TITLE_JPN'] as String;
-          String title = titleJP == "" ? comic['TITLE'] as String : titleJP;
-          int timeStamp = comic['TIME'] as int;
-          DateTime downloadTime = timeStamp != 0
-              ? DateTime.fromMillisecondsSinceEpoch(timeStamp)
-              : DateTime.now();
-          var comicObj = await _checkSingleComic(
-            comicDir,
-            title: title,
-            tags: [
-              //1 >> x
-              [
-                "MISC",
-                "DOUJINSHI",
-                "MANGA",
-                "ARTISTCG",
-                "GAMECG",
-                "IMAGE SET",
-                "COSPLAY",
-                "ASIAN PORN",
-                "NON-H",
-                "WESTERN",
-              ][(log(comic['CATEGORY'] as int) / ln2).floor()],
-            ],
-            createTime: downloadTime,
-          );
-          if (comicObj == null) {
-            continue;
-          }
-          imported.add(comicObj);
+          return imported;
         }
-        return imported;
-      }
 
-      var tags = <String>[""];
-      tags.addAll(
-        db
-            .select("""
+        var tags = <String>[""];
+        tags.addAll(
+          db
+              .select("""
             SELECT * FROM DOWNLOAD_LABELS LB
             ORDER BY  LB.TIME DESC;
           """)
-            .map((r) => r['LABEL'] as String)
-            .toList(),
-      );
+              .map((r) => r['LABEL'] as String)
+              .toList(),
+        );
 
-      for (var tag in tags) {
-        if (cancelled) {
-          break;
-        }
-        var folderName = tag == '' ? '(EhViewer)Default'.tl : '(EhViewer)$tag';
-        var comicList = db.select("""
+        for (var tag in tags) {
+          if (cancelled) {
+            break;
+          }
+          var folderName = tag == ''
+              ? '(EhViewer)Default'.tl
+              : '(EhViewer)$tag';
+          var comicList = db.select("""
               SELECT * 
               FROM DOWNLOAD_DIRNAME DN
               LEFT JOIN DOWNLOADS DL
@@ -263,14 +275,16 @@ class ImportComic {
               ORDER BY DL.TIME DESC
             """).toList();
 
-        var validComics = await validateComics(comicList);
-        imported[folderName] = validComics;
-        if (validComics.isNotEmpty &&
-            !LocalFavoritesManager().existsFolder(folderName)) {
-          LocalFavoritesManager().createFolder(folderName);
+          var validComics = await validateComics(comicList);
+          imported[folderName] = validComics;
+          if (validComics.isNotEmpty &&
+              !LocalFavoritesManager().existsFolder(folderName)) {
+            LocalFavoritesManager().createFolder(folderName);
+          }
         }
+      } finally {
+        db.dispose();
       }
-      db.dispose();
 
       //Android specific
       var cache = FilePath.join(App.cachePath, dbFile.name);
@@ -290,6 +304,12 @@ class ImportComic {
     if (path == null) {
       return false;
     }
+    return LocalComicStorageGuard.instance.runImport(
+      () => _importDirectory(path, single),
+    );
+  }
+
+  Future<bool> _importDirectory(Directory path, bool single) async {
     Map<String?, List<LocalComic>> imported = {selectedFolder: []};
     try {
       if (single) {
@@ -367,7 +387,7 @@ class ImportComic {
     }
     controller.close();
     if (cancelled) return false;
-    return registerComics(imported, false);
+    return _registerComics(imported, false);
   }
 
   //Automatically search for cover image and chapters
@@ -537,6 +557,14 @@ class ImportComic {
   }
 
   Future<bool> registerComics(
+    Map<String?, List<LocalComic>> importedComics,
+    bool copy,
+  ) => LocalComicStorageGuard.instance.runImport(
+    () => _registerComics(importedComics, copy),
+  );
+
+  // Caller owns either an import reservation or the recovery exclusive guard.
+  Future<bool> _registerComics(
     Map<String?, List<LocalComic>> importedComics,
     bool copy,
   ) async {
