@@ -9,11 +9,19 @@ import 'package:venera_next/features/favorites/favorites.dart';
 
 import 'bootstrap_core.dart';
 import 'data_sync.dart';
+import 'headless_arguments.dart';
 import 'headless_bindings.dart';
+import 'headless_source_update_command.dart';
 import 'headless_sync_command.dart';
 import 'headless_output.dart';
 
 Future<void> runHeadlessMode(List<String> args) async {
+  final parsed = parseHeadlessArguments(args);
+  if (parsed.error) {
+    cliPrint({'status': 'error', 'message': parsed.errorMessage});
+    exit(1);
+  }
+  final request = parsed.data;
   WidgetsFlutterBinding.ensureInitialized();
   if (args.contains('--ignore-disheadless-log')) {
     Log.isMuted = true;
@@ -21,16 +29,6 @@ Future<void> runHeadlessMode(List<String> args) async {
   if (Platform.isLinux || Platform.isMacOS) {
     Directory.current = Platform.environment['HOME']!;
   }
-  // The first arg is '--headless', so we look at the next ones.
-  var commandIndex = args.indexOf('--headless') + 1;
-  if (commandIndex >= args.length) {
-    cliPrint({
-      'status': 'error',
-      'message': 'No command provided for headless mode.',
-    });
-    exit(1);
-  }
-
   // Need to initialize the app for some features to work
   configureHeadlessBindings();
   final sync = createApplicationDataSync();
@@ -47,204 +45,179 @@ Future<void> runHeadlessMode(List<String> args) async {
     exit(1);
   }
 
-  var command = args[commandIndex];
-  var subCommand = (commandIndex + 1 < args.length)
-      ? args[commandIndex + 1]
-      : null;
-
   var commandExitCode = 0;
-  switch (command) {
-    case 'webdav':
-      commandExitCode = await runHeadlessSyncCommand(
-        subCommand,
-        isConfigured: sync.hasConfiguration,
-        upload: sync.uploadData,
-        download: sync.downloadData,
-        emit: cliPrint,
-      );
-      break;
-    case 'updatescript':
-      if (subCommand == 'all') {
+  try {
+    switch (request.command) {
+      case HeadlessCommand.webdav:
+        commandExitCode = await runHeadlessSyncCommand(
+          request.subcommand,
+          isConfigured: sync.hasConfiguration,
+          upload: sync.uploadData,
+          download: sync.downloadData,
+          emit: cliPrint,
+        );
+        break;
+      case HeadlessCommand.updateScript:
+        commandExitCode = await runHeadlessSourceUpdateCommand(
+          checkUpdates: _checkSourceUpdatesForCli,
+          emit: cliPrint,
+        );
+        break;
+      case HeadlessCommand.updateSubscribe:
         cliPrint({
           'status': 'running',
-          'message': 'Checking for comic source script updates...',
+          'message': 'Updating subscribed comics...',
         });
-        await SourceUpdateService.instance.checkUpdates();
-        var updates = ComicSourceManager().availableUpdates;
-        if (updates.isEmpty) {
-          cliPrint({'status': 'success', 'message': 'No updates found.'});
-        } else {
-          var total = updates.length;
-          var current = 0;
-          var errors = 0;
-          var updated = 0;
+        var folder = appdata.settings["followUpdatesFolder"];
+        if (folder == null) {
+          cliPrint({
+            'status': 'error',
+            'message': 'Follow updates folder is not configured.',
+          });
+          commandExitCode = 1;
+          break;
+        }
+
+        final selected = request.comic;
+        if (selected != null) {
+          var comics = LocalFavoritesManager().getComicsWithUpdatesInfo(folder);
+          var comic = comics
+              .where(
+                (c) =>
+                    c.id == selected.id &&
+                    c.type.sourceKey == selected.sourceKey,
+              )
+              .firstOrNull;
+          if (comic == null) {
+            cliPrint({
+              'status': 'error',
+              'message': 'Subscribed comic not found.',
+            });
+            commandExitCode = 1;
+            break;
+          }
+
+          var result = await updateComic(comic, folder);
+
+          Map<String, dynamic> data = {
+            'current': 1,
+            'total': 1,
+            'comic': {
+              'id': comic.id,
+              'name': comic.name,
+              'coverUrl': comic.coverPath,
+              'author': comic.author,
+              'type': comic.type.sourceKey,
+              'updateTime': comic.updateTime,
+              'tags': comic.tags,
+            },
+          };
+
+          var message = 'Progress';
+          if (result.errorMessage != null) {
+            message = 'ProgressError';
+            data['error'] = result.errorMessage;
+          }
+
+          cliPrint({'status': 'running', 'message': message, 'data': data});
+
           cliPrint({
             'status': 'running',
-            'message': 'Updating all comic source scripts...',
-            'data': {'total': total, 'current': 0, 'updated': 0, 'errors': 0},
+            'message': 'Update check complete.',
+            'data': {
+              'total': 1,
+              'updated': result.updated ? 1 : 0,
+              'errors': result.errorMessage != null ? 1 : 0,
+            },
           });
-          for (var key in updates.keys) {
-            var source = ComicSource.find(key);
-            if (source != null) {
-              current++;
-              var data = {
-                'current': current,
-                'total': total,
-                'source': {
-                  'key': source.key,
-                  'name': source.name,
-                  'version': source.version,
-                  'url': source.url,
-                },
+
+          await Future.delayed(const Duration(milliseconds: 500));
+          var json = await getUpdatedComicsAsJson(folder);
+          commandExitCode = result.errorMessage != null ? 1 : 0;
+          cliPrint({
+            'status': result.errorMessage != null ? 'error' : 'success',
+            'message': 'Updated comics list.',
+            'data': jsonDecode(json),
+          });
+        } else {
+          int total = 0;
+          int updated = 0;
+          int errors = 0;
+          await for (var progress in updateFolder(folder, true)) {
+            total = progress.total;
+            updated = progress.updated;
+            errors = progress.errors;
+            Map<String, dynamic> data = {
+              'current': progress.current,
+              'total': progress.total,
+            };
+            if (progress.comic != null) {
+              data['comic'] = {
+                'id': progress.comic!.id,
+                'name': progress.comic!.name,
+                'coverUrl': progress.comic!.coverPath,
+                'author': progress.comic!.author,
+                'type': progress.comic!.type.sourceKey,
+                'updateTime': progress.comic!.updateTime,
+                'tags': progress.comic!.tags,
               };
-              try {
-                await SourceUpdateService.instance.update(source);
-                updated++;
-                cliPrint({
-                  'status': 'running',
-                  'message': 'Progress',
-                  'data': data,
-                });
-              } catch (e) {
-                errors++;
-                cliPrint({
-                  'status': 'running',
-                  'message': 'ProgressError',
-                  'data': {...data, 'error': e.toString()},
-                });
-              }
             }
+            var message = 'Progress';
+            if (progress.errorMessage != null) {
+              message = 'ProgressError';
+              data['error'] = progress.errorMessage;
+            }
+            cliPrint({'status': 'running', 'message': message, 'data': data});
           }
           cliPrint({
-            'status': 'success',
-            'message': 'All scripts updated.',
+            'status': 'running',
+            'message': 'Update check complete.',
             'data': {'total': total, 'updated': updated, 'errors': errors},
           });
+          await Future.delayed(const Duration(milliseconds: 500));
+          var json = await getUpdatedComicsAsJson(folder);
+          commandExitCode = errors > 0 ? 1 : 0;
+          cliPrint({
+            'status': errors > 0 ? 'error' : 'success',
+            'message': 'Updated comics list.',
+            'data': jsonDecode(json),
+          });
         }
-      } else {
-        cliPrint({
-          'status': 'error',
-          'message': 'Invalid updatescript command. Use "all".',
-        });
-        exit(1);
-      }
-      break;
-    case 'updatesubscribe':
-      cliPrint({
-        'status': 'running',
-        'message': 'Updating subscribed comics...',
-      });
-      var folder = appdata.settings["followUpdatesFolder"];
-      if (folder == null) {
-        cliPrint({
-          'status': 'error',
-          'message': 'Follow updates folder is not configured.',
-        });
-        exit(1);
-      }
-
-      var updateIndex = args.indexOf('--update-comic-by-id-type');
-      if (updateIndex != -1) {
-        var id = args[updateIndex + 1];
-        var type = args[updateIndex + 2];
-        var comics = LocalFavoritesManager().getComicsWithUpdatesInfo(folder);
-        var comic = comics.firstWhere(
-          (c) => c.id == id && c.type.sourceKey == type,
-        );
-
-        var result = await updateComic(comic, folder);
-
-        Map<String, dynamic> data = {
-          'current': 1,
-          'total': 1,
-          'comic': {
-            'id': comic.id,
-            'name': comic.name,
-            'coverUrl': comic.coverPath,
-            'author': comic.author,
-            'type': comic.type.sourceKey,
-            'updateTime': comic.updateTime,
-            'tags': comic.tags,
-          },
-        };
-
-        var message = 'Progress';
-        if (result.errorMessage != null) {
-          message = 'ProgressError';
-          data['error'] = result.errorMessage;
-        }
-
-        cliPrint({'status': 'running', 'message': message, 'data': data});
-
-        cliPrint({
-          'status': 'running',
-          'message': 'Update check complete.',
-          'data': {
-            'total': 1,
-            'updated': result.updated ? 1 : 0,
-            'errors': result.errorMessage != null ? 1 : 0,
-          },
-        });
-
-        await Future.delayed(const Duration(milliseconds: 500));
-        var json = await getUpdatedComicsAsJson(folder);
-        cliPrint({
-          'status': result.errorMessage != null ? 'error' : 'success',
-          'message': 'Updated comics list.',
-          'data': jsonDecode(json),
-        });
-      } else {
-        int total = 0;
-        int updated = 0;
-        int errors = 0;
-        await for (var progress in updateFolder(folder, true)) {
-          total = progress.total;
-          updated = progress.updated;
-          errors = progress.errors;
-          Map<String, dynamic> data = {
-            'current': progress.current,
-            'total': progress.total,
-          };
-          if (progress.comic != null) {
-            data['comic'] = {
-              'id': progress.comic!.id,
-              'name': progress.comic!.name,
-              'coverUrl': progress.comic!.coverPath,
-              'author': progress.comic!.author,
-              'type': progress.comic!.type.sourceKey,
-              'updateTime': progress.comic!.updateTime,
-              'tags': progress.comic!.tags,
-            };
-          }
-          var message = 'Progress';
-          if (progress.errorMessage != null) {
-            message = 'ProgressError';
-            data['error'] = progress.errorMessage;
-          }
-          cliPrint({'status': 'running', 'message': message, 'data': data});
-        }
-        cliPrint({
-          'status': 'running',
-          'message': 'Update check complete.',
-          'data': {'total': total, 'updated': updated, 'errors': errors},
-        });
-        await Future.delayed(const Duration(milliseconds: 500));
-        var json = await getUpdatedComicsAsJson(folder);
-        cliPrint({
-          'status': errors > 0 ? 'error' : 'success',
-          'message': 'Updated comics list.',
-          'data': jsonDecode(json),
-        });
-      }
-      break;
-    default:
-      cliPrint({'status': 'error', 'message': 'Unknown command: $command'});
-      exit(1);
+        break;
+    }
+  } catch (error, stack) {
+    Log.error('Headless command', error, stack);
+    cliPrint({'status': 'error', 'message': 'Command failed: $error'});
+    commandExitCode = 1;
+  } finally {
+    sync.dispose();
+    configureComicSourceDataSavedHandler(null);
   }
-
-  sync.dispose();
-  configureComicSourceDataSavedHandler(null);
 
   // Exit after command execution
   exit(commandExitCode);
+}
+
+Future<HeadlessSourceUpdateCheck> _checkSourceUpdatesForCli() async {
+  final service = SourceUpdateService.instance;
+  await service.checkUpdates();
+  final keys = List<String>.of(ComicSourceManager().availableUpdates.keys);
+  return HeadlessSourceUpdateCheck(
+    failures: service.lastUpdateCheck?.failures ?? const [],
+    updates: keys.map((key) {
+      final source = ComicSource.find(key);
+      return HeadlessSourceUpdate(
+        key: key,
+        name: source?.name ?? key,
+        version: source?.version ?? '',
+        url: source?.url ?? '',
+        update: () async {
+          if (source == null) {
+            throw StateError('Comic source no longer exists: $key');
+          }
+          await service.update(source);
+        },
+      );
+    }).toList(),
+  );
 }

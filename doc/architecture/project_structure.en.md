@@ -349,3 +349,5 @@ Remote uploads await new-archive write acknowledgement before deleting archives 
 Archive downloads and retention share natural ordering from data_sync_archive_order.dart, comparing numeric day/version runs by value. Daily cleanup selects the oldest under this order independently of server listing order. Non-numeric names remain eligible under the existing .venera filter; equivalent numeric spellings use original-name ordering.
 
 headless_sync_command.dart maps injected sync outcomes to CLI status/exit codes without Flutter or application globals; headless_output.dart preserves [CLI PRINT] JSON lines. headless.dart assembles/cleans services and exits with the returned code. Controlled Dart subprocess tests cover this output protocol; full Flutter headless-app acceptance is tracked separately.
+
+headless_arguments.dart parses typed requests before core startup. headless_source_update_command.dart accepts check/update ports, snapshots check results and returns progress, summary and exit code. headless.dart assembles source/subscription services and centralizes command exception handling and controller cleanup.
