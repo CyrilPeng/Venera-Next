@@ -15,6 +15,7 @@ void openLocalComic(LocalComic comic) {
   );
   App.rootContext.to(
     () => Reader(
+      onClosed: ReaderSessionScope.onClosedOf(App.rootContext),
       type: comic.comicType,
       cid: comic.id,
       name: comic.title,

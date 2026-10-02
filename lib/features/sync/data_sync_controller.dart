@@ -76,7 +76,9 @@ class DataSyncController with ChangeNotifier {
 
   /// Attach automatic synchronization once, after core services are ready.
   void start() {
-    if (_disposed) throw StateError('Cannot start a disposed DataSync');
+    if (_disposed) {
+      throw StateError('Cannot start a disposed DataSyncController');
+    }
     if (_started) return;
     _started = true;
     try {

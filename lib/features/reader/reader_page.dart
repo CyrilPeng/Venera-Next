@@ -26,7 +26,6 @@ import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/features/reader/volume.dart';
 import 'package:venera_next/features/reader/volume_controller.dart';
 import 'package:venera_next/features/reader/window_controller.dart';
-import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/reader_settings.dart';
@@ -51,6 +50,7 @@ class Reader extends StatefulWidget {
     required this.name,
     required this.chapters,
     required this.history,
+    required this.onClosed,
     this.initialPage,
     this.initialChapter,
     this.initialChapterGroup,
@@ -80,6 +80,8 @@ class Reader extends StatefulWidget {
   final int? initialChapterGroup;
 
   final History history;
+
+  final VoidCallback onClosed;
 
   @override
   State<Reader> createState() => ReaderState();
@@ -371,7 +373,7 @@ class ReaderState extends State<Reader>
         ),
       ),
       pauseAutoReading: (paused) => autoReading.pause('lifecycle', paused),
-      onClosed: () => DataSync().onDataChanged(),
+      onClosed: widget.onClosed,
       foreground: lifecycle == null || lifecycle == AppLifecycleState.resumed,
     );
     if (!appdata.settings

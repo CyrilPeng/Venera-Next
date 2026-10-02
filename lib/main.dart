@@ -1,7 +1,10 @@
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
+import 'package:venera_next/app_runtime/data_sync.dart';
+import 'package:venera_next/app_runtime/bootstrap_core.dart';
 import 'package:venera_next/app_runtime/follow_updates.dart';
 import 'package:venera_next/app_runtime/webdav_library.dart';
 import 'package:venera_next/features/reader/reader.dart'
-    show ReaderOrientationScope;
+    show ReaderOrientationScope, ReaderSessionScope;
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/app_runtime/background_sync.dart';
 import 'package:venera_next/app_runtime/interactive_bindings.dart';
@@ -44,8 +47,15 @@ void main(List<String> args) {
           showToast(message: message, context: context);
         });
         JsEngine.configureUiMessageHandler(JsUiApi());
-        await init();
-        runApp(const MyApp());
+        final sync = createApplicationDataSync();
+        try {
+          await init(createCoreBootstrap(onDataChanged: sync.onDataChanged));
+        } catch (_) {
+          sync.dispose();
+          configureComicSourceDataSavedHandler(null);
+          rethrow;
+        }
+        runApp(MyApp(dataSync: sync));
         if (App.isDesktop) {
           await windowManager.ensureInitialized();
           // WindowFrame owns the async close flow, including native close events.
@@ -80,7 +90,10 @@ void main(List<String> args) {
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.dataSync});
+
+  /// The host owns this controller beyond an individual widget mount.
+  final DataSyncController dataSync;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -89,7 +102,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   final _library = webDavLibrary;
   final _interactiveBindings = InteractiveBindings.platform();
-  final DataSyncController _dataSync = DataSync();
+  late final _dataSync = widget.dataSync;
   late final _followUpdates = createFollowUpdatesRuntime(_dataSync);
   late final _backgroundSync = BackgroundSync.platform(_dataSync);
 
@@ -117,6 +130,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     hideContentOverlay?.remove();
     hideContentOverlay = null;
     _followUpdates.dispose();
+    // Stop timers while retaining observation for late reader writes/remounts.
     _backgroundSync.stop();
     _library.source.dispose();
     unawaited(_interactiveBindings.dispose());
@@ -351,6 +365,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               }
               widget = FollowUpdatesScope(
                 runtime: _followUpdates,
+                child: widget,
+              );
+              widget = ReaderSessionScope(
+                onClosed: _dataSync.onDataChanged,
                 child: widget,
               );
               widget = DataSyncScope(controller: _dataSync, child: widget);

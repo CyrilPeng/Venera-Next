@@ -7,7 +7,6 @@ import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
-import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
@@ -26,7 +25,9 @@ void main() {
       ).absolute.path;
       DynamicLibrary.open('$native/flutter_windows.dll');
       DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
+      var dataChanges = 0;
       final core = createCoreBootstrap(
+        onDataChanged: () => dataChanges++,
         environment: () async {
           App.dataPath = root.path;
           App.cachePath = (Directory('${root.path}/temp')..createSync()).path;
@@ -37,7 +38,7 @@ void main() {
       configureHeadlessBindings();
       await core.start();
       expect(App.rootNavigatorKey.currentContext, isNull);
-      expect(DataSync.instance, isNull);
+      expect(dataChanges, 0);
       expect(File('${root.path}/appdata.json').existsSync(), isTrue);
       expect(File('${root.path}/cookie.db').existsSync(), isTrue);
       expect(LocalManager().path, startsWith(root.path));

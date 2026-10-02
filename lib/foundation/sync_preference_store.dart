@@ -1,7 +1,7 @@
 import 'sync_configuration.dart';
 
 /// Adapts typed sync configuration to existing settings and implicit-data keys.
-/// Persistence and transfer transaction ownership remain with DataSync.
+/// Persistence and transfer transaction ownership remain with DataSyncController.
 class SyncPreferenceStore {
   const SyncPreferenceStore({
     required Object? Function(String) readSetting,

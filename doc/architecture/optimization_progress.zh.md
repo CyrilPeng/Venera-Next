@@ -971,3 +971,13 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 调度测试的应用数据订阅由局部 fixture 提供，保留 stop 后记录待同步、重复 start、重试和配置回滚场景；应用归档测试直接构造控制器并注入真实 ZIP 导入参与者。下载 fixture 明确以 false 表示未应用快照，不再依赖覆盖方法没有更新内部字段的偶然行为。
 - 原有 32 项排队/调度/窗口针对性测试通过。应用组装单例、生产订阅适配和剩余阅读器 reset 调用仍待迁移；P8.1 不标记完成。
 - 最终验证：全量 Flutter 1036 项通过；静态分析零 error/warning、23 个 info；结构与 54 项业务入口门禁、Python 56 项（3 项平台工具跳过）、依赖锁文件与格式检查通过。日志 output/sync-hooks-{targeted,full,analyze}.log。用户原有修改参与工作区测试但不纳入提交。
+
+## P6/P8：生产同步单例与 reset 入口退场（2026-10-02）
+
+- 删除 features/sync/data_sync.dart 及传输工厂注册函数。app_runtime/data_sync.dart 仅提供无构造副作用的工厂，不持有静态控制器；交互入口和无头入口显式创建各自的控制器。
+- CoreBootstrap 由调用者持有，漫画源保存回调通过 createCoreBootstrap 参数注入；删除默认全局 bootstrap 实例和旧无参数 init 缓存。核心启动仍由 CoreBootstrap.start 保证同实例去重。
+- MyApp 接收宿主持有的控制器，窗口、后台调度、设置、摘要、追更均使用该实例。卸载时仅停止定时器，保留对延迟阅读写入及重新挂载间变更的观察；进程宿主拥有最终销毁责任。初始化失败和无头正常结束释放控制器。未改变强制进程退出或传输中销毁的既有边界。
+- Reader 要求显式 onClosed 回调，四个阅读入口通过 ReaderSessionScope 获取宿主通知；ReaderState 在历史/时长排空后调用原 ReaderSession 完成链。删除阅读器测试的同步 reset；用户已修改的自动阅读测试仅选择性暂存回调迁移，不混入其功能改动。
+- 新增实际阅读卸载只通知一次及应用适配器“构造无订阅、stop 后仍观察、dispose 后解除”的回归。首次新增测试读取未初始化 App.dataPath 失败，修正测试设置后单独通过；其余 24 项针对性测试通过。旧同步文件加入退场门禁，删除 reader → sync 允许依赖边。
+- P6.5/P6.6 继续验收配置失败恢复、运行中取消与完整重启/不回传矩阵；P8.1 的同步兼容入口已删除，但本地漫画等域 reset/debug 和聚合导出审查仍未完成。无头命令实际进程验收、五平台和固定设备性能证据仍待补齐。
+- 最终验证：全量 Flutter 1038 项通过；静态分析零 error/warning、23 个 info；结构与 54 项业务入口门禁、Python 56 项（3 项平台工具跳过）、依赖锁文件及格式检查通过。日志 output/sync-owner-{targeted,adapter,full,analyze}.log。测试包含用户原有工作区修改，提交只含本阶段改动。

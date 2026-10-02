@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/widgets.dart';
-import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
@@ -9,6 +8,7 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 
 import 'bootstrap_core.dart';
+import 'data_sync.dart';
 import 'headless_bindings.dart';
 
 void cliPrint(Map<String, dynamic> data) {
@@ -35,9 +35,12 @@ Future<void> runHeadlessMode(List<String> args) async {
 
   // Need to initialize the app for some features to work
   configureHeadlessBindings();
+  final sync = createApplicationDataSync();
   try {
-    await bootstrapCore();
+    await createCoreBootstrap(onDataChanged: sync.onDataChanged).start();
   } catch (error, stack) {
+    sync.dispose();
+    configureComicSourceDataSavedHandler(null);
     Log.error('Headless startup', error, stack);
     cliPrint({
       'status': 'error',
@@ -55,14 +58,14 @@ Future<void> runHeadlessMode(List<String> args) async {
     case 'webdav':
       if (subCommand == 'up') {
         cliPrint({'status': 'running', 'message': 'Uploading WebDAV data...'});
-        await DataSync().uploadData();
+        await sync.uploadData();
         cliPrint({'status': 'success', 'message': 'Upload complete.'});
       } else if (subCommand == 'down') {
         cliPrint({
           'status': 'running',
           'message': 'Downloading WebDAV data...',
         });
-        await DataSync().downloadData();
+        await sync.downloadData();
         cliPrint({'status': 'success', 'message': 'Download complete.'});
       } else {
         cliPrint({
@@ -250,6 +253,9 @@ Future<void> runHeadlessMode(List<String> args) async {
       cliPrint({'status': 'error', 'message': 'Unknown command: $command'});
       exit(1);
   }
+
+  sync.dispose();
+  configureComicSourceDataSavedHandler(null);
 
   // Exit after command execution
   exit(0);
