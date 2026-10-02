@@ -185,6 +185,43 @@ void main() {
     },
   );
 
+  test('download selects version 10 after version 9 on the same day', () async {
+    participant.version = 9;
+    remote.names = ['20-9.venera', '20-10.venera'];
+    expect(await transfer.download(connection, scope: scope), isTrue);
+    expect(remote.readName, '20-10.venera');
+    expect(participant.imports, 1);
+  });
+
+  test('download selects the later numeric day', () async {
+    remote.names = ['9-100.venera', '10-10.venera'];
+    expect(await transfer.download(connection, scope: scope), isTrue);
+    expect(remote.readName, '10-10.venera');
+  });
+
+  test(
+    'retention removes numeric oldest and daily candidates independent of listing order',
+    () async {
+      remote.names = [
+        '20-10.venera',
+        '10-1.venera',
+        '9-100.venera',
+        '20-9.venera',
+        for (var day = 11; day < 17; day++) '$day-1.venera',
+      ];
+      await transfer.upload(connection, excludeFields: false, scope: scope);
+      expect(remote.removed, ['20-9.venera', '9-100.venera']);
+      expect(remote.written, '20-8.venera');
+    },
+  );
+
+  test('unversioned legacy archive remains downloadable', () async {
+    remote.names = ['backup.venera'];
+    expect(await transfer.download(connection, scope: scope), isTrue);
+    expect(remote.readName, 'backup.venera');
+    expect(participant.imports, 1);
+  });
+
   test(
     'unchanged remote version does not download or clear pending via apply result',
     () async {
@@ -299,6 +336,7 @@ class _Remote implements DataSyncRemote {
   String? written;
   Uint8List? bytes;
   String? readPath;
+  String? readName;
   Object? writeError;
   bool closed = false;
   int closeCount = 0;
@@ -333,6 +371,7 @@ class _Remote implements DataSyncRemote {
 
   @override
   Future<void> readToFile(String name, String path) async {
+    readName = name;
     readPath = path;
     readStarted.complete();
     await readGate;

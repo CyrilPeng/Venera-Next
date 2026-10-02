@@ -1,3 +1,4 @@
+import 'data_sync_archive_order.dart';
 import 'dart:async';
 import 'package:venera_next/network/request_scope.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -77,9 +78,11 @@ class WebDavDataSyncTransfer implements DataSyncTransfer {
       scope.check();
       final day = (_now().millisecondsSinceEpoch ~/ 86400000).toString();
       final name = '$day-$version.venera';
-      final files = (await remote.listNames())
-          .where((name) => name.endsWith('.venera'))
-          .toList();
+      final files =
+          (await remote.listNames())
+              .where((name) => name.endsWith('.venera'))
+              .toList()
+            ..sort(compareDataSyncArchiveNames);
       scope.check();
       final today = files.where((name) => name.startsWith('$day-')).firstOrNull;
       final bytes = await archive.readAsBytes();
@@ -88,10 +91,8 @@ class WebDavDataSyncTransfer implements DataSyncTransfer {
       // The server may still have committed a request whose response was lost.
       await remote.write(name, bytes);
       scope.check();
-      final obsolete = <String>{
-        ?today,
-        if (files.length >= 10) (files..sort()).first,
-      }..remove(name);
+      final obsolete = <String>{?today, if (files.length >= 10) files.first}
+        ..remove(name);
       for (final oldName in obsolete) {
         scope.check();
         await remote.remove(oldName);
@@ -119,7 +120,7 @@ class WebDavDataSyncTransfer implements DataSyncTransfer {
     try {
       final files = await remote.listNames();
       scope.check();
-      files.sort((a, b) => b.compareTo(a));
+      files.sort((a, b) => compareDataSyncArchiveNames(b, a));
       final name = files.where((name) => name.endsWith('.venera')).firstOrNull;
       if (name == null) throw const DataSyncArchiveNotFound();
       final parts = name.split('-');

@@ -284,7 +284,8 @@
     "features/sync/data_sync_transfer.dart",
     "features/sync/data_sync_remote.dart",
     "features/sync/data_sync_controller.dart",
-    "features/follow_updates/follow_updates_runtime.dart"
+    "features/follow_updates/follow_updates_runtime.dart",
+    "features/sync/data_sync_archive_order.dart"
   ],
   "ui_files": [
     "app_shell/auth_page.dart",
