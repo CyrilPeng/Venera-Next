@@ -832,3 +832,13 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - Changelog and bilingual structure/progress synchronized; user changes preserved. Archive migration/recovery/registration coordination, directory/EhViewer exclusion, other exit lifecycle work and platform/performance acceptance remain unfinished.
 
 - Final full Windows Flutter suite: 970 passed. Analysis: no errors/warnings, 23 existing infos; structure, architecture, 12 script tests, Git dependencies and formatting passed.
+
+## P4/P6: Coordinate archive registration and storage migration (2026-10-02)
+
+- CBZ.import reuses LocalComicStorageGuard.runImport across workspace creation, extraction/copying, optional registration and cleanup. Registration failure reclaims newly created output; the registration adapter remains responsible for database rollback rather than implying a transaction across all persistence.
+- Single/batch import pages register inside the callback. Batches commit/count per book and continue after individual errors instead of creating all output before registration. Single-book failure returns false rather than registering an empty collection as success; loading views close in finally.
+- Default WebDAV restore passes registration to the real CBZ importer and awaits LocalManager.add before counting success; injectable import/registration adapters remain for tests. All three production CBZ.import call sites now supply registration callbacks.
+- Three real-archive regressions cover waiting before extraction, protection through registration, registration failure cleanup/retry and the real WebDAV import chain. Initial local/backup tests: 195 passed; final targeted run including WebDAV integration: 16 passed.
+- Changelog and bilingual structure/progress synchronized; user changes preserved. Directory/EhViewer imports, general deletion exclusion, archive/EPUB exit draining and remaining P0–P8 architecture/platform/performance acceptance remain unfinished.
+
+- Final full Windows Flutter suite: 973 passed. Analysis: no errors/warnings, 23 existing infos; structure, architecture, 12 script tests, Git dependencies and formatting passed.

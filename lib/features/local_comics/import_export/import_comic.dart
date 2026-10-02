@@ -28,48 +28,58 @@ class ImportComic {
   const ImportComic({this.selectedFolder, this.copyToLocal = true});
 
   Future<bool> cbz() async {
-    var file = await selectFile(ext: ['cbz', 'zip', '7z', 'cb7']);
-    Map<String?, List<LocalComic>> imported = {};
-    if (file == null) {
-      return false;
-    }
-    var controller = showLoadingDialog(App.rootContext, allowCancel: false);
+    final file = await selectFile(ext: ['cbz', 'zip', '7z', 'cb7']);
+    if (file == null) return false;
+    final controller = showLoadingDialog(App.rootContext, allowCancel: false);
     try {
-      var comic = await CBZ.import(File(file.path));
-      imported[selectedFolder] = [comic];
+      await CBZ.import(
+        File(file.path),
+        registerComic: (comic) => registerComic(comic, folder: selectedFolder),
+      );
+      App.rootContext.showMessage(
+        message: 'Imported @a comics'.tlParams({'a': 1}),
+      );
+      return true;
     } catch (e, s) {
-      Log.error("Import Comic", e.toString(), s);
+      Log.error('Import Comic', e.toString(), s);
       App.rootContext.showMessage(message: e.toString());
+      return false;
+    } finally {
+      controller.close();
     }
-    controller.close();
-    return registerComics(imported, false);
   }
 
   Future<bool> multipleCbz() async {
-    var picker = DirectoryPicker();
-    var dir = await picker.pickDirectory(directAccess: true);
-    if (dir != null) {
-      var files = (await dir.list().toList()).whereType<File>().toList();
-      files.removeWhere((file) => !isComicArchiveFileName(file.name));
-      Map<String?, List<LocalComic>> imported = {};
-      var controller = showLoadingDialog(App.rootContext, allowCancel: false);
-      var comics = <LocalComic>[];
-      for (var file in files) {
+    final dir = await DirectoryPicker().pickDirectory(directAccess: true);
+    if (dir == null) return false;
+    final files = (await dir.list().toList()).whereType<File>().where(
+      (file) => isComicArchiveFileName(file.name),
+    );
+    final controller = showLoadingDialog(App.rootContext, allowCancel: false);
+    var importedCount = 0;
+    try {
+      for (final file in files) {
         try {
-          var comic = await CBZ.import(file);
-          comics.add(comic);
+          await CBZ.import(
+            file,
+            registerComic: (comic) =>
+                registerComic(comic, folder: selectedFolder),
+          );
+          importedCount++;
         } catch (e, s) {
-          Log.error("Import Comic", e.toString(), s);
+          Log.error('Import Comic', e.toString(), s);
         }
       }
-      if (comics.isEmpty) {
-        App.rootContext.showMessage(message: "No valid comics found".tl);
+      if (importedCount == 0) {
+        App.rootContext.showMessage(message: 'No valid comics found'.tl);
       }
-      imported[selectedFolder] = comics;
+      App.rootContext.showMessage(
+        message: 'Imported @a comics'.tlParams({'a': importedCount}),
+      );
+      return true;
+    } finally {
       controller.close();
-      return registerComics(imported, false);
     }
-    return false;
   }
 
   Future<bool> pdf() async {

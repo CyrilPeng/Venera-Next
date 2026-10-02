@@ -11,6 +11,7 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/file_type.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:zip_flutter/zip_flutter.dart';
+import '../local_storage_guard.dart';
 
 /// Comic Book Archive. Currently supports CBZ, ZIP and 7Z formats.
 abstract class CBZ {
@@ -167,11 +168,21 @@ abstract class CBZ {
         );
   }
 
-  static Future<LocalComic> import(File file) async {
+  static Future<LocalComic> import(
+    File file, {
+    Future<void> Function(LocalComic comic)? registerComic,
+  }) => LocalComicStorageGuard.instance.runImport(
+    () => _import(file, registerComic: registerComic),
+  );
+
+  static Future<LocalComic> _import(
+    File file, {
+    Future<void> Function(LocalComic comic)? registerComic,
+  }) async {
     final workspace = Directory(App.cachePath).createTempSync('cbz_import_');
     try {
       await extractArchive(file, workspace);
-      return await _importExtracted(file, workspace);
+      return await _importExtracted(file, workspace, registerComic);
     } finally {
       await workspace.deleteIgnoreError(recursive: true);
     }
@@ -180,6 +191,7 @@ abstract class CBZ {
   static Future<LocalComic> _importExtracted(
     File file,
     Directory workspace,
+    Future<void> Function(LocalComic comic)? registerComic,
   ) async {
     final layout = ComicFileSystemLayout.inspect(
       workspace,
@@ -309,6 +321,7 @@ abstract class CBZ {
         cover: 'cover.${coverFile.extension}',
         createdAt: DateTime.now(),
       );
+      await registerComic?.call(comic);
       return comic;
     } catch (_) {
       await dest.deleteIgnoreError(recursive: true);

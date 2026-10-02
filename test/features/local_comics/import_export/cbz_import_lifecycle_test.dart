@@ -1,9 +1,13 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:archive/archive_io.dart' as archive;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/local_comics/import_export/cbz.dart';
 import 'package:venera_next/features/local_comics/local.dart';
+import 'package:venera_next/features/local_comics/local_storage_guard.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/file_system.dart';
 
 void main() {
@@ -47,6 +51,109 @@ void main() {
     return File('${root.path}/$name.cbz')
       ..writeAsBytesSync(archive.ZipEncoder().encodeBytes(contents));
   }
+
+  test(
+    'WebDAV restore keeps the real archive importer guarded until registration',
+    () async {
+      final gate = Completer<void>();
+      final registering = Completer<void>();
+      final oldOps = ComicBackupManager.ops;
+      final oldImporter = ComicBackupManager.importComic;
+      final oldRegister = ComicBackupManager.registerImportedComic;
+      final oldConfig = appdata.settings['backupWebdav'];
+      final oldPath = appdata.settings['backupWebdavPath'];
+      appdata.settings['backupWebdav'] = ['https://example.com/dav', 'u', 'p'];
+      appdata.settings['backupWebdavPath'] = '/backup';
+      ComicBackupManager.ops = _ArchiveDownloadOps(book('Restored'));
+      ComicBackupManager.importComic = null;
+      ComicBackupManager.registerImportedComic = (comic) async {
+        registering.complete();
+        await gate.future;
+        await manager.add(comic, comic.id);
+      };
+      final restoring = ComicBackupManager.restore([
+        BackupFile(name: 'Restored.cbz', size: 1, modified: DateTime(2024)),
+      ]);
+      try {
+        await registering.future;
+        await expectLater(
+          manager.runWithExclusiveStorage(() async {}),
+          throwsA(isA<LocalComicStorageBusy>()),
+        );
+        gate.complete();
+        final result = await restoring;
+        expect(result.success, 1);
+        expect(result.failed, 0);
+        expect(manager.findByName('Restored'), isNotNull);
+        expect(Directory(App.cachePath).listSync(), isEmpty);
+      } finally {
+        if (!gate.isCompleted) gate.complete();
+        await restoring;
+        ComicBackupManager.ops = oldOps;
+        ComicBackupManager.importComic = oldImporter;
+        ComicBackupManager.registerImportedComic = oldRegister;
+        appdata.settings['backupWebdav'] = oldConfig;
+        appdata.settings['backupWebdavPath'] = oldPath;
+      }
+    },
+  );
+
+  test(
+    'storage protects archive extraction through awaited registration',
+    () async {
+      final migrationGate = Completer<void>();
+      final registrationGate = Completer<void>();
+      final registering = Completer<LocalComic>();
+      final exclusive = manager.runWithExclusiveStorage(
+        () => migrationGate.future,
+      );
+      final importing = CBZ.import(
+        book('Guarded'),
+        registerComic: (comic) async {
+          registering.complete(comic);
+          await registrationGate.future;
+          await manager.add(comic, comic.id);
+        },
+      );
+      addTearDown(() async {
+        if (!migrationGate.isCompleted) migrationGate.complete();
+        if (!registrationGate.isCompleted) registrationGate.complete();
+        await exclusive;
+        await importing;
+      });
+      await pumpEventQueue();
+      expect(Directory(App.cachePath).listSync(), isEmpty);
+      expect(registering.isCompleted, isFalse);
+      migrationGate.complete();
+      await exclusive;
+      await registering.future;
+      expect(manager.findByName('Guarded'), isNull);
+      await expectLater(
+        manager.runWithExclusiveStorage(() async {}),
+        throwsA(isA<LocalComicStorageBusy>()),
+      );
+      registrationGate.complete();
+      await importing;
+      expect(manager.findByName('Guarded'), isNotNull);
+      await manager.runWithExclusiveStorage(() async {});
+    },
+  );
+
+  test('registration error removes archive output and permits retry', () async {
+    final error = StateError('registration rejected');
+    await expectLater(
+      CBZ.import(book('Register'), registerComic: (_) async => throw error),
+      throwsA(same(error)),
+    );
+    expect(Directory('${manager.path}/Register').existsSync(), isFalse);
+    expect(Directory(App.cachePath).listSync(), isEmpty);
+    await manager.runWithExclusiveStorage(() async {});
+    await CBZ.import(
+      book('Register'),
+      registerComic: (comic) => manager.add(comic, comic.id),
+    );
+    expect(manager.findByName('Register'), isNotNull);
+  });
 
   test(
     'concurrent archives retain separate workspaces, pages and awaited covers',
@@ -107,4 +214,21 @@ void main() {
       expect(Directory(App.cachePath).listSync(), isEmpty);
     },
   );
+}
+
+class _ArchiveDownloadOps implements ComicBackupWebDavOps {
+  _ArchiveDownloadOps(this.archiveFile);
+  final File archiveFile;
+
+  @override
+  Future<void> downloadFile(
+    BackupConfig config,
+    String remotePath,
+    String localPath,
+  ) async {
+    await archiveFile.copy(localPath);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

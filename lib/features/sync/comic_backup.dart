@@ -356,21 +356,23 @@ class ComicBackupManager {
       final localFile = File(localPath);
       try {
         await ops.downloadFile(config, remotePath, localPath);
-        late LocalComic comic;
+        Future<void> register(LocalComic comic) async {
+          final callback = registerImportedComic;
+          if (callback != null) {
+            await callback(comic);
+          } else {
+            await LocalManager().add(
+              comic,
+              LocalManager().findValidId(comic.comicType),
+            );
+          }
+        }
+
         final importer = importComic;
         if (importer != null) {
-          comic = await importer(localPath);
+          await register(await importer(localPath));
         } else {
-          comic = await CBZ.import(localFile);
-        }
-        final register = registerImportedComic;
-        if (register != null) {
-          await register(comic);
-        } else {
-          LocalManager().add(
-            comic,
-            LocalManager().findValidId(comic.comicType),
-          );
+          await CBZ.import(localFile, registerComic: register);
         }
         success++;
       } catch (e) {
