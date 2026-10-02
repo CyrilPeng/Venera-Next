@@ -1,3 +1,4 @@
+import 'package:venera_next/app_runtime/follow_updates.dart';
 import 'package:venera_next/app_runtime/webdav_library.dart';
 import 'package:venera_next/features/reader/reader.dart'
     show ReaderOrientationScope;
@@ -89,6 +90,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   final _library = webDavLibrary;
   final _interactiveBindings = InteractiveBindings.platform();
   final DataSyncController _dataSync = DataSync();
+  late final _followUpdates = createFollowUpdatesRuntime(_dataSync);
   late final _backgroundSync = BackgroundSync.platform(_dataSync);
 
   @override
@@ -99,7 +101,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       if (mounted) {
         _interactiveBindings.start();
         _backgroundSync.start();
-        startFollowUpdates();
+        _followUpdates.start();
       }
     });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -114,7 +116,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     App.registerForceRebuild(null);
     hideContentOverlay?.remove();
     hideContentOverlay = null;
-    stopFollowUpdates();
+    _followUpdates.dispose();
     _backgroundSync.stop();
     _library.source.dispose();
     unawaited(_interactiveBindings.dispose());
@@ -347,6 +349,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   ),
                 );
               }
+              widget = FollowUpdatesScope(
+                runtime: _followUpdates,
+                child: widget,
+              );
               widget = DataSyncScope(controller: _dataSync, child: widget);
               widget = WebDavLibraryScope(services: _library, child: widget);
               return _SystemUiProvider(

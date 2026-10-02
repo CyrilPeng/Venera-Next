@@ -955,3 +955,11 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 新增作用域/摘要回归：替换实例、上传下载按钮路由、状态变化、卸载释放监听、作用域不销毁控制器，以及缺少作用域时明确报错。针对性测试 14 项通过。
 - 本阶段只迁移部分调用方：main 的装配仍获取旧 DataSync 实例；无头入口、启动回调、追更与阅读结束入口、旧测试钩子尚待迁移，P6.5/P6.6/P8.1 不标记完成。
 - 最终验证：全量 Flutter 1032 项通过；静态分析零 error/warning、23 个 info；结构与 53 项业务入口门禁、Python 56 项（3 项平台工具跳过）、依赖锁文件和格式检查通过。日志为 output/sync-scope-{targeted,full,analyze}.log。工作区测试含用户未提交修改，本提交不包含这些功能改动。
+
+## P6：追更运行时实例化并移除同步域依赖（2026-10-02）
+
+- FollowUpdatesRuntime 独立持有后台服务、通知器和外部订阅，注入目录读取、忙碌判断、等待下载、任务工厂、错误处理与订阅函数。移除 followUpdatesService/followUpdatesChanges 全局实例及 start/stop 全局入口。
+- app_runtime/follow_updates.dart 连接现有收藏通知和显式 DataSyncController，MyApp 持有运行时并在卸载时销毁。FollowUpdatesScope 传递依赖；预览和页面在作用域替换时迁移监听、刷新数据，取消操作针对当前运行时。
+- 启动失败停止定时器并释放已获得的订阅，允许重试；重复启动/停止不重复订阅或释放。停止后旧下载返回不能创建任务，销毁取消运行时自有任务。收藏管理器的单回调注册以及 FollowUpdateJob 前台全局任务仍是后续生命周期优化范围，不宣称所有追更/收藏状态已实例化。
+- 增加 4 项运行时回归，并扩展双预览测试验证作用域替换与退订；追更相关 14 项测试通过。删除 follow_updates → sync 允许依赖边，登记运行时业务入口，业务门禁总数 54。P6.5/P6.6/P8.1 保持未完成。
+- 最终验证：全量 Flutter 1036 项通过；静态分析零 error/warning、23 个 info；结构与 54 项业务入口门禁、Python 56 项（3 项平台工具跳过）、依赖锁文件与格式检查通过。日志 output/follow-runtime-{targeted,full,analyze}.log。工作区测试包含用户修改，本提交不包含这些原有功能改动。

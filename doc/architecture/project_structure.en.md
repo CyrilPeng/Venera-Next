@@ -134,7 +134,7 @@ InteractiveBindings owns interactive subscriptions: the mounted app starts it an
 
 BackgroundSync owns automatic scheduling while the app is mounted. WebDAV sources perform checks/transfers without a static polling timer. DataSync.stop keeps observing changes to preserve pending state; dispose removes observation. Stopping scheduling must not interrupt transfer commits, and stale-generation ticks must not activate new work.
 
-FollowUpdatesService is separate from the page and exposes a UI-free narrow contract through follow_updates_api.dart. It cancels only owned task handles; runtime bindings own timers and external listeners. Views subscribe to followUpdatesChanges and unsubscribe in dispose; do not restore global State lookup to refresh follow-update pages/previews.
+FollowUpdatesService is separate from the page and exposes a UI-free narrow contract through follow_updates_api.dart. It cancels only owned task handles; FollowUpdatesRuntime instances own service lifecycle and external listeners. app_runtime/follow_updates.dart injects sync download waits and favorites notifications; MyApp owns/disposes the runtime. Views obtain it from FollowUpdatesScope, move changes subscriptions on scope replacement, and unsubscribe in dispose; do not restore global State lookup to refresh follow-update pages/previews.
 
 CacheManager owns instance paths, database, scanner and operation queue. CacheManager.open supports independent hosts; start explicitly begins one scan and dispose drains accepted work before closing. Scanners return results without global manager access. Cache operations must not bypass the queue, and directory cleanup must await disposal.
 

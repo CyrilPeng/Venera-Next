@@ -244,7 +244,7 @@ DataSync 构造无运行副作用，由运行时显式 start；dispose 禁止新
 
 `BackgroundSync` 在主应用挂载后管理自动同步调度；WebDAV 源只执行检查/传输，不保存静态轮询定时器。DataSync.stop 保留本地变更观察以避免丢失 pending，dispose 才解除观察；停止调度不得中断已进入提交的传输。旧代数 tick 不得启动新调度的工作。
 
-追更后台检查从页面分离到 FollowUpdatesService，通过 follow_updates_api.dart 暴露无 UI 的窄边界。服务只能取消自身任务句柄；运行时负责定时器和外部通知监听的启停。页面订阅 followUpdatesChanges 并在 dispose 退订，不得重新使用全局 State 查找刷新追更页面或预览。
+追更后台检查从页面分离到 FollowUpdatesService，通过 follow_updates_api.dart 暴露无 UI 的窄边界。服务只能取消自身任务句柄；FollowUpdatesRuntime 实例负责服务和外部通知监听的启停；app_runtime/follow_updates.dart 注入同步下载等待和收藏通知，MyApp 持有并销毁实例。页面通过 FollowUpdatesScope 订阅实例 changes，作用域替换时迁移监听、dispose 时退订，不得重新使用全局 State 查找刷新追更页面或预览。
 
 缓存管理器以实例保存路径、数据库、扫描器和操作队列；CacheManager.open 支持独立宿主，start 显式启动一次扫描，dispose 排空已接收操作后关闭。扫描器只返回结果，不访问全局缓存实例；缓存操作不得绕过队列或在未等待 dispose 完成时删除工作目录。
 
