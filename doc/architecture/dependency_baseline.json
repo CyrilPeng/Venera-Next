@@ -290,7 +290,8 @@
     "features/webdav_library/webdav_library_snapshot_store.dart",
     "features/webdav_library/webdav_library_synchronizer.dart",
     "features/sync/data_sync_transfer.dart",
-    "features/sync/data_sync_remote.dart"
+    "features/sync/data_sync_remote.dart",
+    "features/sync/data_sync_controller.dart"
   ],
   "ui_files": [
     "app_shell/auth_page.dart",

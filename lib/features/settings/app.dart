@@ -1,5 +1,5 @@
 import 'package:uuid/uuid.dart';
-import 'package:venera_next/foundation/sync_preference_store.dart';
+import 'package:venera_next/foundation/app_sync_preferences.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -271,7 +271,7 @@ class _WebdavSettingState extends State<_WebdavSetting> {
   @override
   void initState() {
     super.initState();
-    final config = SyncPreferenceStore(appdata).configuration;
+    final config = createAppSyncPreferences(appdata).configuration;
     if (config.excludedFields.trim().isNotEmpty) {
       disableSync = config.excludedFields;
     }

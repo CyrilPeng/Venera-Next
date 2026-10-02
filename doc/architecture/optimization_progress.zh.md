@@ -937,3 +937,12 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 运行时参与者原样返回该结果，传输服务不再为跳过导入发送成功通知或更新 lastSyncTime，DataSync 保留 pending。未启用版本检查的手动导入仍可应用旧版本，原数据格式、替换/回滚路径不变。
 - 新增五项真实 ZIP 夹具/控制器回归：旧/同版本跳过、新版本应用、手动旧版本导入、DataSync 跳过时保留 pending 及应用后清除 pending。专项连同传输和收藏导入 14 项通过。
 - 最终验证：Flutter 全量 1024 项通过，分析零 error/warning、23 info；结构/架构、完整 Python 56 项（3 项 Linux 工具依赖跳过）、依赖锁定和格式检查通过。日志 `output/import-result-{targeted,full,analyze}.log`；工作区测试包含用户原有修改，本提交不包含这些修改。
+
+## P6：同步控制器的设置、时钟与订阅注入（2026-10-02）
+
+- 提取 DataSyncController，接收设置存储、传输工厂、设置/隐式数据持久化、变更订阅、时钟与定时器接口。控制器不导入 appdata 或功能管理器，不含静态单例或 debug/reset；纳入业务门禁后共 53 个入口。
+- SyncPreferenceStore 改为显式设置读写和隐式数据 provider，Appdata 适配集中在 app_sync_preferences.dart；provider 每次取得当前映射，应用启动或导入替换 implicitData 对象后仍能读取新值，旧键和回滚检查点语义保持。
+- 变更订阅返回独立释放回调；stop 仍保留监听以记录脱离窗口期间的编辑，dispose 释放监听。订阅失败会回退 started 状态以允许重试；订阅端负责原子建立/回滚。旧应用订阅适配增加建立失败清理。
+- 原 DataSync 暂保留为兼容组装入口，承接静态 mode/interval、单例与旧测试覆盖钩子，通过继承使用同一个控制器实现。它尚未退场；不能据此宣称生产同步已彻底摆脱全局状态。下一阶段迁移调用方及测试后删除该兼容层。
+- 新增六项无 appdata/文件系统依赖的控制器回归：独立状态/订阅、stop/dispose、独立时钟/定时器、订阅失败重试、配置传输失败回滚、隐式映射替换。专项连同旧调度/窗口/导入测试共 55 项通过。
+- 最终验证：Flutter 全量 1030 项通过，分析零 error/warning、23 info；结构/53 业务入口架构门禁、完整 Python 56 项（3 项 Linux 工具依赖跳过）、依赖锁定及格式检查通过。日志 `output/sync-controller-{targeted,full,analyze}.log`。工作区测试包含用户既有修改，本阶段仅提交自己的文件及 changelog 条目。
