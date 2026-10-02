@@ -1071,3 +1071,10 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - JsCallbackScope 增加子作用域：单个快照可单独释放，父源释放会释放所有子快照。getSettingsDynamic 显式要求调用方作用域，设置页在每次重建、收起和卸载时释放旧快照，避免将每次 getter 新生成的函数积累到源卸载；不同读取者互不干扰。getter 失败继续回退到静态设置，不受失败快照释放影响。
 - 新增 4 项真实 QuickJS 回归：静态回调移除失效、两个独立快照与 20 次创建/释放、getter 失败回退、连续解析失败释放。模块 129 项测试通过；原生关闭检查覆盖引用释放，但设置页重建/收起/卸载的 Widget 专项仍需后续补验。图片处理/JS UI 的 JSAutoFreeFunction 还未迁移，不据此完成全项目生命周期验收。
 - 最终验证：全量 Flutter 1138 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁及格式检查通过。日志 output/settings-lifetime-{targeted,full,analyze}.log。工作区测试包含用户修改，提交仅含本阶段内容。
+
+## P4/P7：设置页面快照与异步回调验收（2026-10-03）
+
+- 使用正式 ComicSourcePage、真实 JsCallbackScope 与受控 JSInvokable 构建 5 项 Widget 测试，核对主题重建、收起、重新展开、卸载时每份动态快照只释放一次；补齐上一阶段的页面生命周期证据。它与真实 QuickJS 测试互补，不能独立证明原生执行行为。
+- 回归先复现 _CallbackSettingState 在回调完成前卸载后仍 setState 的错误。现在 finally 检查 mounted，同步抛错和异步失败统一记录原异常并在仍挂载时通过消息接口提示；执行中重复点击不再重复调用，失败后恢复可重试状态，卸载后失败不操作页面。
+- 5 项针对性 Widget 测试通过：快照释放、卸载后成功、同步/异步失败后重试、快速重复点击及卸载后失败。双语能力矩阵已更新；多页面/源替换交互和图片/JS UI 回调迁移仍待继续，不宣布 P4/P7 整体完成。
+- 最终验证：全量 Flutter 1143 项通过；测试格式提示修正后静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。日志 output/settings-widget-{targeted,full,analyze}.log。用户工作区修改仅参与测试，不混入本提交。

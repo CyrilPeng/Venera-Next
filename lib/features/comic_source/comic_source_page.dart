@@ -523,15 +523,21 @@ class _CallbackSettingState extends State<_CallbackSetting> {
   bool isLoading = false;
 
   Future<void> onClick() async {
-    var func = widget.setting.value['callback'];
-    var result = func([]);
-    if (result is Future) {
-      setState(() {
-        isLoading = true;
-      });
-      try {
+    if (isLoading) return;
+    try {
+      var func = widget.setting.value['callback'];
+      var result = func([]);
+      if (result is Future) {
+        setState(() {
+          isLoading = true;
+        });
         await result;
-      } finally {
+      }
+    } catch (error, stack) {
+      Log.error('Source setting callback', error, stack);
+      if (mounted) context.showMessage(message: error.toString());
+    } finally {
+      if (mounted && isLoading) {
         setState(() {
           isLoading = false;
         });

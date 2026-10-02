@@ -12,6 +12,8 @@ Environment: Windows Flutter tests with the real QuickJS library, assets/init.js
 | Comic | Details, malformed data/source errors and source identity | source_lifecycle_test.dart | Like/rating and archive list/download URL bridge execution |
 | Images | Chapter images, thumbnails/next token, async image config, sync thumbnail config and identity | source_lifecycle_test.dart | Processing functions, cancellation and full config-error matrix |
 | Comments | Comic/chapter lists and pagination, send callbacks and identity | source_lifecycle_test.dart | Vote/like, reply arguments, re-login/cancellation matrix |
-| Metadata | Absent hooks; static settings callbacks, dynamic getter snapshots/independent release, fallback and parse-failure cleanup; version/key/install/rollback | source_lifecycle_test.dart | Link/tag navigation, translations and full dynamic-settings UI interaction |
+| Metadata | Absent hooks; static settings callbacks, dynamic getter snapshots/independent release, fallback and parse-failure cleanup; page rebuild/collapse/disposal and late/failing/retried callbacks; version/key/install/rollback | source_lifecycle_test.dart | Link/tag navigation, translations and multi-page/source-replacement settings interaction |
 
 Tests are under test/features/comic_source/. Existing normalization tests cover data conversion but do not replace JS bridge execution. See optimization_progress.en.md for stage/full logs. Dynamic categories now use explicit native callback scopes. Next, audit image/UI finalizer ownership and fill remaining capability paths. P7.2 remains partial.
+
+Page evidence: source_settings_widget_test.dart uses production ComicSourcePage and JsCallbackScope with controlled JSInvokable objects to verify destruction counts and page behavior. It complements native tests rather than replacing real JS execution.

@@ -12,6 +12,8 @@
 | 漫画 | 详情加载、非法数据与源错误；源身份隔离 | source_lifecycle_test.dart | 点赞/评分、归档列表与下载 URL 的实际桥接 |
 | 图片 | 章节图片、缩略图与下一页标记、异步图片配置、同步缩略图配置；源身份隔离 | source_lifecycle_test.dart | 图片处理函数/取消/配置错误的完整矩阵 |
 | 评论 | 普通/章节评论列表与分页，发送回调与源身份隔离 | source_lifecycle_test.dart | 评论投票/点赞、回复参数、重登录与取消交叉矩阵 |
-| 元数据 | 能力缺失；静态设置回调、动态 getter 快照与独立释放、异常回退、解析失败清理；版本/key/安装回滚 | source_lifecycle_test.dart | 链接、标签跳转、翻译及动态设置页面交互的完整执行矩阵 |
+| 元数据 | 能力缺失；静态设置回调、动态 getter 快照与独立释放、异常回退、解析失败清理；页面重建/收起/卸载及回调晚到/失败/重试；版本/key/安装回滚 | source_lifecycle_test.dart | 链接、标签跳转、翻译及动态设置的多页面/源替换交互 |
 
 测试文件位于 test/features/comic_source/。源输入归一化另由现有 normalization 测试覆盖，但纯数据测试不能代替真实 JS 桥接执行。全量及阶段日志见 optimization_progress.zh.md。动态分类已使用显式原生回调作用域；后续继续审查图片/UI 回调的 finalizer 所有权并补齐未执行能力；P7.2 继续为部分完成。
+
+设置页面证据：source_settings_widget_test.dart 使用正式 ComicSourcePage、实际 JsCallbackScope 与受控 JSInvokable，验证快照销毁次数和页面行为；它补充原生测试，不代替真实 JS 函数执行。
