@@ -47,10 +47,11 @@ Future<File> _exportAppData(bool sync) async {
   return cacheFile;
 }
 
-Future<void> importAppData(File file, [bool checkVersion = false]) =>
+/// False means the archive was skipped by its embedded version check.
+Future<bool> importAppData(File file, [bool checkVersion = false]) =>
     AppDataOperations.instance.run(() => _importAppData(file, checkVersion));
 
-Future<void> _importAppData(File file, bool checkVersion) async {
+Future<bool> _importAppData(File file, bool checkVersion) async {
   var cacheDirPath = FilePath.join(App.cachePath, 'temp_data');
   var cacheDir = Directory(cacheDirPath);
   var backupDir = Directory(
@@ -87,7 +88,7 @@ Future<void> _importAppData(File file, bool checkVersion) async {
           ? importedSettings["dataVersion"]
           : null;
       if (version is int && version <= appdata.settings["dataVersion"]) {
-        return;
+        return false;
       }
     }
 
@@ -155,6 +156,7 @@ Future<void> _importAppData(File file, bool checkVersion) async {
       appdata.syncData(importedAppdata);
     }
     success = true;
+    return true;
   } catch (error, stackTrace) {
     try {
       await _rollbackImport(

@@ -930,3 +930,10 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 下载接口返回是否应用：远端版本不新时返回 false，DataSync 保留 pending。生产归档导入器仍为 void，本次适配暂沿用导入调用返回即已应用的旧行为；下一项独立修复归档内部版本检查跳过时的结果，避免错误清除 pending。
 - 新增六项传输测试：命名/保留/排除字段、上传失败清理、版本跳过、参与者 no-op、通知时序/独立路径及导入失败清理。专项 47 项、Flutter 全量 1019 项通过；分析零 error/warning、23 info。结构/52 业务入口门禁、完整 Python 56 项（3 项 Linux 工具依赖跳过）、锁定依赖与格式检查通过。
 - 日志 `output/data-transfer-{targeted,full,analyze}.log`。测试包含用户原有工作区修改，提交仅包含本阶段文件。
+
+## P6：跳过旧归档时保留待同步状态（2026-10-02）
+
+- 修复独立于传输拆分提交：当服务器文件名版本较新、但归档内 dataVersion 不高于本地版本时，归档导入会跳过。过去 void 返回被调用者当作已应用，可能清除 pending；现在 importAppData 返回 bool，内嵌版本检查跳过返回 false，完成原导入路径返回 true，异常仍抛出。
+- 运行时参与者原样返回该结果，传输服务不再为跳过导入发送成功通知或更新 lastSyncTime，DataSync 保留 pending。未启用版本检查的手动导入仍可应用旧版本，原数据格式、替换/回滚路径不变。
+- 新增五项真实 ZIP 夹具/控制器回归：旧/同版本跳过、新版本应用、手动旧版本导入、DataSync 跳过时保留 pending 及应用后清除 pending。专项连同传输和收藏导入 14 项通过。
+- 最终验证：Flutter 全量 1024 项通过，分析零 error/warning、23 info；结构/架构、完整 Python 56 项（3 项 Linux 工具依赖跳过）、依赖锁定和格式检查通过。日志 `output/import-result-{targeted,full,analyze}.log`；工作区测试包含用户原有修改，本提交不包含这些修改。

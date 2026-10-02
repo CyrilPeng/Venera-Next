@@ -31,10 +31,7 @@ class _ApplicationSyncParticipant implements DataSyncParticipant {
   Future<File> exportData(bool excludeFields) => exportAppData(excludeFields);
 
   @override
-  Future<bool> importData(File file) async {
-    await importAppData(file, true);
-    return true;
-  }
+  Future<bool> importData(File file) => importAppData(file, true);
 
   @override
   void notifyImported() {

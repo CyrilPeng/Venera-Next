@@ -47,7 +47,7 @@
 | P6.3 | P | 本地库与导入下载 | `lib/features/local_comics/local.dart; lib/features/local_comics/local_deletion_paths.dart` | 队列/仓储/迁移已拆分；符号链接、删除回滚和未受保护直接写入者仍需处理。 |
 | P6.4 | I | WebDAV 实例化与拆分 | `lib/features/webdav_library/webdav_library_synchronizer.dart; lib/features/webdav_library/webdav_library_snapshot_store.dart; lib/features/webdav_library/webdav_library_source.dart` | 配置/发现/快照与缓存/同步协调/源适配已分离，实例注入和路径、增量同步、取消回归已有证据；仍受 P6 总体数据/性能/平台退出条件约束。 |
 | P6.5 | P | 应用同步职责 | `lib/features/sync/data_sync.dart; lib/features/sync/app_data_archive.dart; lib/app_runtime/sync_window_binding.dart` | 归档/窗口/传输已迁出，传输通过参与者接口连接运行时；DataSync 调度、设置与变更监听仍依赖全局对象。 |
-| P6.6 | P | 同步窄接口与协议 | `lib/features/sync/data_sync.dart; test/features/sync/data_sync_schedule_test.dart` | 传输参与者接口已注入并保留三模式回归；归档导入的 no-op 结果仍需传回，继续设置/监听注入与 pending、不回传最终矩阵。 |
+| P6.6 | P | 同步窄接口与协议 | `lib/features/sync/data_sync.dart; test/features/sync/data_sync_schedule_test.dart` | 传输参与者接口已注入，导入版本检查的 no-op 结果已传回以保留 pending；继续设置/监听注入与重启、不回传最终矩阵。 |
 | P6.7 | P | 原子性约束 | `lib/foundation/sqlite_transaction.dart; lib/foundation/directory_replacement.dart; lib/features/local_comics/local.dart` | 已有事务/恢复工具；删除仍可能跨文件/数据库部分提交。 |
 | P7.1 | O | 按能力拆解析器 | `lib/features/comic_source/parser.dart` | 1349 行仍含搜索/分类/图片/评论注册解析；按真实能力逐项拆出。 |
 | P7.2 | P | JS 与最小源兼容 | `assets/init.js; test/features/comic_source/source_parser_test.dart` | 现有 parser 测试只验证类声明；补充合成源的能力/桥接执行矩阵。 |
