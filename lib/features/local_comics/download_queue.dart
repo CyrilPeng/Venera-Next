@@ -194,7 +194,7 @@ class DownloadQueue {
 
   /// Freeze admissions/scheduling and drain all accepted pause/cancel work.
   /// The owner releases the suspension if shutdown is abandoned.
-  Future<void> suspend() {
+  Future<void> suspend({bool notify = true}) {
     if (_suspension != null) return _suspension!.future;
     final completion = _suspension = Completer<void>();
     completion.future.ignore();
@@ -203,7 +203,7 @@ class DownloadQueue {
     for (final task in List<DownloadTask>.of(tasks)) {
       _stopBeforeScheduling(task, task.pause);
     }
-    notifyChanged();
+    if (notify) notifyChanged();
     unawaited(() async {
       try {
         while (_pendingStop != null) {
@@ -217,7 +217,7 @@ class DownloadQueue {
     return completion.future;
   }
 
-  void releaseSuspension(Future<void> preparation) {
+  void releaseSuspension(Future<void> preparation, {bool notify = true}) {
     final suspension = _suspension;
     if (suspension == null || !identical(suspension.future, preparation)) {
       return;
@@ -228,7 +228,7 @@ class DownloadQueue {
     _suspension = null;
     _revision++;
     _scheduledResumeRevision = null;
-    notifyChanged();
+    if (notify) notifyChanged();
   }
 
   Future<void> _stopBeforeScheduling(DownloadTask task, void Function() stop) {

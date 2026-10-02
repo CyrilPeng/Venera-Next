@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
+import 'package:venera_next/features/local_comics/local_storage_guard.dart';
 
 const _testComicType = ComicType(9001);
 
@@ -35,6 +37,63 @@ bool _sqliteAvailable() {
 
 void main() {
   test(
+    'deletion rejects importing and uses current registered output before completing',
+    () async {
+      final root = Directory.systemTemp.createTempSync('local-delete-owner-');
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      LocalManager.resetForTesting();
+      LocalManager.debugSkipComicSourceInit = true;
+      final manager = LocalManager();
+      await manager.init();
+      final db = sqlite3.open('${root.path}/local.db');
+      final stale = _localComic('old', downloaded: ['a']);
+      await manager.add(stale);
+      final oldDirectory = Directory('${manager.path}/old')..createSync();
+      File('${oldDirectory.path}/keep.jpg').writeAsStringSync('keep');
+      final currentDirectory = Directory('${manager.path}/current')
+        ..createSync();
+      File('${currentDirectory.path}/page.jpg').writeAsStringSync('current');
+      db.execute("UPDATE comics SET directory = 'current' WHERE id = 'old'");
+      final gate = Completer<void>();
+      final importing = LocalComicStorageGuard.instance.runImport(
+        () => gate.future,
+      );
+      try {
+        await expectLater(
+          manager.deleteComic(stale),
+          throwsA(isA<LocalComicStorageBusy>()),
+        );
+        await expectLater(
+          manager.deleteComicChapters(stale, ['a']),
+          throwsA(isA<LocalComicStorageBusy>()),
+        );
+        await expectLater(
+          manager.batchDeleteComics([stale], true, false),
+          throwsA(isA<LocalComicStorageBusy>()),
+        );
+        expect(manager.find(stale.id, stale.comicType), isNotNull);
+        expect(currentDirectory.existsSync(), isTrue);
+        gate.complete();
+        await importing;
+        await manager.deleteComic(stale);
+        expect(currentDirectory.existsSync(), isFalse);
+        expect(
+          File('${oldDirectory.path}/keep.jpg').readAsStringSync(),
+          'keep',
+        );
+        expect(manager.find(stale.id, stale.comicType), isNull);
+        await manager.runWithExclusiveStorage(() async {});
+      } finally {
+        if (!gate.isCompleted) gate.complete();
+        await importing;
+        db.dispose();
+        LocalManager.resetForTesting();
+        root.deleteSync(recursive: true);
+      }
+    },
+  );
+  test(
     'deletions notify after storage succeeds and retain files on failure',
     () async {
       final root = Directory.systemTemp.createTempSync('local-delete-');
@@ -62,8 +121,8 @@ void main() {
       db.execute(
         "CREATE TRIGGER reject_update BEFORE UPDATE ON comics BEGIN SELECT RAISE(ABORT, 'injected'); END;",
       );
-      expect(
-        () => manager.deleteComicChapters(first, ['a']),
+      await expectLater(
+        manager.deleteComicChapters(first, ['a']),
         throwsA(isA<SqliteException>()),
       );
       expect(file.existsSync(), isTrue);
@@ -72,12 +131,15 @@ void main() {
       db.execute(
         "CREATE TRIGGER reject_second BEFORE DELETE ON comics WHEN OLD.id = 'second' BEGIN SELECT RAISE(ABORT, 'injected'); END;",
       );
-      manager.batchDeleteComics([first, second], true, false);
+      await expectLater(
+        manager.batchDeleteComics([first, second], true, false),
+        throwsA(isA<SqliteException>()),
+      );
       expect(manager.count, 2);
       expect(file.existsSync(), isTrue);
       expect(notifications, 0);
       db.execute('DROP TRIGGER reject_second;');
-      manager.batchDeleteComics([first, second], false, false);
+      await manager.batchDeleteComics([first, second], false, false);
       expect(manager.count, 0);
       expect(db.select('SELECT * FROM natural_sort_migration'), isEmpty);
       expect(file.existsSync(), isTrue);
@@ -107,7 +169,7 @@ void main() {
         notifications++;
         expect(manager.find('1', stale.comicType)!.downloadedChapters, ['new']);
       });
-      manager.deleteComicChapters(stale, ['a']);
+      await manager.deleteComicChapters(stale, ['a']);
       expect(notifications, 1);
       expect(stale.downloadedChapters, ['a']);
     },
@@ -216,7 +278,7 @@ void main() {
       await manager.add(second);
       notifyCount = 0;
       isDeleting = true;
-      manager.deleteComic(second, false);
+      await manager.deleteComic(second, false);
       isDeleting = false;
 
       expect(notifyCount, 1);

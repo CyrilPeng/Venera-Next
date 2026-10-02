@@ -122,12 +122,12 @@ class LocalManager with ChangeNotifier {
         'Wait for downloads to finish or cancel them before changing the local library.',
       );
     }
-    final stopped = _downloadQueue.suspend();
+    final stopped = _downloadQueue.suspend(notify: false);
     try {
       await stopped;
       return await action();
     } finally {
-      _downloadQueue.releaseSuspension(stopped);
+      _downloadQueue.releaseSuspension(stopped, notify: false);
     }
   });
 
@@ -488,24 +488,33 @@ class LocalManager with ChangeNotifier {
 
   void addTask(DownloadTask task) => _downloadQueue.add(task);
 
-  void deleteComic(LocalComic c, [bool removeFileOnDisk = true]) {
-    if (removeFileOnDisk) {
-      var dir = Directory(FilePath.join(path, c.directory));
-      dir.deleteIgnoreError(recursive: true);
-    }
+  Future<void> deleteComic(LocalComic c, [bool removeFileOnDisk = true]) =>
+      runWithExclusiveStorage(() => _deleteComic(c, removeFileOnDisk));
+
+  Future<void> _deleteComic(LocalComic c, bool removeFileOnDisk) async {
+    final current = find(c.id, c.comicType);
+    if (current == null) return;
+    c = current;
     // Deleting a local comic means that it's no longer available, thus both favorite and history should be deleted.
     if (c.comicType == ComicType.local) {
       // Always queue deletion: an earlier progress write may still be pending.
-      unawaited(HistoryManager().remove(c.id, c.comicType));
+      await HistoryManager().remove(c.id, c.comicType);
       var folders = LocalFavoritesManager().find(c.id, c.comicType);
       for (var f in folders) {
         LocalFavoritesManager().deleteComicWithId(f, c.id, c.comicType);
       }
     }
     remove(c.id, c.comicType);
+    if (removeFileOnDisk) await _deleteDirectories([Directory(c.baseDir)]);
   }
 
-  void deleteComicChapters(LocalComic c, List<String> chapters) {
+  Future<void> deleteComicChapters(LocalComic c, List<String> chapters) =>
+      runWithExclusiveStorage(() => _deleteComicChapters(c, chapters));
+
+  Future<void> _deleteComicChapters(LocalComic c, List<String> chapters) async {
+    final current = find(c.id, c.comicType);
+    if (current == null) return;
+    c = current;
     if (chapters.isEmpty) {
       return;
     }
@@ -522,16 +531,26 @@ class LocalManager with ChangeNotifier {
       }
     }
     if (shouldRemovedDirs.isNotEmpty) {
-      _deleteDirectories(shouldRemovedDirs);
+      await _deleteDirectories(shouldRemovedDirs);
     }
     notifyListeners();
   }
 
-  void batchDeleteComics(
+  Future<void> batchDeleteComics(
     List<LocalComic> comics, [
     bool removeFileOnDisk = true,
     bool removeFavoriteAndHistory = true,
-  ]) {
+  ]) => runWithExclusiveStorage(
+    () =>
+        _batchDeleteComics(comics, removeFileOnDisk, removeFavoriteAndHistory),
+  );
+
+  Future<void> _batchDeleteComics(
+    List<LocalComic> comics,
+    bool removeFileOnDisk,
+    bool removeFavoriteAndHistory,
+  ) async {
+    comics = [for (final comic in comics) ?find(comic.id, comic.comicType)];
     if (comics.isEmpty) {
       return;
     }
@@ -549,34 +568,30 @@ class LocalManager with ChangeNotifier {
       _repository.removeAll(comics);
     } catch (e, s) {
       Log.error("LocalManager", "Failed to batch delete comics: $e", s);
-      return;
+      rethrow;
     }
 
     var comicIDs = comics.map((e) => ComicID(e.comicType, e.id)).toList();
 
     if (removeFavoriteAndHistory) {
       LocalFavoritesManager().batchDeleteComicsInAllFolders(comicIDs);
-      unawaited(HistoryManager().batchDeleteHistories(comicIDs));
+      await HistoryManager().batchDeleteHistories(comicIDs);
     }
 
     notifyListeners();
 
     if (removeFileOnDisk) {
-      _deleteDirectories(shouldRemovedDirs);
+      await _deleteDirectories(shouldRemovedDirs);
     }
   }
 
   /// Deletes the directories in a separate isolate to avoid blocking the UI thread.
-  static void _deleteDirectories(List<Directory> directories) {
-    Isolate.run(() async {
+  static Future<void> _deleteDirectories(List<Directory> directories) async {
+    await Isolate.run(() async {
       await SAFTaskWorker().init();
       for (var dir in directories) {
-        try {
-          if (dir.existsSync()) {
-            await dir.delete(recursive: true);
-          }
-        } catch (e) {
-          continue;
+        if (dir.existsSync()) {
+          await dir.delete(recursive: true);
         }
       }
     });

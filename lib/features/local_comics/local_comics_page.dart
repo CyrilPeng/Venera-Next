@@ -494,14 +494,20 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
                     },
                   ),
                 FilledButton(
-                  onPressed: () {
-                    context.pop();
-                    LocalManager().batchDeleteComics(
-                      comics,
-                      removeComicFile,
-                      removeFavoriteAndHistory,
-                    );
-                    isDeleted = true;
+                  onPressed: () async {
+                    try {
+                      await LocalManager().batchDeleteComics(
+                        comics,
+                        removeComicFile,
+                        removeFavoriteAndHistory,
+                      );
+                      isDeleted = true;
+                      if (context.mounted) context.pop();
+                    } catch (error) {
+                      if (context.mounted) {
+                        context.showMessage(message: error.toString().tl);
+                      }
+                    }
                   },
                   child: Text("Confirm".tl),
                 ),
@@ -747,11 +753,18 @@ void showDeleteChaptersPopWindow(BuildContext context, LocalComic comic) {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     FilledButton(
-                      onPressed: () {
-                        Future.delayed(const Duration(milliseconds: 200), () {
-                          LocalManager().deleteComicChapters(comic, chapters);
-                        });
-                        App.rootContext.pop();
+                      onPressed: () async {
+                        try {
+                          await LocalManager().deleteComicChapters(
+                            comic,
+                            chapters,
+                          );
+                          if (context.mounted) context.pop();
+                        } catch (error) {
+                          if (context.mounted) {
+                            context.showMessage(message: error.toString().tl);
+                          }
+                        }
                       },
                       child: Text("Submit".tl),
                     ),
