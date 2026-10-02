@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -6,13 +7,18 @@ import 'package:url_launcher/url_launcher_string.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/js_engine.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 import 'message.dart';
 
 class JsUiApi implements JsUiMessageHandler {
-  final Map<int, LoadingDialogController> _loadingDialogControllers = {};
+  final _loadingDialogControllers =
+      <
+        int,
+        ({LoadingDialogController controller, JsCallbackScope callbacks})
+      >{};
 
   @override
   dynamic handleUIMessage(Map<String, dynamic> message) {
@@ -62,77 +68,122 @@ class JsUiApi implements JsUiMessageHandler {
     }
   }
 
-  Future<void> _showDialog(Map<String, dynamic> message) {
-    BuildContext? dialogContext;
-    var title = message['title'];
-    var content = message['content'];
-    var actions = <Widget>[];
-    for (var action in message['actions']) {
-      if (action['callback'] is! JSInvokable) {
-        continue;
-      }
-      var callback = action['callback'] as JSInvokable;
-      var text = action['text'].toString();
-      var style = (action['style'] ?? 'text').toString();
-      actions.add(
-        _JSCallbackButton(
-          text: text,
-          callback: JSAutoFreeFunction(callback),
-          style: style,
-          onCallbackFinished: () {
-            dialogContext?.pop();
-          },
-        ),
-      );
-    }
-    if (actions.isEmpty) {
-      actions.add(
-        TextButton(
-          onPressed: () {
-            dialogContext?.pop();
-          },
-          child: Text('OK'.tl),
-        ),
-      );
-    }
-    return showDialog(
-      context: App.rootContext,
-      builder: (context) {
-        dialogContext = context;
-        return ContentDialog(
-          title: title,
-          content: Text(content).paddingHorizontal(16),
-          actions: actions,
+  Future<void> _showDialog(Map<String, dynamic> message) async {
+    final callbacks = JsCallbackScope();
+    final disposed = Completer<void>();
+    try {
+      BuildContext? dialogContext;
+      var title = message['title'];
+      var content = message['content'];
+      var actions = <Widget>[];
+      for (var action in message['actions']) {
+        if (action['callback'] is! JSInvokable) {
+          continue;
+        }
+        var callback = action['callback'] as JSInvokable;
+        var text = action['text'].toString();
+        var style = (action['style'] ?? 'text').toString();
+        actions.add(
+          _JSCallbackButton(
+            text: text,
+            callback: callbacks.retain(callback),
+            style: style,
+            onCallbackFinished: () {
+              dialogContext?.pop();
+            },
+          ),
         );
-      },
-    ).then((value) {
-      dialogContext = null;
-    });
+      }
+      if (actions.isEmpty) {
+        actions.add(
+          TextButton(
+            onPressed: () {
+              dialogContext?.pop();
+            },
+            child: Text('OK'.tl),
+          ),
+        );
+      }
+      final closed =
+          showDialog<void>(
+            context: App.rootContext,
+            builder: (context) {
+              dialogContext = context;
+              return DialogResourceScope(
+                onDispose: () {
+                  callbacks.dispose();
+                  if (!disposed.isCompleted) disposed.complete();
+                },
+                child: ContentDialog(
+                  title: title,
+                  content: Text(content).paddingHorizontal(16),
+                  actions: actions,
+                ),
+              );
+            },
+          ).then((value) {
+            dialogContext = null;
+          });
+      await Future.any<void>([closed, disposed.future]);
+    } finally {
+      callbacks.dispose();
+    }
   }
 
   int _showLoading(JSInvokable? onCancel) {
-    var func = onCancel == null ? null : JSAutoFreeFunction(onCancel);
-    var controller = showLoadingDialog(
-      App.rootContext,
-      barrierDismissible: onCancel != null,
-      allowCancel: onCancel != null,
-      onCancel: onCancel == null
-          ? null
-          : () {
-              func?.call([]);
-            },
-    );
-    var i = 0;
-    while (_loadingDialogControllers.containsKey(i)) {
-      i++;
+    final callbacks = JsCallbackScope();
+    var id = 0;
+    while (_loadingDialogControllers.containsKey(id)) {
+      id++;
     }
-    _loadingDialogControllers[i] = controller;
-    return i;
+    final loadingId = id;
+    void release() {
+      if (identical(
+        _loadingDialogControllers[loadingId]?.callbacks,
+        callbacks,
+      )) {
+        _loadingDialogControllers.remove(loadingId);
+      }
+      callbacks.dispose();
+    }
+
+    try {
+      final cancel = onCancel == null ? null : callbacks.retain(onCancel);
+      final controller = showLoadingDialog(
+        App.rootContext,
+        barrierDismissible: onCancel != null,
+        allowCancel: onCancel != null,
+        onCancel: cancel == null
+            ? null
+            : () {
+                unawaited(
+                  Future.sync(() => cancel([])).then<void>(
+                    JSRef.freeRecursive,
+                    onError: (Object error, StackTrace stack) =>
+                        Log.error('JS loading cancellation', error, stack),
+                  ),
+                );
+              },
+        onClosed: release,
+      );
+      _loadingDialogControllers[id] = (
+        controller: controller,
+        callbacks: callbacks,
+      );
+      return id;
+    } catch (_) {
+      release();
+      rethrow;
+    }
   }
 
   void _cancelLoading(int id) {
-    var controller = _loadingDialogControllers.remove(id);
-    controller?.close();
+    final entry = _loadingDialogControllers.remove(id);
+    try {
+      entry?.controller.close();
+    } finally {
+      entry?.callbacks.dispose();
+    }
   }
 
   Future<String?> _showInputDialog(
@@ -140,39 +191,46 @@ class JsUiApi implements JsUiMessageHandler {
     JSInvokable? validator,
     dynamic image,
   ) async {
-    String? result;
-    var func = validator == null ? null : JSAutoFreeFunction(validator);
-    String? imageUrl;
-    Uint8List? imageData;
-    if (image != null) {
-      if (image is String) {
-        imageUrl = image;
-      } else if (image is Uint8List) {
-        imageData = image;
-      } else if (image is List<int>) {
-        imageData = Uint8List.fromList(image);
-      }
-    }
-    await showInputDialog(
-      context: App.rootContext,
-      title: title,
-      image: imageUrl,
-      imageData: imageData,
-      onConfirm: (v) {
-        if (func != null) {
-          var res = func.call([v]);
-          if (res != null) {
-            return res.toString();
-          } else {
-            result = v;
-          }
-        } else {
-          result = v;
+    final callbacks = JsCallbackScope();
+    try {
+      String? result;
+      final func = validator == null ? null : callbacks.retain(validator);
+      String? imageUrl;
+      Uint8List? imageData;
+      if (image != null) {
+        if (image is String) {
+          imageUrl = image;
+        } else if (image is Uint8List) {
+          imageData = image;
+        } else if (image is List<int>) {
+          imageData = Uint8List.fromList(image);
         }
-        return null;
-      },
-    );
-    return result;
+      }
+      await showInputDialog(
+        context: App.rootContext,
+        title: title,
+        onClosed: callbacks.dispose,
+        image: imageUrl,
+        imageData: imageData,
+        onConfirm: (v) {
+          dynamic validation;
+          try {
+            validation = func?.call([v]);
+            if (validation != null) return validation.toString();
+            result = v;
+            return null;
+          } catch (error, stack) {
+            Log.error('JS input validation', error, stack);
+            return error.toString();
+          } finally {
+            JSRef.freeRecursive(validation);
+          }
+        },
+      );
+      return result;
+    } finally {
+      callbacks.dispose();
+    }
   }
 
   Future<int?> _showSelectDialog(
@@ -203,7 +261,7 @@ class _JSCallbackButton extends StatefulWidget {
     this.onCallbackFinished,
   });
 
-  final JSAutoFreeFunction callback;
+  final dynamic Function(List<dynamic>) callback;
 
   final String text;
 
@@ -222,17 +280,21 @@ class _JSCallbackButtonState extends State<_JSCallbackButton> {
     if (isLoading) {
       return;
     }
-    var res = widget.callback.call([]);
-    if (res is Future) {
-      setState(() {
-        isLoading = true;
-      });
-      await res;
-      setState(() {
-        isLoading = false;
-      });
+    dynamic result;
+    try {
+      result = widget.callback([]);
+      if (result is Future) {
+        setState(() => isLoading = true);
+        result = await result;
+      }
+      if (mounted) widget.onCallbackFinished?.call();
+    } catch (error, stack) {
+      Log.error('JS dialog callback', error, stack);
+      if (mounted) context.showMessage(message: error.toString());
+    } finally {
+      JSRef.freeRecursive(result);
+      if (mounted && isLoading) setState(() => isLoading = false);
     }
-    widget.onCallbackFinished?.call();
   }
 
   @override

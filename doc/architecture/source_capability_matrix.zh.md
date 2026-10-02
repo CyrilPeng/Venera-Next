@@ -14,6 +14,8 @@
 | 评论 | 普通/章节评论列表与分页，发送回调与源身份隔离 | source_lifecycle_test.dart | 评论投票/点赞、回复参数、重登录与取消交叉矩阵 |
 | 元数据 | 能力缺失；静态设置回调、动态 getter 快照与独立释放、异常回退、解析失败清理；页面重建/收起/卸载及回调晚到/失败/重试；版本/key/安装回滚 | source_lifecycle_test.dart | 链接、标签跳转、翻译及动态设置的多页面/源替换交互 |
 
-测试文件位于 test/features/comic_source/。源输入归一化另由现有 normalization 测试覆盖，但纯数据测试不能代替真实 JS 桥接执行。全量及阶段日志见 optimization_progress.zh.md。动态分类已使用显式原生回调作用域；后续继续审查图片/UI 回调的 finalizer 所有权并补齐未执行能力；P7.2 继续为部分完成。
+测试文件位于 test/features/comic_source/。源输入归一化另由现有 normalization 测试覆盖，但纯数据测试不能代替真实 JS 桥接执行。全量及阶段日志见 optimization_progress.zh.md。动态分类已使用显式原生回调作用域；图片/UI 所有权证据见下文，后续继续补齐未执行能力；P7.2 继续为部分完成。
 
 设置页面证据：source_settings_widget_test.dart 使用正式 ComicSourcePage、实际 JsCallbackScope 与受控 JSInvokable，验证快照销毁次数和页面行为；它补充原生测试，不代替真实 JS 函数执行。
+
+图片与 UI 补充证据：reader_image_processing_native_test.dart 验证真实图片处理/取消协议；test/components/js_ui_native_test.dart 使用真实 QuickJS 与 Widget 验证异步动作/取消、输入及 Navigator 卸载，关闭引擎时检查原生引用释放。js_ui_test.dart 的 14 项受控用例补齐返回/遮罩/按钮/卸载、id 复用、异常重试及晚到结果。UI 回调现由弹窗作用域显式释放；归一化兼容入口及未结束 Promise 的引擎退出仍待审查。
