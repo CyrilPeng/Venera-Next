@@ -457,3 +457,5 @@ DataSyncScope 向状态摘要与同步设置提供应用持有的控制器，作
 远端上传先确认新归档写入成功，再删除原策略选择的旧归档。清理候选去重并排除新文件名；写入失败不主动删除旧恢复点，清理失败保留 pending，但远端可能已完成新文件提交。同名覆盖、并发写入和响应丢失仍不具备远端事务保证。
 
 归档下载及保留策略共用 data_sync_archive_order.dart 的自然顺序，数字日数/版本不按字符串大小排序。当日清理选择该顺序下最旧项，不依赖服务端列表顺序；非数字名称仍参与原 .venera 筛选，数字等值拼写以原名稳定排序。
+
+headless_sync_command.dart 将注入的同步结果映射为 CLI status 与退出码，不依赖 Flutter 或应用全局状态；headless_output.dart 保留 [CLI PRINT] JSON 行格式。headless.dart 负责组装、清理并使用返回码退出。受控 Dart 子进程测试覆盖输出协议，完整 Flutter 无头应用验收另行记录。

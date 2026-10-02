@@ -10,10 +10,8 @@ import 'package:venera_next/features/favorites/favorites.dart';
 import 'bootstrap_core.dart';
 import 'data_sync.dart';
 import 'headless_bindings.dart';
-
-void cliPrint(Map<String, dynamic> data) {
-  print('[CLI PRINT] ${jsonEncode(data)}');
-}
+import 'headless_sync_command.dart';
+import 'headless_output.dart';
 
 Future<void> runHeadlessMode(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,26 +52,16 @@ Future<void> runHeadlessMode(List<String> args) async {
       ? args[commandIndex + 1]
       : null;
 
+  var commandExitCode = 0;
   switch (command) {
     case 'webdav':
-      if (subCommand == 'up') {
-        cliPrint({'status': 'running', 'message': 'Uploading WebDAV data...'});
-        await sync.uploadData();
-        cliPrint({'status': 'success', 'message': 'Upload complete.'});
-      } else if (subCommand == 'down') {
-        cliPrint({
-          'status': 'running',
-          'message': 'Downloading WebDAV data...',
-        });
-        await sync.downloadData();
-        cliPrint({'status': 'success', 'message': 'Download complete.'});
-      } else {
-        cliPrint({
-          'status': 'error',
-          'message': 'Invalid webdav command. Use "up" or "down".',
-        });
-        exit(1);
-      }
+      commandExitCode = await runHeadlessSyncCommand(
+        subCommand,
+        isConfigured: sync.hasConfiguration,
+        upload: sync.uploadData,
+        download: sync.downloadData,
+        emit: cliPrint,
+      );
       break;
     case 'updatescript':
       if (subCommand == 'all') {
@@ -258,5 +246,5 @@ Future<void> runHeadlessMode(List<String> args) async {
   configureComicSourceDataSavedHandler(null);
 
   // Exit after command execution
-  exit(0);
+  exit(commandExitCode);
 }

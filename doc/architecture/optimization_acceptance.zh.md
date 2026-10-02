@@ -20,7 +20,7 @@
 | P1.5 | P | 依赖用途核对 | `tool/check_git_dependencies.dart` | Git 声明/锁定检查通过不证明所有包都有生产用途。 |
 | P2.1 | P | 业务/UI 入口 | `dependency_baseline.json; lib/features/comic_source/comic_source_api.dart` | 补齐本地/同步/WebDAV 等遗留聚合依赖。 |
 | P2.2 | I | 源更新服务 | `lib/features/comic_source/source_update_service.dart` | 服务已存在并被调用；后续 P4/P7 收束全局依赖与错误翻译。 |
-| P2.3 | P | 页面与 CLI 适配 | `lib/app_runtime/headless.dart` | 服务调用已有；真实无头子进程参数/输出/退出协议仍需集中验收。 |
+| P2.3 | P | 页面与 CLI 适配 | `lib/app_runtime/headless.dart; lib/app_runtime/headless_sync_command.dart` | 同步结果适配及受控 Dart 子进程输出/退出码已有验证；完整 Flutter 无头程序及其余命令参数/部分失败协议仍需验收。 |
 | P2.4 | I | 本地阅读目标与路由 | `lib/features/local_comics/local_reading.dart; lib/routing/local_reading.dart` | 模型导航已迁出，保留章节/历史回归。 |
 | P2.5 | P | 跨域接口所有者 | `lib/features/reader/chapter_image_loader.dart; lib/features/sync/data_sync.dart` | 同步参与者和部分源/本地管理器仍直接耦合。 |
 | P3.1 | I | 阅读设置规则 | `lib/foundation/reader_preferences.dart` | 默认值与范围集中；后续修改保持旧值语义。 |
