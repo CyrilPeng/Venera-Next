@@ -449,3 +449,5 @@ WebDAV 在线库的连接与路径模型位于 `webdav_library_config.dart`；�
 应用同步的传输协议位于 `features/sync/data_sync_transfer.dart`，客户端适配位于 `data_sync_remote.dart`；应用数据版本、导入导出和管理器通知由 `app_runtime/data_sync_transfer.dart` 的参与者连接。DataSyncController 负责调度与 pending，显式注入设置、持久化、时钟、定时器与订阅。SyncPreferenceStore 不依赖 appdata，应用适配在 foundation/app_sync_preferences.dart。旧 DataSync 暂作为全局兼容组装入口及测试钩子宿主，待调用方迁移后退场。传输使用单次连接及独立下载临时目录。
 
 importAppData 以 bool 区分内嵌版本检查跳过与原导入路径完成；运行时参与者传回结果，传输和 DataSync 仅在导入路径完成后按原规则处理通知、时间戳与 pending。未开启版本检查的手动导入仍允许旧版本。
+
+DataSyncScope 向状态摘要与同步设置提供应用持有的控制器，作用域不销毁该实例；后台同步和窗口退出绑定通过构造参数接收同一个控制器。摘要监听随作用域实例替换自动迁移。应用装配仍暂时使用旧 DataSync，其他运行时入口与测试钩子尚待退场。

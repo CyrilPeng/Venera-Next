@@ -3,3 +3,5 @@ export 'comic_archive_page.dart';
 export 'comic_backup.dart';
 export 'data_sync.dart';
 export 'sync_status_summary.dart';
+export 'data_sync_controller.dart';
+export 'data_sync_scope.dart';

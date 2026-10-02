@@ -7,37 +7,23 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
-import 'data_sync.dart';
+import 'data_sync_controller.dart';
+import 'data_sync_scope.dart';
 
-class SyncStatusSummary extends StatefulWidget {
+class SyncStatusSummary extends StatelessWidget {
   const SyncStatusSummary({super.key});
 
   @override
-  State<SyncStatusSummary> createState() => _SyncStatusSummaryState();
-}
-
-class _SyncStatusSummaryState extends State<SyncStatusSummary> {
-  @override
-  void initState() {
-    super.initState();
-    DataSync().addListener(update);
-  }
-
-  void update() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-    DataSync().removeListener(update);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final syncStatus = DataSync().statusSnapshot;
+    final controller = DataSyncScope.of(context);
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => buildSummary(context, controller),
+    );
+  }
+
+  Widget buildSummary(BuildContext context, DataSyncController controller) {
+    final syncStatus = controller.statusSnapshot;
     Widget child;
     if (!syncStatus.shouldShow) {
       child = const SliverPadding(padding: EdgeInsets.zero);
@@ -112,14 +98,14 @@ class _SyncStatusSummaryState extends State<SyncStatusSummary> {
                   icon: const Icon(Icons.cloud_upload_outlined),
                   tooltip: 'Upload'.tl,
                   onPressed: () async {
-                    DataSync().uploadData();
+                    controller.uploadData();
                   },
                 ),
                 IconButton(
                   icon: const Icon(Icons.cloud_download_outlined),
                   tooltip: 'Download'.tl,
                   onPressed: () async {
-                    DataSync().downloadData();
+                    controller.downloadData();
                   },
                 ),
               ],

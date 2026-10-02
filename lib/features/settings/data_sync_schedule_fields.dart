@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:venera_next/features/sync/sync.dart';
+import 'package:venera_next/foundation/sync_configuration.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 class DataSyncScheduleFields extends StatelessWidget {
@@ -62,7 +62,7 @@ class DataSyncScheduleFields extends StatelessWidget {
                 isExpanded: true,
                 value: minutes,
                 items: [
-                  for (final interval in DataSync.intervalOptions)
+                  for (final interval in SyncConfiguration.intervalOptions)
                     DropdownMenuItem(
                       value: interval,
                       child: Text(

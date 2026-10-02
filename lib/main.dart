@@ -88,7 +88,8 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   final _library = webDavLibrary;
   final _interactiveBindings = InteractiveBindings.platform();
-  final _backgroundSync = BackgroundSync.platform();
+  final DataSyncController _dataSync = DataSync();
+  late final _backgroundSync = BackgroundSync.platform(_dataSync);
 
   @override
   void initState() {
@@ -134,7 +135,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      DataSync().checkForAutomaticSync();
+      _dataSync.checkForAutomaticSync();
       _library.source.synchronizer.checkForAutomaticSync();
     }
     if (!App.isMobile || !appdata.settings['authorizationRequired']) {
@@ -340,12 +341,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   child: MouseBackDetector(
                     onTapDown: App.pop,
                     child: WindowFrame(
-                      SyncWindowBinding(child: widget),
+                      SyncWindowBinding(controller: _dataSync, child: widget),
                       debugAction: reloadComicSourcesForDebug,
                     ),
                   ),
                 );
               }
+              widget = DataSyncScope(controller: _dataSync, child: widget);
               widget = WebDavLibraryScope(services: _library, child: widget);
               return _SystemUiProvider(
                 Material(

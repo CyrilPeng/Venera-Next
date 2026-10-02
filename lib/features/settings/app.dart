@@ -476,13 +476,14 @@ class _WebdavSettingState extends State<_WebdavSetting> {
                         url.trim().isEmpty &&
                         user.trim().isEmpty &&
                         pass.trim().isEmpty;
-                    final testResult = await DataSync().configure(
-                      config: clear ? [] : [url.trim(), user, pass],
-                      excludedFields: disableSync,
-                      syncMode: syncMode,
-                      minutes: syncInterval,
-                      initialUpload: upload,
-                    );
+                    final testResult = await DataSyncScope.of(context)
+                        .configure(
+                          config: clear ? [] : [url.trim(), user, pass],
+                          excludedFields: disableSync,
+                          syncMode: syncMode,
+                          minutes: syncInterval,
+                          initialUpload: upload,
+                        );
                     if (!mounted) return;
                     setState(() => isTesting = false);
                     if (testResult.error) {

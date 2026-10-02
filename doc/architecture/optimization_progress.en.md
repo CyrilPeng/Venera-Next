@@ -945,3 +945,12 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - DataSync remains a temporary composition facade for static mode/interval, singleton access and legacy test hooks, inheriting the same controller implementation. It has not been retired; production sync is not yet globally independent. Migrate callers/tests before removing the facade.
 - Added six controller regressions without appdata/filesystem setup: instance/subscription isolation, stop/dispose, independent clock/timer scheduling, subscription retry, failed draft-transfer rollback and implicit-map replacement. Alongside existing schedule/window/import tests, 55 targeted tests passed.
 - Final validation: full Flutter suite 1030 passed; analysis zero errors/warnings, 23 infos. Structure/53 business-entry gates, full Python suite (56 tests, 3 Linux-tool-dependent skips), locked dependencies and formatting passed. Logs: `output/sync-controller-{targeted,full,analyze}.log`. Worktree tests include user changes; only stage files/changelog are committed.
+
+## P6: Explicit sync controllers for UI and window bindings (2026-10-02)
+
+- Added DataSyncScope. The application supplies the same controller to status summary and sync settings; the scope does not dispose it. ListenableBuilder moves summary subscriptions when the controller changes.
+- BackgroundSync.platform and SyncWindowBinding require a controller. Resume checks, background scheduling and window shutdown share the application-held instance. Each shutdown captures its controller before asynchronous preparation, avoiding a wait on a replacement instance.
+- Schedule fields read SyncConfiguration.intervalOptions directly. Existing window tests now pass their controller explicitly while retaining their legacy test composition.
+- New scope/summary regressions cover replacement, button routing, status changes, listener removal, non-owning scope lifecycle and a clear error for missing composition. All 14 targeted tests passed.
+- This is a caller-migration increment: main still obtains the legacy DataSync instance. Headless/bootstrap/follow-up/reader-close callers and legacy test hooks remain. P6.5/P6.6/P8.1 stay incomplete.
+- Final validation: full Flutter suite 1032 passed; analysis zero errors/warnings, 23 infos. Structure/53 business-entry gates, Python 56 tests (3 platform-tool skips), dependency lock and formatting checks passed. Logs: output/sync-scope-{targeted,full,analyze}.log. Worktree tests include user changes excluded from this commit.

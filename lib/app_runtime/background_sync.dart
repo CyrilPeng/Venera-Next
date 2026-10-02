@@ -10,8 +10,7 @@ class BackgroundSync {
     required this.checkLibrary,
   });
 
-  factory BackgroundSync.platform() {
-    final sync = DataSync();
+  factory BackgroundSync.platform(DataSyncController sync) {
     return BackgroundSync(
       startDataSync: sync.start,
       stopDataSync: sync.stop,

@@ -45,6 +45,7 @@ void main() {
             navigatorKey: App.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
+                controller: DataSync(),
                 prepareImports: () => imports.future,
                 prepareDownloads: () {
                   downloadCalls++;
@@ -100,6 +101,7 @@ void main() {
             navigatorKey: App.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
+                controller: DataSync(),
                 prepareDownloads: () {
                   events.add('downloads');
                   return downloads.future;
@@ -164,7 +166,7 @@ void main() {
           MaterialApp(
             navigatorKey: App.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
-              SyncWindowBinding(child: child!),
+              SyncWindowBinding(controller: DataSync(), child: child!),
               onExit: () => exits++,
             ),
             home: Builder(
@@ -232,7 +234,7 @@ void main() {
       MaterialApp(
         navigatorKey: App.rootNavigatorKey,
         builder: (_, child) => WindowFrame(
-          SyncWindowBinding(child: child!),
+          SyncWindowBinding(controller: DataSync(), child: child!),
           onExit: () => exits++,
         ),
         home: Builder(
@@ -267,7 +269,7 @@ void main() {
           MaterialApp(
             navigatorKey: App.rootNavigatorKey,
             builder: (context, child) => WindowFrame(
-              SyncWindowBinding(child: child!),
+              SyncWindowBinding(controller: DataSync(), child: child!),
               onExit: () => exits++,
             ),
             home: const Scaffold(body: Text('content')),
@@ -304,7 +306,7 @@ void main() {
         MaterialApp(
           navigatorKey: App.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
-            SyncWindowBinding(child: child!),
+            SyncWindowBinding(controller: DataSync(), child: child!),
             onExit: () => exits++,
           ),
           home: const Scaffold(),

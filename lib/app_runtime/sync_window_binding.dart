@@ -11,6 +11,7 @@ import 'package:venera_next/foundation/translations.dart';
 class SyncWindowBinding extends StatefulWidget {
   const SyncWindowBinding({
     required this.child,
+    required this.controller,
     this.prepareDownloads,
     this.prepareImports,
     super.key,
@@ -18,6 +19,7 @@ class SyncWindowBinding extends StatefulWidget {
   final Future<VoidCallback> Function()? prepareDownloads;
   final Future<VoidCallback> Function()? prepareImports;
   final Widget child;
+  final DataSyncController controller;
 
   @override
   State<SyncWindowBinding> createState() => _SyncWindowBindingState();
@@ -39,6 +41,7 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
   }
 
   Future<void> _waitThenClose() async {
+    final controller = widget.controller;
     try {
       final releaseImports =
           await (widget.prepareImports ?? prepareLocalImportsForExit)();
@@ -56,7 +59,7 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
       }
       _releaseDownloads = release;
       await HistoryManager().waitForAsyncWrites();
-      if (!mounted || !DataSync().isUploading) return;
+      if (!mounted || !controller.isUploading) return;
       showLoadingDialog(
         App.rootContext,
         cancelButtonText: 'Shut Down'.tl,
@@ -64,7 +67,7 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
         barrierDismissible: false,
         message: 'Uploading data...'.tl,
       );
-      await DataSync().waitForUpload();
+      await controller.waitForUpload();
     } catch (_) {
       _releaseDownloads?.call();
       _releaseDownloads = null;
