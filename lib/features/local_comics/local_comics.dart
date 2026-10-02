@@ -5,3 +5,4 @@ export 'local_comic_image.dart';
 export 'local_comics_page.dart';
 export 'local_comics_summary.dart';
 export 'local_reading.dart';
+export 'import_export/pdf_import_tasks.dart';

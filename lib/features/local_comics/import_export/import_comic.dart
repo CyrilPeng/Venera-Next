@@ -73,8 +73,10 @@ class ImportComic {
   }
 
   Future<bool> pdf() async {
+    var selected = <FileSelection>[];
+    var accepted = false;
     try {
-      final selected = await selectFiles(
+      selected = await selectFiles(
         ext: ['pdf'],
         uniformTypeIdentifiers: ['com.adobe.pdf'],
       );
@@ -95,6 +97,7 @@ class ImportComic {
           },
         ),
       );
+      accepted = true;
       await showPdfImportDialog(context: App.rootContext, task: task);
       // Closing the view accepts the task. Its eventual completion must not
       // navigate away from whatever the user is reading in the meantime.
@@ -103,6 +106,18 @@ class ImportComic {
       Log.error('Import PDF', e.toString(), s);
       App.rootContext.showMessage(message: _documentImportError(e));
       return false;
+    } finally {
+      // A picker can return while exit preparation is rejecting new batches.
+      // Until add succeeds, the caller still owns the selected file handles.
+      if (!accepted) {
+        for (final file in selected) {
+          try {
+            await file.dispose();
+          } catch (error, stack) {
+            Log.error('Import PDF cleanup', error.toString(), stack);
+          }
+        }
+      }
     }
   }
 

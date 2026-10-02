@@ -41,6 +41,7 @@ class PdfImportTasks extends ChangeNotifier {
 
   final _tasks = <PdfImportTask>[];
   PdfImportTask? _active;
+  Future<VoidCallback>? _exitPreparation;
 
   List<PdfImportTask> get tasks => List.unmodifiable(_tasks);
   int get activeCount => _tasks.where((task) => !task.isFinished).length;
@@ -49,6 +50,9 @@ class PdfImportTasks extends ChangeNotifier {
     required List<FileSelection> files,
     required PdfImportBatch batch,
   }) {
+    if (_exitPreparation != null) {
+      throw StateError('PDF imports are suspended for exit');
+    }
     if (files.isEmpty) throw ArgumentError.value(files, 'files', 'Empty batch');
     final task = PdfImportTask._(files, batch);
     task.addListener(notifyListeners);
@@ -79,7 +83,7 @@ class PdfImportTasks extends ChangeNotifier {
   }
 
   void _startNext() {
-    if (_active != null) return;
+    if (_active != null || _exitPreparation != null) return;
     for (final task in _tasks) {
       if (task._started) continue;
       _active = task;
@@ -88,6 +92,29 @@ class PdfImportTasks extends ChangeNotifier {
       unawaited(_run(task));
       return;
     }
+  }
+
+  /// Cancel uncommitted work and drain conversion/selection cleanup before exit.
+  /// The returned release permits new batches if the window remains open.
+  Future<VoidCallback> prepareForExit() {
+    final existing = _exitPreparation;
+    if (existing != null) return existing;
+    final ready = Completer<VoidCallback>();
+    final preparation = _exitPreparation = ready.future;
+    final pending = _tasks.where((task) => !task.isFinished).toList();
+    for (final task in pending) {
+      cancel(task);
+    }
+    Future.wait(pending.map((task) => task.done)).then(
+      (_) => ready.complete(() {
+        if (identical(_exitPreparation, preparation)) _exitPreparation = null;
+      }),
+      onError: (Object error, StackTrace stack) {
+        if (identical(_exitPreparation, preparation)) _exitPreparation = null;
+        ready.completeError(error, stack);
+      },
+    );
+    return preparation;
   }
 
   Future<void> _run(PdfImportTask task) async {

@@ -425,3 +425,5 @@ LocalManager.init 为实例内共享初始化 Future，成功后复用连接，�
 local_storage_migration.dart 的 LocalStorageMigration 管理目录迁移提交顺序：校验非重叠空目标、复制、暂存/flush/rename 路径配置、同步发布新路径、清理旧目录。清理失败仅记录，新路径仍为权威；复制/配置失败不删除源目录，部分目标保留。LocalManager 提供平台复制、SAF 路径适配与内存赋值，原 PDF 互斥保留；该服务自身不提供下载/其他写入者互斥。
 
 LocalManager.runWithExclusiveStorage 为迁移/恢复叠加下载协调：排队任务（含暂停）阻止操作，空队列冻结新增并等待取消清理，结束后按归属释放。LocalComicStorageGuard.pendingExclusive 允许正常窗口退出等待存储操作完成后取得自己的队列静止状态。本策略不迁移活动任务路径，也不覆盖其他导入/删除写入者或退出时的 PDF 导入等待。
+
+PDF 批次退出通过 PdfImportTasks.prepareForExit 冻结接收/启动，取消未提交工作并等待转换和选择文件释放；完成提交的结果不改标取消。返回按准备 Future 归属的释放回调，重复调用共享准备，旧回调不能解除新限制。SyncWindowBinding 通过公开本地库入口先准备 PDF，再准备下载、历史与上传；失败或卸载释放限制。ImportComic.pdf 在队列接收前保留文件句柄所有权，拒绝时自行清理。该接线覆盖正常窗口退出，不代替任意直接 dispose 或系统终止协议。

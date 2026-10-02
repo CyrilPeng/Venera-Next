@@ -31,6 +31,57 @@ void main() {
         .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
   });
 
+  for (final detach in [false, true]) {
+    testWidgets(
+      'exit drains imports and releases when download preparation fails or detaches: $detach',
+      (tester) async {
+        final imports = Completer<VoidCallback>();
+        final downloads = Completer<VoidCallback>();
+        var importReleases = 0;
+        var downloadCalls = 0;
+        var exits = 0;
+        await tester.pumpWidget(
+          MaterialApp(
+            navigatorKey: App.rootNavigatorKey,
+            builder: (_, child) => WindowFrame(
+              SyncWindowBinding(
+                prepareImports: () => imports.future,
+                prepareDownloads: () {
+                  downloadCalls++;
+                  return downloads.future;
+                },
+                child: child!,
+              ),
+              onExit: () => exits++,
+            ),
+            home: const Scaffold(body: Text('shutdown')),
+          ),
+        );
+        tester
+            .widgetList<WindowButton>(find.byType(WindowButton))
+            .last
+            .onPressed();
+        await tester.pump();
+        expect(downloadCalls, 0);
+        expect(exits, 0);
+        if (detach) await tester.pumpWidget(const SizedBox());
+        imports.complete(() => importReleases++);
+        await tester.pump();
+        if (!detach) {
+          expect(downloadCalls, 1);
+          downloads.completeError(StateError('download preparation failed'));
+          await tester.pump();
+          expect(tester.takeException(), isA<StateError>());
+        }
+        expect(importReleases, 1);
+        expect(exits, 0);
+        await tester.pumpWidget(const SizedBox());
+        expect(importReleases, 1);
+      },
+      skip: !Platform.isWindows,
+    );
+  }
+
   for (final failHistory in [false, true]) {
     testWidgets(
       'exit waits for downloads and releases on history failure: $failHistory',

@@ -12,9 +12,11 @@ class SyncWindowBinding extends StatefulWidget {
   const SyncWindowBinding({
     required this.child,
     this.prepareDownloads,
+    this.prepareImports,
     super.key,
   });
   final Future<VoidCallback> Function()? prepareDownloads;
+  final Future<VoidCallback> Function()? prepareImports;
   final Widget child;
 
   @override
@@ -24,6 +26,7 @@ class SyncWindowBinding extends StatefulWidget {
 class _SyncWindowBindingState extends State<SyncWindowBinding> {
   WindowFrameController? _window;
   VoidCallback? _releaseDownloads;
+  VoidCallback? _releaseImports;
 
   @override
   void didChangeDependencies() {
@@ -36,15 +39,23 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
   }
 
   Future<void> _waitThenClose() async {
-    final release =
-        await (widget.prepareDownloads ??
-            LocalManager.prepareDownloadsForExit)();
-    if (!mounted) {
-      release();
-      return;
-    }
-    _releaseDownloads = release;
     try {
+      final releaseImports =
+          await (widget.prepareImports ??
+              PdfImportTasks.instance.prepareForExit)();
+      if (!mounted) {
+        releaseImports();
+        return;
+      }
+      _releaseImports = releaseImports;
+      final release =
+          await (widget.prepareDownloads ??
+              LocalManager.prepareDownloadsForExit)();
+      if (!mounted) {
+        release();
+        return;
+      }
+      _releaseDownloads = release;
       await HistoryManager().waitForAsyncWrites();
       if (!mounted || !DataSync().isUploading) return;
       showLoadingDialog(
@@ -58,6 +69,8 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
     } catch (_) {
       _releaseDownloads?.call();
       _releaseDownloads = null;
+      _releaseImports?.call();
+      _releaseImports = null;
       rethrow;
     }
   }
@@ -67,6 +80,8 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
     _window?.removeExitTask(_waitThenClose);
     _releaseDownloads?.call();
     _releaseDownloads = null;
+    _releaseImports?.call();
+    _releaseImports = null;
     super.dispose();
   }
 
