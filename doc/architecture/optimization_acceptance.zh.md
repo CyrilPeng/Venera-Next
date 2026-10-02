@@ -45,7 +45,7 @@
 | P6.1 | I | 模型与仓储分离 | `lib/features/local_comics/local_repository.dart; lib/features/history/history_repository.dart; lib/features/favorites/favorites_repository.dart` | 主体 SQL 已迁入仓储；后续新增 SQL 继续遵守边界。 |
 | P6.2 | P | 收藏业务职责 | `lib/features/favorites/read_later_service.dart; lib/features/favorites/favorite_updates_service.dart; lib/features/favorites/favorites_manager.dart` | 稍后阅读/追更已分离；管理器仍有全局依赖和统一生命周期待收束。 |
 | P6.3 | P | 本地库与导入下载 | `lib/features/local_comics/local.dart; lib/features/local_comics/local_deletion_paths.dart` | 队列/仓储/迁移已拆分；符号链接、删除回滚和未受保护直接写入者仍需处理。 |
-| P6.4 | P | WebDAV 实例化与拆分 | `lib/features/webdav_library/webdav_library_settings.dart; lib/features/webdav_library/webdav_library_source.dart` | 配置、目录发现、快照构建、缓存和传输已分离，运行状态实例化；同步协调仍与源适配集中，继续拆分并完成退出条件验收。 |
+| P6.4 | I | WebDAV 实例化与拆分 | `lib/features/webdav_library/webdav_library_synchronizer.dart; lib/features/webdav_library/webdav_library_snapshot_store.dart; lib/features/webdav_library/webdav_library_source.dart` | 配置/发现/快照与缓存/同步协调/源适配已分离，实例注入和路径、增量同步、取消回归已有证据；仍受 P6 总体数据/性能/平台退出条件约束。 |
 | P6.5 | P | 应用同步职责 | `lib/features/sync/data_sync.dart; lib/features/sync/app_data_archive.dart; lib/app_runtime/sync_window_binding.dart` | 归档/窗口已迁出；DataSync 仍组合调度、传输和全局参与者。 |
 | P6.6 | P | 同步窄接口与协议 | `lib/features/sync/data_sync.dart; test/features/sync/data_sync_schedule_test.dart` | 保留三模式回归；参与者注入、pending 重启和不回传最终矩阵待完成。 |
 | P6.7 | P | 原子性约束 | `lib/foundation/sqlite_transaction.dart; lib/foundation/directory_replacement.dart; lib/features/local_comics/local.dart` | 已有事务/恢复工具；删除仍可能跨文件/数据库部分提交。 |
@@ -87,7 +87,7 @@
 
 ## 后续执行顺序
 
-1. 继续 P6.4：配置/设置与运行实例已分离，应用装配/UI 绑定和会话失效测试已接入；目录发现、快照构建及传输职责现已分离；下一步收束同步协调与漫画源适配，保留增量同步与旧缓存兼容。
+1. P6.4 的配置/发现/快照/同步/源适配拆分已有实现及回归；继续维护旧缓存/路径/增量同步兼容，并在总体平台和性能验收中复核。当前主体工作转入 P6.5/P6.6。
 2. 完成 P6.5/P6.6：DataSync 调度/传输/数据参与者边界；完成本地删除失败恢复与符号链接策略的明确验收，而非继续新增零散例外。
 3. 收束 P5 宿主 State/手势/阅读壳剩余接口，保留并整合用户未提交改动；同步补 P4 的生命周期与测试注入缺口。
 4. 执行 P7 全部能力拆分、协议回归、重复机制对照和结构化错误；避免把解析器机械切成多个仍共用隐式状态的文件。

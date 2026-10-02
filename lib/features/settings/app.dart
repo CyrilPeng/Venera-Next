@@ -718,7 +718,7 @@ class _WebDavComicLibrarySettingState
       password: config.pass,
       remotePath: config.remotePath,
     );
-    widget.services.source.updateSyncStatusFromCache();
+    widget.services.source.synchronizer.updateSyncStatusFromCache();
     final configuration = widget.services.settings.read();
     autoSyncEnabled = configuration.autoSync;
     syncIntervalMinutes = configuration.intervalMinutes;
@@ -814,7 +814,7 @@ class _WebDavComicLibrarySettingState
             ],
             const SizedBox(height: 16),
             ValueListenableBuilder<WebDavLibrarySyncStatus>(
-              valueListenable: widget.services.source.syncStatus,
+              valueListenable: widget.services.source.synchronizer.status,
               builder: (context, status, _) {
                 final text = switch (status) {
                   WebDavLibrarySyncStatus(isSyncing: true, total: > 0) =>
@@ -926,7 +926,7 @@ class _WebDavComicLibrarySettingState
     if (!await _persistConfiguration() || !mounted) return;
     final config = widget.services.settings.read().connection;
     if (config.isValid) {
-      unawaited(widget.services.source.synchronize(force: true));
+      unawaited(widget.services.source.synchronizer.synchronize(force: true));
     }
     if (!mounted) return;
     context.showMessage(message: 'Saved'.tl);
@@ -940,7 +940,9 @@ class _WebDavComicLibrarySettingState
     setState(() {
       isSyncing = true;
     });
-    final result = await widget.services.source.synchronize(force: true);
+    final result = await widget.services.source.synchronizer.synchronize(
+      force: true,
+    );
     if (!mounted) return;
     setState(() {
       isSyncing = false;

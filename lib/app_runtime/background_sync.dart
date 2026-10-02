@@ -15,7 +15,7 @@ class BackgroundSync {
     return BackgroundSync(
       startDataSync: sync.start,
       stopDataSync: sync.stop,
-      checkLibrary: webDavLibrary.source.checkForAutomaticSync,
+      checkLibrary: webDavLibrary.source.synchronizer.checkForAutomaticSync,
     );
   }
 

@@ -286,7 +286,9 @@
     "features/webdav_library/webdav_library_session.dart",
     "features/webdav_library/webdav_library_discovery.dart",
     "features/webdav_library/webdav_library_snapshot.dart",
-    "features/webdav_library/webdav_library_snapshot_builder.dart"
+    "features/webdav_library/webdav_library_snapshot_builder.dart",
+    "features/webdav_library/webdav_library_snapshot_store.dart",
+    "features/webdav_library/webdav_library_synchronizer.dart"
   ],
   "ui_files": [
     "app_shell/auth_page.dart",

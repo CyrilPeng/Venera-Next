@@ -88,14 +88,14 @@ void main() {
     () async {
       final ops = _Ops();
       final library = create(ops);
-      final pending = library.source.synchronize();
+      final pending = library.source.synchronizer.synchronize();
       library.source.dispose();
       expect((await pending).error, isTrue);
       expect(ops.calls, isEmpty);
       expect(File(library.cache.path).existsSync(), isFalse);
       library.source.dispose();
       expect(ops.disposals, 1);
-      expect(() => library.source.synchronize(), throwsStateError);
+      expect(() => library.source.synchronizer.synchronize(), throwsStateError);
       expect(() => library.cache.count('any'), throwsStateError);
     },
   );
@@ -145,19 +145,19 @@ void main() {
           return _Ops.pages;
         };
       final library = create(ops);
-      final pending = library.source.synchronize();
+      final pending = library.source.synchronizer.synchronize();
       await entered.future;
       final previous = settings.connection;
       settings = configuration('new');
       library.source.onConfigurationChanged(previous);
-      expect((await library.source.synchronize()).success, isTrue);
+      expect((await library.source.synchronizer.synchronize()).success, isTrue);
       final version = library.source.contentVersion.value;
-      final status = library.source.syncStatus.value;
+      final status = library.source.synchronizer.status.value;
       oldResponse.complete([
         const WebDavLibraryEntry(name: 'Old', isDirectory: true),
       ]);
       expect((await pending).error, isTrue);
-      expect(library.source.syncStatus.value, same(status));
+      expect(library.source.synchronizer.status.value, same(status));
       expect(library.source.contentVersion.value, version);
       expect(library.cache.all(settings.connection.cacheKey).keys, ['New']);
     },

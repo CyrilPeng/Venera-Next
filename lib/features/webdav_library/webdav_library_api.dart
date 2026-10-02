@@ -6,3 +6,4 @@ export 'webdav_library_source.dart';
 export 'webdav_library_entries.dart';
 export 'webdav_library_transport.dart';
 export 'webdav_library_snapshot.dart';
+export 'webdav_library_synchronizer.dart';

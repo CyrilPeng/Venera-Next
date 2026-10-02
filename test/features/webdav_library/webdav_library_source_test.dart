@@ -28,7 +28,9 @@ void main() {
   });
 
   tearDown(() async {
-    if (source.syncStatus.value.isSyncing) await source.synchronize();
+    if (source.synchronizer.status.value.isSyncing) {
+      await source.synchronizer.synchronize();
+    }
     source.dispose();
     dataDir.deleteSync(recursive: true);
   });
@@ -45,7 +47,7 @@ void main() {
     ];
 
     await source.loadComics(1);
-    await source.synchronize();
+    await source.synchronizer.synchronize();
     final result = await source.loadComics(1);
 
     expect(result.success, isTrue);
@@ -71,7 +73,7 @@ void main() {
       ]);
 
       await source.loadComics(1);
-      await source.synchronize();
+      await source.synchronizer.synchronize();
       final result = await source.loadComics(1);
 
       expect(result.success, isTrue);
@@ -116,10 +118,10 @@ void main() {
       expect(initial.success, isTrue);
       expect(initial.data.single.title, 'Slow Book');
       expect(initial.data.single.cover, isEmpty);
-      expect(source.syncStatus.value.isSyncing, isTrue);
+      expect(source.synchronizer.status.value.isSyncing, isTrue);
 
       blocker.complete();
-      await source.synchronize();
+      await source.synchronizer.synchronize();
       final updated = await source.loadComics(1);
 
       expect(updated.data.single.cover, '/manga/Slow Book/cover.jpg');
@@ -142,7 +144,7 @@ void main() {
       ];
     }
 
-    await source.synchronize();
+    await source.synchronizer.synchronize();
     ops.readPaths.clear();
 
     final first = await source.loadComics(1);
@@ -169,10 +171,10 @@ void main() {
     ops.dirs['/manga/Book B/'] = const [
       WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
     ];
-    await source.synchronize();
+    await source.synchronizer.synchronize();
     ops.readPaths.clear();
 
-    await source.synchronize();
+    await source.synchronizer.synchronize();
     expect(ops.readPaths, ['/manga/']);
 
     ops.readPaths.clear();
@@ -180,7 +182,7 @@ void main() {
       WebDavLibraryEntry(name: 'Book A', isDirectory: true, eTag: 'v2'),
       WebDavLibraryEntry(name: 'Book B', isDirectory: true, eTag: 'v1'),
     ];
-    await source.synchronize();
+    await source.synchronizer.synchronize();
 
     expect(ops.readPaths, ['/manga/', '/manga/Book A/']);
   });
@@ -192,10 +194,10 @@ void main() {
     ops.dirs['/manga/Cached Book/'] = const [
       WebDavLibraryEntry(name: '001.jpg', isDirectory: false),
     ];
-    await source.synchronize();
+    await source.synchronizer.synchronize();
     ops.errors['/manga/'] = StateError('WebDAV unavailable');
 
-    final refresh = await source.synchronize(force: true);
+    final refresh = await source.synchronizer.synchronize(force: true);
     final cached = await source.loadComics(1);
 
     expect(refresh.error, isTrue);
@@ -233,7 +235,7 @@ void main() {
 
       await source.loadComicInfo('Book A');
       await source.loadComics(1);
-      await source.synchronize();
+      await source.synchronizer.synchronize();
       final comics = await source.loadComics(1);
 
       expect(comics.data.map((comic) => comic.id), ['Book A', 'Book B']);
@@ -308,7 +310,7 @@ void main() {
         ],
       });
 
-      final sync = await source.synchronize();
+      final sync = await source.synchronizer.synchronize();
       final comics = await source.loadComics(1);
       final details = await source.loadComicInfo('分类/作者/猫之眼');
       final pages = await source.loadComicPages('分类/作者/猫之眼', '第01章');
@@ -354,7 +356,7 @@ void main() {
         });
       }
 
-      final sync = await source.synchronize();
+      final sync = await source.synchronizer.synchronize();
       final comics = await source.loadComics(1);
 
       expect(sync.success, isTrue);
@@ -385,7 +387,7 @@ void main() {
       'chapters': null,
     });
 
-    final sync = await source.synchronize();
+    final sync = await source.synchronizer.synchronize();
     final comics = await source.loadComics(1);
 
     expect(sync.success, isTrue);
@@ -443,7 +445,7 @@ void main() {
         WebDavLibraryEntry(name: 'Chapter 05', isDirectory: true),
       ];
 
-      final sync = await source.synchronize();
+      final sync = await source.synchronizer.synchronize();
       final details = await source.loadComicInfo(comicId);
 
       expect(sync.success, isTrue);
@@ -551,7 +553,7 @@ void main() {
       });
 
       await source.loadComics(1);
-      await source.synchronize();
+      await source.synchronizer.synchronize();
       final comics = await source.loadComics(1);
       final details = await source.loadComicInfo('猫之眼[北条司]');
       final pages = await source.loadComicPages('猫之眼[北条司]', '__cbz_range_1');

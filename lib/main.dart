@@ -135,7 +135,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       DataSync().checkForAutomaticSync();
-      _library.source.checkForAutomaticSync();
+      _library.source.synchronizer.checkForAutomaticSync();
     }
     if (!App.isMobile || !appdata.settings['authorizationRequired']) {
       return;
