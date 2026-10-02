@@ -4,7 +4,7 @@ Audit baseline: `99e607d`, 2026-10-02. The worktree includes pre-existing user c
 
 Status: I = implementation evidence inspected (still subject to overall acceptance); P = partial; O = code shows unfinished work; U = insufficient verification. I does not complete a phase. Short filenames refer to this directory or `.github/scripts/`; other paths are repository-relative.
 
-Current evidence: 986 Windows Flutter tests passed; analyzer has no errors/warnings and 23 infos; LCOV covers 13,988/31,156 lines (44.90%). This is the latest local `coverage/lcov.info`, not performance evidence or proof of complete behavior. The architecture report enforces 36 business entries. The aggregate SCC remains comic_details/favorites/history/local_comics/reader/search/sync and includes UI; it does not prove business cycles eliminated.
+Initial audit evidence (see the execution record for newer stage results): 986 Windows Flutter tests passed; analyzer has no errors/warnings and 23 infos; LCOV covers 13,988/31,156 lines (44.90%). This is the latest local `coverage/lcov.info`, not performance evidence or proof of complete behavior. The architecture report enforces 36 business entries. The aggregate SCC remains comic_details/favorites/history/local_comics/reader/search/sync and includes UI; it does not prove business cycles eliminated.
 
 | Plan item | Status | Requirement | Inspected evidence | Remaining action/acceptance |
 |---|---|---|---|---|
@@ -27,11 +27,11 @@ Current evidence: 986 Windows Flutter tests passed; analyzer has no errors/warni
 | P3.2 | I | Immutable settings resolution | `lib/foundation/reader_settings.dart; test/foundation/reader_settings_snapshot_test.dart` | Snapshot/override tests exist; this does not accept all settings. |
 | P3.3 | P | Typed storage and consumers | `lib/foundation/reader_preference_store.dart; lib/features/settings/reader.dart` | Reader consumers migrated; audit all consumers and integration with user changes. |
 | P3.4 | P | Invalid values and round-trip compatibility | `test/foundation/reader_preference_store_test.dart; test/foundation/sync_configuration_test.dart` | Complete legacy round-trip/unknown-field/all-import-path matrix. |
-| P3.5 | P | Other configuration/gates | `lib/foundation/application_configuration.dart; lib/features/webdav_library/webdav_library_settings.dart` | Network/appearance/data-sync/WebDAV snapshots exist; WebDAV settings storage is injectable. Runtime assembly and gates remain. |
+| P3.5 | P | Other configuration/gates | `lib/foundation/application_configuration.dart; lib/features/webdav_library/webdav_library_settings.dart` | Network/appearance/data-sync/WebDAV snapshots exist; WebDAV settings storage is injectable; app_runtime owns assembly and six business entries are gated. Continue all-consumer configuration acceptance. |
 | P4.1 | I | Shared initialization and failure | `lib/foundation/init.dart; test/foundation/init_test.dart` | State machine and explicit retry are implemented. |
 | P4.2 | P | Startup dependency audit | `lib/app_runtime/bootstrap_core.dart` | Critical/optional ordering is explicit; audit all ensureInit callers and failure resources. |
 | P4.3 | I | Startup mode separation | `lib/app_runtime/core_bootstrap.dart; lib/app_runtime/interactive_bindings.dart; lib/app_runtime/headless_bindings.dart` | Assembly is separated; real CLI smoke acceptance remains P0/P8. |
-| P4.4 | P | Dependencies and start/dispose | `lib/features/sync/data_sync.dart; lib/features/webdav_library/webdav_library_source.dart` | DataSync has start/dispose; WebDAV static state/direct manager disposal remain. |
+| P4.4 | P | Dependencies and start/dispose | `lib/features/sync/data_sync.dart; lib/features/webdav_library/webdav_library_source.dart` | DataSync has start/dispose; WebDAV is instance-owned and disposed with the mounted app. Other managers/startup-failure resources remain. |
 | P4.5 | P | Reader request ownership | `lib/network/request_scope.dart; lib/features/reader/chapter_loader.dart; lib/features/reader/image_precache.dart` | Session/shared-request regressions exist; finish all source requests and device lifecycle acceptance. |
 | P4.6 | P | Cancel/dispose/commit semantics | `lib/features/local_comics/local_import_lifecycle.dart; lib/features/reader/reader_session.dart` | Normal window exit is coordinated; background/OS termination and cross-store rollback remain. |
 | P4.7 | O | Remove global State lookup | `lib/features/reader/comic_image.dart:358` | Still calls GlobalState.find<ReaderGestureDetectorState>; replace with an explicit interaction contract. |
@@ -45,7 +45,7 @@ Current evidence: 986 Windows Flutter tests passed; analyzer has no errors/warni
 | P6.1 | I | Models and repositories | `lib/features/local_comics/local_repository.dart; lib/features/history/history_repository.dart; lib/features/favorites/favorites_repository.dart` | Core SQL is in repositories; maintain this boundary for new SQL. |
 | P6.2 | P | Favorite business responsibilities | `lib/features/favorites/read_later_service.dart; lib/features/favorites/favorite_updates_service.dart; lib/features/favorites/favorites_manager.dart` | Read-later/update services split; global manager dependencies/lifecycle remain. |
 | P6.3 | P | Local storage/import/download | `lib/features/local_comics/local.dart; lib/features/local_comics/local_deletion_paths.dart` | Queue/repository/migration split; symlinks, deletion rollback and unguarded direct writers remain. |
-| P6.4 | P | WebDAV instantiation and separation | `lib/features/webdav_library/webdav_library_settings.dart; lib/features/webdav_library/webdav_library_source.dart` | Config/settings storage extracted with injection; caches/in-flight/ops/sync state remain static. Continue discovery/snapshot/runtime separation. |
+| P6.4 | P | WebDAV instantiation and separation | `lib/features/webdav_library/webdav_library_settings.dart; lib/features/webdav_library/webdav_library_source.dart` | Config/settings extracted; caches/in-flight/ops/sync state are instance-owned with session/disposal regressions. Continue discovery/snapshot/transport responsibility separation. |
 | P6.5 | P | Application sync responsibilities | `lib/features/sync/data_sync.dart; lib/features/sync/app_data_archive.dart; lib/app_runtime/sync_window_binding.dart` | Archive/window concerns moved; DataSync still combines scheduling, transfer and global participants. |
 | P6.6 | P | Narrow sync contracts | `lib/features/sync/data_sync.dart; test/features/sync/data_sync_schedule_test.dart` | Retain three-mode tests; finish participant injection and pending/restart/no-echo acceptance. |
 | P6.7 | P | Atomicity constraints | `lib/foundation/sqlite_transaction.dart; lib/foundation/directory_replacement.dart; lib/features/local_comics/local.dart` | Transaction/recovery utilities exist; deletion can still partially commit across filesystem/database. |
@@ -68,7 +68,7 @@ Current evidence: 986 Windows Flutter tests passed; analyzer has no errors/warni
 | 9.1 Business without UI/State dependencies | Incomplete | Extend enforced entries and remove ReaderImages/global gesture State dependencies and reverse UI references |
 | 9.2 Business cycles and CI | Unproven | Inspect transitive dependencies of all key services and classify UI cycles; 36 passing entries are not whole-project proof |
 | 9.3 Reader controllers/policies | Partial | Finish P5.3/P5.5/P5.6 and combined seven-mode tests including existing user changes |
-| 9.4 Dependencies/lifecycle | Partial | WebDAV instances, DataSync participant injection, removal of production reset dependencies and failure/disposal matrix |
+| 9.4 Dependencies/lifecycle | Partial | WebDAV isolation regressions exist; continue DataSync participant injection, other production reset retirement and the full failure/disposal matrix |
 | 9.5 Removals/compatibility | Incomplete | P1 candidate decisions, actual caller audit of forwarding layers and P8.1 retirement record |
 | 9.6 Data/JS/CLI/platform compatibility | Unproven | Legacy fixtures, synthetic sources, real CLI subprocess and five-platform results with explicit limitations/skips |
 | 9.7 Performance/coverage | Unproven | Fixed-device before/after measurements; 44.90% is a line-coverage snapshot, not a passing threshold |
@@ -87,7 +87,7 @@ Current evidence: 986 Windows Flutter tests passed; analyzer has no errors/warni
 
 ## Execution order
 
-1. Prioritize P6.4: separate WebDAV configuration/settings, discovery and snapshots, move runtime state into instances with existing ops/cache injection, then migrate runtime/UI bindings. Test instance isolation, configuration changes, incremental sync and late results after disposal.
+1. Continue P6.4: config/settings and runtime instances are separated; application assembly/UI binding and session-invalidation tests are in place. Next separate discovery, snapshot building and transport while retaining incremental-sync/legacy-cache compatibility.
 2. Finish P6.5/P6.6 scheduling/transport/data-participant boundaries. Complete explicit acceptance of local deletion recovery and symlink policy instead of adding isolated exceptions indefinitely.
 3. Finish P5 host State/gesture/shell contracts while preserving/integrating user changes; close P4 lifecycle/test-injection gaps alongside them.
 4. Execute all P7 capability extraction, protocol regressions, mechanism comparison and structured errors. Do not mechanically split files while retaining implicit shared state.

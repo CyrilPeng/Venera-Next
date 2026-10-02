@@ -274,7 +274,13 @@
     "features/reader/reader_session.dart",
     "features/history/image_favorite_actions.dart",
     "features/comic_source/comic_source_api.dart",
-    "features/follow_updates/follow_updates_api.dart"
+    "features/follow_updates/follow_updates_api.dart",
+    "features/webdav_library/webdav_library_api.dart",
+    "features/webdav_library/webdav_library_cache.dart",
+    "features/webdav_library/webdav_library_config.dart",
+    "features/webdav_library/webdav_library_settings.dart",
+    "features/webdav_library/webdav_library_services.dart",
+    "features/webdav_library/webdav_library_source.dart"
   ],
   "ui_files": [
     "app_shell/auth_page.dart",

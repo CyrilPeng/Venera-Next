@@ -195,7 +195,10 @@ class _AppSettingsState extends State<AppSettings> {
               "Online reading uses directory image structure only; CBZ is kept for archive backup and restore."
                   .tl,
           callback: () async {
-            showPopUpWidget(context, const _WebDavComicLibrarySetting());
+            showPopUpWidget(
+              context,
+              _WebDavComicLibrarySetting(WebDavLibraryScope.of(context)),
+            );
           },
           actionTitle: 'Set'.tl,
         ).toSliver(),
@@ -688,7 +691,9 @@ class _BackupWebdavSettingState extends State<_BackupWebdavSetting> {
 }
 
 class _WebDavComicLibrarySetting extends StatefulWidget {
-  const _WebDavComicLibrarySetting();
+  const _WebDavComicLibrarySetting(this.services);
+
+  final WebDavLibraryServices services;
 
   @override
   State<_WebDavComicLibrarySetting> createState() =>
@@ -706,15 +711,15 @@ class _WebDavComicLibrarySettingState
   @override
   void initState() {
     super.initState();
-    final config = WebDavLibrarySource.settings.read().connection;
+    final config = widget.services.settings.read().connection;
     _connectionControllers = WebDavConnectionControllers(
       url: config.url,
       user: config.user,
       password: config.pass,
       remotePath: config.remotePath,
     );
-    WebDavLibrarySource.updateSyncStatusFromCache();
-    final configuration = WebDavLibrarySource.settings.read();
+    widget.services.source.updateSyncStatusFromCache();
+    final configuration = widget.services.settings.read();
     autoSyncEnabled = configuration.autoSync;
     syncIntervalMinutes = configuration.intervalMinutes;
   }
@@ -809,7 +814,7 @@ class _WebDavComicLibrarySettingState
             ],
             const SizedBox(height: 16),
             ValueListenableBuilder<WebDavLibrarySyncStatus>(
-              valueListenable: WebDavLibrarySource.syncStatus,
+              valueListenable: widget.services.source.syncStatus,
               builder: (context, status, _) {
                 final text = switch (status) {
                   WebDavLibrarySyncStatus(isSyncing: true, total: > 0) =>
@@ -853,7 +858,7 @@ class _WebDavComicLibrarySettingState
               ],
             ),
             const SizedBox(height: 12),
-            if (WebDavLibrarySource.settings.read().connection.isValid) ...[
+            if (widget.services.settings.read().connection.isValid) ...[
               Row(
                 children: [
                   Expanded(
@@ -904,7 +909,7 @@ class _WebDavComicLibrarySettingState
     setState(() {
       isTesting = true;
     });
-    final result = await WebDavLibrarySource.testConnection(currentConfig);
+    final result = await widget.services.source.testConnection(currentConfig);
     if (!mounted) return;
     setState(() {
       isTesting = false;
@@ -918,10 +923,10 @@ class _WebDavComicLibrarySettingState
 
   Future<void> save() async {
     if (isTesting || isSyncing) return;
-    if (!await _persistConfiguration()) return;
-    final config = WebDavLibrarySource.settings.read().connection;
+    if (!await _persistConfiguration() || !mounted) return;
+    final config = widget.services.settings.read().connection;
     if (config.isValid) {
-      unawaited(WebDavLibrarySource.synchronize(force: true));
+      unawaited(widget.services.source.synchronize(force: true));
     }
     if (!mounted) return;
     context.showMessage(message: 'Saved'.tl);
@@ -930,12 +935,12 @@ class _WebDavComicLibrarySettingState
 
   Future<void> syncNow() async {
     if (isTesting || isSyncing) return;
-    if (!await _persistConfiguration()) return;
-    if (!WebDavLibrarySource.settings.read().connection.isValid) return;
+    if (!await _persistConfiguration() || !mounted) return;
+    if (!widget.services.settings.read().connection.isValid) return;
     setState(() {
       isSyncing = true;
     });
-    final result = await WebDavLibrarySource.synchronize(force: true);
+    final result = await widget.services.source.synchronize(force: true);
     if (!mounted) return;
     setState(() {
       isSyncing = false;
@@ -955,14 +960,15 @@ class _WebDavComicLibrarySettingState
       intervalMinutes: syncIntervalMinutes,
     );
     if (!config.isValid && config.user.isEmpty && config.pass.isEmpty) {
-      await WebDavLibrarySource.settings.save(configuration);
+      await widget.services.settings.save(configuration);
+      if (!mounted) return false;
       _refreshWebDavLibrarySource(enabled: false);
       return true;
     }
     setState(() {
       isTesting = true;
     });
-    final result = await WebDavLibrarySource.testConnection(config);
+    final result = await widget.services.source.testConnection(config);
     if (!mounted) return false;
     setState(() {
       isTesting = false;
@@ -972,7 +978,8 @@ class _WebDavComicLibrarySettingState
       context.showMessage(message: "Saved Failed".tl);
       return false;
     } else {
-      await WebDavLibrarySource.settings.save(configuration);
+      await widget.services.settings.save(configuration);
+      if (!mounted) return false;
       _refreshWebDavLibrarySource(enabled: true);
       return true;
     }
@@ -984,7 +991,7 @@ class _WebDavComicLibrarySettingState
     final pages = List<String>.from(appdata.settings['explore_pages']);
     pages.remove(WebDavLibrarySource.explorePageTitle);
     if (enabled) {
-      manager.add(WebDavLibrarySource.create());
+      manager.add(widget.services.source.create());
       pages.add(WebDavLibrarySource.explorePageTitle);
     }
     appdata.settings['explore_pages'] = pages;

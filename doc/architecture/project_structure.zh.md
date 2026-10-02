@@ -444,4 +444,4 @@ local_deletion_paths.dart 的纯策略过滤清理候选：保护保留记录的
 
 LocalRepository.directoryReferences 为删除保护提供仅目录字段的查询，支持参数化完整身份排除，不解析或排序漫画展示模型。LocalManager 使用同一个内部解析器处理 baseDir 和保留目录列表，使归属检查独立于无关 JSON 元数据且保持既有路径语义。
 
-WebDAV 在线库的连接与路径模型位于 `webdav_library_config.dart`；旧设置键的只读解析、序列化和可注入保存协议位于 `webdav_library_settings.dart`。页面和同步调度共用该快照。当前 `WebDavLibrarySource.settings` 仍负责连接 appdata 与缓存失效回调，缓存和同步运行状态尚未实例化；这不是 P6.4 的整体完成。
+WebDAV 在线库的连接与路径模型位于 `webdav_library_config.dart`；旧设置键的只读解析、序列化和可注入保存协议位于 `webdav_library_settings.dart`。页面和同步调度共用该快照。`app_runtime/webdav_library.dart` 装配 appdata、设置存储、显式数据库路径和源实例，`main.dart` 挂载时注册适配器、卸载时释放实例；设置页面通过 `WebDavLibraryScope` 和构造参数取得服务。业务仅导出 `webdav_library_api.dart`，含 UI 的聚合入口另导出 scope。缓存、请求、通知器和同步状态均属于源实例；配置会话在切换/释放后禁止旧请求提交。仍需继续拆分源内的目录发现、快照构建和传输职责。

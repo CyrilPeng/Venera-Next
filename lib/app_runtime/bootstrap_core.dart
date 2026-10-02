@@ -7,7 +7,6 @@ import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/sync/sync.dart';
-import 'package:venera_next/features/webdav_library/webdav_library.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
@@ -18,6 +17,7 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/network/cookie_jar.dart';
 
 import 'core_bootstrap.dart';
+import 'webdav_library.dart';
 
 /// Core startup never registers window callbacks or automatic sync timers.
 Future<void> bootstrapCore() => _core.start();
@@ -45,8 +45,8 @@ CoreBootstrap createCoreBootstrap({Future<void> Function()? environment}) =>
           () async => DataSync().onDataChanged(),
         );
         configureRuntimeComicSourcesProvider(
-          () => WebDavLibrarySource.settings.read().connection.isValid
-              ? [WebDavLibrarySource.create()]
+          () => webDavLibrary.settings.read().connection.isValid
+              ? [webDavLibrary.source.create()]
               : const [],
         );
         await JsEngine().init();

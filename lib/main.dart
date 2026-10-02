@@ -1,3 +1,4 @@
+import 'package:venera_next/app_runtime/webdav_library.dart';
 import 'package:venera_next/features/reader/reader.dart'
     show ReaderOrientationScope;
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
@@ -85,11 +86,13 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  final _library = webDavLibrary;
   final _interactiveBindings = InteractiveBindings.platform();
   final _backgroundSync = BackgroundSync.platform();
 
   @override
   void initState() {
+    mountWebDavLibrary(_library);
     App.registerForceRebuild(forceRebuild);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -112,6 +115,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     hideContentOverlay = null;
     stopFollowUpdates();
     _backgroundSync.stop();
+    _library.source.dispose();
     unawaited(_interactiveBindings.dispose());
     super.dispose();
   }
@@ -131,7 +135,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       DataSync().checkForAutomaticSync();
-      WebDavLibrarySource.checkForAutomaticSync();
+      _library.source.checkForAutomaticSync();
     }
     if (!App.isMobile || !appdata.settings['authorizationRequired']) {
       return;
@@ -342,6 +346,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   ),
                 );
               }
+              widget = WebDavLibraryScope(services: _library, child: widget);
               return _SystemUiProvider(
                 Material(
                   color: App.isLinux ? Colors.transparent : null,
