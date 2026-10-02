@@ -82,16 +82,20 @@ class WebDavDataSyncTransfer implements DataSyncTransfer {
           .toList();
       scope.check();
       final today = files.where((name) => name.startsWith('$day-')).firstOrNull;
-      // Preserve the existing remote retention protocol during extraction.
-      if (today != null) await remote.remove(today);
-      scope.check();
-      if (files.length >= 10) {
-        files.sort();
-        await remote.remove(files.first);
-      }
       final bytes = await archive.readAsBytes();
       scope.check();
+      // Keep previous recovery points until the new archive is acknowledged.
+      // The server may still have committed a request whose response was lost.
       await remote.write(name, bytes);
+      scope.check();
+      final obsolete = <String>{
+        ?today,
+        if (files.length >= 10) (files..sort()).first,
+      }..remove(name);
+      for (final oldName in obsolete) {
+        scope.check();
+        await remote.remove(oldName);
+      }
       scope.check();
       await _participant.recordSyncTime(_now().millisecondsSinceEpoch);
     } finally {

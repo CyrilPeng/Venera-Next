@@ -104,13 +104,14 @@ void main() {
   );
 
   test(
-    'upload preserves archive naming, exclusion and retention protocol',
+    'upload preserves naming and retention selection after writing new archive',
     () async {
       remote.names = ['19-4.venera', '20-5.venera', 'notes.txt'];
       await transfer.upload(connection, excludeFields: true, scope: scope);
       expect(participant.version, 8);
       expect(participant.excludeFields, isTrue);
       expect(remote.removed, ['20-5.venera']);
+      expect(remote.events, ['write:20-8.venera', 'remove:20-5.venera']);
       expect(remote.written, '20-8.venera');
       expect(remote.bytes, [1, 2, 3]);
       expect(participant.syncTime, 20 * 86400000);
@@ -120,15 +121,69 @@ void main() {
   );
 
   test('failed upload releases exported archive and remote', () async {
+    remote.names = ['19-4.venera', '20-5.venera'];
     remote.writeError = StateError('denied');
     await expectLater(
       transfer.upload(connection, excludeFields: false, scope: scope),
       throwsStateError,
     );
     expect(participant.syncTime, isNull);
+    expect(remote.removed, isEmpty);
     expect(directory.listSync(), isEmpty);
     expect(remote.closed, isTrue);
   });
+
+  test(
+    'cleanup failure reports failure only after a new recovery point is written',
+    () async {
+      remote.names = ['19-4.venera', '20-5.venera'];
+      remote.removeError = StateError('cannot delete');
+      await expectLater(
+        transfer.upload(connection, excludeFields: false, scope: scope),
+        throwsStateError,
+      );
+      expect(remote.written, '20-8.venera');
+      expect(remote.bytes, [1, 2, 3]);
+      expect(remote.events, ['write:20-8.venera', 'remove:20-5.venera']);
+      expect(participant.syncTime, isNull);
+      expect(directory.listSync(), isEmpty);
+      expect(remote.closed, isTrue);
+    },
+  );
+
+  test(
+    'cancellation after upload acknowledgement preserves old recovery points',
+    () async {
+      remote.names = ['20-5.venera'];
+      remote.afterWrite = scope.cancel;
+      await expectLater(
+        transfer.upload(connection, excludeFields: false, scope: scope),
+        throwsA(isA<RequestCancelled>()),
+      );
+      expect(remote.written, '20-8.venera');
+      expect(remote.removed, isEmpty);
+      expect(participant.syncTime, isNull);
+      expect(directory.listSync(), isEmpty);
+    },
+  );
+
+  test('retention never deletes the newly uploaded name', () async {
+    remote.names = ['20-8.venera'];
+    await transfer.upload(connection, excludeFields: false, scope: scope);
+    expect(remote.written, '20-8.venera');
+    expect(remote.removed, isEmpty);
+    expect(participant.syncTime, isNotNull);
+  });
+
+  test(
+    'overlapping daily and oldest retention candidates are deleted once',
+    () async {
+      remote.names = [for (var i = 10; i < 20; i++) '20-$i.venera'];
+      await transfer.upload(connection, excludeFields: false, scope: scope);
+      expect(remote.removed, ['20-10.venera']);
+      expect(remote.events, ['write:20-8.venera', 'remove:20-10.venera']);
+    },
+  );
 
   test(
     'unchanged remote version does not download or clear pending via apply result',
@@ -238,6 +293,9 @@ class _Participant implements DataSyncParticipant {
 class _Remote implements DataSyncRemote {
   List<String> names = [];
   final removed = <String>[];
+  final events = <String>[];
+  Object? removeError;
+  void Function()? afterWrite;
   String? written;
   Uint8List? bytes;
   String? readPath;
@@ -256,13 +314,21 @@ class _Remote implements DataSyncRemote {
   }
 
   @override
-  Future<void> remove(String name) async => removed.add(name);
+  Future<void> remove(String name) async {
+    events.add('remove:$name');
+    final error = removeError;
+    if (error != null) throw error;
+    removed.add(name);
+  }
+
   @override
   Future<void> write(String name, Uint8List bytes) async {
+    events.add('write:$name');
     final error = writeError;
     if (error != null) throw error;
     written = name;
     this.bytes = bytes;
+    afterWrite?.call();
   }
 
   @override
