@@ -79,7 +79,14 @@ class ImageFavoritesProvider
     if (!file.existsSync()) {
       return null;
     }
-    return await file.readAsBytes();
+    try {
+      return await file.readAsBytes();
+    } on FileSystemException {
+      // Cache eviction may finish after the existence check above.
+      // A vanished entry is a miss; retain errors for entries still present.
+      if (!file.existsSync()) return null;
+      rethrow;
+    }
   }
 
   /// Delete a image favorite cache

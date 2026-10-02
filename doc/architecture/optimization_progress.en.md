@@ -802,3 +802,10 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - Four integration regressions cover queued ownership, cancellation draining with real migration, failure release and exit ownership. Local/runtime targeted tests: 184 passed. Analysis: no errors/warnings, 23 existing infos; structure, architecture, 12 script tests and Git dependency checks passed.
 - Full Windows Flutter run: 958 passed, one failed because image-favorites cache deletion races with the existence-check/read sequence in readFromCache. This is recorded for a separate fix, not a passing full run. Changelog and bilingual docs are synchronized; user changes remain separate.
 - Live task rebasing, other import/delete exclusion, draining PDF imports on exit, direct disposal, SAF device checks and remaining P0–P8 acceptance remain unfinished.
+
+## P4/P6: Image-favorites cache read/eviction race (2026-10-02)
+
+- Fixed the failure found by the preceding full run: ImageFavoritesProvider may lose a cache file between existence checking and asynchronous reading. On filesystem read failure it rechecks existence, treating a vanished file as a cache miss while preserving the original error for a remaining entry.
+- Two deterministic regressions remove a real file between checking and reading and verify error propagation without removal. After initializing the fixture cache path, all 43 history tests passed; the race is not hidden by sleeps or reruns.
+- Full Windows Flutter suite: 961 passed. Analysis: no errors/warnings, 23 existing infos; structure, architecture, 12 script tests, Git dependencies and formatting passed. The preceding full-suite failure is resolved; changelog updated with user changes kept separate.
+- This change defines cache disappearance during reading, not serialization of all cache writes/deletions. Remaining P0–P8 lifecycle, business boundary, platform and performance acceptance work continues.
