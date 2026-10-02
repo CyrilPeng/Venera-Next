@@ -348,6 +348,8 @@ class LocalManager with ChangeNotifier {
 
   bool get isDownloadResumePending => _downloadQueue.isResumePending;
 
+  Future<void> cancelDownload(DownloadTask task) => _downloadQueue.cancel(task);
+
   void resumeDownload(DownloadTask task) => _downloadQueue.resume(task);
 
   Future<void> pauseDownload(DownloadTask task) => _downloadQueue.pause(task);

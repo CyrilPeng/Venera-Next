@@ -202,6 +202,102 @@ void main() {
     },
   );
 
+  test(
+    'cancel tracks cleanup assigned after removal and gates a replacement start',
+    () async {
+      final gate = Completer<void>();
+      final first = _Task('a', events);
+      final replacement = _Task('a', events);
+      first.onCancel = () {
+        queue.remove(first);
+        queue.add(replacement);
+        first.cleanup = gate.future;
+      };
+      queue.add(first);
+      events.clear();
+      final canceled = queue.cancel(first);
+      expect(identical(queue.tasks.single, replacement), isTrue);
+      await pumpEventQueue();
+      expect(events.where((event) => event.startsWith('resume:')), isEmpty);
+      gate.complete();
+      await canceled;
+      await pumpEventQueue();
+      expect(events.where((event) => event.startsWith('resume:')), [
+        'resume:a',
+      ]);
+    },
+  );
+
+  test(
+    'cancel retains no-auto-advance behavior and ignores stale or recursive requests',
+    () async {
+      final first = _Task('a', events);
+      final next = _Task('b', events);
+      var cancels = 0;
+      first.onCancel = () {
+        cancels++;
+        queue.cancel(first);
+      };
+      queue.add(first);
+      queue.add(next);
+      events.clear();
+      await queue.cancel(_Task('a', events));
+      expect(events, isEmpty);
+      await queue.cancel(first);
+      await queue.cancel(first);
+      expect(cancels, 1);
+      expect(queue.tasks, [next]);
+      expect(next.isPaused, isTrue);
+      expect(events.where((event) => event.startsWith('resume:')), isEmpty);
+    },
+  );
+
+  test(
+    'canceling a tail retains pending head start but waits for its cleanup',
+    () async {
+      final gates = [Completer<void>(), Completer<void>()];
+      final first = _Task('a', events)..cleanup = gates[0].future;
+      final second = _Task('b', events);
+      final tail = _Task('c', events)..cleanup = gates[1].future;
+      queue.add(first);
+      queue.add(second);
+      queue.add(tail);
+      events.clear();
+      final moved = queue.moveToFirst(second);
+      final canceled = queue.cancel(tail);
+      gates[0].complete();
+      await moved;
+      await pumpEventQueue();
+      expect(events.where((event) => event.startsWith('resume:')), isEmpty);
+      gates[1].complete();
+      await canceled;
+      await pumpEventQueue();
+      expect(events.where((event) => event.startsWith('resume:')), [
+        'resume:b',
+      ]);
+    },
+  );
+
+  test('cancel listener pause overrides an older pending start', () async {
+    final gate = Completer<void>();
+    final first = _Task('a', events)..cleanup = gate.future;
+    final second = _Task('b', events);
+    final tail = _Task('c', events);
+    queue.add(first);
+    queue.add(second);
+    queue.add(tail);
+    final moved = queue.moveToFirst(second);
+    Future<void>? paused;
+    tail.onCancel = () => paused = queue.pause(second);
+    events.clear();
+    final canceled = queue.cancel(tail);
+    gate.complete();
+    await Future.wait([moved, canceled, paused!]);
+    await pumpEventQueue();
+    expect(second.isPaused, isTrue);
+    expect(events.where((event) => event.startsWith('resume:')), isEmpty);
+  });
+
   test('task view rejects mutations but reflects service updates', () {
     final view = queue.tasks;
     final task = _Task('a', events);
@@ -416,6 +512,7 @@ class _Task extends DownloadTask {
   Future<void> get pendingCleanup => cleanup ?? Future.value();
   bool _paused = true;
   void Function()? onPause;
+  void Function()? onCancel;
   @override
   bool get isPaused => _paused;
   @override
@@ -431,7 +528,11 @@ class _Task extends DownloadTask {
   @override
   String get message => '';
   @override
-  void cancel() => pause();
+  void cancel() {
+    pause();
+    onCancel?.call();
+  }
+
   @override
   void pause() {
     _paused = true;

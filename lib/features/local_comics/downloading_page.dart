@@ -214,7 +214,7 @@ class _DownloadTaskTileState extends State<_DownloadTaskTile> {
                           icon: Icons.close,
                           text: "Cancel".tl,
                           onClick: () {
-                            widget.task.cancel();
+                            LocalManager().cancelDownload(widget.task);
                           },
                         ),
                         MenuEntry(

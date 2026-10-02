@@ -413,3 +413,5 @@ ImagesDownloadTask 将目录分配 Future 纳入停止等待，记录新建输�
 DownloadTask.pendingCleanup 为任务公共契约。DownloadQueue.moveToFirst 在暂停回调前设置调度等待，立即重排但等待旧任务清理后自动启动；连续置顶串联停止并保留运行意图，过期修订不再启动，清理失败通过管理器适配报告。恢复暂停快照不能覆盖正在停止的队列。该机制尚不替代页面直接控制和完整退出协议。
 
 下载页面通过 LocalManager.resumeDownload/pauseDownload 调用队列启停，队列按当前首项对象身份校验并复用停止等待；暂停使待启动修订失效。isDownloadResumePending 驱动等待期间的暂停入口，停止失败清除意图并通知界面。页面不再直接调用首项 resume/pause，取消和完整运行时退出仍需后续收敛。
+
+页面取消经 LocalManager.cancelDownload 委托 DownloadQueue.cancel，停止屏障先于任务回调建立、清理信号后于回调读取，使任务移出队列后仍可约束后续启动。取消按实例防重入，保留不自动推进规则；队尾取消仅在没有更新监听动作时恢复原待启动意图。队列暂停和取消共用内部停止编排，整体运行时关闭仍待接入。

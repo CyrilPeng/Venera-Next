@@ -24,6 +24,7 @@ class DownloadQueue {
   final List<DownloadTask> _tasks = [];
   late final List<DownloadTask> tasks = UnmodifiableListView(_tasks);
   final _completing = Set<DownloadTask>.identity();
+  final _canceling = Set<DownloadTask>.identity();
   int _revision = 0;
 
   /// Publish a complete paused snapshot during initialization/recovery, without
@@ -126,8 +127,30 @@ class DownloadQueue {
     if (!identical(tasks.firstOrNull, task)) return Future.value();
     _revision++;
     _scheduledResumeRevision = null;
-    final stopped = _pauseBeforeScheduling(task);
+    final stopped = _stopBeforeScheduling(task, task.pause);
     notifyChanged();
+    return stopped;
+  }
+
+  Future<void> cancel(DownloadTask task) {
+    if (_indexOf(task) < 0 || !_canceling.add(task)) return Future.value();
+    final before = _revision;
+    final keepPendingStart =
+        isResumePending && !identical(tasks.firstOrNull, task);
+    final stopped = _stopBeforeScheduling(task, () {
+      try {
+        task.cancel();
+        // Concrete tasks currently remove themselves through the manager.
+        // Identity-based removal is also safe for tasks that do not.
+        remove(task);
+      } finally {
+        _canceling.remove(task);
+      }
+    });
+    // Do not replace a newer listener action with the pre-cancel start intent.
+    if (keepPendingStart && _revision == before + 1) {
+      _resumeIfUnchanged(_revision);
+    }
     return stopped;
   }
 
@@ -145,7 +168,7 @@ class DownloadQueue {
     final shouldResume =
         !first.isPaused || _scheduledResumeRevision == _revision;
     final beforePause = _revision;
-    final stopped = _pauseBeforeScheduling(first);
+    final stopped = _stopBeforeScheduling(first, first.pause);
     if (beforePause != _revision || !identical(tasks.firstOrNull, first)) {
       return stopped;
     }
@@ -159,7 +182,7 @@ class DownloadQueue {
     return stopped;
   }
 
-  Future<void> _pauseBeforeScheduling(DownloadTask task) {
+  Future<void> _stopBeforeScheduling(DownloadTask task, void Function() stop) {
     final previous = _pendingStop;
     final gate = Completer<void>();
     final stopped = _pendingStop = gate.future;
@@ -180,9 +203,9 @@ class DownloadQueue {
       }
     }
 
-    // Install the barrier before pause can notify/reenter queue operations.
+    // Install the barrier before stop can notify/reenter queue operations.
     try {
-      task.pause();
+      stop();
       unawaited(
         Future.wait<void>([?previous, task.pendingCleanup]).then<void>(
           (_) => finish(),
