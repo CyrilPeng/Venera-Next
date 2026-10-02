@@ -134,6 +134,7 @@ class ImportComic {
     try {
       comic = await EpubComicImporter.import(
         File(selected.path),
+        registerComic: (comic) => registerComic(comic, folder: selectedFolder),
         onProgress: (current, total) {
           controller
             ..setProgress(current / total)
@@ -149,9 +150,10 @@ class ImportComic {
       controller.close();
     }
     if (comic == null) return false;
-    return registerComics({
-      selectedFolder: [comic],
-    }, false);
+    App.rootContext.showMessage(
+      message: 'Imported @a comics'.tlParams({'a': 1}),
+    );
+    return true;
   }
 
   static String _documentImportError(Object error) {

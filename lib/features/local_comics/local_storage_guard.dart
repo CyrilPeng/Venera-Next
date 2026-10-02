@@ -9,7 +9,7 @@ class LocalComicStorageBusy implements Exception {
   String toString() => message;
 }
 
-/// Keeps background PDF writes out of storage migration and library recovery.
+/// Keeps document imports out of storage migration and library recovery.
 /// Normal reading remains available throughout these operations.
 class LocalComicStorageGuard {
   static final instance = LocalComicStorageGuard();
@@ -35,7 +35,7 @@ class LocalComicStorageGuard {
   Future<T> runExclusive<T>(Future<T> Function() action) async {
     if (_imports > 0) {
       throw const LocalComicStorageBusy(
-        'Wait for PDF imports to finish or cancel them before changing the local library.',
+        'Wait for document imports to finish or cancel them before changing the local library.',
       );
     }
     if (_exclusive != null) {
