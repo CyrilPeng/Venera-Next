@@ -35,6 +35,9 @@ class SourceCategoryParser {
         continue;
       }
       List? categories = c["categories"];
+      if (categories != null && categories.isEmpty) {
+        continue;
+      }
       if (categories == null || categories[0] is Map) {
         // new format
         final String name = c["name"];
