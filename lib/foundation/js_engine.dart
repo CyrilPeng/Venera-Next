@@ -846,24 +846,6 @@ class DocumentWrapper {
   }
 }
 
-class JSAutoFreeFunction {
-  final JSInvokable func;
-
-  /// Automatically free the function when it's not used anymore
-  JSAutoFreeFunction(this.func) {
-    func.dup();
-    finalizer.attach(this, func);
-  }
-
-  dynamic call(List<dynamic> args) {
-    return func(args);
-  }
-
-  static final finalizer = Finalizer<JSInvokable>((func) {
-    func.destroy();
-  });
-}
-
 /// Explicit ownership for native callbacks retained beyond one evaluation.
 /// Scopes are released by their owner, or before their engine closes.
 class JsCallbackScope {

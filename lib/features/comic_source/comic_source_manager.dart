@@ -15,8 +15,6 @@ import 'comic_type_bridge.dart';
 import 'favorites.dart';
 import 'image_loading.dart';
 import 'js_bridge.dart';
-import 'models.dart';
-import 'normalization.dart';
 import 'parser.dart';
 import 'source.dart';
 import 'source_repositories.dart';
@@ -29,61 +27,6 @@ void configureRuntimeComicSourcesProvider(
   RuntimeComicSourcesProvider? provider,
 ) {
   _runtimeComicSourcesProvider = provider;
-}
-
-@visibleForTesting
-Map<String, Map<String, dynamic>>? debugNormalizeComicSourceSettings(
-  dynamic value,
-) {
-  return normalizeComicSourceSettings(value);
-}
-
-@visibleForTesting
-Map<String, dynamic>? debugNormalizeComicSourceLoadingConfig(dynamic value) {
-  return normalizeComicSourceLoadingConfig(value);
-}
-
-@visibleForTesting
-Map<String, dynamic>? debugNormalizeComicSourceStringKeyedMap(dynamic value) {
-  return normalizeComicSourceStringKeyedMap(value);
-}
-
-@visibleForTesting
-List<String>? debugNormalizeComicSourceStringList(dynamic value) {
-  return normalizeComicSourceStringList(value);
-}
-
-@visibleForTesting
-List<Comic>? debugNormalizeComicSourceComicList(
-  dynamic value,
-  String sourceKey,
-) {
-  return normalizeComicSourceComicList(value, sourceKey);
-}
-
-@visibleForTesting
-Map<String, dynamic>? debugNormalizeComicSourceComicDetails(
-  dynamic value,
-  String sourceKey,
-  String comicId,
-) {
-  return normalizeComicSourceComicDetails(value, sourceKey, comicId);
-}
-
-@visibleForTesting
-({Map<String, dynamic> data, List<Comment> comments})?
-debugNormalizeComicSourceCommentsResult(dynamic value) {
-  return normalizeComicSourceCommentsResult(value);
-}
-
-@visibleForTesting
-List<ArchiveInfo>? debugNormalizeComicSourceArchiveList(dynamic value) {
-  return normalizeComicSourceArchiveList(value);
-}
-
-@visibleForTesting
-String? debugNormalizeComicSourceArchiveDownloadUrl(dynamic value) {
-  return normalizeComicSourceArchiveDownloadUrl(value);
 }
 
 class ComicSourceManager with ChangeNotifier, Init {

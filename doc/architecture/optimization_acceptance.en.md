@@ -94,3 +94,5 @@ Initial audit evidence (see the execution record for newer stage results): 986 W
 5. P8 compatibility retirement, lint restoration and complete script/CLI/platform/performance checks. Only complete the goal after every inventory and section-9 requirement is proven.
 
 This audit preserves the original objective and waives nothing. Complete P0 measurements, P1 classification and remaining P3 settings at the relevant steps. Unavailable platforms remain unverified; Windows tests do not replace them.
+
+P8.1 incremental evidence (2026-10-03): removed nine normalization debug forwarders and JSAutoFreeFunction after repository-wide caller checks. Tests use production normalization directly with explicit callback ownership. Local-library reset/debug and other compatibility entries remain open; see the matching progress entry.

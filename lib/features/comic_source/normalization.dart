@@ -1,5 +1,4 @@
 import 'package:flutter_qjs/flutter_qjs.dart';
-import 'package:venera_next/foundation/js_engine.dart';
 
 import 'models.dart';
 
@@ -161,7 +160,7 @@ normalizeComicSourceStringListResult(dynamic value, String key) {
 
 Map<String, Map<String, dynamic>>? normalizeComicSourceSettings(
   dynamic value, {
-  dynamic Function(JSInvokable)? retainCallback,
+  required dynamic Function(List<dynamic>) Function(JSInvokable) retainCallback,
 }) {
   if (value is! Map) {
     return null;
@@ -181,9 +180,7 @@ Map<String, Map<String, dynamic>>? normalizeComicSourceSettings(
       }
       var v2 = e2.value;
       if (v2 is JSInvokable) {
-        v2 = retainCallback == null
-            ? JSAutoFreeFunction(v2)
-            : retainCallback(v2);
+        v2 = retainCallback(v2);
       }
       v[itemKey] = v2;
     }

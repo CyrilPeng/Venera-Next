@@ -55,7 +55,7 @@
 | P7.4 | P | 仅抽真实共性 | `lib/foundation/throttled_task_runner.dart; lib/network/request_scope.dart` | 现有原语可复用；以 P7.3 对照证明新增抽象并删除对应重复实现。 |
 | P7.5 | O | 结构化错误 | `lib/features/comic_source/source_update_service.dart; lib/foundation/res.dart` | 更新服务仍抛翻译字符串；建立失败/取消/不支持与 Res 适配边界。 |
 | P7.6 | P | 技术规则复用 | `lib/features/comic_source/parser.dart:23; lib/features/comic_storage/archive_metadata.dart` | 元数据/文件规则已有公共实现；版本比较/日期等仍需用途和兼容审查。 |
-| P8.1 | P | 兼容与测试开关退场 | `lib/features/local_comics/local.dart:52; lib/app_runtime/data_sync.dart` | 同步单例/reset/debug 已删除；本地漫画等域仍有 reset/debug，聚合导出继续审查。 |
+| P8.1 | P | 兼容与测试开关退场 | `lib/features/local_comics/local.dart:52; lib/app_runtime/data_sync.dart` | 同步单例/reset/debug、9 个归一化 debug 转发及 JSAutoFreeFunction 已删除；本地漫画等域仍有 reset/debug，聚合导出继续审查。 |
 | P8.2 | O | 恢复 lint 与边界类型 | `analysis_options.yaml` | collection_methods_unrelated_type 与 use_build_context_synchronously 仍为 false。 |
 | P8.3 | P | CI 与覆盖趋势 | `.github/workflows/analyze.yml` | 检查和覆盖上传已有；未登记服务仍不受业务入口门禁约束。 |
 | P8.4 | U | 最终平台与性能验收 | `.github/workflows/build.yml; optimization_progress.zh.md` | 构建工作流存在不等于本轮运行成功；收集五平台结果和固定设备复测。 |

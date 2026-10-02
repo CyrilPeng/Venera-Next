@@ -18,4 +18,4 @@
 
 设置页面证据：source_settings_widget_test.dart 使用正式 ComicSourcePage、实际 JsCallbackScope 与受控 JSInvokable，验证快照销毁次数和页面行为；它补充原生测试，不代替真实 JS 函数执行。
 
-图片与 UI 补充证据：reader_image_processing_native_test.dart 验证真实图片处理/取消协议；test/components/js_ui_native_test.dart 使用真实 QuickJS 与 Widget 验证异步动作/取消、输入及 Navigator 卸载，关闭引擎时检查原生引用释放。js_ui_test.dart 的 14 项受控用例补齐返回/遮罩/按钮/卸载、id 复用、异常重试及晚到结果。UI 回调现由弹窗作用域显式释放；归一化兼容入口及未结束 Promise 的引擎退出仍待审查。
+图片与 UI 补充证据：reader_image_processing_native_test.dart 验证真实图片处理/取消协议；test/components/js_ui_native_test.dart 使用真实 QuickJS 与 Widget 验证异步动作/取消、输入及 Navigator 卸载，关闭引擎时检查原生引用释放。js_ui_test.dart 的 14 项受控用例补齐返回/遮罩/按钮/卸载、id 复用、异常重试及晚到结果。UI 回调现由弹窗作用域显式释放；归一化兼容入口已删除，正式归一化测试验证显式释放后不能调用；未结束 Promise 的引擎退出仍待审查。
