@@ -357,6 +357,23 @@ class LocalManager with ChangeNotifier {
   Future<void> moveToFirst(DownloadTask task) =>
       _downloadQueue.moveToFirst(task);
 
+  /// Do not initialize a library just to close a window that never used it.
+  /// Keep the queue suspended on success until exit or explicit release.
+  static Future<VoidCallback> prepareDownloadsForExit() async {
+    final manager = _instance;
+    if (manager == null) return () {};
+    final preparation = manager._downloadQueue.suspend();
+    try {
+      await preparation;
+      await manager.saveCurrentDownloadingTasks();
+      await manager.pendingDownloadTaskWrites;
+      return () => manager._downloadQueue.releaseSuspension(preparation);
+    } catch (_) {
+      manager._downloadQueue.releaseSuspension(preparation);
+      rethrow;
+    }
+  }
+
   final _downloadTaskStore = DownloadTaskStore(
     onError: (error, stack) => Log.error('LocalManager', error, stack),
   );

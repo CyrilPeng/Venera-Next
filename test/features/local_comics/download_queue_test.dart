@@ -298,6 +298,59 @@ void main() {
     expect(events.where((event) => event.startsWith('resume:')), isEmpty);
   });
 
+  test(
+    'suspension drains removed cancellation and freezes admission until release',
+    () async {
+      final gate = Completer<void>();
+      final removed = _Task('a', events)..cleanup = gate.future;
+      final next = _Task('b', events);
+      queue.add(removed);
+      queue.add(next);
+      final canceled = queue.cancel(removed);
+      final suspended = queue.suspend();
+      expect(identical(suspended, queue.suspend()), isTrue);
+      expect(() => queue.add(_Task('c', events)), throwsStateError);
+      expect(() => queue.restorePausedTasks([]), throwsStateError);
+      expect(() => queue.releaseSuspension(suspended), throwsStateError);
+      events.clear();
+      queue.resume(next);
+      var completed = false;
+      suspended.then((_) => completed = true);
+      await pumpEventQueue();
+      expect(completed, isFalse);
+      gate.complete();
+      await Future.wait([canceled, suspended]);
+      expect(events.where((event) => event.startsWith('resume:')), isEmpty);
+      queue.releaseSuspension(suspended);
+      expect(next.isPaused, isTrue);
+      queue.resume(next);
+      expect(next.isPaused, isFalse);
+    },
+  );
+
+  test(
+    'suspension pauses every task and failed drain can be released and retried',
+    () async {
+      final first = _Task('a', events)
+        ..cleanup = Future.error(StateError('cleanup'));
+      final second = _Task('b', events);
+      queue.restorePausedTasks([first, second]);
+      final suspended = queue.suspend();
+      await expectLater(suspended, throwsStateError);
+      expect(events, containsAll(['pause:a', 'pause:b']));
+      queue.releaseSuspension(suspended);
+      first.cleanup = null;
+      final retry = queue.suspend();
+      await retry;
+      queue.releaseSuspension(suspended);
+      queue.resume(first);
+      expect(first.isPaused, isTrue);
+      queue.releaseSuspension(retry);
+      queue.resume(first);
+      expect(first.isPaused, isFalse);
+    },
+  );
+
   test('task view rejects mutations but reflects service updates', () {
     final view = queue.tasks;
     final task = _Task('a', events);

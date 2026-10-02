@@ -417,3 +417,5 @@ DownloadTask.pendingCleanup 为任务公共契约。DownloadQueue.moveToFirst �
 页面取消经 LocalManager.cancelDownload 委托 DownloadQueue.cancel，停止屏障先于任务回调建立、清理信号后于回调读取，使任务移出队列后仍可约束后续启动。取消按实例防重入，保留不自动推进规则；队尾取消仅在没有更新监听动作时恢复原待启动意图。队列暂停和取消共用内部停止编排，整体运行时关闭仍待接入。
 
 DownloadingPage 持有单个管理器用于订阅/读取/操作/释放，并向条目传入同一实例。首项监听只在初始化及首项实例变化时更新，首项与复用条目都用 identical 切换任务监听，防止漫画身份相等掩盖对象替换。页面组件回归覆盖主题依赖变化、替换、卸载及等待启动的暂停交互。
+
+正常窗口退出时，SyncWindowBinding 调用 LocalManager.prepareDownloadsForExit：对既有管理器冻结队列、等待任务停止/取消清理、写入最终快照，再等待历史与上传。队列静止使用 Future 身份匹配释放，过期释放无效、解除限制不自动启动。准备失败或运行时绑定卸载会释放，成功保持静止直至退出；不提前关闭同步仍可能访问的数据库连接。该协议不覆盖系统强杀或连接替换。

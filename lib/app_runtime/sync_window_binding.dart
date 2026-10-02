@@ -3,12 +3,18 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 /// Window-close behavior exists only while the interactive window is mounted.
 class SyncWindowBinding extends StatefulWidget {
-  const SyncWindowBinding({required this.child, super.key});
+  const SyncWindowBinding({
+    required this.child,
+    this.prepareDownloads,
+    super.key,
+  });
+  final Future<VoidCallback> Function()? prepareDownloads;
   final Widget child;
 
   @override
@@ -17,6 +23,7 @@ class SyncWindowBinding extends StatefulWidget {
 
 class _SyncWindowBindingState extends State<SyncWindowBinding> {
   WindowFrameController? _window;
+  VoidCallback? _releaseDownloads;
 
   @override
   void didChangeDependencies() {
@@ -29,21 +36,37 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
   }
 
   Future<void> _waitThenClose() async {
-    await HistoryManager().waitForAsyncWrites();
-    if (!mounted || !DataSync().isUploading) return;
-    showLoadingDialog(
-      App.rootContext,
-      cancelButtonText: 'Shut Down'.tl,
-      onCancel: _window!.forceExit,
-      barrierDismissible: false,
-      message: 'Uploading data...'.tl,
-    );
-    await DataSync().waitForUpload();
+    final release =
+        await (widget.prepareDownloads ??
+            LocalManager.prepareDownloadsForExit)();
+    if (!mounted) {
+      release();
+      return;
+    }
+    _releaseDownloads = release;
+    try {
+      await HistoryManager().waitForAsyncWrites();
+      if (!mounted || !DataSync().isUploading) return;
+      showLoadingDialog(
+        App.rootContext,
+        cancelButtonText: 'Shut Down'.tl,
+        onCancel: _window!.forceExit,
+        barrierDismissible: false,
+        message: 'Uploading data...'.tl,
+      );
+      await DataSync().waitForUpload();
+    } catch (_) {
+      _releaseDownloads?.call();
+      _releaseDownloads = null;
+      rethrow;
+    }
   }
 
   @override
   void dispose() {
     _window?.removeExitTask(_waitThenClose);
+    _releaseDownloads?.call();
+    _releaseDownloads = null;
     super.dispose();
   }
 

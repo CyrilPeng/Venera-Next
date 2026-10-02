@@ -31,6 +31,66 @@ void main() {
         .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
   });
 
+  for (final failHistory in [false, true]) {
+    testWidgets(
+      'exit waits for downloads and releases on history failure: $failHistory',
+      (tester) async {
+        final downloads = Completer<VoidCallback>();
+        final history = Completer<void>();
+        var releases = 0;
+        var exits = 0;
+        final events = <String>[];
+        HistoryManager.cache = _PendingHistory(() {
+          events.add('history');
+          return history.future;
+        });
+        await tester.pumpWidget(
+          MaterialApp(
+            navigatorKey: App.rootNavigatorKey,
+            builder: (_, child) => WindowFrame(
+              SyncWindowBinding(
+                prepareDownloads: () {
+                  events.add('downloads');
+                  return downloads.future;
+                },
+                child: child!,
+              ),
+              onExit: () => exits++,
+            ),
+            home: const Scaffold(body: Text('shutdown')),
+          ),
+        );
+        tester
+            .widgetList<WindowButton>(find.byType(WindowButton))
+            .last
+            .onPressed();
+        await tester.pump();
+        expect(events, ['downloads']);
+        expect(exits, 0);
+        downloads.complete(() => releases++);
+        await tester.pump();
+        expect(events, ['downloads', 'history']);
+        if (failHistory) {
+          history.completeError(StateError('history failure'));
+        } else {
+          history.complete();
+        }
+        await tester.pump();
+        if (failHistory) {
+          expect(tester.takeException(), isA<StateError>());
+          expect(exits, 0);
+          expect(releases, 1);
+        } else {
+          expect(exits, 1);
+          expect(releases, 0);
+        }
+        await tester.pumpWidget(const SizedBox());
+        expect(releases, 1);
+      },
+      skip: !Platform.isWindows,
+    );
+  }
+
   for (final detached in [false, true]) {
     testWidgets(
       'shutdown drains reader then history then upload; detached=$detached',

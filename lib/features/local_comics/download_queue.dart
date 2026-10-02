@@ -20,6 +20,7 @@ class DownloadQueue {
   final void Function(Object, StackTrace) reportError;
   Future<void>? _pendingStop;
   int? _scheduledResumeRevision;
+  Completer<void>? _suspension;
 
   final List<DownloadTask> _tasks = [];
   late final List<DownloadTask> tasks = UnmodifiableListView(_tasks);
@@ -30,6 +31,7 @@ class DownloadQueue {
   /// Publish a complete paused snapshot during initialization/recovery, without
   /// starting tasks, notifying listeners or writing the snapshot back to disk.
   void restorePausedTasks(Iterable<DownloadTask> restored) {
+    if (_suspension != null) throw StateError('Download queue is suspended');
     final revision = _revision;
     final snapshot = <DownloadTask>[];
     final identities = <(String, int)>{};
@@ -61,6 +63,7 @@ class DownloadQueue {
   }
 
   void add(DownloadTask task) {
+    if (_suspension != null) throw StateError('Download queue is suspended');
     if (contains(task.id, task.comicType)) return;
     _tasks.add(task);
     final revision = ++_revision;
@@ -69,6 +72,7 @@ class DownloadQueue {
   }
 
   void complete(DownloadTask task) {
+    if (_suspension != null) return;
     if (_indexOf(task) < 0 || !_completing.add(task)) return;
     try {
       final comic = task.toLocalComic();
@@ -89,7 +93,7 @@ class DownloadQueue {
 
   void _resumeIfUnchanged(int revision) {
     // A nested queue operation owns the final scheduling decision.
-    if (revision != _revision) return;
+    if (_suspension != null || revision != _revision) return;
     final stop = _pendingStop;
     if (stop == null) {
       _scheduledResumeRevision = null;
@@ -112,7 +116,8 @@ class DownloadQueue {
       _pendingStop != null && _scheduledResumeRevision == _revision;
 
   void resume(DownloadTask task) {
-    if (!identical(tasks.firstOrNull, task) ||
+    if (_suspension != null ||
+        !identical(tasks.firstOrNull, task) ||
         !task.isPaused ||
         isResumePending) {
       return;
@@ -124,6 +129,7 @@ class DownloadQueue {
   }
 
   Future<void> pause(DownloadTask task) {
+    if (_suspension != null) return _suspension!.future;
     if (!identical(tasks.firstOrNull, task)) return Future.value();
     _revision++;
     _scheduledResumeRevision = null;
@@ -133,6 +139,7 @@ class DownloadQueue {
   }
 
   Future<void> cancel(DownloadTask task) {
+    if (_suspension != null) return _suspension!.future;
     if (_indexOf(task) < 0 || !_canceling.add(task)) return Future.value();
     final before = _revision;
     final keepPendingStart =
@@ -163,6 +170,7 @@ class DownloadQueue {
   }
 
   Future<void> moveToFirst(DownloadTask task) {
+    if (_suspension != null) return _suspension!.future;
     if (_indexOf(task) <= 0) return Future.value();
     final first = tasks.first;
     final shouldResume =
@@ -180,6 +188,45 @@ class DownloadQueue {
     _publish();
     if (shouldResume) _resumeIfUnchanged(revision);
     return stopped;
+  }
+
+  /// Freeze admissions/scheduling and drain all accepted pause/cancel work.
+  /// The owner releases the suspension if shutdown is abandoned.
+  Future<void> suspend() {
+    if (_suspension != null) return _suspension!.future;
+    final completion = _suspension = Completer<void>();
+    completion.future.ignore();
+    _revision++;
+    _scheduledResumeRevision = null;
+    for (final task in List<DownloadTask>.of(tasks)) {
+      _stopBeforeScheduling(task, task.pause);
+    }
+    notifyChanged();
+    unawaited(() async {
+      try {
+        while (_pendingStop != null) {
+          await _pendingStop;
+        }
+        completion.complete();
+      } catch (error, stack) {
+        completion.completeError(error, stack);
+      }
+    }());
+    return completion.future;
+  }
+
+  void releaseSuspension(Future<void> preparation) {
+    final suspension = _suspension;
+    if (suspension == null || !identical(suspension.future, preparation)) {
+      return;
+    }
+    if (!suspension.isCompleted) {
+      throw StateError('Download cleanup has not completed');
+    }
+    _suspension = null;
+    _revision++;
+    _scheduledResumeRevision = null;
+    notifyChanged();
   }
 
   Future<void> _stopBeforeScheduling(DownloadTask task, void Function() stop) {
