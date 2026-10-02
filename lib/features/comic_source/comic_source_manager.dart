@@ -191,6 +191,9 @@ class ComicSourceManager with ChangeNotifier, Init {
   Future<void> reload() => _mutate(_reloadSources);
 
   Future<void> _reloadSources() async {
+    for (final source in _sources) {
+      source.disposeRuntimeCallbacks();
+    }
     _sources.clear();
     JsEngine().runCode('ComicSource.sources = {};');
     await doInit();
@@ -354,6 +357,7 @@ class ComicSourceManager with ChangeNotifier, Init {
       }
       await replacement.commitDataWrites();
       parser.commit();
+      source.disposeRuntimeCallbacks();
       clearSourceUpdate(source.key);
       notifyListeners();
     } catch (_) {
@@ -390,6 +394,9 @@ class ComicSourceManager with ChangeNotifier, Init {
   }
 
   void remove(String key) {
+    for (final source in _sources.where((source) => source.key == key)) {
+      source.disposeRuntimeCallbacks();
+    }
     _sources.removeWhere((element) => element.key == key);
     notifyListeners();
   }

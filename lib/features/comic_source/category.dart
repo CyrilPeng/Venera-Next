@@ -1,7 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:venera_next/foundation/js_engine.dart';
-
 import 'models.dart';
 
 typedef CategoryDataResolver = CategoryData Function(String key);
@@ -103,7 +101,7 @@ class RandomCategoryPart extends BaseCategoryPart {
 }
 
 class DynamicCategoryPart extends BaseCategoryPart {
-  final JSAutoFreeFunction loader;
+  final dynamic Function(List<dynamic>) loader;
 
   final String sourceKey;
 

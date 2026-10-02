@@ -465,3 +465,5 @@ headless_arguments.dart 在核心启动前解析有类型的命令请求；headl
 headless_subscription_command.dart 通过单漫画更新、文件夹进度流和结果列表读取三个端口统一订阅 CLI 协议；无 Flutter/应用全局依赖。入口映射真实服务结果与漫画字段。适配器等待流及结果读取完成，提前关闭的流不会返回成功；单漫画取消在装配边界转为非成功结果。
 
 漫画源解析入口 parser.dart 只负责声明/版本/key 校验、JS 对象安装/回滚、能力装配和源数据加载。source_account/explore/category/search/favorites/images/comments/comic/metadata_parser.dart 分别持有对应能力的注册及回调构造。SourceParserContext 固定单次解析的 key/name，集中可选属性路径读取与漫画列表归一化；回调不捕获入口后续可变的源身份。异常类型移入 source_parse_exception.dart，parser.dart 继续导出以兼容旧调用。各能力单元不反向依赖入口，均纳入业务入口依赖门禁。
+
+动态分类的原生函数由 SourceParserContext 的 JsCallbackScope 持有；解析的临时 JS 文档在 finally 释放引用。parse 成功后 ComicSource 持有作用域，失败/回滚释放新作用域，替换提交/删除/重载释放旧作用域；JsEngine 关闭前兜底释放仍存活的作用域。已释放回调在 Dart 层抛出 StateError。设置、图片和 UI 中的 JSAutoFreeFunction 仍需另行生命周期审查。

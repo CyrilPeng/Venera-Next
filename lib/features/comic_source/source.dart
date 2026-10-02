@@ -46,6 +46,10 @@ void configureComicSourceDataSavedHandler(
 }
 
 class ComicSource {
+  final JsCallbackScope? _runtimeCallbacks;
+
+  void disposeRuntimeCallbacks() => _runtimeCallbacks?.dispose();
+
   static List<ComicSource> all() => _comicSourceListResolver?.call() ?? [];
 
   static ComicSource? find(String key) => _comicSourceResolver?.call(key);
@@ -285,8 +289,9 @@ class ComicSource {
     this.enableTagsSuggestions,
     this.enableTagsTranslate,
     this.starRatingFunc,
-    this.archiveDownloader,
-  );
+    this.archiveDownloader, {
+    JsCallbackScope? runtimeCallbacks,
+  }) : _runtimeCallbacks = runtimeCallbacks;
 }
 
 class AccountConfig {

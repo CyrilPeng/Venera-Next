@@ -1056,3 +1056,11 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 首次运行复现空分类列表 categories[0] 越界导致整份源安装失败；source_category_parser.dart 在判别新旧格式前跳过空列表，修复后保持其他分类的原行为。没有扩大到随机分类算法或动态函数所有权变更。
 - 新增 source_capability_matrix.zh/en.md，逐项记录实际执行证据和缺口。P7.2 仍为部分完成：有效动态分类函数的执行/释放、归档/投票/元数据、完整取消/重登录组合仍待验收。测试不依赖外网/个人源数据，原生库不可用环境会明确跳过。
 - 最终验证：漫画源 121 项针对性测试和全量 Flutter 1130 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁及格式检查通过。日志 output/source-matrix-{targeted,full,analyze}.log。用户原有工作区修改仅参与测试，不混入提交。
+
+## P4/P7：动态分类原生回调的显式所有权（2026-10-02）
+
+- 先用真实 QuickJS 执行动态分类并关闭引擎，复现 reference leak（日志 output/dynamic-lifetime-before.log）。原实现只用 JSAutoFreeFunction 的 finalizer，既没有在源卸载时释放，又保留了读取 category 文档得到的临时函数引用。
+- 新增 JsCallbackScope：引用保留/释放配对，重复 dispose 幂等，释放后的调用抛 StateError；作用域绑定创建时的引擎，引擎关闭前释放尚存作用域。动态分类改用受作用域保护的函数闭包，category 文档用 finally 释放临时引用。JS loader 名称、调用参数和分类数据格式不变。
+- 解析器在失败/回滚时释放新作用域，成功后交给 ComicSource 持有；管理器在替换提交、remove、reload 时释放旧源回调。失败替换不释放旧源。源模型新增可选作用域参数，已有非 JS 源构造不受影响；测试 Fake 补齐生命周期方法。
+- 新增 4 项真实原生回归：执行与关闭、源移除后回调拒绝、引擎关闭/重新初始化后旧回调拒绝、连续三次替换失败仍可用旧 loader 且成功替换后旧 loader 失效。漫画源 125 项针对性测试通过。更新双语能力矩阵，其他设置/图片/UI 的 JSAutoFreeFunction 仍待独立审查，不据此宣称全部 JS 生命周期或 P7 已完成。
+- 最终验证：全量 Flutter 1134 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。日志 output/dynamic-lifetime-{before,targeted,full,analyze}.log；before 是修复前故意复现的失败，其余为最终验证。测试含用户工作区改动，提交不包含这些改动。

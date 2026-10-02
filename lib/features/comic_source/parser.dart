@@ -79,12 +79,14 @@ String sourceClassName(String script) {
 
 class ComicSourceParser {
   JSInvokable? _restore;
+  JsCallbackScope? _callbacks;
 
   /// Restore the previous runtime object if a later disk commit fails.
   void rollback() {
     try {
       _restore?.invoke([]);
     } finally {
+      _callbacks?.dispose();
       commit();
     }
   }
@@ -92,6 +94,7 @@ class ComicSourceParser {
   void commit() {
     _restore?.free();
     _restore = null;
+    _callbacks = null;
   }
 
   /// comic source key
@@ -221,7 +224,12 @@ class ComicSourceParser {
       void (ComicSource.sources.$_key = this['temp']);
     """);
 
-    final context = SourceParserContext(key: key, name: _name!);
+    final callbacks = _callbacks = JsCallbackScope();
+    final context = SourceParserContext(
+      key: key,
+      name: _name!,
+      callbacks: callbacks,
+    );
     final account = SourceAccountParser(context);
     final explore = SourceExploreParser(context);
     final category = SourceCategoryParser(context);
@@ -266,6 +274,7 @@ class ComicSourceParser {
       context.getValue("comic.enableTagsTranslate") ?? false,
       comic.parseStarRatingFunc(),
       comic.parseArchiveDownloader(),
+      runtimeCallbacks: callbacks,
     );
 
     await source.loadData();

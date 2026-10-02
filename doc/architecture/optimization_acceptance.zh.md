@@ -50,7 +50,7 @@
 | P6.6 | P | 同步窄接口与协议 | `lib/features/sync/data_sync_controller.dart; test/features/sync/data_sync_schedule_test.dart` | 控制器端口和应用回调显式注入，旧入口已退场；重启/不回传的最终矩阵与协议失败边界仍需验收。 |
 | P6.7 | P | 原子性约束 | `lib/foundation/sqlite_transaction.dart; lib/foundation/directory_replacement.dart; lib/features/local_comics/local.dart` | 已有事务/恢复工具；删除仍可能跨文件/数据库部分提交。 |
 | P7.1 | I | 按能力拆解析器 | `lib/features/comic_source/parser.dart; source_*_parser.dart; source_parser_context.dart` | 已拆分账户、发现、分类、搜索、收藏、图片、评论、漫画及元数据；源身份上下文固定。完整能力/错误矩阵继续按 P7.2/P7.5 验收。 |
-| P7.2 | P | JS 与最小源兼容 | `source_capability_matrix.zh.md; test/features/comic_source/source_capabilities_test.dart` | 真实 QuickJS 已覆盖登录、重登录、游标、新旧分类与多能力源隔离；有效动态分类函数生命周期、归档/投票/元数据及完整取消矩阵仍待补齐。 |
+| P7.2 | P | JS 与最小源兼容 | `source_capability_matrix.zh.md; test/features/comic_source/source_capabilities_test.dart` | 真实 QuickJS 已覆盖登录、重登录、游标、新旧分类与多能力源隔离；动态分类执行与显式释放已验证；其他 JS 回调所有权、归档/投票/元数据及完整取消矩阵仍待补齐。 |
 | P7.3 | U | 重复流程对照表 | `optimization_plan.zh.md P7.3` | 补交更新/图片/归档/同步/导入机制与业务差异表。 |
 | P7.4 | P | 仅抽真实共性 | `lib/foundation/throttled_task_runner.dart; lib/network/request_scope.dart` | 现有原语可复用；以 P7.3 对照证明新增抽象并删除对应重复实现。 |
 | P7.5 | O | 结构化错误 | `lib/features/comic_source/source_update_service.dart; lib/foundation/res.dart` | 更新服务仍抛翻译字符串；建立失败/取消/不支持与 Res 适配边界。 |

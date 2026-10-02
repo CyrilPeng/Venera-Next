@@ -318,6 +318,9 @@ class _Manager extends Fake implements ComicSourceManager {
 
 class _Source extends Fake implements ComicSource {
   @override
+  void disposeRuntimeCallbacks() {}
+
+  @override
   String get key => 'installed';
   @override
   String get name => 'Installed source';

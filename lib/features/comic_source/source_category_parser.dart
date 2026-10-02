@@ -19,103 +19,110 @@ class SourceCategoryParser {
   final SourceParserContext context;
 
   CategoryData? loadCategoryData() {
-    var doc = context.getValue("category");
-
-    if (doc?["title"] == null) {
-      return null;
-    }
-
-    final String title = doc["title"];
-    final bool? enableRankingPage = doc["enableRankingPage"];
-
-    var categoryParts = <BaseCategoryPart>[];
-
-    for (var c in doc["parts"]) {
-      if (c["categories"] != null && c["categories"] is! List) {
-        continue;
+    final doc = context.getValue("category");
+    try {
+      if (doc?["title"] == null) {
+        return null;
       }
-      List? categories = c["categories"];
-      if (categories != null && categories.isEmpty) {
-        continue;
-      }
-      if (categories == null || categories[0] is Map) {
-        // new format
-        final String name = c["name"];
-        final String type = c["type"];
-        final cs = categories
-            ?.map(
-              (e) => CategoryItem(
-                e['label'],
-                PageJumpTarget.parse(context.key, e['target']),
-              ),
-            )
-            .toList();
-        if (type != "dynamic" && (cs == null || cs.isEmpty)) {
+
+      final String title = doc["title"];
+      final bool? enableRankingPage = doc["enableRankingPage"];
+
+      var categoryParts = <BaseCategoryPart>[];
+
+      for (var c in doc["parts"]) {
+        if (c["categories"] != null && c["categories"] is! List) {
           continue;
         }
-        if (type == "fixed") {
-          categoryParts.add(FixedCategoryPart(name, cs!));
-        } else if (type == "random") {
-          categoryParts.add(
-            RandomCategoryPart(name, cs!, c["randomNumber"] ?? 1),
-          );
-        } else if (type == "dynamic" && categories == null) {
-          var loader = c["loader"];
-          if (loader is! JSInvokable) {
-            throw "DynamicCategoryPart loader must be a function";
+        List? categories = c["categories"];
+        if (categories != null && categories.isEmpty) {
+          continue;
+        }
+        if (categories == null || categories[0] is Map) {
+          // new format
+          final String name = c["name"];
+          final String type = c["type"];
+          final cs = categories
+              ?.map(
+                (e) => CategoryItem(
+                  e['label'],
+                  PageJumpTarget.parse(context.key, e['target']),
+                ),
+              )
+              .toList();
+          if (type != "dynamic" && (cs == null || cs.isEmpty)) {
+            continue;
           }
-          categoryParts.add(
-            DynamicCategoryPart(name, JSAutoFreeFunction(loader), context.key),
-          );
-        }
-      } else {
-        // old format
-        final String name = c["name"];
-        final String type = c["type"];
-        final List<String> tags = List.from(c["categories"]);
-        final String itemType = c["itemType"];
-        List<String>? categoryParams = ListOrNull.from(c["categoryParams"]);
-        final String? groupParam = c["groupParam"];
-        if (groupParam != null) {
-          categoryParams = List.filled(tags.length, groupParam);
-        }
-        var cs = <CategoryItem>[];
-        for (int i = 0; i < tags.length; i++) {
-          PageJumpTarget target;
-          if (itemType == 'category') {
-            target = PageJumpTarget(context.key, 'category', {
-              "category": tags[i],
-              "param": categoryParams?.elementAtOrNull(i),
-            });
-          } else if (itemType == 'search') {
-            target = PageJumpTarget(context.key, 'search', {
-              "keyword": tags[i],
-            });
-          } else if (itemType == 'search_with_namespace') {
-            target = PageJumpTarget(context.key, 'search', {
-              "keyword": "$name:$tags[i]",
-            });
-          } else {
-            target = PageJumpTarget(context.key, itemType, null);
+          if (type == "fixed") {
+            categoryParts.add(FixedCategoryPart(name, cs!));
+          } else if (type == "random") {
+            categoryParts.add(
+              RandomCategoryPart(name, cs!, c["randomNumber"] ?? 1),
+            );
+          } else if (type == "dynamic" && categories == null) {
+            var loader = c["loader"];
+            if (loader is! JSInvokable) {
+              throw "DynamicCategoryPart loader must be a function";
+            }
+            categoryParts.add(
+              DynamicCategoryPart(
+                name,
+                context.callbacks.retain(loader),
+                context.key,
+              ),
+            );
           }
-          cs.add(CategoryItem(tags[i], target));
-        }
-        if (type == "fixed") {
-          categoryParts.add(FixedCategoryPart(name, cs));
-        } else if (type == "random") {
-          categoryParts.add(
-            RandomCategoryPart(name, cs, c["randomNumber"] ?? 1),
-          );
+        } else {
+          // old format
+          final String name = c["name"];
+          final String type = c["type"];
+          final List<String> tags = List.from(c["categories"]);
+          final String itemType = c["itemType"];
+          List<String>? categoryParams = ListOrNull.from(c["categoryParams"]);
+          final String? groupParam = c["groupParam"];
+          if (groupParam != null) {
+            categoryParams = List.filled(tags.length, groupParam);
+          }
+          var cs = <CategoryItem>[];
+          for (int i = 0; i < tags.length; i++) {
+            PageJumpTarget target;
+            if (itemType == 'category') {
+              target = PageJumpTarget(context.key, 'category', {
+                "category": tags[i],
+                "param": categoryParams?.elementAtOrNull(i),
+              });
+            } else if (itemType == 'search') {
+              target = PageJumpTarget(context.key, 'search', {
+                "keyword": tags[i],
+              });
+            } else if (itemType == 'search_with_namespace') {
+              target = PageJumpTarget(context.key, 'search', {
+                "keyword": "$name:$tags[i]",
+              });
+            } else {
+              target = PageJumpTarget(context.key, itemType, null);
+            }
+            cs.add(CategoryItem(tags[i], target));
+          }
+          if (type == "fixed") {
+            categoryParts.add(FixedCategoryPart(name, cs));
+          } else if (type == "random") {
+            categoryParts.add(
+              RandomCategoryPart(name, cs, c["randomNumber"] ?? 1),
+            );
+          }
         }
       }
-    }
 
-    return CategoryData(
-      title: title,
-      categories: categoryParts,
-      enableRankingPage: enableRankingPage ?? false,
-      key: title,
-    );
+      return CategoryData(
+        title: title,
+        categories: categoryParts,
+        enableRankingPage: enableRankingPage ?? false,
+        key: title,
+      );
+    } finally {
+      JSRef.freeRecursive(doc);
+    }
   }
 
   CategoryComicsData? loadCategoryComicsData() {

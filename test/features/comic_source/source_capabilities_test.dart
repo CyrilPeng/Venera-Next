@@ -264,6 +264,85 @@ category = {title: "Categories", parts: [
       );
 
       test(
+        'dynamic category callbacks release before engine shutdown',
+        () async {
+          final source = await parse(dynamicCategoryScript);
+          final part = source.categoryData!.categories.single;
+          expect(part.categories.single.label, 'Dynamic');
+          expect(part.categories.single.target.sourceKey, source.key);
+        },
+      );
+
+      test(
+        'removed source rejects retained dynamic callback without native access',
+        () async {
+          final source = await parse(dynamicCategoryScript);
+          final part = source.categoryData!.categories.single;
+          manager.remove(source.key);
+          source.disposeRuntimeCallbacks();
+          expect(() => part.categories, throwsStateError);
+        },
+      );
+
+      test(
+        'engine shutdown releases active source callbacks and prevents reuse',
+        () async {
+          final source = await parse(dynamicCategoryScript);
+          final part = source.categoryData!.categories.single;
+          final engine = JsEngine();
+          engine.dispose();
+          expect(() => part.categories, throwsStateError);
+          await JsEngine().init();
+          expect(() => part.categories, throwsStateError);
+        },
+      );
+
+      test(
+        'replacement rollback keeps old loader; commit releases it',
+        () async {
+          final original = await parse(dynamicCategoryScript);
+          await File(
+            original.filePath,
+          ).writeAsString(sourceScript(dynamicCategoryScript));
+          final oldPart = original.categoryData!.categories.single;
+          for (var attempt = 0; attempt < 3; attempt++) {
+            await expectLater(
+              manager.replaceScript(
+                original,
+                sourceScript('${dynamicCategoryScript}comic = {idMatch: "["};'),
+                validate: () {},
+              ),
+              throwsA(anything),
+            );
+            expect(oldPart.categories.single.label, 'Dynamic');
+            expect(manager.find(original.key), same(original));
+          }
+          await manager.replaceScript(
+            original,
+            sourceScript(
+              dynamicCategoryScript.replaceFirst(
+                'label: "Dynamic"',
+                'label: "Replacement"',
+              ),
+            ),
+            validate: () {},
+          );
+          expect(() => oldPart.categories, throwsStateError);
+          expect(
+            manager
+                .find(original.key)!
+                .categoryData!
+                .categories
+                .single
+                .categories
+                .single
+                .label,
+            'Replacement',
+          );
+        },
+      );
+
+      test(
         'invalid dynamic loader reports actionable parse error and rolls back runtime',
         () async {
           await expectLater(
@@ -351,4 +430,10 @@ const cursorScript = r'''
     load: (...args) => { this.calls.push(args); return {comics: [], maxPage: 6}; },
     optionLoader: (...args) => { this.calls.push(args); return [{label: "Options", options: ["a-Alpha-Beta"]}]; }
   };
+''';
+
+const dynamicCategoryScript = r'''
+  category = {title: "Categories", parts: [{name: "dynamic", type: "dynamic",
+    loader: () => [{label: "Dynamic", target: {page: "search", attributes: {keyword: "word"}}}]
+  }]};
 ''';

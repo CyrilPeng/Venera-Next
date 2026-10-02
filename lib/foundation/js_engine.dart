@@ -78,6 +78,7 @@ class JsEngine with _JSEngineApi, Init {
   JsEngine._create();
 
   FlutterQjs? _engine;
+  final _callbackScopes = <JsCallbackScope>{};
 
   bool _closed = true;
 
@@ -380,6 +381,9 @@ class JsEngine with _JSEngineApi, Init {
   }
 
   void dispose() {
+    for (final scope in _callbackScopes.toList()) {
+      scope.dispose();
+    }
     _cache = null;
     _closed = true;
     _engine?.close();
@@ -858,4 +862,34 @@ class JSAutoFreeFunction {
   static final finalizer = Finalizer<JSInvokable>((func) {
     func.destroy();
   });
+}
+
+/// Explicit ownership for native callbacks retained beyond one evaluation.
+/// Scopes are released by their owner, or before their engine closes.
+class JsCallbackScope {
+  JsCallbackScope() : _engine = JsEngine() {
+    _engine._callbackScopes.add(this);
+  }
+  final JsEngine _engine;
+  final _functions = <JSInvokable>{};
+  bool _disposed = false;
+
+  dynamic Function(List<dynamic>) retain(JSInvokable function) {
+    if (_disposed) throw StateError('JavaScript callback scope is closed');
+    if (_functions.add(function)) function.dup();
+    return (args) {
+      if (_disposed) throw StateError('JavaScript callback scope is closed');
+      return function(args);
+    };
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    _engine._callbackScopes.remove(this);
+    for (final function in _functions) {
+      function.free();
+    }
+    _functions.clear();
+  }
 }
