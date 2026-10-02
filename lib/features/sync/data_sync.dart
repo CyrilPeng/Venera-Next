@@ -1,23 +1,26 @@
+import 'data_sync_transfer.dart';
 import 'dart:async';
 
 import 'package:venera_next/foundation/sync_configuration.dart';
 import 'package:venera_next/foundation/sync_preference_store.dart';
 
 import 'package:flutter/foundation.dart';
-import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
-import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/network/webdav.dart';
-import 'package:venera_next/features/sync/app_data_transfer.dart';
-import 'package:venera_next/foundation/extensions.dart';
-import 'package:venera_next/foundation/file_system.dart';
 
 export 'package:venera_next/foundation/sync_configuration.dart'
     show DataSyncMode;
+
+DataSyncTransfer Function()? _dataSyncTransferFactory;
+
+/// The application runtime supplies production archive/data participants.
+void configureDataSyncTransferFactory(DataSyncTransfer Function() factory) {
+  _dataSyncTransferFactory = factory;
+}
 
 enum _DataSyncTask { upload, download }
 
@@ -58,6 +61,13 @@ class DataSyncStatusSnapshot {
 
 class DataSync with ChangeNotifier {
   DataSync._();
+
+  DataSync.withTransfer(DataSyncTransfer transfer) : _transfer = transfer;
+
+  DataSyncTransfer? _transfer;
+  DataSyncTransfer get _dataTransfer => _transfer ??=
+      (_dataSyncTransferFactory ??
+      (() => throw StateError('Data sync transfer is not configured')))();
 
   bool _started = false;
   bool _observing = false;
@@ -437,33 +447,11 @@ class DataSync with ChangeNotifier {
     if (!config.isValid) {
       return const Res(true);
     }
-    var client = config.createClient(logRequests: true);
-
     try {
-      appdata.settings['dataVersion']++;
-      await appdata.saveData(false);
-      var data = await exportAppData(
-        _syncPreferences.configuration.excludedFields.isNotEmpty,
+      await _dataTransfer.upload(
+        config,
+        excludeFields: _syncPreferences.configuration.excludedFields.isNotEmpty,
       );
-      var time = (DateTime.now().millisecondsSinceEpoch ~/ 86400000).toString();
-      var filename = time;
-      filename += '-';
-      filename += appdata.settings['dataVersion'].toString();
-      filename += '.venera';
-      var files = await client.readDir('/');
-      files = files.where((e) => e.name!.endsWith('.venera')).toList();
-      var old = files.firstWhereOrNull((e) => e.name!.startsWith("$time-"));
-      if (old != null) {
-        await client.remove(old.name!);
-      }
-      if (files.length >= 10) {
-        files.sort((a, b) => a.name!.compareTo(b.name!));
-        await client.remove(files.first.name!);
-      }
-      await client.write(filename, await data.readAsBytes());
-      data.deleteIgnoreError();
-      appdata.settings['lastSyncTime'] = DateTime.now().millisecondsSinceEpoch;
-      await appdata.saveData(false);
       Log.info("Upload Data", "Data uploaded successfully");
       return const Res(true);
     } catch (e, s) {
@@ -486,35 +474,14 @@ class DataSync with ChangeNotifier {
     if (!config.isValid) {
       return const Res(true);
     }
-    var client = config.createClient(logRequests: true);
-
     try {
-      var files = await client.readDir('/');
-      files.sort((a, b) => b.name!.compareTo(a.name!));
-      var file = files.firstWhereOrNull((e) => e.name!.endsWith('.venera'));
-      if (file == null) {
-        throw 'No data file found';
-      }
-      var version = file.name!.split('-').elementAtOrNull(1)?.split('.').first;
-      if (version != null && int.tryParse(version) != null) {
-        var currentVersion = appdata.settings['dataVersion'];
-        if (currentVersion != null && int.parse(version) <= currentVersion) {
-          Log.info("Data Sync", 'No new data to download');
-          return const Res(true);
-        }
-      }
-      Log.info("Data Sync", "Downloading data from WebDAV server");
-      var localFile = File(FilePath.join(App.cachePath, file.name!));
-      await client.read2File(file.name!, localFile.path);
-      await importAppData(localFile, true);
-      _downloadApplied = true;
-      await localFile.delete();
-      HistoryManager().notifyChanges();
-      LocalFavoritesManager().notifyChanges();
-      ImageFavoriteManager().notifyChanges();
-      appdata.settings['lastSyncTime'] = DateTime.now().millisecondsSinceEpoch;
-      await appdata.saveData(false);
-      Log.info("Data Sync", "Data downloaded successfully");
+      _downloadApplied = await _dataTransfer.download(config);
+      Log.info(
+        "Data Sync",
+        _downloadApplied
+            ? "Data downloaded successfully"
+            : "No new data to download",
+      );
       return const Res(true);
     } catch (e, s) {
       Log.error("Data Sync", e, s);

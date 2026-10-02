@@ -17,6 +17,7 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/network/cookie_jar.dart';
 
 import 'core_bootstrap.dart';
+import 'data_sync_transfer.dart';
 import 'webdav_library.dart';
 
 /// Core startup never registers window callbacks or automatic sync timers.
@@ -40,6 +41,7 @@ CoreBootstrap createCoreBootstrap({Future<void> Function()? environment}) =>
         ]);
       },
       sources: () async {
+        configureDataSyncTransferFactory(createDataSyncTransfer);
         configureComicTypeSourceKeyResolver();
         configureComicSourceDataSavedHandler(
           () async => DataSync().onDataChanged(),

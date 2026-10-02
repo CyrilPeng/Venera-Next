@@ -921,3 +921,12 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 新增五项协调器测试：关闭自动同步/精确时间边界、并发合并（含进行中 force）、索引提前可用、失效后新任务不受旧结果影响、释放协调器后调用方仍可读取。既有路径、快照、配置切换和源挂载测试保留。
 - 调用方迁移时的文件名替换错误导致一轮全量编译失败，已修复并另存日志 `output/webdav-coordinator-compile-failure.log`；仅以下最终重跑结果作为通过证据。
 - 最终验证：Flutter 全量重跑 1013 项通过；分析零 error/warning、23 info；50 个业务入口架构门禁、结构检查、完整 Python 56 项（3 项 Linux 工具依赖跳过）、锁定依赖与格式检查通过。日志 `output/webdav-coordinator-{full,analyze}.log`。工作区测试含用户原有修改；提交仅含本阶段改动。
+
+## P6：应用同步传输与数据参与者边界（2026-10-02）
+
+- 提取 `DataSyncTransfer`、`DataSyncParticipant` 和 `DataSyncRemote` 接口，WebDavDataSyncTransfer 负责版本筛选、归档名与远端保留策略；WebDavDataSyncRemote 封装客户端。DataSync 不再直接导入归档模块或通知历史/图片收藏管理器。
+- `app_runtime/data_sync_transfer.dart` 装配应用参与者并在 core sources 阶段注册惰性工厂，不提前创建 DataSync 单例；DataSync.withTransfer 支持显式传输实例。设置、调度、变更监听、旧 debug/reset 仍待后续实例化，不宣称 DataSync 已无全局依赖。
+- 上传/下载在 finally 中关闭传输连接并清理自有临时文件。下载使用缓存目录内独立临时子目录，远端文件名只用于远端读取。保留日序号/版本文件名及原先先清理远端旧档再上传的顺序；不声称远端替换已经原子化。清理失败仍可能使已提交传输返回失败。
+- 下载接口返回是否应用：远端版本不新时返回 false，DataSync 保留 pending。生产归档导入器仍为 void，本次适配暂沿用导入调用返回即已应用的旧行为；下一项独立修复归档内部版本检查跳过时的结果，避免错误清除 pending。
+- 新增六项传输测试：命名/保留/排除字段、上传失败清理、版本跳过、参与者 no-op、通知时序/独立路径及导入失败清理。专项 47 项、Flutter 全量 1019 项通过；分析零 error/warning、23 info。结构/52 业务入口门禁、完整 Python 56 项（3 项 Linux 工具依赖跳过）、锁定依赖与格式检查通过。
+- 日志 `output/data-transfer-{targeted,full,analyze}.log`。测试包含用户原有工作区修改，提交仅包含本阶段文件。
