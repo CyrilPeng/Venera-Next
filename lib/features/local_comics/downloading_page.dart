@@ -79,6 +79,7 @@ class _DownloadingPageState extends State<DownloadingPage> {
       speed = LocalManager().downloadingTasks.first.speed;
     }
     var first = LocalManager().downloadingTasks.firstOrNull;
+    final resumePending = LocalManager().isDownloadResumePending;
     return Container(
       height: 48,
       decoration: BoxDecoration(
@@ -91,14 +92,15 @@ class _DownloadingPageState extends State<DownloadingPage> {
       ),
       child: Row(
         children: [
-          if (first?.isPaused == true)
+          if (first?.isPaused == true && !resumePending)
             Text("Paused".tl, style: ts.s18.bold)
           else if (first?.isError == true)
             Text("Error".tl, style: ts.s18.bold)
           else
             Text("${bytesToReadableString(speed)}/s", style: ts.s18.bold),
           const Spacer(),
-          if (first?.isPaused == true || first?.isError == true)
+          if (!resumePending &&
+              (first?.isPaused == true || first?.isError == true))
             OutlinedButton(
               child: Row(
                 children: [
@@ -108,7 +110,7 @@ class _DownloadingPageState extends State<DownloadingPage> {
                 ],
               ),
               onPressed: () {
-                first!.resume();
+                LocalManager().resumeDownload(first!);
               },
             )
           else if (first != null)
@@ -121,7 +123,7 @@ class _DownloadingPageState extends State<DownloadingPage> {
                 ],
               ),
               onPressed: () {
-                first.pause();
+                LocalManager().pauseDownload(first);
               },
             ),
         ],

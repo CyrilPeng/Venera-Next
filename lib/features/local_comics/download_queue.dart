@@ -106,6 +106,31 @@ class DownloadQueue {
     }
   }
 
+  /// A queued start is still cancellable while an older task is stopping.
+  bool get isResumePending =>
+      _pendingStop != null && _scheduledResumeRevision == _revision;
+
+  void resume(DownloadTask task) {
+    if (!identical(tasks.firstOrNull, task) ||
+        !task.isPaused ||
+        isResumePending) {
+      return;
+    }
+    final revision = ++_revision;
+    _scheduledResumeRevision = revision;
+    notifyChanged();
+    _resumeIfUnchanged(revision);
+  }
+
+  Future<void> pause(DownloadTask task) {
+    if (!identical(tasks.firstOrNull, task)) return Future.value();
+    _revision++;
+    _scheduledResumeRevision = null;
+    final stopped = _pauseBeforeScheduling(task);
+    notifyChanged();
+    return stopped;
+  }
+
   void remove(DownloadTask task) {
     final index = _indexOf(task);
     if (index < 0) return;
@@ -141,11 +166,16 @@ class DownloadQueue {
     // UI callers may ignore the result; failures are also sent to the owner.
     stopped.ignore();
     void finish([Object? error, StackTrace? stack]) {
-      if (identical(_pendingStop, stopped)) _pendingStop = null;
+      final isLatest = identical(_pendingStop, stopped);
+      if (isLatest) _pendingStop = null;
       if (error == null) {
         gate.complete();
       } else {
         gate.completeError(error, stack);
+        if (isLatest) {
+          _scheduledResumeRevision = null;
+          notifyChanged();
+        }
         reportError(error, stack!);
       }
     }

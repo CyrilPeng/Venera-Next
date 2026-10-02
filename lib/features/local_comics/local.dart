@@ -346,6 +346,12 @@ class LocalManager with ChangeNotifier {
 
   void removeTask(DownloadTask task) => _downloadQueue.remove(task);
 
+  bool get isDownloadResumePending => _downloadQueue.isResumePending;
+
+  void resumeDownload(DownloadTask task) => _downloadQueue.resume(task);
+
+  Future<void> pauseDownload(DownloadTask task) => _downloadQueue.pause(task);
+
   Future<void> moveToFirst(DownloadTask task) =>
       _downloadQueue.moveToFirst(task);
 

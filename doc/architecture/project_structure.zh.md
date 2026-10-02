@@ -411,3 +411,5 @@ ImagesDownloadTask 持有封面 StreamIterator，停止时将取消 Future 纳�
 ImagesDownloadTask 将目录分配 Future 纳入停止等待，记录新建输出及原管理器。暂停后的迟到分配供恢复复用；取消等待分配与传输后，仅整目录清理自有未入库输出，成功提交释放所有权。外部/恢复路径不推断所有权；章节清理需与当前登记目录匹配。可注入分配适配器，默认委托管理器，不改变快照字段。
 
 DownloadTask.pendingCleanup 为任务公共契约。DownloadQueue.moveToFirst 在暂停回调前设置调度等待，立即重排但等待旧任务清理后自动启动；连续置顶串联停止并保留运行意图，过期修订不再启动，清理失败通过管理器适配报告。恢复暂停快照不能覆盖正在停止的队列。该机制尚不替代页面直接控制和完整退出协议。
+
+下载页面通过 LocalManager.resumeDownload/pauseDownload 调用队列启停，队列按当前首项对象身份校验并复用停止等待；暂停使待启动修订失效。isDownloadResumePending 驱动等待期间的暂停入口，停止失败清除意图并通知界面。页面不再直接调用首项 resume/pause，取消和完整运行时退出仍需后续收敛。

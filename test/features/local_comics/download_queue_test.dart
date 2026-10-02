@@ -112,6 +112,96 @@ void main() {
     );
   }
 
+  test(
+    'manual pause cancels pending start and manual resume respects prior stop',
+    () async {
+      final gate = Completer<void>();
+      final first = _Task('a', events)..cleanup = gate.future;
+      final second = _Task('b', events);
+      queue.add(first);
+      queue.add(second);
+      events.clear();
+      final moved = queue.moveToFirst(second);
+      expect(queue.isResumePending, isTrue);
+      final paused = queue.pause(second);
+      expect(queue.isResumePending, isFalse);
+      queue.resume(second);
+      queue.resume(second);
+      expect(queue.isResumePending, isTrue);
+      await pumpEventQueue();
+      expect(events.where((event) => event.startsWith('resume:')), isEmpty);
+      final canceledStart = queue.pause(second);
+      gate.complete();
+      await Future.wait([moved, paused, canceledStart]);
+      await pumpEventQueue();
+      expect(events.where((event) => event.startsWith('resume:')), isEmpty);
+      expect(queue.isResumePending, isFalse);
+      queue.resume(second);
+      expect(events.where((event) => event.startsWith('resume:')), [
+        'resume:b',
+      ]);
+    },
+  );
+
+  test(
+    'manual controls ignore stale instances and tasks outside the head',
+    () async {
+      final first = _Task('a', events);
+      final second = _Task('b', events);
+      queue.restorePausedTasks([first, second]);
+      queue.resume(_Task('a', events));
+      queue.resume(second);
+      await queue.pause(_Task('a', events));
+      await queue.pause(second);
+      expect(events, isEmpty);
+      queue.resume(first);
+      expect(events, ['notify', 'resume:a']);
+      events.clear();
+      queue.resume(first);
+      expect(events, isEmpty);
+    },
+  );
+
+  test(
+    'notification pause invalidates a manual start before it reaches the task',
+    () async {
+      final task = _Task('a', events);
+      queue.restorePausedTasks([task]);
+      Future<void>? paused;
+      onNotify = () {
+        onNotify = null;
+        paused = queue.pause(task);
+      };
+      queue.resume(task);
+      await paused;
+      await pumpEventQueue();
+      expect(task.isPaused, isTrue);
+      expect(queue.isResumePending, isFalse);
+      expect(events.where((event) => event.startsWith('resume:')), isEmpty);
+    },
+  );
+
+  test(
+    'failed stop clears pending-start state and notifies controls',
+    () async {
+      final gate = Completer<void>();
+      final first = _Task('a', events)..cleanup = gate.future;
+      final second = _Task('b', events);
+      queue.add(first);
+      queue.add(second);
+      final moved = queue.moveToFirst(second);
+      expect(queue.isResumePending, isTrue);
+      events.clear();
+      final failure = expectLater(moved, throwsStateError);
+      gate.completeError(StateError('cannot stop'));
+      await failure;
+      await pumpEventQueue();
+      expect(queue.isResumePending, isFalse);
+      expect(events.where((event) => event == 'notify'), hasLength(1));
+      expect(second.isPaused, isTrue);
+    },
+  );
+
   test('task view rejects mutations but reflects service updates', () {
     final view = queue.tasks;
     final task = _Task('a', events);
