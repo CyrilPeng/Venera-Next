@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/res.dart';
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -107,6 +108,109 @@ void main() {
     },
   );
 
+  for (final implicitFailure in [false, true]) {
+    test(
+      'failed save and rollback release configuration for retry: $implicitFailure',
+      () async {
+        final fixture = _Fixture();
+        addTearDown(fixture.controller.dispose);
+        fixture.saveFailures = implicitFailure ? 0 : 2;
+        fixture.implicitFailures = implicitFailure ? 2 : 0;
+        final result = await fixture.controller.configure(
+          config: ['https://new.example.com', '', ''],
+          excludedFields: 'new-field',
+          syncMode: DataSyncMode.manual,
+          minutes: 15,
+          initialUpload: true,
+        );
+        expect(
+          result.errorMessage,
+          contains('Failed to restore sync configuration'),
+        );
+        expect(fixture.settings['webdav'], ['https://example.com', '', '']);
+        expect(fixture.settings['disableSyncFields'], 'old-field');
+        final retried = await fixture.controller.configure(
+          config: ['https://retry.example.com', '', ''],
+          excludedFields: '',
+          syncMode: DataSyncMode.manual,
+          minutes: 60,
+          initialUpload: true,
+        );
+        expect(retried.success, isTrue);
+        expect(fixture.settings['webdav'], [
+          'https://retry.example.com',
+          '',
+          '',
+        ]);
+      },
+    );
+  }
+
+  test(
+    'checkpoint read failure releases configuration without restoring a missing checkpoint',
+    () async {
+      final fixture = _Fixture()..readFailures = 1;
+      addTearDown(fixture.controller.dispose);
+      Future<Res<bool>> configure() => fixture.controller.configure(
+        config: [],
+        excludedFields: '',
+        syncMode: DataSyncMode.manual,
+        minutes: 30,
+        initialUpload: false,
+      );
+      final failed = await configure();
+      expect(failed.error, isTrue);
+      expect(fixture.saveCount, 0);
+      expect((await configure()).success, isTrue);
+    },
+  );
+
+  test(
+    'dispose while waiting for existing transfer never applies the draft',
+    () async {
+      final fixture = _Fixture();
+      final gate = Completer<void>();
+      fixture.transfer.uploadGate = gate.future;
+      final upload = fixture.controller.uploadData();
+      final configured = fixture.controller.configure(
+        config: ['https://new.example.com', '', ''],
+        excludedFields: '',
+        syncMode: DataSyncMode.manual,
+        minutes: 30,
+        initialUpload: false,
+      );
+      fixture.controller.dispose();
+      gate.complete();
+      await upload;
+      expect((await configured).error, isTrue);
+      expect(fixture.settings['webdav'], ['https://example.com', '', '']);
+      expect(fixture.saveCount, 0);
+    },
+  );
+
+  test(
+    'dispose during draft transfer restores configuration without committing schedule',
+    () async {
+      final fixture = _Fixture();
+      final gate = Completer<void>();
+      fixture.transfer.uploadGate = gate.future;
+      final configured = fixture.controller.configure(
+        config: ['https://new.example.com', '', ''],
+        excludedFields: '',
+        syncMode: DataSyncMode.realtime,
+        minutes: 60,
+        initialUpload: true,
+      );
+      expect(fixture.settings['webdav'], ['https://new.example.com', '', '']);
+      fixture.controller.dispose();
+      gate.complete();
+      expect((await configured).error, isTrue);
+      expect(fixture.settings['webdav'], ['https://example.com', '', '']);
+      expect(fixture.controller.currentMode, DataSyncMode.manual);
+      expect(fixture.saveCount, 1);
+    },
+  );
+
   test(
     'replacing implicit settings storage is observed without recreating controller',
     () {
@@ -136,9 +240,18 @@ class _Fixture {
   DateTime now = DateTime.utc(2026, 1, 1);
   bool failSubscription = false;
   int saveCount = 0;
+  int saveFailures = 0;
+  int implicitFailures = 0;
+  int readFailures = 0;
   int unsubscribeCount = 0;
   late final preferences = SyncPreferenceStore(
-    readSetting: (key) => settings[key],
+    readSetting: (key) {
+      if (readFailures > 0) {
+        readFailures--;
+        throw StateError('read failed');
+      }
+      return settings[key];
+    },
     writeSetting: (key, value) => settings[key] = value,
     implicitData: () => implicit,
   );
@@ -147,8 +260,17 @@ class _Fixture {
     transfer: () => transfer,
     saveSettings: () async {
       saveCount++;
+      if (saveFailures > 0) {
+        saveFailures--;
+        throw StateError('save failed');
+      }
     },
-    persistImplicit: () {},
+    persistImplicit: () {
+      if (implicitFailures > 0) {
+        implicitFailures--;
+        throw StateError('implicit save failed');
+      }
+    },
     observeChanges: (changed) {
       if (failSubscription) throw StateError('subscription failed');
       listeners.add(changed);
@@ -175,6 +297,7 @@ class _Fixture {
 class _Transfer implements DataSyncTransfer {
   int downloads = 0;
   Object? uploadError;
+  Future<void>? uploadGate;
   @override
   Future<bool> download(WebDavEndpoint connection) async {
     downloads++;
@@ -186,6 +309,7 @@ class _Transfer implements DataSyncTransfer {
     WebDavEndpoint connection, {
     required bool excludeFields,
   }) async {
+    await uploadGate;
     final error = uploadError;
     if (error != null) throw error;
   }

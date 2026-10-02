@@ -185,48 +185,69 @@ class DataSyncController with ChangeNotifier {
     if (_configuring) return const Res.error('Sync configuration is busy');
     _configuring = true;
     _scheduleTimer?.cancel();
-    while (_activeTask != null || _pendingTask != null) {
-      await (_pendingTask ?? _activeTask!);
-    }
-    final previous = _syncPreferences.capture();
-    final previousGeneration = _changeGeneration;
+    SyncPreferenceCheckpoint? previous;
+    var previousGeneration = _changeGeneration;
     var committed = false;
+    var result = const Res<bool>(true);
     try {
-      _syncPreferences.applyDraft(config, excludedFields);
-      if (config.isNotEmpty && !hasConfiguration) {
-        return const Res.error('Invalid WebDAV configuration');
+      while (_activeTask != null || _pendingTask != null) {
+        await (_pendingTask ?? _activeTask!);
       }
-      if (config.isNotEmpty && syncMode != DataSyncMode.manual) {
-        final result = initialUpload
-            ? await uploadData()
-            : await downloadData();
-        if (result.error) return result;
+      if (_disposed) {
+        result = const Res.error('Sync service is disposed');
+      } else {
+        previous = _syncPreferences.capture();
+        previousGeneration = _changeGeneration;
+        _syncPreferences.applyDraft(config, excludedFields);
+        if (config.isNotEmpty && !hasConfiguration) {
+          result = const Res.error('Invalid WebDAV configuration');
+        } else if (config.isNotEmpty && syncMode != DataSyncMode.manual) {
+          result = initialUpload ? await uploadData() : await downloadData();
+        }
+        if (_disposed) result = const Res.error('Sync service is disposed');
+        if (result.success) {
+          final selected = config.isEmpty ? DataSyncMode.manual : syncMode;
+          _syncPreferences.setSchedule(selected, minutes);
+          _syncPreferences.lastAttempt = _now.millisecondsSinceEpoch;
+          if (config.isEmpty) _syncPreferences.pending = false;
+          _persistImplicit();
+          await _saveSettings();
+          if (_disposed) {
+            result = const Res.error('Sync service is disposed');
+          } else {
+            committed = true;
+          }
+        }
       }
-      final selected = config.isEmpty ? DataSyncMode.manual : syncMode;
-      _syncPreferences.setSchedule(selected, minutes);
-      _syncPreferences.lastAttempt = _now.millisecondsSinceEpoch;
-      if (config.isEmpty) _syncPreferences.pending = false;
-      _persistImplicit();
-      await _saveSettings();
-      committed = true;
-      return const Res(true);
     } catch (error, stack) {
       Log.error('Data Sync', error, stack);
-      return Res.error(error.toString());
+      result = Res.error(error.toString());
     } finally {
-      if (!committed) {
-        _syncPreferences.restore(previous);
-        if (_changeGeneration != previousGeneration && hasConfiguration) {
-          _syncPreferences.pending = true;
+      try {
+        if (!committed && previous != null) {
+          _syncPreferences.restore(previous);
+          if (_changeGeneration != previousGeneration && hasConfiguration) {
+            _syncPreferences.pending = true;
+          }
+          _persistImplicit();
+          await _saveSettings();
         }
-        _persistImplicit();
-        await _saveSettings();
+      } catch (error, stack) {
+        Log.error('Data Sync rollback', error, stack);
+        result = Res.error(
+          '${result.errorMessage ?? 'Sync configuration failed'}; '
+          'Failed to restore sync configuration: $error',
+        );
+      } finally {
+        _configuring = false;
+        if (!_disposed) {
+          _lastRealtimeCheck = _now;
+          if (currentMode == DataSyncMode.scheduled) checkForAutomaticSync();
+          notifyListeners();
+        }
       }
-      _configuring = false;
-      _lastRealtimeCheck = _now;
-      if (currentMode == DataSyncMode.scheduled) checkForAutomaticSync();
-      if (!_disposed) notifyListeners();
     }
+    return result;
   }
 
   Future<void> waitForUpload() => _waitForTask(_DataSyncTask.upload);
