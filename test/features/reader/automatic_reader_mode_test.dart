@@ -13,7 +13,6 @@ import 'package:venera_next/features/comic_source/models.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
-import 'package:venera_next/features/sync/data_sync.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
@@ -46,7 +45,6 @@ void main() {
   });
 
   tearDown(() {
-    DataSync.resetForTesting();
     LocalFavoritesManager.cache = previousFavorites;
     previousSettings.forEach((key, value) => settings[key] = value);
     directory.deleteSync(recursive: true);
@@ -63,17 +61,31 @@ void main() {
     });
   }
 
-  Future<_ReaderHarnessState> mount(WidgetTester tester) async {
+  Future<_ReaderHarnessState> mount(
+    WidgetTester tester, {
+    VoidCallback? onClosed,
+  }) async {
     final key = GlobalKey<_ReaderHarnessState>();
     await tester.pumpWidget(
       MaterialApp(
         builder: (context, child) => ReaderOrientationScope(child: child!),
         navigatorKey: App.rootNavigatorKey,
-        home: OverlayWidget(_ReaderHarness(key: key)),
+        home: OverlayWidget(_ReaderHarness(key: key, onClosed: onClosed)),
       ),
     );
     return key.currentState!;
   }
+
+  readerTest('reader teardown notifies its injected owner once', (
+    tester,
+  ) async {
+    var closed = 0;
+    await mount(tester, onClosed: () => closed++);
+    expect(closed, 0);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 3));
+    expect(closed, 1);
+  });
 
   readerTest(
     'default-off leaves mode and navigation unchanged and starts no probe',
@@ -238,8 +250,9 @@ void main() {
 // Keep the real ReaderState lifecycle and navigation, isolating native window,
 // database and image-rendering services. Probe behavior is tested separately.
 class _ReaderHarness extends Reader {
-  _ReaderHarness({required super.key})
+  _ReaderHarness({required super.key, VoidCallback? onClosed})
     : super(
+        onClosed: onClosed ?? () {},
         type: ComicType.local,
         cid: 'comic',
         name: 'Comic',

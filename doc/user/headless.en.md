@@ -178,3 +178,13 @@ Once the update process is complete, a final JSON object is returned with a list
     }
   ]
 }
+
+## Argument validation and failures
+
+Arguments are validated before core initialization or application-data access. Only the documented complete command forms are accepted. Missing, unknown, invalid or extra arguments produce error and exit code 1; previously ignored trailing arguments are now rejected. --ignore-disheadless-log may appear before --headless or among command arguments. Comic id/source-key values must be nonempty and must not start with --.
+
+A failed script-update check is no longer reported as no updates. Available updates are still attempted; any check or update failure produces final status error and exit code 1. Summaries retain total/updated/errors (errors counts update failures only); optional data.checkErrors contains check-error strings. No updates with no check failures remains a success.
+
+Subscription updates exit with 1 for a missing folder configuration, missing selected comic, individual/batch update failures or command exceptions. Partial failures retain successful updates and list output, with final status error. Successful commands exit with 0. A ProgressError progress line is not terminal; inspect final status and process exit code.
+
+Subscription commands read the committed comic list immediately after updates finish, without a fixed 500 ms delay. Single-comic cancellation emits ProgressError and ends with error/1. A batch stream that reports no initial state or closes with current below total emits Subscription update did not complete. and exits with 1 instead of a successful list result. Completed partial writes are not rolled back.

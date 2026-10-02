@@ -1,33 +1,72 @@
 import 'package:flutter/foundation.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
-import 'package:venera_next/features/sync/sync.dart';
-import 'package:venera_next/foundation/appdata.dart';
-import 'package:venera_next/foundation/log.dart';
-import 'follow_updates_manager.dart';
+import 'follow_update_task.dart';
 import 'follow_updates_service.dart';
 
-final followUpdatesChanges = ValueNotifier<int>(0);
-void notifyFollowUpdatesChanged() => followUpdatesChanges.value++;
+/// Owns one background checker and its external change subscription.
+class FollowUpdatesRuntime {
+  FollowUpdatesRuntime({
+    required String? Function() folder,
+    required bool Function() isChecking,
+    required Future<void> Function() waitForDownload,
+    required FollowUpdateTask Function(String) createTask,
+    required void Function(Object, StackTrace) onError,
+    required void Function() Function(void Function()) observeChanges,
+  }) : _observeChanges = observeChanges {
+    _service = FollowUpdatesService(
+      folder: folder,
+      isChecking: isChecking,
+      waitForDownload: waitForDownload,
+      createTask: createTask,
+      onUpdated: notifyChanged,
+      onError: onError,
+    );
+  }
 
-final followUpdatesService = FollowUpdatesService(
-  folder: () => appdata.settings['followUpdatesFolder'] as String?,
-  isChecking: () => FollowUpdateJob.isChecking,
-  waitForDownload: () => DataSync().waitForDownload(),
-  createTask: (folder) => FollowUpdateJob(folder, false),
-  onUpdated: notifyFollowUpdatesChanged,
-  onError: (error, stack) => Log.error('Check Updates', error, stack),
-);
+  late final FollowUpdatesService _service;
+  final void Function() Function(void Function()) _observeChanges;
+  final _changes = ValueNotifier<int>(0);
+  VoidCallback? _unsubscribe;
+  bool _disposed = false;
 
-void startFollowUpdates() {
-  if (followUpdatesService.isRunning) return;
-  registerFollowUpdatesChangeListener(notifyFollowUpdatesChanged);
-  DataSync().addListener(notifyFollowUpdatesChanged);
-  followUpdatesService.start();
-}
+  ValueListenable<int> get changes => _changes;
+  bool get isRunning => _service.isRunning;
 
-void stopFollowUpdates() {
-  if (!followUpdatesService.isRunning) return;
-  followUpdatesService.stop();
-  registerFollowUpdatesChangeListener(null);
-  DataSync().removeListener(notifyFollowUpdatesChanged);
+  void notifyChanged() {
+    if (!_disposed) _changes.value++;
+  }
+
+  /// Subscription setup must be atomic and return its release callback.
+  void start() {
+    if (_disposed) throw StateError('Follow updates runtime is disposed');
+    if (isRunning) return;
+    try {
+      _unsubscribe = _observeChanges(notifyChanged);
+      _service.start();
+    } catch (_) {
+      stop();
+      rethrow;
+    }
+  }
+
+  void cancelChecking() => _service.cancelChecking();
+
+  void stop() {
+    final unsubscribe = _unsubscribe;
+    _unsubscribe = null;
+    try {
+      _service.stop();
+    } finally {
+      unsubscribe?.call();
+    }
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    try {
+      stop();
+    } finally {
+      _changes.dispose();
+    }
+  }
 }

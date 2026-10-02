@@ -1,3 +1,4 @@
+import '../support/data_sync_fixture.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -6,18 +7,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/app_runtime/sync_window_binding.dart';
 import 'package:venera_next/components/window_frame.dart';
-import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/features/history/history_manager.dart';
 import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:window_manager/window_manager.dart';
 
 void main() {
+  late SyncTestFixture fixture;
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() {
-    DataSync.resetForTesting();
-    appdata.implicitData['webdavAutoSync'] = false;
+    fixture = SyncTestFixture();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('window_manager'),
@@ -26,7 +25,7 @@ void main() {
   });
   tearDown(() {
     HistoryManager.cache = null;
-    DataSync.resetForTesting();
+    fixture.disposeController();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
   });
@@ -45,6 +44,7 @@ void main() {
             navigatorKey: App.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
+                controller: fixture.controller,
                 prepareImports: () => imports.future,
                 prepareDownloads: () {
                   downloadCalls++;
@@ -100,6 +100,7 @@ void main() {
             navigatorKey: App.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
+                controller: fixture.controller,
                 prepareDownloads: () {
                   events.add('downloads');
                   return downloads.future;
@@ -154,7 +155,7 @@ void main() {
           events.add('history');
           return history.future;
         });
-        DataSync.debugUploadOverride = () {
+        fixture.transfer.onUpload = () {
           events.add('upload');
           return uploaded.future;
         };
@@ -164,7 +165,7 @@ void main() {
           MaterialApp(
             navigatorKey: App.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
-              SyncWindowBinding(child: child!),
+              SyncWindowBinding(controller: fixture.controller, child: child!),
               onExit: () => exits++,
             ),
             home: Builder(
@@ -178,7 +179,7 @@ void main() {
         Future<void> closeReader() async {
           events.add('reader');
           await saved.future;
-          unawaited(DataSync().uploadData());
+          unawaited(fixture.controller.uploadData());
         }
 
         frame.addExitTask(closeReader);
@@ -224,15 +225,15 @@ void main() {
     tester,
   ) async {
     final uploaded = Completer<Res<bool>>();
-    DataSync.debugUploadOverride = () => uploaded.future;
-    final upload = DataSync().uploadData();
+    fixture.transfer.onUpload = () => uploaded.future;
+    final upload = fixture.controller.uploadData();
     var exits = 0;
     late WindowFrameController frame;
     await tester.pumpWidget(
       MaterialApp(
         navigatorKey: App.rootNavigatorKey,
         builder: (_, child) => WindowFrame(
-          SyncWindowBinding(child: child!),
+          SyncWindowBinding(controller: fixture.controller, child: child!),
           onExit: () => exits++,
         ),
         home: Builder(
@@ -260,14 +261,14 @@ void main() {
       'window close waits for upload; removed=$removeBeforeComplete',
       (tester) async {
         final pending = Completer<Res<bool>>();
-        DataSync.debugUploadOverride = () => pending.future;
-        final upload = DataSync().uploadData();
+        fixture.transfer.onUpload = () => pending.future;
+        final upload = fixture.controller.uploadData();
         var exits = 0;
         await tester.pumpWidget(
           MaterialApp(
             navigatorKey: App.rootNavigatorKey,
             builder: (context, child) => WindowFrame(
-              SyncWindowBinding(child: child!),
+              SyncWindowBinding(controller: fixture.controller, child: child!),
               onExit: () => exits++,
             ),
             home: const Scaffold(body: Text('content')),
@@ -304,7 +305,7 @@ void main() {
         MaterialApp(
           navigatorKey: App.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
-            SyncWindowBinding(child: child!),
+            SyncWindowBinding(controller: fixture.controller, child: child!),
             onExit: () => exits++,
           ),
           home: const Scaffold(),

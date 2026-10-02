@@ -1,4 +1,5 @@
 import 'follow_updates_runtime.dart';
+import 'follow_updates_scope.dart';
 
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
@@ -24,6 +25,19 @@ class FollowUpdatesWidget extends StatefulWidget {
 }
 
 class _FollowUpdatesWidgetState extends State<FollowUpdatesWidget> {
+  FollowUpdatesRuntime? _runtime;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final runtime = FollowUpdatesScope.of(context);
+    if (identical(runtime, _runtime)) return;
+    _runtime?.changes.removeListener(updateCount);
+    _runtime = runtime;
+    runtime.changes.addListener(updateCount);
+    updatePreviewData();
+  }
+
   int _count = 0;
 
   List<FavoriteItemWithUpdateInfo> previewComics = [];
@@ -57,15 +71,8 @@ class _FollowUpdatesWidgetState extends State<FollowUpdatesWidget> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    followUpdatesChanges.addListener(updateCount);
-    updatePreviewData();
-  }
-
-  @override
   void dispose() {
-    followUpdatesChanges.removeListener(updateCount);
+    _runtime?.changes.removeListener(updateCount);
     super.dispose();
   }
 
@@ -159,6 +166,19 @@ class FollowUpdatesPage extends StatefulWidget {
 }
 
 class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
+  FollowUpdatesRuntime? _runtime;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final runtime = FollowUpdatesScope.of(context);
+    if (identical(runtime, _runtime)) return;
+    _runtime?.changes.removeListener(updateComics);
+    _runtime = runtime;
+    runtime.changes.addListener(updateComics);
+    updateComics();
+  }
+
   String? get folder => appdata.settings["followUpdatesFolder"];
 
   var updatedComics = <FavoriteItemWithUpdateInfo>[];
@@ -190,19 +210,8 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    followUpdatesChanges.addListener(updateComics);
-    if (folder != null) {
-      allComics = LocalFavoritesManager().getComicsWithUpdatesInfo(folder!);
-      sortComics();
-      updatedComics = allComics.where((c) => c.hasNewUpdate).toList();
-    }
-  }
-
-  @override
   void dispose() {
-    followUpdatesChanges.removeListener(updateComics);
+    _runtime?.changes.removeListener(updateComics);
     super.dispose();
   }
 
@@ -341,7 +350,7 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
                             );
                           }
                           LocalFavoritesManager().notifyChanges();
-                          notifyFollowUpdatesChanged();
+                          _runtime!.notifyChanged();
                           appdata.saveData();
                         },
                       );
@@ -476,16 +485,16 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
   }
 
   void disable() {
-    followUpdatesService.cancelChecking();
+    _runtime!.cancelChecking();
     FollowUpdateJob.cancelActive();
     appdata.settings["followUpdatesFolder"] = null;
     LocalFavoritesManager().refreshUpdateIds();
     appdata.saveData();
-    notifyFollowUpdatesChanged();
+    _runtime!.notifyChanged();
   }
 
   void setFolder(String folder) async {
-    followUpdatesService.cancelChecking();
+    _runtime!.cancelChecking();
     LocalFavoritesManager().prepareTableForFollowUpdates(folder);
 
     var count = LocalFavoritesManager().count(folder);
@@ -525,7 +534,7 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
   }
 
   void checkNow() async {
-    followUpdatesService.cancelChecking();
+    _runtime!.cancelChecking();
 
     final job = FollowUpdateJob(folder!, true);
 
@@ -550,7 +559,7 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
       loadingController.close();
     }
     if (updated > 0 && mounted) {
-      notifyFollowUpdatesChanged();
+      _runtime!.notifyChanged();
     }
   }
 

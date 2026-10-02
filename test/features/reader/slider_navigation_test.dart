@@ -15,7 +15,6 @@ import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/continuous_view.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
-import 'package:venera_next/features/sync/data_sync.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
@@ -143,7 +142,6 @@ void main() {
           HistoryManager().close();
         }
         HistoryManager.cache = previousHistory;
-        DataSync.resetForTesting();
         LocalFavoritesManager.cache = previousFavorites;
         Log.isMuted = false;
         previous.forEach((key, value) => appdata.settings[key] = value);
@@ -162,6 +160,7 @@ const _chapters = ComicChapters({'one': 'One'});
 class _Reader extends Reader {
   _Reader({required super.key})
     : super(
+        onClosed: () {},
         type: ComicType.local,
         cid: 'book',
         name: 'Book',

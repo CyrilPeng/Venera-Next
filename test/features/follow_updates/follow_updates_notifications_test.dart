@@ -28,8 +28,13 @@ void main() {
         LocalFavoritesManager.cache = previous;
         appdata.settings['followUpdatesFolder'] = folder;
       });
-      await tester.pumpWidget(
-        const MaterialApp(
+      final runtime = _runtime();
+      final replacement = _runtime();
+      addTearDown(runtime.dispose);
+      addTearDown(replacement.dispose);
+      Widget app(FollowUpdatesRuntime owner) => FollowUpdatesScope(
+        runtime: owner,
+        child: const MaterialApp(
           home: Scaffold(
             body: CustomScrollView(
               slivers: [FollowUpdatesWidget(), FollowUpdatesWidget()],
@@ -37,15 +42,33 @@ void main() {
           ),
         ),
       );
+      await tester.pumpWidget(app(runtime));
       expect(find.text('1 updates'), findsNWidgets(2));
       favorites.updates = 3;
-      notifyFollowUpdatesChanged();
+      runtime.notifyChanged();
       await tester.pump();
       expect(find.text('3 updates'), findsNWidgets(2));
+      await tester.pumpWidget(app(replacement));
+      favorites.updates = 5;
+      runtime.notifyChanged();
+      await tester.pump();
+      expect(find.text('3 updates'), findsNWidgets(2));
+      replacement.notifyChanged();
+      await tester.pump();
+      expect(find.text('5 updates'), findsNWidgets(2));
       await tester.pumpWidget(const SizedBox());
-      notifyFollowUpdatesChanged();
+      replacement.notifyChanged();
       await tester.pump();
       expect(tester.takeException(), isNull);
     },
   );
 }
+
+FollowUpdatesRuntime _runtime() => FollowUpdatesRuntime(
+  folder: () => null,
+  isChecking: () => false,
+  waitForDownload: () async {},
+  createTask: (_) => throw StateError('Unexpected task'),
+  onError: (_, _) {},
+  observeChanges: (_) => () {},
+);

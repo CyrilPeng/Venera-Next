@@ -249,6 +249,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
           if (!mounted || scope.isCancelled) return;
           App.rootContext.to(() {
             return Reader(
+              onClosed: ReaderSessionScope.onClosedOf(App.rootContext),
               type: ComicType.local,
               cid: widget.id,
               name: localComic.title,

@@ -1,3 +1,4 @@
+import 'reader_session_scope.dart';
 import 'package:venera_next/network/request_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/loading.dart';
@@ -42,6 +43,7 @@ class _ReaderWithLoadingState
   @override
   Widget buildContent(BuildContext context, ReaderProps data) {
     return Reader(
+      onClosed: ReaderSessionScope.onClosedOf(context),
       type: data.type,
       cid: data.cid,
       name: data.name,

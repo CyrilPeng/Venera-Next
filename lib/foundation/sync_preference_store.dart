@@ -1,27 +1,35 @@
-import 'appdata.dart';
 import 'sync_configuration.dart';
 
 /// Adapts typed sync configuration to existing settings and implicit-data keys.
-/// Persistence and transfer transaction ownership remain with DataSync.
+/// Persistence and transfer transaction ownership remain with DataSyncController.
 class SyncPreferenceStore {
-  const SyncPreferenceStore(this.data);
-  final Appdata data;
+  const SyncPreferenceStore({
+    required Object? Function(String) readSetting,
+    required void Function(String, Object?) writeSetting,
+    required Map<String, dynamic> Function() implicitData,
+  }) : _readSetting = readSetting,
+       _writeSetting = writeSetting,
+       _implicitData = implicitData;
 
-  SyncConfiguration get configuration => SyncConfiguration.read(
-    (key) => data.settings[key],
-    (key) => data.implicitData[key],
-  );
+  final Object? Function(String) _readSetting;
+  final void Function(String, Object?) _writeSetting;
+  final Map<String, dynamic> Function() _implicitData;
 
-  bool get pending => data.implicitData['webdavSyncPending'] == true;
-  set pending(bool value) => data.implicitData['webdavSyncPending'] = value;
+  int get lastSyncTime => (_readSetting('lastSyncTime') as int?) ?? 0;
+
+  SyncConfiguration get configuration =>
+      SyncConfiguration.read(_readSetting, (key) => _implicitData()[key]);
+
+  bool get pending => _implicitData()['webdavSyncPending'] == true;
+  set pending(bool value) => _implicitData()['webdavSyncPending'] = value;
 
   int? get lastAttempt {
-    final value = data.implicitData['webdavSyncLastAttempt'];
+    final value = _implicitData()['webdavSyncLastAttempt'];
     return value is int ? value : null;
   }
 
   set lastAttempt(int? value) =>
-      data.implicitData['webdavSyncLastAttempt'] = value;
+      _implicitData()['webdavSyncLastAttempt'] = value;
 
   static const _scheduleKeys = [
     'webdavSyncMode',
@@ -32,32 +40,32 @@ class SyncPreferenceStore {
   ];
 
   SyncPreferenceCheckpoint capture() => SyncPreferenceCheckpoint._(
-    data.settings['webdav'],
-    data.settings['disableSyncFields'],
-    {for (final key in _scheduleKeys) key: data.implicitData[key]},
+    _readSetting('webdav'),
+    _readSetting('disableSyncFields'),
+    {for (final key in _scheduleKeys) key: _implicitData()[key]},
   );
 
   void restore(SyncPreferenceCheckpoint checkpoint) {
-    data.settings['webdav'] = checkpoint._connection;
-    data.settings['disableSyncFields'] = checkpoint._excludedFields;
+    _writeSetting('webdav', checkpoint._connection);
+    _writeSetting('disableSyncFields', checkpoint._excludedFields);
     for (final entry in checkpoint._schedule.entries) {
       if (entry.value == null) {
-        data.implicitData.remove(entry.key);
+        _implicitData().remove(entry.key);
       } else {
-        data.implicitData[entry.key] = entry.value;
+        _implicitData()[entry.key] = entry.value;
       }
     }
   }
 
   void applyDraft(List<String> connection, String excludedFields) {
-    data.settings['webdav'] = List<String>.of(connection);
-    data.settings['disableSyncFields'] = excludedFields;
+    _writeSetting('webdav', List<String>.of(connection));
+    _writeSetting('disableSyncFields', excludedFields);
   }
 
   void setSchedule(DataSyncMode mode, int minutes) {
-    data.implicitData['webdavSyncMode'] = mode.name;
-    data.implicitData['webdavAutoSync'] = mode != DataSyncMode.manual;
-    data.implicitData['webdavSyncIntervalMinutes'] =
+    _implicitData()['webdavSyncMode'] = mode.name;
+    _implicitData()['webdavAutoSync'] = mode != DataSyncMode.manual;
+    _implicitData()['webdavSyncIntervalMinutes'] =
         SyncConfiguration.normalizeInterval(minutes);
   }
 }

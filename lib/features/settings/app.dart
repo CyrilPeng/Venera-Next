@@ -1,5 +1,5 @@
 import 'package:uuid/uuid.dart';
-import 'package:venera_next/foundation/sync_preference_store.dart';
+import 'package:venera_next/foundation/app_sync_preferences.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -195,7 +195,10 @@ class _AppSettingsState extends State<AppSettings> {
               "Online reading uses directory image structure only; CBZ is kept for archive backup and restore."
                   .tl,
           callback: () async {
-            showPopUpWidget(context, const _WebDavComicLibrarySetting());
+            showPopUpWidget(
+              context,
+              _WebDavComicLibrarySetting(WebDavLibraryScope.of(context)),
+            );
           },
           actionTitle: 'Set'.tl,
         ).toSliver(),
@@ -268,7 +271,7 @@ class _WebdavSettingState extends State<_WebdavSetting> {
   @override
   void initState() {
     super.initState();
-    final config = SyncPreferenceStore(appdata).configuration;
+    final config = createAppSyncPreferences(appdata).configuration;
     if (config.excludedFields.trim().isNotEmpty) {
       disableSync = config.excludedFields;
     }
@@ -473,13 +476,14 @@ class _WebdavSettingState extends State<_WebdavSetting> {
                         url.trim().isEmpty &&
                         user.trim().isEmpty &&
                         pass.trim().isEmpty;
-                    final testResult = await DataSync().configure(
-                      config: clear ? [] : [url.trim(), user, pass],
-                      excludedFields: disableSync,
-                      syncMode: syncMode,
-                      minutes: syncInterval,
-                      initialUpload: upload,
-                    );
+                    final testResult = await DataSyncScope.of(context)
+                        .configure(
+                          config: clear ? [] : [url.trim(), user, pass],
+                          excludedFields: disableSync,
+                          syncMode: syncMode,
+                          minutes: syncInterval,
+                          initialUpload: upload,
+                        );
                     if (!mounted) return;
                     setState(() => isTesting = false);
                     if (testResult.error) {
@@ -688,7 +692,9 @@ class _BackupWebdavSettingState extends State<_BackupWebdavSetting> {
 }
 
 class _WebDavComicLibrarySetting extends StatefulWidget {
-  const _WebDavComicLibrarySetting();
+  const _WebDavComicLibrarySetting(this.services);
+
+  final WebDavLibraryServices services;
 
   @override
   State<_WebDavComicLibrarySetting> createState() =>
@@ -706,20 +712,17 @@ class _WebDavComicLibrarySettingState
   @override
   void initState() {
     super.initState();
-    final config = WebDavLibraryConfig.fromSettings();
+    final config = widget.services.settings.read().connection;
     _connectionControllers = WebDavConnectionControllers(
       url: config.url,
       user: config.user,
       password: config.pass,
       remotePath: config.remotePath,
     );
-    WebDavLibrarySource.updateSyncStatusFromCache();
-    autoSyncEnabled =
-        appdata.settings['webdavComicLibraryAutoSync'] as bool? ?? true;
-    syncIntervalMinutes =
-        (appdata.settings['webdavComicLibrarySyncIntervalMinutes'] as num?)
-            ?.round() ??
-        360;
+    widget.services.source.synchronizer.updateSyncStatusFromCache();
+    final configuration = widget.services.settings.read();
+    autoSyncEnabled = configuration.autoSync;
+    syncIntervalMinutes = configuration.intervalMinutes;
   }
 
   @override
@@ -784,6 +787,15 @@ class _WebDavComicLibrarySettingState
                   border: const OutlineInputBorder(),
                 ),
                 items: [
+                  if (![15, 60, 360, 1440].contains(syncIntervalMinutes))
+                    DropdownMenuItem(
+                      value: syncIntervalMinutes,
+                      child: Text(
+                        '@minutes min'.tlParams({
+                          'minutes': '$syncIntervalMinutes',
+                        }),
+                      ),
+                    ),
                   DropdownMenuItem(
                     value: 15,
                     child: Text('Every 15 minutes'.tl),
@@ -803,7 +815,7 @@ class _WebDavComicLibrarySettingState
             ],
             const SizedBox(height: 16),
             ValueListenableBuilder<WebDavLibrarySyncStatus>(
-              valueListenable: WebDavLibrarySource.syncStatus,
+              valueListenable: widget.services.source.synchronizer.status,
               builder: (context, status, _) {
                 final text = switch (status) {
                   WebDavLibrarySyncStatus(isSyncing: true, total: > 0) =>
@@ -847,7 +859,7 @@ class _WebDavComicLibrarySettingState
               ],
             ),
             const SizedBox(height: 12),
-            if (WebDavLibraryConfig.fromSettings().isValid) ...[
+            if (widget.services.settings.read().connection.isValid) ...[
               Row(
                 children: [
                   Expanded(
@@ -898,7 +910,7 @@ class _WebDavComicLibrarySettingState
     setState(() {
       isTesting = true;
     });
-    final result = await WebDavLibrarySource.testConnection(currentConfig);
+    final result = await widget.services.source.testConnection(currentConfig);
     if (!mounted) return;
     setState(() {
       isTesting = false;
@@ -912,10 +924,10 @@ class _WebDavComicLibrarySettingState
 
   Future<void> save() async {
     if (isTesting || isSyncing) return;
-    if (!await _persistConfiguration()) return;
-    final config = WebDavLibraryConfig.fromSettings();
+    if (!await _persistConfiguration() || !mounted) return;
+    final config = widget.services.settings.read().connection;
     if (config.isValid) {
-      unawaited(WebDavLibrarySource.synchronize(force: true));
+      unawaited(widget.services.source.synchronizer.synchronize(force: true));
     }
     if (!mounted) return;
     context.showMessage(message: 'Saved'.tl);
@@ -924,12 +936,14 @@ class _WebDavComicLibrarySettingState
 
   Future<void> syncNow() async {
     if (isTesting || isSyncing) return;
-    if (!await _persistConfiguration()) return;
-    if (!WebDavLibraryConfig.fromSettings().isValid) return;
+    if (!await _persistConfiguration() || !mounted) return;
+    if (!widget.services.settings.read().connection.isValid) return;
     setState(() {
       isSyncing = true;
     });
-    final result = await WebDavLibrarySource.synchronize(force: true);
+    final result = await widget.services.source.synchronizer.synchronize(
+      force: true,
+    );
     if (!mounted) return;
     setState(() {
       isSyncing = false;
@@ -943,18 +957,21 @@ class _WebDavComicLibrarySettingState
 
   Future<bool> _persistConfiguration() async {
     final config = currentConfig;
-    appdata.settings['webdavComicLibraryAutoSync'] = autoSyncEnabled;
-    appdata.settings['webdavComicLibrarySyncIntervalMinutes'] =
-        syncIntervalMinutes;
+    final configuration = WebDavLibrarySettings(
+      connection: config,
+      autoSync: autoSyncEnabled,
+      intervalMinutes: syncIntervalMinutes,
+    );
     if (!config.isValid && config.user.isEmpty && config.pass.isEmpty) {
-      await WebDavLibraryConfig.saveToSettings(config);
+      await widget.services.settings.save(configuration);
+      if (!mounted) return false;
       _refreshWebDavLibrarySource(enabled: false);
       return true;
     }
     setState(() {
       isTesting = true;
     });
-    final result = await WebDavLibrarySource.testConnection(config);
+    final result = await widget.services.source.testConnection(config);
     if (!mounted) return false;
     setState(() {
       isTesting = false;
@@ -964,7 +981,8 @@ class _WebDavComicLibrarySettingState
       context.showMessage(message: "Saved Failed".tl);
       return false;
     } else {
-      await WebDavLibraryConfig.saveToSettings(config);
+      await widget.services.settings.save(configuration);
+      if (!mounted) return false;
       _refreshWebDavLibrarySource(enabled: true);
       return true;
     }
@@ -976,7 +994,7 @@ class _WebDavComicLibrarySettingState
     final pages = List<String>.from(appdata.settings['explore_pages']);
     pages.remove(WebDavLibrarySource.explorePageTitle);
     if (enabled) {
-      manager.add(WebDavLibrarySource.create());
+      manager.add(widget.services.source.create());
       pages.add(WebDavLibrarySource.explorePageTitle);
     }
     appdata.settings['explore_pages'] = pages;

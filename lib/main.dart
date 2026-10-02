@@ -1,5 +1,10 @@
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
+import 'package:venera_next/app_runtime/data_sync.dart';
+import 'package:venera_next/app_runtime/bootstrap_core.dart';
+import 'package:venera_next/app_runtime/follow_updates.dart';
+import 'package:venera_next/app_runtime/webdav_library.dart';
 import 'package:venera_next/features/reader/reader.dart'
-    show ReaderOrientationScope;
+    show ReaderOrientationScope, ReaderSessionScope;
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/app_runtime/background_sync.dart';
 import 'package:venera_next/app_runtime/interactive_bindings.dart';
@@ -42,8 +47,15 @@ void main(List<String> args) {
           showToast(message: message, context: context);
         });
         JsEngine.configureUiMessageHandler(JsUiApi());
-        await init();
-        runApp(const MyApp());
+        final sync = createApplicationDataSync();
+        try {
+          await init(createCoreBootstrap(onDataChanged: sync.onDataChanged));
+        } catch (_) {
+          sync.dispose();
+          configureComicSourceDataSavedHandler(null);
+          rethrow;
+        }
+        runApp(MyApp(dataSync: sync));
         if (App.isDesktop) {
           await windowManager.ensureInitialized();
           // WindowFrame owns the async close flow, including native close events.
@@ -78,24 +90,31 @@ void main(List<String> args) {
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.dataSync});
+
+  /// The host owns this controller beyond an individual widget mount.
+  final DataSyncController dataSync;
 
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  final _library = webDavLibrary;
   final _interactiveBindings = InteractiveBindings.platform();
-  final _backgroundSync = BackgroundSync.platform();
+  late final _dataSync = widget.dataSync;
+  late final _followUpdates = createFollowUpdatesRuntime(_dataSync);
+  late final _backgroundSync = BackgroundSync.platform(_dataSync);
 
   @override
   void initState() {
+    mountWebDavLibrary(_library);
     App.registerForceRebuild(forceRebuild);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _interactiveBindings.start();
         _backgroundSync.start();
-        startFollowUpdates();
+        _followUpdates.start();
       }
     });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -110,8 +129,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     App.registerForceRebuild(null);
     hideContentOverlay?.remove();
     hideContentOverlay = null;
-    stopFollowUpdates();
+    _followUpdates.dispose();
+    // Stop timers while retaining observation for late reader writes/remounts.
     _backgroundSync.stop();
+    _library.source.dispose();
     unawaited(_interactiveBindings.dispose());
     super.dispose();
   }
@@ -130,8 +151,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      DataSync().checkForAutomaticSync();
-      WebDavLibrarySource.checkForAutomaticSync();
+      _dataSync.checkForAutomaticSync();
+      _library.source.synchronizer.checkForAutomaticSync();
     }
     if (!App.isMobile || !appdata.settings['authorizationRequired']) {
       return;
@@ -336,12 +357,22 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   child: MouseBackDetector(
                     onTapDown: App.pop,
                     child: WindowFrame(
-                      SyncWindowBinding(child: widget),
+                      SyncWindowBinding(controller: _dataSync, child: widget),
                       debugAction: reloadComicSourcesForDebug,
                     ),
                   ),
                 );
               }
+              widget = FollowUpdatesScope(
+                runtime: _followUpdates,
+                child: widget,
+              );
+              widget = ReaderSessionScope(
+                onClosed: _dataSync.onDataChanged,
+                child: widget,
+              );
+              widget = DataSyncScope(controller: _dataSync, child: widget);
+              widget = WebDavLibraryScope(services: _library, child: widget);
               return _SystemUiProvider(
                 Material(
                   color: App.isLinux ? Colors.transparent : null,

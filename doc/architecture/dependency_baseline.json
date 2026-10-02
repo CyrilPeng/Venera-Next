@@ -82,10 +82,6 @@
       "favorites"
     ],
     [
-      "follow_updates",
-      "sync"
-    ],
-    [
       "history",
       "comic_details"
     ],
@@ -168,10 +164,6 @@
     [
       "reader",
       "local_comics"
-    ],
-    [
-      "reader",
-      "sync"
     ],
     [
       "search",
@@ -274,7 +266,26 @@
     "features/reader/reader_session.dart",
     "features/history/image_favorite_actions.dart",
     "features/comic_source/comic_source_api.dart",
-    "features/follow_updates/follow_updates_api.dart"
+    "features/follow_updates/follow_updates_api.dart",
+    "features/webdav_library/webdav_library_api.dart",
+    "features/webdav_library/webdav_library_cache.dart",
+    "features/webdav_library/webdav_library_config.dart",
+    "features/webdav_library/webdav_library_settings.dart",
+    "features/webdav_library/webdav_library_services.dart",
+    "features/webdav_library/webdav_library_source.dart",
+    "features/webdav_library/webdav_library_entries.dart",
+    "features/webdav_library/webdav_library_transport.dart",
+    "features/webdav_library/webdav_library_session.dart",
+    "features/webdav_library/webdav_library_discovery.dart",
+    "features/webdav_library/webdav_library_snapshot.dart",
+    "features/webdav_library/webdav_library_snapshot_builder.dart",
+    "features/webdav_library/webdav_library_snapshot_store.dart",
+    "features/webdav_library/webdav_library_synchronizer.dart",
+    "features/sync/data_sync_transfer.dart",
+    "features/sync/data_sync_remote.dart",
+    "features/sync/data_sync_controller.dart",
+    "features/follow_updates/follow_updates_runtime.dart",
+    "features/sync/data_sync_archive_order.dart"
   ],
   "ui_files": [
     "app_shell/auth_page.dart",

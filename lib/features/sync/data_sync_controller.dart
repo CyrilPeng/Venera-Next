@@ -1,27 +1,14 @@
+import 'package:venera_next/network/request_scope.dart';
 import 'dart:async';
-
+import 'package:flutter/foundation.dart';
 import 'package:venera_next/foundation/sync_configuration.dart';
 import 'package:venera_next/foundation/sync_preference_store.dart';
-
-import 'package:flutter/foundation.dart';
-import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/foundation/appdata.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
-import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/network/webdav.dart';
-import 'package:venera_next/features/sync/app_data_transfer.dart';
-import 'package:venera_next/foundation/extensions.dart';
-import 'package:venera_next/foundation/file_system.dart';
-
-export 'package:venera_next/foundation/sync_configuration.dart'
-    show DataSyncMode;
+import 'data_sync_transfer.dart';
 
 enum _DataSyncTask { upload, download }
-
-final _syncPreferences = SyncPreferenceStore(appdata);
 
 class DataSyncStatusSnapshot {
   const DataSyncStatusSnapshot({
@@ -56,24 +43,56 @@ class DataSyncStatusSnapshot {
   }
 }
 
-class DataSync with ChangeNotifier {
-  DataSync._();
+class DataSyncController with ChangeNotifier {
+  DataSyncController({
+    required SyncPreferenceStore preferences,
+    required DataSyncTransfer Function() transfer,
+    required Future<void> Function() saveSettings,
+    required void Function() persistImplicit,
+    required void Function() Function(void Function()) observeChanges,
+    DateTime Function()? now,
+    Timer Function(Duration, void Function())? createTimer,
+  }) : _syncPreferences = preferences,
+       _transferFactory = transfer,
+       _saveSettings = saveSettings,
+       _persistImplicit = persistImplicit,
+       _observeChanges = observeChanges,
+       _clock = now ?? DateTime.now,
+       _createTimer = createTimer ?? Timer.new;
+
+  final SyncPreferenceStore _syncPreferences;
+  final DataSyncTransfer Function() _transferFactory;
+  DataSyncTransfer? _transfer;
+  RequestScope? _transferScope;
+  DataSyncTransfer get _dataTransfer => _transfer ??= _transferFactory();
+  final Future<void> Function() _saveSettings;
+  final void Function() _persistImplicit;
+
+  /// Subscribing must be atomic; the returned callback releases this subscription.
+  final void Function() Function(void Function()) _observeChanges;
+  final DateTime Function() _clock;
+  final Timer Function(Duration, void Function()) _createTimer;
 
   bool _started = false;
-  bool _observing = false;
+  void Function()? _unsubscribe;
 
   /// Attach automatic synchronization once, after core services are ready.
   void start() {
-    if (_disposed) throw StateError('Cannot start a disposed DataSync');
+    if (_disposed) {
+      throw StateError('Cannot start a disposed DataSyncController');
+    }
     if (_started) return;
     _started = true;
-    if (!_observing) {
-      _observing = true;
-      appdata.registerSyncDataRequestHandler(onDataChanged);
-      LocalFavoritesManager().addListener(onDataChanged);
-      ComicSourceManager().addListener(onDataChanged);
+    try {
+      _unsubscribe ??= _observeChanges(onDataChanged);
+      checkForAutomaticSync(startup: true);
+    } catch (_) {
+      stop();
+      final unsubscribe = _unsubscribe;
+      _unsubscribe = null;
+      unsubscribe?.call();
+      rethrow;
     }
-    checkForAutomaticSync(startup: true);
   }
 
   /// Stop automatic scheduling without canceling requested transfers.
@@ -91,21 +110,19 @@ class DataSync with ChangeNotifier {
     _changeGeneration++;
     if (!hasPendingChanges) {
       _syncPreferences.pending = true;
-      appdata.writeImplicitData();
+      _persistImplicit();
     }
     if (_started &&
         isEnabled &&
-        mode == DataSyncMode.realtime &&
+        currentMode == DataSyncMode.realtime &&
         !_configuring) {
       unawaited(uploadData());
     }
   }
 
-  static DataSyncMode get mode => _syncPreferences.configuration.mode;
+  DataSyncMode get currentMode => _syncPreferences.configuration.mode;
 
-  static const intervalOptions = SyncConfiguration.intervalOptions;
-
-  static int get intervalMinutes =>
+  int get currentIntervalMinutes =>
       _syncPreferences.configuration.intervalMinutes;
 
   bool get hasConfiguration => _validateConfig()?.isValid == true;
@@ -118,10 +135,7 @@ class DataSync with ChangeNotifier {
   int _changeGeneration = 0;
   DateTime? _lastRealtimeCheck;
 
-  @visibleForTesting
-  static DateTime Function()? debugNow;
-
-  DateTime get _now => debugNow?.call() ?? DateTime.now();
+  DateTime get _now => _clock();
 
   /// Called at startup and resume, independently of the home page being mounted.
   /// Timers only run in this process; overdue checks are caught up on next launch.
@@ -135,7 +149,7 @@ class DataSync with ChangeNotifier {
         _activeTask != null) {
       return;
     }
-    if (mode == DataSyncMode.realtime) {
+    if (currentMode == DataSyncMode.realtime) {
       if (!startup &&
           _lastRealtimeCheck != null &&
           _now.difference(_lastRealtimeCheck!) < const Duration(minutes: 10)) {
@@ -147,12 +161,12 @@ class DataSync with ChangeNotifier {
       final last = stored is int
           ? DateTime.fromMillisecondsSinceEpoch(stored)
           : null;
-      final interval = Duration(minutes: intervalMinutes);
+      final interval = Duration(minutes: currentIntervalMinutes);
       // A clock moved backwards must not delay syncing indefinitely.
       final elapsed = last == null ? interval : _now.difference(last);
       final remaining = interval - (elapsed.isNegative ? interval : elapsed);
       if (remaining > Duration.zero) {
-        _scheduleTimer = Timer(remaining, checkForAutomaticSync);
+        _scheduleTimer = _createTimer(remaining, checkForAutomaticSync);
         return;
       }
     }
@@ -173,48 +187,69 @@ class DataSync with ChangeNotifier {
     if (_configuring) return const Res.error('Sync configuration is busy');
     _configuring = true;
     _scheduleTimer?.cancel();
-    while (_activeTask != null || _pendingTask != null) {
-      await (_pendingTask ?? _activeTask!);
-    }
-    final previous = _syncPreferences.capture();
-    final previousGeneration = _changeGeneration;
+    SyncPreferenceCheckpoint? previous;
+    var previousGeneration = _changeGeneration;
     var committed = false;
+    var result = const Res<bool>(true);
     try {
-      _syncPreferences.applyDraft(config, excludedFields);
-      if (config.isNotEmpty && !hasConfiguration) {
-        return const Res.error('Invalid WebDAV configuration');
+      while (_activeTask != null || _pendingTask != null) {
+        await (_pendingTask ?? _activeTask!);
       }
-      if (config.isNotEmpty && syncMode != DataSyncMode.manual) {
-        final result = initialUpload
-            ? await uploadData()
-            : await downloadData();
-        if (result.error) return result;
+      if (_disposed) {
+        result = const Res.error('Sync service is disposed');
+      } else {
+        previous = _syncPreferences.capture();
+        previousGeneration = _changeGeneration;
+        _syncPreferences.applyDraft(config, excludedFields);
+        if (config.isNotEmpty && !hasConfiguration) {
+          result = const Res.error('Invalid WebDAV configuration');
+        } else if (config.isNotEmpty && syncMode != DataSyncMode.manual) {
+          result = initialUpload ? await uploadData() : await downloadData();
+        }
+        if (_disposed) result = const Res.error('Sync service is disposed');
+        if (result.success) {
+          final selected = config.isEmpty ? DataSyncMode.manual : syncMode;
+          _syncPreferences.setSchedule(selected, minutes);
+          _syncPreferences.lastAttempt = _now.millisecondsSinceEpoch;
+          if (config.isEmpty) _syncPreferences.pending = false;
+          _persistImplicit();
+          await _saveSettings();
+          if (_disposed) {
+            result = const Res.error('Sync service is disposed');
+          } else {
+            committed = true;
+          }
+        }
       }
-      final selected = config.isEmpty ? DataSyncMode.manual : syncMode;
-      _syncPreferences.setSchedule(selected, minutes);
-      _syncPreferences.lastAttempt = _now.millisecondsSinceEpoch;
-      if (config.isEmpty) _syncPreferences.pending = false;
-      appdata.writeImplicitData();
-      await appdata.saveData(false);
-      committed = true;
-      return const Res(true);
     } catch (error, stack) {
       Log.error('Data Sync', error, stack);
-      return Res.error(error.toString());
+      result = Res.error(error.toString());
     } finally {
-      if (!committed) {
-        _syncPreferences.restore(previous);
-        if (_changeGeneration != previousGeneration && hasConfiguration) {
-          _syncPreferences.pending = true;
+      try {
+        if (!committed && previous != null) {
+          _syncPreferences.restore(previous);
+          if (_changeGeneration != previousGeneration && hasConfiguration) {
+            _syncPreferences.pending = true;
+          }
+          _persistImplicit();
+          await _saveSettings();
         }
-        appdata.writeImplicitData();
-        await appdata.saveData(false);
+      } catch (error, stack) {
+        Log.error('Data Sync rollback', error, stack);
+        result = Res.error(
+          '${result.errorMessage ?? 'Sync configuration failed'}; '
+          'Failed to restore sync configuration: $error',
+        );
+      } finally {
+        _configuring = false;
+        if (!_disposed) {
+          _lastRealtimeCheck = _now;
+          if (currentMode == DataSyncMode.scheduled) checkForAutomaticSync();
+          notifyListeners();
+        }
       }
-      _configuring = false;
-      _lastRealtimeCheck = _now;
-      if (mode == DataSyncMode.scheduled) checkForAutomaticSync();
-      if (!_disposed) notifyListeners();
     }
+    return result;
   }
 
   Future<void> waitForUpload() => _waitForTask(_DataSyncTask.upload);
@@ -236,25 +271,6 @@ class DataSync with ChangeNotifier {
       }
       await taskFuture;
     }
-  }
-
-  static DataSync? instance;
-
-  factory DataSync() => instance ?? (instance = DataSync._());
-
-  @visibleForTesting
-  static Future<Res<bool>> Function()? debugUploadOverride;
-
-  @visibleForTesting
-  static Future<Res<bool>> Function()? debugDownloadOverride;
-
-  @visibleForTesting
-  static void resetForTesting() {
-    instance?.dispose();
-    instance = null;
-    debugUploadOverride = null;
-    debugDownloadOverride = null;
-    debugNow = null;
   }
 
   bool _isDownloading = false;
@@ -282,14 +298,15 @@ class DataSync with ChangeNotifier {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _transferScope?.cancel();
     stop();
-    if (_observing) {
-      _observing = false;
-      appdata.registerSyncDataRequestHandler(null);
-      LocalFavoritesManager().removeListener(onDataChanged);
-      ComicSourceManager().removeListener(onDataChanged);
+    final unsubscribe = _unsubscribe;
+    _unsubscribe = null;
+    try {
+      unsubscribe?.call();
+    } finally {
+      super.dispose();
     }
-    super.dispose();
   }
 
   DataSyncStatusSnapshot get statusSnapshot => DataSyncStatusSnapshot(
@@ -297,11 +314,11 @@ class DataSync with ChangeNotifier {
     isEnabled: isEnabled,
     isUploading: _isUploading,
     isDownloading: _isDownloading,
-    lastSyncTime: (appdata.settings['lastSyncTime'] as int?) ?? 0,
+    lastSyncTime: _syncPreferences.lastSyncTime,
     lastError: _lastError,
   );
 
-  bool get isEnabled => mode != DataSyncMode.manual && hasConfiguration;
+  bool get isEnabled => currentMode != DataSyncMode.manual && hasConfiguration;
 
   WebDavEndpoint? _validateConfig() {
     final connection = _syncPreferences.configuration.connection;
@@ -320,17 +337,17 @@ class DataSync with ChangeNotifier {
       return const Res(true);
     }
     if (_activeTask != null) {
-      return _schedulePendingTask(_DataSyncTask.upload, _uploadDataNow);
+      return _schedulePendingTask(_DataSyncTask.upload, _uploadNow);
     }
-    return _startTask(_DataSyncTask.upload, _uploadDataNow);
+    return _startTask(_DataSyncTask.upload, _uploadNow);
   }
 
   Future<Res<bool>> downloadData() async {
     if (_disposed) return const Res.error('Sync service is disposed');
     if (_activeTask != null) {
-      return _schedulePendingTask(_DataSyncTask.download, _downloadDataNow);
+      return _schedulePendingTask(_DataSyncTask.download, _downloadNow);
     }
-    return _startTask(_DataSyncTask.download, _downloadDataNow);
+    return _startTask(_DataSyncTask.download, _downloadNow);
   }
 
   Future<Res<bool>> _schedulePendingTask(
@@ -369,7 +386,7 @@ class DataSync with ChangeNotifier {
     activeTask = _runTask(task, run).whenComplete(() {
       if (identical(_activeTask, activeTask)) {
         _activeTask = null;
-        if (mode == DataSyncMode.scheduled && _pendingTask == null) {
+        if (currentMode == DataSyncMode.scheduled && _pendingTask == null) {
           checkForAutomaticSync();
         }
       }
@@ -390,7 +407,7 @@ class DataSync with ChangeNotifier {
     final generation = _changeGeneration;
     if (hasConfiguration && !_configuring) {
       _syncPreferences.lastAttempt = _now.millisecondsSinceEpoch;
-      appdata.writeImplicitData();
+      _persistImplicit();
     }
     notifyListeners();
     try {
@@ -414,7 +431,7 @@ class DataSync with ChangeNotifier {
       _isDownloading = false;
       if (hasConfiguration && !_configuring && !_disposed) {
         _syncPreferences.lastAttempt = _now.millisecondsSinceEpoch;
-        appdata.writeImplicitData();
+        _persistImplicit();
       }
       if (!_disposed) notifyListeners();
     }
@@ -424,11 +441,7 @@ class DataSync with ChangeNotifier {
     return task == _DataSyncTask.upload ? 'Upload Data' : 'Data Sync';
   }
 
-  Future<Res<bool>> _uploadDataNow() async {
-    var debugUpload = debugUploadOverride;
-    if (debugUpload != null) {
-      return debugUpload();
-    }
+  Future<Res<bool>> _uploadNow() async {
     var config = _validateConfig();
     if (config == null) {
       _lastError = 'Invalid WebDAV configuration';
@@ -437,47 +450,27 @@ class DataSync with ChangeNotifier {
     if (!config.isValid) {
       return const Res(true);
     }
-    var client = config.createClient(logRequests: true);
-
+    final scope = RequestScope();
+    _transferScope = scope;
     try {
-      appdata.settings['dataVersion']++;
-      await appdata.saveData(false);
-      var data = await exportAppData(
-        _syncPreferences.configuration.excludedFields.isNotEmpty,
+      await _dataTransfer.upload(
+        config,
+        excludeFields: _syncPreferences.configuration.excludedFields.isNotEmpty,
+        scope: scope,
       );
-      var time = (DateTime.now().millisecondsSinceEpoch ~/ 86400000).toString();
-      var filename = time;
-      filename += '-';
-      filename += appdata.settings['dataVersion'].toString();
-      filename += '.venera';
-      var files = await client.readDir('/');
-      files = files.where((e) => e.name!.endsWith('.venera')).toList();
-      var old = files.firstWhereOrNull((e) => e.name!.startsWith("$time-"));
-      if (old != null) {
-        await client.remove(old.name!);
-      }
-      if (files.length >= 10) {
-        files.sort((a, b) => a.name!.compareTo(b.name!));
-        await client.remove(files.first.name!);
-      }
-      await client.write(filename, await data.readAsBytes());
-      data.deleteIgnoreError();
-      appdata.settings['lastSyncTime'] = DateTime.now().millisecondsSinceEpoch;
-      await appdata.saveData(false);
       Log.info("Upload Data", "Data uploaded successfully");
       return const Res(true);
     } catch (e, s) {
       Log.error("Upload Data", e, s);
       _lastError = e.toString();
       return Res.error(e.toString());
+    } finally {
+      if (identical(_transferScope, scope)) _transferScope = null;
+      scope.dispose();
     }
   }
 
-  Future<Res<bool>> _downloadDataNow() async {
-    var debugDownload = debugDownloadOverride;
-    if (debugDownload != null) {
-      return debugDownload();
-    }
+  Future<Res<bool>> _downloadNow() async {
     var config = _validateConfig();
     if (config == null) {
       _lastError = 'Invalid WebDAV configuration';
@@ -486,40 +479,24 @@ class DataSync with ChangeNotifier {
     if (!config.isValid) {
       return const Res(true);
     }
-    var client = config.createClient(logRequests: true);
-
+    final scope = RequestScope();
+    _transferScope = scope;
     try {
-      var files = await client.readDir('/');
-      files.sort((a, b) => b.name!.compareTo(a.name!));
-      var file = files.firstWhereOrNull((e) => e.name!.endsWith('.venera'));
-      if (file == null) {
-        throw 'No data file found';
-      }
-      var version = file.name!.split('-').elementAtOrNull(1)?.split('.').first;
-      if (version != null && int.tryParse(version) != null) {
-        var currentVersion = appdata.settings['dataVersion'];
-        if (currentVersion != null && int.parse(version) <= currentVersion) {
-          Log.info("Data Sync", 'No new data to download');
-          return const Res(true);
-        }
-      }
-      Log.info("Data Sync", "Downloading data from WebDAV server");
-      var localFile = File(FilePath.join(App.cachePath, file.name!));
-      await client.read2File(file.name!, localFile.path);
-      await importAppData(localFile, true);
-      _downloadApplied = true;
-      await localFile.delete();
-      HistoryManager().notifyChanges();
-      LocalFavoritesManager().notifyChanges();
-      ImageFavoriteManager().notifyChanges();
-      appdata.settings['lastSyncTime'] = DateTime.now().millisecondsSinceEpoch;
-      await appdata.saveData(false);
-      Log.info("Data Sync", "Data downloaded successfully");
+      _downloadApplied = await _dataTransfer.download(config, scope: scope);
+      Log.info(
+        "Data Sync",
+        _downloadApplied
+            ? "Data downloaded successfully"
+            : "No new data to download",
+      );
       return const Res(true);
     } catch (e, s) {
       Log.error("Data Sync", e, s);
       _lastError = e.toString();
       return Res.error(e.toString());
+    } finally {
+      if (identical(_transferScope, scope)) _transferScope = null;
+      scope.dispose();
     }
   }
 }

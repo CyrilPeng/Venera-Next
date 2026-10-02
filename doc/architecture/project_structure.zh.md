@@ -244,7 +244,7 @@ DataSync 构造无运行副作用，由运行时显式 start；dispose 禁止新
 
 `BackgroundSync` 在主应用挂载后管理自动同步调度；WebDAV 源只执行检查/传输，不保存静态轮询定时器。DataSync.stop 保留本地变更观察以避免丢失 pending，dispose 才解除观察；停止调度不得中断已进入提交的传输。旧代数 tick 不得启动新调度的工作。
 
-追更后台检查从页面分离到 FollowUpdatesService，通过 follow_updates_api.dart 暴露无 UI 的窄边界。服务只能取消自身任务句柄；运行时负责定时器和外部通知监听的启停。页面订阅 followUpdatesChanges 并在 dispose 退订，不得重新使用全局 State 查找刷新追更页面或预览。
+追更后台检查从页面分离到 FollowUpdatesService，通过 follow_updates_api.dart 暴露无 UI 的窄边界。服务只能取消自身任务句柄；FollowUpdatesRuntime 实例负责服务和外部通知监听的启停；app_runtime/follow_updates.dart 注入同步下载等待和收藏通知，MyApp 持有并销毁实例。页面通过 FollowUpdatesScope 订阅实例 changes，作用域替换时迁移监听、dispose 时退订，不得重新使用全局 State 查找刷新追更页面或预览。
 
 缓存管理器以实例保存路径、数据库、扫描器和操作队列；CacheManager.open 支持独立宿主，start 显式启动一次扫描，dispose 排空已接收操作后关闭。扫描器只返回结果，不访问全局缓存实例；缓存操作不得绕过队列或在未等待 dispose 完成时删除工作目录。
 
@@ -443,3 +443,23 @@ LocalManager 的三类删除返回 Future 并经过 runWithExclusiveStorage，�
 local_deletion_paths.dart 的纯策略过滤清理候选：保护保留记录的相同/重叠目录、库根及其祖先，规范路径去重并保留原始平台路径。LocalManager 三类删除统一使用；章节删除排除自己的根引用后仍检查其他记录，并沿用章节别名规则。策略纳入业务边界，范围为规范字符串路径，不保证符号链接/SAF 身份或跨进程排他。
 
 LocalRepository.directoryReferences 为删除保护提供仅目录字段的查询，支持参数化完整身份排除，不解析或排序漫画展示模型。LocalManager 使用同一个内部解析器处理 baseDir 和保留目录列表，使归属检查独立于无关 JSON 元数据且保持既有路径语义。
+
+WebDAV 在线库的连接与路径模型位于 `webdav_library_config.dart`；旧设置键的只读解析、序列化和可注入保存协议位于 `webdav_library_settings.dart`。页面和同步调度共用该快照。`app_runtime/webdav_library.dart` 装配 appdata、设置存储、显式数据库路径和源实例，`main.dart` 挂载时注册适配器、卸载时释放实例；设置页面通过 `WebDavLibraryScope` 和构造参数取得服务。业务仅导出 `webdav_library_api.dart`，含 UI 的聚合入口另导出 scope。缓存、请求、通知器和同步状态均属于源实例；配置会话在切换/释放后禁止旧请求提交。`webdav_library_transport.dart` 负责 HTTP 客户端及目录/文本读取；`webdav_library_session.dart` 保留请求有效性检查；`webdav_library_discovery.dart` 只接收会话和缓存复用判断，不依赖仓储；`webdav_library_snapshot_builder.dart` 负责元数据、章节与封面选择，`webdav_library_snapshot.dart` 定义序列化模型与格式版本；共同文件规则位于 `webdav_library_entries.dart`。`webdav_library_snapshot_store.dart` 管理内存/磁盘快照与并发读取合并；`webdav_library_synchronizer.dart` 管理自动更新判断、同步任务、索引就绪信号与只读进度，接收会话/存储/时钟/通知接口。每个同步运行拥有派生会话，协调器失效不取消调用方的其他会话。源适配器仅保留漫画接口转换、读取与资源组装/释放；运行时和设置直接调用其 synchronizer，不保留同步转发方法。
+
+应用同步的传输协议位于 `features/sync/data_sync_transfer.dart`，客户端适配位于 `data_sync_remote.dart`；应用数据版本、导入导出和管理器通知由 `app_runtime/data_sync_transfer.dart` 的参与者连接。DataSyncController 负责调度与 pending，显式注入设置、持久化、时钟、定时器与订阅。SyncPreferenceStore 不依赖 appdata，应用适配在 foundation/app_sync_preferences.dart。旧 DataSync 单例、reset 和静态测试钩子均已删除；app_runtime/data_sync.dart 提供无静态实例的应用工厂，测试通过端口注入。传输使用单次连接及独立下载临时目录。
+
+importAppData 以 bool 区分内嵌版本检查跳过与原导入路径完成；运行时参与者传回结果，传输和 DataSync 仅在导入路径完成后按原规则处理通知、时间戳与 pending。未开启版本检查的手动导入仍允许旧版本。
+
+DataSyncScope 向状态摘要与同步设置提供应用持有的控制器，作用域不销毁该实例；后台同步和窗口退出绑定通过构造参数接收同一个控制器。摘要监听随作用域实例替换自动迁移。交互与无头入口分别显式创建控制器，并向 CoreBootstrap 传入保存通知。ReaderSessionScope 向阅读入口传递 onClosed；MyApp 借用宿主持有的控制器，卸载只停止调度，保留对延迟写入的观察。
+
+同步传输端口显式接收 RequestScope，控制器销毁时取消并关闭该次连接，同时等待临时文件清理。importSyncAppData 在取得导入队列后及创建替换备份前检查取消；进入替换阶段后必须完整提交或回滚，完成的导入仍通知状态变化。手工 importAppData 保持原接口。远端已发送写入及原先保留策略不具备事务性撤销保证。
+
+远端上传先确认新归档写入成功，再删除原策略选择的旧归档。清理候选去重并排除新文件名；写入失败不主动删除旧恢复点，清理失败保留 pending，但远端可能已完成新文件提交。同名覆盖、并发写入和响应丢失仍不具备远端事务保证。
+
+归档下载及保留策略共用 data_sync_archive_order.dart 的自然顺序，数字日数/版本不按字符串大小排序。当日清理选择该顺序下最旧项，不依赖服务端列表顺序；非数字名称仍参与原 .venera 筛选，数字等值拼写以原名稳定排序。
+
+headless_sync_command.dart 将注入的同步结果映射为 CLI status 与退出码，不依赖 Flutter 或应用全局状态；headless_output.dart 保留 [CLI PRINT] JSON 行格式。headless.dart 负责组装、清理并使用返回码退出。受控 Dart 子进程测试覆盖输出协议，完整 Flutter 无头应用验收另行记录。
+
+headless_arguments.dart 在核心启动前解析有类型的命令请求；headless_source_update_command.dart 通过检查/更新端口返回进度、汇总及退出码，并对检查结果创建不可变快照。headless.dart 装配实际源服务与订阅更新，并统一捕获命令异常及清理控制器。
+
+headless_subscription_command.dart 通过单漫画更新、文件夹进度流和结果列表读取三个端口统一订阅 CLI 协议；无 Flutter/应用全局依赖。入口映射真实服务结果与漫画字段。适配器等待流及结果读取完成，提前关闭的流不会返回成功；单漫画取消在装配边界转为非成功结果。

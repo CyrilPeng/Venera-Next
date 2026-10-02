@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:venera_next/features/sync/sync.dart';
-import 'package:venera_next/features/webdav_library/webdav_library.dart';
+import 'webdav_library.dart';
 
 /// The mounted application owns automatic sync scheduling, not transfer data.
 class BackgroundSync {
@@ -10,12 +10,11 @@ class BackgroundSync {
     required this.checkLibrary,
   });
 
-  factory BackgroundSync.platform() {
-    final sync = DataSync();
+  factory BackgroundSync.platform(DataSyncController sync) {
     return BackgroundSync(
       startDataSync: sync.start,
       stopDataSync: sync.stop,
-      checkLibrary: WebDavLibrarySource.checkForAutomaticSync,
+      checkLibrary: webDavLibrary.source.synchronizer.checkForAutomaticSync,
     );
   }
 

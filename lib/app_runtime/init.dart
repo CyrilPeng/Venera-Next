@@ -17,15 +17,11 @@ import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
-import 'bootstrap_core.dart';
+import 'core_bootstrap.dart';
 
-Future<void>? _interactiveInitialization;
-
-/// Compatibility entry point for interactive startup.
-Future<void> init() => _interactiveInitialization ??= _initializeInteractive();
-
-Future<void> _initializeInteractive() async {
-  await bootstrapCore();
+/// Interactive startup uses the caller-owned, idempotent core bootstrap.
+Future<void> init(CoreBootstrap core) async {
+  await core.start();
   configureComicWidgets(
     comicPageBuilder:
         ({

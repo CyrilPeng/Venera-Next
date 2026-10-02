@@ -47,10 +47,25 @@ Future<File> _exportAppData(bool sync) async {
   return cacheFile;
 }
 
-Future<void> importAppData(File file, [bool checkVersion = false]) =>
+/// False means the archive was skipped by its embedded version check.
+Future<bool> importAppData(File file, [bool checkVersion = false]) =>
     AppDataOperations.instance.run(() => _importAppData(file, checkVersion));
 
-Future<void> _importAppData(File file, bool checkVersion) async {
+/// Sync cancellation is checked after queueing and immediately before replacement.
+/// Once replacement starts, the existing commit/rollback path must finish.
+Future<bool> importSyncAppData(
+  File file, {
+  required void Function() checkActive,
+}) => AppDataOperations.instance.run(
+  () => _importAppData(file, true, checkActive),
+);
+
+Future<bool> _importAppData(
+  File file,
+  bool checkVersion, [
+  void Function()? checkActive,
+]) async {
+  checkActive?.call();
   var cacheDirPath = FilePath.join(App.cachePath, 'temp_data');
   var cacheDir = Directory(cacheDirPath);
   var backupDir = Directory(
@@ -87,10 +102,11 @@ Future<void> _importAppData(File file, bool checkVersion) async {
           ? importedSettings["dataVersion"]
           : null;
       if (version is int && version <= appdata.settings["dataVersion"]) {
-        return;
+        return false;
       }
     }
 
+    checkActive?.call();
     backupDir.createSync();
 
     if (await historyFile.exists()) {
@@ -155,6 +171,7 @@ Future<void> _importAppData(File file, bool checkVersion) async {
       appdata.syncData(importedAppdata);
     }
     success = true;
+    return true;
   } catch (error, stackTrace) {
     try {
       await _rollbackImport(

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/sync_configuration.dart';
-import 'package:venera_next/foundation/sync_preference_store.dart';
+import 'package:venera_next/foundation/app_sync_preferences.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
 void main() {
@@ -49,7 +49,7 @@ void main() {
   test(
     'configuration rollback preserves raw legacy values and absent keys',
     () {
-      final store = SyncPreferenceStore(appdata);
+      final store = createAppSyncPreferences(appdata);
       final original = store.capture();
       addTearDown(() => store.restore(original));
       appdata.settings['webdav'] = ['legacy'];

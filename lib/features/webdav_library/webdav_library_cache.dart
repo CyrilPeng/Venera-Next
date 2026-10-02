@@ -1,10 +1,9 @@
 import 'dart:convert';
 
 import 'package:sqlite3/sqlite3.dart';
-import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
 
-const webDavLibrarySnapshotFormatVersion = 3;
+import 'webdav_library_snapshot.dart';
 
 class WebDavLibraryCachedComic {
   const WebDavLibraryCachedComic({
@@ -72,20 +71,19 @@ class WebDavLibraryRemoteDirectory {
 }
 
 class WebDavLibraryCache {
-  WebDavLibraryCache._();
+  WebDavLibraryCache(this.path);
 
-  static final instance = WebDavLibraryCache._();
+  final String path;
+  bool _disposed = false;
 
   Database? _db;
-  String? _dbPath;
 
   Database get _database {
-    final path = '${App.dataPath}/webdav_library.db';
-    if (_db != null && _dbPath == path) return _db!;
-    _db?.dispose();
-    _dbPath = path;
+    if (_disposed) throw StateError('WebDAV cache is disposed');
+    if (_db != null) return _db!;
     final db = openSqliteDatabase(path);
-    db.execute('''
+    try {
+      db.execute('''
       CREATE TABLE IF NOT EXISTS webdav_library_comics (
         config_key TEXT NOT NULL,
         id TEXT NOT NULL,
@@ -101,22 +99,28 @@ class WebDavLibraryCache {
         PRIMARY KEY (config_key, id)
       );
     ''');
-    db.execute('''
+      db.execute('''
       CREATE INDEX IF NOT EXISTS webdav_library_comics_page
       ON webdav_library_comics(config_key, sort_index);
     ''');
-    db.execute('''
+      db.execute('''
       CREATE TABLE IF NOT EXISTS webdav_library_state (
         config_key TEXT PRIMARY KEY,
         last_successful_sync INTEGER NOT NULL DEFAULT 0,
         index_initialized INTEGER NOT NULL DEFAULT 0
       );
     ''');
-    final stateColumns = db.select('PRAGMA table_info(webdav_library_state);');
-    if (!stateColumns.any((row) => row['name'] == 'index_initialized')) {
-      db.execute(
-        'ALTER TABLE webdav_library_state ADD COLUMN index_initialized INTEGER NOT NULL DEFAULT 0;',
+      final stateColumns = db.select(
+        'PRAGMA table_info(webdav_library_state);',
       );
+      if (!stateColumns.any((row) => row['name'] == 'index_initialized')) {
+        db.execute(
+          'ALTER TABLE webdav_library_state ADD COLUMN index_initialized INTEGER NOT NULL DEFAULT 0;',
+        );
+      }
+    } catch (_) {
+      db.dispose();
+      rethrow;
     }
     _db = db;
     return db;
@@ -312,9 +316,10 @@ class WebDavLibraryCache {
     }
   }
 
-  void resetForTesting() {
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
     _db?.dispose();
     _db = null;
-    _dbPath = null;
   }
 }
