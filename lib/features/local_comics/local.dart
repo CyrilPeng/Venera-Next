@@ -107,13 +107,29 @@ class LocalManager with ChangeNotifier {
   // return error message if failed
   Future<String?> setNewPath(String newPath) async {
     try {
-      return await LocalComicStorageGuard.instance.runExclusive(
-        () => _setNewPath(newPath),
-      );
+      return await runWithExclusiveStorage(() => _setNewPath(newPath));
     } on LocalComicStorageBusy catch (error) {
       return error.message.tl;
     }
   }
+
+  /// Migration/recovery may not reinterpret directories owned by queued tasks.
+  Future<T> runWithExclusiveStorage<T>(
+    Future<T> Function() action,
+  ) => LocalComicStorageGuard.instance.runExclusive(() async {
+    if (downloadingTasks.isNotEmpty || _downloadQueue.isSuspended) {
+      throw const LocalComicStorageBusy(
+        'Wait for downloads to finish or cancel them before changing the local library.',
+      );
+    }
+    final stopped = _downloadQueue.suspend();
+    try {
+      await stopped;
+      return await action();
+    } finally {
+      _downloadQueue.releaseSuspension(stopped);
+    }
+  });
 
   Future<String?> _setNewPath(String newPath) async {
     try {
@@ -422,6 +438,11 @@ class LocalManager with ChangeNotifier {
     if (manager == null) return () {};
     final initialization = manager._initialization;
     if (initialization != null) await initialization;
+    var storage = LocalComicStorageGuard.instance.pendingExclusive;
+    while (storage != null) {
+      await storage;
+      storage = LocalComicStorageGuard.instance.pendingExclusive;
+    }
     final preparation = manager._downloadQueue.suspend();
     try {
       await preparation;

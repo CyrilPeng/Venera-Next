@@ -292,9 +292,7 @@ class ImportComic {
 
   Future<bool> localDownloads() async {
     try {
-      return await LocalComicStorageGuard.instance.runExclusive(
-        _scanLocalDownloads,
-      );
+      return await LocalManager().runWithExclusiveStorage(_scanLocalDownloads);
     } on LocalComicStorageBusy catch (error) {
       App.rootContext.showMessage(message: error.message.tl);
       return false;

@@ -423,3 +423,5 @@ DownloadingPage 持有单个管理器用于订阅/读取/操作/释放，并向�
 LocalManager.init 为实例内共享初始化 Future，成功后复用连接，失败关闭并清空连接后允许重试。dispose 幂等，初始化的异步继续执行检查释放状态，避免释放后恢复下载队列；测试工厂支持独立注入连接和源初始化。窗口下载退出准备等待已开始的初始化；该约束不等于活动下载时可安全直接 dispose，也不提供连接热替换。
 
 local_storage_migration.dart 的 LocalStorageMigration 管理目录迁移提交顺序：校验非重叠空目标、复制、暂存/flush/rename 路径配置、同步发布新路径、清理旧目录。清理失败仅记录，新路径仍为权威；复制/配置失败不删除源目录，部分目标保留。LocalManager 提供平台复制、SAF 路径适配与内存赋值，原 PDF 互斥保留；该服务自身不提供下载/其他写入者互斥。
+
+LocalManager.runWithExclusiveStorage 为迁移/恢复叠加下载协调：排队任务（含暂停）阻止操作，空队列冻结新增并等待取消清理，结束后按归属释放。LocalComicStorageGuard.pendingExclusive 允许正常窗口退出等待存储操作完成后取得自己的队列静止状态。本策略不迁移活动任务路径，也不覆盖其他导入/删除写入者或退出时的 PDF 导入等待。

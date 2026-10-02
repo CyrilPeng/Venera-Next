@@ -17,6 +17,9 @@ class LocalComicStorageGuard {
   int _imports = 0;
   Completer<void>? _exclusive;
 
+  /// Completion of the current migration/recovery, including failed operations.
+  Future<void>? get pendingExclusive => _exclusive?.future;
+
   Future<T> runImport<T>(Future<T> Function() action) async {
     while (_exclusive != null) {
       await _exclusive!.future;

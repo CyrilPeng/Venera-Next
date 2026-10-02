@@ -22,6 +22,8 @@ class DownloadQueue {
   int? _scheduledResumeRevision;
   Completer<void>? _suspension;
 
+  bool get isSuspended => _suspension != null;
+
   final List<DownloadTask> _tasks = [];
   late final List<DownloadTask> tasks = UnmodifiableListView(_tasks);
   final _completing = Set<DownloadTask>.identity();
