@@ -57,13 +57,37 @@ class LocalManager with ChangeNotifier {
     debugSkipComicSourceInit = false;
   }
 
-  LocalManager._();
+  LocalManager._({
+    Database Function(String)? openDatabase,
+    Future<void> Function()? initializeSources,
+  }) : _openDatabase = openDatabase ?? openSqliteDatabase,
+       _initializeSources = initializeSources;
+
+  @visibleForTesting
+  factory LocalManager.forTesting({
+    required Database Function(String) openDatabase,
+    required Future<void> Function() initializeSources,
+  }) => LocalManager._(
+    openDatabase: openDatabase,
+    initializeSources: initializeSources,
+  );
+
+  final Database Function(String) _openDatabase;
+  final Future<void> Function()? _initializeSources;
+  Future<void>? _initialization;
+  Database? _database;
+  bool _disposed = false;
 
   factory LocalManager() {
     return _instance ??= LocalManager._();
   }
 
-  late Database _db;
+  Database get _db =>
+      _database ?? (throw StateError('Local manager is not initialized'));
+
+  void _checkNotDisposed() {
+    if (_disposed) throw StateError('Local manager is disposed');
+  }
 
   /// path to the directory where all the comics are stored
   late String path;
@@ -149,8 +173,26 @@ class LocalManager with ChangeNotifier {
     }
   }
 
-  Future<void> init() async {
-    _db = openSqliteDatabase('${App.dataPath}/local.db');
+  Future<void> init() {
+    if (_disposed) return Future.error(StateError('Local manager is disposed'));
+    return _initialization ??= _initialize().catchError((
+      Object error,
+      StackTrace stack,
+    ) {
+      final database = _database;
+      _database = null;
+      try {
+        database?.dispose();
+      } catch (closeError, closeStack) {
+        Log.error('LocalManager', closeError, closeStack);
+      }
+      _initialization = null;
+      Error.throwWithStackTrace(error, stack);
+    });
+  }
+
+  Future<void> _initialize() async {
+    _database = _openDatabase('${App.dataPath}/local.db');
     _repository.initialize();
     if (File(FilePath.join(App.dataPath, 'local_path')).existsSync()) {
       path = File(FilePath.join(App.dataPath, 'local_path')).readAsStringSync();
@@ -160,6 +202,7 @@ class LocalManager with ChangeNotifier {
     } else {
       path = await findDefaultPath();
     }
+    _checkNotDisposed();
     try {
       if (!directory.existsSync()) {
         await directory.create();
@@ -167,11 +210,16 @@ class LocalManager with ChangeNotifier {
     } catch (e, s) {
       Log.error("IO", "Failed to create local folder: $e", s);
     }
+    _checkNotDisposed();
     await _checkPathValidation();
+    _checkNotDisposed();
     _checkNoMedia();
-    if (!debugSkipComicSourceInit) {
+    if (_initializeSources != null) {
+      await _initializeSources();
+    } else if (!debugSkipComicSourceInit) {
       await ComicSourceManager().ensureInit();
     }
+    _checkNotDisposed();
     restoreDownloadingTasks();
   }
 
@@ -204,8 +252,12 @@ class LocalManager with ChangeNotifier {
 
   @override
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    final database = _database;
+    _database = null;
     super.dispose();
-    _db.dispose();
+    database?.dispose();
   }
 
   Future<List<String>> getImages(String id, ComicType type, Object ep) async {
@@ -362,6 +414,8 @@ class LocalManager with ChangeNotifier {
   static Future<VoidCallback> prepareDownloadsForExit() async {
     final manager = _instance;
     if (manager == null) return () {};
+    final initialization = manager._initialization;
+    if (initialization != null) await initialization;
     final preparation = manager._downloadQueue.suspend();
     try {
       await preparation;
