@@ -37,10 +37,13 @@ export 'local_comic_image.dart';
 extension LocalComicFiles on LocalComic {
   File get coverFile => File(FilePath.join(baseDir, cover));
 
-  String get baseDir => (directory.contains('/') || directory.contains('\\'))
-      ? directory
-      : FilePath.join(LocalManager().path, directory);
+  String get baseDir => _resolveComicDirectory(directory, LocalManager().path);
 }
+
+String _resolveComicDirectory(String directory, String libraryPath) =>
+    (directory.contains('/') || directory.contains('\\'))
+    ? directory
+    : FilePath.join(libraryPath, directory);
 
 class LocalManager with ChangeNotifier {
   static LocalManager? _instance;
@@ -593,15 +596,16 @@ class LocalManager with ChangeNotifier {
     List<Directory> directories, {
     LocalComic? chapterOwner,
   }) async {
-    final retained = getComics(LocalSortType.name).where(
-      (comic) =>
-          chapterOwner == null ||
-          comic.id != chapterOwner.id ||
-          comic.comicType != chapterOwner.comicType,
+    final retained = _repository.directoryReferences(
+      excluding: chapterOwner == null
+          ? null
+          : (chapterOwner.id, chapterOwner.comicType),
     );
     final paths = localDirectoriesToDelete(
       candidates: directories.map((directory) => directory.path),
-      retained: retained.map((comic) => comic.baseDir),
+      retained: retained.map(
+        (directory) => _resolveComicDirectory(directory, path),
+      ),
       libraryPath: path,
     );
     if (paths.isNotEmpty) {

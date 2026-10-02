@@ -168,6 +168,17 @@ class LocalRepository {
     ]);
   }
 
+  /// Directory ownership does not require decoding display/reading metadata.
+  List<String> directoryReferences({(String, ComicType)? excluding}) {
+    final rows = db.select(
+      excluding == null
+          ? 'SELECT directory FROM comics'
+          : 'SELECT directory FROM comics WHERE NOT (id = ? AND comic_type = ?)',
+      excluding == null ? [] : [excluding.$1, excluding.$2.value],
+    );
+    return rows.map((row) => row['directory'] as String).toList();
+  }
+
   List<LocalComic> getComics(LocalSortType sortType) {
     var res = db.select('''
       SELECT * FROM comics

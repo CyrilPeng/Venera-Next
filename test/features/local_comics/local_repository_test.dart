@@ -7,6 +7,52 @@ import 'package:venera_next/foundation/comic_type.dart';
 
 void main() {
   test(
+    'directory references exclude exact identity without decoding other metadata',
+    () {
+      final db = sqlite3.openInMemory();
+      final repository = LocalRepository(db)..initialize();
+      try {
+        for (final type in [1, 2]) {
+          db.execute(
+            '''INSERT INTO comics
+          (id,title,subtitle,tags,directory,chapters,cover,comic_type,downloadedChapters,created_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?)''',
+            [
+              'same',
+              '',
+              '',
+              'invalid json',
+              'directory-$type',
+              'invalid json',
+              '',
+              type,
+              'invalid json',
+              0,
+            ],
+          );
+        }
+        expect(
+          repository.directoryReferences(),
+          unorderedEquals(['directory-1', 'directory-2']),
+        );
+        expect(
+          repository.directoryReferences(
+            excluding: ('same', const ComicType(1)),
+          ),
+          ['directory-2'],
+        );
+        expect(
+          repository.directoryReferences(
+            excluding: ("' OR 1=1 --", const ComicType(1)),
+          ),
+          hasLength(2),
+        );
+      } finally {
+        db.dispose();
+      }
+    },
+  );
+  test(
     'page mappings preserve first writer, null markers and source identity',
     () {
       final db = sqlite3.openInMemory();

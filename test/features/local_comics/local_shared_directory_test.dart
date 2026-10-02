@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -37,6 +38,29 @@ void main() {
     LocalManager.resetForTesting();
     root.deleteSync(recursive: true);
   });
+
+  test(
+    'unrelated malformed metadata does not break shared directory protection',
+    () async {
+      final directory = Directory('${manager.path}/shared')..createSync();
+      final page = File('${directory.path}/1.jpg')..writeAsStringSync('keep');
+      final first = comic('first', 'shared');
+      await manager.add(first);
+      await manager.add(comic('second', 'shared'));
+      final db = sqlite3.open('${root.path}/local.db');
+      try {
+        db.execute(
+          "UPDATE comics SET tags = 'invalid json' WHERE id = 'second'",
+        );
+        await manager.deleteComic(first);
+        expect(page.readAsStringSync(), 'keep');
+        expect(manager.count, 1);
+        expect(db.select('SELECT id FROM comics').single['id'], 'second');
+      } finally {
+        db.dispose();
+      }
+    },
+  );
 
   test(
     'single deletion preserves shared output until the last registration is removed',

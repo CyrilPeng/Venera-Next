@@ -876,3 +876,10 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - Changelog and bilingual structure/progress synchronized; user changes preserved. Comparisons are lexical and do not resolve symlink/SAF document identity, provide cross-process locks or database/filesystem rollback. These ownership/recovery issues and remaining P0–P8 acceptance continue.
 
 - Full Windows Flutter suite: 984 passed. After fixing formatting-related brace hints, final policy/integration tests: 4 passed; final analysis: no errors/warnings, 23 existing infos. Structure, architecture, 12 script tests, Git dependencies and formatting passed.
+
+## P6: Narrow directory-reference queries (2026-10-02)
+
+- LocalRepository.directoryReferences selects only directory values and uses a bound full-identity exclusion for chapter owners. Deletion protection no longer reads, sorts and decodes every comic model; unrelated invalid tag/chapter JSON cannot block directory ownership checks. SQL stays in the repository and path resolution in the manager adapter.
+- Existing baseDir and retained directory strings share one internal resolver, preserving current single-segment library paths and paths containing separators without divergent implementations.
+- Two repository/real-directory regressions cover exact exclusion across source identities, binding, invalid display metadata and preservation of shared files. Local tests: 199 passed; full Windows Flutter suite: 986 passed. Analysis: no errors/warnings, 23 existing infos; structure, architecture, 12 script tests, Git dependencies and formatting passed.
+- Changelog and bilingual structure/progress synchronized; user changes preserved. Eliminating unused columns/sorting/model decoding is not a measured device-performance result. Symlink identity, deletion rollback and remaining P0–P8 acceptance are unfinished.
