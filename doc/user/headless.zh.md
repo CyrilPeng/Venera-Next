@@ -188,3 +188,5 @@ venera-next --headless updatesubscribe --update-comic-by-id-type "comic-id" "sou
 脚本更新检查失败不会报告“没有更新”。可更新的源仍会继续处理；任一检查或更新失败，最终 status 为 error、退出码为 1。更新汇总保留 total/updated/errors（errors 仅统计更新失败），检查错误通过可选 data.checkErrors 字符串数组返回。没有更新且没有检查错误时仍成功退出。
 
 订阅更新未配置文件夹、指定漫画不存在、单项/批量更新失败或命令执行异常均以 1 退出；部分失败时保留已成功更新的数据及列表输出，最终 status 为 error。成功命令以 0 退出。进度行的 ProgressError 不是终态，应以最终 status 和进程退出码判断结果。
+
+订阅命令统一在更新完成后立即读取已提交的漫画列表，不再固定等待 500 毫秒。单漫画取消输出 ProgressError 并以 error/1 结束；批量进度流没有报告初始状态或在 current 小于 total 时结束，输出 Subscription update did not complete. 并以 1 退出，不生成成功列表终态。已完成的部分写入不会撤销。

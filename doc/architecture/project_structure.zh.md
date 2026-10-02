@@ -461,3 +461,5 @@ DataSyncScope 向状态摘要与同步设置提供应用持有的控制器，作
 headless_sync_command.dart 将注入的同步结果映射为 CLI status 与退出码，不依赖 Flutter 或应用全局状态；headless_output.dart 保留 [CLI PRINT] JSON 行格式。headless.dart 负责组装、清理并使用返回码退出。受控 Dart 子进程测试覆盖输出协议，完整 Flutter 无头应用验收另行记录。
 
 headless_arguments.dart 在核心启动前解析有类型的命令请求；headless_source_update_command.dart 通过检查/更新端口返回进度、汇总及退出码，并对检查结果创建不可变快照。headless.dart 装配实际源服务与订阅更新，并统一捕获命令异常及清理控制器。
+
+headless_subscription_command.dart 通过单漫画更新、文件夹进度流和结果列表读取三个端口统一订阅 CLI 协议；无 Flutter/应用全局依赖。入口映射真实服务结果与漫画字段。适配器等待流及结果读取完成，提前关闭的流不会返回成功；单漫画取消在装配边界转为非成功结果。

@@ -351,3 +351,5 @@ Archive downloads and retention share natural ordering from data_sync_archive_or
 headless_sync_command.dart maps injected sync outcomes to CLI status/exit codes without Flutter or application globals; headless_output.dart preserves [CLI PRINT] JSON lines. headless.dart assembles/cleans services and exits with the returned code. Controlled Dart subprocess tests cover this output protocol; full Flutter headless-app acceptance is tracked separately.
 
 headless_arguments.dart parses typed requests before core startup. headless_source_update_command.dart accepts check/update ports, snapshots check results and returns progress, summary and exit code. headless.dart assembles source/subscription services and centralizes command exception handling and controller cleanup.
+
+headless_subscription_command.dart unifies subscription CLI output through selected-comic, folder-progress and result-list ports without Flutter or app globals. The entrypoint maps service results and comic fields. The adapter awaits stream completion and result reads; premature stream completion cannot return success. Single-comic cancellation is mapped to a non-success result at composition.
