@@ -182,9 +182,7 @@ class ImportComic {
       return false;
     }
 
-    return LocalComicStorageGuard.instance.runImport(
-      () => _importEhViewer(dbFile, comicSrc, imported),
-    );
+    return _runImport(() => _importEhViewer(dbFile, comicSrc, imported));
   }
 
   Future<bool> _importEhViewer(
@@ -295,7 +293,7 @@ class ImportComic {
     }
     controller.close();
     if (cancelled) return false;
-    return registerComics(imported, copyToLocal);
+    return _registerComics(imported, copyToLocal);
   }
 
   Future<bool> directory(bool single) async {
@@ -304,9 +302,7 @@ class ImportComic {
     if (path == null) {
       return false;
     }
-    return LocalComicStorageGuard.instance.runImport(
-      () => _importDirectory(path, single),
-    );
+    return _runImport(() => _importDirectory(path, single));
   }
 
   Future<bool> _importDirectory(Directory path, bool single) async {
@@ -334,7 +330,7 @@ class ImportComic {
       Log.error("Import Comic", e.toString(), s);
       App.rootContext.showMessage(message: e.toString());
     }
-    return registerComics(imported, copyToLocal);
+    return _registerComics(imported, copyToLocal);
   }
 
   Future<bool> localDownloads() async {
@@ -559,9 +555,16 @@ class ImportComic {
   Future<bool> registerComics(
     Map<String?, List<LocalComic>> importedComics,
     bool copy,
-  ) => LocalComicStorageGuard.instance.runImport(
-    () => _registerComics(importedComics, copy),
-  );
+  ) => _runImport(() => _registerComics(importedComics, copy));
+
+  Future<bool> _runImport(Future<bool> Function() action) async {
+    try {
+      return await LocalComicStorageGuard.instance.runImport(action);
+    } on LocalComicStorageBusy catch (error) {
+      App.rootContext.showMessage(message: error.message.tl);
+      return false;
+    }
+  }
 
   // Caller owns either an import reservation or the recovery exclusive guard.
   Future<bool> _registerComics(

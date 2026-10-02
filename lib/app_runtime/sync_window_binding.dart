@@ -41,8 +41,7 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
   Future<void> _waitThenClose() async {
     try {
       final releaseImports =
-          await (widget.prepareImports ??
-              PdfImportTasks.instance.prepareForExit)();
+          await (widget.prepareImports ?? prepareLocalImportsForExit)();
       if (!mounted) {
         releaseImports();
         return;

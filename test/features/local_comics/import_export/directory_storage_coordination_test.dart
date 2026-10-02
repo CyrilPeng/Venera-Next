@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/local_comics/import_export/import_comic.dart';
 import 'package:venera_next/features/local_comics/local.dart';
+import 'package:venera_next/features/local_comics/local_storage_guard.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/file_system.dart';
@@ -66,6 +67,16 @@ void main() {
               isTrue,
             );
             expect(manager.findByName('External'), isNotNull);
+            final release = await LocalComicStorageGuard.instance
+                .prepareForExit();
+            try {
+              expect(
+                await const ImportComic().registerComics({}, copy),
+                isFalse,
+              );
+            } finally {
+              release();
+            }
             expect(File('${source.path}/1.jpg').readAsStringSync(), 'page');
           });
           await tester.pumpAndSettle();

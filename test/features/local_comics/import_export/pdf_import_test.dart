@@ -8,6 +8,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/local_comics/import_export/import_export.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
+import 'package:venera_next/features/local_comics/local_storage_guard.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
@@ -411,6 +412,28 @@ void main() {
         expect(document.disposed, isTrue);
         expect(manager.directory.listSync().whereType<Directory>(), isEmpty);
       });
+
+      test(
+        'exit rejection closes a document before conversion begins',
+        () async {
+          final release = await LocalComicStorageGuard.instance
+              .prepareForExit();
+          final document = _Document([_Page()]);
+          try {
+            await expectLater(
+              PdfComicImporter.importDocument(document, title: 'Rejected'),
+              throwsA(isA<LocalComicStorageBusy>()),
+            );
+            expect(document.disposed, isTrue);
+            expect(
+              manager.directory.listSync().whereType<Directory>(),
+              isEmpty,
+            );
+          } finally {
+            release();
+          }
+        },
+      );
 
       test('empty documents are rejected and disposed', () async {
         final document = _Document([]);
