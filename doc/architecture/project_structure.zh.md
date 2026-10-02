@@ -439,3 +439,5 @@ ImportComic 的目录/EhViewer 流程在选定路径后持有导入保护，公�
 local_import_lifecycle.dart 的 prepareLocalImportsForExit 先取消并等待 PDF 队列，再调用 LocalComicStorageGuard.prepareForExit 冻结新操作并等待全部已接收导入（包括等待迁移者）和独占操作。运行时通过公开入口接入，解除回调按准备归属匹配。原操作错误仍交给原调用方；正常完成/失败后均能满足清理等待。持有保护的内部注册不重新申请接收，公共 UI 接收拒绝返回忙提示；PDF 在接收前遭拒绝也释放文档。
 
 LocalManager 的三类删除返回 Future 并经过 runWithExclusiveStorage，操作期间排斥导入/迁移和排队下载，使用当前数据库记录选取路径，等待历史及文件删除后才解除保护。页面等待 Future 并处理失败。文件 isolate 错误传播；不提供跨数据库/文件系统回滚。独占操作的空队列冻结静默通知，保留删除本身的通知契约，正常下载退出仍通知。
+
+local_deletion_paths.dart 的纯策略过滤清理候选：保护保留记录的相同/重叠目录、库根及其祖先，规范路径去重并保留原始平台路径。LocalManager 三类删除统一使用；章节删除排除自己的根引用后仍检查其他记录，并沿用章节别名规则。策略纳入业务边界，范围为规范字符串路径，不保证符号链接/SAF 身份或跨进程排他。

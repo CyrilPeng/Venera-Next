@@ -1,6 +1,7 @@
 import 'local_comic_model.dart';
 import 'local_repository.dart';
 import 'local_chapter_storage.dart';
+import 'local_deletion_paths.dart';
 import 'download_task_store.dart';
 import 'download_directory_allocator.dart';
 import 'local_sort_type.dart';
@@ -505,7 +506,9 @@ class LocalManager with ChangeNotifier {
       }
     }
     remove(c.id, c.comicType);
-    if (removeFileOnDisk) await _deleteDirectories([Directory(c.baseDir)]);
+    if (removeFileOnDisk) {
+      await _deleteUnreferencedDirectories([Directory(c.baseDir)]);
+    }
   }
 
   Future<void> deleteComicChapters(LocalComic c, List<String> chapters) =>
@@ -531,7 +534,7 @@ class LocalManager with ChangeNotifier {
       }
     }
     if (shouldRemovedDirs.isNotEmpty) {
-      await _deleteDirectories(shouldRemovedDirs);
+      await _deleteUnreferencedDirectories(shouldRemovedDirs, chapterOwner: c);
     }
     notifyListeners();
   }
@@ -559,7 +562,7 @@ class LocalManager with ChangeNotifier {
     try {
       for (final comic in comics) {
         if (removeFileOnDisk) {
-          final dir = Directory(FilePath.join(path, comic.directory));
+          final dir = Directory(comic.baseDir);
           if (dir.existsSync()) {
             shouldRemovedDirs.add(dir);
           }
@@ -581,11 +584,31 @@ class LocalManager with ChangeNotifier {
     notifyListeners();
 
     if (removeFileOnDisk) {
-      await _deleteDirectories(shouldRemovedDirs);
+      await _deleteUnreferencedDirectories(shouldRemovedDirs);
     }
   }
 
-  /// Deletes the directories in a separate isolate to avoid blocking the UI thread.
+  /// Protect remaining registrations before handing paths to filesystem cleanup.
+  Future<void> _deleteUnreferencedDirectories(
+    List<Directory> directories, {
+    LocalComic? chapterOwner,
+  }) async {
+    final retained = getComics(LocalSortType.name).where(
+      (comic) =>
+          chapterOwner == null ||
+          comic.id != chapterOwner.id ||
+          comic.comicType != chapterOwner.comicType,
+    );
+    final paths = localDirectoriesToDelete(
+      candidates: directories.map((directory) => directory.path),
+      retained: retained.map((comic) => comic.baseDir),
+      libraryPath: path,
+    );
+    if (paths.isNotEmpty) {
+      await _deleteDirectories(paths.map(Directory.new).toList());
+    }
+  }
+
   static Future<void> _deleteDirectories(List<Directory> directories) async {
     await Isolate.run(() async {
       await SAFTaskWorker().init();

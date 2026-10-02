@@ -240,6 +240,7 @@
   ],
   "business_entrypoints": [
     "features/local_comics/local_storage_migration.dart",
+    "features/local_comics/local_deletion_paths.dart",
     "features/local_comics/download_directory_allocator.dart",
     "features/local_comics/download_queue.dart",
     "features/local_comics/download_task.dart",

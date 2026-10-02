@@ -867,3 +867,12 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - The first full run stalled at 155 tests for roughly 30 minutes, with its runner alive but no test workers. That runner was explicitly stopped before retrying; the stalled run is not counted as passing. User changes remain separate and changelog/bilingual docs are synchronized. Shared-directory/external-path ownership, deletion rollback, device checks and remaining P0–P8 acceptance continue.
 
 - The full Windows Flutter retry passed all 980 tests in about 117 seconds; final changed-file formatting checks passed.
+
+## P4/P6: Shared-directory deletion policy (2026-10-02)
+
+- New pure localDirectoriesToDelete policy normalizes paths and preserves equal/ancestor/descendant overlaps with retained records. It rejects the library root and its ancestors, deduplicates normalized paths and returns original platform paths. Enrolled in the business dependency gate without manager/UI dependencies.
+- Single/batch deletion queries retained records after removing target rows. Chapter deletion excludes only its owner and retains existing chapter-alias rules. All three filter paths before cleanup. Batch paths use the same baseDir resolution as single deletion, including external absolute paths.
+- One policy matrix and three real-directory/SQLite regressions cover normalized aliases, shared roots until the last registration disappears, another comic rooted inside a deleted chapter, retained children protecting parents and library-root protection. Local targeted tests: 197 passed.
+- Changelog and bilingual structure/progress synchronized; user changes preserved. Comparisons are lexical and do not resolve symlink/SAF document identity, provide cross-process locks or database/filesystem rollback. These ownership/recovery issues and remaining P0–P8 acceptance continue.
+
+- Full Windows Flutter suite: 984 passed. After fixing formatting-related brace hints, final policy/integration tests: 4 passed; final analysis: no errors/warnings, 23 existing infos. Structure, architecture, 12 script tests, Git dependencies and formatting passed.
