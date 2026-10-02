@@ -1,5 +1,7 @@
 # Architecture Optimization Execution Record
 
+See the [acceptance inventory](optimization_acceptance.en.md) for current item-level status. Original checklists and dated entries below retain their historical meaning and are not the complete current status.
+
 中文：[架构优化执行记录](optimization_progress.zh.md)
 
 ## P0: Tooling and quality baseline (2026-09-30)

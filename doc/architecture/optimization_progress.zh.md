@@ -1,5 +1,7 @@
 # 架构优化执行记录
 
+当前逐项状态见 [验收清单](optimization_acceptance.zh.md)。本文原始待办或带日期记录保留其历史含义，不代表当前全部状态。
+
 English: [Execution Record](optimization_progress.en.md)
 
 ## P0：工具与检查基线（2026-09-30）

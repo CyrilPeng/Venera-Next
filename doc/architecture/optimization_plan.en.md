@@ -1,5 +1,7 @@
 # Architecture and Maintainability Optimization Plan
 
+See the [acceptance inventory](optimization_acceptance.en.md) for current item-level status. Original checklists and dated entries below retain their historical meaning and are not the complete current status.
+
 中文：[架构与可维护性优化方案](optimization_plan.zh.md)
 
 Date: 2026-09-30. Status: proposed, not implemented. This document is not a release-date commitment.
