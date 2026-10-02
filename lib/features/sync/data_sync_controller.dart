@@ -311,17 +311,17 @@ class DataSyncController with ChangeNotifier {
       return const Res(true);
     }
     if (_activeTask != null) {
-      return _schedulePendingTask(_DataSyncTask.upload, uploadNow);
+      return _schedulePendingTask(_DataSyncTask.upload, _uploadNow);
     }
-    return _startTask(_DataSyncTask.upload, uploadNow);
+    return _startTask(_DataSyncTask.upload, _uploadNow);
   }
 
   Future<Res<bool>> downloadData() async {
     if (_disposed) return const Res.error('Sync service is disposed');
     if (_activeTask != null) {
-      return _schedulePendingTask(_DataSyncTask.download, downloadNow);
+      return _schedulePendingTask(_DataSyncTask.download, _downloadNow);
     }
-    return _startTask(_DataSyncTask.download, downloadNow);
+    return _startTask(_DataSyncTask.download, _downloadNow);
   }
 
   Future<Res<bool>> _schedulePendingTask(
@@ -415,8 +415,7 @@ class DataSyncController with ChangeNotifier {
     return task == _DataSyncTask.upload ? 'Upload Data' : 'Data Sync';
   }
 
-  @protected
-  Future<Res<bool>> uploadNow() async {
+  Future<Res<bool>> _uploadNow() async {
     var config = _validateConfig();
     if (config == null) {
       _lastError = 'Invalid WebDAV configuration';
@@ -439,8 +438,7 @@ class DataSyncController with ChangeNotifier {
     }
   }
 
-  @protected
-  Future<Res<bool>> downloadNow() async {
+  Future<Res<bool>> _downloadNow() async {
     var config = _validateConfig();
     if (config == null) {
       _lastError = 'Invalid WebDAV configuration';

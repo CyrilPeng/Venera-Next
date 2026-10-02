@@ -963,3 +963,11 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 启动失败停止定时器并释放已获得的订阅，允许重试；重复启动/停止不重复订阅或释放。停止后旧下载返回不能创建任务，销毁取消运行时自有任务。收藏管理器的单回调注册以及 FollowUpdateJob 前台全局任务仍是后续生命周期优化范围，不宣称所有追更/收藏状态已实例化。
 - 增加 4 项运行时回归，并扩展双预览测试验证作用域替换与退订；追更相关 14 项测试通过。删除 follow_updates → sync 允许依赖边，登记运行时业务入口，业务门禁总数 54。P6.5/P6.6/P8.1 保持未完成。
 - 最终验证：全量 Flutter 1036 项通过；静态分析零 error/warning、23 个 info；结构与 54 项业务入口门禁、Python 56 项（3 项平台工具跳过）、依赖锁文件与格式检查通过。日志 output/follow-runtime-{targeted,full,analyze}.log。工作区测试包含用户修改，本提交不包含这些原有功能改动。
+
+## P6/P8：同步静态测试钩子退场（2026-10-02）
+
+- 删除 DataSync.debugNow/debugUploadOverride/debugDownloadOverride，以及无调用的静态 mode/intervalMinutes/intervalOptions 和 withTransfer 测试构造入口。控制器 uploadNow/downloadNow 收为私有，不再通过继承覆盖跳过实际传输路径。
+- 排队与窗口测试使用独立内存设置和 ControlledSyncTransfer，传输失败经端口抛出后由真实控制器转换为 Res；调度测试显式注入时钟/定时器，移除 Zone 定时器替换，持久化与重启场景仍读取真实临时 implicitData.json。
+- 调度测试的应用数据订阅由局部 fixture 提供，保留 stop 后记录待同步、重复 start、重试和配置回滚场景；应用归档测试直接构造控制器并注入真实 ZIP 导入参与者。下载 fixture 明确以 false 表示未应用快照，不再依赖覆盖方法没有更新内部字段的偶然行为。
+- 原有 32 项排队/调度/窗口针对性测试通过。应用组装单例、生产订阅适配和剩余阅读器 reset 调用仍待迁移；P8.1 不标记完成。
+- 最终验证：全量 Flutter 1036 项通过；静态分析零 error/warning、23 个 info；结构与 54 项业务入口门禁、Python 56 项（3 项平台工具跳过）、依赖锁文件与格式检查通过。日志 output/sync-hooks-{targeted,full,analyze}.log。用户原有修改参与工作区测试但不纳入提交。

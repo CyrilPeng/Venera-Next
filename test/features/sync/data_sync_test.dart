@@ -1,36 +1,34 @@
+import '../../support/data_sync_fixture.dart';
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
-import 'package:venera_next/features/sync/sync.dart';
 
 void main() {
+  late SyncTestFixture fixture;
   setUp(() {
-    DataSync.resetForTesting();
+    fixture = SyncTestFixture();
     Log.isMuted = true;
-    appdata.implicitData['webdavAutoSync'] = false;
   });
 
   tearDown(() {
-    appdata.implicitData['webdavAutoSync'] = false;
     Log.clear();
     Log.isMuted = false;
-    DataSync.resetForTesting();
+    fixture.disposeController();
   });
 
   test(
     'uploadData coalesces concurrent uploads into one pending task',
     () async {
       final uploads = <Completer<Res<bool>>>[];
-      DataSync.debugUploadOverride = () {
+      fixture.transfer.onUpload = () {
         final completer = Completer<Res<bool>>();
         uploads.add(completer);
         return completer.future;
       };
 
-      final sync = DataSync();
+      final sync = fixture.controller;
       final first = sync.uploadData();
       final second = sync.uploadData();
       final third = sync.uploadData();
@@ -64,13 +62,13 @@ void main() {
   test('downloadData waits for an active upload before starting', () async {
     final upload = Completer<Res<bool>>();
     var downloadCount = 0;
-    DataSync.debugUploadOverride = () => upload.future;
-    DataSync.debugDownloadOverride = () async {
+    fixture.transfer.onUpload = () => upload.future;
+    fixture.transfer.onDownload = () async {
       downloadCount++;
       return const Res(true);
     };
 
-    final sync = DataSync();
+    final sync = fixture.controller;
     final uploadFuture = sync.uploadData();
     final downloadFuture = sync.downloadData();
 
@@ -93,13 +91,13 @@ void main() {
     final upload = Completer<Res<bool>>();
     final download = Completer<Res<bool>>();
     var downloadStarted = false;
-    DataSync.debugUploadOverride = () => upload.future;
-    DataSync.debugDownloadOverride = () {
+    fixture.transfer.onUpload = () => upload.future;
+    fixture.transfer.onDownload = () {
       downloadStarted = true;
       return download.future;
     };
 
-    final sync = DataSync();
+    final sync = fixture.controller;
     final uploadFuture = sync.uploadData();
     final downloadFuture = sync.downloadData();
     var waitCompleted = false;
@@ -127,11 +125,11 @@ void main() {
   });
 
   test('uploadData records failed results in status snapshot', () async {
-    DataSync.debugUploadOverride = () async {
+    fixture.transfer.onUpload = () async {
       return const Res.error('upload failed');
     };
 
-    final sync = DataSync();
+    final sync = fixture.controller;
     final result = await sync.uploadData();
 
     expect(result.error, isTrue);
@@ -146,11 +144,11 @@ void main() {
     () async {
       final gate = Completer<Res<bool>>();
       var uploads = 0;
-      DataSync.debugUploadOverride = () {
+      fixture.transfer.onUpload = () {
         uploads++;
         return gate.future;
       };
-      final sync = DataSync();
+      final sync = fixture.controller;
       var notifications = 0;
       sync.addListener(() => notifications++);
       final active = sync.uploadData();
@@ -167,11 +165,11 @@ void main() {
   );
 
   test('downloadData converts thrown errors into failed results', () async {
-    DataSync.debugDownloadOverride = () async {
+    fixture.transfer.onDownload = () async {
       throw StateError('download failed');
     };
 
-    final sync = DataSync();
+    final sync = fixture.controller;
     final result = await sync.downloadData();
 
     expect(result.error, isTrue);

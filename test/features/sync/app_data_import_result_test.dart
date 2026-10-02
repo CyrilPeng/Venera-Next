@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/app_sync_preferences.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -80,7 +81,7 @@ void main() {
   });
 
   test('DataSync retains pending edits when archive import skips', () async {
-    final sync = DataSync.withTransfer(_ArchiveTransfer(archive(7)));
+    final sync = _controller(_ArchiveTransfer(archive(7)));
     try {
       expect((await sync.downloadData()).success, isTrue);
       expect(sync.hasPendingChanges, isTrue);
@@ -91,7 +92,7 @@ void main() {
   });
 
   test('DataSync clears pending only after an applied archive', () async {
-    final sync = DataSync.withTransfer(_ArchiveTransfer(archive(8)));
+    final sync = _controller(_ArchiveTransfer(archive(8)));
     try {
       expect((await sync.downloadData()).success, isTrue);
       expect(sync.hasPendingChanges, isFalse);
@@ -116,3 +117,11 @@ class _ArchiveTransfer implements DataSyncTransfer {
     required bool excludeFields,
   }) async => throw UnsupportedError('download-only fixture');
 }
+
+DataSyncController _controller(DataSyncTransfer transfer) => DataSyncController(
+  preferences: createAppSyncPreferences(appdata),
+  transfer: () => transfer,
+  saveSettings: () => appdata.saveData(false),
+  persistImplicit: appdata.writeImplicitData,
+  observeChanges: (_) => () {},
+);
