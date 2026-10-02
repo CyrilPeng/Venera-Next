@@ -1,3 +1,4 @@
+import 'package:flutter_qjs/flutter_qjs.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -246,13 +247,24 @@ class ComicSource {
 
   /// Get settings dynamically from JavaScript source.
   /// This allows sources to use getters for dynamic settings that can change at runtime.
-  Map<String, Map<String, dynamic>>? getSettingsDynamic() {
+  JsCallbackScope createSettingsCallbackScope() =>
+      _runtimeCallbacks?.fork() ?? JsCallbackScope();
+
+  Map<String, Map<String, dynamic>>? getSettingsDynamic({
+    required JsCallbackScope callbacks,
+  }) {
+    dynamic value;
     try {
-      var value = JsEngine().runCode("ComicSource.sources.$key.settings");
-      return normalizeComicSourceSettings(value);
+      value = JsEngine().runCode("ComicSource.sources.$key.settings");
+      return normalizeComicSourceSettings(
+        value,
+        retainCallback: callbacks.retain,
+      );
     } catch (e) {
       Log.error("ComicSource", "Failed to get dynamic settings: $e");
       return settings;
+    } finally {
+      JSRef.freeRecursive(value);
     }
   }
 

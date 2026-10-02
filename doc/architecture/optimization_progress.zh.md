@@ -1064,3 +1064,10 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 解析器在失败/回滚时释放新作用域，成功后交给 ComicSource 持有；管理器在替换提交、remove、reload 时释放旧源回调。失败替换不释放旧源。源模型新增可选作用域参数，已有非 JS 源构造不受影响；测试 Fake 补齐生命周期方法。
 - 新增 4 项真实原生回归：执行与关闭、源移除后回调拒绝、引擎关闭/重新初始化后旧回调拒绝、连续三次替换失败仍可用旧 loader 且成功替换后旧 loader 失效。漫画源 125 项针对性测试通过。更新双语能力矩阵，其他设置/图片/UI 的 JSAutoFreeFunction 仍待独立审查，不据此宣称全部 JS 生命周期或 P7 已完成。
 - 最终验证：全量 Flutter 1134 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。日志 output/dynamic-lifetime-{before,targeted,full,analyze}.log；before 是修复前故意复现的失败，其余为最终验证。测试含用户工作区改动，提交不包含这些改动。
+
+## P4/P7：源设置回调与动态快照作用域（2026-10-02）
+
+- 静态设置解析复用源的 JsCallbackScope，normalizeComicSourceSettings 接受保留回调端口，正式源解析不再创建 finalizer 包装；读取的临时 JS 文档在 finally 释放，包括未采用的字段。旧归一化函数的默认包装行为保留给既有独立调用者。
+- JsCallbackScope 增加子作用域：单个快照可单独释放，父源释放会释放所有子快照。getSettingsDynamic 显式要求调用方作用域，设置页在每次重建、收起和卸载时释放旧快照，避免将每次 getter 新生成的函数积累到源卸载；不同读取者互不干扰。getter 失败继续回退到静态设置，不受失败快照释放影响。
+- 新增 4 项真实 QuickJS 回归：静态回调移除失效、两个独立快照与 20 次创建/释放、getter 失败回退、连续解析失败释放。模块 129 项测试通过；原生关闭检查覆盖引用释放，但设置页重建/收起/卸载的 Widget 专项仍需后续补验。图片处理/JS UI 的 JSAutoFreeFunction 还未迁移，不据此完成全项目生命周期验收。
+- 最终验证：全量 Flutter 1138 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁及格式检查通过。日志 output/settings-lifetime-{targeted,full,analyze}.log。工作区测试包含用户修改，提交仅含本阶段内容。

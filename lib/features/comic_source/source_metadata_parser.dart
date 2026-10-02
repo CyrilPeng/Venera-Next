@@ -1,3 +1,4 @@
+import 'package:flutter_qjs/flutter_qjs.dart';
 import 'dart:convert';
 
 import 'package:venera_next/foundation/js_engine.dart';
@@ -14,8 +15,16 @@ class SourceMetadataParser {
   final SourceParserContext context;
 
   Map<String, Map<String, dynamic>> parseSettings() {
-    var value = context.getValue("settings");
-    return normalizeComicSourceSettings(value) ?? {};
+    final value = context.getValue("settings");
+    try {
+      return normalizeComicSourceSettings(
+            value,
+            retainCallback: context.callbacks.retain,
+          ) ??
+          {};
+    } finally {
+      JSRef.freeRecursive(value);
+    }
   }
 
   RegExp? parseIdMatch() {

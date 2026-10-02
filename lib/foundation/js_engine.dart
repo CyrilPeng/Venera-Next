@@ -867,10 +867,21 @@ class JSAutoFreeFunction {
 /// Explicit ownership for native callbacks retained beyond one evaluation.
 /// Scopes are released by their owner, or before their engine closes.
 class JsCallbackScope {
-  JsCallbackScope() : _engine = JsEngine() {
+  JsCallbackScope() : _engine = JsEngine(), _parent = null {
     _engine._callbackScopes.add(this);
   }
+  JsCallbackScope._child(this._engine, this._parent);
   final JsEngine _engine;
+  final JsCallbackScope? _parent;
+  final _children = <JsCallbackScope>{};
+
+  JsCallbackScope fork() {
+    if (_disposed) throw StateError('JavaScript callback scope is closed');
+    final child = JsCallbackScope._child(_engine, this);
+    _children.add(child);
+    return child;
+  }
+
   final _functions = <JSInvokable>{};
   bool _disposed = false;
 
@@ -886,6 +897,10 @@ class JsCallbackScope {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    for (final child in _children.toList()) {
+      child.dispose();
+    }
+    _parent?._children.remove(this);
     _engine._callbackScopes.remove(this);
     for (final function in _functions) {
       function.free();

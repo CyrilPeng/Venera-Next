@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/js_engine.dart';
 import 'dart:convert';
 import 'dart:io' as io;
 import 'package:flutter/material.dart';
@@ -571,12 +572,24 @@ class _SliverComicSource extends StatefulWidget {
 }
 
 class _SliverComicSourceState extends State<_SliverComicSource> {
+  JsCallbackScope? _settingsCallbacks;
+
+  @override
+  void dispose() {
+    _settingsCallbacks?.dispose();
+    super.dispose();
+  }
+
   ComicSource get source => widget.source;
 
   bool expanded = false;
 
   @override
   Widget build(BuildContext context) {
+    if (!expanded) {
+      _settingsCallbacks?.dispose();
+      _settingsCallbacks = null;
+    }
     final newVersion = ComicSourceManager().availableUpdates[source.key];
     final hasUpdate =
         newVersion != null && compareSemVer(newVersion, source.version);
@@ -685,7 +698,10 @@ class _SliverComicSourceState extends State<_SliverComicSource> {
 
   Iterable<Widget> buildSourceSettings() sync* {
     // Try to get dynamic settings first (for getters), fall back to cached settings
-    var settingsMap = source.getSettingsDynamic() ?? source.settings;
+    _settingsCallbacks?.dispose();
+    final callbacks = _settingsCallbacks = source.createSettingsCallbackScope();
+    var settingsMap =
+        source.getSettingsDynamic(callbacks: callbacks) ?? source.settings;
 
     if (settingsMap == null) {
       return;

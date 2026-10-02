@@ -342,6 +342,80 @@ category = {title: "Categories", parts: [
         },
       );
 
+      test('static settings callback is released with its source', () async {
+        final source = await parse(settingsCallbacksScript);
+        final callback = source.settings!['action']!['callback'];
+        expect(callback(['value']), [1, 'value']);
+        manager.remove(source.key);
+        expect(() => callback([]), throwsStateError);
+      });
+
+      test(
+        'dynamic settings snapshots have independent bounded lifetimes',
+        () async {
+          final source = await parse(settingsCallbacksScript);
+          final firstScope = source.createSettingsCallbackScope();
+          final first = source.getSettingsDynamic(
+            callbacks: firstScope,
+          )!['action']!['callback'];
+          final secondScope = source.createSettingsCallbackScope();
+          final second = source.getSettingsDynamic(
+            callbacks: secondScope,
+          )!['action']!['callback'];
+          expect(first(['a']), [2, 'a']);
+          expect(second(['b']), [3, 'b']);
+          firstScope.dispose();
+          firstScope.dispose();
+          expect(() => first([]), throwsStateError);
+          expect(second(['c']), [3, 'c']);
+          for (var index = 0; index < 20; index++) {
+            final scope = source.createSettingsCallbackScope();
+            final callback = source.getSettingsDynamic(
+              callbacks: scope,
+            )!['action']!['callback'];
+            scope.dispose();
+            expect(() => callback([]), throwsStateError);
+          }
+          manager.remove(source.key);
+          expect(() => second([]), throwsStateError);
+          expect(() => secondScope.fork(), throwsStateError);
+        },
+      );
+
+      test(
+        'settings getter failure falls back to source-owned static callback',
+        () async {
+          final source = await parse(settingsCallbacksScript);
+          JsEngine().runCode(
+            'void (ComicSource.sources.transaction_a.failSettings = true)',
+          );
+          final scope = source.createSettingsCallbackScope();
+          final fallback = source.getSettingsDynamic(
+            callbacks: scope,
+          )!['action']!['callback'];
+          scope.dispose();
+          expect(fallback(['fallback']), [1, 'fallback']);
+          manager.remove(source.key);
+          expect(() => fallback([]), throwsStateError);
+        },
+      );
+
+      test(
+        'parse failure after settings registration releases native callbacks',
+        () async {
+          for (var attempt = 0; attempt < 3; attempt++) {
+            await expectLater(
+              parse('${settingsCallbacksScript}comic = {idMatch:"["};'),
+              throwsA(anything),
+            );
+            expect(
+              JsEngine().runCode('ComicSource.sources.transaction_a == null'),
+              isTrue,
+            );
+          }
+        },
+      );
+
       test(
         'invalid dynamic loader reports actionable parse error and rolls back runtime',
         () async {
@@ -436,4 +510,14 @@ const dynamicCategoryScript = r'''
   category = {title: "Categories", parts: [{name: "dynamic", type: "dynamic",
     loader: () => [{label: "Dynamic", target: {page: "search", attributes: {keyword: "word"}}}]
   }]};
+''';
+
+const settingsCallbacksScript = r'''
+  reads = 0;
+  get settings() {
+    if (this.failSettings) throw new Error("settings failed");
+    const snapshot = ++this.reads;
+    return { action: {type: "callback", title: "Action", callback: (args) => [snapshot, args]},
+      ignored: () => "unused" };
+  }
 ''';
