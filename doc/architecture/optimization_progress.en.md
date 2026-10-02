@@ -823,3 +823,12 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - The EPUB UI supplies registerComic to the importer instead of registering after it returns, removing the unprotected gap while retaining the success-count message. Busy wording now covers document imports (PDF and EPUB).
 - Two real-archive integration tests cover waiting without extraction, blocking migration through registration, successful release and registration failure cleanup/retry. Local tests: 180 passed; full Windows Flutter suite: 967 passed. Analysis: no errors/warnings, 23 existing infos; structure, architecture, 12 script tests, Git dependencies and formatting passed.
 - Changelog and bilingual structure/progress synchronized; user changes preserved. Archive shared-cache/cover-copy issues, directory/EhViewer exclusion, EPUB normal-exit draining, other deletion/lifecycle work and platform/performance acceptance remain unfinished; P6 is not complete.
+
+## P4/P6: Archive temporary workspace and failed-output ownership (2026-10-02)
+
+- CBZ.import allocates a unique temporary directory per invocation and extracts post-extraction work into a helper. Finally cleans the outer workspace, including single-directory archive wrappers, without deleting a shared cbz_import path. Both cover-copy branches are awaited before continuing or cleaning the cache.
+- Existing output directories, files and links reject import, preserving unregistered/other-task data. Cleanup ownership starts after creating a fresh output; copy or page-range processing failure removes only that output. Page names, chapter keys and metadata behavior remain. This is not cross-process exclusive creation and does not include registration in the commit.
+- Three real-archive regressions cover concurrent books/wrapped archives/chapter mapping/cover contents, post-cover range failure and retry, and preservation of existing empty directories/files. Local targeted tests: 183 passed.
+- Changelog and bilingual structure/progress synchronized; user changes preserved. Archive migration/recovery/registration coordination, directory/EhViewer exclusion, other exit lifecycle work and platform/performance acceptance remain unfinished.
+
+- Final full Windows Flutter suite: 970 passed. Analysis: no errors/warnings, 23 existing infos; structure, architecture, 12 script tests, Git dependencies and formatting passed.

@@ -168,15 +168,24 @@ abstract class CBZ {
   }
 
   static Future<LocalComic> import(File file) async {
-    var cache = Directory(FilePath.join(App.cachePath, 'cbz_import'));
-    if (cache.existsSync()) cache.deleteSync(recursive: true);
-    cache.createSync();
-    await extractArchive(file, cache);
+    final workspace = Directory(App.cachePath).createTempSync('cbz_import_');
+    try {
+      await extractArchive(file, workspace);
+      return await _importExtracted(file, workspace);
+    } finally {
+      await workspace.deleteIgnoreError(recursive: true);
+    }
+  }
+
+  static Future<LocalComic> _importExtracted(
+    File file,
+    Directory workspace,
+  ) async {
     final layout = ComicFileSystemLayout.inspect(
-      cache,
+      workspace,
       unwrapSingleDirectory: true,
     );
-    cache = layout.root;
+    final cache = layout.root;
     var metaDataFile = File(FilePath.join(cache.path, 'metadata.json'));
     ComicMetaData? metaData;
     if (metaDataFile.existsSync()) {
@@ -200,7 +209,6 @@ abstract class CBZ {
     final files = List<File>.from(layout.rootPages);
     final chapterDirectories = layout.chapters;
     if (!layout.hasImages) {
-      cache.deleteSync(recursive: true);
       throw Exception('No images found in the archive');
     }
     Map<String, String>? cpMap;
@@ -210,66 +218,32 @@ abstract class CBZ {
         sanitizeFileName(metaData.title, maxLength: maxSanitizedFileNameLength),
       ),
     );
+    if (dest.existsSync() ||
+        File(dest.path).existsSync() ||
+        Link(dest.path).existsSync()) {
+      throw FileSystemException(
+        'Archive output path is already occupied',
+        dest.path,
+      );
+    }
     dest.createSync();
-    File coverFile;
-    if (metaData.chapters == null && layout.useChapterDirectories) {
-      coverFile = layout.inferredCover!;
-      coverFile.copyMem(
-        FilePath.join(dest.path, 'cover.${coverFile.extension}'),
-      );
-      cpMap = <String, String>{};
-      for (var i = 0; i < chapterDirectories.length; i++) {
-        final chapter = chapterDirectories[i];
-        final chapterKey = i.toString();
-        cpMap[chapterKey] = chapter.title;
-        final chapterDir = Directory(FilePath.join(dest.path, chapterKey));
-        chapterDir.createSync();
-        for (var j = 0; j < chapter.pages.length; j++) {
-          final src = chapter.pages[j];
-          final dst = File(
-            FilePath.join(
-              chapterDir.path,
-              '${j + 1}.${src.path.split('.').last}',
-            ),
-          );
-          await src.copyMem(dst.path);
-        }
-      }
-    } else {
-      if (files.isEmpty) {
-        cache.deleteSync(recursive: true);
-        throw Exception('No images found in the archive');
-      }
-      coverFile = layout.inferredCover!;
-      coverFile.copyMem(
-        FilePath.join(dest.path, 'cover.${coverFile.extension}'),
-      );
-      if (metaData.chapters == null) {
-        for (var i = 0; i < files.length; i++) {
-          var src = files[i];
-          var dst = File(
-            FilePath.join(dest.path, '${i + 1}.${src.path.split('.').last}'),
-          );
-          await src.copyMem(dst.path);
-        }
-      } else {
-        dest.createSync();
-        var chapters = <String, List<File>>{};
-        for (var chapter in metaData.chapters!) {
-          chapters[chapter.title] = files.sublist(
-            chapter.start - 1,
-            chapter.end,
-          );
-        }
-        int i = 0;
+    try {
+      File coverFile;
+      if (metaData.chapters == null && layout.useChapterDirectories) {
+        coverFile = layout.inferredCover!;
+        await coverFile.copyMem(
+          FilePath.join(dest.path, 'cover.${coverFile.extension}'),
+        );
         cpMap = <String, String>{};
-        for (var chapter in chapters.entries) {
-          cpMap[i.toString()] = chapter.key;
-          var chapterDir = Directory(FilePath.join(dest.path, i.toString()));
+        for (var i = 0; i < chapterDirectories.length; i++) {
+          final chapter = chapterDirectories[i];
+          final chapterKey = i.toString();
+          cpMap[chapterKey] = chapter.title;
+          final chapterDir = Directory(FilePath.join(dest.path, chapterKey));
           chapterDir.createSync();
-          for (var j = 0; j < chapter.value.length; j++) {
-            var src = chapter.value[j];
-            var dst = File(
+          for (var j = 0; j < chapter.pages.length; j++) {
+            final src = chapter.pages[j];
+            final dst = File(
               FilePath.join(
                 chapterDir.path,
                 '${j + 1}.${src.path.split('.').last}',
@@ -277,24 +251,69 @@ abstract class CBZ {
             );
             await src.copyMem(dst.path);
           }
-          i++;
+        }
+      } else {
+        if (files.isEmpty) {
+          throw Exception('No images found in the archive');
+        }
+        coverFile = layout.inferredCover!;
+        await coverFile.copyMem(
+          FilePath.join(dest.path, 'cover.${coverFile.extension}'),
+        );
+        if (metaData.chapters == null) {
+          for (var i = 0; i < files.length; i++) {
+            var src = files[i];
+            var dst = File(
+              FilePath.join(dest.path, '${i + 1}.${src.path.split('.').last}'),
+            );
+            await src.copyMem(dst.path);
+          }
+        } else {
+          dest.createSync();
+          var chapters = <String, List<File>>{};
+          for (var chapter in metaData.chapters!) {
+            chapters[chapter.title] = files.sublist(
+              chapter.start - 1,
+              chapter.end,
+            );
+          }
+          int i = 0;
+          cpMap = <String, String>{};
+          for (var chapter in chapters.entries) {
+            cpMap[i.toString()] = chapter.key;
+            var chapterDir = Directory(FilePath.join(dest.path, i.toString()));
+            chapterDir.createSync();
+            for (var j = 0; j < chapter.value.length; j++) {
+              var src = chapter.value[j];
+              var dst = File(
+                FilePath.join(
+                  chapterDir.path,
+                  '${j + 1}.${src.path.split('.').last}',
+                ),
+              );
+              await src.copyMem(dst.path);
+            }
+            i++;
+          }
         }
       }
+      var comic = LocalComic(
+        id: LocalManager().findValidId(ComicType.local),
+        title: metaData.title,
+        subtitle: metaData.author,
+        tags: metaData.tags,
+        comicType: ComicType.local,
+        directory: dest.name,
+        chapters: ComicChapters.fromJsonOrNull(cpMap),
+        downloadedChapters: cpMap?.keys.toList() ?? [],
+        cover: 'cover.${coverFile.extension}',
+        createdAt: DateTime.now(),
+      );
+      return comic;
+    } catch (_) {
+      await dest.deleteIgnoreError(recursive: true);
+      rethrow;
     }
-    var comic = LocalComic(
-      id: LocalManager().findValidId(ComicType.local),
-      title: metaData.title,
-      subtitle: metaData.author,
-      tags: metaData.tags,
-      comicType: ComicType.local,
-      directory: dest.name,
-      chapters: ComicChapters.fromJsonOrNull(cpMap),
-      downloadedChapters: cpMap?.keys.toList() ?? [],
-      cover: 'cover.${coverFile.extension}',
-      createdAt: DateTime.now(),
-    );
-    await cache.delete(recursive: true);
-    return comic;
   }
 
   static Map<String, Object?> inspectImportLayoutForTesting(

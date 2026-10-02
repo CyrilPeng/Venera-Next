@@ -429,3 +429,5 @@ LocalManager.runWithExclusiveStorage 为迁移/恢复叠加下载协调：排队
 PDF 批次退出通过 PdfImportTasks.prepareForExit 冻结接收/启动，取消未提交工作并等待转换和选择文件释放；完成提交的结果不改标取消。返回按准备 Future 归属的释放回调，重复调用共享准备，旧回调不能解除新限制。SyncWindowBinding 通过公开本地库入口先准备 PDF，再准备下载、历史与上传；失败或卸载释放限制。ImportComic.pdf 在队列接收前保留文件句柄所有权，拒绝时自行清理。该接线覆盖正常窗口退出，不代替任意直接 dispose 或系统终止协议。
 
 EpubComicImporter.import 的解压、输出、可选 registerComic 回调及缓存清理均在 LocalComicStorageGuard 导入保护内；回调失败清理该次输出，数据库回滚由注册适配器负责。EPUB 页面在回调内注册，返回后只提示成功，不再次注册。此约束补齐 EPUB 与迁移/恢复的互斥，不覆盖 EPUB 退出等待、压缩包或目录导入。
+
+CBZ.import 使用每次独立临时目录，_importExtracted 处理解包后的布局/复制，外层 finally 清理完整工作目录。封面复制必须等待；输出若被目录、文件或链接占用则拒绝，只有新建输出在复制/解析失败时可回收。旧页码/章节协议保持；注册与存储互斥、跨进程排他创建不由本单元保证。
