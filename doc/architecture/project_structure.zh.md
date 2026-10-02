@@ -463,3 +463,5 @@ headless_sync_command.dart 将注入的同步结果映射为 CLI status 与退�
 headless_arguments.dart 在核心启动前解析有类型的命令请求；headless_source_update_command.dart 通过检查/更新端口返回进度、汇总及退出码，并对检查结果创建不可变快照。headless.dart 装配实际源服务与订阅更新，并统一捕获命令异常及清理控制器。
 
 headless_subscription_command.dart 通过单漫画更新、文件夹进度流和结果列表读取三个端口统一订阅 CLI 协议；无 Flutter/应用全局依赖。入口映射真实服务结果与漫画字段。适配器等待流及结果读取完成，提前关闭的流不会返回成功；单漫画取消在装配边界转为非成功结果。
+
+漫画源解析入口 parser.dart 只负责声明/版本/key 校验、JS 对象安装/回滚、能力装配和源数据加载。source_account/explore/category/search/favorites/images/comments/comic/metadata_parser.dart 分别持有对应能力的注册及回调构造。SourceParserContext 固定单次解析的 key/name，集中可选属性路径读取与漫画列表归一化；回调不捕获入口后续可变的源身份。异常类型移入 source_parse_exception.dart，parser.dart 继续导出以兼容旧调用。各能力单元不反向依赖入口，均纳入业务入口依赖门禁。
