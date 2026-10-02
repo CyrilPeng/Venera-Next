@@ -1078,3 +1078,11 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 回归先复现 _CallbackSettingState 在回调完成前卸载后仍 setState 的错误。现在 finally 检查 mounted，同步抛错和异步失败统一记录原异常并在仍挂载时通过消息接口提示；执行中重复点击不再重复调用，失败后恢复可重试状态，卸载后失败不操作页面。
 - 5 项针对性 Widget 测试通过：快照释放、卸载后成功、同步/异步失败后重试、快速重复点击及卸载后失败。双语能力矩阵已更新；多页面/源替换交互和图片/JS UI 回调迁移仍待继续，不宣布 P4/P7 整体完成。
 - 最终验证：全量 Flutter 1143 项通过；测试格式提示修正后静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。日志 output/settings-widget-{targeted,full,analyze}.log。用户工作区修改仅参与测试，不混入本提交。
+
+## P4/P7/P8：自定义图片处理与回调释放（2026-10-03）
+
+- 提取 reader_image_processing.dart，图片 provider 继续负责读文件/网络流，自定义 processImage 的执行/结果适配/取消等待由独立函数负责。移除 reader_image.dart 两处 finalizer 包装及重复 Future 分支，以操作作用域持有处理与取消函数，及时释放借用的函数/结果文档，finally 结束所有权。
+- waitForReaderImageProcessingResult 显式接收取消信号；取消后晚到的结果或结果到达时 checkStop 抛错，均释放其中未消费的 JSRef，避免丢弃结果时泄漏。测试专用 debugWaitForReaderImageProcessingResult 已删除，既有测试直接使用正式函数。
+- 增加 7 项真实 QuickJS 用例，执行旧协议的 ArrayBuffer、Promise、{image,onCancel}，核对参数顺序、同步/异步失败、取消钩子只调用一次、忽略字段及无效结果回退。最初夹具误用 Uint8Array，按实际桥接 ArrayBuffer 协议修正，未变更生产字节协议。再加 2 项受控引用测试验证晚到/停止结果只释放一次；合计 13 项针对性测试通过。
+- 保留异步 null 转为空字节、其他无效结果回退原图的既有语义。取消仍快速返回，不承诺强制结束不配合的第三方 JS Promise，也不撤销其副作用；引擎退出时未结束 Promise 的生命周期及网络图片配置/UI 回调仍需继续验收。
+- 最终验证：全量 Flutter 1152 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。日志 output/image-callback-{targeted,full,analyze}.log。工作区测试含用户改动，提交仅含本阶段。
