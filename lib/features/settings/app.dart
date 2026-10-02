@@ -706,7 +706,7 @@ class _WebDavComicLibrarySettingState
   @override
   void initState() {
     super.initState();
-    final config = WebDavLibraryConfig.fromSettings();
+    final config = WebDavLibrarySource.settings.read().connection;
     _connectionControllers = WebDavConnectionControllers(
       url: config.url,
       user: config.user,
@@ -714,12 +714,9 @@ class _WebDavComicLibrarySettingState
       remotePath: config.remotePath,
     );
     WebDavLibrarySource.updateSyncStatusFromCache();
-    autoSyncEnabled =
-        appdata.settings['webdavComicLibraryAutoSync'] as bool? ?? true;
-    syncIntervalMinutes =
-        (appdata.settings['webdavComicLibrarySyncIntervalMinutes'] as num?)
-            ?.round() ??
-        360;
+    final configuration = WebDavLibrarySource.settings.read();
+    autoSyncEnabled = configuration.autoSync;
+    syncIntervalMinutes = configuration.intervalMinutes;
   }
 
   @override
@@ -784,6 +781,15 @@ class _WebDavComicLibrarySettingState
                   border: const OutlineInputBorder(),
                 ),
                 items: [
+                  if (![15, 60, 360, 1440].contains(syncIntervalMinutes))
+                    DropdownMenuItem(
+                      value: syncIntervalMinutes,
+                      child: Text(
+                        '@minutes min'.tlParams({
+                          'minutes': '$syncIntervalMinutes',
+                        }),
+                      ),
+                    ),
                   DropdownMenuItem(
                     value: 15,
                     child: Text('Every 15 minutes'.tl),
@@ -847,7 +853,7 @@ class _WebDavComicLibrarySettingState
               ],
             ),
             const SizedBox(height: 12),
-            if (WebDavLibraryConfig.fromSettings().isValid) ...[
+            if (WebDavLibrarySource.settings.read().connection.isValid) ...[
               Row(
                 children: [
                   Expanded(
@@ -913,7 +919,7 @@ class _WebDavComicLibrarySettingState
   Future<void> save() async {
     if (isTesting || isSyncing) return;
     if (!await _persistConfiguration()) return;
-    final config = WebDavLibraryConfig.fromSettings();
+    final config = WebDavLibrarySource.settings.read().connection;
     if (config.isValid) {
       unawaited(WebDavLibrarySource.synchronize(force: true));
     }
@@ -925,7 +931,7 @@ class _WebDavComicLibrarySettingState
   Future<void> syncNow() async {
     if (isTesting || isSyncing) return;
     if (!await _persistConfiguration()) return;
-    if (!WebDavLibraryConfig.fromSettings().isValid) return;
+    if (!WebDavLibrarySource.settings.read().connection.isValid) return;
     setState(() {
       isSyncing = true;
     });
@@ -943,11 +949,13 @@ class _WebDavComicLibrarySettingState
 
   Future<bool> _persistConfiguration() async {
     final config = currentConfig;
-    appdata.settings['webdavComicLibraryAutoSync'] = autoSyncEnabled;
-    appdata.settings['webdavComicLibrarySyncIntervalMinutes'] =
-        syncIntervalMinutes;
+    final configuration = WebDavLibrarySettings(
+      connection: config,
+      autoSync: autoSyncEnabled,
+      intervalMinutes: syncIntervalMinutes,
+    );
     if (!config.isValid && config.user.isEmpty && config.pass.isEmpty) {
-      await WebDavLibraryConfig.saveToSettings(config);
+      await WebDavLibrarySource.settings.save(configuration);
       _refreshWebDavLibrarySource(enabled: false);
       return true;
     }
@@ -964,7 +972,7 @@ class _WebDavComicLibrarySettingState
       context.showMessage(message: "Saved Failed".tl);
       return false;
     } else {
-      await WebDavLibraryConfig.saveToSettings(config);
+      await WebDavLibrarySource.settings.save(configuration);
       _refreshWebDavLibrarySource(enabled: true);
       return true;
     }

@@ -408,7 +408,7 @@ void main() {
     'incremental sync rebuilds snapshots from the old cache format',
     () async {
       const comicId = 'Cached Book';
-      final config = WebDavLibraryConfig.fromSettings();
+      final config = WebDavLibrarySource.settings.read().connection;
       final cache = WebDavLibraryCache.instance;
       cache.replaceDirectoryIndex(config.cacheKey, const [
         WebDavLibraryRemoteDirectory(id: comicId, sortIndex: 0, eTag: 'v1'),

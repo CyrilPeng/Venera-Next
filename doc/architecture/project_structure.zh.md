@@ -443,3 +443,5 @@ LocalManager 的三类删除返回 Future 并经过 runWithExclusiveStorage，�
 local_deletion_paths.dart 的纯策略过滤清理候选：保护保留记录的相同/重叠目录、库根及其祖先，规范路径去重并保留原始平台路径。LocalManager 三类删除统一使用；章节删除排除自己的根引用后仍检查其他记录，并沿用章节别名规则。策略纳入业务边界，范围为规范字符串路径，不保证符号链接/SAF 身份或跨进程排他。
 
 LocalRepository.directoryReferences 为删除保护提供仅目录字段的查询，支持参数化完整身份排除，不解析或排序漫画展示模型。LocalManager 使用同一个内部解析器处理 baseDir 和保留目录列表，使归属检查独立于无关 JSON 元数据且保持既有路径语义。
+
+WebDAV 在线库的连接与路径模型位于 `webdav_library_config.dart`；旧设置键的只读解析、序列化和可注入保存协议位于 `webdav_library_settings.dart`。页面和同步调度共用该快照。当前 `WebDavLibrarySource.settings` 仍负责连接 appdata 与缓存失效回调，缓存和同步运行状态尚未实例化；这不是 P6.4 的整体完成。

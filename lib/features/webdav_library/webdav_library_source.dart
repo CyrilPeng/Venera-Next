@@ -5,95 +5,14 @@ import 'package:flutter/foundation.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/features/webdav_library/webdav_library_cache.dart';
+import 'package:venera_next/features/webdav_library/webdav_library_config.dart';
+import 'package:venera_next/features/webdav_library/webdav_library_settings.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/throttled_task_runner.dart';
-import 'package:venera_next/network/webdav.dart';
 import 'package:webdav_client/webdav_client.dart' hide File;
-
-class WebDavLibraryConfig {
-  WebDavLibraryConfig({
-    required String url,
-    required String user,
-    required String pass,
-    required String remotePath,
-  }) : endpoint = WebDavEndpoint(url: url, user: user, password: pass),
-       remotePath = normalizeWebDavDirectoryPath(
-         remotePath,
-         fallback: '/venera_comics/',
-       );
-
-  final WebDavEndpoint endpoint;
-  final String remotePath;
-
-  String get url => endpoint.url;
-
-  String get user => endpoint.user;
-
-  String get pass => endpoint.password;
-
-  bool get isValid => endpoint.isValid;
-
-  Map<String, String> get authHeaders => endpoint.authHeaders;
-
-  String get cacheKey => jsonEncode([url, user, remotePath]);
-
-  String get connectionKey => jsonEncode([url, user, pass, remotePath]);
-
-  static WebDavLibraryConfig fromSettings() {
-    final config = appdata.settings['webdavComicLibrary'];
-    final path = appdata.settings['webdavComicLibraryPath'];
-    if (config is List && config.whereType<String>().length == 3) {
-      final values = config.whereType<String>().toList();
-      return WebDavLibraryConfig(
-        url: values[0],
-        user: values[1],
-        pass: values[2],
-        remotePath: path is String ? path : '/venera_comics/',
-      );
-    }
-    return WebDavLibraryConfig(
-      url: '',
-      user: '',
-      pass: '',
-      remotePath: path is String ? path : '/venera_comics/',
-    );
-  }
-
-  static Future<void> saveToSettings(WebDavLibraryConfig config) async {
-    final previous = fromSettings();
-    if (!config.isValid && config.user.isEmpty && config.pass.isEmpty) {
-      appdata.settings['webdavComicLibrary'] = [];
-    } else {
-      appdata.settings['webdavComicLibrary'] = [
-        config.url,
-        config.user,
-        config.pass,
-      ];
-    }
-    appdata.settings['webdavComicLibraryPath'] = config.remotePath;
-    await appdata.saveData(false);
-    if (previous.connectionKey != config.connectionKey) {
-      WebDavLibrarySource.onConfigurationChanged(previous);
-    }
-  }
-
-  String childDirectoryPath(String name) {
-    return childDirectoryPathFrom(remotePath, name);
-  }
-
-  String childFilePath(String parent, String name) {
-    return joinWebDavFilePath(parent, name);
-  }
-
-  String childDirectoryPathFrom(String parent, String name) {
-    return joinWebDavDirectoryPath(parent, name);
-  }
-
-  String fileUrl(String remoteFilePath) => endpoint.fileUrl(remoteFilePath);
-}
 
 class WebDavLibraryEntry {
   const WebDavLibraryEntry({
@@ -200,6 +119,17 @@ class _WebDavLibrarySyncRun {
 class WebDavLibrarySource {
   const WebDavLibrarySource._();
 
+  static final settings = WebDavLibrarySettingsStore(
+    readValue: (key) => appdata.settings[key],
+    persist: (values) async {
+      for (final entry in values.entries) {
+        appdata.settings[entry.key] = entry.value;
+      }
+      await appdata.saveData(false);
+    },
+    onConnectionChanged: onConfigurationChanged,
+  );
+
   static const sourceKey = 'webdav_library';
   static const explorePageTitle = 'WebDAV Library';
   static const pageSize = 20;
@@ -248,7 +178,7 @@ class WebDavLibrarySource {
 
   static void updateSyncStatusFromCache() {
     if (syncStatus.value.isSyncing) return;
-    final config = WebDavLibraryConfig.fromSettings();
+    final config = settings.read().connection;
     if (!config.isValid) return;
     final lastSync = _cache.lastSuccessfulSync(config.cacheKey);
     if (syncStatus.value.lastSuccessfulSync == lastSync) return;
@@ -260,15 +190,12 @@ class WebDavLibrarySource {
 
   static void checkForAutomaticSync() {
     updateSyncStatusFromCache();
-    final config = WebDavLibraryConfig.fromSettings();
-    if (!config.isValid ||
-        appdata.settings['webdavComicLibraryAutoSync'] != true) {
+    final configuration = settings.read();
+    final config = configuration.connection;
+    if (!config.isValid || !configuration.autoSync) {
       return;
     }
-    final interval =
-        (appdata.settings['webdavComicLibrarySyncIntervalMinutes'] as num?)
-            ?.round() ??
-        360;
+    final interval = configuration.intervalMinutes;
     final lastSync = _cache.lastSuccessfulSync(config.cacheKey);
     final elapsed = DateTime.now().millisecondsSinceEpoch - lastSync;
     if (lastSync == 0 ||
@@ -353,7 +280,7 @@ class WebDavLibrarySource {
   }
 
   static Future<Res<List<Comic>>> loadComics(int page) async {
-    final config = WebDavLibraryConfig.fromSettings();
+    final config = settings.read().connection;
     if (!config.isValid) {
       return const Res.error('Invalid WebDAV comic library configuration');
     }
@@ -398,7 +325,7 @@ class WebDavLibrarySource {
   }
 
   static Future<Res<bool>> synchronize({bool force = false}) {
-    final config = WebDavLibraryConfig.fromSettings();
+    final config = settings.read().connection;
     if (!config.isValid) {
       return Future.value(
         const Res.error('Invalid WebDAV comic library configuration'),
@@ -571,7 +498,7 @@ class WebDavLibrarySource {
   }
 
   static Future<Res<ComicDetails>> loadComicInfo(String id) async {
-    final config = WebDavLibraryConfig.fromSettings();
+    final config = settings.read().connection;
     if (!config.isValid) {
       return const Res.error('Invalid WebDAV comic library configuration');
     }
@@ -611,7 +538,7 @@ class WebDavLibrarySource {
   }
 
   static Future<Res<List<String>>> loadComicPages(String id, String? ep) async {
-    final config = WebDavLibraryConfig.fromSettings();
+    final config = settings.read().connection;
     if (!config.isValid) {
       return const Res.error('Invalid WebDAV comic library configuration');
     }
@@ -1026,12 +953,12 @@ class WebDavLibrarySource {
     String comicId,
     String epId,
   ) async {
-    final config = WebDavLibraryConfig.fromSettings();
+    final config = settings.read().connection;
     return {'url': config.fileUrl(imageKey), 'headers': config.authHeaders};
   }
 
   static Map<String, dynamic> getThumbnailLoadingConfig(String imageKey) {
-    final config = WebDavLibraryConfig.fromSettings();
+    final config = settings.read().connection;
     if (imageKey.startsWith('cover.')) {
       return {'headers': config.authHeaders};
     }

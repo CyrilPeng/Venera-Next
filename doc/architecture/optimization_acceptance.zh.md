@@ -27,7 +27,7 @@
 | P3.2 | I | 不可变设置解析 | `lib/foundation/reader_settings.dart; test/foundation/reader_settings_snapshot_test.dart` | 已存在快照与覆盖测试；不得用这项替代所有设置验收。 |
 | P3.3 | P | 存储与消费端类型化 | `lib/foundation/reader_preference_store.dart; lib/features/settings/reader.dart` | 阅读消费端已有迁移，仍需全消费端盘点与用户改动合并验收。 |
 | P3.4 | P | 非法值与往返兼容 | `test/foundation/reader_preference_store_test.dart; test/foundation/sync_configuration_test.dart` | 补齐旧配置往返、未知字段及全部导入路径交叉矩阵。 |
-| P3.5 | P | 其他配置与门禁 | `lib/foundation/application_configuration.dart; lib/features/webdav_library/webdav_library_source.dart` | 网络/外观/数据同步已有快照；WebDAV 库仍直接读写动态键。 |
+| P3.5 | P | 其他配置与门禁 | `lib/foundation/application_configuration.dart; lib/features/webdav_library/webdav_library_settings.dart` | 网络/外观/数据同步/WebDAV 已有快照；WebDAV 设置存储可注入，运行时装配和门禁仍待收束。 |
 | P4.1 | I | 初始化共享与失败 | `lib/foundation/init.dart; test/foundation/init_test.dart` | 状态机与显式重试已实现。 |
 | P4.2 | P | 启动依赖审计 | `lib/app_runtime/bootstrap_core.dart` | 关键/可选顺序已显式；仍需全 ensureInit 调用和失败资源清单。 |
 | P4.3 | I | 启动模式分离 | `lib/app_runtime/core_bootstrap.dart; lib/app_runtime/interactive_bindings.dart; lib/app_runtime/headless_bindings.dart` | 代码组装已分离；真实 CLI 冒烟归 P0/P8 验收。 |
@@ -45,7 +45,7 @@
 | P6.1 | I | 模型与仓储分离 | `lib/features/local_comics/local_repository.dart; lib/features/history/history_repository.dart; lib/features/favorites/favorites_repository.dart` | 主体 SQL 已迁入仓储；后续新增 SQL 继续遵守边界。 |
 | P6.2 | P | 收藏业务职责 | `lib/features/favorites/read_later_service.dart; lib/features/favorites/favorite_updates_service.dart; lib/features/favorites/favorites_manager.dart` | 稍后阅读/追更已分离；管理器仍有全局依赖和统一生命周期待收束。 |
 | P6.3 | P | 本地库与导入下载 | `lib/features/local_comics/local.dart; lib/features/local_comics/local_deletion_paths.dart` | 队列/仓储/迁移已拆分；符号链接、删除回滚和未受保护直接写入者仍需处理。 |
-| P6.4 | O | WebDAV 实例化与拆分 | `lib/features/webdav_library/webdav_library_source.dart:213` | 缓存、in-flight、ops、同步状态仍 static；优先分离配置、发现、快照和运行实例。 |
+| P6.4 | P | WebDAV 实例化与拆分 | `lib/features/webdav_library/webdav_library_settings.dart; lib/features/webdav_library/webdav_library_source.dart` | 配置模型和可注入设置存储已拆出；缓存、in-flight、ops、同步状态仍 static，继续发现/快照/运行实例拆分。 |
 | P6.5 | P | 应用同步职责 | `lib/features/sync/data_sync.dart; lib/features/sync/app_data_archive.dart; lib/app_runtime/sync_window_binding.dart` | 归档/窗口已迁出；DataSync 仍组合调度、传输和全局参与者。 |
 | P6.6 | P | 同步窄接口与协议 | `lib/features/sync/data_sync.dart; test/features/sync/data_sync_schedule_test.dart` | 保留三模式回归；参与者注入、pending 重启和不回传最终矩阵待完成。 |
 | P6.7 | P | 原子性约束 | `lib/foundation/sqlite_transaction.dart; lib/foundation/directory_replacement.dart; lib/features/local_comics/local.dart` | 已有事务/恢复工具；删除仍可能跨文件/数据库部分提交。 |

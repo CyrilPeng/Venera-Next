@@ -45,7 +45,7 @@ CoreBootstrap createCoreBootstrap({Future<void> Function()? environment}) =>
           () async => DataSync().onDataChanged(),
         );
         configureRuntimeComicSourcesProvider(
-          () => WebDavLibraryConfig.fromSettings().isValid
+          () => WebDavLibrarySource.settings.read().connection.isValid
               ? [WebDavLibrarySource.create()]
               : const [],
         );
