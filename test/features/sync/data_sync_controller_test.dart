@@ -1,3 +1,4 @@
+import 'package:venera_next/network/request_scope.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'dart:async';
 
@@ -180,6 +181,7 @@ void main() {
         initialUpload: false,
       );
       fixture.controller.dispose();
+      expect(fixture.transfer.uploadScope!.isCancelled, isTrue);
       gate.complete();
       await upload;
       expect((await configured).error, isTrue);
@@ -203,6 +205,7 @@ void main() {
       );
       expect(fixture.settings['webdav'], ['https://new.example.com', '', '']);
       fixture.controller.dispose();
+      expect(fixture.transfer.uploadScope!.isCancelled, isTrue);
       gate.complete();
       expect((await configured).error, isTrue);
       expect(fixture.settings['webdav'], ['https://example.com', '', '']);
@@ -298,8 +301,12 @@ class _Transfer implements DataSyncTransfer {
   int downloads = 0;
   Object? uploadError;
   Future<void>? uploadGate;
+  RequestScope? uploadScope;
   @override
-  Future<bool> download(WebDavEndpoint connection) async {
+  Future<bool> download(
+    WebDavEndpoint connection, {
+    required RequestScope scope,
+  }) async {
     downloads++;
     return false;
   }
@@ -308,7 +315,9 @@ class _Transfer implements DataSyncTransfer {
   Future<void> upload(
     WebDavEndpoint connection, {
     required bool excludeFields,
+    required RequestScope scope,
   }) async {
+    uploadScope = scope;
     await uploadGate;
     final error = uploadError;
     if (error != null) throw error;

@@ -1,3 +1,4 @@
+import 'package:venera_next/network/request_scope.dart';
 import 'dart:async';
 import 'package:venera_next/features/sync/data_sync_controller.dart';
 import 'package:venera_next/features/sync/data_sync_transfer.dart';
@@ -55,13 +56,17 @@ class ControlledSyncTransfer implements DataSyncTransfer {
   Future<void> upload(
     WebDavEndpoint connection, {
     required bool excludeFields,
+    required RequestScope scope,
   }) async {
     final result = await onUpload();
     if (result.error) throw _TransferFailure(result.errorMessage!);
   }
 
   @override
-  Future<bool> download(WebDavEndpoint connection) async {
+  Future<bool> download(
+    WebDavEndpoint connection, {
+    required RequestScope scope,
+  }) async {
     final result = await onDownload();
     if (result.error) throw _TransferFailure(result.errorMessage!);
     return result.data;

@@ -1,8 +1,9 @@
+import 'package:venera_next/network/request_scope.dart';
 import 'dart:io';
 import 'package:venera_next/features/sync/data_sync_transfer.dart';
 import 'package:venera_next/features/sync/data_sync_remote.dart';
 import 'package:venera_next/features/sync/sync.dart'
-    show exportAppData, importAppData;
+    show exportAppData, importSyncAppData;
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -31,7 +32,8 @@ class _ApplicationSyncParticipant implements DataSyncParticipant {
   Future<File> exportData(bool excludeFields) => exportAppData(excludeFields);
 
   @override
-  Future<bool> importData(File file) => importAppData(file, true);
+  Future<bool> importData(File file, {required RequestScope scope}) =>
+      importSyncAppData(file, checkActive: scope.check);
 
   @override
   void notifyImported() {

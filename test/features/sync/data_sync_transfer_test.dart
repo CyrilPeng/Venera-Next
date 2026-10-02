@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:venera_next/network/request_scope.dart';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -7,6 +9,7 @@ import 'package:venera_next/network/webdav.dart';
 
 void main() {
   late Directory directory;
+  late RequestScope scope;
   late _Participant participant;
   late _Remote remote;
   late WebDavDataSyncTransfer transfer;
@@ -16,6 +19,7 @@ void main() {
     password: '',
   );
   setUp(() {
+    scope = RequestScope();
     directory = Directory.systemTemp.createTempSync('data-transfer-');
     participant = _Participant(directory.path);
     remote = _Remote();
@@ -25,13 +29,85 @@ void main() {
       now: () => DateTime.fromMillisecondsSinceEpoch(20 * 86400000),
     );
   });
-  tearDown(() => directory.deleteSync(recursive: true));
+  tearDown(() {
+    scope.dispose();
+    directory.deleteSync(recursive: true);
+  });
+
+  test(
+    'cancelled download closes the remote and never imports late bytes',
+    () async {
+      remote.names = ['20-8.venera'];
+      final gate = Completer<void>();
+      remote.readGate = gate.future;
+      final downloading = transfer.download(connection, scope: scope);
+      final checked = expectLater(
+        downloading,
+        throwsA(isA<RequestCancelled>()),
+      );
+      await remote.readStarted.future;
+      expect(remote.readPath, isNotNull);
+      scope.cancel();
+      await pumpEventQueue();
+      expect(remote.closed, isTrue);
+      gate.complete();
+      await checked;
+      expect(participant.imports, 0);
+      expect(participant.notifications, 0);
+      expect(participant.syncTime, isNull);
+      expect(directory.listSync(), isEmpty);
+      expect(remote.closeCount, 1);
+    },
+  );
+
+  test(
+    'cancelled upload cannot delete or write after a delayed listing',
+    () async {
+      remote.names = ['20-7.venera'];
+      final gate = Completer<void>();
+      remote.listGate = gate.future;
+      final uploading = transfer.upload(
+        connection,
+        excludeFields: false,
+        scope: scope,
+      );
+      final checked = expectLater(uploading, throwsA(isA<RequestCancelled>()));
+      await remote.listStarted.future;
+      scope.cancel();
+      gate.complete();
+      await checked;
+      expect(remote.removed, isEmpty);
+      expect(remote.written, isNull);
+      expect(participant.syncTime, isNull);
+      expect(directory.listSync(), isEmpty);
+      expect(remote.closeCount, 1);
+    },
+  );
+
+  test(
+    'an import past its commit boundary completes notifications after cancellation',
+    () async {
+      remote.names = ['20-8.venera'];
+      final gate = Completer<void>();
+      participant.importGate = gate.future;
+      final downloading = transfer.download(connection, scope: scope);
+      await participant.importStarted.future;
+      expect(participant.imports, 1);
+      scope.cancel();
+      gate.complete();
+      expect(await downloading, isTrue);
+      expect(participant.notifications, 1);
+      expect(participant.syncTime, isNotNull);
+      expect(directory.listSync(), isEmpty);
+      expect(remote.closeCount, 1);
+    },
+  );
 
   test(
     'upload preserves archive naming, exclusion and retention protocol',
     () async {
       remote.names = ['19-4.venera', '20-5.venera', 'notes.txt'];
-      await transfer.upload(connection, excludeFields: true);
+      await transfer.upload(connection, excludeFields: true, scope: scope);
       expect(participant.version, 8);
       expect(participant.excludeFields, isTrue);
       expect(remote.removed, ['20-5.venera']);
@@ -46,7 +122,7 @@ void main() {
   test('failed upload releases exported archive and remote', () async {
     remote.writeError = StateError('denied');
     await expectLater(
-      transfer.upload(connection, excludeFields: false),
+      transfer.upload(connection, excludeFields: false, scope: scope),
       throwsStateError,
     );
     expect(participant.syncTime, isNull);
@@ -58,7 +134,7 @@ void main() {
     'unchanged remote version does not download or clear pending via apply result',
     () async {
       remote.names = ['20-7.venera'];
-      expect(await transfer.download(connection), isFalse);
+      expect(await transfer.download(connection, scope: scope), isFalse);
       expect(remote.readPath, isNull);
       expect(participant.imports, 0);
       expect(participant.notifications, 0);
@@ -70,7 +146,7 @@ void main() {
   test('import no-op is distinct from an applied snapshot', () async {
     remote.names = ['20-8.venera'];
     participant.applied = false;
-    expect(await transfer.download(connection), isFalse);
+    expect(await transfer.download(connection, scope: scope), isFalse);
     expect(participant.imports, 1);
     expect(participant.notifications, 0);
     expect(participant.syncTime, isNull);
@@ -81,7 +157,7 @@ void main() {
     'applied snapshot notifies only after import and uses isolated local path',
     () async {
       remote.names = ['../20-8.venera'];
-      expect(await transfer.download(connection), isTrue);
+      expect(await transfer.download(connection, scope: scope), isTrue);
       expect(participant.imports, 1);
       expect(participant.notifications, 1);
       expect(
@@ -100,7 +176,10 @@ void main() {
     () async {
       remote.names = ['20-8.venera'];
       participant.importError = StateError('invalid archive');
-      await expectLater(transfer.download(connection), throwsStateError);
+      await expectLater(
+        transfer.download(connection, scope: scope),
+        throwsStateError,
+      );
       expect(participant.notifications, 0);
       expect(participant.syncTime, isNull);
       expect(directory.listSync(), isEmpty);
@@ -118,6 +197,8 @@ class _Participant implements DataSyncParticipant {
   bool? excludeFields;
   bool applied = true;
   Object? importError;
+  Future<void>? importGate;
+  final importStarted = Completer<void>();
   int imports = 0;
   int notifications = 0;
   int? syncTime;
@@ -131,9 +212,13 @@ class _Participant implements DataSyncParticipant {
   }
 
   @override
-  Future<bool> importData(File file) async {
+  Future<bool> importData(File file, {required RequestScope scope}) async {
+    scope.check();
     expect(await file.readAsBytes(), [4, 5]);
+    scope.check();
     imports++;
+    importStarted.complete();
+    await importGate;
     final error = importError;
     if (error != null) throw error;
     return applied;
@@ -158,8 +243,18 @@ class _Remote implements DataSyncRemote {
   String? readPath;
   Object? writeError;
   bool closed = false;
+  int closeCount = 0;
+  Future<void>? readGate;
+  final readStarted = Completer<void>();
+  Future<void>? listGate;
+  final listStarted = Completer<void>();
   @override
-  Future<List<String>> listNames() async => List.of(names);
+  Future<List<String>> listNames() async {
+    listStarted.complete();
+    await listGate;
+    return List.of(names);
+  }
+
   @override
   Future<void> remove(String name) async => removed.add(name);
   @override
@@ -173,9 +268,14 @@ class _Remote implements DataSyncRemote {
   @override
   Future<void> readToFile(String name, String path) async {
     readPath = path;
+    readStarted.complete();
+    await readGate;
     await File(path).writeAsBytes([4, 5]);
   }
 
   @override
-  void dispose() => closed = true;
+  void dispose() {
+    closed = true;
+    closeCount++;
+  }
 }

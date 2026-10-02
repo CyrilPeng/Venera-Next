@@ -1,3 +1,4 @@
+import 'package:venera_next/network/request_scope.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:venera_next/foundation/sync_configuration.dart';
@@ -62,6 +63,7 @@ class DataSyncController with ChangeNotifier {
   final SyncPreferenceStore _syncPreferences;
   final DataSyncTransfer Function() _transferFactory;
   DataSyncTransfer? _transfer;
+  RequestScope? _transferScope;
   DataSyncTransfer get _dataTransfer => _transfer ??= _transferFactory();
   final Future<void> Function() _saveSettings;
   final void Function() _persistImplicit;
@@ -296,6 +298,7 @@ class DataSyncController with ChangeNotifier {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _transferScope?.cancel();
     stop();
     final unsubscribe = _unsubscribe;
     _unsubscribe = null;
@@ -447,10 +450,13 @@ class DataSyncController with ChangeNotifier {
     if (!config.isValid) {
       return const Res(true);
     }
+    final scope = RequestScope();
+    _transferScope = scope;
     try {
       await _dataTransfer.upload(
         config,
         excludeFields: _syncPreferences.configuration.excludedFields.isNotEmpty,
+        scope: scope,
       );
       Log.info("Upload Data", "Data uploaded successfully");
       return const Res(true);
@@ -458,6 +464,9 @@ class DataSyncController with ChangeNotifier {
       Log.error("Upload Data", e, s);
       _lastError = e.toString();
       return Res.error(e.toString());
+    } finally {
+      if (identical(_transferScope, scope)) _transferScope = null;
+      scope.dispose();
     }
   }
 
@@ -470,8 +479,10 @@ class DataSyncController with ChangeNotifier {
     if (!config.isValid) {
       return const Res(true);
     }
+    final scope = RequestScope();
+    _transferScope = scope;
     try {
-      _downloadApplied = await _dataTransfer.download(config);
+      _downloadApplied = await _dataTransfer.download(config, scope: scope);
       Log.info(
         "Data Sync",
         _downloadApplied
@@ -483,6 +494,9 @@ class DataSyncController with ChangeNotifier {
       Log.error("Data Sync", e, s);
       _lastError = e.toString();
       return Res.error(e.toString());
+    } finally {
+      if (identical(_transferScope, scope)) _transferScope = null;
+      scope.dispose();
     }
   }
 }

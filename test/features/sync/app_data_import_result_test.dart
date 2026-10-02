@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'package:venera_next/foundation/app_data_operations.dart';
+import 'package:venera_next/network/request_scope.dart';
 import 'package:venera_next/foundation/app_sync_preferences.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -57,6 +60,46 @@ void main() {
   }
 
   test(
+    'sync import cancelled while queued never starts applying data',
+    () async {
+      final scope = RequestScope();
+      addTearDown(scope.dispose);
+      final gate = Completer<void>();
+      final blocker = AppDataOperations.instance.run(() => gate.future);
+      final importing = importSyncAppData(archive(8), checkActive: scope.check);
+      final checked = expectLater(importing, throwsA(isA<RequestCancelled>()));
+      scope.cancel();
+      gate.complete();
+      await blocker;
+      await checked;
+      expect(appdata.settings['dataVersion'], 7);
+      expect(appdata.searchHistory, ['local']);
+      expect(Directory('${App.cachePath}/temp_data').existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'cancellation after archive validation leaves existing data unchanged',
+    () async {
+      var checks = 0;
+      await expectLater(
+        importSyncAppData(
+          archive(8),
+          checkActive: () {
+            checks++;
+            if (checks == 2) throw const RequestCancelled();
+          },
+        ),
+        throwsA(isA<RequestCancelled>()),
+      );
+      expect(checks, 2);
+      expect(appdata.settings['dataVersion'], 7);
+      expect(appdata.searchHistory, ['local']);
+      expect(Directory('${App.cachePath}/temp_data').existsSync(), isFalse);
+    },
+  );
+
+  test(
     'embedded equal or older version returns skipped without applying data',
     () async {
       for (final version in [6, 7]) {
@@ -108,13 +151,16 @@ class _ArchiveTransfer implements DataSyncTransfer {
   final File archive;
 
   @override
-  Future<bool> download(WebDavEndpoint connection) =>
-      importAppData(archive, true);
+  Future<bool> download(
+    WebDavEndpoint connection, {
+    required RequestScope scope,
+  }) => importSyncAppData(archive, checkActive: scope.check);
 
   @override
   Future<void> upload(
     WebDavEndpoint connection, {
     required bool excludeFields,
+    required RequestScope scope,
   }) async => throw UnsupportedError('download-only fixture');
 }
 
