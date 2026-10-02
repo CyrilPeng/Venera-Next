@@ -280,7 +280,13 @@
     "features/webdav_library/webdav_library_config.dart",
     "features/webdav_library/webdav_library_settings.dart",
     "features/webdav_library/webdav_library_services.dart",
-    "features/webdav_library/webdav_library_source.dart"
+    "features/webdav_library/webdav_library_source.dart",
+    "features/webdav_library/webdav_library_entries.dart",
+    "features/webdav_library/webdav_library_transport.dart",
+    "features/webdav_library/webdav_library_session.dart",
+    "features/webdav_library/webdav_library_discovery.dart",
+    "features/webdav_library/webdav_library_snapshot.dart",
+    "features/webdav_library/webdav_library_snapshot_builder.dart"
   ],
   "ui_files": [
     "app_shell/auth_page.dart",

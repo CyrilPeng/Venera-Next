@@ -3,3 +3,6 @@ export 'webdav_library_config.dart';
 export 'webdav_library_services.dart';
 export 'webdav_library_settings.dart';
 export 'webdav_library_source.dart';
+export 'webdav_library_entries.dart';
+export 'webdav_library_transport.dart';
+export 'webdav_library_snapshot.dart';

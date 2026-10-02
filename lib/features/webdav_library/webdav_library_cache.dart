@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
 
-const webDavLibrarySnapshotFormatVersion = 3;
+import 'webdav_library_snapshot.dart';
 
 class WebDavLibraryCachedComic {
   const WebDavLibraryCachedComic({
