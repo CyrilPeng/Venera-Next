@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
-import 'package:venera_next/components/message.dart';
+import 'package:venera_next/features/settings/settings_task_presenter.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
@@ -16,6 +16,7 @@ class LocalFavoritesSettings extends StatefulWidget {
 }
 
 class _LocalFavoritesSettingsState extends State<LocalFavoritesSettings> {
+  final _tasks = SettingsTaskPresenter();
   @override
   Widget build(BuildContext context) {
     return SmoothCustomScrollView(
@@ -56,11 +57,17 @@ class _LocalFavoritesSettingsState extends State<LocalFavoritesSettings> {
         CallbackSetting(
           title: "Delete all unavailable local favorite items".tl,
           callback: () async {
-            var controller = showLoadingDialog(context);
-            var count = await LocalFavoritesManager().removeInvalid();
-            controller.close();
-            context.showMessage(
-              message: "Deleted @a favorite items".tlParams({'a': count}),
+            var count = 0;
+            await _tasks.run(
+              context,
+              task: () async {
+                count = await LocalFavoritesManager().removeInvalid();
+                return null;
+              },
+              errorMessage: "Error".tl,
+              onSuccess: () => context.showMessage(
+                message: "Deleted @a favorite items".tlParams({'a': count}),
+              ),
             );
           },
           actionTitle: 'Delete'.tl,

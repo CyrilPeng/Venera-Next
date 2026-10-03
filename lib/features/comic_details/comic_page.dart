@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shimmer_animation/shimmer_animation.dart';
 import 'package:venera_next/routing/local_reading.dart';
+import 'package:venera_next/routing/page_replacement.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/image.dart';
@@ -162,12 +163,16 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
   @override
   void dispose() {
     scrollController.removeListener(onScroll);
+    scrollController.dispose();
     super.dispose();
   }
 
   @override
+  bool isComicActive(ComicDetails value) => mounted && identical(data, value);
+
+  @override
   void update() {
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   @override
@@ -245,13 +250,15 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
       }
       var history = HistoryManager().find(widget.id, ComicType.local);
       if (isFirst) {
+        final pageContext = context;
         Future.microtask(() {
-          if (!mounted || scope.isCancelled) return;
-          App.rootContext.to(() {
+          if (!pageContext.mounted || scope.isCancelled) return;
+          final onClosed = ReaderSessionScope.onClosedOf(pageContext);
+          replaceWithRootPage(pageContext, (_) {
             return Reader(
-              onClosed: ReaderSessionScope.onClosedOf(App.rootContext),
+              onClosed: onClosed,
               type: ComicType.local,
-              cid: widget.id,
+              cid: localComic.id,
               name: localComic.title,
               chapters: localComic.chapters,
               initialPage: history?.page,
@@ -264,7 +271,6 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
               tags: localComic.tags,
             );
           });
-          App.mainNavigatorKey!.currentContext!.pop();
         });
         isFirst = false;
       }

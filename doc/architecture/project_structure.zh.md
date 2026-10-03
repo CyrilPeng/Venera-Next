@@ -521,3 +521,23 @@ local_deletion_paths.dart 同时核对记录路径与实际路径，缺失目录
 local_deletion_storage.dart 拥有三库删除事务，复用仓储 SQL 与临时 ATTACH；LocalManager 负责历史写队列和提交后缓存/通知装配。FavoritesRepository 仅在删除操作接受显式 schema，refreshDeletedFavorites 发布外部事务结果；旧批量跨文件夹管理器入口已退场。文件清理仍是提交后的独立阶段。
 
 删除恢复现由 local_deletion_journal.dart 管理：预检后先暂存到同级隔离路径，三库/本地事务同时提交日志状态与记录删除；启动和独占存储操作前处理未完成日志。提交后直接路径清理已替换为隔离目录清理，事务内快照核对补充暂存期间的记录变更检测。完整状态与验收限制见 local_deletion_recovery.zh.md。
+
+漫画详情收藏面板的 NetworkFavoriteSection 接收 FavoriteData 和状态回调，不解析 ComicSource 或本地收藏单例；单/多文件夹共用请求完成与展示生命周期，远端提交后的缓存失效独立于页面存活。它仍是 UI 组件，不加入业务入口。
+
+网络收藏页在 State 初始化/显式刷新时加载目录，不在 build 中启动请求；漫画与文件夹删除通过 confirmNetworkFavoriteDeletion 接收调用者提供的操作和提交回调，不查找根 context 或重新解析源。请求结果提交与弹窗展示分别遵守各自的生命周期。
+
+设置页的 settings_task_presenter.dart 属于 UI 展示层，仅拥有操作进度路由与页面存活检查；业务调用和临时文件清理保留在任务内，不加入纯业务入口。
+
+漫画详情评分 UI 由 rating_dialog.dart 接收提交操作，拥有评分草稿、忙碌状态与弹窗生命周期；不查找 ComicSource 或根 context。点赞保留在动作编排中，通过宿主的 isComicActive 校验请求结果归属，避免跨漫画状态写入。
+
+详情 archive_download_dialog.dart 只拥有归档列表、链接请求与选择结果，不访问本地下载管理器；actions.dart 捕获原漫画与源，验证宿主存活/身份后统一入队。普通章节与归档选择均不能在等待后重新读取另一个漫画的数据。
+
+收藏 create_favorite_folder_dialog.dart 只拥有输入草稿、导入忙碌状态和弹窗生命周期；favorite_actions.dart 注入文件选择/读取、JSON 导入、命名校验与创建操作，弹窗不访问全局收藏管理器。
+
+favorites/network_favorite_import.dart 为受控业务入口：负责分页收集与同一收藏数据库事务提交，不依赖 Widget/根 context；network_favorite_import_dialog.dart 拥有请求作用域与展示，favorite_actions.dart 仅装配源、管理器与弹窗。
+
+routing/page_replacement.dart 负责把当前路由替换为根导航页面，捕获原路由/导航器，不通过全局 key 弹出未知栈顶；本地详情自动阅读使用该适配，读取参数和会话回调在原宿主有效时捕获。
+
+reader/image_action.dart 共用复制/保存的异步读取与消费流程；gesture.dart 负责检查挂载、视口、图片列表与章节身份，并在展示处检查 mounted。读取结果过期时不启动平台操作；已启动的平台操作继续完成，迟到异常不更新旧页面。该纯 Dart 入口纳入架构门禁。
+
+网络收藏导入提交结果与缓存/通知发布已分离，刷新失败保留成功计数并仅重试发布；本地 JSON 导入、跨进程通知恢复及其他提交后发布边界仍待验收。

@@ -1,0 +1,106 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:venera_next/components/scroll.dart';
+import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/image_favorites/image_favorites_summary.dart';
+import 'package:venera_next/foundation/app.dart';
+import '../history/image_favorites_repository_test.dart' show comic;
+
+void main() {
+  setUpAll(() {
+    App.dataPath = Directory.systemTemp.path;
+    App.cachePath = Directory.systemTemp.path;
+  });
+  late Directory root;
+  late HistoryManager history;
+  late HistoryManager? previous;
+  late String previousData;
+  late String previousCache;
+  setUp(() async {
+    root = Directory.systemTemp.createTempSync('summary-lifecycle-');
+    previousData = App.dataPath;
+    previousCache = App.cachePath;
+    previous = HistoryManager.cache;
+    App.dataPath = root.path;
+    App.cachePath = root.path;
+    history = HistoryManager.create();
+    HistoryManager.cache = history;
+    await history.init();
+    ImageFavoriteManager().addOrUpdateOrDelete(comic('sample'));
+  });
+  tearDown(() async {
+    await history.waitForAsyncWrites();
+    history.close();
+    HistoryManager.cache = previous;
+    App.dataPath = previousData;
+    App.cachePath = previousCache;
+    root.deleteSync(recursive: true);
+  });
+
+  testWidgets('chart switch without a smooth-scroll ancestor remains usable', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: CustomScrollView(slivers: [ImageFavoritesSummary()]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Authors'));
+    await tester.pumpAndSettle();
+    expect(find.text('Author'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('chart frame callback is harmless after summary disposal', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SmoothCustomScrollView(slivers: [ImageFavoritesSummary()]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Authors'));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('rapid chart switches use the latest layout before scrolling', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SmoothCustomScrollView(
+            controller: controller,
+            slivers: const [
+              SliverToBoxAdapter(child: SizedBox(height: 350)),
+              ImageFavoritesSummary(),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Authors'));
+    await tester.tap(find.text('Comics'));
+    await tester.pumpAndSettle();
+    expect(find.text('Title sample'), findsOneWidget);
+    expect(
+      controller.offset,
+      closeTo(controller.position.maxScrollExtent, 0.1),
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
+}

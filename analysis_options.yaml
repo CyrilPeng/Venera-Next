@@ -12,6 +12,7 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   errors:
     collection_methods_unrelated_type: warning
+    use_build_context_synchronously: warning
   exclude:
     # Plugin build runners and local build probes are generated artifacts.
     - build/**

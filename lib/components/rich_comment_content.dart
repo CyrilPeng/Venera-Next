@@ -3,7 +3,7 @@ import 'dart:collection';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/routing/app_links.dart';
@@ -11,6 +11,41 @@ import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 import 'gesture.dart';
+
+/// Opens a comment link while retaining ownership of the originating route.
+Future<void> openCommentLink(
+  BuildContext context,
+  String link, {
+  Future<bool> Function(Uri, bool Function())? openAppLink,
+  Future<bool> Function(String)? openExternal,
+  bool Function()? isActive,
+}) async {
+  bool active() => context.mounted && (isActive?.call() ?? true);
+  if (!active() || !link.isURL) return;
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final route = ModalRoute.of(context);
+  try {
+    final handled = await (openAppLink == null
+        ? handleAppLink(Uri.parse(link), isActive: active)
+        : openAppLink(Uri.parse(link), active));
+    if (!active()) return;
+    if (handled) {
+      // The app link may already have pushed another route. Only remove the
+      // original root overlay, never pop whichever route is now on top.
+      if (navigator.mounted &&
+          route != null &&
+          route.navigator == navigator &&
+          route.isActive &&
+          !route.isFirst) {
+        navigator.removeRoute(route);
+      }
+    } else {
+      await (openExternal?.call(link) ?? launchUrlString(link));
+    }
+  } catch (error, stack) {
+    Log.error('Comment link', error.toString(), stack);
+  }
+}
 
 /// A widget that displays comment content with support for rich text formatting.
 ///
@@ -37,7 +72,11 @@ class _Tag {
 
   const _Tag(this.name, this.attributes);
 
-  TextSpan merge(TextSpan s, BuildContext context) {
+  TextSpan merge(
+    TextSpan s,
+    BuildContext context,
+    TapGestureRecognizer Function(String) createLink,
+  ) {
     var style = s.style ?? ts;
     style = switch (name) {
       'b' => style.bold,
@@ -96,23 +135,10 @@ class _Tag {
     if (name == 'a') {
       var link = attributes['href'];
       if (link != null && link.isURL) {
-        recognizer = TapGestureRecognizer()
-          ..onTap = () {
-            handleLink(link);
-          };
+        recognizer = createLink(link);
       }
     }
     return TextSpan(text: s.text, style: style, recognizer: recognizer);
-  }
-
-  static void handleLink(String link) async {
-    if (link.isURL) {
-      if (await handleAppLink(Uri.parse(link))) {
-        Navigator.of(App.rootContext).maybePop();
-      } else {
-        launchUrlString(link);
-      }
-    }
   }
 }
 
@@ -141,15 +167,48 @@ class RichCommentContent extends StatefulWidget {
 class _RichCommentContentState extends State<RichCommentContent> {
   var textSpan = <InlineSpan>[];
   var images = <_CommentImage>[];
-  bool isRendered = false;
+  final _recognizers = <TapGestureRecognizer>[];
+  int _generation = 0;
+
+  void _releaseRecognizers() {
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
+    }
+    _recognizers.clear();
+  }
+
+  TapGestureRecognizer _createLink(String link) {
+    final generation = _generation;
+    final recognizer = TapGestureRecognizer()
+      ..onTap = () {
+        if (!mounted || generation != _generation) return;
+        openCommentLink(
+          context,
+          link,
+          isActive: () => mounted && generation == _generation,
+        );
+      };
+    _recognizers.add(recognizer);
+    return recognizer;
+  }
+
+  @override
+  void didUpdateWidget(RichCommentContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) render();
+  }
+
+  @override
+  void dispose() {
+    _generation++;
+    _releaseRecognizers();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
-    if (!isRendered) {
-      render();
-      isRendered = true;
-    }
     super.didChangeDependencies();
+    render();
   }
 
   bool isValidUrlChar(String char) {
@@ -157,6 +216,10 @@ class _RichCommentContentState extends State<RichCommentContent> {
   }
 
   void render() {
+    _generation++;
+    _releaseRecognizers();
+    textSpan.clear();
+    images.clear();
     var s = Queue<_Tag>();
 
     int i = 0;
@@ -169,7 +232,7 @@ class _RichCommentContentState extends State<RichCommentContent> {
       if (buffer.isEmpty) return;
       var span = TextSpan(text: buffer.toString());
       for (var tag in s) {
-        span = tag.merge(span, context);
+        span = tag.merge(span, context, _createLink);
       }
       textSpan.add(span);
       buffer.clear();
@@ -265,10 +328,7 @@ class _RichCommentContentState extends State<RichCommentContent> {
             TextSpan(
               text: url,
               style: ts.withColor(context.colorScheme.primary),
-              recognizer: TapGestureRecognizer()
-                ..onTap = () {
-                  _Tag.handleLink(url);
-                },
+              recognizer: _createLink(url),
             ),
           );
           i = j;
@@ -311,7 +371,7 @@ class _RichCommentContentState extends State<RichCommentContent> {
               if (e.link != null) {
                 image = ClickInkWell(
                   onTap: () {
-                    _Tag.handleLink(e.link!);
+                    openCommentLink(context, e.link!, isActive: () => mounted);
                   },
                   child: image,
                 );

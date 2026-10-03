@@ -22,14 +22,15 @@ class _ImageFavoritesSummaryState extends State<ImageFavoritesSummary> {
   ImageFavoritesComputed? imageFavoritesCompute;
 
   int displayType = 0;
+  int _refreshGeneration = 0;
+  int _scrollGeneration = 0;
 
   void refreshImageFavorites() async {
+    final generation = ++_refreshGeneration;
     try {
-      imageFavoritesCompute =
-          await ImageFavoriteManager.computeImageFavorites();
-      if (mounted) {
-        setState(() {});
-      }
+      final result = await ImageFavoriteManager.computeImageFavorites();
+      if (!mounted || generation != _refreshGeneration) return;
+      setState(() => imageFavoritesCompute = result);
     } catch (e, stackTrace) {
       Log.error("Unhandled Exception", e.toString(), stackTrace);
     }
@@ -129,17 +130,19 @@ class _ImageFavoritesSummaryState extends State<ImageFavoritesSummary> {
     const radius = 24.0;
     return ClickInkWell(
       borderRadius: BorderRadius.circular(radius),
-      onTap: () async {
-        setState(() {
-          displayType = type;
+      onTap: () {
+        final generation = ++_scrollGeneration;
+        setState(() => displayType = type);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || generation != _scrollGeneration) return;
+          final controller = ScrollState.maybeOf(context)?.controller;
+          if (controller == null || !controller.hasClients) return;
+          controller.animateTo(
+            controller.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.ease,
+          );
         });
-        await Future.delayed(const Duration(milliseconds: 20));
-        var scrollController = ScrollState.of(context).controller;
-        scrollController.animateTo(
-          scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.ease,
-        );
       },
       child: AnimatedContainer(
         width: 96,

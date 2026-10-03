@@ -1,3 +1,4 @@
+import 'network_favorite_import.dart';
 import 'favorite_folder_import.dart';
 import 'favorite_updates_service.dart';
 import 'read_later_service.dart';
@@ -913,6 +914,39 @@ class LocalFavoritesManager with ChangeNotifier {
           .map((item) => item.toJson())
           .toList(),
     });
+  }
+
+  NetworkFavoriteImportCommit importNetworkFavorites(
+    String folder,
+    String source,
+    String folderId,
+    List<FavoriteItem> items, {
+    required bool oldToNew,
+  }) {
+    final added = commitNetworkFavorites(
+      _repository,
+      folder: folder,
+      source: source,
+      folderId: folderId,
+      items: items,
+      append: appdata.settings['newFavoriteAddTo'] == 'end',
+      oldToNew: oldToNew,
+      translateTags: _translateTags,
+    );
+    return NetworkFavoriteImportCommit(folder, added);
+  }
+
+  /// Retryable publication of an already committed import; never writes SQL.
+  void publishNetworkFavoriteImport(NetworkFavoriteImportCommit result) {
+    counts[result.folder] = count(result.folder);
+    _refreshIdentityCounts(result.identities);
+    refreshUpdateIds();
+    try {
+      _syncFollowUpdatesIfAffected([result.folder]);
+    } finally {
+      // A follow-up observer must not prevent ordinary views from refreshing.
+      notifyListeners();
+    }
   }
 
   void fromJson(String json) {

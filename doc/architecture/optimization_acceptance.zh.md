@@ -56,7 +56,7 @@
 | P7.5 | P | 结构化错误 | `lib/features/comic_source/source_update_service.dart; lib/foundation/res.dart` | 源仓库/更新与目录预览已有稳定错误码，保留原始异常及检查范围，UI/CLI 在边界展示；源更新取消已有明确原因且 CLI 不再误计成功；FailureDetails/Res 适配已区分失败、取消和标准 UnsupportedError，八类源解析器保留异常；其他服务、直接字符串校验失败和全消费端分类展示仍待迁移。 |
 | P7.6 | P | 技术规则复用 | `lib/features/comic_source/parser.dart:23; lib/features/comic_storage/archive_metadata.dart` | 元数据/文件规则已有公共实现；版本比较/日期等仍需用途和兼容审查。 |
 | P8.1 | P | 兼容与测试开关退场 | `lib/features/local_comics/local.dart:52; lib/app_runtime/data_sync.dart` | 同步单例/reset/debug、9 个归一化 debug 转发及 JSAutoFreeFunction 已删除；本地漫画等域仍有 reset/debug，聚合导出继续审查。 无调用的旧批量归档执行器已退役，历史元数据编解码独立保留，不构成当前导入入口。  原 36 项调查现已全部处理；最终复扫 379 个生产文件、6036 个声明、304 个候选，无新增未分类项。详见 investigation_resolution.zh.md；历史数量不代表当前扫描。 |
-| P8.2 | P | 恢复 lint 与边界类型 | `analysis_options.yaml` | collection_methods_unrelated_type 已启用并提升为 warning，25 处诊断已处理；use_build_context_synchronously 已启用为 info，导入展示修复 21 处、评论视图修复 8 处、源页面修复 8 处、本地库修复 3 处、同步窗口修复 1 处，历史页面修复 2 处，剩余 42 处见 async_context_audit.zh.md；全部修复后提升门禁。 |
+| P8.2 | P | 恢复 lint 与边界类型 | `analysis_options.yaml` | collection_methods_unrelated_type 已启用并提升为 warning，25 处诊断已处理；use_build_context_synchronously 已提升为 warning，导入展示修复 21 处、评论视图修复 8 处、源页面修复 8 处、本地库修复 3 处、同步窗口修复 1 处，历史页面修复 2 处，收藏面板修复 7 处，网络收藏页修复 9 处，应用设置修复 9 处，本地收藏设置/图片统计各修复 1 处，富文本评论修复 1 处，详情点赞/评分修复 4 处，详情下载修复 3 处，本地收藏文件导入修复 2 处，网络收藏批量导入修复 1 处，调试提示/本地跳转各修复 1 处，阅读手势最后 2 处已修复，剩余 0；另有 21 项 info 与边界类型审查，P8.2 尚未整体验收。 |
 | P8.3 | P | CI 与覆盖趋势 | `.github/workflows/analyze.yml` | 检查和覆盖上传已有；未登记服务仍不受业务入口门禁约束。 |
 | P8.4 | U | 最终平台与性能验收 | `.github/workflows/build.yml; optimization_progress.zh.md` | 构建工作流存在不等于本轮运行成功；收集五平台结果和固定设备复测。 |
 | P8.5 | P | 最终删除/技术债报告 | `optimization_acceptance.zh.md` | 本清单建立追踪入口；剩余项完成后逐项复核，不用总测试数替代验收。 |
@@ -94,3 +94,7 @@
 5. P8 退兼容、恢复 lint、完整脚本/CLI/平台/性能验证；逐项复核本清单与第 9 节后才能完成目标。
 
 审计不改变原目标或豁免未完成项。P0 设备基线、P1 清理分类和 P3 剩余配置在相关步骤补齐；平台不可用时保留未验证，不以 Windows 测试代替其他平台。
+
+P6/P7 网络收藏导入增量证据：抓取/事务提交/UI 生命周期已分离，取消与抓取失败无提交，分页重试/游标检查和 SQL 回滚有专项；见 network_favorite_import.zh.md。提交后发布失败、真实源协议和平台退出仍待验收。
+
+网络收藏导入提交结果与缓存/通知发布已分离，刷新失败保留成功计数并仅重试发布；本地 JSON 导入、跨进程通知恢复及其他提交后发布边界仍待验收。

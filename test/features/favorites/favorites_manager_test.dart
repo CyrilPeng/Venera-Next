@@ -89,6 +89,75 @@ Future<void> _withFavoritesManager(
 
 void main() {
   test(
+    'network refresh can recover after connection closure without reimport',
+    () async {
+      await _withFavoritesManager((manager) async {
+        final result = manager.importNetworkFavorites(
+          'Network',
+          'test',
+          'remote',
+          [_favorite('persisted')],
+          oldToNew: false,
+        );
+        await manager.closeAndWait();
+        expect(
+          () => manager.publishNetworkFavoriteImport(result),
+          throwsStateError,
+        );
+        expect(result.count, 1);
+        await manager.init();
+        await manager.debugWaitForHashedIdsRefresh();
+        manager.publishNetworkFavoriteImport(result);
+        expect(manager.count('Network'), 1);
+        expect(manager.folderComics('Network'), 1);
+        expect(manager.isExist('persisted', ComicType.local), isTrue);
+      });
+    },
+  );
+
+  test(
+    'network publication failure preserves commit and still notifies views',
+    () async {
+      await _withFavoritesManager((manager) async {
+        await manager.debugWaitForHashedIdsRefresh();
+        final result = manager.importNetworkFavorites(
+          'Network',
+          'test',
+          'remote',
+          [_favorite('network-one')],
+          oldToNew: false,
+        );
+        expect(result.count, 1);
+        manager.prepareTableForFollowUpdates('Network');
+        appdata.settings['followUpdatesFolder'] = 'Network';
+        var notifications = 0;
+        void changed() {
+          notifications++;
+        }
+
+        manager.addListener(changed);
+        registerFollowUpdatesChangeListener(() => throw StateError('observer'));
+        try {
+          expect(
+            () => manager.publishNetworkFavoriteImport(result),
+            throwsStateError,
+          );
+          expect(manager.folderComics('Network'), 1);
+          expect(manager.isExist('network-one', ComicType.local), isTrue);
+          expect(notifications, 1);
+          registerFollowUpdatesChangeListener(null);
+          manager.publishNetworkFavoriteImport(result);
+          expect(notifications, 2);
+          expect(manager.count('Network'), 1);
+        } finally {
+          registerFollowUpdatesChangeListener(null);
+          manager.removeListener(changed);
+        }
+      });
+    },
+  );
+
+  test(
     'folder JSON import publishes complete counts once and malformed input not at all',
     () async {
       await _withFavoritesManager((manager) async {

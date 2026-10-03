@@ -32,3 +32,7 @@ Date: 2026-10-03. Code baseline: 8f77c1c, with existing user workspace changes. 
 4. Existing regression entry points: `test/network/{request_scope,shared_request_stream}_test.dart`, `test/foundation/{throttled_task_runner,sqlite_transaction,directory_replacement}_test.dart`, `test/features/follow_updates/follow_update_queue_test.dart`, `test/features/local_comics/local_storage_guard_test.dart`, `test/features/local_comics/import_export/{pdf_import_batch,comic_export_service}_test.dart`, `test/features/sync/data_sync_transfer_test.dart`. Braces abbreviate separate filenames.
 
 Documentation-only stage: implementations and test entry points inspected; full tests not repeated. Previous code-stage logs: output/legacy-codec-full.log (1306 passed), output/legacy-codec-analyze.log (zero errors/warnings, 65 infos). These results do not close the outstanding acceptance items above.
+
+## Shared settings-task presentation (2026-10-03)
+
+SettingsTaskPresenter owns only the current settings page's progress route, duplicate-trigger guard, error presentation and cleanup. Actual callers are path migration, cache clearing, export and import; their four manual dialog-close paths were removed. Page disposal does not cancel accepted storage work, and finally closes the owned route; import retains its own temporary-file cleanup. This provides no automatic retries, business rollback, cross-page exclusion or network cancellation, and does not replace P6 storage guards. settings_task_presenter_test covers failure, reentry and completion after disposal.

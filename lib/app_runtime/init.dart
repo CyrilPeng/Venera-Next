@@ -140,6 +140,9 @@ void reloadComicSourcesForDebug() async {
     await ComicSourceManager().reloadForDebug();
   } catch (error, stack) {
     Log.error('Reload comic sources', error, stack);
-    showToast(message: error.toString(), context: App.rootContext);
+    final context = App.rootNavigatorKey.currentContext;
+    if (context != null && context.mounted) {
+      showToast(message: error.toString(), context: context);
+    }
   }
 }

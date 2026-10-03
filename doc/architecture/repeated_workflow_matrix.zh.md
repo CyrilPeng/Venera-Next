@@ -32,3 +32,7 @@
 4. 现有回归入口：`test/network/{request_scope,shared_request_stream}_test.dart`、`test/foundation/{throttled_task_runner,sqlite_transaction,directory_replacement}_test.dart`、`test/features/follow_updates/follow_update_queue_test.dart`、`test/features/local_comics/local_storage_guard_test.dart`、`test/features/local_comics/import_export/{pdf_import_batch,comic_export_service}_test.dart`、`test/features/sync/data_sync_transfer_test.dart`。花括号为文件名缩写，不是单个路径。
 
 本阶段只新增审查文档，逐项核对实现和测试入口，不重复运行完整测试。上一代码阶段日志 `output/legacy-codec-full.log` 为 1306 项通过，`output/legacy-codec-analyze.log` 为零 error/warning、65 个 info；该结果不证明本表所列剩余验收已完成。
+
+## 设置任务展示共性落实（2026-10-03）
+
+SettingsTaskPresenter 仅管理当前设置页的进度路由、重复触发、异常提示和收尾。真实调用者为目录迁移、清缓存、导出与导入，原四份手工弹窗关闭路径已移除。页面退出不取消已接受的存储任务，finally 始终关闭该任务持有的路由；业务临时文件清理仍留在导入任务中。它不提供自动重试、业务回滚、跨页面互斥或网络请求取消，也不替代 P6 的存储锁。失败/重入/卸载后的完成由 settings_task_presenter_test 覆盖。

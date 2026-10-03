@@ -5,7 +5,7 @@ import 'package:shimmer_animation/shimmer_animation.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -129,9 +129,9 @@ class _FavoriteListState extends State<_FavoriteList> {
     );
 
     final networkSection = widget.hasNetwork
-        ? _NetworkSection(
+        ? NetworkFavoriteSection(
             cid: widget.cid,
-            comicSource: widget.comicSource,
+            favoriteData: widget.comicSource.favoriteData!,
             isFavorite: widget.isFavorite,
             onFavorite: (network) {
               widget.onFavorite(null, network);
@@ -161,24 +161,25 @@ class _FavoriteListState extends State<_FavoriteList> {
   }
 }
 
-class _NetworkSection extends StatefulWidget {
-  const _NetworkSection({
+class NetworkFavoriteSection extends StatefulWidget {
+  const NetworkFavoriteSection({
+    super.key,
     required this.cid,
-    required this.comicSource,
+    required this.favoriteData,
     required this.isFavorite,
     required this.onFavorite,
   });
 
   final String cid;
-  final ComicSource comicSource;
+  final FavoriteData favoriteData;
   final bool? isFavorite;
   final void Function(bool) onFavorite;
 
   @override
-  State<_NetworkSection> createState() => _NetworkSectionState();
+  State<NetworkFavoriteSection> createState() => _NetworkSectionState();
 }
 
-class _NetworkSectionState extends State<_NetworkSection> {
+class _NetworkSectionState extends State<NetworkFavoriteSection> {
   bool isLoading = false;
   Map<String, String>? folders;
   var addedFolders = <String>{};
@@ -195,39 +196,87 @@ class _NetworkSectionState extends State<_NetworkSection> {
       3,
       (_) => 0.3 + math.Random().nextDouble() * 0.5,
     );
-    if (widget.comicSource.favoriteData!.loadFolders != null) {
+    if (widget.favoriteData.loadFolders != null) {
       loadFolders();
     } else {
       isLoadingFolders = false;
     }
   }
 
-  void loadFolders() async {
-    var res = await widget.comicSource.favoriteData!.loadFolders!(widget.cid);
+  Future<void> loadFolders() async {
+    Res<Map<String, String>> res;
+    try {
+      res = await widget.favoriteData.loadFolders!(widget.cid);
+    } catch (error, stack) {
+      res = Res.fromException(error, stack);
+    }
+    if (!mounted) return;
     if (res.error) {
       context.showMessage(message: res.errorMessage!);
-      setState(() {
-        isLoadingFolders = false;
-      });
     } else {
       folders = res.data;
-      if (res.subData is List) {
-        final list = List<String>.from(res.subData);
-        if (list.isNotEmpty) {
-          addedFolders = list.toSet();
-          localIsFavorite = true;
-        } else {
-          addedFolders.clear();
-          localIsFavorite = false;
-        }
-      } else {
-        addedFolders.clear();
-        localIsFavorite = false;
-      }
-      setState(() {
-        isLoadingFolders = false;
-      });
+      addedFolders = res.subData is List
+          ? Set<String>.from(res.subData)
+          : <String>{};
+      localIsFavorite = addedFolders.isNotEmpty;
     }
+    setState(() => isLoadingFolders = false);
+  }
+
+  Future<void> _toggle(
+    String folder,
+    bool wasAdded, {
+    required bool multi,
+  }) async {
+    if (multi ? (_itemLoading[folder] ?? false) : isLoading) return;
+    setState(() {
+      if (multi) {
+        _itemLoading[folder] = true;
+      } else {
+        isLoading = true;
+      }
+    });
+    Res<bool> result;
+    try {
+      result = await widget.favoriteData.addOrDelFavorite!(
+        widget.cid,
+        folder,
+        !wasAdded,
+        null,
+      );
+    } catch (error, stack) {
+      result = Res.fromException(error, stack);
+    }
+    // The accepted remote mutation outlives the panel; invalidate stale lists
+    // even when the caller has already closed it.
+    if (result.success) NetworkCacheManager().clear();
+    if (!mounted) return;
+    setState(() {
+      _itemLoading.remove(folder);
+      isLoading = false;
+      if (result.success) {
+        if (multi) {
+          if (wasAdded) {
+            addedFolders.remove(folder);
+          } else {
+            addedFolders.add(folder);
+          }
+          localIsFavorite = addedFolders.isNotEmpty;
+        } else {
+          localIsFavorite = !wasAdded;
+        }
+      }
+    });
+    if (result.error) {
+      context.showMessage(message: result.errorMessage!);
+      return;
+    }
+    widget.onFavorite(localIsFavorite!);
+    if (!mounted) return;
+    context.showMessage(
+      message: multi ? "Success".tl : (wasAdded ? "Removed".tl : "Added".tl),
+    );
+    if (appdata.settings['autoCloseFavoritePanel'] ?? false) context.pop();
   }
 
   Widget _buildLoadingSkeleton() {
@@ -285,7 +334,16 @@ class _NetworkSectionState extends State<_NetworkSection> {
       return _buildLoadingSkeleton();
     }
 
-    bool isMultiFolder = widget.comicSource.favoriteData!.loadFolders != null;
+    if (widget.favoriteData.loadFolders != null && folders == null) {
+      return TextButton(
+        onPressed: () {
+          setState(() => isLoadingFolders = true);
+          loadFolders();
+        },
+        child: Text("Retry".tl),
+      );
+    }
+    bool isMultiFolder = widget.favoriteData.loadFolders != null;
 
     if (isMultiFolder) {
       return _buildMultiFolder();
@@ -336,33 +394,7 @@ class _NetworkSectionState extends State<_NetworkSection> {
                 )
               : _HoverButton(
                   isFavorite: isFavorite,
-                  onTap: () async {
-                    setState(() {
-                      isLoading = true;
-                    });
-
-                    var res = await widget
-                        .comicSource
-                        .favoriteData!
-                        .addOrDelFavorite!(widget.cid, '', !isFavorite, null);
-                    if (res.success) {
-                      setState(() {
-                        localIsFavorite = !isFavorite;
-                      });
-                      widget.onFavorite(!isFavorite);
-                      App.rootContext.showMessage(
-                        message: isFavorite ? "Removed".tl : "Added".tl,
-                      );
-                      if (appdata.settings['autoCloseFavoritePanel'] ?? false) {
-                        context.pop();
-                      }
-                    } else {
-                      context.showMessage(message: res.errorMessage!);
-                    }
-                    setState(() {
-                      isLoading = false;
-                    });
-                  },
+                  onTap: () => _toggle('', isFavorite, multi: false),
                 ),
         ),
       ],
@@ -391,7 +423,7 @@ class _NetworkSectionState extends State<_NetworkSection> {
           // When `singleFolderForSingleComic` is `true`, the remove button is always clickable,
           // while the add button is only clickable if the comic has not been added to any list.
           var enabled =
-              !(widget.comicSource.favoriteData!.singleFolderForSingleComic &&
+              !(widget.favoriteData.singleFolderForSingleComic &&
                   addedFolders.isNotEmpty &&
                   !isAdded);
 
@@ -423,40 +455,7 @@ class _NetworkSectionState extends State<_NetworkSection> {
                 : _HoverButton(
                     isFavorite: isAdded,
                     enabled: enabled,
-                    onTap: () async {
-                      setState(() {
-                        _itemLoading[id] = true;
-                      });
-                      var res = await widget
-                          .comicSource
-                          .favoriteData!
-                          .addOrDelFavorite!(widget.cid, id, !isAdded, null);
-                      if (res.success) {
-                        // Invalidate network cache so folders/pages reload with fresh data
-                        NetworkCacheManager().clear();
-                        setState(() {
-                          if (isAdded) {
-                            addedFolders.remove(id);
-                          } else {
-                            addedFolders.add(id);
-                          }
-                          // sync local flag for single-folder-per-comic logic and parent
-                          localIsFavorite = addedFolders.isNotEmpty;
-                        });
-                        // notify parent so page state updates when closing and reopening panel
-                        widget.onFavorite(addedFolders.isNotEmpty);
-                        context.showMessage(message: "Success".tl);
-                        if (appdata.settings['autoCloseFavoritePanel'] ??
-                            false) {
-                          context.pop();
-                        }
-                      } else {
-                        context.showMessage(message: res.errorMessage!);
-                      }
-                      setState(() {
-                        _itemLoading[id] = false;
-                      });
-                    },
+                    onTap: () => _toggle(id, isAdded, multi: true),
                   ),
           );
         }),
@@ -580,6 +579,7 @@ class _LocalSectionState extends State<_LocalSection> {
           ),
           onTap: () {
             newFolder().then((v) {
+              if (!mounted) return;
               setState(() {
                 localFolders = LocalFavoritesManager().folderNames;
               });

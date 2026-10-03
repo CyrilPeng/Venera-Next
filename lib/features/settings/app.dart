@@ -15,6 +15,7 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
+import 'package:venera_next/features/settings/settings_task_presenter.dart';
 import 'package:venera_next/features/settings/data_sync_schedule_fields.dart';
 import 'package:venera_next/features/settings/webdav_connection_fields.dart';
 import 'package:venera_next/features/sync/sync.dart';
@@ -36,6 +37,8 @@ class AppSettings extends StatefulWidget {
 }
 
 class _AppSettingsState extends State<AppSettings> {
+  final _tasks = SettingsTaskPresenter();
+  int _authorizationCheck = 0;
   @override
   Widget build(BuildContext context) {
     return SmoothCustomScrollView(
@@ -66,20 +69,14 @@ class _AppSettingsState extends State<AppSettings> {
             } else {
               result = await selectDirectory();
             }
-            if (result == null) return;
-            var loadingDialog = showLoadingDialog(
-              App.rootContext,
-              barrierDismissible: false,
-              allowCancel: false,
+            if (result == null || !context.mounted) return;
+            await _tasks.run(
+              context,
+              task: () => LocalManager().setNewPath(result!),
+              errorMessage: "Error".tl,
+              successMessage: "Path set successfully".tl,
+              onSuccess: () => setState(() {}),
             );
-            var res = await LocalManager().setNewPath(result);
-            loadingDialog.close();
-            if (res != null) {
-              context.showMessage(message: res);
-            } else {
-              context.showMessage(message: "Path set successfully".tl);
-              setState(() {});
-            }
           },
         ).toSliver(),
         ListTile(
@@ -90,15 +87,16 @@ class _AppSettingsState extends State<AppSettings> {
           title: "Clear Cache".tl,
           actionTitle: "Clear".tl,
           callback: () async {
-            var loadingDialog = showLoadingDialog(
-              App.rootContext,
-              barrierDismissible: false,
-              allowCancel: false,
+            await _tasks.run(
+              context,
+              task: () async {
+                await CacheManager().clear();
+                return null;
+              },
+              errorMessage: "Error".tl,
+              successMessage: "Cache cleared".tl,
+              onSuccess: () => setState(() {}),
             );
-            await CacheManager().clear();
-            loadingDialog.close();
-            context.showMessage(message: "Cache cleared".tl);
-            setState(() {});
           },
         ).toSliver(),
         CallbackSetting(
@@ -136,41 +134,47 @@ class _AppSettingsState extends State<AppSettings> {
         CallbackSetting(
           title: "Export App Data".tl,
           callback: () async {
-            var controller = showLoadingDialog(context);
-            var file = await exportAppData(false);
-            await saveFile(filename: "data.venera", file: file);
-            controller.close();
+            await _tasks.run(
+              context,
+              task: () async {
+                var file = await exportAppData(false);
+                await saveFile(filename: "data.venera", file: file);
+                return null;
+              },
+              errorMessage: "Error".tl,
+            );
           },
           actionTitle: 'Export'.tl,
         ).toSliver(),
         CallbackSetting(
           title: "Import App Data".tl,
           callback: () async {
-            var controller = showLoadingDialog(context);
-            var file = await selectFile(ext: ['venera', 'picadata']);
-            if (file != null) {
-              var cacheFile = File(
-                FilePath.join(
-                  App.cachePath,
-                  "import_data_${const Uuid().v4()}",
-                ),
-              );
-              try {
-                await file.saveTo(cacheFile.path);
-                if (file.name.endsWith('picadata')) {
-                  await importPicaData(cacheFile);
-                } else {
-                  await importAppData(cacheFile);
+            await _tasks.run(
+              context,
+              task: () async {
+                final file = await selectFile(ext: ['venera', 'picadata']);
+                if (file == null) return null;
+                final cacheFile = File(
+                  FilePath.join(
+                    App.cachePath,
+                    "import_data_${const Uuid().v4()}",
+                  ),
+                );
+                try {
+                  await file.saveTo(cacheFile.path);
+                  if (file.name.endsWith('picadata')) {
+                    await importPicaData(cacheFile);
+                  } else {
+                    await importAppData(cacheFile);
+                  }
+                } finally {
+                  cacheFile.deleteIgnoreError();
+                  App.forceRebuild();
                 }
-              } catch (e, s) {
-                Log.error("Import data", e.toString(), s);
-                context.showMessage(message: "Failed to import data".tl);
-              } finally {
-                cacheFile.deleteIgnoreError();
-                App.forceRebuild();
-              }
-            }
-            controller.close();
+                return null;
+              },
+              errorMessage: "Failed to import data".tl,
+            );
           },
           actionTitle: 'Import'.tl,
         ).toSliver(),
@@ -221,23 +225,24 @@ class _AppSettingsState extends State<AppSettings> {
             title: "Authorization Required".tl,
             settingKey: "authorizationRequired",
             onChanged: () async {
-              var current = appdata.settings['authorizationRequired'];
-              if (current) {
+              final check = ++_authorizationCheck;
+              if (appdata.settings['authorizationRequired'] != true) return;
+              bool supported;
+              try {
                 final auth = LocalAuthentication();
-                final bool canAuthenticateWithBiometrics =
-                    await auth.canCheckBiometrics;
-                final bool canAuthenticate =
-                    canAuthenticateWithBiometrics ||
+                supported =
+                    await auth.canCheckBiometrics ||
                     await auth.isDeviceSupported();
-                if (!canAuthenticate) {
-                  context.showMessage(message: "Biometrics not supported".tl);
-                  setState(() {
-                    appdata.settings['authorizationRequired'] = false;
-                  });
-                  appdata.saveData();
-                  return;
-                }
+              } catch (error, stack) {
+                Log.error('Authorization support', error.toString(), stack);
+                supported = false;
               }
+              if (check != _authorizationCheck || supported) return;
+              appdata.settings['authorizationRequired'] = false;
+              await appdata.saveData();
+              if (!context.mounted) return;
+              context.showMessage(message: "Biometrics not supported".tl);
+              setState(() {});
             },
           ).toSliver(),
       ],
@@ -484,7 +489,7 @@ class _WebdavSettingState extends State<_WebdavSetting> {
                           minutes: syncInterval,
                           initialUpload: upload,
                         );
-                    if (!mounted) return;
+                    if (!context.mounted) return;
                     setState(() => isTesting = false);
                     if (testResult.error) {
                       context.showMessage(message: testResult.errorMessage!);

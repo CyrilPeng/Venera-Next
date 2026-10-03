@@ -1,4 +1,5 @@
 import 'gesture_port.dart';
+import 'image_action.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -388,24 +389,38 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
     _dragListeners.remove(listener);
   }
 
-  void copyImage(Offset location) async {
-    var controller = reader.imageViewController;
-    var image = await controller!.getImageByOffset(location);
-    if (image != null) {
-      writeImageToClipboard(image);
-    } else {
-      context.showMessage(message: "No Image".tl);
-    }
+  Future<void> _useImage(
+    Offset location,
+    Future<void> Function(Uint8List) consume,
+  ) async {
+    if (!mounted || !reader.mounted) return;
+    final viewport = reader.imageViewController;
+    if (viewport == null) return;
+    final images = reader.images;
+    final chapter = reader.chapter;
+    await useReaderImage(
+      read: () => viewport.getImageByOffset(location),
+      isCurrent: () =>
+          mounted &&
+          reader.mounted &&
+          identical(viewport, reader.imageViewController) &&
+          identical(images, reader.images) &&
+          chapter == reader.chapter,
+      consume: consume,
+      onMissing: () {
+        if (mounted) context.showMessage(message: "No Image".tl);
+      },
+      onError: (error) {
+        if (mounted) context.showMessage(message: error.toString());
+      },
+    );
   }
 
-  void saveImage(Offset location) async {
-    var controller = reader.imageViewController;
-    var image = await controller!.getImageByOffset(location);
-    if (image != null) {
-      var filetype = detectFileType(image);
-      saveFile(filename: "image${filetype.ext}", data: image);
-    } else {
-      context.showMessage(message: "No Image".tl);
-    }
-  }
+  Future<void> copyImage(Offset location) =>
+      _useImage(location, writeImageToClipboard);
+
+  Future<void> saveImage(Offset location) => _useImage(location, (image) async {
+    final filetype = detectFileType(image);
+    await saveFile(filename: "image${filetype.ext}", data: image);
+  });
 }

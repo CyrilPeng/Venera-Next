@@ -2,16 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:venera_next/components/appbar.dart';
-import 'package:venera_next/components/button.dart';
-import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/components/menu.dart';
-import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/side_bar.dart';
-import 'package:venera_next/features/comic_details/archive_download.dart';
+import 'package:venera_next/features/comic_details/archive_download_dialog.dart';
 import 'package:venera_next/features/comic_details/comments_page.dart';
 import 'package:venera_next/features/comic_details/favorite.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
@@ -22,11 +18,16 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/translations.dart';
-import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/routing/page_jump_target.dart';
+import 'package:venera_next/foundation/res.dart';
+import 'package:venera_next/features/comic_details/rating_dialog.dart';
 
 abstract mixin class ComicPageActions {
   void update();
+
+  BuildContext get context;
+
+  bool isComicActive(ComicDetails value);
 
   ComicDetails get comic;
 
@@ -34,21 +35,35 @@ abstract mixin class ComicPageActions {
 
   History? get history;
 
-  bool isLiking = false;
+  ComicDetails? _likingComic;
+
+  bool get isLiking => _likingComic != null && isComicActive(_likingComic!);
 
   bool isLiked = false;
 
-  void likeOrUnlike() async {
+  Future<void> likeOrUnlike() async {
     if (isLiking) return;
-    isLiking = true;
+    final target = comic;
+    final wasLiked = isLiked;
+    _likingComic = target;
     update();
-    var res = await comicSource.likeOrUnlikeComic!(comic.id, isLiked);
-    if (res.error) {
-      App.rootContext.showMessage(message: res.errorMessage!);
-    } else {
-      isLiked = !isLiked;
+    Res<bool> result;
+    try {
+      result = await comicSource.likeOrUnlikeComic!(target.id, wasLiked);
+    } catch (error, stack) {
+      result = Res.fromException(error, stack);
+    } finally {
+      if (identical(_likingComic, target)) _likingComic = null;
     }
-    isLiking = false;
+    if (!isComicActive(target)) return;
+    if (result.error) {
+      final currentContext = context;
+      if (currentContext.mounted) {
+        currentContext.showMessage(message: result.errorMessage!);
+      }
+    } else {
+      isLiked = !wasLiked;
+    }
     update();
   }
 
@@ -170,209 +185,96 @@ abstract mixin class ComicPageActions {
 
   void onReadEnd();
 
-  void download() async {
-    if (LocalManager().isDownloading(comic.id, comic.comicType)) {
-      App.rootContext.showMessage(message: "The comic is downloading".tl);
-      return;
-    }
-    if (comic.chapters == null &&
-        LocalManager().isDownloaded(comic.id, comic.comicType, 0)) {
-      App.rootContext.showMessage(message: "The comic is downloaded".tl);
-      return;
-    }
+  bool _choosingDownload = false;
 
-    if (comicSource.archiveDownloader != null) {
-      bool useNormalDownload = false;
-      List<ArchiveInfo>? archives;
-      int selected = -1;
-      bool isLoading = false;
-      bool isGettingLink = false;
-      String? archiveLoadError;
-      await showDialog(
-        context: App.rootContext,
-        builder: (context) {
-          return StatefulBuilder(
-            builder: (context, setState) {
-              Future<void> loadArchives() async {
-                if (isLoading) return;
-                isLoading = true;
-                archives = null;
-                archiveLoadError = null;
-                selected = -1;
-                setState(() {});
-                final value = await loadArchiveOptions(
-                  comicSource.archiveDownloader!,
-                  comic.id,
-                );
-                if (value.success) {
-                  archives = value.dataOrNull ?? [];
-                  if (archives!.isEmpty) {
-                    archiveLoadError = "No archive options available".tl;
-                  }
-                } else {
-                  archives = [];
-                  archiveLoadError =
-                      (value.errorMessage ?? "Failed to load archive options")
-                          .tl;
-                }
-                isLoading = false;
-                if (context.mounted) {
-                  setState(() {});
-                }
-              }
-
-              return ContentDialog(
-                title: "Download".tl,
-                content: RadioGroup<int>(
-                  groupValue: selected,
-                  onChanged: (v) {
-                    setState(() {
-                      selected = v ?? selected;
-                    });
-                  },
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      RadioListTile<int>(value: -1, title: Text("Normal".tl)),
-                      ExpansionTile(
-                        title: Text("Archive".tl),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.zero,
-                        ),
-                        collapsedShape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.zero,
-                        ),
-                        onExpansionChanged: (b) {
-                          if (b &&
-                              (archives == null || archiveLoadError != null)) {
-                            loadArchives();
-                          }
-                        },
-                        children: [
-                          if (archives == null)
-                            const ListLoadingIndicator().toCenter()
-                          else if (archiveLoadError != null)
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                ListTile(title: Text(archiveLoadError!)),
-                                Button.text(
-                                  onPressed: loadArchives,
-                                  child: Text("Retry".tl),
-                                ),
-                              ],
-                            )
-                          else
-                            for (int i = 0; i < archives!.length; i++)
-                              RadioListTile<int>(
-                                value: i,
-                                title: Text(archives![i].title),
-                                subtitle: Text(archives![i].description),
-                              ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  Button.filled(
-                    isLoading: isGettingLink,
-                    onPressed: () async {
-                      if (selected == -1) {
-                        useNormalDownload = true;
-                        context.pop();
-                        return;
-                      }
-                      setState(() {
-                        isGettingLink = true;
-                      });
-                      if (archives == null ||
-                          selected < 0 ||
-                          selected >= archives!.length) {
-                        App.rootContext.showMessage(
-                          message: "Select an archive option".tl,
-                        );
-                      } else {
-                        final res = await loadArchiveDownloadLink(
-                          comicSource.archiveDownloader!,
-                          comic.id,
-                          archives![selected].id,
-                        );
-                        if (res.error) {
-                          App.rootContext.showMessage(
-                            message: (res.errorMessage ?? "Error").tl,
-                          );
-                        } else if (context.mounted) {
-                          LocalManager().addTask(
-                            ArchiveDownloadTask(res.data, comic),
-                          );
-                          App.rootContext.showMessage(
-                            message: "Download started".tl,
-                          );
-                          context.pop();
-                        }
-                      }
-                      if (context.mounted) {
-                        isGettingLink = false;
-                        setState(() {});
-                      }
-                    },
-                    child: Text("Confirm".tl),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
-      if (!useNormalDownload) {
+  Future<void> download() async {
+    if (_choosingDownload) return;
+    final target = comic;
+    final source = comicSource;
+    final owner = context;
+    _choosingDownload = true;
+    try {
+      if (LocalManager().isDownloading(target.id, target.comicType)) {
+        owner.showMessage(message: "The comic is downloading".tl);
         return;
       }
-    }
+      if (target.chapters == null &&
+          LocalManager().isDownloaded(target.id, target.comicType, 0)) {
+        owner.showMessage(message: "The comic is downloaded".tl);
+        return;
+      }
 
-    if (comic.chapters == null) {
-      LocalManager().addTask(
-        ImagesDownloadTask(
-          source: comicSource,
-          comicId: comic.id,
-          comic: comic,
-        ),
-      );
-    } else {
-      List<int>? selected;
-      var downloaded = <int>[];
-      var localComic = LocalManager().find(comic.id, comic.comicType);
-      if (localComic != null) {
-        for (int i = 0; i < comic.chapters!.length; i++) {
-          if (localComic.downloadedChapters.contains(
-            comic.chapters!.ids.elementAt(i),
-          )) {
-            downloaded.add(i);
-          }
+      if (source.archiveDownloader != null) {
+        final selection = await showDialog<ArchiveDownloadSelection>(
+          context: owner,
+          builder: (_) => ArchiveDownloadDialog(
+            downloader: source.archiveDownloader!,
+            comicId: target.id,
+          ),
+        );
+        if (!owner.mounted || !isComicActive(target) || selection == null) {
+          return;
+        }
+        if (selection.url != null) {
+          if (LocalManager().isDownloading(target.id, target.comicType)) return;
+          LocalManager().addTask(ArchiveDownloadTask(selection.url!, target));
+          owner.showMessage(message: "Download started".tl);
+          update();
+          return;
         }
       }
-      await showSideBar(
-        App.rootContext,
-        _SelectDownloadChapter(
-          comic.chapters!.titles.toList(),
-          (v) => selected = v,
-          downloaded,
-        ),
-      );
-      if (selected == null) return;
-      LocalManager().addTask(
-        ImagesDownloadTask(
-          source: comicSource,
-          comicId: comic.id,
-          comic: comic,
-          chapters: selected!.map((i) {
-            return comic.chapters!.ids.elementAt(i);
-          }).toList(),
-        ),
-      );
+
+      if (!owner.mounted || !isComicActive(target)) return;
+      if (LocalManager().isDownloading(target.id, target.comicType)) return;
+      if (target.chapters == null) {
+        LocalManager().addTask(
+          ImagesDownloadTask(source: source, comicId: target.id, comic: target),
+        );
+      } else {
+        List<int>? selected;
+        var downloaded = <int>[];
+        var localComic = LocalManager().find(target.id, target.comicType);
+        if (localComic != null) {
+          for (int i = 0; i < target.chapters!.length; i++) {
+            if (localComic.downloadedChapters.contains(
+              target.chapters!.ids.elementAt(i),
+            )) {
+              downloaded.add(i);
+            }
+          }
+        }
+        await showSideBar(
+          owner,
+          _SelectDownloadChapter(
+            target.chapters!.titles.toList(),
+            (v) => selected = v,
+            downloaded,
+          ),
+        );
+        if (!owner.mounted || !isComicActive(target) || selected == null) {
+          return;
+        }
+        if (LocalManager().isDownloading(target.id, target.comicType)) return;
+        LocalManager().addTask(
+          ImagesDownloadTask(
+            source: source,
+            comicId: target.id,
+            comic: target,
+            chapters: selected!.map((i) {
+              return target.chapters!.ids.elementAt(i);
+            }).toList(),
+          ),
+        );
+      }
+      owner.showMessage(message: "Download started".tl);
+      update();
+    } catch (error) {
+      if (owner.mounted && isComicActive(target)) {
+        owner.showMessage(message: error.toString());
+      }
+    } finally {
+      _choosingDownload = false;
     }
-    App.rootContext.showMessage(message: "Download started".tl);
-    update();
   }
 
   void onTapTag(String tag, String namespace) {
@@ -456,66 +358,13 @@ abstract mixin class ComicPageActions {
   }
 
   void starRating() {
-    if (!comicSource.isLogged) {
-      return;
-    }
-    var rating = 0.0;
-    var isLoading = false;
-    showDialog(
-      context: App.rootContext,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => SimpleDialog(
-          title: Text("Rating".tl),
-          alignment: Alignment.center,
-          children: [
-            SizedBox(
-              height: 100,
-              child: Center(
-                child: SizedBox(
-                  width: 210,
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 10),
-                      RatingWidget(
-                        padding: 2,
-                        onRatingUpdate: (value) => rating = value,
-                        value: 1,
-                        selectable: true,
-                        size: 40,
-                      ),
-                      const Spacer(),
-                      Button.filled(
-                        isLoading: isLoading,
-                        onPressed: () {
-                          setState(() {
-                            isLoading = true;
-                          });
-                          comicSource.starRatingFunc!(comic.id, rating.round())
-                              .then((value) {
-                                if (value.success) {
-                                  App.rootContext.showMessage(
-                                    message: "Success".tl,
-                                  );
-                                  Navigator.of(dialogContext).pop();
-                                } else {
-                                  App.rootContext.showMessage(
-                                    message: value.errorMessage!,
-                                  );
-                                  setState(() {
-                                    isLoading = false;
-                                  });
-                                }
-                              });
-                        },
-                        child: Text("Submit".tl),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+    final source = comicSource;
+    if (!source.isLogged) return;
+    final id = comic.id;
+    showDialog<void>(
+      context: context,
+      builder: (_) => ComicRatingDialog(
+        submit: (rating) => source.starRatingFunc!(id, rating),
       ),
     );
   }

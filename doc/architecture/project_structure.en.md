@@ -411,3 +411,23 @@ local_deletion_paths.dart checks recorded and canonical paths, resolving missing
 local_deletion_storage.dart owns the three-database deletion transaction with repository SQL and temporary attachments. LocalManager composes the history queue and post-commit publication. Favorite deletion supports explicit schema; refreshDeletedFavorites publishes external results, replacing the obsolete cross-folder manager entry. File cleanup remains a separate post-commit stage.
 
 local_deletion_journal.dart now stages preflighted directories to sibling quarantine and commits journal state with record deletion. Startup/exclusive operations recover pending entries. Quarantine cleanup replaces direct post-commit path deletion; transaction-time snapshot checks detect record changes during staging. See local_deletion_recovery.en.md for states and acceptance limits.
+
+The comic-detail NetworkFavoriteSection receives FavoriteData and state callbacks rather than resolving ComicSource or the local-favorites singleton. Single/multiple folders share request completion and presentation lifecycle; cache invalidation after remote success is independent of page lifetime. This remains a UI component, not a business entry point.
+
+Network favorites load folders during State initialization or explicit refresh, never from build. Comic and folder removal use confirmNetworkFavoriteDeletion with caller-provided operations and commit callbacks, without root-context lookup or source re-resolution. Commit effects and dialog presentation obey their respective owner lifetimes.
+
+settings/settings_task_presenter.dart belongs to UI presentation and owns operation progress routes and page-lifetime checks. Business operations and temporary-file cleanup remain in the task; it is not a pure business entry point.
+
+Comic-detail rating_dialog.dart accepts a submission operation and owns the rating draft, busy state and dialog lifecycle, without ComicSource or root-context lookup. Like orchestration validates result ownership through the host isComicActive predicate to prevent writes across comic identities.
+
+Detail archive_download_dialog.dart owns archive lists, link requests and selection results without accessing the local download manager. actions.dart captures the original comic/source and enqueues only after host lifetime/identity validation. Normal chapter and archive selection must not reread a different comic after awaiting.
+
+Favorites create_favorite_folder_dialog.dart owns the draft, import busy state and dialog lifecycle. favorite_actions.dart supplies file selection/read, JSON import, name validation and creation operations; the dialog does not access the global favorites manager.
+
+favorites/network_favorite_import.dart is an enrolled business entry for paginated collection and same-database transaction commit, without Widget/root-context dependencies. network_favorite_import_dialog.dart owns its request scope and presentation; favorite_actions.dart composes the source, manager and dialog.
+
+routing/page_replacement.dart redirects the current route to a root page while retaining original route/navigator ownership, without popping an unknown top route through global keys. Local detail auto-reading uses this adapter and captures reader inputs/session callbacks while the original host is valid.
+
+reader/image_action.dart shares asynchronous image reading and consumption for copy/save. gesture.dart owns mounted, viewport, image-list and chapter identity checks and guards presentation locally. Stale reads never start platform operations; already started operations may finish, with late errors suppressed for the old owner. The pure Dart entry is enrolled in the architecture gate.
+
+Network-favorite import now separates committed results from cache/notification publication; refresh failure preserves success counts and retries publication only. Local JSON import, cross-process notification recovery and other post-commit boundaries still need acceptance.

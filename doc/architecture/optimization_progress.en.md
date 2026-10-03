@@ -1342,3 +1342,87 @@ Reader forms/defaults are complete. Sync/network/appearance configuration and fu
 - Commands check exit codes and run at the repository root. Installer templates are restored byte-for-byte; stale installers are removed before compilation. Recursive cleanup checks resolved containment within build/windows, and version parsing rejects path injection.
 - Six new tests cover full ZIP contents/architecture isolation, stopping after build failure, template restoration, cleanup boundaries, versions and command cwd. Python: 63 passed with 3 existing skips; structure and architecture checks pass. No Dart changes or repeated Flutter suite in this stage.
 - Commands: python windows/build.py for x64; python windows/build.py --arch arm64 or python windows/build_arm64.py for ARM64. Real ARM64 compilation, Inno installation and platform release remain unverified; P0/P8 remain open. User changes excluded.
+
+## P8/P7: Favorite-panel async ownership and shared mutation flow (2026-10-03)
+
+- NetworkFavoriteSection accepts FavoriteData. Single/multiple folders share request, busy-state, exception conversion and post-commit presentation. Duplicate taps submit once; remote success invalidates network cache even after panel disposal, while callbacks/navigation require a mounted owner.
+- Folder exceptions now offer retry instead of remaining busy or dereferencing null folders. Local folder creation checks mounting on completion. Source protocol, persisted data and favorite layout are unchanged.
+- Five new behavioral tests cover both mutation modes, duplicate calls, late success/cache invalidation, retry after exceptions, and folder retry/late exceptions after disposal. Focused 5 and full Flutter 1344 tests passed; analysis: zero errors/warnings, 56 infos. Structure, architecture and Git dependency gates passed. Logs: output/favorite-lifecycle-{targeted,full,analyze}.log.
+- Seven async-context findings resolved here, 35 remain repository-wide; P8.2 stays partial. Existing user changes participated in workspace validation but are excluded from the commit.
+
+## P8/P7: Network-favorites requests and dialog lifecycle (2026-10-03)
+
+- Folder loading moved from build to initState/explicit reload, preventing rebuild duplication and converting exceptions into retryable failures without updating disposed State.
+- Comic/folder deletion shares confirmNetworkFavoriteDeletion with operations injected from the current FavoriteData, removing global source and root-context lookups. Busy requests reject duplicate taps; exceptions reset controls. Success clears cache and refreshes live owners without presenting or popping from dismissed dialogs.
+- Folder creation captures the parent callback, refreshes a live parent after late success and permits retry after failure; its text controller is disposed. Comic removal inside a folder now sends the actual folderID, covered through the production menu path.
+- Final focused 6 and full Flutter 1350 tests passed. Final analysis: zero errors/warnings, 47 infos; structure, architecture and Git dependency gates passed. An unnecessary test null assertion found in the first analysis was removed, followed by final analysis and focused tests. Logs: output/network-favorites-{full,final-targeted,final-analyze}.log.
+- Nine async-context diagnostics resolved here; 26 remain repository-wide. Severity remains info and P8 stays partial. Existing user changes participated in workspace tests but are excluded from the commit.
+
+## P8/P7: Application settings task presentation and cleanup (2026-10-03)
+
+- SettingsTaskPresenter owns per-page duplicate-trigger control, progress routes and finally cleanup, replacing four manual close paths for migration/cache/export/import. Returned failures and exceptions do not publish success. Accepted tasks finish cleanup after page disposal; UI presentation/refresh requires the calling context to remain mounted. Import retains temporary-file cleanup and application rebuild ownership.
+- Directory selection checks page lifetime on return. Authorization capability checks use request generations and exception fallback; persisted fallback does not depend on page lifetime, while presentation does. Sync configuration checks its actual builder context. This UI helper is not a business entry and does not replace storage locking, cancellation or rollback.
+- Five tests cover success/failure cleanup, reentry, disposal and returned operation errors. Initial focused assertions used circular progress instead of the actual linear widget and were corrected. The initial full run exposed a nullable captured directory argument; the explicit assertion after the null check was restored. Final full suite: 1355 passed; analysis: zero errors/warnings, 38 infos. Structure, architecture and Git dependency gates passed. Logs: output/settings-task-{targeted,full,final-full,final-analyze}.log; full preserves the failed run.
+- Nine application-settings context findings resolved, 17 remain; P8.2 stays partial. Real biometric, picker and migration platform evidence is still missing; these tests do not prove native workflows. Existing user changes participated in workspace tests but are excluded from this commit.
+
+## P8: Local favorite cleanup and summary frame callbacks (2026-10-03)
+
+- Invalid-favorite cleanup reuses SettingsTaskPresenter: duplicate triggers are guarded, failures close progress without publishing counts, and success is presented only to a live page. Repository deletion behavior is unchanged.
+- Image-favorite chart switching uses post-layout callbacks instead of a fixed 20ms delay, checking mounting, latest selection generation, scroll host and controller attachment. Summary refresh also rejects stale request generations.
+- Three real database/widget tests cover missing scroll hosts, disposal after selection and rapid switching before scrolling to the latest layout. Combined with task-presentation tests, 8 focused tests passed. Initial fixtures omitted App path initialization and were corrected. Final full Flutter suite: 1358 passed; analysis: zero errors/warnings, 36 infos; structure, architecture and Git dependency gates passed. Logs: output/favorites-summary-{targeted,full,analyze}.log.
+- Two context findings resolved, 15 remain; P8.2 stays incomplete. Small fixtures do not cover all >100-item background-isolate races or performance, and overall platform/performance validation remains open. Existing user changes participated in tests but are excluded from the commit.
+
+## P8/P4: Comment-link routing and recognizer ownership (2026-10-03)
+
+- openCommentLink binds the original context, route and root navigator. After an app link opens, only the original root-owned route is removed, avoiding a late maybePop that closes the new page. App-link processing receives an active predicate; disposed/stale owners do not launch external fallback, and exceptions are logged. Production retains existing app-link and URL-launch implementations behind explicit adapters.
+- RichCommentContent owns every TapGestureRecognizer, releasing/rebuilding on text or dependency changes and releasing all on disposal. Rendering clears old spans/images; text replacement no longer displays stale content, and old text callbacks do not initiate work.
+- Five widget tests pass: content replacement, original-route removal while preserving the new page, late failure/unhandled results after disposal, and live external fallback. Full Flutter: 1363 passed; analysis: zero errors/warnings, 35 infos. Structure, architecture and Git dependency gates passed. Logs: output/rich-comment-{targeted,full,analyze}.log.
+- One context finding resolved, 14 remain. Detail loading and other actions remain on the original backlog; this does not complete the detail domain. System browser/link platform validation remains open. Existing user changes excluded.
+
+## P8/P4: Detail like/rating submission lifecycle (2026-10-03)
+
+- Like busy state binds to the current comic identity and deduplicates same-comic requests. Exceptions retain original error information and release busy state. Results validate mounted/current data ownership before mutation; an old comic cannot overwrite the new one. ComicPage.update refreshes only mounted State.
+- Rating UI moved to rating_dialog.dart with a submission closure capturing the current source/comic, without root-context lookup. Initial submission now matches the displayed one star instead of zero. Errors permit retry, duplicate taps submit once, and late completion after dismissal neither updates State nor closes a replacement route.
+- Four tests cover like failure/reentry/identity replacement and rating defaults/retry/late success/failure. Focused 4 and full Flutter 1367 tests passed; final analysis: zero errors/warnings, 31 infos. Structure, architecture and Git dependency gates passed. An unused aggregate import left by extraction was found on first analysis and removed before final analysis. Logs: output/reaction-lifecycle-{targeted,full,final-analyze}.log.
+- Four context findings resolved, 10 remain; three in actions download paths remain. This does not prove underlying source-request cancellation or real-device networking; P4/P7/P8 remain open. Existing user changes excluded.
+
+## P8/P5: Separate detail download selection from enqueueing (2026-10-03)
+
+- ArchiveDownloadDialog receives fixed downloader/comicId inputs and returns only normal download or a validated URL. It neither reads current detail State nor creates download tasks. List/link operations own their busy state, deduplicate submissions and ignore presentation/navigation after disposal.
+- Detail actions capture the original comic, source and context. Normal/archive and chapter selections validate mounted comic identity and existing downloads before enqueueing. One selection flow may open at a time, and exceptions release the guard. Chapter IDs/titles come from the captured comic, avoiding data from a replacement page.
+- Four new dialog tests plus existing archive tests: 7 passed; full Flutter: 1371 passed. Final analysis: zero errors/warnings, 28 infos. Structure, architecture and Git dependency gates passed. Three imports and one braces lint left by extraction were found on initial analysis and removed. Logs: output/download-dialog-{targeted,full,final-analyze}.log.
+- Three actions context findings resolved, 7 remain. Real source downloads, reconnect/resume and full queue lifecycle are not claimed verified; P6/P7/P8 remain tracked. Existing user changes excluded.
+
+## P8/P4: Local favorite creation and file-import dialog (2026-10-03)
+
+- CreateFavoriteFolderDialog receives validation, creation, selection/read and JSON commit callbacks without global manager access; newFolder remains production composition. State owns/disposes its text controller and preserves existing name-validation rules.
+- File import disables creation/duplicate import, presents retryable picker/read/parse errors and preserves drafts when selection is cancelled. Reads may finish after dismissal but cannot commit JSON or operate a replacement page. Underlying read cancellation is not claimed.
+- Four widget tests cover late success/error after dismissal, retry after read/parse failures, validation and cancelled selection. Focused 4 and full Flutter 1375 tests passed; analysis: zero errors/warnings, 26 infos. Structure, architecture and Git dependency gates passed. Logs: output/create-favorite-{targeted,full,analyze}.log.
+- Two context findings resolved, 5 remain. Network batch favorite import prefetch, close callbacks and post-cancellation commit semantics remain incomplete under P6/P7/P8. Existing user changes excluded.
+
+## P6/P7/P8: Separate network-favorite collection and atomic commit (2026-10-03)
+
+- network_favorite_import extracts RequestScope-controlled prefetch/paging with three-attempt retries, metadata/cursor validation and deduplication. Oldest-first starting pages cannot be negative. Route exit cancels waiting without stale StateSetter/close closures.
+- Complete collection enters one transaction checking linkage and writing folders/linkage/all records, with rollback on failure. Cancellation or collection failure no longer imports partial results. Manager caches/notifications publish only after commit; publication-failure semantics remain open. Enrolled business entry number 76.
+- Focused 10 passed. The first exit-window test timed out waiting for a perpetual progress animation; it now waits only for route entry before testing immediate cancellation. Full 1385 passed; empty-name validation/assertion added afterward, final focused 10 passed. Final analysis: zero errors/warnings, 25 infos. Structure/architecture, Python 63 (3 skips) and Git dependency gates passed. Logs: output/network-import-{full,final-targeted,final-analyze}.log.
+- Protocol, behavior changes, ordering and remaining work are in network_favorite_import.en.md. The last favorite_actions context finding is resolved; 4 remain repository-wide. P6/P7/P8 remain partial and existing user changes are excluded.
+
+## P8/P4: Local detail route replacement and debug presentation (2026-10-03)
+
+- replaceWithRootPage captures current route/root navigator, pushes the destination and removes only the original route. Covered/disposed pages cannot redirect. Nested navigators retain their sole home route; no global main-navigator pop targets an unknown page.
+- Delayed local-detail navigation captures its context and checks mounting/request cancellation. Reader ID and session callbacks are captured from the original host. The detail-owned scroll controller is disposed. Debug source-reload errors use only the current mounted nullable root context.
+- Three focused root/nested/stale-route tests and full Flutter 1388 tests passed. Initial analysis required checking the actual closure context; explicit capture resolved it. Final analysis: zero errors/warnings, 23 infos. Structure, architecture and Git dependency gates passed. Logs: output/local-redirect-{targeted,full,final-analyze}.log.
+- Two context findings remain in the reader gesture file containing user edits; rule severity is unchanged and P4/P8 remain incomplete. User changes excluded.
+
+## P5/P8: reader image action lifecycle and async context enforcement (2026-10-03)
+
+- Copy/save share useReaderImage. Missing viewports do not start work; completed reads require a mounted owner and unchanged viewport, image list and chapter. Missing-image/error presentation is guarded; both reading and platform failures are handled. Already started platform operations may finish; this does not cancel OS save/clipboard effects.
+- Six focused tests cover inactive owners, late bytes/misses, read failures, platform failures and awaiting completion. All 1394 Windows Flutter tests pass. Analysis has zero errors/warnings and 21 infos; use_build_context_synchronously has zero findings and is enforced as warning. Structure/architecture (77 business entries), Git dependencies, formatting and 63 Python tests (3 existing skips) pass. Logs: output/gesture-image-{targeted,full,analyze,python}.log.
+- gesture.dart and CHANGELOG were staged selectively, preserving user edits. P5/P8 and the overall plan remain incomplete: the other 21 infos, reader shell ownership, native behavior, performance and remaining acceptance items still require work.
+
+## P6/P8: network-favorite committed results and publication recovery (2026-10-03)
+
+- importNetworkFavorites commits the transaction and returns a folder, immutable id/type snapshot and count. publishNetworkFavoriteImport separately refreshes caches/tracking/views. A tracking observer failure does not suppress ordinary view notifications; refresh retries neither collect nor write SQL.
+- The dialog records success before publishing. Publication errors appear as refresh errors with Finished and the committed count retained, plus a Refresh retry. Actual commit failure does not publish or offer refresh, and stops the progress animation.
+- Five new regressions cover real SQLite commit with repeated publication failure/retry, no publication on commit failure, immutable identities, manager observer failure with ordinary notifications, and publication recovery after database close/reopen. Initial focused 40 passed; after adding reopen coverage, all 1399 Windows Flutter tests passed. Final analysis: zero errors/warnings, 21 infos; structure, architecture, Git dependencies and formatting passed. Logs: output/network-publication-{targeted,full,final-analyze}.log.
+- Publication is not cross-process atomic with SQL and notifications have at-least-once semantics. Local JSON import and other publication boundaries, native exit, real-source protocols and performance remain pending. Existing user changes were excluded from this commit.

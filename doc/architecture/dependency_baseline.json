@@ -305,7 +305,9 @@
     "foundation/res.dart",
     "features/reader/page_order_migration.dart",
     "features/reader/image_picker.dart",
-    "features/local_comics/import_export/legacy_comic_metadata.dart"
+    "features/reader/image_action.dart",
+    "features/local_comics/import_export/legacy_comic_metadata.dart",
+    "features/favorites/network_favorite_import.dart"
   ],
   "ui_files": [
     "app_shell/auth_page.dart",
