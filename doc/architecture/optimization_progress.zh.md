@@ -1128,3 +1128,11 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 漫画/章节页面释放 TextEditingController；嵌入式视图的 ScrollController 改由 State 持有并释放，避免每次 build 新建。修复全部 8 处评论文件的 context 诊断，并处理 lint 未覆盖的 setState/控制器生命周期问题。
 - 24 项 Widget 回归覆盖三类视图的首屏重建去重、同步失败重试、分页失败/重试/刷新代次、发送重复点击/失败重试/卸载后成功及失败、点赞和投票失败后重试及晚到成功。测试使用生产 Widget 和受控源端口，不替代真实 JS 投票/取消能力矩阵。
 - 最终验证：全量 Flutter 1197 项通过；静态分析零 error/warning、79 个 info（原有 23 + 剩余 context 56）；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁和格式通过。日志 output/comments-lifecycle-{targeted,full,final-analyze}.log。三类评论的重复流程后续仍需收束，P5/P7/P8 不据此全部完成；工作区测试含用户修改，提交仅含本阶段。
+
+## P4/P8：源登录页面与异步错误恢复（2026-10-03）
+
+- 密码/Cookie 登录改为统一 async/try/catch/finally，提交中拒绝重复调用；错误保留原日志与可见提示，卸载后不提示、不导航、不更新 State。Cookie 校验成功后显式等待 saveData，保存失败仍留在页面并恢复按钮供重试。
+- 重新登录按源 key 去重，成功/业务失败/抛错后均恢复忙碌状态。源设置页从登录页返回后等待保存、记录错误且只重建仍挂载视图，修复未被原 lint 报出的晚到 setState。
+- 外部编辑后的重载弹窗使用已检查存活的页面 context；WebView 返回后检查登录页存活。桌面 WebView 不可用直接停止，不再提示后继续打开；关闭处理幂等且不会在登录页卸载后 pop。
+- 8 项 Widget 测试验证密码/Cookie 重复点击、错误重试、卸载后成功与失败、Cookie 保存等待/失败恢复、重新登录去重与晚到异常。真实原生 WebView 插件、Cookie/localStorage 采集并发和路由身份仍待单独验收；本阶段不声明全网页登录生命周期完成，也未改变源登录函数自身的副作用。
+- 最终验证：全量 Flutter 1205 项通过；静态分析零 error/warning、71 个 info（原有 23 + 剩余 context 48）；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁及格式通过。日志 output/source-login-{targeted,full,final-analyze}.log。工作区测试含用户修改，提交仅含本阶段。

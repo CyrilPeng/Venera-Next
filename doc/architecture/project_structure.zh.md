@@ -481,3 +481,5 @@ JsUiApi 为每个动作/加载/输入弹窗持有 JsCallbackScope。DialogResour
 ImportComic 通过可注入 ImportComicPresentation 展示提示、加载和 PDF 任务，不直接使用 BuildContext。默认适配器每次同步取得根 Navigator 当前 context 并检查 mounted，根页面缺失时省略展示；任务仍由原服务持有。PDF 对话框绑定 DialogResourceScope，正常关闭或 Navigator 卸载均结束界面等待，均不取消应用级任务。
 
 三类评论视图（漫画、章节、嵌入章节）按页面拥有编辑器/滚动控制器和异步请求状态。首屏/分页请求去重，发送后递增 generation，旧分页结果不再混入刷新列表；分页失败显示可重试项。所有发送/点赞/投票完成与异常分支检查对应页面存活，finally 恢复忙碌状态。页面销毁不强制终止源请求；三类视图的相同流程仍需后续共性收束。
+
+源账号页面的密码/Cookie 登录与重新登录统一使用 await/try/finally 管理忙碌状态，并在结果返回时检查所属 State。Cookie 登录等待 saveData 后返回；源设置页返回时等待保存并仅更新仍挂载的视图。桌面外部编辑对话框使用已检查存活的页面 context；桌面 WebView 不可用时直接返回。原生 WebView Cookie/localStorage 采集与页面路由的完整联合生命周期仍待验收。
