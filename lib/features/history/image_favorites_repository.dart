@@ -140,7 +140,8 @@ class ImageFavoritesRepository {
     return imageFavoritesComicFromRow(row.first);
   }
 
-  int count() => db.select('SELECT count(*) FROM $_table;').first[0] as int;
+  int count() =>
+      db.select('SELECT count(*) AS total FROM $_table;').first['total'] as int;
 
   void saveAll(Iterable<ImageFavoritesComic> comics) =>
       runSqliteTransaction(db, () {

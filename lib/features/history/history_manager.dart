@@ -399,60 +399,74 @@ class HistoryManager with ChangeNotifier {
   static const _refreshThrottleEvery = 5;
 
   Stream<RefreshProgress> refreshAllHistoriesStream() {
-    var controller = StreamController<RefreshProgress>();
-    _refreshAllHistoriesBase(controller);
+    var cancelled = false;
+    final controller = StreamController<RefreshProgress>(
+      onCancel: () {
+        cancelled = true;
+      },
+    );
+    _refreshAllHistoriesBase(controller, () => cancelled);
     return controller.stream;
   }
 
   void _refreshAllHistoriesBase(
     StreamController<RefreshProgress> controller,
+    bool Function() isCancelled,
   ) async {
-    var histories = getAll();
-    int total = histories.length;
-    int current = 0;
-    int success = 0;
-    int failed = 0;
-    int skipped = 0;
+    try {
+      var histories = getAll();
+      int total = histories.length;
+      int current = 0;
+      int success = 0;
+      int failed = 0;
+      int skipped = 0;
 
-    controller.add(RefreshProgress(total, current, success, failed, skipped));
+      controller.add(RefreshProgress(total, current, success, failed, skipped));
 
-    var historiesToRefresh = <History>[];
-    for (var history in histories) {
-      if (history.sourceKey == 'local') {
-        skipped++;
-        current++;
-        controller.add(
-          RefreshProgress(total, current, success, failed, skipped),
-        );
-        continue;
-      }
-      historiesToRefresh.add(history);
-    }
-
-    total = historiesToRefresh.length;
-    current = 0;
-    controller.add(RefreshProgress(total, current, success, failed, skipped));
-
-    await runThrottledTasks(
-      historiesToRefresh,
-      concurrency: _refreshConcurrency,
-      throttleEvery: _refreshThrottleEvery,
-      run: (history) async {
-        var result = await _refreshSingleHistory(history);
-        current++;
-        if (result) {
-          success++;
-        } else {
-          failed++;
+      var historiesToRefresh = <History>[];
+      for (var history in histories) {
+        if (history.sourceKey == 'local') {
+          skipped++;
+          current++;
+          controller.add(
+            RefreshProgress(total, current, success, failed, skipped),
+          );
+          continue;
         }
-        controller.add(
-          RefreshProgress(total, current, success, failed, skipped),
-        );
-      },
-    );
+        historiesToRefresh.add(history);
+      }
 
-    notifyListeners();
-    controller.close();
+      total = historiesToRefresh.length;
+      current = 0;
+      controller.add(RefreshProgress(total, current, success, failed, skipped));
+
+      await runThrottledTasks(
+        historiesToRefresh,
+        concurrency: _refreshConcurrency,
+        throttleEvery: _refreshThrottleEvery,
+        isCancelled: isCancelled,
+        run: (history) async {
+          if (isCancelled()) return;
+          var result = await _refreshSingleHistory(history);
+          if (isCancelled()) return;
+          current++;
+          if (result) {
+            success++;
+          } else {
+            failed++;
+          }
+          controller.add(
+            RefreshProgress(total, current, success, failed, skipped),
+          );
+        },
+      );
+
+      if (!isCancelled()) notifyListeners();
+    } catch (error, stack) {
+      if (!isCancelled()) controller.addError(error, stack);
+    } finally {
+      await controller.close();
+    }
   }
 }
 

@@ -9,6 +9,7 @@ Future<void> runThrottledTasks<T>(
   required int concurrency,
   required int throttleEvery,
   Future<void> Function(Duration duration)? delay,
+  bool Function()? isCancelled,
   required Future<void> Function(T task) run,
 }) async {
   if (tasks.isEmpty || concurrency <= 0) {
@@ -26,8 +27,9 @@ Future<void> runThrottledTasks<T>(
     return () async {
       await previousSchedule;
       try {
+        if (isCancelled?.call() ?? false) return null;
         await throttleGate;
-        if (nextIndex >= tasks.length) {
+        if ((isCancelled?.call() ?? false) || nextIndex >= tasks.length) {
           return null;
         }
         final task = tasks[nextIndex];

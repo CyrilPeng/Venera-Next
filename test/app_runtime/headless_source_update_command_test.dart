@@ -1,7 +1,42 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/app_runtime/headless_source_update_command.dart';
+import 'package:venera_next/features/comic_source/source_failure.dart';
 
 void main() {
+  test('cancelled updates never count as successful updates', () async {
+    final messages = <Map<String, dynamic>>[];
+    final code = await runHeadlessSourceUpdateCommand(
+      checkUpdates: () async => HeadlessSourceUpdateCheck(
+        updates: [
+          HeadlessSourceUpdate(
+            key: 'cancelled',
+            name: 'Cancelled',
+            version: '1',
+            url: 'url',
+            update: () async =>
+                throw const SourceFailure(SourceFailureCode.cancelled),
+          ),
+          HeadlessSourceUpdate(
+            key: 'next',
+            name: 'Next',
+            version: '1',
+            url: 'url',
+            update: () async {},
+          ),
+        ],
+      ),
+      emit: messages.add,
+    );
+    expect(code, 1);
+    expect(messages.last['data'], {'total': 2, 'updated': 1, 'errors': 1});
+    expect(
+      messages.singleWhere(
+        (message) => message['message'] == 'ProgressError',
+      )['data']['error'],
+      'Source update cancelled.',
+    );
+  });
+
   for (final failures in <List<String>>[
     [],
     ['network unavailable'],

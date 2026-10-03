@@ -1,3 +1,4 @@
+import 'package:venera_next/features/comic_source/source_failure.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -102,7 +103,18 @@ void main() {
     '',
   ]) {
     test('unsupported input is rejected without installing: $invalid', () {
-      expect(() => SourceImportPreview.parse(invalid), throwsA(isA<String>()));
+      expect(
+        () => SourceImportPreview.parse(invalid),
+        invalid.startsWith('{') || invalid.startsWith('[')
+            ? throwsA(
+                isA<SourceFailure>().having(
+                  (error) => error.code,
+                  'code',
+                  SourceFailureCode.invalidCatalog,
+                ),
+              )
+            : throwsA(isA<String>()),
+      );
     });
   }
 

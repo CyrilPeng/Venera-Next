@@ -1,5 +1,5 @@
+import 'source_failure.dart';
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/network/app_dio.dart';
 
 import 'comic_source_manager.dart';
@@ -27,7 +27,9 @@ class SourceUpdateService {
   }
 
   Future<void> update(ComicSource source, {void Function()? onCommit}) async {
-    if (isUpdating(source.key)) throw 'Update already in progress'.tl;
+    if (isUpdating(source.key)) {
+      throw const SourceFailure(SourceFailureCode.updateInProgress);
+    }
     final token = CancelToken();
     _updating[source.key] = token;
     Dio? dio;
@@ -41,7 +43,7 @@ class SourceUpdateService {
         client: dio,
         cancelToken: token,
       );
-      if (token.isCancelled) return;
+      if (token.isCancelled) throw token.cancelError!;
       final res = await dio.get<String>(
         url,
         cancelToken: token,
@@ -50,7 +52,7 @@ class SourceUpdateService {
           headers: {'cache-time': 'no'},
         ),
       );
-      if (token.isCancelled) return;
+      if (token.isCancelled) throw token.cancelError!;
       await ComicSourceManager().replaceScript(
         source,
         res.data!,
@@ -62,7 +64,7 @@ class SourceUpdateService {
               ComicSource.find(source.key)?.filePath != source.filePath ||
               (repository != null &&
                   store.find(repository.id)?.url != repository.url)) {
-            throw 'Repository changed. Refresh the list and try again.'.tl;
+            throw const SourceFailure(SourceFailureCode.repositoryChanged);
           }
           // The serialized script commit is atomic; UI cancellation ends here.
           onCommit?.call();
@@ -77,10 +79,15 @@ class SourceUpdateService {
               ),
       );
     } catch (error, stack) {
-      if (!token.isCancelled) {
-        Log.error('Update comic source', '$error\n$stack');
-        rethrow;
+      if (token.isCancelled) {
+        throw SourceFailure(
+          SourceFailureCode.cancelled,
+          cause: error,
+          stackTrace: stack,
+        );
       }
+      Log.error('Update comic source', '$error\n$stack');
+      rethrow;
     } finally {
       dio?.close();
       if (identical(_updating[source.key], token)) {
@@ -102,7 +109,11 @@ class SourceUpdateService {
     if (revision != SourceRepositories.instance.revision) {
       result = SourceUpdateCheck(
         updates: {},
-        failures: ['Repository changed. Refresh the list and try again.'.tl],
+        failures: [
+          const SourceCheckFailure(
+            SourceFailure(SourceFailureCode.repositoryChanged),
+          ),
+        ],
         checked: 0,
         skipped: ComicSource.all().length,
       );

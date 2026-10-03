@@ -1,6 +1,7 @@
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/models.dart';
+import 'package:venera_next/features/comic_source/normalization.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 
 class _FakeJSInvokable extends JSInvokable {
@@ -22,32 +23,46 @@ class _FakeJSInvokable extends JSInvokable {
 }
 
 void main() {
-  test('normalize settings filters invalid keys and wraps callbacks', () {
+  test('normalize settings filters invalid keys and scopes callbacks', () {
+    final callbacks = JsCallbackScope();
+    addTearDown(callbacks.dispose);
     final callback = _FakeJSInvokable((args) => 'called:${args.single}');
 
-    final settings = debugNormalizeComicSourceSettings({
+    final settings = normalizeComicSourceSettings({
       'reader': {'label': 'Reader', 'onTap': callback, 1: 'ignored'},
       2: {'label': 'ignored group'},
       'invalid': 'not a map',
-    });
+    }, retainCallback: callbacks.retain);
+    callback.free(); // Release the caller-owned document reference.
 
     expect(settings!.keys, ['reader']);
-    expect(settings['reader']!.containsKey(1), isFalse);
+    expect(settings['reader']!.keys, ['label', 'onTap']);
     expect(settings['reader']!['label'], 'Reader');
-    expect(settings['reader']!['onTap'], isA<JSAutoFreeFunction>());
-
-    final onTap = settings['reader']!['onTap'] as JSAutoFreeFunction;
+    final onTap =
+        settings['reader']!['onTap'] as dynamic Function(List<dynamic>);
     expect(onTap(['ok']), 'called:ok');
     expect(callback.destroyCount, 0);
+    callbacks.dispose();
+    callbacks.dispose();
+    expect(callback.destroyCount, 1);
+    expect(() => onTap(['late']), throwsStateError);
   });
 
   test('normalize settings returns null for non-map values', () {
-    expect(debugNormalizeComicSourceSettings(null), isNull);
-    expect(debugNormalizeComicSourceSettings('bad'), isNull);
+    dynamic Function(List<dynamic>) unexpectedCallback(JSInvokable _) =>
+        throw StateError('Invalid settings must not retain callbacks');
+    expect(
+      normalizeComicSourceSettings(null, retainCallback: unexpectedCallback),
+      isNull,
+    );
+    expect(
+      normalizeComicSourceSettings('bad', retainCallback: unexpectedCallback),
+      isNull,
+    );
   });
 
   test('normalize loading config accepts dynamically typed map', () {
-    final config = debugNormalizeComicSourceLoadingConfig(<dynamic, dynamic>{
+    final config = normalizeComicSourceLoadingConfig(<dynamic, dynamic>{
       'url': 'https://example.com/image.jpg',
       'headers': {'referer': 'https://example.com'},
     });
@@ -59,16 +74,16 @@ void main() {
   });
 
   test('normalize loading config rejects invalid values', () {
-    expect(debugNormalizeComicSourceLoadingConfig(null), isNull);
-    expect(debugNormalizeComicSourceLoadingConfig('bad'), isNull);
+    expect(normalizeComicSourceLoadingConfig(null), isNull);
+    expect(normalizeComicSourceLoadingConfig('bad'), isNull);
     expect(
-      debugNormalizeComicSourceLoadingConfig(<dynamic, dynamic>{1: 'bad-key'}),
+      normalizeComicSourceLoadingConfig(<dynamic, dynamic>{1: 'bad-key'}),
       isNull,
     );
   });
 
   test('normalize string keyed map accepts dynamic map', () {
-    final map = debugNormalizeComicSourceStringKeyedMap(<dynamic, dynamic>{
+    final map = normalizeComicSourceStringKeyedMap(<dynamic, dynamic>{
       'images': ['1.jpg', '2.jpg'],
       'next': 'page-2',
     });
@@ -80,26 +95,26 @@ void main() {
   });
 
   test('normalize string keyed map rejects invalid keys', () {
-    expect(debugNormalizeComicSourceStringKeyedMap(null), isNull);
-    expect(debugNormalizeComicSourceStringKeyedMap('bad'), isNull);
+    expect(normalizeComicSourceStringKeyedMap(null), isNull);
+    expect(normalizeComicSourceStringKeyedMap('bad'), isNull);
     expect(
-      debugNormalizeComicSourceStringKeyedMap(<dynamic, dynamic>{1: 'bad'}),
+      normalizeComicSourceStringKeyedMap(<dynamic, dynamic>{1: 'bad'}),
       isNull,
     );
   });
 
   test('normalize string list rejects invalid entries', () {
-    expect(debugNormalizeComicSourceStringList(['1.jpg', '2.jpg']), [
+    expect(normalizeComicSourceStringList(['1.jpg', '2.jpg']), [
       '1.jpg',
       '2.jpg',
     ]);
-    expect(debugNormalizeComicSourceStringList(null), isNull);
-    expect(debugNormalizeComicSourceStringList('bad'), isNull);
-    expect(debugNormalizeComicSourceStringList(['1.jpg', 2]), isNull);
+    expect(normalizeComicSourceStringList(null), isNull);
+    expect(normalizeComicSourceStringList('bad'), isNull);
+    expect(normalizeComicSourceStringList(['1.jpg', 2]), isNull);
   });
 
   test('normalize comic list accepts dynamic item maps', () {
-    final comics = debugNormalizeComicSourceComicList([
+    final comics = normalizeComicSourceComicList([
       <dynamic, dynamic>{
         'title': 'Comic A',
         'cover': 'cover.jpg',
@@ -115,11 +130,11 @@ void main() {
   });
 
   test('normalize comic list rejects invalid item maps', () {
-    expect(debugNormalizeComicSourceComicList(null, 'source'), isNull);
-    expect(debugNormalizeComicSourceComicList('bad', 'source'), isNull);
-    expect(debugNormalizeComicSourceComicList(['bad'], 'source'), isNull);
+    expect(normalizeComicSourceComicList(null, 'source'), isNull);
+    expect(normalizeComicSourceComicList('bad', 'source'), isNull);
+    expect(normalizeComicSourceComicList(['bad'], 'source'), isNull);
     expect(
-      debugNormalizeComicSourceComicList([
+      normalizeComicSourceComicList([
         <dynamic, dynamic>{1: 'bad'},
       ], 'source'),
       isNull,
@@ -127,7 +142,7 @@ void main() {
   });
 
   test('normalize comic details accepts nested dynamic maps', () {
-    final details = debugNormalizeComicSourceComicDetails(
+    final details = normalizeComicSourceComicDetails(
       <dynamic, dynamic>{
         'title': 'Detail',
         'cover': 'cover.jpg',
@@ -171,11 +186,11 @@ void main() {
 
   test('normalize comic details rejects invalid nested data', () {
     expect(
-      debugNormalizeComicSourceComicDetails('bad', 'source', 'detail-id'),
+      normalizeComicSourceComicDetails('bad', 'source', 'detail-id'),
       isNull,
     );
     expect(
-      debugNormalizeComicSourceComicDetails(
+      normalizeComicSourceComicDetails(
         {
           'title': 'Detail',
           'cover': 'cover.jpg',
@@ -189,7 +204,7 @@ void main() {
       isNull,
     );
     expect(
-      debugNormalizeComicSourceComicDetails(
+      normalizeComicSourceComicDetails(
         {
           'title': 'Detail',
           'cover': 'cover.jpg',
@@ -206,7 +221,7 @@ void main() {
   });
 
   test('normalize comments result accepts dynamic comment maps', () {
-    final result = debugNormalizeComicSourceCommentsResult(<dynamic, dynamic>{
+    final result = normalizeComicSourceCommentsResult(<dynamic, dynamic>{
       'comments': [
         <dynamic, dynamic>{
           'userName': 'reader',
@@ -225,15 +240,13 @@ void main() {
   });
 
   test('normalize comments result rejects invalid data', () {
-    expect(debugNormalizeComicSourceCommentsResult(null), isNull);
+    expect(normalizeComicSourceCommentsResult(null), isNull);
     expect(
-      debugNormalizeComicSourceCommentsResult(<dynamic, dynamic>{
-        'comments': 'bad',
-      }),
+      normalizeComicSourceCommentsResult(<dynamic, dynamic>{'comments': 'bad'}),
       isNull,
     );
     expect(
-      debugNormalizeComicSourceCommentsResult(<dynamic, dynamic>{
+      normalizeComicSourceCommentsResult(<dynamic, dynamic>{
         'comments': [
           <dynamic, dynamic>{1: 'bad-key'},
         ],
@@ -243,7 +256,7 @@ void main() {
   });
 
   test('normalize archive list accepts dynamic item maps', () {
-    final archives = debugNormalizeComicSourceArchiveList([
+    final archives = normalizeComicSourceArchiveList([
       <dynamic, dynamic>{
         'title': 'Volume 1',
         'description': 'zip archive',
@@ -258,10 +271,10 @@ void main() {
   });
 
   test('normalize archive list rejects invalid data', () {
-    expect(debugNormalizeComicSourceArchiveList(null), isNull);
-    expect(debugNormalizeComicSourceArchiveList('bad'), isNull);
+    expect(normalizeComicSourceArchiveList(null), isNull);
+    expect(normalizeComicSourceArchiveList('bad'), isNull);
     expect(
-      debugNormalizeComicSourceArchiveList([
+      normalizeComicSourceArchiveList([
         <dynamic, dynamic>{1: 'bad-key'},
       ]),
       isNull,
@@ -270,10 +283,10 @@ void main() {
 
   test('normalize archive download url requires string', () {
     expect(
-      debugNormalizeComicSourceArchiveDownloadUrl('https://example.com/a.zip'),
+      normalizeComicSourceArchiveDownloadUrl('https://example.com/a.zip'),
       'https://example.com/a.zip',
     );
-    expect(debugNormalizeComicSourceArchiveDownloadUrl(null), isNull);
-    expect(debugNormalizeComicSourceArchiveDownloadUrl(1), isNull);
+    expect(normalizeComicSourceArchiveDownloadUrl(null), isNull);
+    expect(normalizeComicSourceArchiveDownloadUrl(1), isNull);
   });
 }

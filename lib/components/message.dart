@@ -263,6 +263,30 @@ Future<void> showConfirmDialog({
   );
 }
 
+/// Releases dialog-owned resources even when its navigator is unmounted.
+class DialogResourceScope extends StatefulWidget {
+  const DialogResourceScope({
+    super.key,
+    required this.onDispose,
+    required this.child,
+  });
+  final VoidCallback onDispose;
+  final Widget child;
+  @override
+  State<DialogResourceScope> createState() => _DialogResourceScopeState();
+}
+
+class _DialogResourceScopeState extends State<DialogResourceScope> {
+  @override
+  void dispose() {
+    widget.onDispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class LoadingDialogController {
   double? _progress;
 
@@ -281,11 +305,7 @@ class LoadingDialogController {
       return;
     }
     closed = true;
-    if (_closeDialog == null) {
-      Future.microtask(_closeDialog!);
-    } else {
-      _closeDialog!();
-    }
+    _closeDialog?.call();
   }
 
   void setProgress(double? value) {
@@ -306,8 +326,12 @@ class LoadingDialogController {
 LoadingDialogController showLoadingDialog(
   BuildContext context, {
   void Function()? onCancel,
+  void Function()? onClosed,
   bool barrierDismissible = true,
   bool allowCancel = true,
+  // Button cancellation is always explicit; optionally suppress cancellation
+  // when the route is dismissed or its navigator is unmounted.
+  bool cancelOnDismiss = true,
   String? message,
   String cancelButtonText = "Cancel",
   bool withProgress = false,
@@ -319,56 +343,77 @@ LoadingDialogController showLoadingDialog(
     controller._progress = 0;
   }
 
+  var finished = false;
+  void finish() {
+    if (finished) return;
+    finished = true;
+    final wasClosed = controller.closed;
+    controller.closed = true;
+    controller._closeDialog = null;
+    controller._serProgress = null;
+    controller._setMessage = null;
+    try {
+      if (!wasClosed && cancelOnDismiss) onCancel?.call();
+    } finally {
+      onClosed?.call();
+    }
+  }
+
   var loadingDialogRoute = DialogRoute(
     context: context,
     barrierDismissible: barrierDismissible,
     builder: (BuildContext context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          controller._serProgress = (value) {
-            setState(() {
-              controller._progress = value;
-            });
-          };
-          controller._setMessage = (message) {
-            setState(() {
-              controller._message = message;
-            });
-          };
-          return ContentDialog(
-            title: controller._message ?? 'Loading'.tl,
-            content: LinearProgressIndicator(
-              value: controller._progress,
-              backgroundColor: context.colorScheme.surfaceContainer,
-            ).paddingHorizontal(16).paddingVertical(16),
-            actions: [
-              FilledButton(
-                onPressed: allowCancel
-                    ? () {
-                        controller.close();
-                        onCancel?.call();
-                      }
-                    : null,
-                child: Text(cancelButtonText.tl),
-              ),
-            ],
-          );
-        },
+      return DialogResourceScope(
+        onDispose: finish,
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            controller._serProgress = (value) {
+              setState(() {
+                controller._progress = value;
+              });
+            };
+            controller._setMessage = (message) {
+              setState(() {
+                controller._message = message;
+              });
+            };
+            return ContentDialog(
+              title: controller._message ?? 'Loading'.tl,
+              content: LinearProgressIndicator(
+                value: controller._progress,
+                backgroundColor: context.colorScheme.surfaceContainer,
+              ).paddingHorizontal(16).paddingVertical(16),
+              actions: [
+                FilledButton(
+                  onPressed: allowCancel
+                      ? () {
+                          try {
+                            onCancel?.call();
+                          } finally {
+                            controller.close();
+                          }
+                        }
+                      : null,
+                  child: Text(cancelButtonText.tl),
+                ),
+              ],
+            );
+          },
+        ),
       );
     },
   );
 
   var navigator = Navigator.of(context, rootNavigator: true);
 
-  navigator.push(loadingDialogRoute).then((value) {
-    final wasClosed = controller.closed;
-    controller.closed = true;
-    // Back and barrier dismissal must cancel the work just like the button.
-    if (!wasClosed) onCancel?.call();
-  });
+  navigator.push(loadingDialogRoute).then((_) => finish());
 
   controller._closeDialog = () {
-    navigator.removeRoute(loadingDialogRoute);
+    if (navigator.mounted && loadingDialogRoute.isActive) {
+      navigator.removeRoute(loadingDialogRoute);
+    } else {
+      finish();
+    }
   };
 
   return controller;
@@ -458,6 +503,7 @@ Future<void> showInputDialog({
   required String title,
   String? hintText,
   required FutureOr<Object?> Function(String) onConfirm,
+  void Function()? onClosed,
   String? initialValue,
   String confirmText = "Confirm",
   String cancelText = "Cancel",
@@ -469,67 +515,90 @@ Future<void> showInputDialog({
   bool isLoading = false;
   String? error;
 
-  return showDialog(
+  final disposed = Completer<void>();
+  final closed = showDialog<void>(
     context: context,
     builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          return ContentDialog(
-            title: title,
-            content: Column(
-              children: [
-                if (image != null)
-                  SizedBox(
-                    height: 108,
-                    child: Image.network(image, fit: BoxFit.none),
-                  ).paddingBottom(8),
-                if (image == null && imageData != null)
-                  SizedBox(
-                    height: 108,
-                    child: Image.memory(imageData, fit: BoxFit.none),
-                  ).paddingBottom(8),
-                TextField(
-                  controller: controller,
-                  decoration: InputDecoration(
-                    hintText: hintText,
-                    border: const OutlineInputBorder(),
-                    errorText: error,
-                  ),
-                ).paddingHorizontal(12),
-              ],
-            ),
-            actions: [
-              Button.filled(
-                isLoading: isLoading,
-                onPressed: () async {
-                  if (inputValidator != null &&
-                      !inputValidator.hasMatch(controller.text)) {
-                    setState(() => error = "Invalid input".tl);
-                    return;
-                  }
-                  var futureOr = onConfirm(controller.text);
-                  Object? result;
-                  if (futureOr is Future) {
-                    setState(() => isLoading = true);
-                    result = await futureOr;
-                    setState(() => isLoading = false);
-                  } else {
-                    result = futureOr;
-                  }
-                  if (result == null) {
-                    context.pop();
-                  } else {
-                    setState(() => error = result.toString());
-                  }
-                },
-                child: Text(confirmText.tl),
-              ),
-            ],
-          );
+      return DialogResourceScope(
+        onDispose: () {
+          controller.dispose();
+          try {
+            onClosed?.call();
+          } finally {
+            if (!disposed.isCompleted) disposed.complete();
+          }
         },
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            return ContentDialog(
+              title: title,
+              content: Column(
+                children: [
+                  if (image != null)
+                    SizedBox(
+                      height: 108,
+                      child: Image.network(image, fit: BoxFit.none),
+                    ).paddingBottom(8),
+                  if (image == null && imageData != null)
+                    SizedBox(
+                      height: 108,
+                      child: Image.memory(imageData, fit: BoxFit.none),
+                    ).paddingBottom(8),
+                  TextField(
+                    controller: controller,
+                    decoration: InputDecoration(
+                      hintText: hintText,
+                      border: const OutlineInputBorder(),
+                      errorText: error,
+                    ),
+                  ).paddingHorizontal(12),
+                ],
+              ),
+              actions: [
+                Button.filled(
+                  isLoading: isLoading,
+                  onPressed: () async {
+                    if (inputValidator != null &&
+                        !inputValidator.hasMatch(controller.text)) {
+                      setState(() => error = "Invalid input".tl);
+                      return;
+                    }
+                    if (isLoading) return;
+                    try {
+                      final futureOr = onConfirm(controller.text);
+                      Object? result;
+                      if (futureOr is Future) {
+                        setState(() => isLoading = true);
+                        result = await futureOr;
+                      } else {
+                        result = futureOr;
+                      }
+                      if (!context.mounted) return;
+                      if (result == null) {
+                        context.pop();
+                      } else {
+                        setState(() => error = result.toString());
+                      }
+                    } catch (failure) {
+                      if (context.mounted) {
+                        setState(() => error = failure.toString());
+                      }
+                    } finally {
+                      if (context.mounted && isLoading) {
+                        setState(() => isLoading = false);
+                      }
+                    }
+                  },
+                  child: Text(confirmText.tl),
+                ),
+              ],
+            );
+          },
+        ),
       );
     },
   );
+  return Future.any<void>([closed, disposed.future]);
 }
 
 void showInfoDialog({

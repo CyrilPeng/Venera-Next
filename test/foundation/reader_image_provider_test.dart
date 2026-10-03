@@ -2,15 +2,50 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera_next/foundation/image_provider/reader_image.dart';
+import 'package:flutter_qjs/flutter_qjs.dart';
+import 'package:venera_next/foundation/image_provider/reader_image_processing.dart';
 
 void main() {
+  test(
+    'cancelled processing frees callbacks in late result exactly once',
+    () async {
+      final image = Completer<dynamic>();
+      final signal = Completer<void>();
+      final callback = _ResultCallback();
+      final result = waitForReaderImageProcessingResult(
+        image.future,
+        () {},
+        () => throw StateError('stopped'),
+        cancelSignal: signal.future,
+      );
+      signal.complete();
+      await expectLater(result, throwsStateError);
+      image.complete({'unused': callback});
+      await pumpEventQueue();
+      expect(callback.destroyed, 1);
+    },
+  );
+
+  test(
+    'stop after result arrival frees result callbacks exactly once',
+    () async {
+      final callback = _ResultCallback();
+      final result = waitForReaderImageProcessingResult(
+        Future.value({'unused': callback}),
+        () {},
+        () => throw StateError('stopped'),
+        cancelSignal: Completer<void>().future,
+      );
+      await expectLater(result, throwsStateError);
+      expect(callback.destroyed, 1);
+    },
+  );
   test('reader image processing waits for future result', () async {
     final cancelSignal = Completer<void>();
     final bytes = Uint8List.fromList([1, 2, 3]);
     var canceled = false;
 
-    final result = await debugWaitForReaderImageProcessingResult(
+    final result = await waitForReaderImageProcessingResult(
       Future<Uint8List>.value(bytes),
       () {
         canceled = true;
@@ -29,7 +64,7 @@ void main() {
     var canceled = false;
     var checkedStop = false;
 
-    final result = debugWaitForReaderImageProcessingResult(
+    final result = waitForReaderImageProcessingResult(
       image.future,
       () {
         canceled = true;
@@ -51,7 +86,7 @@ void main() {
   test('reader image processing keeps null result as empty bytes', () async {
     final cancelSignal = Completer<void>();
 
-    final result = await debugWaitForReaderImageProcessingResult(
+    final result = await waitForReaderImageProcessingResult(
       Future<void>.value(),
       () {},
       () {},
@@ -66,7 +101,7 @@ void main() {
     final cancelSignal = Completer<void>();
     var canceled = false;
 
-    final result = debugWaitForReaderImageProcessingResult(
+    final result = waitForReaderImageProcessingResult(
       Future<Uint8List>.error(StateError('failed')),
       () {
         canceled = true;
@@ -78,4 +113,12 @@ void main() {
     await expectLater(result, throwsA(isA<StateError>()));
     expect(canceled, isFalse);
   });
+}
+
+class _ResultCallback extends JSInvokable {
+  int destroyed = 0;
+  @override
+  dynamic invoke(List args, [dynamic thisVal]) => null;
+  @override
+  void destroy() => destroyed++;
 }

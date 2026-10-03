@@ -107,7 +107,11 @@ Future<HeadlessSourceUpdateCheck> _checkSourceUpdatesForCli() async {
   await service.checkUpdates();
   final keys = List<String>.of(ComicSourceManager().availableUpdates.keys);
   return HeadlessSourceUpdateCheck(
-    failures: service.lastUpdateCheck?.failures ?? const [],
+    failures:
+        service.lastUpdateCheck?.failures
+            .map((failure) => failure.toString())
+            .toList() ??
+        const [],
     updates: keys.map((key) {
       final source = ComicSource.find(key);
       return HeadlessSourceUpdate(

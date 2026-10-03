@@ -1,3 +1,4 @@
+import 'source_failure_presentation.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -79,7 +80,7 @@ class _SourceImportDialogState extends State<SourceImportDialog> {
       if (!mounted) return;
       setState(() {
         _needsBase = _needsBase || error is SourceImportNeedsBaseUrl;
-        _error = error.toString();
+        _error = sourceFailureMessage(error);
       });
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -101,7 +102,7 @@ class _SourceImportDialogState extends State<SourceImportDialog> {
       _readFile = file.readAsBytes;
       await _identify();
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = sourceFailureMessage(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -148,7 +149,7 @@ class _SourceImportDialogState extends State<SourceImportDialog> {
       }
       if (mounted) Navigator.pop(context);
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = sourceFailureMessage(error));
     } finally {
       if (mounted) setState(() => _installing = false);
     }

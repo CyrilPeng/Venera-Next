@@ -1,51 +1,13 @@
 import 'dart:async' show Future;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:venera_next/foundation/file_system.dart';
-import 'package:venera_next/foundation/js_engine.dart';
+import 'reader_image_processing.dart';
 import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/image_stream.dart';
 import 'base_image_provider.dart';
 import 'reader_image.dart' as image_provider;
 import 'package:venera_next/foundation/appdata.dart';
-
-final Object _imageProcessingCanceled = Object();
-
-@visibleForTesting
-Future<dynamic> debugWaitForReaderImageProcessingResult(
-  Future<dynamic> image,
-  void Function() onCancel,
-  void Function() checkStop, {
-  Future<void>? cancelSignal,
-}) {
-  return _waitForReaderImageProcessingResult(
-    image,
-    onCancel,
-    checkStop,
-    cancelSignal: cancelSignal,
-  );
-}
-
-Future<dynamic> _waitForReaderImageProcessingResult(
-  Future<dynamic> image,
-  void Function() onCancel,
-  void Function() checkStop, {
-  Future<void>? cancelSignal,
-}) async {
-  final result = await Future.any<dynamic>([
-    image,
-    (cancelSignal ?? BaseImageProvider.cancelSignalOf(checkStop)).then(
-      (_) => _imageProcessingCanceled,
-    ),
-  ]);
-  if (identical(result, _imageProcessingCanceled)) {
-    onCancel();
-    checkStop();
-  }
-  checkStop();
-  return result ?? Uint8List(0);
-}
 
 class ReaderImageProvider
     extends BaseImageProvider<image_provider.ReaderImageProvider> {
@@ -111,58 +73,16 @@ class ReaderImageProvider
       if (!script.contains('function processImage')) {
         return imageBytes;
       }
-      var func = JsEngine().runCode('''
-        (() => {
-          $script
-          return processImage;
-        })()
-      ''');
-      if (func is JSInvokable) {
-        var autoFreeFunc = JSAutoFreeFunction(func);
-        var result = autoFreeFunc([imageBytes, cid, eid, page, sourceKey]);
-        if (result is Uint8List) {
-          imageBytes = result;
-        } else if (result is Future) {
-          var futureResult = await _waitForReaderImageProcessingResult(
-            result,
-            () {},
-            checkStop,
-          );
-          if (futureResult is Uint8List) {
-            imageBytes = futureResult;
-          }
-        } else if (result is Map) {
-          var image = result['image'];
-          if (image is Uint8List) {
-            imageBytes = image;
-          } else if (image is Future) {
-            JSAutoFreeFunction? onCancel;
-            if (result['onCancel'] is JSInvokable) {
-              onCancel = JSAutoFreeFunction(result['onCancel']);
-            }
-            if (onCancel == null) {
-              var futureImage = await _waitForReaderImageProcessingResult(
-                image,
-                () {},
-                checkStop,
-              );
-              if (futureImage is Uint8List) {
-                imageBytes = futureImage;
-              }
-            } else {
-              final cancelImageProcessing = onCancel;
-              final futureImage = await _waitForReaderImageProcessingResult(
-                image,
-                () => cancelImageProcessing([]),
-                checkStop,
-              );
-              if (futureImage is Uint8List) {
-                imageBytes = futureImage;
-              }
-            }
-          }
-        }
-      }
+      imageBytes = await processReaderImageBytes(
+        imageBytes,
+        script: script,
+        comicId: cid,
+        episodeId: eid,
+        page: page,
+        sourceKey: sourceKey,
+        checkStop: checkStop,
+        cancelSignal: BaseImageProvider.cancelSignalOf(checkStop),
+      );
     }
     return imageBytes;
   }

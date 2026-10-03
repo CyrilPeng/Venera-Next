@@ -818,7 +818,10 @@ void main() {
         expect(existingRows, hasLength(1));
         expect(existingRows.first['page'], 7);
         expect(existingRows.first['read_duration_ms'], 15000);
-        expect(db.select('select count(*) from history;').first[0], 2);
+        expect(
+          db.select('select count(*) AS total from history;').first['total'],
+          2,
+        );
       } finally {
         db.dispose();
       }

@@ -1,3 +1,4 @@
+import 'package:venera_next/features/comic_source/source_failure.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -12,7 +13,6 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/network/app_dio.dart';
 
 void main() {
@@ -96,6 +96,34 @@ void main() {
   ]);
 
   for (final linked in [false, true]) {
+    sourceScenario(
+      'service exposes cancellation to non-UI callers: linked=$linked',
+      (tester) async {
+        await pumpPage(tester);
+        final source = install(linked: linked);
+        final pending = ComicSourcePage.updateService.update(source);
+        final result = expectLater(
+          pending,
+          throwsA(
+            isA<SourceFailure>()
+                .having(
+                  (error) => error.code,
+                  'code',
+                  SourceFailureCode.cancelled,
+                )
+                .having((error) => error.cause, 'cause', isA<DioException>()),
+          ),
+        );
+        await _pumpUntil(tester, () => requests.items.isNotEmpty);
+        ComicSourcePage.updateService.cancel(source.key);
+        await _pumpUntil(tester, () => requests.items.single.cancelled);
+        await result;
+        expect(ComicSourcePage.updateService.isUpdating(source.key), isFalse);
+        expect(File(source.filePath).readAsStringSync(), 'original content');
+        expect(messages, isEmpty);
+      },
+    );
+
     sourceScenario('cancel script download and retry immediately: linked=$linked', (
       tester,
     ) async {
@@ -146,7 +174,13 @@ void main() {
       await _pumpUntil(tester, () => requests.items.isNotEmpty);
       final conflict = expectLater(
         ComicSourcePage.updateService.update(source),
-        throwsA('Update already in progress'.tl),
+        throwsA(
+          isA<SourceFailure>().having(
+            (error) => error.code,
+            'code',
+            SourceFailureCode.updateInProgress,
+          ),
+        ),
       );
       // The first update fails with a network error, which is swallowed above.
       requests.items.single.reply('', status: 503);

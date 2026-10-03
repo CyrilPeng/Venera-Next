@@ -66,6 +66,116 @@ void main() {
       });
 
       test(
+        'capability callbacks retain source identity when parser is reused',
+        () async {
+          final parser = ComicSourceParser();
+          final first = await parser.parse(
+            capabilityScript('transaction_a'),
+            '${directory.path}/a.js',
+          );
+          manager.add(first);
+          final second = await parser.parse(
+            capabilityScript('transaction_b'),
+            '${directory.path}/b.js',
+          );
+          manager.add(second);
+          for (final source in [first, second]) {
+            source.data['account'] = ['user', 'password'];
+            expect(
+              (await source.searchPageData!.loadPage!('query', 1, [])).subData,
+              9,
+            );
+            expect(
+              source.onTagSuggestionSelected!('namespace', 'tag'),
+              source.key,
+            );
+            expect(source.categoryData!.title, 'Categories');
+            expect((await source.favoriteData!.loadComic!(1)).subData, 4);
+            expect((await source.explorePages.single.loadPage!(1)).subData, 5);
+
+            expect((await source.loadComicInfo!('id')).data.title, source.key);
+            expect((await source.loadComicPages!('id', 'ep')).data, [
+              '${source.key}/image',
+            ]);
+            expect(
+              (await source.loadComicThumbnail!('id', null)).subData,
+              'next',
+            );
+            expect(
+              (await source.getImageLoadingConfig!('image', 'id', 'ep'))['url'],
+              source.key,
+            );
+            expect(
+              source.getThumbnailLoadingConfig!('image')['url'],
+              source.key,
+            );
+            expect(
+              (await source.commentsLoader!('id', null, 1, null)).subData,
+              7,
+            );
+            expect(
+              (await source.chapterCommentsLoader!(
+                'id',
+                'ep',
+                1,
+                null,
+              )).subData,
+              8,
+            );
+            expect(
+              (await source.sendCommentFunc!('id', null, 'text', null)).success,
+              isTrue,
+            );
+            expect(
+              (await source.sendChapterCommentFunc!(
+                'id',
+                'ep',
+                'text',
+                null,
+              )).success,
+              isTrue,
+            );
+          }
+          expect(
+            JsEngine().runCode('ComicSource.sources.transaction_a.sent'),
+            2,
+          );
+          expect(
+            JsEngine().runCode('ComicSource.sources.transaction_b.sent'),
+            2,
+          );
+        },
+      );
+
+      test(
+        'capability failures preserve error results and absent optional hooks',
+        () async {
+          final source = await ComicSourceParser().parse(
+            script('transaction_a'),
+            '${directory.path}/a.js',
+          );
+          manager.add(source);
+          expect(source.commentsLoader, isNull);
+          expect(source.getImageLoadingConfig, isNull);
+          expect(source.searchPageData, isNull);
+          JsEngine().runCode(
+            'void (ComicSource.sources.transaction_a.comic.loadEp = async () => ({invalid: true}))',
+          );
+          final invalid = await source.loadComicPages!('id', 'ep');
+          expect(invalid.errorMessage, 'Invalid data');
+          expect(invalid.failure!.cause, 'Invalid data');
+          expect(invalid.failure!.stackTrace, isNotNull);
+          JsEngine().runCode(
+            'void (ComicSource.sources.transaction_a.comic.loadInfo = () => { throw new Error("source failure"); })',
+          );
+          final failed = await source.loadComicInfo!('id');
+          expect(failed.errorMessage, contains('source failure'));
+          expect(failed.failure!.cause, isNotNull);
+          expect(failed.failure!.stackTrace, isNotNull);
+        },
+      );
+
+      test(
         'JS initialization failure is observable and can be explicitly retried',
         () async {
           JsEngine().dispose();
@@ -280,4 +390,30 @@ String script(String key, {String version = '1.0.0', String init = ''}) =>
     comic = {loadInfo: async () => ({title: "Comic", cover: "", tags: {}}), loadEp: async () => []};
     init() { $init }
   }
+''';
+
+String capabilityScript(String key) =>
+    '''
+class CapabilitySource extends ComicSource {
+  name = "Capability";
+  key = "$key";
+  version = "1.0.0";
+  minAppVersion = "1.0.0";
+  sent = 0;
+  search = {load: async () => ({comics: [], maxPage: 9}), onTagSuggestionSelected: () => "$key"};
+  category = {title: "Categories", parts: []};
+  favorites = {multiFolder: false, loadComics: async () => ({comics: [], maxPage: 4})};
+  explore = [{title: "Explore", type: "multiPageComicList", load: async () => ({comics: [], maxPage: 5})}];
+  comic = {
+    loadInfo: async () => ({title: "$key", cover: "", tags: {}}),
+    loadEp: async () => ({images: ["$key/image"]}),
+    loadThumbnails: async () => ({thumbnails: ["thumbnail"], next: "next"}),
+    onImageLoad: async () => ({url: "$key"}),
+    onThumbnailLoad: () => ({url: "$key"}),
+    loadComments: async () => ({comments: [], maxPage: 7}),
+    loadChapterComments: async () => ({comments: [], maxPage: 8}),
+    sendComment: async () => { this.sent++; },
+    sendChapterComment: async () => { this.sent++; }
+  };
+}
 ''';

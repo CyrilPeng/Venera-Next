@@ -1,3 +1,4 @@
+import 'package:venera_next/features/comic_source/source_failure.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -7,6 +8,7 @@ import 'package:venera_next/features/comic_source/source_repositories.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/translations.dart';
+import 'package:venera_next/network/app_dio.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -46,8 +48,6 @@ void main() {
   });
 
   group('normalizeUrl', () {
-    const invalidUrl = 'Enter a complete HTTP or HTTPS URL.';
-
     test('rejects unsupported schemes, relative addresses and empty hosts', () {
       for (final value in [
         '',
@@ -62,7 +62,13 @@ void main() {
       ]) {
         expect(
           () => SourceRepositories.normalizeUrl(value),
-          throwsA(invalidUrl.tl),
+          throwsA(
+            isA<SourceFailure>().having(
+              (error) => error.code,
+              'code',
+              SourceFailureCode.invalidUrl,
+            ),
+          ),
           reason: 'expected [$value] to be rejected',
         );
       }
@@ -465,7 +471,13 @@ void main() {
 
       await expectLater(
         SourceRepositories.instance.link('other', repository, entry),
-        throwsA('Repository changed. Refresh the list and try again.'.tl),
+        throwsA(
+          isA<SourceFailure>().having(
+            (error) => error.code,
+            'code',
+            SourceFailureCode.repositoryChanged,
+          ),
+        ),
       );
       expect(SourceRepositories.instance.originFor('other'), isNull);
     });
@@ -473,7 +485,13 @@ void main() {
     test('rejects a repository that is no longer stored', () async {
       await expectLater(
         SourceRepositories.instance.link('source', repository, entry),
-        throwsA('Repository changed. Refresh the list and try again.'.tl),
+        throwsA(
+          isA<SourceFailure>().having(
+            (error) => error.code,
+            'code',
+            SourceFailureCode.repositoryChanged,
+          ),
+        ),
       );
     });
 
@@ -484,7 +502,13 @@ void main() {
 
       await expectLater(
         SourceRepositories.instance.link('source', repository, entry),
-        throwsA('Repository changed. Refresh the list and try again.'.tl),
+        throwsA(
+          isA<SourceFailure>().having(
+            (error) => error.code,
+            'code',
+            SourceFailureCode.repositoryChanged,
+          ),
+        ),
       );
     });
 
@@ -563,7 +587,13 @@ void main() {
     test('throws when the source is missing from the catalog', () {
       expect(
         () => SourceRepositories.instance.entryFor(_source('source'), const []),
-        throwsA('This source is no longer listed in its repository.'.tl),
+        throwsA(
+          isA<SourceFailure>().having(
+            (error) => error.code,
+            'code',
+            SourceFailureCode.missingSource,
+          ),
+        ),
       );
     });
 
@@ -574,8 +604,11 @@ void main() {
           second,
         ]),
         throwsA(
-          'Multiple variants found. Choose a source in the repository again.'
-              .tl,
+          isA<SourceFailure>().having(
+            (error) => error.code,
+            'code',
+            SourceFailureCode.ambiguousSource,
+          ),
         ),
       );
     });
@@ -618,12 +651,66 @@ void main() {
 
       await expectLater(
         SourceRepositories.instance.updateUrl(source),
-        throwsA('Enter a complete HTTP or HTTPS URL.'.tl),
+        throwsA(
+          isA<SourceFailure>().having(
+            (error) => error.code,
+            'code',
+            SourceFailureCode.invalidUrl,
+          ),
+        ),
       );
     });
   });
 
   group('checkUpdates', () {
+    test(
+      'retains catalog and source failures while checking other repositories',
+      () async {
+        appdata.settings['comicSourceRepositories'] = [
+          _repoMap('bad', 'Bad catalog', 'https://bad.example/index.json'),
+          _repoMap('good', 'Good catalog', 'https://good.example/index.json'),
+        ];
+        appdata.settings['comicSourceOrigins'] = {
+          'a': {'kind': 'repository', 'repositoryId': 'bad'},
+          'b': {'kind': 'repository', 'repositoryId': 'good'},
+        };
+        final dio = Dio();
+        addTearDown(dio.close);
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              handler.resolve(
+                Response<String>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: options.uri.host == 'bad.example'
+                      ? '{}'
+                      : '[{"key":"other","name":"Other","version":"1.0.0","url":"https://good.example/other.js"}]',
+                ),
+              );
+            },
+          ),
+        );
+        final result = await SourceRepositories.forTesting(
+          dio,
+        ).checkUpdates([_source('a'), _source('b')]);
+        expect(result.skipped, 2);
+        expect(result.failures, hasLength(2));
+        expect(result.failures.first.repository, 'Bad catalog');
+        expect(result.failures.first.source, isNull);
+        expect(
+          (result.failures.first.cause as SourceFailure).code,
+          SourceFailureCode.invalidCatalog,
+        );
+        expect(result.failures.last.repository, 'Good catalog');
+        expect(result.failures.last.source, isNotNull);
+        expect(
+          (result.failures.last.cause as SourceFailure).code,
+          SourceFailureCode.missingSource,
+        );
+      },
+    );
+
     test('skips every source when no repository is stored', () async {
       final result = await SourceRepositories.instance.checkUpdates([
         _source('a'),
@@ -680,7 +767,13 @@ void main() {
           name: '   ',
           url: 'https://example.com/index.json',
         ),
-        throwsA('Enter a repository name.'.tl),
+        throwsA(
+          isA<SourceFailure>().having(
+            (error) => error.code,
+            'code',
+            SourceFailureCode.missingName,
+          ),
+        ),
       );
     });
 
@@ -696,7 +789,13 @@ void main() {
             name: 'Other',
             url: 'ftp://example.com/index.json',
           ),
-          throwsA('Enter a complete HTTP or HTTPS URL.'.tl),
+          throwsA(
+            isA<SourceFailure>().having(
+              (error) => error.code,
+              'code',
+              SourceFailureCode.invalidUrl,
+            ),
+          ),
         );
       },
     );
@@ -711,14 +810,26 @@ void main() {
           name: 'Other',
           url: 'https://example.com/index.json',
         ),
-        throwsA('This repository address has already been added.'.tl),
+        throwsA(
+          isA<SourceFailure>().having(
+            (error) => error.code,
+            'code',
+            SourceFailureCode.duplicateRepository,
+          ),
+        ),
       );
       await expectLater(
         SourceRepositories.instance.save(
           name: 'Other',
           url: 'https://example.com/index.json#new',
         ),
-        throwsA('This repository address has already been added.'.tl),
+        throwsA(
+          isA<SourceFailure>().having(
+            (error) => error.code,
+            'code',
+            SourceFailureCode.duplicateRepository,
+          ),
+        ),
       );
     });
 
@@ -734,7 +845,13 @@ void main() {
           name: 'Renamed First',
           url: 'https://two.example.com/index.json',
         ),
-        throwsA('This repository address has already been added.'.tl),
+        throwsA(
+          isA<SourceFailure>().having(
+            (error) => error.code,
+            'code',
+            SourceFailureCode.duplicateRepository,
+          ),
+        ),
       );
       // The rejected edit must not have modified the stored records.
       expect(

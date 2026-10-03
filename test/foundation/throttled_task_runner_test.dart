@@ -4,6 +4,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/throttled_task_runner.dart';
 
 void main() {
+  for (final duringThrottle in [false, true]) {
+    test(
+      'cancellation stops new tasks and drains in-flight work; throttle=$duringThrottle',
+      () async {
+        var cancelled = false;
+        final gate = Completer<void>();
+        final started = <int>[];
+        final pending = runThrottledTasks(
+          [1, 2, 3],
+          concurrency: 2,
+          throttleEvery: duringThrottle ? 1 : 0,
+          delay: (_) => gate.future,
+          isCancelled: () => cancelled,
+          run: (value) async {
+            started.add(value);
+            if (!duringThrottle) await gate.future;
+          },
+        );
+        await pumpEventQueue();
+        expect(started, duringThrottle ? [1] : [1, 2]);
+        cancelled = true;
+        gate.complete();
+        await pending;
+        expect(started, duringThrottle ? [1] : [1, 2]);
+      },
+    );
+  }
+
   test('runThrottledTasks limits concurrency and throttles batches', () async {
     final started = <int>[];
     final completed = <int>[];

@@ -1,3 +1,6 @@
+import 'source_failure_presentation.dart';
+import 'source_failure.dart';
+import 'package:venera_next/foundation/js_engine.dart';
 import 'dart:convert';
 import 'dart:io' as io;
 import 'package:flutter/material.dart';
@@ -58,12 +61,15 @@ class ComicSourcePage extends StatelessWidget {
         },
       );
     } catch (error) {
+      if (error is SourceFailure && error.code == SourceFailureCode.cancelled) {
+        return;
+      }
       final context = App.rootNavigatorKey.currentContext;
       if (context != null && context.mounted) {
         context.showMessage(
           message: error is DioException
               ? 'Network error'.tl
-              : error.toString(),
+              : sourceFailureMessage(error),
         );
       }
     } finally {
@@ -196,7 +202,7 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
         String? error;
         bool saving = false;
         await showDialog(
-          context: App.rootContext,
+          context: context,
           builder: (context) => StatefulBuilder(
             builder: (context, updateDialog) => AlertDialog(
               title: Text("Reload Configs".tl),
@@ -229,7 +235,9 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
                             }
                           } catch (e) {
                             if (context.mounted) {
-                              updateDialog(() => error = e.toString());
+                              updateDialog(
+                                () => error = sourceFailureMessage(e),
+                              );
                             }
                           } finally {
                             if (context.mounted) {
@@ -434,7 +442,7 @@ class _CheckUpdatesButtonState extends State<_CheckUpdatesButton> {
                   Padding(
                     padding: const EdgeInsets.only(top: 12),
                     child: Text(
-                      '${'Some sources could not be checked.'.tl}\n${result.failures.join('\n')}',
+                      '${'Some sources could not be checked.'.tl}\n${result.failures.map((failure) => failure.format(sourceFailureMessage)).join('\n')}',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
                       ),
@@ -472,7 +480,7 @@ class _CheckUpdatesButtonState extends State<_CheckUpdatesButton> {
           try {
             await ComicSourcePage.update(source, false);
           } catch (error) {
-            failures.add('${source.name}: $error');
+            failures.add('${source.name}: ${sourceFailureMessage(error)}');
           }
         }
         loadingController.setProgress(++current / result.updates.length);
@@ -522,15 +530,21 @@ class _CallbackSettingState extends State<_CallbackSetting> {
   bool isLoading = false;
 
   Future<void> onClick() async {
-    var func = widget.setting.value['callback'];
-    var result = func([]);
-    if (result is Future) {
-      setState(() {
-        isLoading = true;
-      });
-      try {
+    if (isLoading) return;
+    try {
+      var func = widget.setting.value['callback'];
+      var result = func([]);
+      if (result is Future) {
+        setState(() {
+          isLoading = true;
+        });
         await result;
-      } finally {
+      }
+    } catch (error, stack) {
+      Log.error('Source setting callback', error, stack);
+      if (mounted) context.showMessage(message: error.toString());
+    } finally {
+      if (mounted && isLoading) {
         setState(() {
           isLoading = false;
         });
@@ -571,12 +585,24 @@ class _SliverComicSource extends StatefulWidget {
 }
 
 class _SliverComicSourceState extends State<_SliverComicSource> {
+  JsCallbackScope? _settingsCallbacks;
+
+  @override
+  void dispose() {
+    _settingsCallbacks?.dispose();
+    super.dispose();
+  }
+
   ComicSource get source => widget.source;
 
   bool expanded = false;
 
   @override
   Widget build(BuildContext context) {
+    if (!expanded) {
+      _settingsCallbacks?.dispose();
+      _settingsCallbacks = null;
+    }
     final newVersion = ComicSourceManager().availableUpdates[source.key];
     final hasUpdate =
         newVersion != null && compareSemVer(newVersion, source.version);
@@ -685,7 +711,10 @@ class _SliverComicSourceState extends State<_SliverComicSource> {
 
   Iterable<Widget> buildSourceSettings() sync* {
     // Try to get dynamic settings first (for getters), fall back to cached settings
-    var settingsMap = source.getSettingsDynamic() ?? source.settings;
+    _settingsCallbacks?.dispose();
+    final callbacks = _settingsCallbacks = source.createSettingsCallbackScope();
+    var settingsMap =
+        source.getSettingsDynamic(callbacks: callbacks) ?? source.settings;
 
     if (settingsMap == null) {
       return;
@@ -795,8 +824,13 @@ class _SliverComicSourceState extends State<_SliverComicSource> {
           await context.to(
             () => _LoginPage(config: source.account!, source: source),
           );
-          source.saveData();
-          setState(() {});
+          try {
+            await source.saveData();
+          } catch (error, stack) {
+            Log.error('Save source login', error, stack);
+            if (mounted) context.showMessage(message: error.toString());
+          }
+          if (mounted) setState(() {});
         },
       );
     }
@@ -818,23 +852,27 @@ class _SliverComicSourceState extends State<_SliverComicSource> {
           title: Text("Re-login".tl),
           subtitle: Text("Click if login expired".tl),
           onTap: () async {
+            if (_reLogin[source.key] == true) return;
             if (source.data["account"] == null) {
               context.showMessage(message: "No data".tl);
               return;
             }
-            setState(() {
-              _reLogin[source.key] = true;
-            });
-            final List account = source.data["account"];
-            var res = await source.account!.login!(account[0], account[1]);
-            if (res.error) {
-              context.showMessage(message: res.errorMessage!);
-            } else {
-              context.showMessage(message: "Success".tl);
+            setState(() => _reLogin[source.key] = true);
+            try {
+              final List account = source.data["account"];
+              final res = await source.account!.login!(account[0], account[1]);
+              if (!mounted) return;
+              context.showMessage(
+                message: res.error
+                    ? (res.errorMessage ?? 'Error'.tl)
+                    : 'Success'.tl,
+              );
+            } catch (error, stack) {
+              Log.error('Source re-login', error, stack);
+              if (mounted) context.showMessage(message: error.toString());
+            } finally {
+              if (mounted) setState(() => _reLogin[source.key] = false);
             }
-            setState(() {
-              _reLogin[source.key] = false;
-            });
           },
           trailing: loading
               ? const SizedBox.square(
@@ -979,50 +1017,47 @@ class _LoginPageState extends State<_LoginPage> {
     );
   }
 
-  void login() {
-    if (widget.config.login != null) {
-      if (username.isEmpty || password.isEmpty) {
-        showToast(
-          message: "Cannot be empty".tl,
-          icon: const Icon(Icons.error_outline),
-          context: context,
-        );
-        return;
-      }
-      setState(() {
-        loading = true;
-      });
-      widget.config.login!(username, password).then((value) {
-        if (value.error) {
-          context.showMessage(message: value.errorMessage!);
-          setState(() {
-            loading = false;
-          });
+  void login() async {
+    if (loading) return;
+    final config = widget.config;
+    if (config.login != null && (username.isEmpty || password.isEmpty)) {
+      showToast(
+        message: 'Cannot be empty'.tl,
+        icon: const Icon(Icons.error_outline),
+        context: context,
+      );
+      return;
+    }
+    if (config.login == null && config.validateCookies == null) return;
+    setState(() => loading = true);
+    try {
+      if (config.login != null) {
+        final result = await config.login!(username, password);
+        if (!mounted) return;
+        if (result.error) {
+          context.showMessage(message: result.errorMessage ?? 'Error'.tl);
         } else {
-          if (mounted) {
-            context.pop();
-          }
-        }
-      });
-    } else if (widget.config.validateCookies != null) {
-      setState(() {
-        loading = true;
-      });
-      var cookies = widget.config.cookieFields!
-          .map((e) => _cookies[e] ?? '')
-          .toList();
-      widget.config.validateCookies!(cookies).then((value) {
-        if (value) {
-          widget.source.data['account'] = 'ok';
-          widget.source.saveData();
           context.pop();
-        } else {
-          context.showMessage(message: "Invalid cookies".tl);
-          setState(() {
-            loading = false;
-          });
         }
-      });
+      } else {
+        final cookies = config.cookieFields!
+            .map((e) => _cookies[e] ?? '')
+            .toList();
+        final valid = await config.validateCookies!(cookies);
+        if (!mounted) return;
+        if (!valid) {
+          context.showMessage(message: 'Invalid cookies'.tl);
+          return;
+        }
+        widget.source.data['account'] = 'ok';
+        await widget.source.saveData();
+        if (mounted) context.pop();
+      }
+    } catch (error, stack) {
+      Log.error('Source login', error, stack);
+      if (mounted) context.showMessage(message: error.toString());
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
   }
 
@@ -1068,6 +1103,7 @@ class _LoginPageState extends State<_LoginPage> {
         },
       ),
     );
+    if (!mounted) return;
     if (success) {
       widget.source.data['account'] = 'ok';
       widget.source.saveData();
@@ -1077,16 +1113,22 @@ class _LoginPageState extends State<_LoginPage> {
 
   // for linux
   void loginWithWebview2() async {
-    if (!await DesktopWebview.isAvailable()) {
+    final available = await DesktopWebview.isAvailable();
+    if (!mounted) return;
+    if (!available) {
       context.showMessage(message: "Webview is not available".tl);
+      return;
     }
 
     var url = widget.config.loginWebsite!;
     var title = '';
     bool success = false;
 
+    var closed = false;
     void onClose() {
-      if (success) {
+      if (closed) return;
+      closed = true;
+      if (success && mounted) {
         widget.source.data['account'] = 'ok';
         widget.source.saveData();
         context.pop();

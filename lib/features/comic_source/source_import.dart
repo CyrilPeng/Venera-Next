@@ -1,3 +1,4 @@
+import 'source_failure.dart';
 import 'dart:convert';
 
 import 'package:venera_next/foundation/translations.dart';
@@ -37,8 +38,12 @@ class SourceImportPreview {
       dynamic decoded;
       try {
         decoded = jsonDecode(contents);
-      } catch (_) {
-        throw 'The address must return a source list in JSON format.'.tl;
+      } catch (error, stack) {
+        throw SourceFailure(
+          SourceFailureCode.invalidCatalog,
+          cause: error,
+          stackTrace: stack,
+        );
       }
       if (decoded is List && url == null && baseUrl == null) {
         for (final record in decoded.whereType<Map>()) {

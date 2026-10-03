@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -114,11 +115,20 @@ Future<PdfImportBatchResult?> showPdfImportDialog({
   required PdfImportTask task,
   PdfImportTasks? tasks,
 }) async {
-  await showDialog<void>(
+  final disposed = Completer<void>();
+  final closed = showDialog<void>(
     context: context,
-    builder: (context) =>
-        PdfImportDialog(task: task, tasks: tasks ?? PdfImportTasks.instance),
+    builder: (context) => DialogResourceScope(
+      onDispose: () {
+        if (!disposed.isCompleted) disposed.complete();
+      },
+      child: PdfImportDialog(
+        task: task,
+        tasks: tasks ?? PdfImportTasks.instance,
+      ),
+    ),
   );
+  await Future.any<void>([closed, disposed.future]);
   return task.result;
 }
 

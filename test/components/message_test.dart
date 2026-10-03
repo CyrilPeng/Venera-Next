@@ -3,6 +3,49 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/message.dart';
 
 void main() {
+  for (final action in ['button', 'back', 'unmount', 'unbuilt']) {
+    testWidgets('explicit-only loading cancellation: $action', (tester) async {
+      late BuildContext context;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (value) {
+              context = value;
+              return const Scaffold();
+            },
+          ),
+        ),
+      );
+      var cancellations = 0;
+      var closures = 0;
+      final controller = showLoadingDialog(
+        context,
+        onCancel: () => cancellations++,
+        onClosed: () => closures++,
+        cancelOnDismiss: false,
+        cancelButtonText: 'Force',
+      );
+      if (action != 'unbuilt') {
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      if (action == 'button') {
+        await tester.tap(find.text('Force'));
+      } else if (action == 'back') {
+        Navigator.of(context).pop();
+      } else {
+        await tester.pumpWidget(const SizedBox());
+        controller.close();
+      }
+      await tester.pumpAndSettle();
+      controller.close();
+      expect(controller.closed, isTrue);
+      expect(cancellations, action == 'button' ? 1 : 0);
+      expect(closures, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final dismissal in ['button', 'back', 'barrier', 'finished']) {
     testWidgets('loading dialog cancels once on $dismissal', (tester) async {
       late BuildContext dialogContext;

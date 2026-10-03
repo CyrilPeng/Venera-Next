@@ -1,3 +1,4 @@
+import 'package:venera_next/features/comic_source/source_failure.dart';
 import 'dart:typed_data';
 import 'dart:convert';
 
@@ -68,7 +69,18 @@ void main() {
   ]) {
     test('invalid catalog is rejected: $malformed', () async {
       adapter.body = malformed;
-      await expectLater(repositories.load(repository), throwsA(isA<String>()));
+      await expectLater(
+        repositories.load(repository),
+        throwsA(
+          isA<SourceFailure>().having(
+            (error) => error.code,
+            'code',
+            malformed.startsWith('[')
+                ? SourceFailureCode.emptyCatalog
+                : SourceFailureCode.invalidCatalog,
+          ),
+        ),
+      );
     });
   }
 
@@ -139,7 +151,16 @@ void main() {
   test('rejects non-HTTP script references before installation', () async {
     adapter.body =
         '[{"key":"source","name":"Source","version":"1.0.0","url":"file:///tmp/source.js"}]';
-    await expectLater(repositories.load(repository), throwsA(isA<String>()));
+    await expectLater(
+      repositories.load(repository),
+      throwsA(
+        isA<SourceFailure>().having(
+          (error) => error.code,
+          'code',
+          SourceFailureCode.emptyCatalog,
+        ),
+      ),
+    );
   });
 
   test('HTTP errors cannot produce an empty successful catalog', () async {

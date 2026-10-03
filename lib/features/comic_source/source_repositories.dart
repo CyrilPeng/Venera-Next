@@ -1,3 +1,4 @@
+import 'source_failure.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -81,7 +82,7 @@ class SourceUpdateCheck {
   });
 
   final Map<String, String> updates;
-  final List<String> failures;
+  final List<SourceCheckFailure> failures;
   final int checked;
   final int skipped;
 }
@@ -183,7 +184,7 @@ class SourceRepositories extends ChangeNotifier {
     if (uri == null ||
         !['http', 'https'].contains(uri.scheme) ||
         uri.host.isEmpty) {
-      throw 'Enter a complete HTTP or HTTPS URL.'.tl;
+      throw const SourceFailure(SourceFailureCode.invalidUrl);
     }
     return uri.removeFragment().toString();
   }
@@ -209,7 +210,9 @@ class SourceRepositories extends ChangeNotifier {
     } finally {
       if (ownsClient) dio.close();
     }
-    if (response.statusCode != 200) throw 'Unable to load repository.'.tl;
+    if (response.statusCode != 200) {
+      throw const SourceFailure(SourceFailureCode.unavailableRepository);
+    }
     return parseCatalog(response.data!, baseUrl: response.realUri.toString());
   }
 
@@ -218,11 +221,15 @@ class SourceRepositories extends ChangeNotifier {
     dynamic json;
     try {
       json = jsonDecode(contents.replaceFirst('\uFEFF', ''));
-    } catch (_) {
-      throw 'The address must return a source list in JSON format.'.tl;
+    } catch (error, stack) {
+      throw SourceFailure(
+        SourceFailureCode.invalidCatalog,
+        cause: error,
+        stackTrace: stack,
+      );
     }
     if (json is! List) {
-      throw 'The address must return a source list in JSON format.'.tl;
+      throw const SourceFailure(SourceFailureCode.invalidCatalog);
     }
     final entries = <SourceCatalogEntry>[];
     final skipped = <String>[];
@@ -270,7 +277,7 @@ class SourceRepositories extends ChangeNotifier {
       }
     }
     if (entries.isEmpty && skipped.isNotEmpty) {
-      throw 'The repository contains no usable source entries.'.tl;
+      throw const SourceFailure(SourceFailureCode.emptyCatalog);
     }
     return SourceCatalog(entries, skipped);
   }
@@ -283,14 +290,14 @@ class SourceRepositories extends ChangeNotifier {
   }) async {
     name = name.trim();
     url = normalizeUrl(url);
-    if (name.isEmpty) throw 'Enter a repository name.'.tl;
+    if (name.isEmpty) throw const SourceFailure(SourceFailureCode.missingName);
     void validateDuplicate() {
       if (all.any(
         (r) =>
             r.id != id &&
             Uri.tryParse(r.url)?.removeFragment().toString() == url,
       )) {
-        throw 'This repository address has already been added.'.tl;
+        throw const SourceFailure(SourceFailureCode.duplicateRepository);
       }
     }
 
@@ -308,7 +315,9 @@ class SourceRepositories extends ChangeNotifier {
     validateDuplicate();
     final repositories = all;
     final index = repositories.indexWhere((r) => r.id == id);
-    if (id != null && index < 0) throw 'Repository no longer exists.'.tl;
+    if (id != null && index < 0) {
+      throw const SourceFailure(SourceFailureCode.missingRepository);
+    }
     if (index < 0) {
       repositories.add(repository);
     } else {
@@ -362,7 +371,7 @@ class SourceRepositories extends ChangeNotifier {
     SourceCatalogEntry entry,
   ) async {
     if (entry.key != key || find(repository.id)?.url != repository.url) {
-      throw 'Repository changed. Refresh the list and try again.'.tl;
+      throw const SourceFailure(SourceFailureCode.repositoryChanged);
     }
     await setOrigin(
       key,
@@ -384,10 +393,11 @@ class SourceRepositories extends ChangeNotifier {
     final exact = candidates.firstWhereOrNull((e) => e.url == previousUrl);
     if (exact != null) return exact;
     if (candidates.length == 1) return candidates.single;
-    throw (candidates.isEmpty
-            ? 'This source is no longer listed in its repository.'
-            : 'Multiple variants found. Choose a source in the repository again.')
-        .tl;
+    throw SourceFailure(
+      candidates.isEmpty
+          ? SourceFailureCode.missingSource
+          : SourceFailureCode.ambiguousSource,
+    );
   }
 
   Future<String> updateUrl(
@@ -408,7 +418,7 @@ class SourceRepositories extends ChangeNotifier {
   Future<SourceUpdateCheck> checkUpdates(List<ComicSource> sources) async {
     final repositories = all;
     final updates = <String, String>{};
-    final failures = <String>[];
+    final failures = <SourceCheckFailure>[];
     var checked = 0;
     var skipped = sources
         .where((s) => find(originFor(s.key)?.repositoryId) == null)
@@ -424,7 +434,10 @@ class SourceRepositories extends ChangeNotifier {
         final entries = catalog.entries;
         if (find(repository.id)?.url != repository.url) {
           failures.add(
-            '${repository.name}: ${'Repository changed. Refresh the list and try again.'.tl}',
+            SourceCheckFailure(
+              const SourceFailure(SourceFailureCode.repositoryChanged),
+              repository: repository.name,
+            ),
           );
           skipped += linked.length;
           continue;
@@ -442,12 +455,18 @@ class SourceRepositories extends ChangeNotifier {
             checked++;
           } catch (error) {
             skipped++;
-            failures.add('${repository.name} / ${source.name}: $error');
+            failures.add(
+              SourceCheckFailure(
+                error,
+                repository: repository.name,
+                source: source.name,
+              ),
+            );
           }
         }
       } catch (error) {
         skipped += linked.length;
-        failures.add('${repository.name}: $error');
+        failures.add(SourceCheckFailure(error, repository: repository.name));
       }
     }
     return SourceUpdateCheck(

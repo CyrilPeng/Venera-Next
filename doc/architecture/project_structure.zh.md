@@ -463,3 +463,35 @@ headless_sync_command.dart 将注入的同步结果映射为 CLI status 与退�
 headless_arguments.dart 在核心启动前解析有类型的命令请求；headless_source_update_command.dart 通过检查/更新端口返回进度、汇总及退出码，并对检查结果创建不可变快照。headless.dart 装配实际源服务与订阅更新，并统一捕获命令异常及清理控制器。
 
 headless_subscription_command.dart 通过单漫画更新、文件夹进度流和结果列表读取三个端口统一订阅 CLI 协议；无 Flutter/应用全局依赖。入口映射真实服务结果与漫画字段。适配器等待流及结果读取完成，提前关闭的流不会返回成功；单漫画取消在装配边界转为非成功结果。
+
+漫画源解析入口 parser.dart 只负责声明/版本/key 校验、JS 对象安装/回滚、能力装配和源数据加载。source_account/explore/category/search/favorites/images/comments/comic/metadata_parser.dart 分别持有对应能力的注册及回调构造。SourceParserContext 固定单次解析的 key/name，集中可选属性路径读取与漫画列表归一化；回调不捕获入口后续可变的源身份。异常类型移入 source_parse_exception.dart，parser.dart 继续导出以兼容旧调用。各能力单元不反向依赖入口，均纳入业务入口依赖门禁。
+
+动态分类的原生函数由 SourceParserContext 的 JsCallbackScope 持有；解析的临时 JS 文档在 finally 释放引用。parse 成功后 ComicSource 持有作用域，失败/回滚释放新作用域，替换提交/删除/重载释放旧作用域；JsEngine 关闭前兜底释放仍存活的作用域。已释放回调在 Dart 层抛出 StateError。设置、图片和 UI 的显式作用域见后续说明；归一化入口要求显式传入保留回调端口，旧 finalizer 包装已删除。
+
+静态源设置解析通过源的回调作用域保留函数，finally 释放临时 JS 文档。动态设置 getSettingsDynamic 要求调用方提供子作用域；createSettingsCallbackScope 将其绑定到源。设置页在重建、收起和卸载时释放旧快照，两个页面读取同一源时不会互相释放快照。getter 失败仍回退到源拥有的静态设置。图片处理与 JS UI 已迁移到显式作用域，见下文。
+
+reader_image_processing.dart 独立承接自定义 processImage 协议，ReaderImageProvider 只负责读图和装配参数。一次操作用 JsCallbackScope 持有处理/取消函数，借用结果文档及时释放，操作 finally 释放作用域；取消后晚到的结果引用也会清理。正式 waitForReaderImageProcessingResult 替代 debugWaitForReaderImageProcessingResult，显式接收取消信号。仍保留 ArrayBuffer/Promise/{image,onCancel} 协议与无效结果回退原图语义。取消不能强制终止未配合取消的第三方 JS Promise 或撤销它的副作用。
+
+JsUiApi 为每个动作/加载/输入弹窗持有 JsCallbackScope。DialogResourceScope 将释放绑定到 Widget 卸载，路由正常完成也执行幂等清理；加载 id 注册项按作用域身份移除，防止旧弹窗清理误删复用 id。动作/取消的忽略结果释放 JSRef，异步完成后仅操作仍挂载的界面；输入校验保留同步协议。动作/输入请求在 Navigator 卸载时也结束，不遗留等待路由返回的桥接 Promise。
+
+归一化测试直接导入 normalization.dart 和 models.dart；ComicSourceManager 不再提供 9 个 debugNormalize 转发函数或依赖归一化/模型模块。normalizeComicSourceSettings 必须接收有类型的 retainCallback，生产调用方传入源/快照作用域的 retain；不再提供隐式 finalizer 后备分支。JSAutoFreeFunction 已从 JS 引擎模块删除，回调统一由显式所有者释放。
+
+集合类型检查 collection_methods_unrelated_type 在全库启用，诊断提升为 warning，受 CI --fatal-warnings 约束。SQLite 仓储/缓存/导入读取使用列名，聚合查询为结果命名 total；不依赖 Row 的数字下标扩展。普通章节已读标记按 1-based 字符串索引读取历史，倒序显示不改变原索引。
+
+ImportComic 通过可注入 ImportComicPresentation 展示提示、加载和 PDF 任务，不直接使用 BuildContext。默认适配器每次同步取得根 Navigator 当前 context 并检查 mounted，根页面缺失时省略展示；任务仍由原服务持有。PDF 对话框绑定 DialogResourceScope，正常关闭或 Navigator 卸载均结束界面等待，均不取消应用级任务。
+
+三类评论视图（漫画、章节、嵌入章节）按页面拥有编辑器/滚动控制器和异步请求状态。首屏/分页请求去重，发送后递增 generation，旧分页结果不再混入刷新列表；分页失败显示可重试项。所有发送/点赞/投票完成与异常分支检查对应页面存活，finally 恢复忙碌状态。页面销毁不强制终止源请求；三类视图的相同流程仍需后续共性收束。
+
+源账号页面的密码/Cookie 登录与重新登录统一使用 await/try/finally 管理忙碌状态，并在结果返回时检查所属 State。Cookie 登录等待 saveData 后返回；源设置页返回时等待保存并仅更新仍挂载的视图。桌面外部编辑对话框使用已检查存活的页面 context；桌面 WebView 不可用时直接返回。原生 WebView Cookie/localStorage 采集与页面路由的完整联合生命周期仍待验收。
+
+comic_export_service.dart 拥有一次导出的独立临时目录，依次调用格式导出、压缩与保存端口，finally 等待清理；删除失败记录日志且不覆盖原操作错误。页面仅装配端口、更新进度/提示和关闭弹窗。批量输出保留 comics_export.zip 名称，内部重名（忽略大小写）文件按序加后缀，压缩结果位于内容目录外。服务不直接依赖页面/State，已纳入业务入口门禁。
+
+SyncWindowBinding 持有上传等待弹窗，在等待完成/失败时关闭，卸载时于树解锁后关闭仍存活的路由。导入/下载退出保护通过先清空再调用的释放函数处理，下载释放失败也会尝试释放导入保护。根 Navigator 不存在时仍等待上传，不展示弹窗。加载弹窗的 cancelOnDismiss 默认 true；关闭窗口等待显式设为 false，只有按钮表示强制退出，路由卸载不会触发该操作。
+
+HistoryPage 持有批量刷新订阅并在取消/卸载时释放；HistoryManager 将订阅取消传给 runThrottledTasks，停止调度新请求。生产异常进入进度流，finally 关闭流；已发出的请求及已有节流等待允许完成。单条刷新按标识去重，页面内批量与单条任务互斥。
+
+source_failure.dart 定义稳定的源管理错误码、原始原因及检查范围；source_failure_presentation.dart 在页面边界翻译，headless.dart 保留字符串数组协议。SourceRepositories 与 SourceUpdateService 不再将已迁移的业务错误提前翻译或拼接范围。
+
+SourceUpdateService 取消时抛出带原始原因的 SourceFailureCode.cancelled，单条交互适配器静默处理并释放弹窗；无头和无弹窗调用者收到明确取消，不再当作完成更新。CLI 保持旧字段，将取消计入 errors 并继续下一项。
+
+foundation/operation_failure.dart 定义 FailureDetails 与 failed/cancelled/unsupported 分类；Res.failure/fromException 兼容旧文本接口并保留原因，fromErrorRes 转发结构化信息。SourceFailure 实现该接口；八类源能力解析器通过 fromException 接入。未提供的可选 JS 能力仍为 null，不据字符串猜测不支持或取消。

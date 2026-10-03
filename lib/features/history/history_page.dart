@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:venera_next/foundation/log.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/button.dart';
@@ -6,7 +8,6 @@ import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
-import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -30,6 +31,7 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   void dispose() {
     HistoryManager().removeListener(onUpdate);
+    _cancelRefresh?.call();
     super.dispose();
   }
 
@@ -85,61 +87,83 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
+  final _refreshing = <(String, int)>{};
+  bool _refreshingAll = false;
+  VoidCallback? _cancelRefresh;
+
   void _refreshHistory(History comic) async {
-    var result = await HistoryManager().refreshHistoryInfo(comic);
-    if (result) {
+    final identity = (comic.id, comic.type.value);
+    if (_refreshingAll || !_refreshing.add(identity)) return;
+    try {
+      final result = await HistoryManager().refreshHistoryInfo(comic);
       if (mounted) {
-        App.rootContext.showMessage(message: "Refresh Success".tl);
+        context.showMessage(
+          message: result ? 'Refresh Success'.tl : 'Refresh Failed'.tl,
+        );
       }
-    } else {
-      if (mounted) {
-        App.rootContext.showMessage(message: "Refresh Failed".tl);
-      }
+    } catch (error, stack) {
+      Log.error('Refresh history', error, stack);
+      if (mounted) context.showMessage(message: error.toString());
+    } finally {
+      _refreshing.remove(identity);
     }
   }
 
   void _refreshAllHistories() async {
-    bool isCanceled = false;
-    void onCancel() {
-      isCanceled = true;
+    if (_refreshingAll || _refreshing.isNotEmpty) return;
+    _refreshingAll = true;
+    var cancelled = false;
+    StreamIterator<RefreshProgress>? iterator;
+    void cancel() {
+      cancelled = true;
+      unawaited(iterator?.cancel() ?? Future<void>.value());
     }
 
-    var loadingController = showLoadingDialog(
-      App.rootContext,
+    _cancelRefresh = cancel;
+    final loading = showLoadingDialog(
+      context,
       withProgress: true,
-      cancelButtonText: "Cancel".tl,
-      onCancel: onCancel,
-      message: "Refreshing Histories".tl,
+      cancelButtonText: 'Cancel'.tl,
+      onCancel: cancel,
+      message: 'Refreshing Histories'.tl,
     );
-
-    int success = 0;
-    int failed = 0;
-    int skipped = 0;
-
-    await for (var progress in HistoryManager().refreshAllHistoriesStream()) {
-      if (isCanceled) {
-        return;
+    try {
+      iterator = StreamIterator(HistoryManager().refreshAllHistoriesStream());
+      var success = 0;
+      var failed = 0;
+      var skipped = 0;
+      while (await iterator.moveNext()) {
+        if (cancelled || !mounted) return;
+        final progress = iterator.current;
+        if (progress.total > 0) {
+          loading.setProgress(progress.current / progress.total);
+        }
+        success = progress.success;
+        failed = progress.failed;
+        skipped = progress.skipped;
       }
-      if (progress.total > 0) {
-        loadingController.setProgress(progress.current / progress.total);
+      if (mounted && !cancelled) {
+        context.showMessage(
+          message:
+              'Refresh Completed: Success @success, Failed @failed, Skipped @skipped'
+                  .tlParams({
+                    'success': success,
+                    'failed': failed,
+                    'skipped': skipped,
+                  }),
+        );
       }
-      success = progress.success;
-      failed = progress.failed;
-      skipped = progress.skipped;
-    }
-
-    loadingController.close();
-
-    if (mounted) {
-      App.rootContext.showMessage(
-        message:
-            "Refresh Completed: Success @success, Failed @failed, Skipped @skipped"
-                .tlParams({
-                  'success': success,
-                  'failed': failed,
-                  'skipped': skipped,
-                }),
-      );
+    } catch (error, stack) {
+      Log.error('Refresh histories', error, stack);
+      if (mounted && !cancelled) context.showMessage(message: error.toString());
+    } finally {
+      try {
+        await iterator?.cancel();
+      } finally {
+        loading.close();
+        _cancelRefresh = null;
+        _refreshingAll = false;
+      }
     }
   }
 

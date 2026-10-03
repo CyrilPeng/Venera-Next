@@ -1041,3 +1041,143 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 删除两处固定 500 ms 等待：updateComic 的 updateInfo/updateUpdateTime/updateCheckTime 均同步提交仓储写入；文件夹进度流在任务结束后关闭，列表应直接读取提交状态，无需时间猜测。
 - 新增 12 项适配器测试、6 项真实 Dart 子进程协议探针；与现有追更测试合计 32 项针对性测试通过。探针仍为受控端口，未覆盖真实 Flutter 启动、实际服务装配和全局管理器隔离；P2.3 继续部分完成，间接 UI 聚合依赖仍待处理。
 - 最终验证：全量 Flutter 1119 项通过；静态分析零 error/warning、23 个 info；结构与 55 项业务入口门禁、Python 56 项（3 项平台工具跳过）、Git 依赖锁和格式检查通过。日志 output/cli-subscription-{targeted,full,analyze}.log。工作区测试含用户原有改动，本提交不包含这些改动。
+
+## P7：按能力拆分漫画源解析器（2026-10-02）
+
+- 将 26 个能力方法迁到 9 个独立类：账户、发现、分类、搜索、收藏、图片、评论、漫画、元数据。parser.dart 从 1349 行降为 282 行，保留声明/版本/key 校验、JS 安装回滚、装配和 loadData；最大能力单元 266 行。不是 part/mixin 分文件，能力单元不反向引用入口。
+- SourceParserContext 提供不可变 key/name、可选属性访问与公共漫画列表归一化。修复复用同一解析器后旧回调读取新 _key 的问题；现有回调名称、参数顺序、JS 读/写桥接选择、Res/重登录逻辑、磁盘格式均保留。异常类型独立并由原 parser.dart 重新导出。
+- 新增两个真实 QuickJS 回归用例：同一解析器产生两个源后执行各自搜索/发现/分类/收藏/详情/图片/评论能力，并核对源身份；缺失可选能力、非法响应和 JS 抛错保持原失败语义。首轮夹具缺少 minAppVersion 且测试赋值返回的 JS 函数未释放，已补齐版本声明并使用 void 赋值后通过；未更改生产版本比较语义。
+- 漫画源模块 112 项针对性测试通过；依赖门禁增加 11 个能力/上下文/异常入口，总数为 66。P7.1 有实现证据；P7.2 仍需完整账户/重登录、游标、动态分类等矩阵，P7.5 的统一结构化错误和取消边界尚未完成，不能据此宣布 P7 整体完成。
+- 最终验证：全量 Flutter 1121 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口门禁、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。日志 output/parser-split-{targeted,full,analyze}.log。工作区测试包含用户原有修改，本提交仅含本阶段改动。
+
+## P7：账户、游标与分类能力执行矩阵（2026-10-02）
+
+- 新增 source_capabilities_test.dart，使用实际 QuickJS/生产 init.js 和临时目录执行 9 项合成源测试；验证特殊字符登录参数与身份落盘、网页登录/Cookie/登出回调，收藏未登录不请求、过期仅重登录一次、重登录失败及再次过期停止、多文件夹操作，搜索/发现/排行游标与动态选项参数、新旧分类目标和非法动态加载器回滚。
+- 首次运行复现空分类列表 categories[0] 越界导致整份源安装失败；source_category_parser.dart 在判别新旧格式前跳过空列表，修复后保持其他分类的原行为。没有扩大到随机分类算法或动态函数所有权变更。
+- 新增 source_capability_matrix.zh/en.md，逐项记录实际执行证据和缺口。P7.2 仍为部分完成：有效动态分类函数的执行/释放、归档/投票/元数据、完整取消/重登录组合仍待验收。测试不依赖外网/个人源数据，原生库不可用环境会明确跳过。
+- 最终验证：漫画源 121 项针对性测试和全量 Flutter 1130 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁及格式检查通过。日志 output/source-matrix-{targeted,full,analyze}.log。用户原有工作区修改仅参与测试，不混入提交。
+
+## P4/P7：动态分类原生回调的显式所有权（2026-10-02）
+
+- 先用真实 QuickJS 执行动态分类并关闭引擎，复现 reference leak（日志 output/dynamic-lifetime-before.log）。原实现只用 JSAutoFreeFunction 的 finalizer，既没有在源卸载时释放，又保留了读取 category 文档得到的临时函数引用。
+- 新增 JsCallbackScope：引用保留/释放配对，重复 dispose 幂等，释放后的调用抛 StateError；作用域绑定创建时的引擎，引擎关闭前释放尚存作用域。动态分类改用受作用域保护的函数闭包，category 文档用 finally 释放临时引用。JS loader 名称、调用参数和分类数据格式不变。
+- 解析器在失败/回滚时释放新作用域，成功后交给 ComicSource 持有；管理器在替换提交、remove、reload 时释放旧源回调。失败替换不释放旧源。源模型新增可选作用域参数，已有非 JS 源构造不受影响；测试 Fake 补齐生命周期方法。
+- 新增 4 项真实原生回归：执行与关闭、源移除后回调拒绝、引擎关闭/重新初始化后旧回调拒绝、连续三次替换失败仍可用旧 loader 且成功替换后旧 loader 失效。漫画源 125 项针对性测试通过。更新双语能力矩阵，其他设置/图片/UI 的 JSAutoFreeFunction 仍待独立审查，不据此宣称全部 JS 生命周期或 P7 已完成。
+- 最终验证：全量 Flutter 1134 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。日志 output/dynamic-lifetime-{before,targeted,full,analyze}.log；before 是修复前故意复现的失败，其余为最终验证。测试含用户工作区改动，提交不包含这些改动。
+
+## P4/P7：源设置回调与动态快照作用域（2026-10-02）
+
+- 静态设置解析复用源的 JsCallbackScope，normalizeComicSourceSettings 接受保留回调端口，正式源解析不再创建 finalizer 包装；读取的临时 JS 文档在 finally 释放，包括未采用的字段。旧归一化函数的默认包装行为保留给既有独立调用者。
+- JsCallbackScope 增加子作用域：单个快照可单独释放，父源释放会释放所有子快照。getSettingsDynamic 显式要求调用方作用域，设置页在每次重建、收起和卸载时释放旧快照，避免将每次 getter 新生成的函数积累到源卸载；不同读取者互不干扰。getter 失败继续回退到静态设置，不受失败快照释放影响。
+- 新增 4 项真实 QuickJS 回归：静态回调移除失效、两个独立快照与 20 次创建/释放、getter 失败回退、连续解析失败释放。模块 129 项测试通过；原生关闭检查覆盖引用释放，但设置页重建/收起/卸载的 Widget 专项仍需后续补验。图片处理/JS UI 的 JSAutoFreeFunction 还未迁移，不据此完成全项目生命周期验收。
+- 最终验证：全量 Flutter 1138 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁及格式检查通过。日志 output/settings-lifetime-{targeted,full,analyze}.log。工作区测试包含用户修改，提交仅含本阶段内容。
+
+## P4/P7：设置页面快照与异步回调验收（2026-10-03）
+
+- 使用正式 ComicSourcePage、真实 JsCallbackScope 与受控 JSInvokable 构建 5 项 Widget 测试，核对主题重建、收起、重新展开、卸载时每份动态快照只释放一次；补齐上一阶段的页面生命周期证据。它与真实 QuickJS 测试互补，不能独立证明原生执行行为。
+- 回归先复现 _CallbackSettingState 在回调完成前卸载后仍 setState 的错误。现在 finally 检查 mounted，同步抛错和异步失败统一记录原异常并在仍挂载时通过消息接口提示；执行中重复点击不再重复调用，失败后恢复可重试状态，卸载后失败不操作页面。
+- 5 项针对性 Widget 测试通过：快照释放、卸载后成功、同步/异步失败后重试、快速重复点击及卸载后失败。双语能力矩阵已更新；多页面/源替换交互和图片/JS UI 回调迁移仍待继续，不宣布 P4/P7 整体完成。
+- 最终验证：全量 Flutter 1143 项通过；测试格式提示修正后静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。日志 output/settings-widget-{targeted,full,analyze}.log。用户工作区修改仅参与测试，不混入本提交。
+
+## P4/P7/P8：自定义图片处理与回调释放（2026-10-03）
+
+- 提取 reader_image_processing.dart，图片 provider 继续负责读文件/网络流，自定义 processImage 的执行/结果适配/取消等待由独立函数负责。移除 reader_image.dart 两处 finalizer 包装及重复 Future 分支，以操作作用域持有处理与取消函数，及时释放借用的函数/结果文档，finally 结束所有权。
+- waitForReaderImageProcessingResult 显式接收取消信号；取消后晚到的结果或结果到达时 checkStop 抛错，均释放其中未消费的 JSRef，避免丢弃结果时泄漏。测试专用 debugWaitForReaderImageProcessingResult 已删除，既有测试直接使用正式函数。
+- 增加 7 项真实 QuickJS 用例，执行旧协议的 ArrayBuffer、Promise、{image,onCancel}，核对参数顺序、同步/异步失败、取消钩子只调用一次、忽略字段及无效结果回退。最初夹具误用 Uint8Array，按实际桥接 ArrayBuffer 协议修正，未变更生产字节协议。再加 2 项受控引用测试验证晚到/停止结果只释放一次；合计 13 项针对性测试通过。
+- 保留异步 null 转为空字节、其他无效结果回退原图的既有语义。取消仍快速返回，不承诺强制结束不配合的第三方 JS Promise，也不撤销其副作用；引擎退出时未结束 Promise 的生命周期及网络图片配置/UI 回调仍需继续验收。
+- 最终验证：全量 Flutter 1152 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。日志 output/image-callback-{targeted,full,analyze}.log。工作区测试含用户改动，提交仅含本阶段。
+
+## P4/P7：JS 弹窗回调与资源生命周期（2026-10-03）
+
+- JsUiApi 的动作、加载、输入弹窗全部采用 JsCallbackScope，替换 JSAutoFreeFunction；每个弹窗独立持有回调，路由完成和 Widget 卸载均幂等释放。加载注册表按作用域身份清理，旧弹窗退出不会删除复用 id 的新弹窗。
+- 公共 DialogResourceScope 将清理绑定到实际卸载；加载控制器清除已关闭回调，主动关闭不触发取消，按钮/返回/遮罩/卸载最多取消一次。输入控制器随弹窗释放，动作/输入请求在 Navigator 卸载时也结束，避免桥接 Promise 一直等待路由返回。
+- 动作回调支持等待异步结果，拒绝重复执行；异常记录原错误，卸载后不更新界面。忽略的动作/取消结果释放 JSRef。输入验证保持同步 JS 协议，异常在当前弹窗显示且可重试；公共异步输入确认增加 mounted 检查及失败恢复。
+- 14 项受控 JS UI 测试、1 项真实 QuickJS/Widget 联合测试及 5 项已有公共消息测试共 20 项通过。覆盖关闭方式、id 复用、错误重试、晚到成功/失败、原生异步动作/取消返回函数的释放和输入卸载完成。原生测试需交替推进真实事件循环与 Flutter 模拟帧；修正测试等待后通过，未用模拟替代原生执行。
+- 归一化兼容入口仍保留 finalizer 包装；引擎退出时未结束 Promise 等边界仍待后续验收，不据此声明 P4/P7/P8 整体完成。
+- 最终验证：全量 Flutter 1167 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。日志 output/js-ui-{targeted,native,full,analyze}.log。工作区测试包含用户原有修改，提交仅含本阶段内容。
+
+## P1/P8：归一化测试入口与 finalizer 包装退场（2026-10-03）
+
+- 全库引用检索确认 9 个 debugNormalizeComicSource 转发函数只被 comic_source_settings_test.dart 使用；测试改为直接导入 normalization.dart/models.dart，删除管理器中的全部转发及两个冗余依赖。漫画源公开聚合入口不再间接暴露这些测试工具。
+- JSAutoFreeFunction 最后一个调用点为设置归一化的默认兼容分支；两个生产调用点（静态元数据、动态设置）此前均显式传入 JsCallbackScope.retain。删除包装类/Finalizer 和默认分支，retainCallback 改为必填、返回有类型可调用函数的端口，编译期禁止遗漏所有者。
+- 原有归一化测试继续验证数据转换；回调用例改为真实 JsCallbackScope 配合受控 JSInvokable，核对借用文档释放后仍可调用、作用域释放仅销毁一次、重复释放幂等和关闭后调用拒绝。非法设置不调用保留端口。漫画源模块 134 项测试通过，包含已有真实 QuickJS 设置/替换/失败释放用例。
+- 这是有引用证据的一组冗余删除，不替代 P1 的全库候选/依赖/产物盘点；其他 reset/debug 入口和 P8 lint 收束仍待继续。
+- 最终验证：全量 Flutter 1167 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁和格式检查通过。日志 output/normalization-cleanup-{targeted,full,analyze}.log。工作区测试含用户改动，提交仅含本阶段。
+
+## P8：恢复集合类型门禁与章节已读标记（2026-10-03）
+
+- 启用 collection_methods_unrelated_type 后实际检出 25 处诊断：23 处 SQLite Row 数字下标、1 处归一化测试对字符串键 Map 查询整数、1 处普通章节使用整数查询 Set<String>。没有通过 dynamic 强转或 ignore 绕过规则。
+- SQLite 行本来支持数字索引，这些诊断不等于数据读取失败；仓储/缓存/导入与相应测试现在改用明确列名，聚合结果增加 total 别名，减少列顺序耦合。归一化测试直接断言完整键列表，继续核验非法键被过滤。
+- 修复普通章节已读样式不生效：读取历史的 1-based 字符串索引，而非整数。两项 Widget 回归验证正序/倒序下仅已读章节变色，点击仍返回原章节索引，重建后清空/替换历史正确更新样式；分组历史格式未改动。
+- 规则显式提升为 warning，与既有 CI --fatal-warnings 配合阻止回归，不影响其他 info 的处理。81 项针对性测试通过，覆盖章节、历史、图片收藏、本地仓储、导入、事务、缓存和归一化。use_build_context_synchronously 仍待继续，P8.2 保持部分完成。
+- 最终验证：全量 Flutter 1169 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。临时错误样例实际产生 warning 并使 dart analyze --fatal-warnings 非零退出，验证后删除。日志 output/collection-lint-{analyze,targeted,final-analyze,full,gate-probe}.log；analyze 为恢复规则后的诊断基线。工作区测试含用户原有修改，提交仅含本阶段。
+
+## P4/P6/P8：导入展示边界与异步 context 检查（2026-10-03）
+
+- 全库启用 use_build_context_synchronously 为 info，实际发现 85 处诊断；本阶段处理导入文件的 21 处，其余 64 处按文件登记在 async_context_audit.zh.md。当前总数为 87 个 info（原有 23 + 待修复 64），不是分析回归已清零；全部修复后再提升 warning，不屏蔽遗留项。
+- 提取可注入 ImportComicPresentation，统一提示/加载/PDF 任务展示；默认实现每次同步读取根 Navigator 当前 context 并检查 mounted。根页面不存在时省略 UI，导入服务继续按原有所有权完成；ImportComic 不再直接访问 BuildContext 或强制非空的 App.rootContext。文件选择、复制/注册与数据协议保留。
+- PDF 弹窗使用 DialogResourceScope，正常关闭或 Navigator 卸载均结束 showPdfImportDialog 的等待，返回当时结果；未完成任务仍归 PdfImportTasks，不随窗口卸载取消。加载弹窗继续复用已有关闭/取消清理，晚到进度不操作已卸载页面。
+- 4 项展示生命周期测试验证无根页面完成注册、加载卸载与新根页面重建、PDF 未显示/显示后卸载均不取消任务且最终释放选择资源。首轮测试清理中跨 fake-async 等待已完成 Future 导致挂起，调整清理后通过；导入目录 91 项针对性测试通过。
+- 此适配器仍是导入编排的展示依赖，不代表导入模块全部纯业务化；其他 context、存储部分提交和原生平台验收继续保留。
+- 最终验证：全量 Flutter 1173 项通过；静态分析零 error/warning、87 个 info（分解如上）；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁及格式检查通过。日志 output/context-import-{presentation,targeted,final-analyze,full}.log。测试包含用户原有改动，提交仅含本阶段。
+
+## P4/P5/P8：评论请求、交互与页面生命周期（2026-10-03）
+
+- 漫画评论、章节评论和嵌入式章节评论的首屏/分页增加请求去重；同步抛错经 Future.sync 进入统一异步错误处理。首屏失败可重试，成功清除旧错误；分页失败显示明确重试项，不在重建中反复请求失败页。
+- 发送成功递增请求代次并重置列表状态，旧分页的晚到结果不再污染刷新后的列表。发送同帧重复点击只执行一次；发送/点赞/投票统一处理原异常并记录日志，finally 恢复忙碌状态，卸载后不更新页面或已释放编辑器。
+- 漫画/章节页面释放 TextEditingController；嵌入式视图的 ScrollController 改由 State 持有并释放，避免每次 build 新建。修复全部 8 处评论文件的 context 诊断，并处理 lint 未覆盖的 setState/控制器生命周期问题。
+- 24 项 Widget 回归覆盖三类视图的首屏重建去重、同步失败重试、分页失败/重试/刷新代次、发送重复点击/失败重试/卸载后成功及失败、点赞和投票失败后重试及晚到成功。测试使用生产 Widget 和受控源端口，不替代真实 JS 投票/取消能力矩阵。
+- 最终验证：全量 Flutter 1197 项通过；静态分析零 error/warning、79 个 info（原有 23 + 剩余 context 56）；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁和格式通过。日志 output/comments-lifecycle-{targeted,full,final-analyze}.log。三类评论的重复流程后续仍需收束，P5/P7/P8 不据此全部完成；工作区测试含用户修改，提交仅含本阶段。
+
+## P4/P8：源登录页面与异步错误恢复（2026-10-03）
+
+- 密码/Cookie 登录改为统一 async/try/catch/finally，提交中拒绝重复调用；错误保留原日志与可见提示，卸载后不提示、不导航、不更新 State。Cookie 校验成功后显式等待 saveData，保存失败仍留在页面并恢复按钮供重试。
+- 重新登录按源 key 去重，成功/业务失败/抛错后均恢复忙碌状态。源设置页从登录页返回后等待保存、记录错误且只重建仍挂载视图，修复未被原 lint 报出的晚到 setState。
+- 外部编辑后的重载弹窗使用已检查存活的页面 context；WebView 返回后检查登录页存活。桌面 WebView 不可用直接停止，不再提示后继续打开；关闭处理幂等且不会在登录页卸载后 pop。
+- 8 项 Widget 测试验证密码/Cookie 重复点击、错误重试、卸载后成功与失败、Cookie 保存等待/失败恢复、重新登录去重与晚到异常。真实原生 WebView 插件、Cookie/localStorage 采集并发和路由身份仍待单独验收；本阶段不声明全网页登录生命周期完成，也未改变源登录函数自身的副作用。
+- 最终验证：全量 Flutter 1205 项通过；静态分析零 error/warning、71 个 info（原有 23 + 剩余 context 48）；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁及格式通过。日志 output/source-login-{targeted,full,final-analyze}.log。工作区测试含用户修改，提交仅含本阶段。
+
+## P2/P6/P8：本地导出编排与临时文件所有权（2026-10-03）
+
+- 检查本地库 context 诊断时发现导出共用固定 comics_export 目录/ZIP，且保存异常、取消等分支清理不一致。提取 comic_export_service.dart：每次 createTemp 分配独立工作目录，内容与最终 ZIP 分开放置，导出/压缩/保存均置于同一 try/finally，等待保存完成后再清理。并发任务不再删除彼此或旧缓存路径。
+- 页面只装配导出格式/压缩/保存端口，更新进度、捕获错误并在 finally 关闭弹窗；取消或页面卸载后不继续下一步/打开保存窗口。已开始的导出、压缩或系统保存不可强制中止，完成后再清理。清理失败记录原错误但不覆盖主操作结果，不宣称跨平台文件删除永远成功。
+- 批量同名或大小写冲突标题按序添加 (2) 等后缀，不再静默覆盖；保留单文件原名和最终 comics_export.zip 名称。归档到 WebDAV 的消息仅向仍挂载页面显示，返回结果与现有取消语义保留。3 处本地库 context 诊断已修复。
+- 新增 10 项真实临时文件与受控端口测试：保存前后所有权、重名与 ZIP 位置、导出/压缩/保存异常、导出/压缩后取消、空集合/预取消及并发隔离，验证旧固定缓存目录未删除。未用这些端口测试代替 PDF/EPUB/ZIP 原生实现与系统保存窗口验收；历史/图片收藏的其他诊断继续在清单中。
+- 最终验证：全量 Flutter 1215 项通过；静态分析零 error/warning、68 个 info（原有 23 + context 45）；结构与 67 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁和格式检查通过。日志 output/local-export-{targeted,full,final-analyze}.log。用户原有修改只参与工作区测试，不混入本提交。
+
+## P4/P6/P8：同步窗口等待与退出保护释放（2026-10-03）
+
+- SyncWindowBinding 持有上传加载控制器，等待完成/失败均 finally 关闭；卸载时把关闭安排到树解锁后，避免仍存活 Navigator 被同步修改。展示前读取并检查当前根 context；根 Navigator 缺失时继续等待上传，不因提示无法展示而失败。
+- showLoadingDialog 增加 cancelOnDismiss（默认 true，既有任务语义保留）。同步窗口等待设为 false，使主动按钮仍可强制退出，但路由返回/卸载不会被当成强制退出。控制器关闭前检查 Navigator.mounted 和 route.isActive；首轮既有测试实际复现“入队但未构建的弹窗随 Navigator 卸载后 close”触发路由锁断言，修复后通过。
+- 导入/下载退出释放函数先清空句柄再调用，保证重复清理不重复释放，并在下载释放抛错时仍尝试释放导入保护。成功等待保留保护至真正卸载；失败释放保护，窗口可重新发起关闭。
+- 新增 8 项回归（窗口 4、公共弹窗 4），与原有用例合计 23 项通过：完成/等待异常/移除绑定但保留窗口/无根 Navigator，按钮/返回/卸载/未构建弹窗；核对清理一次及不因拆除绑定提前强制退出。窗口用例在 Windows 运行，其他平台显式跳过，不替代原生多平台退出验收。
+- 最终验证：全量 Flutter 1223 项通过；静态分析零 error/warning、67 个 info（原有 23 + 剩余 context 44）；结构与 67 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁和格式检查通过。日志 output/sync-window-{targeted,full,analyze}.log。用户原有修改仅参与测试，提交仅含本阶段内容。
+
+## P4/P6/P8：历史刷新取消与页面生命周期（2026-10-03）
+
+- HistoryPage 使用 StreamIterator 持有批量进度订阅；按钮取消或页面卸载立即取消订阅，正常结束和异常均释放订阅、关闭弹窗并恢复重试入口。单条刷新按漫画标识去重，页面内批量与单条任务互斥；异步消息只发给仍挂载的页面。
+- HistoryManager 将生产异常转发到进度流并在 finally 关闭流。订阅取消标记传入公共节流执行器，在等待节流前后检查，不再调度后续请求；已发出的请求和既有节流等待允许完成，不承诺中断网络或撤销已写入数据。
+- 新增 8 项测试，覆盖成功、失败重试、取消、卸载、重复操作、单条迟到失败、生产初始化异常以及运行中/节流中取消。Widget 测试显式排空异步清理；空列表菜单通过不可见 sliver 获取，不要求渲染虚构条目。
+- 最终验证：全量 Flutter 1231 项通过；静态分析零 error/warning、65 个 info（原有 23 + context 42）；结构与 67 项业务入口门禁通过，Python 56 项执行成功（3 项平台工具跳过），Git 依赖一致。日志 output/history-refresh-{targeted,full,final-analyze}.log；用户原有修改参与工作区测试但不纳入提交。未以本次测试代替跨平台或设备性能验收。
+
+## P7：源仓库与更新错误的展示边界（2026-10-03）
+
+- SourceFailureCode/SourceFailure 为 URL、目录格式、空目录、名称、仓库重复/缺失/变更、源缺失/歧义和重复更新提供稳定原因码；JSON 解析失败保留原始异常与堆栈。更新服务不再直接翻译业务错误，错误模型不依赖界面或全局配置，并加入业务入口门禁。
+- SourceCheckFailure 保留原始错误与仓库/源范围。页面通过 sourceFailureMessage 在展示时翻译；CLI 在装配边界转成既有字符串数组，保持协议字段结构。导入预览的目录解析错误同步迁移；网络错误与未知错误继续保留原类型和诊断。
+- 新增 4 项测试，验证语言切换后展示、原始异常与堆栈、范围格式化及混合仓库失败不阻断后续检查；既有断言改为核对具体错误码。首轮全量发现 6 项目录测试仍断言 String，修正后重新全量验证。
+- 最终全量 Flutter 1235 项通过；强化语言切换断言后专项 3 项通过。分析零 error/warning、65 个 info；结构及 68 项业务入口门禁通过，Python 56 项执行成功（3 项平台工具跳过），Git 依赖一致。日志 output/source-errors-final-full.log、output/source-errors-final-analyze.log、output/source-errors-language.log。
+- P7.5 仍未完成：取消/不支持与旧 Res 适配边界、其他服务的翻译异常继续迁移；仓库来源标签与迁移默认名称仍属于遗留展示/持久化行为。未声称全域错误协议统一或完成跨平台/性能验收。用户原有改动不纳入本提交。
+
+## P7：源更新取消不再等同成功（2026-10-03）
+
+- 源更新在仓库查询、脚本下载或提交前取消时抛出明确的 SourceFailureCode.cancelled，保留原始原因与堆栈。此前正常返回会使无头调用者误计成功；现在 CLI 保持既有协议字段，将取消计入 errors 并继续后续源。取消不记录为普通网络失败。
+- 单条更新的交互适配器识别取消并保持静默，finally 仍关闭弹窗。无弹窗调用者接收取消；已完成的脚本提交仍视为成功，不回滚。既有立即重试与旧请求清理不能删除新锁的行为保留。
+- 在现有组合 Widget 测试中新增普通/仓库源直接取消场景，验证原因码、原始网络异常、文件不变与锁释放；新增 1 项 CLI 取消后继续与计数回归。专项共 10 项测试通过，全量 Flutter 1236 项通过；分析零 error/warning、65 个 info；结构及 68 项业务入口门禁、Python 56 项（3 项平台工具跳过）和 Git 依赖检查通过。日志 output/source-cancel-{targeted,full,analyze}.log。
+- P7.5 的不支持状态、旧 Res 适配及其他服务错误仍未完成；平台与性能验收仍单独追踪。只提交本阶段修改，保留原有用户改动。
+
+## P7：Res 结构化失败适配与源解析诊断（2026-10-03）
+
+- 新增独立 FailureDetails/OperationFailure，区分 failed/cancelled/unsupported 并保留消息、原始原因和堆栈。SourceFailure 实现该协议；只有显式取消类型或标准 UnsupportedError 被分类，不根据错误文本猜测。
+- Res.failure/fromException 为已迁移调用保留结构化诊断，同时维持 errorMessage/error/success/dataOrNull 的旧行为；fromErrorRes 在改变结果类型时保留原 failure。旧 const 构造和字符串错误继续可用，未替换全库接口，也未改变 data 访问器原有抛错行为。
+- 八类源能力解析器的 31 处捕获异常改为 fromException，动态分类 catch 同时保留堆栈；可选能力缺失仍返回 null。直接校验字符串和其他域继续按验收清单迁移，不声称所有 Res 调用已经类型化。
+- 新增 4 项适配测试覆盖旧结果兼容、原始原因/堆栈跨类型转发、取消与不支持分类；强化真实 QuickJS 生命周期回归，验证格式错误及 JS 抛错除旧文本外还保留诊断。29 项专项和全量 Flutter 1240 项通过；分析零 error/warning、65 个 info。结构/70 个业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖和格式检查通过。日志 output/res-failure-{targeted,full,final-analyze}.log。用户改动仅参与工作区测试，不混入提交。

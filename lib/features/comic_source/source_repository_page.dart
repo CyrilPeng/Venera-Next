@@ -1,3 +1,4 @@
+import 'source_failure_presentation.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart' show CancelToken;
 import 'package:venera_next/components/pop_up_widget.dart';
@@ -198,7 +199,7 @@ class _RepositoryEditorState extends State<_RepositoryEditor> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          error = e.toString();
+          error = sourceFailureMessage(e);
           saving = false;
         });
       }
@@ -346,7 +347,7 @@ class _SourceRepositoryCatalogPageState
       }
     } catch (e) {
       if (isCurrent()) {
-        setState(() => error = e.toString());
+        setState(() => error = sourceFailureMessage(e));
       }
     } finally {
       if (isCurrent()) {
@@ -408,7 +409,7 @@ class _SourceRepositoryCatalogPageState
     } catch (e) {
       if (mounted) {
         setState(() {
-          error = e.toString();
+          error = sourceFailureMessage(e);
         });
       }
     } finally {

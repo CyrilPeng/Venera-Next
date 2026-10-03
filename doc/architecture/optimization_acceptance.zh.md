@@ -49,14 +49,14 @@
 | P6.5 | P | 应用同步职责 | `lib/features/sync/data_sync_controller.dart; lib/app_runtime/data_sync.dart` | 归档/窗口/传输/参与者已分离，生产单例与测试钩子已删除；继续配置失败清理和运行中销毁的最终验收。 |
 | P6.6 | P | 同步窄接口与协议 | `lib/features/sync/data_sync_controller.dart; test/features/sync/data_sync_schedule_test.dart` | 控制器端口和应用回调显式注入，旧入口已退场；重启/不回传的最终矩阵与协议失败边界仍需验收。 |
 | P6.7 | P | 原子性约束 | `lib/foundation/sqlite_transaction.dart; lib/foundation/directory_replacement.dart; lib/features/local_comics/local.dart` | 已有事务/恢复工具；删除仍可能跨文件/数据库部分提交。 |
-| P7.1 | O | 按能力拆解析器 | `lib/features/comic_source/parser.dart` | 1349 行仍含搜索/分类/图片/评论注册解析；按真实能力逐项拆出。 |
-| P7.2 | P | JS 与最小源兼容 | `assets/init.js; test/features/comic_source/source_parser_test.dart` | 现有 parser 测试只验证类声明；补充合成源的能力/桥接执行矩阵。 |
+| P7.1 | I | 按能力拆解析器 | `lib/features/comic_source/parser.dart; source_*_parser.dart; source_parser_context.dart` | 已拆分账户、发现、分类、搜索、收藏、图片、评论、漫画及元数据；源身份上下文固定。完整能力/错误矩阵继续按 P7.2/P7.5 验收。 |
+| P7.2 | P | JS 与最小源兼容 | `source_capability_matrix.zh.md; test/features/comic_source/source_capabilities_test.dart` | 真实 QuickJS 已覆盖登录、重登录、游标、新旧分类与多能力源隔离；动态分类执行与显式释放已验证；其他 JS 回调所有权、归档/投票/元数据及完整取消矩阵仍待补齐。 |
 | P7.3 | U | 重复流程对照表 | `optimization_plan.zh.md P7.3` | 补交更新/图片/归档/同步/导入机制与业务差异表。 |
 | P7.4 | P | 仅抽真实共性 | `lib/foundation/throttled_task_runner.dart; lib/network/request_scope.dart` | 现有原语可复用；以 P7.3 对照证明新增抽象并删除对应重复实现。 |
-| P7.5 | O | 结构化错误 | `lib/features/comic_source/source_update_service.dart; lib/foundation/res.dart` | 更新服务仍抛翻译字符串；建立失败/取消/不支持与 Res 适配边界。 |
+| P7.5 | P | 结构化错误 | `lib/features/comic_source/source_update_service.dart; lib/foundation/res.dart` | 源仓库/更新与目录预览已有稳定错误码，保留原始异常及检查范围，UI/CLI 在边界展示；源更新取消已有明确原因且 CLI 不再误计成功；FailureDetails/Res 适配已区分失败、取消和标准 UnsupportedError，八类源解析器保留异常；其他服务、直接字符串校验失败和全消费端分类展示仍待迁移。 |
 | P7.6 | P | 技术规则复用 | `lib/features/comic_source/parser.dart:23; lib/features/comic_storage/archive_metadata.dart` | 元数据/文件规则已有公共实现；版本比较/日期等仍需用途和兼容审查。 |
-| P8.1 | P | 兼容与测试开关退场 | `lib/features/local_comics/local.dart:52; lib/app_runtime/data_sync.dart` | 同步单例/reset/debug 已删除；本地漫画等域仍有 reset/debug，聚合导出继续审查。 |
-| P8.2 | O | 恢复 lint 与边界类型 | `analysis_options.yaml` | collection_methods_unrelated_type 与 use_build_context_synchronously 仍为 false。 |
+| P8.1 | P | 兼容与测试开关退场 | `lib/features/local_comics/local.dart:52; lib/app_runtime/data_sync.dart` | 同步单例/reset/debug、9 个归一化 debug 转发及 JSAutoFreeFunction 已删除；本地漫画等域仍有 reset/debug，聚合导出继续审查。 |
+| P8.2 | P | 恢复 lint 与边界类型 | `analysis_options.yaml` | collection_methods_unrelated_type 已启用并提升为 warning，25 处诊断已处理；use_build_context_synchronously 已启用为 info，导入展示修复 21 处、评论视图修复 8 处、源页面修复 8 处、本地库修复 3 处、同步窗口修复 1 处，历史页面修复 2 处，剩余 42 处见 async_context_audit.zh.md；全部修复后提升门禁。 |
 | P8.3 | P | CI 与覆盖趋势 | `.github/workflows/analyze.yml` | 检查和覆盖上传已有；未登记服务仍不受业务入口门禁约束。 |
 | P8.4 | U | 最终平台与性能验收 | `.github/workflows/build.yml; optimization_progress.zh.md` | 构建工作流存在不等于本轮运行成功；收集五平台结果和固定设备复测。 |
 | P8.5 | P | 最终删除/技术债报告 | `optimization_acceptance.zh.md` | 本清单建立追踪入口；剩余项完成后逐项复核，不用总测试数替代验收。 |

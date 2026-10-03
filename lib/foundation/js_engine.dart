@@ -78,6 +78,7 @@ class JsEngine with _JSEngineApi, Init {
   JsEngine._create();
 
   FlutterQjs? _engine;
+  final _callbackScopes = <JsCallbackScope>{};
 
   bool _closed = true;
 
@@ -380,6 +381,9 @@ class JsEngine with _JSEngineApi, Init {
   }
 
   void dispose() {
+    for (final scope in _callbackScopes.toList()) {
+      scope.dispose();
+    }
     _cache = null;
     _closed = true;
     _engine?.close();
@@ -842,20 +846,47 @@ class DocumentWrapper {
   }
 }
 
-class JSAutoFreeFunction {
-  final JSInvokable func;
+/// Explicit ownership for native callbacks retained beyond one evaluation.
+/// Scopes are released by their owner, or before their engine closes.
+class JsCallbackScope {
+  JsCallbackScope() : _engine = JsEngine(), _parent = null {
+    _engine._callbackScopes.add(this);
+  }
+  JsCallbackScope._child(this._engine, this._parent);
+  final JsEngine _engine;
+  final JsCallbackScope? _parent;
+  final _children = <JsCallbackScope>{};
 
-  /// Automatically free the function when it's not used anymore
-  JSAutoFreeFunction(this.func) {
-    func.dup();
-    finalizer.attach(this, func);
+  JsCallbackScope fork() {
+    if (_disposed) throw StateError('JavaScript callback scope is closed');
+    final child = JsCallbackScope._child(_engine, this);
+    _children.add(child);
+    return child;
   }
 
-  dynamic call(List<dynamic> args) {
-    return func(args);
+  final _functions = <JSInvokable>{};
+  bool _disposed = false;
+
+  dynamic Function(List<dynamic>) retain(JSInvokable function) {
+    if (_disposed) throw StateError('JavaScript callback scope is closed');
+    if (_functions.add(function)) function.dup();
+    return (args) {
+      if (_disposed) throw StateError('JavaScript callback scope is closed');
+      return function(args);
+    };
   }
 
-  static final finalizer = Finalizer<JSInvokable>((func) {
-    func.destroy();
-  });
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    for (final child in _children.toList()) {
+      child.dispose();
+    }
+    _parent?._children.remove(this);
+    _engine._callbackScopes.remove(this);
+    for (final function in _functions) {
+      function.free();
+    }
+    _functions.clear();
+  }
 }

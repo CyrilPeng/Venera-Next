@@ -285,7 +285,22 @@
     "features/sync/data_sync_remote.dart",
     "features/sync/data_sync_controller.dart",
     "features/follow_updates/follow_updates_runtime.dart",
-    "features/sync/data_sync_archive_order.dart"
+    "features/sync/data_sync_archive_order.dart",
+    "features/comic_source/source_account_parser.dart",
+    "features/comic_source/source_category_parser.dart",
+    "features/comic_source/source_comic_parser.dart",
+    "features/comic_source/source_comments_parser.dart",
+    "features/comic_source/source_explore_parser.dart",
+    "features/comic_source/source_favorites_parser.dart",
+    "features/comic_source/source_images_parser.dart",
+    "features/comic_source/source_metadata_parser.dart",
+    "features/comic_source/source_search_parser.dart",
+    "features/comic_source/source_parser_context.dart",
+    "features/comic_source/source_parse_exception.dart",
+    "features/local_comics/import_export/comic_export_service.dart",
+    "features/comic_source/source_failure.dart",
+    "foundation/operation_failure.dart",
+    "foundation/res.dart"
   ],
   "ui_files": [
     "app_shell/auth_page.dart",
