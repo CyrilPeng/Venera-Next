@@ -1,0 +1,4 @@
+# This standalone maintenance tool has its own package resolution.
+analyzer:
+  errors:
+    unused_import: error

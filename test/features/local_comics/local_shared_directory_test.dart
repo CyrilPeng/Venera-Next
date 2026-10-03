@@ -119,4 +119,157 @@ void main() {
       expect(manager.count, 1);
     },
   );
+
+  void alias(String link, String target) {
+    if (Platform.isWindows) {
+      final result = Process.runSync('cmd', [
+        '/c',
+        'mklink',
+        '/J',
+        link.replaceAll('/', '\\'),
+        target.replaceAll('/', '\\'),
+      ]);
+      if (result.exitCode != 0) {
+        throw StateError('Cannot create junction: ${result.stderr}');
+      }
+    } else {
+      Link(link).createSync(target);
+    }
+  }
+
+  test('deletion protects a registration through a filesystem alias', () async {
+    final target = Directory('${manager.path}/target')..createSync();
+    final page = File('${target.path}/1.jpg')..writeAsStringSync('keep');
+    final link = '${manager.path}/alias';
+    alias(link, target.path);
+    final first = comic('target', 'target');
+    await manager.add(first);
+    await manager.add(comic('alias', link));
+    await manager.deleteComic(first);
+    expect(page.readAsStringSync(), 'keep');
+    expect(manager.find('alias', first.comicType), isNotNull);
+  });
+
+  test('chapter deletion protects another retained chapter alias', () async {
+    final target = Directory('${manager.path}/book/a')
+      ..createSync(recursive: true);
+    final page = File('${target.path}/1.jpg')..writeAsStringSync('keep');
+    alias('${manager.path}/book/b', target.path);
+    final book = comic('book', 'book', chapters: ['a', 'b']);
+    await manager.add(book);
+    await manager.deleteComicChapters(book, ['a']);
+    expect(page.readAsStringSync(), 'keep');
+    expect(manager.find('book', book.comicType)!.downloadedChapters, ['b']);
+  });
+
+  test('batch deletion protects an aliased descendant reference', () async {
+    final target = Directory('${manager.path}/target/child')
+      ..createSync(recursive: true);
+    final page = File('${target.path}/1.jpg')..writeAsStringSync('keep');
+    alias('${manager.path}/alias', '${manager.path}/target');
+    final parent = comic('target', 'target');
+    await manager.add(parent);
+    await manager.add(comic('child', '${manager.path}/alias/child'));
+    await manager.batchDeleteComics([parent], true, false);
+    expect(page.readAsStringSync(), 'keep');
+  });
+
+  test('deletion never traverses an alias of the library root', () async {
+    final link = '${root.path}/library-alias';
+    alias(link, manager.path);
+    final page = File('${manager.path}/keep.jpg')..writeAsStringSync('keep');
+    final book = comic('library-alias', link);
+    await manager.add(book);
+    await manager.deleteComic(book);
+    expect(page.readAsStringSync(), 'keep');
+    expect(manager.directory.existsSync(), isTrue);
+  });
+
+  for (final operation in ['single', 'batch', 'chapter']) {
+    test(
+      '$operation preflight failure preserves records and supports retry',
+      () async {
+        final directory = Directory('${manager.path}/book/a')
+          ..createSync(recursive: true);
+        final page = File('${directory.path}/1.jpg')..writeAsStringSync('keep');
+        final book = comic('book', 'book', chapters: ['a', 'b']);
+        await manager.add(book);
+        final target = Directory('${root.path}/missing-target')..createSync();
+        final link = '${root.path}/broken';
+        alias(link, target.path);
+        target.deleteSync();
+        final broken = comic('broken', link);
+        await manager.add(broken);
+        Future<void> removeBook() => switch (operation) {
+          'single' => manager.deleteComic(book),
+          'batch' => manager.batchDeleteComics([book], true, false),
+          _ => manager.deleteComicChapters(book, ['a']),
+        };
+        var notifications = 0;
+        manager.addListener(() => notifications++);
+        await expectLater(removeBook(), throwsA(isA<FileSystemException>()));
+        expect(manager.find(book.id, book.comicType)!.downloadedChapters, [
+          'a',
+          'b',
+        ]);
+        expect(page.readAsStringSync(), 'keep');
+        expect(notifications, 0);
+        // Unregistering a reference without disk cleanup remains available even
+        // when its native identity is broken. Then retry the original operation.
+        await manager.deleteComic(broken, false);
+        await removeBook();
+        expect(page.existsSync(), isFalse);
+        if (operation == 'chapter') {
+          expect(manager.find(book.id, book.comicType)!.downloadedChapters, [
+            'b',
+          ]);
+        } else {
+          expect(manager.find(book.id, book.comicType), isNull);
+        }
+      },
+    );
+  }
+
+  for (final committed in [false, true]) {
+    test(
+      'manager startup recovers ${committed ? "committed" : "prepared"} deletion',
+      () async {
+        final original = Directory('${manager.path}/interrupted')..createSync();
+        File('${original.path}/old').writeAsStringSync('original');
+        final item = comic('interrupted', 'interrupted');
+        await manager.add(item);
+        final quarantine = '${manager.path}/.venera-delete-restart';
+        final db = sqlite3.open('${root.path}/local.db');
+        try {
+          db.execute(
+            'INSERT INTO local_deletion_journal(original_path,quarantine_path,committed) VALUES(?,?,?)',
+            [original.path, quarantine, committed ? 1 : 0],
+          );
+          if (committed) {
+            db.execute("DELETE FROM comics WHERE id = 'interrupted'");
+          }
+        } finally {
+          db.dispose();
+        }
+        await original.rename(quarantine);
+        if (committed) {
+          original.createSync();
+          File('${original.path}/new').writeAsStringSync('new owner');
+        }
+        await manager.pendingDownloadTaskWrites;
+        LocalManager.resetForTesting();
+        LocalManager.debugSkipComicSourceInit = true;
+        manager = LocalManager();
+        await manager.init();
+        expect(Directory(quarantine).existsSync(), isFalse);
+        if (committed) {
+          expect(manager.find(item.id, item.comicType), isNull);
+          expect(File('${original.path}/new').readAsStringSync(), 'new owner');
+        } else {
+          expect(manager.find(item.id, item.comicType), isNotNull);
+          expect(File('${original.path}/old').readAsStringSync(), 'original');
+        }
+      },
+    );
+  }
 }

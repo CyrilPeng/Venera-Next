@@ -107,13 +107,14 @@ class FavoritesRepository {
 
   Map<String, List<(String, int)>> deleteComics(
     List<String> folders,
-    Iterable<(String, int)> identities,
-  ) => _transaction(() {
+    Iterable<(String, int)> identities, {
+    String? schema,
+  }) => _transaction(() {
     final requested = identities.toSet();
     final removed = <String, List<(String, int)>>{};
     for (final folder in folders) {
       for (final (id, type) in requested) {
-        _removeRecord(folder, id, type);
+        _removeRecord(folder, id, type, schema: schema);
         if (db.updatedRows > 0) (removed[folder] ??= []).add((id, type));
       }
     }
@@ -218,11 +219,11 @@ class FavoritesRepository {
     );
   }
 
-  void _removeRecord(String folder, String id, int type) {
-    db.execute('DELETE FROM ${_table(folder)} WHERE id = ? AND type = ?;', [
-      id,
-      type,
-    ]);
+  void _removeRecord(String folder, String id, int type, {String? schema}) {
+    final table = schema == null
+        ? _table(folder)
+        : '${_table(schema)}.${_table(folder)}';
+    db.execute('DELETE FROM $table WHERE id = ? AND type = ?;', [id, type]);
   }
 
   /// Single moves leave the source intact when the destination already exists.

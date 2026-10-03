@@ -15,6 +15,8 @@ class LocalComicStorageGuard {
   static final instance = LocalComicStorageGuard();
 
   final _imports = <Completer<void>>{};
+  final _importOwnerKey = Object();
+  final _exclusiveOwnerKey = Object();
   Completer<void>? _exclusive;
   Future<void Function()>? _exitPreparation;
 
@@ -29,7 +31,7 @@ class LocalComicStorageGuard {
       while (_exclusive != null) {
         await _exclusive!.future;
       }
-      return await action();
+      return await runZoned(action, zoneValues: {_importOwnerKey: done});
     } finally {
       _imports.remove(done);
       done.complete();
@@ -50,7 +52,7 @@ class LocalComicStorageGuard {
     }
     final done = _exclusive = Completer<void>();
     try {
-      return await action();
+      return await runZoned(action, zoneValues: {_exclusiveOwnerKey: done});
     } finally {
       _exclusive = null;
       done.complete();
@@ -63,6 +65,26 @@ class LocalComicStorageGuard {
         'Local comic storage is closing. Try again later.',
       );
     }
+  }
+
+  /// Synchronous record mutations may finish within their accepted owner even
+  /// during exit draining. Unrelated or expired owners cannot enter a migration.
+  T write<T>(T Function() action) {
+    final importOwner = Zone.current[_importOwnerKey];
+    final exclusiveOwner = Zone.current[_exclusiveOwnerKey];
+    if ((importOwner != null && !_imports.contains(importOwner)) ||
+        (exclusiveOwner != null && !identical(exclusiveOwner, _exclusive))) {
+      throw const LocalComicStorageBusy('Local storage reservation has ended.');
+    }
+    final ownsImport = importOwner != null;
+    final ownsExclusive = exclusiveOwner != null;
+    if (!ownsImport && !ownsExclusive) _checkAdmission();
+    if (_exclusive != null && !ownsExclusive) {
+      throw const LocalComicStorageBusy(
+        'Local comic storage is busy. Try again later.',
+      );
+    }
+    return action();
   }
 
   /// Reject new operations, then drain accepted imports (including waiters)

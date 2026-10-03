@@ -15,9 +15,9 @@
 | P0.5 | U | 设备性能基线 | `optimization_progress.zh.md: 性能基线与平台补验` | 固定设备、样本和构建模式测量六类场景，记录至少三次波动。 |
 | P1.1 | I | Channel 清理 | `git ls-files lib/foundation/channel.dart` | 文件已不再跟踪；历史判定见执行记录。 |
 | P1.2 | I | 组件聚合入口 | `git ls-files lib/components/components.dart` | 文件已不再跟踪；保留使用中的组件。 |
-| P1.3 | U | 完整候选分类 | `optimization_plan.zh.md P1.3` | 补交动态入口、测试工具、兼容协议和待调查符号清单。 |
-| P1.4 | U | 仓库临时产物审查 | `git status --short` | 工作区差异已保留；仍需独立完成已跟踪产物清单。 |
-| P1.5 | P | 依赖用途核对 | `tool/check_git_dependencies.dart` | Git 声明/锁定检查通过不证明所有包都有生产用途。 |
+| P1.3 | I | 完整候选分类 | `public_symbol_audit.zh.md; public_symbol_candidates.json; tool/code_audit` | 原 36 项调查现已全部处理；最终复扫 379 个生产文件、6036 个声明、304 个候选，无新增未分类项。详见 investigation_resolution.zh.md；历史数量不代表当前扫描。 |
+| P1.4 | I | 仓库临时产物审查 | `dependency_artifact_audit.zh.md` | 已核对 881 个跟踪路径、27 个工具与 14 组相同内容；无跟踪临时输出，平台资源保留。ARM64 手工入口已复用 Windows 共用打包流程，保留命令适配；6 项脚本回归通过，真实 ARM64 构建仍需平台补验。 |
+| P1.5 | I | 依赖用途核对 | `dependency_artifact_audit.zh.md; pubspec.yaml; pubspec.lock` | 51 项原声明逐项核对 Dart、配置、原生插件与 JS 桥；删除无调用的 flutter_to_arch 及独占 io，保留 Python 消费的配置。其余版本/来源不变；不替代 fork 许可、平台构建及公开符号审查。 |
 | P2.1 | P | 业务/UI 入口 | `dependency_baseline.json; lib/features/comic_source/comic_source_api.dart` | 补齐本地/同步/WebDAV 等遗留聚合依赖。 |
 | P2.2 | I | 源更新服务 | `lib/features/comic_source/source_update_service.dart` | 服务已存在并被调用；后续 P4/P7 收束全局依赖与错误翻译。 |
 | P2.3 | P | 页面与 CLI 适配 | `lib/app_runtime/headless.dart; lib/app_runtime/headless_sync_command.dart` | 同步/源/订阅输出适配、参数预检及受控 Dart 子进程协议已有验证；真实服务装配、间接 UI 依赖及完整 Flutter 无头程序仍需验收。 |
@@ -44,18 +44,18 @@
 | P5.7 | P | 阅读会话与平台效果 | `lib/features/reader/reader_session.dart; lib/features/reader/orientation_controller.dart; lib/features/reader/volume_controller.dart` | 已有控制器；真实平台方向/音量/亮度及前后台联合验收缺失。 |
 | P6.1 | I | 模型与仓储分离 | `lib/features/local_comics/local_repository.dart; lib/features/history/history_repository.dart; lib/features/favorites/favorites_repository.dart` | 主体 SQL 已迁入仓储；后续新增 SQL 继续遵守边界。 |
 | P6.2 | P | 收藏业务职责 | `lib/features/favorites/read_later_service.dart; lib/features/favorites/favorite_updates_service.dart; lib/features/favorites/favorites_manager.dart` | 稍后阅读/追更已分离；管理器仍有全局依赖和统一生命周期待收束。 |
-| P6.3 | P | 本地库与导入下载 | `lib/features/local_comics/local.dart; lib/features/local_comics/local_deletion_paths.dart` | 队列/仓储/迁移已拆分；符号链接、删除回滚和未受保护直接写入者仍需处理。 |
+| P6.3 | P | 本地库与导入下载 | `lib/features/local_comics/local.dart; lib/features/local_comics/local_deletion_paths.dart` | 队列/仓储/迁移已拆分；删除保护同时核对文本路径和原生实际路径，保留章节也参与引用检查，真实 Windows 联接回归通过。SAF 仍用提供者路径；外部路径并发替换、删除回滚和未受保护写入者继续处理。 add/remove 已校验写入所有权，页序迁移持有存储保留；下载及外部 SQL 剩余边界见 local_storage_writer_audit.zh.md。 |
 | P6.4 | I | WebDAV 实例化与拆分 | `lib/features/webdav_library/webdav_library_synchronizer.dart; lib/features/webdav_library/webdav_library_snapshot_store.dart; lib/features/webdav_library/webdav_library_source.dart` | 配置/发现/快照与缓存/同步协调/源适配已分离，实例注入和路径、增量同步、取消回归已有证据；仍受 P6 总体数据/性能/平台退出条件约束。 |
 | P6.5 | P | 应用同步职责 | `lib/features/sync/data_sync_controller.dart; lib/app_runtime/data_sync.dart` | 归档/窗口/传输/参与者已分离，生产单例与测试钩子已删除；继续配置失败清理和运行中销毁的最终验收。 |
 | P6.6 | P | 同步窄接口与协议 | `lib/features/sync/data_sync_controller.dart; test/features/sync/data_sync_schedule_test.dart` | 控制器端口和应用回调显式注入，旧入口已退场；重启/不回传的最终矩阵与协议失败边界仍需验收。 |
-| P6.7 | P | 原子性约束 | `lib/foundation/sqlite_transaction.dart; lib/foundation/directory_replacement.dart; lib/features/local_comics/local.dart` | 已有事务/恢复工具；删除仍可能跨文件/数据库部分提交。 |
+| P6.7 | P | 原子性约束 | `local_deletion_recovery.zh.md; local_deletion_journal.dart; local_deletion_storage.dart` | 三库事务与持久隔离目录日志已接入；异常回滚、清理重试、重开连接和管理器恢复均有测试。SAF 真机、强制终止/断电、外部写入与恢复冲突修复入口仍需验收。 已验证 Windows 独立 VM 三个确定终止窗口的三库/日志恢复协议；不替代完整应用、SAF、其他平台或断电验收。 |
 | P7.1 | I | 按能力拆解析器 | `lib/features/comic_source/parser.dart; source_*_parser.dart; source_parser_context.dart` | 已拆分账户、发现、分类、搜索、收藏、图片、评论、漫画及元数据；源身份上下文固定。完整能力/错误矩阵继续按 P7.2/P7.5 验收。 |
 | P7.2 | P | JS 与最小源兼容 | `source_capability_matrix.zh.md; test/features/comic_source/source_capabilities_test.dart` | 真实 QuickJS 已覆盖登录、重登录、游标、新旧分类与多能力源隔离；动态分类执行与显式释放已验证；其他 JS 回调所有权、归档/投票/元数据及完整取消矩阵仍待补齐。 |
-| P7.3 | U | 重复流程对照表 | `optimization_plan.zh.md P7.3` | 补交更新/图片/归档/同步/导入机制与业务差异表。 |
+| P7.3 | I | 重复流程对照表 | `repeated_workflow_matrix.zh.md` | 已核对更新、图片、归档、同步和导入的调度、取消、所有权与提交差异；登记已有共享原语和不可合并语义。P7.4/P7.5 及数据/平台验收继续追踪。 |
 | P7.4 | P | 仅抽真实共性 | `lib/foundation/throttled_task_runner.dart; lib/network/request_scope.dart` | 现有原语可复用；以 P7.3 对照证明新增抽象并删除对应重复实现。 |
 | P7.5 | P | 结构化错误 | `lib/features/comic_source/source_update_service.dart; lib/foundation/res.dart` | 源仓库/更新与目录预览已有稳定错误码，保留原始异常及检查范围，UI/CLI 在边界展示；源更新取消已有明确原因且 CLI 不再误计成功；FailureDetails/Res 适配已区分失败、取消和标准 UnsupportedError，八类源解析器保留异常；其他服务、直接字符串校验失败和全消费端分类展示仍待迁移。 |
 | P7.6 | P | 技术规则复用 | `lib/features/comic_source/parser.dart:23; lib/features/comic_storage/archive_metadata.dart` | 元数据/文件规则已有公共实现；版本比较/日期等仍需用途和兼容审查。 |
-| P8.1 | P | 兼容与测试开关退场 | `lib/features/local_comics/local.dart:52; lib/app_runtime/data_sync.dart` | 同步单例/reset/debug、9 个归一化 debug 转发及 JSAutoFreeFunction 已删除；本地漫画等域仍有 reset/debug，聚合导出继续审查。 |
+| P8.1 | P | 兼容与测试开关退场 | `lib/features/local_comics/local.dart:52; lib/app_runtime/data_sync.dart` | 同步单例/reset/debug、9 个归一化 debug 转发及 JSAutoFreeFunction 已删除；本地漫画等域仍有 reset/debug，聚合导出继续审查。 无调用的旧批量归档执行器已退役，历史元数据编解码独立保留，不构成当前导入入口。  原 36 项调查现已全部处理；最终复扫 379 个生产文件、6036 个声明、304 个候选，无新增未分类项。详见 investigation_resolution.zh.md；历史数量不代表当前扫描。 |
 | P8.2 | P | 恢复 lint 与边界类型 | `analysis_options.yaml` | collection_methods_unrelated_type 已启用并提升为 warning，25 处诊断已处理；use_build_context_synchronously 已启用为 info，导入展示修复 21 处、评论视图修复 8 处、源页面修复 8 处、本地库修复 3 处、同步窗口修复 1 处，历史页面修复 2 处，剩余 42 处见 async_context_audit.zh.md；全部修复后提升门禁。 |
 | P8.3 | P | CI 与覆盖趋势 | `.github/workflows/analyze.yml` | 检查和覆盖上传已有；未登记服务仍不受业务入口门禁约束。 |
 | P8.4 | U | 最终平台与性能验收 | `.github/workflows/build.yml; optimization_progress.zh.md` | 构建工作流存在不等于本轮运行成功；收集五平台结果和固定设备复测。 |
@@ -81,7 +81,7 @@
 - `python .github/scripts/check_structure_imports.py --print-feature-dependencies` 与 `python .github/scripts/check_architecture_dependencies.py --report`：本轮实际运行，成功；报告范围如前述。
 - 架构脚本单测、Git 依赖和修改文件格式：此前对应代码提交已验证。本轮不能用 12 项架构脚本单测替代 CI 的 `python -m unittest discover -s .github/scripts/tests -p 'test_*.py'` 全集；最终须执行全集并解释跳过。
 - `.github/workflows/analyze.yml` 已配置结构、架构、完整 Python 单测、锁定依赖、修改文件格式、分析、Flutter 测试及 coverage 摘要/上传。配置存在不代表本轮远端 CI 已通过；未新建 PR、未取得五平台成功 run 的证据。
-- 未发现已提交的固定设备性能结果表、P7 重复流程对照表、最终全量死代码判定表；这些交付物保留为未完成项，不能只写“技术债”后豁免。
+- P7 重复流程对照表已提交；未发现已提交的固定设备性能结果表、最终全量死代码判定表；这些交付物保留为未完成项，不能只写“技术债”后豁免。
 - 原方案第 6 节 20 个提交单元对应：01–02→P0；03→P1；04–06→P2；07–08→P3；09–11→P4；12–14→P5；15–18→P6（18 另含 P3）；19→P7；20→P8。每个单元仍受上述任务/总体验收约束，提交数量不是验收标准。
 - 原方案第 7 节矩阵：纯逻辑/数据夹具/异步故障/Widget/核心集成已有测试证据但需针对剩余修改继续更新；真实 CLI、五平台、性能三类尚未完成集中验收。第 8 节数据格式、备份恢复、原子性和跨版本约束不因现有测试通过而取消。
 

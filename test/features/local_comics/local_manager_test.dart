@@ -36,6 +36,49 @@ bool _sqliteAvailable() {
 }
 
 void main() {
+  test('record writes require the active exclusive owner', () async {
+    final root = Directory.systemTemp.createTempSync('local-writer-owner-');
+    App.dataPath = root.path;
+    App.cachePath = root.path;
+    LocalManager.resetForTesting();
+    LocalManager.debugSkipComicSourceInit = true;
+    final manager = LocalManager();
+    await manager.init();
+    final first = _localComic('first');
+    await manager.add(first);
+    final gate = Completer<void>();
+    final entered = Completer<void>();
+    final exclusive = manager.runWithExclusiveStorage(() async {
+      await manager.add(_localComic('owned'));
+      entered.complete();
+      await gate.future;
+    });
+    try {
+      await entered.future;
+      await expectLater(
+        manager.add(_localComic('unrelated')),
+        throwsA(isA<LocalComicStorageBusy>()),
+      );
+      expect(
+        () => manager.remove(first.id, first.comicType),
+        throwsA(isA<LocalComicStorageBusy>()),
+      );
+      expect(manager.find(first.id, first.comicType), isNotNull);
+      expect(manager.find('owned', first.comicType), isNotNull);
+      expect(manager.find('unrelated', first.comicType), isNull);
+      gate.complete();
+      await exclusive;
+      manager.remove(first.id, first.comicType);
+      expect(manager.find(first.id, first.comicType), isNull);
+    } finally {
+      if (!gate.isCompleted) gate.complete();
+      await exclusive;
+      await manager.pendingDownloadTaskWrites;
+      LocalManager.resetForTesting();
+      root.deleteSync(recursive: true);
+    }
+  });
+
   test(
     'deletion rejects importing and uses current registered output before completing',
     () async {
@@ -268,7 +311,7 @@ void main() {
       final first = _localComic('first');
       await manager.add(first);
       isDeleting = true;
-      manager.removeComic(first);
+      manager.remove(first.id, first.comicType);
       isDeleting = false;
 
       expect(notifyCount, 1);

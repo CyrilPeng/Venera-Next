@@ -70,10 +70,6 @@ class FavoriteData {
   });
 }
 
-FavoriteData getFavoriteData(String key) {
-  return getFavoriteDataOrNull(key) ?? (throw "Unknown source key: $key");
-}
-
 FavoriteData? getFavoriteDataOrNull(String key) {
   return _favoriteDataResolver?.call(key);
 }

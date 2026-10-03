@@ -211,8 +211,6 @@ abstract class BaseImageProvider<T extends BaseImageProvider<T>>
   bool get retryFileSystemErrors => true;
 }
 
-typedef FileDecoderCallback = Future<ui.Codec> Function(Uint8List);
-
 class _ImageLoadingStopException implements Exception {
   const _ImageLoadingStopException();
 }

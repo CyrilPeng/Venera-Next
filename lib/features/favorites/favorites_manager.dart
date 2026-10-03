@@ -677,6 +677,10 @@ class LocalFavoritesManager with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Publish deletions committed by a coordinated database transaction.
+  void refreshDeletedFavorites(Map<String, List<(String, int)>> removed) =>
+      _applyDeletedComics(removed);
+
   void deleteComicWithId(String folder, String id, ComicType type) {
     _applyDeletedComics(_repository.deleteComics([folder], [(id, type.value)]));
   }
@@ -690,21 +694,6 @@ class LocalFavoritesManager with ChangeNotifier {
       ], comics.map((comic) => (comic.id, comic.type.value)));
     } catch (error) {
       Log.error('Batch Delete Comics', error.toString());
-      return;
-    }
-    _applyDeletedComics(removed);
-  }
-
-  void batchDeleteComicsInAllFolders(List<ComicID> comics) {
-    if (comics.isEmpty) return;
-    late Map<String, List<(String, int)>> removed;
-    try {
-      removed = _repository.deleteComics(
-        folderNames,
-        comics.map((comic) => (comic.id, comic.type.value)),
-      );
-    } catch (error) {
-      Log.error('Batch Delete Comics in All Folders', error.toString());
       return;
     }
     _applyDeletedComics(removed);
@@ -969,11 +958,6 @@ class LocalFavoritesManager with ChangeNotifier {
       );
 
   int countUpdates(String folder) => _repository.countUpdates(folder);
-
-  List<FavoriteItemWithUpdateInfo> getUpdates(String folder) =>
-      existsFolder(folder)
-      ? _repository.getComicsWithUpdatesInfo(folder, updatedOnly: true)
-      : [];
 
   List<FavoriteItemWithUpdateInfo> getComicsWithUpdatesInfo(String folder) =>
       existsFolder(folder) ? _repository.getComicsWithUpdatesInfo(folder) : [];

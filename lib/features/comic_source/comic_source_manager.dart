@@ -160,14 +160,6 @@ class ComicSourceManager with ChangeNotifier, Init {
     if (errors.isNotEmpty) throw ComicSourceParseException(errors.join('\n'));
   });
 
-  Future<void> reloadSource(ComicSource source) => _mutate(() async {
-    await _replaceScript(
-      source,
-      await File(source.filePath).readAsString(),
-      validate: () {},
-    );
-  });
-
   Future<void> _initializeSource(ComicSource source) async {
     await Future.sync(
       () => JsEngine().runCode('''(() => {

@@ -31,10 +31,6 @@ class _MainPageState extends State<MainPage> {
     _navigatorKey!.currentContext!.to(widget);
   }
 
-  void back() {
-    _navigatorKey!.currentContext!.pop();
-  }
-
   @override
   void initState() {
     _observer = NaviObserver();

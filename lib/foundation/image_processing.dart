@@ -171,34 +171,6 @@ class Image {
     return Image(data, height, width);
   }
 
-  Color getPixel(int x, int y) {
-    if (x < 0 || x >= width) {
-      throw ArgumentError(
-        'Invalid argument: x must be in the range of [0, $width).',
-      );
-    }
-    if (y < 0 || y >= height) {
-      throw ArgumentError(
-        'Invalid argument: y must be in the range of [0, $height).',
-      );
-    }
-    return Color.fromValue(_data[y * width + x]);
-  }
-
-  void setPixel(int x, int y, Color color) {
-    if (x < 0 || x >= width) {
-      throw ArgumentError(
-        'Invalid argument: x must be in the range of [0, $width).',
-      );
-    }
-    if (y < 0 || y >= height) {
-      throw ArgumentError(
-        'Invalid argument: y must be in the range of [0, $height).',
-      );
-    }
-    _data[y * width + x] = color.value;
-  }
-
   Uint8List encodePng() {
     var data = lodepng.encodePngToPointer(
       lodepng.Image(_data.buffer.asUint8List(), width, height),

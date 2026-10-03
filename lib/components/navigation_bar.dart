@@ -113,9 +113,6 @@ class NaviPaneState extends State<NaviPane>
 
   static const _kTopBarHeight = 48.0;
 
-  double get bottomBarHeight =>
-      _kBottomBarHeight + MediaQuery.of(context).padding.bottom;
-
   void onNavigatorStateChange() {
     onRebuild(context);
   }

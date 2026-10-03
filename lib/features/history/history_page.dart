@@ -345,18 +345,4 @@ class _HistoryPageState extends State<HistoryPage> {
       ),
     );
   }
-
-  String getDescription(History h) {
-    var res = "";
-    if (h.ep >= 1) {
-      res += "Chapter @ep".tlParams({"ep": h.ep});
-    }
-    if (h.page >= 1) {
-      if (h.ep >= 1) {
-        res += " - ";
-      }
-      res += "Page @page".tlParams({"page": h.page});
-    }
-    return res;
-  }
 }

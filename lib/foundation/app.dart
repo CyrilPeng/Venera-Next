@@ -166,15 +166,6 @@ class _App {
     version = data["version"].toString().split('+').first;
   }
 
-  Future<void> initComponents([
-    Iterable<Future<void> Function()> featureInitializers = const [],
-  ]) async {
-    await Future.wait([
-      data.init(),
-      for (final initializer in featureInitializers) initializer(),
-    ]);
-  }
-
   Function? _forceRebuildHandler;
 
   void registerForceRebuild(Function? handler) {

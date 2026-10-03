@@ -168,15 +168,39 @@ class LocalRepository {
     ]);
   }
 
+  /// Detect record/ownership changes while filesystem staging awaits I/O.
+  String deletionSnapshot() => jsonEncode(
+    db
+        .select(
+          'SELECT id, comic_type, directory, downloadedChapters FROM comics ORDER BY id, comic_type',
+        )
+        .map(
+          (row) => [
+            row['id'],
+            row['comic_type'],
+            row['directory'],
+            row['downloadedChapters'],
+          ],
+        )
+        .toList(),
+  );
+
   /// Directory ownership does not require decoding display/reading metadata.
-  List<String> directoryReferences({(String, ComicType)? excluding}) {
-    final rows = db.select(
-      excluding == null
-          ? 'SELECT directory FROM comics'
-          : 'SELECT directory FROM comics WHERE NOT (id = ? AND comic_type = ?)',
-      excluding == null ? [] : [excluding.$1, excluding.$2.value],
-    );
-    return rows.map((row) => row['directory'] as String).toList();
+  List<String> directoryReferences({
+    (String, ComicType)? excluding,
+    Iterable<(String, ComicType)> excludingMany = const [],
+  }) {
+    final excluded = {
+      if (excluding != null) (excluding.$1, excluding.$2.value),
+      for (final identity in excludingMany) (identity.$1, identity.$2.value),
+    };
+    return [
+      for (final row in db.select(
+        'SELECT id, comic_type, directory FROM comics',
+      ))
+        if (!excluded.contains((row['id'], row['comic_type'])))
+          row['directory'] as String,
+    ];
   }
 
   List<LocalComic> getComics(LocalSortType sortType) {

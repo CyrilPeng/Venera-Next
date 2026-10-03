@@ -13,6 +13,12 @@ FOUNDATION_EXTENSIONS_BARREL = LIB_DIR / "foundation" / "extensions.dart"
 FOUNDATION_WIDGET_UTILS_PATH = (LIB_DIR / "foundation" / "widget_utils.dart").resolve()
 PAGES_DIR = LIB_DIR / "pages"
 RETIRED_DART_PATHS = {
+    LIB_DIR / "features/local_comics/import_export/comic_export.dart": (
+        "unused batch archive executor retired; legacy metadata has a dedicated codec"
+    ),
+    LIB_DIR / "features/local_comics/import_export/comic_import.dart": (
+        "unused batch archive executor retired; use current format-specific imports"
+    ),
     LIB_DIR / "features" / "sync" / "data_sync.dart": (
         "sync singleton retired; inject DataSyncController from application composition"
     ),
@@ -714,24 +720,6 @@ FEATURE_ENTRYPOINT_TARGETS = {
         "comic_storage.dart",
     ),
     _feature_path("local_comics", "import_export", "cbz.dart"): _feature_path(
-        "local_comics",
-        "import_export",
-        "import_export.dart",
-    ),
-    _feature_path(
-        "local_comics",
-        "import_export",
-        "comic_export.dart",
-    ): _feature_path(
-        "local_comics",
-        "import_export",
-        "import_export.dart",
-    ),
-    _feature_path(
-        "local_comics",
-        "import_export",
-        "comic_import.dart",
-    ): _feature_path(
         "local_comics",
         "import_export",
         "import_export.dart",

@@ -513,3 +513,11 @@ ReaderImagePicker 接管单图范围检查、多图坐标命中和选择尝试�
 ReaderSidebarBinding 是阅读壳拥有的 UI 生命周期适配器，统一章节、设置与章节评论侧栏。它合并重复请求、显式安排刷新帧、持有路由及交互释放回调；销毁时作废请求，并在树解锁后只删除自己的活动路由。阅读壳装配独立暂停原因和最初的手势宿主，存活检查后恢复自动阅读；保留其他暂停原因。
 
 bottom_actions.dart 只接收按钮状态和回调，生成底部操作按钮；平台与章节能力由可选回调表达，不访问 ReaderState、App 或设置。ReaderAutomaticReadingAction 保存提示、运行/播放状态及动作，宿主负责自动阅读状态解释。ReaderBottomBar 根据实际缩放文字宽高决定是否显示页码标签，空间不足时保留原有仅按钮布局，避免大字体溢出。
+
+legacy_comic_metadata.dart 是不参与生产聚合入口的历史批量格式模型，保留 JSON 兼容测试；已移除无调用的 ComicExporter/ComicImporter 文件执行流程。当前 CBZ/PDF/EPUB 与应用数据归档入口保持独立，不能混用元数据格式。
+
+local_deletion_paths.dart 同时核对记录路径与实际路径，缺失目录通过现存祖先解析；解析失败不返回清理列表。本地管理器提供 SAF/原生路径适配，并将保留章节的目录加入引用保护；实际删除仍使用原记录路径。该检查不提供跨数据库/文件事务，也不保证抵御外部进程在检查后替换链接。
+
+local_deletion_storage.dart 拥有三库删除事务，复用仓储 SQL 与临时 ATTACH；LocalManager 负责历史写队列和提交后缓存/通知装配。FavoritesRepository 仅在删除操作接受显式 schema，refreshDeletedFavorites 发布外部事务结果；旧批量跨文件夹管理器入口已退场。文件清理仍是提交后的独立阶段。
+
+删除恢复现由 local_deletion_journal.dart 管理：预检后先暂存到同级隔离路径，三库/本地事务同时提交日志状态与记录删除；启动和独占存储操作前处理未完成日志。提交后直接路径清理已替换为隔离目录清理，事务内快照核对补充暂存期间的记录变更检测。完整状态与验收限制见 local_deletion_recovery.zh.md。

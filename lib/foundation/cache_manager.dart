@@ -196,12 +196,6 @@ class CacheManager {
   }
 
   /// Check cache size and delete expired cache.
-  /// Only check cache if current size is greater than limit size.
-  Future<void> checkCacheIfRequired() => _enqueue(() async {
-    if (_currentSize > _limitSize) await _checkCache();
-  });
-
-  /// Check cache size and delete expired cache.
   /// If current size is greater than limit size,
   /// delete cache until current size is less than limit size.
   Future<void> checkCache() => _enqueue(_checkCache);

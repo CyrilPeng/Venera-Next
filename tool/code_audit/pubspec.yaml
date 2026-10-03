@@ -1,0 +1,6 @@
+name: venera_code_audit
+publish_to: none
+environment:
+  sdk: ^3.9.0
+dependencies:
+  analyzer: 9.0.0

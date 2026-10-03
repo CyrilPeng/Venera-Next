@@ -123,22 +123,8 @@ extension DirectoryExtension on Directory {
     return total;
   }
 
-  /// Change the base name of the directory.
-  Directory renameX(String newName) {
-    newName = sanitizeFileName(newName);
-    return renameSync(_replaceLast(path, name, newName));
-  }
-
   File joinFile(String name) {
     return File(FilePath.join(path, name));
-  }
-
-  /// Delete the contents of the directory.
-  void deleteContentsSync({recursive = true}) {
-    if (!existsSync()) return;
-    for (var f in listSync()) {
-      f.deleteIfExistsSync(recursive: recursive);
-    }
   }
 
   /// Delete the contents of the directory.
@@ -148,29 +134,6 @@ extension DirectoryExtension on Directory {
       await f.deleteIfExists(recursive: recursive);
     }
   }
-
-  /// Create the directory. If the directory already exists, delete it first.
-  void forceCreateSync() {
-    if (existsSync()) {
-      deleteSync(recursive: true);
-    }
-    createSync(recursive: true);
-  }
-}
-
-String _replaceLast(String value, String from, String to) {
-  if (value.isEmpty || from.isEmpty) {
-    return value;
-  }
-
-  final lastIndex = value.lastIndexOf(from);
-  if (lastIndex == -1) {
-    return value;
-  }
-
-  final before = value.substring(0, lastIndex);
-  final after = value.substring(lastIndex + from.length);
-  return '$before$to$after';
 }
 
 /// Soft upper bound for the sanitized title portion of a filename, in characters.

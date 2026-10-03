@@ -30,18 +30,6 @@ class ImageFavoriteManager with ChangeNotifier {
     if (notify) notifyListeners();
   }
 
-  bool has(String id, String sourceKey, String eid, int page, int ep) {
-    var comic = find(id, sourceKey);
-    if (comic == null) {
-      return false;
-    }
-    var epIndex = comic.imageFavoritesEp.where((e) => e.eid == eid).firstOrNull;
-    if (epIndex == null) {
-      return false;
-    }
-    return epIndex.imageFavorites.any((e) => e.page == page && e.ep == ep);
-  }
-
   List<ImageFavoritesComic> getAll([String? keyword]) {
     try {
       return _repository.getAll(keyword);

@@ -1,5 +1,3 @@
-import 'package:venera_next/foundation/consts.dart';
-
 class ImageFavorite {
   final String eid;
   final String id; // 漫画id
@@ -100,16 +98,6 @@ class ImageFavoritesEp {
     this.maxPage,
   );
 
-  // 是否有封面
-  bool get isHasFirstPage {
-    return imageFavorites[0].page == firstPage;
-  }
-
-  // 是否都有imageKey
-  bool get isHasImageKey {
-    return imageFavorites.every((e) => e.imageKey != "");
-  }
-
   Map<String, dynamic> toJson() {
     return {
       'eid': eid,
@@ -150,24 +138,12 @@ class ImageFavoritesComic {
     this.maxPage,
   );
 
-  // 是否都有imageKey
-  bool get isAllHasImageKey {
-    return imageFavoritesEp.every(
-      (e) => e.imageFavorites.every((j) => j.imageKey != ""),
-    );
-  }
-
   int get maxPageFromEp {
     int temp = 0;
     for (var e in imageFavoritesEp) {
       temp += e.maxPage;
     }
     return temp;
-  }
-
-  // 是否都有封面
-  bool get isAllHasFirstPage {
-    return imageFavoritesEp.every((e) => e.isHasFirstPage);
   }
 
   Iterable<ImageFavorite> get images sync* {

@@ -233,6 +233,8 @@
   "business_entrypoints": [
     "features/local_comics/local_storage_migration.dart",
     "features/local_comics/local_deletion_paths.dart",
+    "features/local_comics/local_deletion_storage.dart",
+    "features/local_comics/local_deletion_journal.dart",
     "features/local_comics/download_directory_allocator.dart",
     "features/local_comics/download_queue.dart",
     "features/local_comics/download_task.dart",
@@ -302,7 +304,8 @@
     "foundation/operation_failure.dart",
     "foundation/res.dart",
     "features/reader/page_order_migration.dart",
-    "features/reader/image_picker.dart"
+    "features/reader/image_picker.dart",
+    "features/local_comics/import_export/legacy_comic_metadata.dart"
   ],
   "ui_files": [
     "app_shell/auth_page.dart",

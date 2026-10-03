@@ -45,7 +45,6 @@ class WebDavLibrarySource {
   static const explorePageTitle = 'WebDAV Library';
   static const pageSize = 20;
   static const rootChapterId = webDavRootChapterId;
-  static const rootChapterTitle = webDavRootChapterTitle;
 
   final contentVersion = ValueNotifier<int>(0);
   late final WebDavLibrarySnapshotStore _snapshots;

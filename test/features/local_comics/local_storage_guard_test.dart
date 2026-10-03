@@ -141,4 +141,80 @@ void main() {
     );
     expect(await guard.runExclusive(() async => 'available'), 'available');
   });
+
+  test(
+    'synchronous writes reject unrelated callers during exclusive work',
+    () async {
+      final guard = LocalComicStorageGuard();
+      final gate = Completer<void>();
+      var writes = 0;
+      final exclusive = guard.runExclusive(() async {
+        guard.write(() => writes++);
+        await gate.future;
+        guard.write(() => writes++);
+      });
+      expect(
+        () => guard.write(() => writes++),
+        throwsA(isA<LocalComicStorageBusy>()),
+      );
+      gate.complete();
+      await exclusive;
+      expect(writes, 2);
+      guard.write(() => writes++);
+      expect(writes, 3);
+    },
+  );
+
+  test(
+    'accepted import writes drain during exit while new writes fail',
+    () async {
+      final guard = LocalComicStorageGuard();
+      final gate = Completer<void>();
+      var writes = 0;
+      final importing = guard.runImport(() async {
+        await gate.future;
+        guard.write(() => writes++);
+      });
+      final preparing = guard.prepareForExit();
+      expect(
+        () => guard.write(() => writes++),
+        throwsA(isA<LocalComicStorageBusy>()),
+      );
+      gate.complete();
+      await importing;
+      final release = await preparing;
+      expect(writes, 1);
+      expect(
+        () => guard.write(() => writes++),
+        throwsA(isA<LocalComicStorageBusy>()),
+      );
+      release();
+      guard.write(() => writes++);
+      expect(writes, 2);
+    },
+  );
+
+  for (final exclusive in [false, true]) {
+    test(
+      'expired ${exclusive ? "exclusive" : "import"} owner cannot write later',
+      () async {
+        final guard = LocalComicStorageGuard();
+        late void Function() lateWrite;
+        Future<void> action() async {
+          lateWrite = Zone.current.bindCallback(() => guard.write(() {}));
+        }
+
+        if (exclusive) {
+          await guard.runExclusive(action);
+        } else {
+          await guard.runImport(action);
+        }
+        expect(lateWrite, throwsA(isA<LocalComicStorageBusy>()));
+        expect(
+          await guard.runExclusive(() async => guard.write(() => 'ok')),
+          'ok',
+        );
+      },
+    );
+  }
 }

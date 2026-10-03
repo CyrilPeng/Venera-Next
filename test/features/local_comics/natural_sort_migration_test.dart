@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:async';
+import 'package:venera_next/features/local_comics/local_storage_guard.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -47,6 +49,34 @@ void main() {
     LocalManager.resetForTesting();
     root.deleteSync(recursive: true);
   });
+
+  test(
+    'page-order conversion waits for exclusive storage before reading or writing',
+    () async {
+      final db = sqlite3.open('${root.path}/local.db');
+      db.execute('DELETE FROM natural_sort_migration');
+      final gate = Completer<void>();
+      final exclusive = LocalComicStorageGuard.instance.runExclusive(
+        () => gate.future,
+      );
+      final converting = local.migrateLegacyPageOrder(history);
+      try {
+        await pumpEventQueue();
+        expect(history.page, 2);
+        expect(db.select('SELECT * FROM natural_sort_migration'), isEmpty);
+        gate.complete();
+        await exclusive;
+        await converting;
+        expect(history.page, 3);
+        expect(db.select('SELECT * FROM natural_sort_migration'), hasLength(1));
+      } finally {
+        if (!gate.isCompleted) gate.complete();
+        await exclusive;
+        await converting;
+        db.dispose();
+      }
+    },
+  );
 
   test('concurrent conversions reuse the first mapping', () async {
     final db = sqlite3.open('${root.path}/local.db');

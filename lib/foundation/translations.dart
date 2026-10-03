@@ -16,8 +16,6 @@ extension AppTranslation on String {
 
   String get tl => _translate();
 
-  String get tlEN => translations["en_US"]?[this] ?? this;
-
   String tlParams(Map<String, Object> values) {
     var res = _translate();
     for (var entry in values.entries) {

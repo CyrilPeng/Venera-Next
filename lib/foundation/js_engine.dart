@@ -96,16 +96,6 @@ class JsEngine with _JSEngineApi, Init {
     _uiMessageHandler = handler;
   }
 
-  @visibleForTesting
-  static void debugResetSourceDataBridge() {
-    configureSourceDataBridge(null);
-  }
-
-  @visibleForTesting
-  static void debugResetUiMessageHandler() {
-    configureUiMessageHandler(null);
-  }
-
   JsSourceDataBridge get _sourceBridge =>
       _sourceDataBridge ?? (throw "JS source data bridge is not configured.");
 

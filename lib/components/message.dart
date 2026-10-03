@@ -135,8 +135,6 @@ class OverlayWidget extends StatefulWidget {
 class OverlayWidgetState extends State<OverlayWidget> {
   final overlayKey = GlobalKey<OverlayState>();
 
-  var entries = <OverlayEntry>[];
-
   OverlayEntry? _toastEntry;
 
   final _toasts = <_ToastRecord>[];
@@ -187,24 +185,7 @@ class OverlayWidgetState extends State<OverlayWidget> {
     }
   }
 
-  void addOverlay(OverlayEntry entry) {
-    if (overlayKey.currentState != null) {
-      overlayKey.currentState!.insert(entry);
-      entries.add(entry);
-    }
-  }
-
-  void remove(OverlayEntry entry) {
-    if (entries.remove(entry)) {
-      entry.remove();
-    }
-  }
-
   void removeAll() {
-    for (var entry in entries) {
-      entry.remove();
-    }
-    entries.clear();
     for (var toast in List.of(_toasts)) {
       _removeToast(toast);
     }

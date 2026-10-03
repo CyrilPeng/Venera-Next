@@ -2,13 +2,15 @@ import 'local_comic_model.dart';
 import 'local_repository.dart';
 import 'local_chapter_storage.dart';
 import 'local_deletion_paths.dart';
+import 'local_deletion_storage.dart';
+import 'local_deletion_journal.dart';
+import 'package:venera_next/foundation/sqlite_transaction.dart';
 import 'download_task_store.dart';
 import 'download_directory_allocator.dart';
 import 'local_sort_type.dart';
 export 'local_sort_type.dart';
 export 'local_comic_model.dart';
 import 'dart:async';
-import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_saf/flutter_saf.dart';
@@ -129,6 +131,7 @@ class LocalManager with ChangeNotifier {
     final stopped = _downloadQueue.suspend(notify: false);
     try {
       await stopped;
+      await _deletionJournal.recover();
       return await action();
     } finally {
       _downloadQueue.releaseSuspension(stopped, notify: false);
@@ -220,6 +223,8 @@ class LocalManager with ChangeNotifier {
   Future<void> _initialize() async {
     _database = _openDatabase('${App.dataPath}/local.db');
     _repository.initialize();
+    _deletionJournal.initialize();
+    await _deletionJournal.recover();
     if (File(FilePath.join(App.dataPath, 'local_path')).existsSync()) {
       path = File(FilePath.join(App.dataPath, 'local_path')).readAsStringSync();
       if (!directory.existsSync()) {
@@ -252,17 +257,15 @@ class LocalManager with ChangeNotifier {
   String findValidId(ComicType type) => _repository.findValidId(type);
 
   Future<void> add(LocalComic comic, [String? id]) async {
-    _repository.add(comic, id);
+    LocalComicStorageGuard.instance.write(() => _repository.add(comic, id));
     notifyListeners();
   }
 
   void remove(String id, ComicType comicType, {bool notify = true}) {
-    _repository.remove(id, comicType);
+    LocalComicStorageGuard.instance.write(
+      () => _repository.remove(id, comicType),
+    );
     if (notify) notifyListeners();
-  }
-
-  void removeComic(LocalComic comic) {
-    remove(comic.id, comic.comicType);
   }
 
   LocalRepository get _repository => LocalRepository(_db);
@@ -317,8 +320,14 @@ class LocalManager with ChangeNotifier {
   /// Preserve the actual saved image on the first read after the sort upgrade.
   /// Record the mapping before writing history so an interrupted migration can
   /// be resumed without interpreting an already converted page a second time.
-  Future<void> migrateLegacyPageOrder(History history) async {
-    if (history.type != ComicType.local) return;
+  Future<void> migrateLegacyPageOrder(History history) {
+    if (history.type != ComicType.local) return Future.value();
+    return LocalComicStorageGuard.instance.runImport(
+      () => _migrateLegacyPageOrder(history),
+    );
+  }
+
+  Future<void> _migrateLegacyPageOrder(History history) async {
     final oldPage = history.page;
     final historyTime = history.time.millisecondsSinceEpoch;
     var migration = _repository.findPageMigration(history.id, history.type);
@@ -361,36 +370,12 @@ class LocalManager with ChangeNotifier {
     }
   }
 
-  bool isDownloaded(
-    String id,
-    ComicType type, [
-    int? ep,
-    ComicChapters? chapters,
-  ]) {
-    var comic = find(id, type);
+  bool isDownloaded(String id, ComicType type, [int? ep]) {
+    final comic = find(id, type);
     if (comic == null) return false;
     if (comic.chapters == null || ep == null) return true;
-    if (chapters != null) {
-      if (comic.chapters?.length != chapters.length) {
-        // update
-        add(
-          LocalComic(
-            id: comic.id,
-            title: comic.title,
-            subtitle: comic.subtitle,
-            tags: comic.tags,
-            directory: comic.directory,
-            chapters: chapters,
-            cover: comic.cover,
-            comicType: comic.comicType,
-            downloadedChapters: comic.downloadedChapters,
-            createdAt: comic.createdAt,
-          ),
-        );
-      }
-    }
     return comic.downloadedChapters.contains(
-      (chapters ?? comic.chapters)!.ids.elementAtOrNull(ep - 1),
+      comic.chapters!.ids.elementAtOrNull(ep - 1),
     );
   }
 
@@ -499,19 +484,23 @@ class LocalManager with ChangeNotifier {
     final current = find(c.id, c.comicType);
     if (current == null) return;
     c = current;
-    // Deleting a local comic means that it's no longer available, thus both favorite and history should be deleted.
-    if (c.comicType == ComicType.local) {
-      // Always queue deletion: an earlier progress write may still be pending.
-      await HistoryManager().remove(c.id, c.comicType);
-      var folders = LocalFavoritesManager().find(c.id, c.comicType);
-      for (var f in folders) {
-        LocalFavoritesManager().deleteComicWithId(f, c.id, c.comicType);
-      }
-    }
-    remove(c.id, c.comicType);
-    if (removeFileOnDisk) {
-      await _deleteUnreferencedDirectories([Directory(c.baseDir)]);
-    }
+    final snapshot = _repository.deletionSnapshot();
+    final directories = removeFileOnDisk
+        ? await _resolveDeletionDirectories(
+            [Directory(c.baseDir)],
+            excluding: [c],
+          )
+        : const <Directory>[];
+    await _deletionJournal.run(
+      directories,
+      (markCommitted) => _deleteRecords(
+        [c],
+        c.comicType == ComicType.local,
+        markCommitted: markCommitted,
+        expectedSnapshot: snapshot,
+      ),
+    );
+    notifyListeners();
   }
 
   Future<void> deleteComicChapters(LocalComic c, List<String> chapters) =>
@@ -524,10 +513,13 @@ class LocalManager with ChangeNotifier {
     if (chapters.isEmpty) {
       return;
     }
-    _repository.removeChapters(c.id, c.comicType, chapters);
+    final snapshot = _repository.deletionSnapshot();
+    final remainingChapters = c.downloadedChapters
+        .where((chapter) => !chapters.contains(chapter))
+        .toList();
     final directories = localChapterDirectoriesToDelete(
       removed: chapters,
-      retained: find(c.id, c.comicType)?.downloadedChapters ?? const [],
+      retained: remainingChapters,
     );
     var shouldRemovedDirs = <Directory>[];
     for (final directory in directories) {
@@ -536,9 +528,18 @@ class LocalManager with ChangeNotifier {
         shouldRemovedDirs.add(dir);
       }
     }
-    if (shouldRemovedDirs.isNotEmpty) {
-      await _deleteUnreferencedDirectories(shouldRemovedDirs, chapterOwner: c);
-    }
+    shouldRemovedDirs = await _resolveDeletionDirectories(
+      shouldRemovedDirs,
+      chapterOwner: c,
+      retainedChapters: remainingChapters,
+    );
+    await _deletionJournal.run(shouldRemovedDirs, (markCommitted) async {
+      runSqliteTransaction(_db, () {
+        _validateDeletionSnapshot(snapshot);
+        _repository.removeChapters(c.id, c.comicType, chapters);
+        markCommitted();
+      });
+    });
     notifyListeners();
   }
 
@@ -561,6 +562,7 @@ class LocalManager with ChangeNotifier {
       return;
     }
 
+    final snapshot = _repository.deletionSnapshot();
     var shouldRemovedDirs = <Directory>[];
     try {
       for (final comic in comics) {
@@ -571,56 +573,120 @@ class LocalManager with ChangeNotifier {
           }
         }
       }
-      _repository.removeAll(comics);
+      if (removeFileOnDisk) {
+        shouldRemovedDirs = await _resolveDeletionDirectories(
+          shouldRemovedDirs,
+          excluding: comics,
+        );
+      }
+      await _deletionJournal.run(
+        shouldRemovedDirs,
+        (markCommitted) => _deleteRecords(
+          comics,
+          removeFavoriteAndHistory,
+          markCommitted: markCommitted,
+          expectedSnapshot: snapshot,
+        ),
+      );
     } catch (e, s) {
       Log.error("LocalManager", "Failed to batch delete comics: $e", s);
       rethrow;
     }
 
-    var comicIDs = comics.map((e) => ComicID(e.comicType, e.id)).toList();
-
-    if (removeFavoriteAndHistory) {
-      LocalFavoritesManager().batchDeleteComicsInAllFolders(comicIDs);
-      await HistoryManager().batchDeleteHistories(comicIDs);
-    }
-
     notifyListeners();
+  }
 
-    if (removeFileOnDisk) {
-      await _deleteUnreferencedDirectories(shouldRemovedDirs);
+  Future<void> _deleteRecords(
+    List<LocalComic> comics,
+    bool removeFavoriteAndHistory, {
+    required void Function() markCommitted,
+    required String expectedSnapshot,
+  }) async {
+    if (!removeFavoriteAndHistory) {
+      runSqliteTransaction(_db, () {
+        _validateDeletionSnapshot(expectedSnapshot);
+        _repository.removeAll(comics);
+        markCommitted();
+      });
+      return;
+    }
+    final favorites = LocalFavoritesManager();
+    final favoritesPath = favorites.databasePath;
+    var removed = <String, List<(String, int)>>{};
+    // Queue behind accepted reading progress. The synchronous callback commits
+    // all three databases before any later queued history mutation can start.
+    await HistoryManager().importStorage((historyPath) {
+      _checkNotDisposed();
+      if (favorites.databasePath != favoritesPath) {
+        throw StateError('Favorites storage changed during deletion');
+      }
+      removed = deleteLocalComicRecords(
+        localDatabase: _db,
+        favoritesPath: favoritesPath,
+        historyPath: historyPath,
+        favoriteFolders: favorites.folderNames,
+        comics: comics,
+        onCommit: markCommitted,
+        validate: () => _validateDeletionSnapshot(expectedSnapshot),
+      );
+    }, onCommitted: () => favorites.refreshDeletedFavorites(removed));
+  }
+
+  void _validateDeletionSnapshot(String expected) {
+    if (_repository.deletionSnapshot() != expected) {
+      throw StateError(
+        'Local library changed during deletion; retry the operation',
+      );
     }
   }
 
-  /// Protect remaining registrations before handing paths to filesystem cleanup.
-  Future<void> _deleteUnreferencedDirectories(
+  LocalDeletionJournal get _deletionJournal => LocalDeletionJournal(
+    _db,
+    exists: (value) async => Directory(value) is AndroidDirectory
+        ? Directory(value).exists()
+        : await FileSystemEntity.type(value, followLinks: false) !=
+              FileSystemEntityType.notFound,
+  );
+
+  /// Resolve the proposed retained records before staging any directories.
+  Future<List<Directory>> _resolveDeletionDirectories(
     List<Directory> directories, {
+    List<LocalComic> excluding = const [],
     LocalComic? chapterOwner,
+    List<String>? retainedChapters,
   }) async {
+    if (directories.isEmpty) return const [];
     final retained = _repository.directoryReferences(
+      excludingMany: excluding.map((comic) => (comic.id, comic.comicType)),
       excluding: chapterOwner == null
           ? null
           : (chapterOwner.id, chapterOwner.comicType),
     );
-    final paths = localDirectoriesToDelete(
+    final remainingChapters =
+        retainedChapters ??
+        (chapterOwner == null
+            ? const <String>[]
+            : find(
+                    chapterOwner.id,
+                    chapterOwner.comicType,
+                  )?.downloadedChapters ??
+                  const <String>[]);
+    final paths = await resolveLocalDirectoriesToDelete(
       candidates: directories.map((directory) => directory.path),
-      retained: retained.map(
-        (directory) => _resolveComicDirectory(directory, path),
-      ),
+      retained: [
+        ...retained.map((directory) => _resolveComicDirectory(directory, path)),
+        for (final chapter in remainingChapters)
+          FilePath.join(
+            chapterOwner!.baseDir,
+            localChapterDirectoryName(chapter),
+          ),
+      ],
       libraryPath: path,
+      // SAF document paths have provider identity, not native symlink APIs.
+      resolvePath: (value) => Directory(value) is AndroidDirectory
+          ? Future.value(value)
+          : resolveLocalNativePath(value),
     );
-    if (paths.isNotEmpty) {
-      await _deleteDirectories(paths.map(Directory.new).toList());
-    }
-  }
-
-  static Future<void> _deleteDirectories(List<Directory> directories) async {
-    await Isolate.run(() async {
-      await SAFTaskWorker().init();
-      for (var dir in directories) {
-        if (dir.existsSync()) {
-          await dir.delete(recursive: true);
-        }
-      }
-    });
+    return paths.map(Directory.new).toList();
   }
 }

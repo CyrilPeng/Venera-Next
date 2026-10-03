@@ -204,12 +204,6 @@ class CookieJarSql {
     }
   }
 
-  void deleteAll() {
-    _db.execute('''
-      DELETE FROM cookies;
-    ''');
-  }
-
   void dispose() {
     _db.dispose();
   }

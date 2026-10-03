@@ -325,14 +325,6 @@ class HistoryManager with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> batchDeleteHistories(List<ComicID> histories) {
-    if (histories.isEmpty) return Future.value();
-    final identities = histories
-        .map((item) => (item.id, item.type.value))
-        .toList();
-    return _delete((repository) => repository.removeMany(identities));
-  }
-
   /// Refresh history info from comic source.
   /// Fetches the latest cover, title and subtitle from the source.
   /// Keeps the reading progress (ep, page, etc.).

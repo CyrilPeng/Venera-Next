@@ -277,7 +277,17 @@ void main() {
           expect(manager.find('same', ComicType.local), isNull);
           final batchWrite = manager.addHistory(_history('batch'));
           final ids = [ComicID(ComicType.local, 'batch')];
-          final batchDelete = manager.batchDeleteHistories(ids);
+          final identities = ids
+              .map((item) => (item.id, item.type.value))
+              .toList();
+          final batchDelete = manager.importStorage((path) {
+            final db = sqlite3.open(path);
+            try {
+              HistoryRepository(db).removeMany(identities);
+            } finally {
+              db.dispose();
+            }
+          }, onCommitted: () {});
           ids.clear();
           await Future.wait([batchWrite, batchDelete]);
           expect(manager.count(), 0);

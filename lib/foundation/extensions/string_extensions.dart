@@ -6,27 +6,6 @@ extension StringExt on String {
   /// convert this to a one-element list.
   List<String> toList() => [this];
 
-  String _nums() {
-    String res = "";
-    for (int i = 0; i < length; i++) {
-      res += this[i].isNum ? this[i] : "";
-    }
-    return res;
-  }
-
-  String get nums => _nums();
-
-  String setValueAt(String value, int index) {
-    return replaceRange(index, index + 1, value);
-  }
-
-  String? subStringOrNull(int start, [int? end]) {
-    if (start < 0 || (end != null && end > length)) {
-      return null;
-    }
-    return substring(start, end);
-  }
-
   String replaceLast(String from, String to) {
     if (isEmpty || from.isEmpty) {
       return this;

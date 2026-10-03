@@ -98,69 +98,6 @@ extension TagsTranslation on String {
     };
   }
 
-  String _categoryTextDynamic(String c) {
-    if (App.locale.languageCode == "zh") {
-      return translateTagsCategoryToCN;
-    } else {
-      return this;
-    }
-  }
-
-  String get categoryTextDynamic => _categoryTextDynamic(this);
-
-  String get translateTagsCategoryToCN =>
-      tagsCategoryTranslations[this] ?? this;
-
-  get tagsCategoryTranslations => switch (App.locale.countryCode) {
-    "CN" => tagsCategoryTranslationsCN,
-    "TW" => tagsCategoryTranslationsTW,
-    _ => tagsCategoryTranslationsCN,
-  };
-
-  static const tagsCategoryTranslationsCN = {
-    "language": "语言",
-    "artist": "画师",
-    "male": "男性",
-    "female": "女性",
-    "mixed": "混合",
-    "other": "其它",
-    "parody": "原作",
-    "character": "角色",
-    "group": "团队",
-    "cosplayer": "Coser",
-    "reclass": "重新分类",
-    "Languages": "语言",
-    "Artists": "画师",
-    "Characters": "角色",
-    "Groups": "团队",
-    "Tags": "标签",
-    "Parodies": "原作",
-    "Categories": "分类",
-    "Time": "时间",
-  };
-
-  static const tagsCategoryTranslationsTW = {
-    "language": "語言",
-    "artist": "畫師",
-    "male": "男性",
-    "female": "女性",
-    "mixed": "混合",
-    "other": "其他",
-    "parody": "原作",
-    "character": "角色",
-    "group": "團隊",
-    "cosplayer": "Coser",
-    "reclass": "重新分類",
-    "Languages": "語言",
-    "Artists": "畫師",
-    "Characters": "角色",
-    "Groups": "團隊",
-    "Tags": "標籤",
-    "Parodies": "原作",
-    "Categories": "分類",
-    "Time": "時間",
-  };
-
   static Map<String, String> get maleTags => _data["male"] ?? const {};
 
   static Map<String, String> get femaleTags => _data["female"] ?? const {};
@@ -176,9 +113,6 @@ extension TagsTranslation on String {
   static Map<String, String> get otherTags => _data["other"] ?? const {};
 
   static Map<String, String> get mixedTags => _data["mixed"] ?? const {};
-
-  static Map<String, String> get characterTags =>
-      _data["character"] ?? const {};
 
   static Map<String, String> get artistTags => _data["artist"] ?? const {};
 

@@ -47,6 +47,23 @@ void main() {
           ),
           hasLength(2),
         );
+        expect(
+          repository.directoryReferences(
+            excludingMany: [
+              ('same', const ComicType(1)),
+              ('same', const ComicType(1)),
+              ('missing', const ComicType(2)),
+            ],
+          ),
+          ['directory-2'],
+        );
+        expect(
+          repository.directoryReferences(
+            excluding: ('same', const ComicType(1)),
+            excludingMany: [('same', const ComicType(2))],
+          ),
+          isEmpty,
+        );
       } finally {
         db.dispose();
       }

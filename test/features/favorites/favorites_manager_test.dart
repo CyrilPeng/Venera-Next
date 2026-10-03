@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:venera_next/features/favorites/favorites_repository.dart';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +20,21 @@ FavoriteItem _favorite(String id) {
     type: ComicType.local,
     tags: const ['tag'],
   );
+}
+
+// Exercise publication of a committed external deletion independently of the
+// local/history coordinator, including no-op and failure-before-publication.
+void _deleteExternally(LocalFavoritesManager manager, List<ComicID> comics) {
+  final db = sqlite3.open(manager.databasePath);
+  try {
+    final removed = FavoritesRepository(db).deleteComics(
+      manager.folderNames,
+      comics.map((comic) => (comic.id, comic.type.value)),
+    );
+    manager.refreshDeletedFavorites(removed);
+  } finally {
+    db.dispose();
+  }
 }
 
 bool _sqliteAvailable() {
@@ -602,7 +618,10 @@ void main() {
           db.execute(
             "CREATE TRIGGER reject_delete BEFORE DELETE ON delete_two BEGIN SELECT RAISE(ABORT, 'rejected'); END;",
           );
-          manager.batchDeleteComicsInAllFolders([ComicID(item.type, item.id)]);
+          expect(
+            () => _deleteExternally(manager, [ComicID(item.type, item.id)]),
+            throwsA(isA<SqliteException>()),
+          );
           expect(notifications, 0);
           expect(manager.folderComics('delete_one'), 1);
           expect(manager.folderComics('delete_two'), 1);
@@ -1050,7 +1069,7 @@ void main() {
 
         final deletedEverywhere = _favorite('delete-everywhere');
         addUpdated(deletedEverywhere);
-        manager.batchDeleteComicsInAllFolders([
+        _deleteExternally(manager, [
           ComicID(deletedEverywhere.type, deletedEverywhere.id),
         ]);
         expect(
@@ -1147,7 +1166,7 @@ void main() {
       manager.batchMoveFavorites('source', 'target', <FavoriteItem>[]);
       manager.batchCopyFavorites('source', 'target', <FavoriteItem>[]);
       manager.batchDeleteComics('source', <FavoriteItem>[]);
-      manager.batchDeleteComicsInAllFolders([]);
+      _deleteExternally(manager, []);
 
       expect(notifyCount, 0);
       expect(manager.count('source'), 0);

@@ -93,7 +93,6 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  flutter_to_arch: ^1.0.1
 
 dependency_overrides:
   flutter_rust_bridge: 2.11.1
@@ -111,6 +110,7 @@ flutter:
     - assets/opencc.txt
 # fonts:
 
+# Metadata consumed by .github/scripts/build_arch_package.py (no Dart package required).
 flutter_to_arch:
   name: venera-next
   icon: debian/gui/venera-next.png

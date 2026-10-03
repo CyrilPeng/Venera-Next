@@ -235,7 +235,7 @@ Chapter ranges must be ordered, non-overlapping, non-reversed, and within the ac
 
 If metadata is missing or unreadable, JSON is malformed, field types are invalid, or chapter ranges fail validation, the app logs a warning and falls back to plain directory mode. The comic remains visible under its folder name, and directory images and chapter folders remain readable.
 
-This `metadata.json` is the single-comic CBZ metadata format. It is not the comic-list format inside a `.venera-comics` batch export, and the two formats are not interchangeable.
+This `metadata.json` is the single-comic CBZ metadata format. It is not the comic-list format inside a historical `.venera-comics` batch archive, and the two formats are not interchangeable.
 
 ### Archives and Online Reading
 

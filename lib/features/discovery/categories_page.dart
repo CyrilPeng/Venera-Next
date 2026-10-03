@@ -143,23 +143,12 @@ class _CategoriesPageState extends State<CategoriesPage>
   bool get wantKeepAlive => true;
 }
 
-typedef ClickTagCallback = void Function(String, String?);
-
 class _CategoryPage extends StatelessWidget {
   const _CategoryPage(this.category);
 
   final String category;
 
   CategoryData get data => getCategoryDataWithKey(category);
-
-  String findComicSourceKey() {
-    for (var source in ComicSource.all()) {
-      if (source.categoryData?.key == category) {
-        return source.key;
-      }
-    }
-    return "";
-  }
 
   @override
   Widget build(BuildContext context) {
