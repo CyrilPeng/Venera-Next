@@ -97,7 +97,7 @@ void main() {
       expect(reader.mode, ReaderMode.galleryRightToLeft);
       expect((reader.chapter, reader.page), (2, 3));
       final controller = _Controller();
-      reader.imageViewController = controller;
+      reader.viewportBinding.update(controller, true);
       expect(reader.toNextPage(), isTrue);
       expect(controller.visited, [4]);
     },
@@ -128,7 +128,7 @@ void main() {
       expect(reader.imageViewController, isNull);
       expect(settings.comicLayout('comic', 'local'), ComicLayout.longStrip);
       final controller = _Controller();
-      reader.imageViewController = controller;
+      reader.viewportBinding.update(controller, true);
       expect(reader.toNextPage(), isTrue);
       expect(reader.toPrevPage(), isTrue);
       expect(controller.visited, [6, 5]);
@@ -213,7 +213,7 @@ void main() {
       settings['enablePageAnimation'] = true;
       final reader = await mount(tester);
       final oldController = _Controller();
-      reader.imageViewController = oldController;
+      reader.viewportBinding.update(oldController, true);
       reader.toNextPage();
       expect(reader.isPageAnimating, isTrue);
       reader.applyReadingMode(ReaderMode.continuousTopToBottom);
@@ -223,7 +223,7 @@ void main() {
       expect(reader.isPageAnimating, isFalse);
       settings['enablePageAnimation'] = false;
       final currentController = _Controller();
-      reader.imageViewController = currentController;
+      reader.viewportBinding.update(currentController, true);
       reader.toNextPage();
       expect(currentController.visited, [6]);
       expect((reader.chapter, reader.page), (2, 6));

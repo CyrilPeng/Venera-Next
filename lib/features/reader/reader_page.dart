@@ -8,9 +8,10 @@ import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/gesture.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
-import 'package:venera_next/features/reader/images.dart';
+import 'package:venera_next/features/reader/images_host.dart';
 import 'package:venera_next/features/reader/image_cache_policy.dart';
 import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_mode_labels.dart';
@@ -19,6 +20,7 @@ import 'package:venera_next/features/reader/reader_session.dart';
 import 'package:venera_next/features/reader/history_writer.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
+import 'package:venera_next/features/reader/page_order_migration.dart';
 
 import 'package:venera_next/features/reader/page_layout.dart';
 import 'package:venera_next/features/reader/history_progress.dart';
@@ -107,7 +109,8 @@ class ReaderState extends State<Reader>
   int get chapter => controller.state.chapter;
   bool get jumpToLastPageOnLoad => controller.state.jumpToLastPageOnLoad;
 
-  ReaderImageViewController? imageViewController;
+  final viewportBinding = ReaderViewportBinding();
+  ReaderImageViewController? get imageViewController => viewportBinding.current;
 
   void setPage(int page) => controller.reportPage(page);
   void resetPageAnimation() => controller.resetAnimation();
@@ -180,7 +183,32 @@ class ReaderState extends State<Reader>
 
   History? history;
 
-  bool localPageOrderChecked = false;
+  late final _pageOrderMigration = ReaderPageOrderMigration(
+    migrate: () async {
+      final saved = history;
+      if (saved == null) return null;
+      final previousPage = saved.page;
+      final savedChapter = saved.ep;
+      await LocalManager().migrateLegacyPageOrder(saved);
+      return MigratedReaderPosition(
+        chapter: savedChapter,
+        previousPage: previousPage,
+        imagePage: saved.page,
+      );
+    },
+    initialChapter: widget.initialChapter ?? 1,
+    initialPage: widget.initialPage,
+    currentChapter: () => chapter,
+    displayPage: (imagePage) => pageLayout.pageForImage(imagePage),
+    restorePage: controller.restorePage,
+  );
+
+  Future<void> prepareLocalPageOrder(bool Function() isCancelled) async {
+    if (type != ComicType.local) return;
+    await _pageOrderMigration.prepare(
+      isCancelled: () => !mounted || isCancelled(),
+    );
+  }
 
   bool _reportedMissingLocalFiles = false;
 
@@ -316,7 +344,7 @@ class ReaderState extends State<Reader>
     mode = next;
     // Convert the old display page to its source image before rebuilding.
     _checkImagesPerPageChange();
-    imageViewController = null;
+    viewportBinding.clear();
     update();
   }
 
@@ -479,6 +507,7 @@ class ReaderState extends State<Reader>
 
   @override
   void dispose() {
+    viewportBinding.dispose();
     controller.dispose();
     _layoutProbe?.cancel();
     _layoutProbe = null;
@@ -515,7 +544,8 @@ class ReaderState extends State<Reader>
       child: Overlay.wrap(
         child: ReaderScaffold(
           child: ReaderGestureDetector(
-            child: ReaderImages(
+            child: ReaderImagesHost(
+              reader: this,
               key: Key(mode.isWaterfall ? mode.key : chapter.toString()),
             ),
           ),

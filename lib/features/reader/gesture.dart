@@ -1,3 +1,4 @@
+import 'gesture_port.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,7 +9,7 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/file_type.dart';
-import 'package:venera_next/foundation/global_state.dart';
+import 'package:venera_next/features/reader/reader_tap_scope.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 class ReaderGestureDetector extends StatefulWidget {
@@ -20,8 +21,8 @@ class ReaderGestureDetector extends StatefulWidget {
   State<ReaderGestureDetector> createState() => ReaderGestureDetectorState();
 }
 
-class ReaderGestureDetectorState
-    extends AutomaticGlobalState<ReaderGestureDetector> {
+class ReaderGestureDetectorState extends State<ReaderGestureDetector>
+    implements ReaderGesturePort {
   late TapGestureRecognizer _tapGestureRecognizer;
 
   static const _kDoubleTapMaxTime = Duration(milliseconds: 200);
@@ -37,13 +38,21 @@ class ReaderGestureDetectorState
   int fingers = 0;
 
   late ReaderState reader;
+  late final void Function() _detachFromScaffold;
 
   bool ignoreNextTag = false;
 
+  @override
   void ignoreNextTap() {
     ignoreNextTag = true;
   }
 
+  @override
+  void cancelPendingTap() {
+    _previousEvent = null;
+  }
+
+  @override
   void clearIgnoreNextTap() {
     ignoreNextTag = false;
   }
@@ -56,8 +65,21 @@ class ReaderGestureDetectorState
         onSecondaryTapUp(details.globalPosition);
       };
     super.initState();
-    context.readerScaffold.gestureDetectorState = this;
+    final scaffold = context.readerScaffold;
+    scaffold.gestureDetectorState = this;
+    _detachFromScaffold = () {
+      if (identical(scaffold.gestureDetectorState, this)) {
+        scaffold.gestureDetectorState = null;
+      }
+    };
     reader = context.reader;
+  }
+
+  @override
+  void dispose() {
+    _detachFromScaffold();
+    _tapGestureRecognizer.dispose();
+    super.dispose();
   }
 
   @override
@@ -145,7 +167,7 @@ class ReaderGestureDetectorState
           onMouseWheel(event.scrollDelta.dy > 0);
         }
       },
-      child: widget.child,
+      child: ReaderTapScope(ignoreNextTap: ignoreNextTap, child: widget.child),
     );
   }
 
@@ -356,16 +378,15 @@ class ReaderGestureDetectorState
     }
   }
 
+  @override
   void addDragListener(ReaderDragListener listener) {
     _dragListeners.add(listener);
   }
 
+  @override
   void removeDragListener(ReaderDragListener listener) {
     _dragListeners.remove(listener);
   }
-
-  @override
-  Object? get key => "reader_gesture";
 
   void copyImage(Offset location) async {
     var controller = reader.imageViewController;
@@ -387,12 +408,4 @@ class ReaderGestureDetectorState
       context.showMessage(message: "No Image".tl);
     }
   }
-}
-
-class ReaderDragListener {
-  void Function(Offset point)? onStart;
-  void Function(Offset offset)? onMove;
-  void Function()? onEnd;
-
-  ReaderDragListener({this.onMove, this.onEnd});
 }

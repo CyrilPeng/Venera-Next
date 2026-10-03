@@ -21,7 +21,7 @@ void main() {
       final file = File('${directory.path}/page.png')
         ..writeAsBytesSync(img.encodePng(img.Image(width: 40, height: 80)));
       final imageKey = 'file://${file.path}';
-      ReaderImageViewController? viewport;
+      var binding = ReaderViewportBinding();
       var collected = 0;
       final loads = <int>[];
       final lifecycle = <bool>[];
@@ -29,7 +29,7 @@ void main() {
         pageCount: () => 3,
         chapterCount: () => 2,
         animationEnabled: () => false,
-        viewport: () => viewport,
+        viewport: () => binding.current,
         onChanged: () {},
         onPageChanged: () {},
         onError: (error, stack) => fail('$error'),
@@ -63,13 +63,7 @@ void main() {
           },
           chapterId: (chapter) => 'id-$chapter',
           chapterTitle: (chapter) => 'Title $chapter',
-          onViewportChanged: (value, attached) {
-            if (attached) {
-              viewport = value;
-            } else if (identical(viewport, value)) {
-              viewport = null;
-            }
-          },
+          onViewportChanged: binding.update,
           onUpdate: () {},
           onFloatingButton: (_) {},
           onCollectImage: () => collected++,
@@ -92,8 +86,14 @@ void main() {
           list.scrollDirection,
           mode == 'ltr' || mode == 'rtl' ? Axis.horizontal : Axis.vertical,
         );
-        viewport!.handleDoubleTap(Offset.zero);
+        binding.current!.handleDoubleTap(Offset.zero);
         expect(collected, 1);
+        final previousOwner = binding;
+        final retained = binding.current;
+        binding = ReaderViewportBinding();
+        await tester.pumpWidget(build());
+        expect(previousOwner.current, isNull);
+        expect(binding.current, same(retained));
         margin = 10;
         await tester.pumpWidget(build());
         final photo = tester.widget<PhotoView>(find.byType(PhotoView));
@@ -102,7 +102,7 @@ void main() {
           mode == 'ltr' || mode == 'rtl' ? 800 : 640,
         );
         if (mode == 'waterfall') {
-          expect(viewport!.toChapter(2), true);
+          expect(binding.current!.toChapter(2), true);
           for (var i = 0; i < 4; i++) {
             await tester.pump();
           }
@@ -111,12 +111,12 @@ void main() {
           expect(navigation.content.images, [imageKey]);
           expect(lifecycle.last, false);
         } else {
-          expect(viewport!.toChapter(2), false);
+          expect(binding.current!.toChapter(2), false);
           expect(loads, isEmpty);
         }
         await tester.pumpWidget(const SizedBox());
         await tester.pump(const Duration(seconds: 1));
-        expect(viewport, isNull);
+        expect(binding.current, isNull);
       } finally {
         navigation.dispose();
         await tester.runAsync(() async {

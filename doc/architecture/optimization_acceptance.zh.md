@@ -34,13 +34,13 @@
 | P4.4 | P | 依赖与启动/释放 | `lib/features/sync/data_sync.dart; lib/features/webdav_library/webdav_library_source.dart` | DataSync 有 start/dispose；WebDAV 已实例化并由应用挂载生命周期释放；其余管理器和启动失败资源仍待收敛。 |
 | P4.5 | P | 阅读请求所有权 | `lib/network/request_scope.dart; lib/features/reader/chapter_loader.dart; lib/features/reader/image_precache.dart` | 已有会话和共享请求回归；补完全部源请求及实机退出/前后台验收。 |
 | P4.6 | P | 取消、释放与提交 | `lib/features/local_comics/local_import_lifecycle.dart; lib/features/reader/reader_session.dart` | 正常窗口已协调；系统终止/后台和跨文件数据库回滚仍未完成。 |
-| P4.7 | O | 退出全局 State 查找 | `lib/features/reader/comic_image.dart:358` | 仍调用 GlobalState.find<ReaderGestureDetectorState>；改为显式交互协议。 |
+| P4.7 | I | 退出全局 State 查找 | `lib/features/reader/reader_tap_scope.dart; comic_image.dart; gesture.dart` | 图片重试已通过最近祖先 ReaderTapScope 抑制点击，手势 State 取消全局注册；独立图片、嵌套/替换宿主及事件顺序已有回归。其他 State 耦合仍见 P5。 |
 | P5.1 | I | 阅读位置模型 | `lib/features/reader/image_position.dart; lib/features/reader/chapters.dart` | 已有模型及位置/分组回归。 |
 | P5.2 | I | 页码与跨章策略 | `lib/features/reader/page_layout.dart; test/features/reader/page_navigation_test.dart` | 策略已提取；最终七模式联合验收仍独立。 |
-| P5.3 | P | 控制器与不可变输入 | `lib/features/reader/reader_controller.dart; lib/features/reader/images.dart:79` | 仍直接写 reader.localPageOrderChecked/imageViewController；移出具体 State 依赖。 |
+| P5.3 | I | 控制器与不可变输入 | `lib/features/reader/reader_controller.dart; lib/features/reader/images.dart:79` | ReaderController 已接管内容加载阶段、取消与结果提交；视口挂载已归 ReaderViewportBinding 且宿主仅提供只读视口；页序迁移结果与一次性恢复由 ReaderPageOrderMigration 持有；ReaderImages 通过显式加载/生命周期回调与内容快照工作，不再持有 ReaderState；具体页面装配位于 ReaderImagesHost，阅读壳仍见 P5.6。 |
 | P5.4 | I | 章节访问注入 | `lib/features/reader/chapter_image_loader.dart; test/features/reader/chapter_image_loader_test.dart` | 已有本地优先/在线回退适配与回归。 |
-| P5.5 | P | 阅读视图与视口 | `lib/features/reader/gallery_view.dart; lib/features/reader/continuous_view.dart; lib/features/reader/reader_viewport.dart` | 已有视图分拆；ReaderImages 仍持有 ReaderState，完成宿主协议后复验模式。 |
-| P5.6 | P | 阅读壳与菜单 | `lib/features/reader/scaffold.dart; lib/features/reader/progress_bar.dart` | scaffold 当前 914 行且有用户修改；继续按职责与交互边界拆分，保留键盘/无障碍。 |
+| P5.5 | I | 阅读视图与视口 | `lib/features/reader/gallery_view.dart; lib/features/reader/continuous_view.dart; lib/features/reader/reader_viewport.dart` | ReaderImages 已独立于 ReaderState，画廊/连续视图采用配置快照与导航/视口协议；独立内容生命周期及模式/自动阅读/滑块联合回归通过，平台行为仍需总体验收。 |
+| P5.6 | P | 阅读壳与菜单 | `lib/features/reader/scaffold.dart; lib/features/reader/progress_bar.dart` | 滑动收藏由 ImageFavoriteSwipeBinding 持有唯一订阅，ReaderGesturePort 替代具体手势 State，挂载/解绑不再依赖延时；5 项回归通过；ReaderImagePicker 独立处理选择与内容身份，收藏/导出统一拒绝过期选择，新增 12 项回归。侧栏已由 ReaderSidebarBinding 统一拥有请求/路由/交互释放，新增 10 项回归；底部按钮展示已独立为状态/回调输入，9 项布局与交互回归通过；其余菜单组装与壳职责仍需审查，保留用户修改与键盘/无障碍。 |
 | P5.7 | P | 阅读会话与平台效果 | `lib/features/reader/reader_session.dart; lib/features/reader/orientation_controller.dart; lib/features/reader/volume_controller.dart` | 已有控制器；真实平台方向/音量/亮度及前后台联合验收缺失。 |
 | P6.1 | I | 模型与仓储分离 | `lib/features/local_comics/local_repository.dart; lib/features/history/history_repository.dart; lib/features/favorites/favorites_repository.dart` | 主体 SQL 已迁入仓储；后续新增 SQL 继续遵守边界。 |
 | P6.2 | P | 收藏业务职责 | `lib/features/favorites/read_later_service.dart; lib/features/favorites/favorite_updates_service.dart; lib/features/favorites/favorites_manager.dart` | 稍后阅读/追更已分离；管理器仍有全局依赖和统一生命周期待收束。 |

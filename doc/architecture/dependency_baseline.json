@@ -300,7 +300,9 @@
     "features/local_comics/import_export/comic_export_service.dart",
     "features/comic_source/source_failure.dart",
     "foundation/operation_failure.dart",
-    "foundation/res.dart"
+    "foundation/res.dart",
+    "features/reader/page_order_migration.dart",
+    "features/reader/image_picker.dart"
   ],
   "ui_files": [
     "app_shell/auth_page.dart",
@@ -329,6 +331,10 @@
     "features/search/search_page.dart",
     "features/search/search_result_page.dart",
     "features/settings/settings_page.dart",
-    "features/sync/comic_archive_page.dart"
+    "features/sync/comic_archive_page.dart",
+    "features/reader/images.dart",
+    "features/reader/images_host.dart",
+    "features/reader/sidebar_binding.dart",
+    "features/reader/bottom_actions.dart"
   ]
 }

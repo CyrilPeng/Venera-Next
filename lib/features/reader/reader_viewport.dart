@@ -1,12 +1,34 @@
 import 'package:flutter/services.dart';
 
 import 'reader_controller.dart';
+import 'image_picker.dart';
+
+/// Owns the current viewport without retaining a reader State.
+class ReaderViewportBinding {
+  ReaderImageViewController? _current;
+  bool _disposed = false;
+
+  ReaderImageViewController? get current => _current;
+
+  void update(ReaderImageViewController viewport, bool attached) {
+    if (_disposed) return;
+    if (attached) {
+      _current = viewport;
+    } else if (identical(_current, viewport)) {
+      _current = null;
+    }
+  }
+
+  void clear() => _current = null;
+
+  void dispose() {
+    _disposed = true;
+    clear();
+  }
+}
 
 abstract interface class ReaderImageViewController
-    implements ReaderNavigationViewport {
-  /// Zero-based, end-exclusive source images represented by the current page.
-  (int start, int end)? get currentImageRange;
-
+    implements ReaderNavigationViewport, ReaderImagePickingViewport {
   void handleDoubleTap(Offset location);
 
   void handleLongPressDown(Offset location);
@@ -19,6 +41,4 @@ abstract interface class ReaderImageViewController
   bool handleOnTap(Offset location);
 
   Future<Uint8List?> getImageByOffset(Offset offset);
-
-  String? getImageKeyByOffset(Offset offset);
 }

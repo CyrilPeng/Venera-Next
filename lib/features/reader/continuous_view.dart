@@ -314,6 +314,15 @@ class ContinuousModeState extends State<ReaderContinuousView>
   }
 
   @override
+  void didUpdateWidget(covariant ReaderContinuousView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onViewportChanged != widget.onViewportChanged) {
+      oldWidget.onViewportChanged(this, false);
+      widget.onViewportChanged(this, true);
+    }
+  }
+
+  @override
   void dispose() {
     widget.onViewportChanged(this, false);
     _waterfall.dispose();

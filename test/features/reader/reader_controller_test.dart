@@ -47,6 +47,124 @@ void main() {
   });
   tearDown(() => controller.dispose());
 
+  test(
+    'owned load deduplicates and completes only after mode preparation',
+    () async {
+      final attempt = controller.beginContentLoad();
+      final preparing = Completer<void>();
+      final readyToPrepare = Completer<void>();
+      final pending = controller.loadContent(
+        attempt,
+        beforeLoad: () async {},
+        loadImages: (_) async => ['one'],
+        prepareMode: () {
+          readyToPrepare.complete();
+          return preparing.future;
+        },
+      );
+      await readyToPrepare.future;
+      expect(controller.content.images, ['one']);
+      expect(controller.content.isLoading, isTrue);
+      expect(
+        await controller.loadContent(
+          attempt,
+          beforeLoad: () async => fail('duplicate preparation'),
+          loadImages: (_) async => throw StateError('duplicate request'),
+          prepareMode: () async => fail('duplicate mode'),
+        ),
+        ReaderContentLoadResult.ignored,
+      );
+      preparing.complete();
+      expect(await pending, ReaderContentLoadResult.ready);
+      expect(controller.content.isLoading, isFalse);
+    },
+  );
+
+  for (final phase in ['before', 'images', 'mode']) {
+    test('owned load reports $phase failure and can retry', () async {
+      final result = await controller.loadContent(
+        controller.beginContentLoad(),
+        beforeLoad: () async {
+          if (phase == 'before') throw StateError(phase);
+        },
+        loadImages: (_) async {
+          if (phase == 'images') throw StateError(phase);
+          return ['one'];
+        },
+        prepareMode: () async {
+          if (phase == 'mode') throw StateError(phase);
+        },
+      );
+      expect(result, ReaderContentLoadResult.failed);
+      expect(controller.content.error, contains(phase));
+      expect(controller.content.isLoading, isFalse);
+      expect(
+        await controller.loadContent(
+          controller.beginContentLoad(),
+          beforeLoad: () async {},
+          loadImages: (_) async => ['retry'],
+          prepareMode: () async {},
+        ),
+        ReaderContentLoadResult.ready,
+      );
+      expect(controller.content.images, ['retry']);
+      expect(controller.content.error, isNull);
+    });
+
+    for (final dispose in [false, true]) {
+      test(
+        'interrupting $phase prevents later phases; dispose=$dispose',
+        () async {
+          final reached = Completer<void>();
+          final release = Completer<void>();
+          final phases = <String>[];
+          Future<void> enter(String current) async {
+            phases.add(current);
+            if (current == phase) {
+              reached.complete();
+              await release.future;
+            }
+          }
+
+          final attempt = controller.beginContentLoad();
+          final pending = controller.loadContent(
+            attempt,
+            beforeLoad: () => enter('before'),
+            loadImages: (_) async {
+              await enter('images');
+              return ['stale'];
+            },
+            prepareMode: () => enter('mode'),
+          );
+          await reached.future;
+          if (dispose) {
+            controller.dispose();
+          } else {
+            await controller.loadContent(
+              controller.beginContentLoad(),
+              beforeLoad: () async {},
+              loadImages: (_) async => ['current'],
+              prepareMode: () async {},
+            );
+          }
+          final snapshot = controller.content;
+          release.complete();
+          expect(await pending, ReaderContentLoadResult.ignored);
+          expect(controller.content, same(snapshot));
+          expect(attempt.scope.isCancelled, isTrue);
+          expect(
+            phases,
+            [
+              'before',
+              'images',
+              'mode',
+            ].take(['before', 'images', 'mode'].indexOf(phase) + 1).toList(),
+          );
+        },
+      );
+    }
+  }
+
   test('content attempts cancel predecessors and reject stale results', () {
     final old = controller.beginContentLoad();
     expect(controller.startContentLoad(old), true);

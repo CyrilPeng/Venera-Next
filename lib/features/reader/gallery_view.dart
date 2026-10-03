@@ -89,6 +89,15 @@ class GalleryModeState extends State<ReaderGalleryView>
   }
 
   @override
+  void didUpdateWidget(covariant ReaderGalleryView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onViewportChanged != widget.onViewportChanged) {
+      oldWidget.onViewportChanged(this, false);
+      widget.onViewportChanged(this, true);
+    }
+  }
+
+  @override
   void dispose() {
     widget.onViewportChanged(this, false);
     keyRepeatTimer?.cancel();

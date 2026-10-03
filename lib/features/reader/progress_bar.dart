@@ -60,7 +60,22 @@ class ReaderBottomBar extends StatelessWidget {
           ),
           LayoutBuilder(
             builder: (context, constrains) {
-              final small = (constrains.maxWidth - actions.length * 50) < 120;
+              final labelSize = TextPainter(
+                text: TextSpan(
+                  text: label,
+                  style: DefaultTextStyle.of(context).style,
+                ),
+                textDirection: Directionality.of(context),
+                textScaler: MediaQuery.textScalerOf(context),
+                maxLines: 1,
+              )..layout();
+              // Keep the existing 24px badge and 48px actions. When scaled
+              // text cannot fit, use the same actions-only layout as phones.
+              final small =
+                  labelSize.height > 20 ||
+                  constrains.maxWidth <
+                      actions.length * 56 + labelSize.width + 32;
+              labelSize.dispose();
               return Row(
                 children: [
                   if (!small) ...[

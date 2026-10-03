@@ -272,9 +272,9 @@ ReaderHistoryWriter 只负责单个阅读器的延迟保存和退出刷新调度
 
 WaterfallController 拥有章节插入/重置、预取/导航状态及请求作用域，连续视图只持有 WaterfallFlowView 查询协议。前插返回源图片数，由视图恢复滚动锚点；跳章和销毁使旧请求及帧回调失效。控制器不依赖 Flutter、ReaderState、全局图源或存储，实际访问由装配端注入。
 
-画廊通过 ReaderGalleryData 和 ReaderController 接收内容/配置与导航，不得查找祖先 ReaderState 或读取全局设置。images.dart 装配评论 Widget、界面回调与图片读取。ReaderImageViewController 独立于页面定义在 reader_viewport.dart；页面不再重导出该接口，调用者必须直接依赖协议。图片列表复用控制器快照，源图片处理页码语义不能在结构迁移中隐式改变。
+画廊通过 ReaderGalleryData 和 ReaderController 接收内容/配置与导航，不得查找祖先 ReaderState 或读取全局设置。images_host.dart 装配评论 Widget、界面回调与图片读取。ReaderImageViewController 独立于页面定义在 reader_viewport.dart；页面不再重导出该接口，调用者必须直接依赖协议。图片列表复用控制器快照，源图片处理页码语义不能在结构迁移中隐式改变。
 
-连续视图通过 ReaderContinuousData 接收设置，通过 ReaderController 读取当前章节/内容，章节加载和 UI 副作用使用显式回调。不得恢复祖先 ReaderState 或全局设置查找；跨章后的当前内容必须即时读取控制器，不能缓存成等待父级重建才更新的章节快照。images.dart 共享视口注册和图片读取适配。
+连续视图通过 ReaderContinuousData 接收设置，通过 ReaderController 读取当前章节/内容，章节加载和 UI 副作用使用显式回调。不得恢复祖先 ReaderState 或全局设置查找；跨章后的当前内容必须即时读取控制器，不能缓存成等待父级重建才更新的章节快照。images_host.dart 共享视口注册和图片读取适配。
 
 progress_bar.dart 只负责底栏、进度滑块和页码文字展示，通过值与回调接收状态；滑块拥有自己的焦点节点。scaffold.dart 决定章节跳转、业务按钮、显示位置及菜单生命周期，不得向进度组件重新引入 ReaderState/全局设置依赖。底栏高度由 ReaderBottomBar.height 统一声明。
 
@@ -495,3 +495,21 @@ source_failure.dart 定义稳定的源管理错误码、原始原因及检查范
 SourceUpdateService 取消时抛出带原始原因的 SourceFailureCode.cancelled，单条交互适配器静默处理并释放弹窗；无头和无弹窗调用者收到明确取消，不再当作完成更新。CLI 保持旧字段，将取消计入 errors 并继续下一项。
 
 foundation/operation_failure.dart 定义 FailureDetails 与 failed/cancelled/unsupported 分类；Res.failure/fromException 兼容旧文本接口并保留原因，fromErrorRes 转发结构化信息。SourceFailure 实现该接口；八类源能力解析器通过 fromException 接入。未提供的可选 JS 能力仍为 null，不据字符串猜测不支持或取消。
+
+ReaderTapScope 将 ignoreNextTap 局部传入手势子树；ComicImage 在重试 PointerDown 时使用最近宿主，没有宿主也可独立重试。ReaderGestureDetectorState 不再继承 AutomaticGlobalState；全局 State 查找已退出阅读器。
+
+ReaderController.loadContent 编排迁移准备、图片获取和模式准备，通过同一 ReaderContentLoad 所有权检查决定是否进入下一阶段或提交。ReaderImagesHost 装配端口，ReaderImages 根据 ready/failed/ignored 更新界面；迁移返回后检查请求取消，旧任务不再恢复页码或发起新请求。已经开始的外部探测仍由其原有生命周期管理。
+
+ReaderViewportBinding 持有当前视口，按实例身份解绑并拒绝销毁后的挂载；模式切换 clear 允许新视口接管。ReaderState 仅提供 imageViewController 只读 getter，ReaderImagesHost 装配绑定回调。画廊和连续视图在 didUpdateWidget 中将挂载关系从旧回调转交新回调。
+
+ReaderPageOrderMigration 保存会话内页序迁移前后的不可变映射，共享进行中的迁移并缓存成功结果；失败允许重试，取消只延后位置恢复。ReaderState 装配 LocalManager 与历史适配，ReaderImages 只调用准备端口，不再读写 localPageOrderChecked 或直接访问本地库。恢复要求初始页和当前章节均匹配，防止切章后应用旧映射。
+
+ReaderImages 不再持有或查找 ReaderState，不导入设置、缓存或源服务；通过控制器、加载与生命周期回调，以及接收 ReaderContentState 快照的构建器独立工作。ReaderImagesHost 是显式接收 ReaderState 的无状态 UI 适配器，集中装配配置、评论、图片读取与阅读壳动作；它不拥有加载尝试。重试回调绑定尝试身份，卸载或更换控制器后不再生效。
+
+ReaderGesturePort 为阅读壳提供点击抑制与拖动监听接口。ImageFavoriteSwipeBinding 持有滑动收藏的唯一监听器和累计位移，设置刷新去重、宿主转交重置、关闭/销毁解绑；手势 State 挂载时绑定，销毁按身份解绑，不再依赖延时注册。
+
+ReaderImagePicker 接管单图范围检查、多图坐标命中和选择尝试的代次；仅依赖 ReaderImagePickingViewport 窄接口和宿主提供的内容/坐标回调。ReaderImagePick 保存视口、图片列表与章节身份，收藏和导出在 await 后统一检查结果仍属于当前内容；切章、内容替换、视口替换或卸载均拒绝旧结果。ReaderController 提供不可变图片列表，覆盖层的挂载与移除仍归 ReaderImageSelectionOverlay。
+
+ReaderSidebarBinding 是阅读壳拥有的 UI 生命周期适配器，统一章节、设置与章节评论侧栏。它合并重复请求、显式安排刷新帧、持有路由及交互释放回调；销毁时作废请求，并在树解锁后只删除自己的活动路由。阅读壳装配独立暂停原因和最初的手势宿主，存活检查后恢复自动阅读；保留其他暂停原因。
+
+bottom_actions.dart 只接收按钮状态和回调，生成底部操作按钮；平台与章节能力由可选回调表达，不访问 ReaderState、App 或设置。ReaderAutomaticReadingAction 保存提示、运行/播放状态及动作，宿主负责自动阅读状态解释。ReaderBottomBar 根据实际缩放文字宽高决定是否显示页码标签，空间不足时保留原有仅按钮布局，避免大字体溢出。

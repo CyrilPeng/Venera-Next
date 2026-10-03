@@ -38,6 +38,8 @@ class ReaderContentLoad {
   bool _finished = false;
 }
 
+enum ReaderContentLoadResult { ignored, ready, failed }
+
 /// Owns navigation state and commands without widget, settings or storage access.
 class ReaderController {
   ReaderController({
@@ -80,6 +82,33 @@ class ReaderController {
     if (!_accepts(attempt) || attempt._started) return false;
     attempt._started = true;
     return true;
+  }
+
+  /// Runs one owned load through preparation, fetching and layout preparation.
+  /// Superseded/disposed attempts cannot start a later phase or publish results.
+  Future<ReaderContentLoadResult> loadContent(
+    ReaderContentLoad attempt, {
+    required Future<void> Function() beforeLoad,
+    required Future<List<String>> Function(RequestScope) loadImages,
+    required Future<void> Function() prepareMode,
+  }) async {
+    if (!startContentLoad(attempt)) return ReaderContentLoadResult.ignored;
+    try {
+      await beforeLoad();
+      if (!_accepts(attempt)) return ReaderContentLoadResult.ignored;
+      final images = await loadImages(attempt.scope);
+      if (!setContentImages(attempt, images)) {
+        return ReaderContentLoadResult.ignored;
+      }
+      await prepareMode();
+      return completeContentLoad(attempt)
+          ? ReaderContentLoadResult.ready
+          : ReaderContentLoadResult.ignored;
+    } catch (error) {
+      return failContentLoad(attempt, error)
+          ? ReaderContentLoadResult.failed
+          : ReaderContentLoadResult.ignored;
+    }
   }
 
   bool setContentImages(ReaderContentLoad attempt, List<String> images) {

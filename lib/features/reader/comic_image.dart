@@ -3,10 +3,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:venera_next/features/reader/gesture.dart';
+import 'package:venera_next/features/reader/reader_tap_scope.dart';
 import 'package:venera_next/features/reader/image_position.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/global_state.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 class ComicImage extends StatefulWidget {
@@ -355,8 +354,7 @@ class ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
                   cursor: SystemMouseCursors.click,
                   child: Listener(
                     onPointerDown: (details) {
-                      GlobalState.find<ReaderGestureDetectorState>()
-                          .ignoreNextTap();
+                      ReaderTapScope.maybeOf(context)?.ignoreNextTap();
                       setState(() {
                         _loadingProgress = null;
                         _lastException = null;

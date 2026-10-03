@@ -18,7 +18,7 @@ void main() {
         final directory = Directory.systemTemp.createTempSync('gallery-input-');
         final file = File('${directory.path}/page.png')
           ..writeAsBytesSync(img.encodePng(img.Image(width: 20, height: 30)));
-        ReaderImageViewController? viewport;
+        var binding = ReaderViewportBinding();
         var ready = 0;
         var collected = 0;
         final reports = <(bool, bool)>[];
@@ -27,7 +27,7 @@ void main() {
           pageCount: () => data.totalPages,
           chapterCount: () => 1,
           animationEnabled: () => false,
-          viewport: () => viewport,
+          viewport: () => binding.current,
           onChanged: () {},
           onPageChanged: () {},
           onError: (error, stack) => fail('$error'),
@@ -60,13 +60,7 @@ void main() {
           home: ReaderGalleryView(
             data: data,
             navigation: navigation,
-            onViewportChanged: (value, attached) {
-              if (attached) {
-                viewport = value;
-              } else if (identical(viewport, value)) {
-                viewport = null;
-              }
-            },
+            onViewportChanged: binding.update,
             onReady: () => ready++,
             onPageReported: (comments, refresh) =>
                 reports.add((comments, refresh)),
@@ -88,20 +82,26 @@ void main() {
             gallery.scrollDirection,
             direction == 'vertical' ? Axis.vertical : Axis.horizontal,
           );
-          expect(viewport!.currentImageRange, (0, 1));
+          expect(binding.current!.currentImageRange, (0, 1));
 
           navigation.toPage(2, animated: false);
           await tester.pump();
-          expect(viewport!.currentImageRange, (1, 2));
+          expect(binding.current!.currentImageRange, (1, 2));
           expect(
-            viewport!.getImageKeyByOffset(Offset.zero),
+            binding.current!.getImageKeyByOffset(Offset.zero),
             'file://${file.path}',
           );
 
+          final previousOwner = binding;
+          final retained = binding.current;
+          binding = ReaderViewportBinding();
+          await tester.pumpWidget(build());
+          expect(previousOwner.current, isNull);
+          expect(binding.current, same(retained));
           data = inputs(imagesPerPage: 2, collect: true);
           await tester.pumpWidget(build());
-          expect(viewport!.currentImageRange, (2, 3));
-          viewport!.handleDoubleTap(Offset.zero);
+          expect(binding.current!.currentImageRange, (2, 3));
+          binding.current!.handleDoubleTap(Offset.zero);
           expect(collected, 1);
           navigation.toPage(data.totalPages, animated: false);
           await tester.pump();
@@ -110,7 +110,7 @@ void main() {
 
           await tester.pumpWidget(const SizedBox());
           await tester.pump();
-          expect(viewport, isNull);
+          expect(binding.current, isNull);
         } finally {
           navigation.dispose();
           await tester.runAsync(() async {

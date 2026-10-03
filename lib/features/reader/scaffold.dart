@@ -6,10 +6,11 @@ import 'package:venera_next/features/reader/status_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:venera_next/features/reader/progress_bar.dart';
+import 'package:venera_next/features/reader/bottom_actions.dart';
 import 'package:venera_next/features/reader/top_bar.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/message.dart';
-import 'package:venera_next/components/side_bar.dart';
+import 'package:venera_next/features/reader/sidebar_binding.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/history/image_favorite_actions.dart';
@@ -18,7 +19,8 @@ import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/chapter_comments.dart';
 import 'package:venera_next/features/reader/chapters.dart';
 import 'package:venera_next/features/reader/eink_refresh.dart';
-import 'package:venera_next/features/reader/gesture.dart';
+import 'package:venera_next/features/reader/gesture_port.dart';
+import 'package:venera_next/features/reader/image_favorite_swipe.dart';
 import 'package:venera_next/features/reader/orientation.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -29,6 +31,7 @@ import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/features/reader/image_export.dart';
 import 'package:venera_next/features/reader/settings_effects.dart';
 import 'package:venera_next/features/reader/image_selection.dart';
+import 'package:venera_next/features/reader/image_picker.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -69,7 +72,18 @@ class ReaderScaffoldState extends State<ReaderScaffold>
 
   var lastValue = 0;
 
-  ReaderGestureDetectorState? gestureDetectorState;
+  ReaderGesturePort? _gesturePort;
+  ReaderGesturePort? get gestureDetectorState => _gesturePort;
+  set gestureDetectorState(ReaderGesturePort? port) {
+    _gesturePort = port;
+    _imageFavoriteSwipe.attach(port);
+    if (port != null && mounted) addDragListener();
+  }
+
+  late final _imageFavoriteSwipe = ImageFavoriteSwipeBinding(
+    isVertical: () => context.reader.mode.isTopToBottom,
+    collect: addImageFavorite,
+  );
 
   void setFloatingButton(int value) {
     lastValue = showFloatingButtonValue;
@@ -88,52 +102,20 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     }
   }
 
-  ReaderDragListener? _imageFavoriteDragListener;
-
-  void addDragListener() async {
+  void addDragListener() {
     if (!mounted) return;
-
-    // 横向阅读的时候, 如果纵向滑就触发收藏, 纵向阅读的时候, 如果横向滑动就触发收藏
-    if (appdata.settings.globalReaderSettings.quickCollectImage == 'Swipe') {
-      if (_imageFavoriteDragListener == null) {
-        double distance = 0;
-        _imageFavoriteDragListener = ReaderDragListener(
-          onMove: (offset) {
-            switch (context.reader.mode) {
-              case ReaderMode.continuousTopToBottom:
-              case ReaderMode.waterfallTopToBottom:
-              case ReaderMode.galleryTopToBottom:
-                distance += offset.dx;
-              case ReaderMode.continuousLeftToRight:
-              case ReaderMode.galleryLeftToRight:
-              case ReaderMode.galleryRightToLeft:
-              case ReaderMode.continuousRightToLeft:
-                distance += offset.dy;
-            }
-          },
-          onEnd: () {
-            if (distance.abs() > 150) {
-              addImageFavorite();
-            }
-            distance = 0;
-          },
-        );
-      }
-      gestureDetectorState!.addDragListener(_imageFavoriteDragListener!);
-    } else if (_imageFavoriteDragListener != null) {
-      gestureDetectorState!.removeDragListener(_imageFavoriteDragListener!);
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    Future.delayed(const Duration(milliseconds: 200), addDragListener);
+    _imageFavoriteSwipe.setEnabled(
+      appdata.settings.globalReaderSettings.quickCollectImage == 'Swipe',
+    );
   }
 
   @override
   void dispose() {
+    _sidebarBinding.dispose();
+    _imageFavoriteSwipe.dispose();
+    _gesturePort = null;
     _imageExporter.dispose();
+    _imagePicker.dispose();
     _selectionOverlay.dispose();
     _eInkRefreshController.dispose();
     super.dispose();
@@ -310,8 +292,13 @@ class ReaderScaffoldState extends State<ReaderScaffold>
       final title = context.reader.history!.title;
       final subtitle = context.reader.history!.subtitle;
       final maxPage = context.reader.images!.length;
-      final index = await selectImage();
-      if (!mounted || index == null) return;
+      final selection = await _imagePicker.pick();
+      if (!mounted ||
+          selection == null ||
+          !selection.isCurrent(_imagePickContext())) {
+        return;
+      }
+      final index = selection.index;
       final reader = context.reader;
       final result = _imageFavorites.toggle(
         ImageFavoriteInput(
@@ -380,95 +367,38 @@ class ReaderScaffoldState extends State<ReaderScaffold>
       text = "P$displayPage";
     }
 
-    final buttons = [
-      Tooltip(
-        message: "Collect the image".tl,
-        child: IconButton(
-          icon: Icon(isLiked() ? Icons.favorite : Icons.favorite_border),
-          onPressed: addImageFavorite,
-        ),
-      ),
-      if (App.isDesktop)
-        Tooltip(
-          message: "${"Full Screen".tl}(F12)",
-          child: IconButton(
-            icon: const Icon(Icons.fullscreen),
-            onPressed: () {
-              context.reader.fullscreen();
-            },
-          ),
-        ),
-      if (App.isAndroid)
-        Tooltip(
-          message: "Screen Rotation".tl,
-          child: IconButton(
-            icon: Icon(switch (readerOrientation) {
-              ReaderOrientation.system => Icons.screen_rotation,
-              ReaderOrientation.portrait => Icons.screen_lock_portrait,
-              ReaderOrientation.landscape => Icons.screen_lock_landscape,
-            }),
-            onPressed: cycleReaderOrientation,
-          ),
-        ),
-      Tooltip(
-        message: 'Reader brightness'.tl,
-        child: IconButton(
-          icon: Icon(
-            context.reader.preferences.readerBrightnessEnabled == true
-                ? Icons.brightness_4
-                : Icons.brightness_6,
-          ),
-          color: context.reader.preferences.readerBrightnessEnabled == true
-              ? context.colorScheme.primary
-              : null,
-          onPressed: () {
-            setState(() {
-              _brightnessPanelOpen = !_brightnessPanelOpen;
-            });
-          },
-        ),
-      ),
-      Tooltip(
-        message: switch (context.reader.autoReading.status) {
+    final buttons = buildReaderBottomActions(
+      context,
+      imageCollected: isLiked(),
+      onCollect: addImageFavorite,
+      onFullscreen: App.isDesktop ? () => context.reader.fullscreen() : null,
+      orientation: readerOrientation,
+      onRotate: App.isAndroid ? cycleReaderOrientation : null,
+      brightnessEnabled:
+          context.reader.preferences.readerBrightnessEnabled == true,
+      onBrightness: () =>
+          setState(() => _brightnessPanelOpen = !_brightnessPanelOpen),
+      automaticReading: ReaderAutomaticReadingAction(
+        tooltip: switch (context.reader.autoReading.status) {
           AutoReadingStatus.waiting =>
             'Automatic reading is waiting for content'.tl,
           AutoReadingStatus.paused => 'Automatic reading is paused'.tl,
           _ => 'Start or stop automatic reading'.tl,
         },
-        child: IconButton(
-          icon: context.reader.autoReading.isActive
-              ? const Icon(Icons.pause_circle_outline)
-              : const Icon(Icons.play_circle_outline),
-          color: context.reader.autoReading.isActive
-              ? context.colorScheme.primary
-              : null,
-          onPressed: () {
-            context.reader.autoReading.toggle();
-            if (context.reader.autoReading.isActive && isOpen) openOrClose();
-            update();
-          },
-        ),
+        active: context.reader.autoReading.isActive,
+        playing: context.reader.autoReading.isActive,
+        onPressed: () {
+          context.reader.autoReading.toggle();
+          if (context.reader.autoReading.isActive && isOpen) openOrClose();
+          update();
+        },
       ),
-      if (context.reader.widget.chapters != null)
-        Tooltip(
-          message: "Chapters".tl,
-          child: IconButton(
-            icon: const Icon(Icons.library_books),
-            onPressed: openChapterDrawer,
-          ),
-        ),
-      Tooltip(
-        message: "Save Image".tl,
-        child: IconButton(
-          icon: const Icon(Icons.download),
-          onPressed: saveCurrentImage,
-        ),
-      ),
-      Tooltip(
-        message: "Share".tl,
-        child: IconButton(icon: const Icon(Icons.share), onPressed: share),
-      ),
-    ];
+      onChapters: context.reader.widget.chapters != null
+          ? openChapterDrawer
+          : null,
+      onSave: saveCurrentImage,
+      onShare: share,
+    );
 
     return ReaderBottomBar(
       label: text,
@@ -573,24 +503,18 @@ class ReaderScaffoldState extends State<ReaderScaffold>
 
   Future<ReaderImageSelection?> _selectImageForExport() async {
     final reader = context.reader;
-    final images = reader.images;
     final chapter = reader.chapter;
     final chapterId = reader.eid;
     final title = reader.widget.name;
     final comicId = reader.cid;
     final sourceKey = reader.type.sourceKey;
-    final index = await selectImage();
-    if (!mounted ||
-        index == null ||
-        images == null ||
-        !identical(images, reader.images) ||
-        chapter != reader.chapter ||
-        index < 0 ||
-        index >= images.length) {
+    final selection = await _imagePicker.pick();
+    if (selection == null || !selection.isCurrent(_imagePickContext())) {
       return null;
     }
+    final index = selection.index;
     return ReaderImageSelection(
-      imageKey: images[index],
+      imageKey: selection.context.images[index],
       sourceKey: sourceKey,
       comicId: comicId,
       chapterId: chapterId,
@@ -647,23 +571,32 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     }
   }
 
-  void _openSideBar(Widget widget, {double width = 400}) {
-    context.reader.autoReading.pause('sidebar', true);
-    gestureDetectorState?.ignoreNextTap();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showSideBar(
-        context,
-        widget,
-        width: width,
-        dismissible: true,
-      ).whenComplete(() {
-        if (!mounted) return;
-        context.reader.autoReading.pause('sidebar', false);
-        gestureDetectorState?.clearIgnoreNextTap();
-      });
-    });
-  }
+  final _sidebarPauseReason = Object();
+  late final _sidebarBinding = ReaderSidebarBinding(
+    canOpen: () => mounted,
+    acquireInteraction: () {
+      final reader = context.reader;
+      final gesture = gestureDetectorState;
+      reader.autoReading.pause(_sidebarPauseReason, true);
+      gesture?.ignoreNextTap();
+      return () {
+        try {
+          if (reader.mounted) {
+            reader.autoReading.pause(_sidebarPauseReason, false);
+          }
+        } finally {
+          gesture?.clearIgnoreNextTap();
+        }
+      };
+    },
+    onError: (error, stack) {
+      Log.error('Reader', 'Failed to open sidebar: $error', stack);
+      if (mounted) context.showMessage(message: error.toString());
+    },
+  );
+
+  void _openSideBar(Widget widget, {double width = 400}) =>
+      _sidebarBinding.show(context, widget, width: width);
 
   bool shouldShowChapterComments() {
     // Check if chapters exist
@@ -691,8 +624,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     var epId = chapters.ids.elementAt(chapterIndex);
     var chapterTitle = chapters.titles.elementAt(chapterIndex);
 
-    showSideBar(
-      context,
+    _openSideBar(
       ChapterCommentsPage(
         comicId: context.reader.cid,
         epId: epId,
@@ -700,6 +632,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
         comicTitle: context.reader.widget.name,
         chapterTitle: chapterTitle,
       ),
+      width: 500,
     );
   }
 
@@ -769,39 +702,23 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     }
   }
 
-  /// If there is only one image on screen, return it.
-  ///
-  /// If there are multiple images on screen,
-  /// show an overlay to let the user select an image.
-  ///
-  /// The return value is the index of the selected image.
-  Future<int?> selectImage() async {
-    var reader = context.reader;
-    var imageViewController = reader.imageViewController;
+  ReaderImagePickContext? _imagePickContext() {
+    if (!mounted) return null;
+    final reader = context.reader;
+    final viewport = reader.imageViewController;
     final images = reader.images;
-    final chapter = reader.chapter;
-
-    if (imageViewController == null || images == null) return null;
-    final range = imageViewController.currentImageRange;
-    if (range != null && range.$2 - range.$1 == 1) {
-      return range.$1 >= 0 && range.$2 <= images.length ? range.$1 : null;
-    } else {
-      var location = await _showSelectImageOverlay();
-      if (!mounted ||
-          location == null ||
-          !identical(imageViewController, reader.imageViewController) ||
-          !identical(images, reader.images) ||
-          chapter != reader.chapter) {
-        return null;
-      }
-      var imageKey = imageViewController.getImageKeyByOffset(location);
-      if (imageKey == null) {
-        return null;
-      }
-      final index = images.indexOf(imageKey);
-      return index < 0 ? null : index;
-    }
+    if (viewport == null || images == null) return null;
+    return ReaderImagePickContext(
+      viewport: viewport,
+      images: images,
+      chapter: reader.chapter,
+    );
   }
+
+  late final _imagePicker = ReaderImagePicker(
+    current: _imagePickContext,
+    selectPosition: _showSelectImageOverlay,
+  );
 
   final _selectionOverlay = ReaderImageSelectionOverlay();
 
