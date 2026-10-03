@@ -329,6 +329,9 @@ LoadingDialogController showLoadingDialog(
   void Function()? onClosed,
   bool barrierDismissible = true,
   bool allowCancel = true,
+  // Button cancellation is always explicit; optionally suppress cancellation
+  // when the route is dismissed or its navigator is unmounted.
+  bool cancelOnDismiss = true,
   String? message,
   String cancelButtonText = "Cancel",
   bool withProgress = false,
@@ -350,7 +353,7 @@ LoadingDialogController showLoadingDialog(
     controller._serProgress = null;
     controller._setMessage = null;
     try {
-      if (!wasClosed) onCancel?.call();
+      if (!wasClosed && cancelOnDismiss) onCancel?.call();
     } finally {
       onClosed?.call();
     }
@@ -406,7 +409,11 @@ LoadingDialogController showLoadingDialog(
   navigator.push(loadingDialogRoute).then((_) => finish());
 
   controller._closeDialog = () {
-    navigator.removeRoute(loadingDialogRoute);
+    if (navigator.mounted && loadingDialogRoute.isActive) {
+      navigator.removeRoute(loadingDialogRoute);
+    } else {
+      finish();
+    }
   };
 
   return controller;

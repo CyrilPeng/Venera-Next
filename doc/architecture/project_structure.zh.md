@@ -485,3 +485,5 @@ ImportComic 通过可注入 ImportComicPresentation 展示提示、加载和 PDF
 源账号页面的密码/Cookie 登录与重新登录统一使用 await/try/finally 管理忙碌状态，并在结果返回时检查所属 State。Cookie 登录等待 saveData 后返回；源设置页返回时等待保存并仅更新仍挂载的视图。桌面外部编辑对话框使用已检查存活的页面 context；桌面 WebView 不可用时直接返回。原生 WebView Cookie/localStorage 采集与页面路由的完整联合生命周期仍待验收。
 
 comic_export_service.dart 拥有一次导出的独立临时目录，依次调用格式导出、压缩与保存端口，finally 等待清理；删除失败记录日志且不覆盖原操作错误。页面仅装配端口、更新进度/提示和关闭弹窗。批量输出保留 comics_export.zip 名称，内部重名（忽略大小写）文件按序加后缀，压缩结果位于内容目录外。服务不直接依赖页面/State，已纳入业务入口门禁。
+
+SyncWindowBinding 持有上传等待弹窗，在等待完成/失败时关闭，卸载时于树解锁后关闭仍存活的路由。导入/下载退出保护通过先清空再调用的释放函数处理，下载释放失败也会尝试释放导入保护。根 Navigator 不存在时仍等待上传，不展示弹窗。加载弹窗的 cancelOnDismiss 默认 true；关闭窗口等待显式设为 false，只有按钮表示强制退出，路由卸载不会触发该操作。

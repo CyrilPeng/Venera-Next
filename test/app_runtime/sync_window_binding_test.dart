@@ -1,3 +1,4 @@
+import 'package:venera_next/features/sync/data_sync_controller.dart';
 import '../support/data_sync_fixture.dart';
 import 'dart:async';
 import 'dart:io';
@@ -29,6 +30,74 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
   });
+
+  for (final mode in ['success', 'failure', 'detach', 'no-root']) {
+    testWidgets('upload dialog cleanup and exit guards: $mode', (tester) async {
+      final pending = Completer<void>();
+      final sync = _WaitingSync(pending.future);
+      var importsReleased = 0;
+      var downloadsReleased = 0;
+      var exits = 0;
+      HistoryManager.cache = _PendingHistory(() async {});
+      Widget host(bool bound) => MaterialApp(
+        navigatorKey: mode == 'no-root' ? null : App.rootNavigatorKey,
+        builder: (_, child) => WindowFrame(
+          bound
+              ? SyncWindowBinding(
+                  controller: sync,
+                  prepareImports: () async =>
+                      () => importsReleased++,
+                  prepareDownloads: () async =>
+                      () => downloadsReleased++,
+                  child: child!,
+                )
+              : child!,
+          onExit: () => exits++,
+        ),
+        home: const Scaffold(),
+      );
+      await tester.pumpWidget(host(true));
+      tester
+          .widgetList<WindowButton>(find.byType(WindowButton))
+          .last
+          .onPressed();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(exits, 0);
+      expect(
+        find.byType(LinearProgressIndicator),
+        mode == 'no-root' ? findsNothing : findsOneWidget,
+      );
+      if (mode == 'detach') {
+        await tester.pumpWidget(host(false));
+        await tester.pump();
+        expect(find.byType(LinearProgressIndicator), findsNothing);
+        expect(exits, 0);
+        expect(importsReleased, 1);
+        expect(downloadsReleased, 1);
+      }
+      if (mode == 'failure') {
+        pending.completeError(StateError('upload wait failed'));
+      } else {
+        pending.complete();
+      }
+      await tester.pumpAndSettle();
+      if (mode == 'failure') {
+        expect(tester.takeException(), isA<StateError>());
+        expect(exits, 0);
+        expect(importsReleased, 1);
+        expect(downloadsReleased, 1);
+      } else {
+        expect(exits, 1);
+      }
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(importsReleased, 1);
+      expect(downloadsReleased, 1);
+      expect(tester.takeException(), isNull);
+    }, skip: !Platform.isWindows);
+  }
 
   for (final detach in [false, true]) {
     testWidgets(
@@ -335,4 +404,13 @@ class _PendingHistory extends HistoryManager {
   final Future<void> Function() wait;
   @override
   Future<void> waitForAsyncWrites() => wait();
+}
+
+class _WaitingSync extends Fake implements DataSyncController {
+  _WaitingSync(this.pending);
+  final Future<void> pending;
+  @override
+  bool get isUploading => true;
+  @override
+  Future<void> waitForUpload() => pending;
 }

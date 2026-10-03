@@ -29,6 +29,7 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
   WindowFrameController? _window;
   VoidCallback? _releaseDownloads;
   VoidCallback? _releaseImports;
+  LoadingDialogController? _uploadDialog;
 
   @override
   void didChangeDependencies() {
@@ -60,31 +61,55 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
       _releaseDownloads = release;
       await HistoryManager().waitForAsyncWrites();
       if (!mounted || !controller.isUploading) return;
-      showLoadingDialog(
-        App.rootContext,
-        cancelButtonText: 'Shut Down'.tl,
-        onCancel: _window!.forceExit,
-        barrierDismissible: false,
-        message: 'Uploading data...'.tl,
-      );
+      final rootContext = App.rootNavigatorKey.currentContext;
+      if (rootContext != null && rootContext.mounted) {
+        _uploadDialog = showLoadingDialog(
+          rootContext,
+          cancelButtonText: 'Shut Down'.tl,
+          onCancel: () {
+            if (mounted) _window?.forceExit();
+          },
+          // Removing a navigator must not be interpreted as forced shutdown.
+          cancelOnDismiss: false,
+          barrierDismissible: false,
+          message: 'Uploading data...'.tl,
+        );
+      }
       await controller.waitForUpload();
     } catch (_) {
-      _releaseDownloads?.call();
-      _releaseDownloads = null;
-      _releaseImports?.call();
-      _releaseImports = null;
+      _releasePreparedWork();
       rethrow;
+    } finally {
+      _uploadDialog?.close();
+      _uploadDialog = null;
+    }
+  }
+
+  void _releasePreparedWork() {
+    final downloads = _releaseDownloads;
+    final imports = _releaseImports;
+    _releaseDownloads = null;
+    _releaseImports = null;
+    try {
+      downloads?.call();
+    } finally {
+      imports?.call();
     }
   }
 
   @override
   void dispose() {
     _window?.removeExitTask(_waitThenClose);
-    _releaseDownloads?.call();
-    _releaseDownloads = null;
-    _releaseImports?.call();
-    _releaseImports = null;
-    super.dispose();
+    final dialog = _uploadDialog;
+    _uploadDialog = null;
+    // A surviving navigator may be reparented while this binding is disposed.
+    // Close outside the framework's locked tree-finalization phase.
+    if (dialog != null) Future.microtask(dialog.close);
+    try {
+      _releasePreparedWork();
+    } finally {
+      super.dispose();
+    }
   }
 
   @override
