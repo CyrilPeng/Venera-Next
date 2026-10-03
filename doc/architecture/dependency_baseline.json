@@ -296,7 +296,8 @@
     "features/comic_source/source_metadata_parser.dart",
     "features/comic_source/source_search_parser.dart",
     "features/comic_source/source_parser_context.dart",
-    "features/comic_source/source_parse_exception.dart"
+    "features/comic_source/source_parse_exception.dart",
+    "features/local_comics/import_export/comic_export_service.dart"
   ],
   "ui_files": [
     "app_shell/auth_page.dart",
