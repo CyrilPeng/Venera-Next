@@ -1111,3 +1111,12 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 修复普通章节已读样式不生效：读取历史的 1-based 字符串索引，而非整数。两项 Widget 回归验证正序/倒序下仅已读章节变色，点击仍返回原章节索引，重建后清空/替换历史正确更新样式；分组历史格式未改动。
 - 规则显式提升为 warning，与既有 CI --fatal-warnings 配合阻止回归，不影响其他 info 的处理。81 项针对性测试通过，覆盖章节、历史、图片收藏、本地仓储、导入、事务、缓存和归一化。use_build_context_synchronously 仍待继续，P8.2 保持部分完成。
 - 最终验证：全量 Flutter 1169 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。临时错误样例实际产生 warning 并使 dart analyze --fatal-warnings 非零退出，验证后删除。日志 output/collection-lint-{analyze,targeted,final-analyze,full,gate-probe}.log；analyze 为恢复规则后的诊断基线。工作区测试含用户原有修改，提交仅含本阶段。
+
+## P4/P6/P8：导入展示边界与异步 context 检查（2026-10-03）
+
+- 全库启用 use_build_context_synchronously 为 info，实际发现 85 处诊断；本阶段处理导入文件的 21 处，其余 64 处按文件登记在 async_context_audit.zh.md。当前总数为 87 个 info（原有 23 + 待修复 64），不是分析回归已清零；全部修复后再提升 warning，不屏蔽遗留项。
+- 提取可注入 ImportComicPresentation，统一提示/加载/PDF 任务展示；默认实现每次同步读取根 Navigator 当前 context 并检查 mounted。根页面不存在时省略 UI，导入服务继续按原有所有权完成；ImportComic 不再直接访问 BuildContext 或强制非空的 App.rootContext。文件选择、复制/注册与数据协议保留。
+- PDF 弹窗使用 DialogResourceScope，正常关闭或 Navigator 卸载均结束 showPdfImportDialog 的等待，返回当时结果；未完成任务仍归 PdfImportTasks，不随窗口卸载取消。加载弹窗继续复用已有关闭/取消清理，晚到进度不操作已卸载页面。
+- 4 项展示生命周期测试验证无根页面完成注册、加载卸载与新根页面重建、PDF 未显示/显示后卸载均不取消任务且最终释放选择资源。首轮测试清理中跨 fake-async 等待已完成 Future 导致挂起，调整清理后通过；导入目录 91 项针对性测试通过。
+- 此适配器仍是导入编排的展示依赖，不代表导入模块全部纯业务化；其他 context、存储部分提交和原生平台验收继续保留。
+- 最终验证：全量 Flutter 1173 项通过；静态分析零 error/warning、87 个 info（分解如上）；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、依赖锁及格式检查通过。日志 output/context-import-{presentation,targeted,final-analyze,full}.log。测试包含用户原有改动，提交仅含本阶段。

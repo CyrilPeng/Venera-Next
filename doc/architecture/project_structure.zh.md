@@ -477,3 +477,5 @@ JsUiApi 为每个动作/加载/输入弹窗持有 JsCallbackScope。DialogResour
 归一化测试直接导入 normalization.dart 和 models.dart；ComicSourceManager 不再提供 9 个 debugNormalize 转发函数或依赖归一化/模型模块。normalizeComicSourceSettings 必须接收有类型的 retainCallback，生产调用方传入源/快照作用域的 retain；不再提供隐式 finalizer 后备分支。JSAutoFreeFunction 已从 JS 引擎模块删除，回调统一由显式所有者释放。
 
 集合类型检查 collection_methods_unrelated_type 在全库启用，诊断提升为 warning，受 CI --fatal-warnings 约束。SQLite 仓储/缓存/导入读取使用列名，聚合查询为结果命名 total；不依赖 Row 的数字下标扩展。普通章节已读标记按 1-based 字符串索引读取历史，倒序显示不改变原索引。
+
+ImportComic 通过可注入 ImportComicPresentation 展示提示、加载和 PDF 任务，不直接使用 BuildContext。默认适配器每次同步取得根 Navigator 当前 context 并检查 mounted，根页面缺失时省略展示；任务仍由原服务持有。PDF 对话框绑定 DialogResourceScope，正常关闭或 Navigator 卸载均结束界面等待，均不取消应用级任务。
