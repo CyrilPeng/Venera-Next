@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:venera_next/components/appbar.dart';
@@ -59,50 +60,81 @@ class _ChapterCommentsPageState extends State<ChapterCommentsPage> {
   var controller = TextEditingController();
   bool sending = false;
 
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  bool _firstLoadRunning = false;
+  bool _loadingMore = false;
+  String? _moreError;
+  int _generation = 0;
+
   void firstLoad() async {
-    var res = await widget.source.chapterCommentsLoader!(
-      widget.comicId,
-      widget.epId,
-      1,
-      widget.replyComment?.id,
-    );
-    if (res.error) {
+    if (_firstLoadRunning) return;
+    _firstLoadRunning = true;
+    final generation = _generation;
+    try {
+      final res = await Future.sync(
+        () => widget.source.chapterCommentsLoader!(
+          widget.comicId,
+          widget.epId,
+          1,
+          widget.replyComment?.id,
+        ),
+      );
+      if (!mounted || generation != _generation) return;
       setState(() {
-        _error = res.errorMessage;
+        _error = res.error ? (res.errorMessage ?? 'Unknown error'.tl) : null;
+        if (!res.error) {
+          _comments = res.data.where((c) => !_shouldBlockComment(c)).toList();
+          maxPage = res.subData;
+        }
         _loading = false;
       });
-    } else if (mounted) {
-      var filteredComments = res.data
-          .where((c) => !_shouldBlockComment(c))
-          .toList();
+    } catch (error, stack) {
+      Log.error('Load comments', error, stack);
+      if (!mounted || generation != _generation) return;
       setState(() {
-        _comments = filteredComments;
+        _error = error.toString();
         _loading = false;
-        maxPage = res.subData;
       });
+    } finally {
+      if (generation == _generation) _firstLoadRunning = false;
     }
   }
 
   void loadMore() async {
-    var res = await widget.source.chapterCommentsLoader!(
-      widget.comicId,
-      widget.epId,
-      _page + 1,
-      widget.replyComment?.id,
-    );
-    if (res.error) {
-      context.showMessage(message: res.errorMessage ?? "Unknown Error");
-    } else {
-      var filteredComments = res.data
-          .where((c) => !_shouldBlockComment(c))
-          .toList();
+    if (_loadingMore) return;
+    _loadingMore = true;
+    final generation = _generation;
+    try {
+      final res = await Future.sync(
+        () => widget.source.chapterCommentsLoader!(
+          widget.comicId,
+          widget.epId,
+          _page + 1,
+          widget.replyComment?.id,
+        ),
+      );
+      if (!mounted || generation != _generation) return;
       setState(() {
-        _comments!.addAll(filteredComments);
-        _page++;
-        if (maxPage == null && res.data.isEmpty) {
-          maxPage = _page;
+        _moreError = res.error
+            ? (res.errorMessage ?? 'Unknown error'.tl)
+            : null;
+        if (!res.error) {
+          _comments!.addAll(res.data.where((c) => !_shouldBlockComment(c)));
+          _page++;
+          if (maxPage == null && res.data.isEmpty) maxPage = _page;
         }
       });
+    } catch (error, stack) {
+      Log.error('Load more comments', error, stack);
+      if (!mounted || generation != _generation) return;
+      setState(() => _moreError = error.toString());
+    } finally {
+      if (generation == _generation) _loadingMore = false;
     }
   }
 
@@ -193,6 +225,15 @@ class _ChapterCommentsPageState extends State<ChapterCommentsPage> {
 
                     if (index == _comments!.length) {
                       if (_page < (maxPage ?? _page + 1)) {
+                        if (_moreError != null) {
+                          return TextButton(
+                            onPressed: () {
+                              setState(() => _moreError = null);
+                              loadMore();
+                            },
+                            child: Text(_moreError!),
+                          );
+                        }
                         loadMore();
                         return const ListLoadingIndicator();
                       } else {
@@ -262,32 +303,47 @@ class _ChapterCommentsPageState extends State<ChapterCommentsPage> {
             else
               IconButton(
                 onPressed: () async {
-                  if (controller.text.isEmpty) {
+                  if (sending || controller.text.isEmpty) {
                     return;
                   }
                   setState(() {
                     sending = true;
                   });
-                  var b = await widget.source.sendChapterCommentFunc!(
-                    widget.comicId,
-                    widget.epId,
-                    controller.text,
-                    widget.replyComment?.id,
-                  );
-                  if (!b.error) {
-                    controller.text = "";
-                    setState(() {
-                      sending = false;
-                      _loading = true;
-                      _comments?.clear();
-                      _page = 1;
-                      maxPage = null;
-                    });
-                  } else {
-                    context.showMessage(message: b.errorMessage ?? "Error");
-                    setState(() {
-                      sending = false;
-                    });
+                  try {
+                    var b = await widget.source.sendChapterCommentFunc!(
+                      widget.comicId,
+                      widget.epId,
+                      controller.text,
+                      widget.replyComment?.id,
+                    );
+                    if (!mounted || !context.mounted) return;
+                    if (!b.error) {
+                      controller.text = "";
+                      setState(() {
+                        sending = false;
+                        _generation++;
+                        _firstLoadRunning = false;
+                        _loadingMore = false;
+                        _moreError = null;
+                        _error = null;
+                        _loading = true;
+                        _comments?.clear();
+                        _page = 1;
+                        maxPage = null;
+                      });
+                    } else {
+                      context.showMessage(message: b.errorMessage ?? "Error");
+                      setState(() {
+                        sending = false;
+                      });
+                    }
+                  } catch (error, stack) {
+                    Log.error('Send comment', error, stack);
+                    if (mounted && context.mounted) {
+                      context.showMessage(message: error.toString());
+                    }
+                  } finally {
+                    if (mounted) setState(() => sending = false);
                   }
                 },
                 icon: Icon(
@@ -463,21 +519,26 @@ class _ChapterCommentTileState extends State<_ChapterCommentTile> {
           setState(() {
             isLiking = true;
           });
-          var res = await widget.source.likeCommentFunc!(
-            widget.comicId,
-            widget.epId,
-            widget.comment.id!,
-            !isLiked,
-          );
-          if (res.success) {
-            isLiked = !isLiked;
-            likes += isLiked ? 1 : -1;
-          } else {
-            context.showMessage(message: res.errorMessage ?? "Error");
+          try {
+            var res = await widget.source.likeCommentFunc!(
+              widget.comicId,
+              widget.epId,
+              widget.comment.id!,
+              !isLiked,
+            );
+            if (!mounted) return;
+            if (res.success) {
+              isLiked = !isLiked;
+              likes += isLiked ? 1 : -1;
+            } else {
+              context.showMessage(message: res.errorMessage ?? "Error");
+            }
+          } catch (error, stack) {
+            Log.error('Like comment', error, stack);
+            if (mounted) context.showMessage(message: error.toString());
+          } finally {
+            if (mounted) setState(() => isLiking = false);
           }
-          setState(() {
-            isLiking = false;
-          });
         },
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -518,32 +579,41 @@ class _ChapterCommentTileState extends State<_ChapterCommentTile> {
       }
     });
     var isCancel = (isUp && voteStatus == 1) || (!isUp && voteStatus == -1);
-    var res = await widget.source.voteCommentFunc!(
-      widget.comicId,
-      widget.epId,
-      widget.comment.id!,
-      isUp,
-      isCancel,
-    );
-    if (res.success) {
-      if (isCancel) {
-        voteStatus = 0;
-      } else {
-        if (isUp) {
-          voteStatus = 1;
+    try {
+      var res = await widget.source.voteCommentFunc!(
+        widget.comicId,
+        widget.epId,
+        widget.comment.id!,
+        isUp,
+        isCancel,
+      );
+      if (!mounted) return;
+      if (res.success) {
+        if (isCancel) {
+          voteStatus = 0;
         } else {
-          voteStatus = -1;
+          if (isUp) {
+            voteStatus = 1;
+          } else {
+            voteStatus = -1;
+          }
         }
+        widget.comment.voteStatus = voteStatus;
+        widget.comment.score = res.data ?? widget.comment.score;
+      } else {
+        context.showMessage(message: res.errorMessage ?? "Error");
       }
-      widget.comment.voteStatus = voteStatus;
-      widget.comment.score = res.data ?? widget.comment.score;
-    } else {
-      context.showMessage(message: res.errorMessage ?? "Error");
+    } catch (error, stack) {
+      Log.error('Vote comment', error, stack);
+      if (mounted) context.showMessage(message: error.toString());
+    } finally {
+      if (mounted) {
+        setState(() {
+          isVotingUp = false;
+          isVotingDown = false;
+        });
+      }
     }
-    setState(() {
-      isVotingUp = false;
-      isVotingDown = false;
-    });
   }
 
   Widget buildVote() {
@@ -636,62 +706,85 @@ class _EmbeddedChapterCommentsPageState
   int _page = 1;
   int? maxPage;
   var textController = TextEditingController();
+  final scrollController = ScrollController();
   bool sending = false;
 
   @override
   void dispose() {
     textController.dispose();
+    scrollController.dispose();
     super.dispose();
   }
 
+  bool _firstLoadRunning = false;
+  bool _loadingMore = false;
+  String? _moreError;
+  int _generation = 0;
+
   void firstLoad() async {
-    var res = await widget.source.chapterCommentsLoader!(
-      widget.comicId,
-      widget.epId,
-      1,
-      null,
-    );
-    if (res.error) {
-      if (mounted) {
-        setState(() {
-          _error = res.errorMessage;
-          _loading = false;
-        });
-      }
-    } else if (mounted) {
-      var filteredComments = res.data
-          .where((c) => !_shouldBlockComment(c))
-          .toList();
+    if (_firstLoadRunning) return;
+    _firstLoadRunning = true;
+    final generation = _generation;
+    try {
+      final res = await Future.sync(
+        () => widget.source.chapterCommentsLoader!(
+          widget.comicId,
+          widget.epId,
+          1,
+          null,
+        ),
+      );
+      if (!mounted || generation != _generation) return;
       setState(() {
-        _comments = filteredComments;
+        _error = res.error ? (res.errorMessage ?? 'Unknown error'.tl) : null;
+        if (!res.error) {
+          _comments = res.data.where((c) => !_shouldBlockComment(c)).toList();
+          maxPage = res.subData;
+        }
         _loading = false;
-        maxPage = res.subData;
       });
+    } catch (error, stack) {
+      Log.error('Load comments', error, stack);
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _error = error.toString();
+        _loading = false;
+      });
+    } finally {
+      if (generation == _generation) _firstLoadRunning = false;
     }
   }
 
   void loadMore() async {
-    var res = await widget.source.chapterCommentsLoader!(
-      widget.comicId,
-      widget.epId,
-      _page + 1,
-      null,
-    );
-    if (res.error) {
-      if (mounted) {
-        context.showMessage(message: res.errorMessage ?? "Unknown Error");
-      }
-    } else if (mounted) {
-      var filteredComments = res.data
-          .where((c) => !_shouldBlockComment(c))
-          .toList();
+    if (_loadingMore) return;
+    _loadingMore = true;
+    final generation = _generation;
+    try {
+      final res = await Future.sync(
+        () => widget.source.chapterCommentsLoader!(
+          widget.comicId,
+          widget.epId,
+          _page + 1,
+          null,
+        ),
+      );
+      if (!mounted || generation != _generation) return;
       setState(() {
-        _comments!.addAll(filteredComments);
-        _page++;
-        if (maxPage == null && res.data.isEmpty) {
-          maxPage = _page;
+        _moreError = res.error
+            ? (res.errorMessage ?? 'Unknown error'.tl)
+            : null;
+        if (!res.error) {
+          _comments!.addAll(res.data.where((c) => !_shouldBlockComment(c)));
+          _page++;
+          if (maxPage == null && res.data.isEmpty) maxPage = _page;
         }
       });
+    } catch (error, stack) {
+      Log.error('Load more comments', error, stack);
+      if (!mounted || generation != _generation) return;
+      setState(() => _moreError = error.toString());
+    } finally {
+      if (generation == _generation) _loadingMore = false;
     }
   }
 
@@ -778,7 +871,6 @@ class _EmbeddedChapterCommentsPageState
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
     final crossAxisCount = isLandscape ? 2 : 1;
-    final scrollController = ScrollController();
 
     return Scrollbar(
       controller: scrollController,
@@ -794,6 +886,15 @@ class _EmbeddedChapterCommentsPageState
         itemBuilder: (context, index) {
           if (index == _comments!.length) {
             if (_page < (maxPage ?? _page + 1)) {
+              if (_moreError != null) {
+                return TextButton(
+                  onPressed: () {
+                    setState(() => _moreError = null);
+                    loadMore();
+                  },
+                  child: Text(_moreError!),
+                );
+              }
               loadMore();
               return const ListLoadingIndicator();
             } else {
@@ -856,34 +957,49 @@ class _EmbeddedChapterCommentsPageState
             else
               IconButton(
                 onPressed: () async {
-                  if (textController.text.isEmpty) {
+                  if (sending || textController.text.isEmpty) {
                     return;
                   }
                   setState(() {
                     sending = true;
                   });
-                  var b = await widget.source.sendChapterCommentFunc!(
-                    widget.comicId,
-                    widget.epId,
-                    textController.text,
-                    null,
-                  );
-                  if (!b.error) {
-                    textController.text = "";
-                    setState(() {
-                      sending = false;
-                      _loading = true;
-                      _comments?.clear();
-                      _page = 1;
-                      maxPage = null;
-                    });
-                  } else {
-                    if (mounted) {
-                      context.showMessage(message: b.errorMessage ?? "Error");
+                  try {
+                    var b = await widget.source.sendChapterCommentFunc!(
+                      widget.comicId,
+                      widget.epId,
+                      textController.text,
+                      null,
+                    );
+                    if (!mounted || !context.mounted) return;
+                    if (!b.error) {
+                      textController.text = "";
+                      setState(() {
+                        sending = false;
+                        _generation++;
+                        _firstLoadRunning = false;
+                        _loadingMore = false;
+                        _moreError = null;
+                        _error = null;
+                        _loading = true;
+                        _comments?.clear();
+                        _page = 1;
+                        maxPage = null;
+                      });
+                    } else {
+                      if (mounted) {
+                        context.showMessage(message: b.errorMessage ?? "Error");
+                      }
+                      setState(() {
+                        sending = false;
+                      });
                     }
-                    setState(() {
-                      sending = false;
-                    });
+                  } catch (error, stack) {
+                    Log.error('Send comment', error, stack);
+                    if (mounted && context.mounted) {
+                      context.showMessage(message: error.toString());
+                    }
+                  } finally {
+                    if (mounted) setState(() => sending = false);
                   }
                 },
                 icon: Icon(

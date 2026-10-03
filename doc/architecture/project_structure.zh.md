@@ -479,3 +479,5 @@ JsUiApi 为每个动作/加载/输入弹窗持有 JsCallbackScope。DialogResour
 集合类型检查 collection_methods_unrelated_type 在全库启用，诊断提升为 warning，受 CI --fatal-warnings 约束。SQLite 仓储/缓存/导入读取使用列名，聚合查询为结果命名 total；不依赖 Row 的数字下标扩展。普通章节已读标记按 1-based 字符串索引读取历史，倒序显示不改变原索引。
 
 ImportComic 通过可注入 ImportComicPresentation 展示提示、加载和 PDF 任务，不直接使用 BuildContext。默认适配器每次同步取得根 Navigator 当前 context 并检查 mounted，根页面缺失时省略展示；任务仍由原服务持有。PDF 对话框绑定 DialogResourceScope，正常关闭或 Navigator 卸载均结束界面等待，均不取消应用级任务。
+
+三类评论视图（漫画、章节、嵌入章节）按页面拥有编辑器/滚动控制器和异步请求状态。首屏/分页请求去重，发送后递增 generation，旧分页结果不再混入刷新列表；分页失败显示可重试项。所有发送/点赞/投票完成与异常分支检查对应页面存活，finally 恢复忙碌状态。页面销毁不强制终止源请求；三类视图的相同流程仍需后续共性收束。

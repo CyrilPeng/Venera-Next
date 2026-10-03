@@ -1,6 +1,6 @@
 # 异步页面上下文检查清单
 
-2026-10-03，基于本机工作区（含用户未提交改动）的 flutter analyze。启用规则后初始 85 处，导入流程修复 21 处，剩余 64 处。当前规则为 info，全部消除后再提升为 warning；这些条目是未完成工作，不是豁免。原有其他 23 个 info 保持不变。
+2026-10-03，基于本机工作区（含用户未提交改动）的 flutter analyze。启用规则后初始 85 处，导入流程修复 21 处、评论视图修复 8 处，剩余 56 处。当前规则为 info，全部消除后再提升为 warning；这些条目是未完成工作，不是豁免。原有其他 23 个 info 保持不变。
 
 | 文件 | 剩余诊断 |
 |---|---:|
@@ -9,7 +9,6 @@
 | `lib/components/rich_comment_content.dart` | 1 |
 | `lib/features/comic_details/actions.dart` | 7 |
 | `lib/features/comic_details/comic_page.dart` | 1 |
-| `lib/features/comic_details/comments_page.dart` | 4 |
 | `lib/features/comic_details/favorite.dart` | 7 |
 | `lib/features/comic_source/comic_source_page.dart` | 8 |
 | `lib/features/favorites/favorite_actions.dart` | 3 |
@@ -17,9 +16,8 @@
 | `lib/features/history/history_page.dart` | 2 |
 | `lib/features/image_favorites/image_favorites_summary.dart` | 1 |
 | `lib/features/local_comics/local_comics_page.dart` | 3 |
-| `lib/features/reader/chapter_comments.dart` | 4 |
 | `lib/features/reader/gesture.dart` | 2 |
 | `lib/features/settings/app.dart` | 9 |
 | `lib/features/settings/local_favorites.dart` | 1 |
 
-处理原则：页面任务使用对应 context.mounted/State.mounted，并检查失败、finally 和资源释放；应用级任务在展示时取得当前可用根页面，不因原页面卸载误报任务失败。禁止靠全局屏蔽、dynamic 或移动到未检查辅助函数消除诊断。手势文件含用户修改，修复时选择性暂存。每阶段重新生成诊断并补行为回归。日志 output/context-lint-baseline.log 与 output/context-import-final-analyze.log。
+处理原则：页面任务使用对应 context.mounted/State.mounted，并检查失败、finally 和资源释放；应用级任务在展示时取得当前可用根页面，不因原页面卸载误报任务失败。禁止靠全局屏蔽、dynamic 或移动到未检查辅助函数消除诊断。手势文件含用户修改，修复时选择性暂存。每阶段重新生成诊断并补行为回归。日志 output/context-lint-baseline.log 与 output/comments-lifecycle-final-analyze.log。
