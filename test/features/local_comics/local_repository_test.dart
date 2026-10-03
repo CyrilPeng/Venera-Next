@@ -154,7 +154,9 @@ void main() {
       );
       repository.add(comic('1', const []));
       expect(
-        db.select('SELECT history_time FROM natural_sort_migration;').single[0],
+        db
+            .select('SELECT history_time FROM natural_sort_migration;')
+            .single['history_time'],
         99,
       );
       db.execute(
@@ -166,7 +168,9 @@ void main() {
       );
       expect(repository.count, 1);
       expect(
-        db.select('SELECT history_time FROM natural_sort_migration;').single[0],
+        db
+            .select('SELECT history_time FROM natural_sort_migration;')
+            .single['history_time'],
         99,
       );
       db.execute('DROP TRIGGER reject_delete;');

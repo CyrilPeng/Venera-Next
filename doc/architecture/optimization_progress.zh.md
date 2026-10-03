@@ -1103,3 +1103,11 @@ P1 首批清理已完成：Channel 只有专属测试调用，组件聚合导出
 - 原有归一化测试继续验证数据转换；回调用例改为真实 JsCallbackScope 配合受控 JSInvokable，核对借用文档释放后仍可调用、作用域释放仅销毁一次、重复释放幂等和关闭后调用拒绝。非法设置不调用保留端口。漫画源模块 134 项测试通过，包含已有真实 QuickJS 设置/替换/失败释放用例。
 - 这是有引用证据的一组冗余删除，不替代 P1 的全库候选/依赖/产物盘点；其他 reset/debug 入口和 P8 lint 收束仍待继续。
 - 最终验证：全量 Flutter 1167 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁和格式检查通过。日志 output/normalization-cleanup-{targeted,full,analyze}.log。工作区测试含用户改动，提交仅含本阶段。
+
+## P8：恢复集合类型门禁与章节已读标记（2026-10-03）
+
+- 启用 collection_methods_unrelated_type 后实际检出 25 处诊断：23 处 SQLite Row 数字下标、1 处归一化测试对字符串键 Map 查询整数、1 处普通章节使用整数查询 Set<String>。没有通过 dynamic 强转或 ignore 绕过规则。
+- SQLite 行本来支持数字索引，这些诊断不等于数据读取失败；仓储/缓存/导入与相应测试现在改用明确列名，聚合结果增加 total 别名，减少列顺序耦合。归一化测试直接断言完整键列表，继续核验非法键被过滤。
+- 修复普通章节已读样式不生效：读取历史的 1-based 字符串索引，而非整数。两项 Widget 回归验证正序/倒序下仅已读章节变色，点击仍返回原章节索引，重建后清空/替换历史正确更新样式；分组历史格式未改动。
+- 规则显式提升为 warning，与既有 CI --fatal-warnings 配合阻止回归，不影响其他 info 的处理。81 项针对性测试通过，覆盖章节、历史、图片收藏、本地仓储、导入、事务、缓存和归一化。use_build_context_synchronously 仍待继续，P8.2 保持部分完成。
+- 最终验证：全量 Flutter 1169 项通过；静态分析零 error/warning、23 个 info；结构与 66 项业务入口、Python 56 项（3 项平台工具跳过）、Git 依赖锁及格式检查通过。临时错误样例实际产生 warning 并使 dart analyze --fatal-warnings 非零退出，验证后删除。日志 output/collection-lint-{analyze,targeted,final-analyze,full,gate-probe}.log；analyze 为恢复规则后的诊断基线。工作区测试含用户原有修改，提交仅含本阶段。

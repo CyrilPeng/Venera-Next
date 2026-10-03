@@ -93,7 +93,7 @@ class LocalRepository {
     if (res.isEmpty) {
       return '1';
     }
-    return (int.parse((res.first[0])) + 1).toString();
+    return (int.parse(res.first['id'] as String) + 1).toString();
   }
 
   void add(LocalComic comic, [String? id]) => runSqliteTransaction(db, () {
@@ -212,9 +212,9 @@ class LocalRepository {
 
   int get count {
     final res = db.select('''
-      SELECT COUNT(*) FROM comics;
+      SELECT COUNT(*) AS total FROM comics;
     ''');
-    return res.first[0] as int;
+    return res.first['total'] as int;
   }
 
   LocalComic? findByName(String name) {

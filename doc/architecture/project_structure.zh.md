@@ -475,3 +475,5 @@ reader_image_processing.dart 独立承接自定义 processImage 协议，ReaderI
 JsUiApi 为每个动作/加载/输入弹窗持有 JsCallbackScope。DialogResourceScope 将释放绑定到 Widget 卸载，路由正常完成也执行幂等清理；加载 id 注册项按作用域身份移除，防止旧弹窗清理误删复用 id。动作/取消的忽略结果释放 JSRef，异步完成后仅操作仍挂载的界面；输入校验保留同步协议。动作/输入请求在 Navigator 卸载时也结束，不遗留等待路由返回的桥接 Promise。
 
 归一化测试直接导入 normalization.dart 和 models.dart；ComicSourceManager 不再提供 9 个 debugNormalize 转发函数或依赖归一化/模型模块。normalizeComicSourceSettings 必须接收有类型的 retainCallback，生产调用方传入源/快照作用域的 retain；不再提供隐式 finalizer 后备分支。JSAutoFreeFunction 已从 JS 引擎模块删除，回调统一由显式所有者释放。
+
+集合类型检查 collection_methods_unrelated_type 在全库启用，诊断提升为 warning，受 CI --fatal-warnings 约束。SQLite 仓储/缓存/导入读取使用列名，聚合查询为结果命名 total；不依赖 Row 的数字下标扩展。普通章节已读标记按 1-based 字符串索引读取历史，倒序显示不改变原索引。

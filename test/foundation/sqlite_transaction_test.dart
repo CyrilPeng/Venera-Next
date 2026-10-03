@@ -18,7 +18,7 @@ void main() {
   tearDown(() => db.dispose());
   List<String> values() => db
       .select('SELECT value FROM records ORDER BY rowid;')
-      .map((row) => row[0] as String)
+      .map((row) => row['value'] as String)
       .toList();
 
   test('inner success does not commit the enclosing transaction', () {
@@ -132,10 +132,10 @@ void main() {
         );
       }, immediate: true);
       second.execute("INSERT INTO records VALUES ('released');");
-      expect(first.select('SELECT value FROM records;').map((row) => row[0]), [
-        'deferred',
-        'released',
-      ]);
+      expect(
+        first.select('SELECT value FROM records;').map((row) => row['value']),
+        ['deferred', 'released'],
+      );
     } finally {
       first.dispose();
       second.dispose();

@@ -83,7 +83,10 @@ void main() {
       expect(commit, throwsStateError);
       expect(favorites.folderNames(), isEmpty);
       expect(history.count(), 0);
-      expect(historyDb.select('PRAGMA journal_mode;').first[0], 'wal');
+      expect(
+        historyDb.select('PRAGMA journal_mode;').first['journal_mode'],
+        'wal',
+      );
       historyDb.execute('PRAGMA journal_mode = DELETE;');
       commit();
       expect(history.count(), 1);

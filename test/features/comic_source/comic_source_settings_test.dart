@@ -36,7 +36,7 @@ void main() {
     callback.free(); // Release the caller-owned document reference.
 
     expect(settings!.keys, ['reader']);
-    expect(settings['reader']!.containsKey(1), isFalse);
+    expect(settings['reader']!.keys, ['label', 'onTap']);
     expect(settings['reader']!['label'], 'Reader');
     final onTap =
         settings['reader']!['onTap'] as dynamic Function(List<dynamic>);

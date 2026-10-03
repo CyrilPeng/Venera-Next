@@ -62,23 +62,23 @@ class HistoryRepository {
   /// 获取历史记录的数量
   int count() {
     var res = db.select("""
-      select count(*) from $_table;
+      select count(*) AS total from $_table;
     """);
-    return res.first[0] as int;
+    return res.first['total'] as int;
   }
 
   int getTotalReadDurationMs() {
     var res = db.select("""
-      select coalesce(sum(read_duration_ms), 0) from $_table;
+      select coalesce(sum(read_duration_ms), 0) AS total from $_table;
     """);
-    return (res.first[0] as num).round();
+    return (res.first['total'] as num).round();
   }
 
   int countWithReadDuration() {
     var res = db.select("""
-      select count(*) from $_table where read_duration_ms > 0;
+      select count(*) AS total from $_table where read_duration_ms > 0;
     """);
-    return (res.first[0] as num).round();
+    return (res.first['total'] as num).round();
   }
 
   List<History> getAllByReadDuration() {

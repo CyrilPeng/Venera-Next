@@ -28,7 +28,9 @@ void commitLegacyPicaData(
     db.execute('PRAGMA busy_timeout = 5000;');
     db.execute('ATTACH DATABASE ? AS imported_history;', [historyPath]);
     for (final schema in ['main', 'imported_history']) {
-      final mode = db.select('PRAGMA $schema.journal_mode;').first[0];
+      final mode = db
+          .select('PRAGMA $schema.journal_mode;')
+          .first['journal_mode'];
       if (!['delete', 'truncate', 'persist'].contains(mode)) {
         throw StateError(
           'Pica import requires rollback journals: $schema=$mode',
