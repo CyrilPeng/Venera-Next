@@ -2,7 +2,7 @@
 
 [English](dependency_audit.en.md) · [治理规则](dependencies.zh.md) · [机器可读清单](git_dependencies.json)
 
-本轮目标是控制依赖来源、减少不必要的 fork，并明确其余依赖的替换条件。基线为接管前的 `pubspec.lock`；当前完整 commit、仓库 URL 和包路径以机器可读清单为准。审计使用固定 commit 的本地源码和 Git 历史、GitHub 仓库信息，以及当天 pub.dev 最新稳定版的发布归档。下面是迁移决策和已确认的不兼容项，不是完整安全审计或逐行等价证明。
+本轮目标是控制依赖来源、减少不必要的 fork，并明确其余依赖的替换条件。基线为接管前的 `pubspec.lock`；当前 Git 依赖的完整 commit、仓库 URL 和包路径以机器可读清单为准。本地 path 包见后续更新和[治理规则](dependencies.zh.md)。审计使用固定 commit 的本地源码和 Git 历史、GitHub 仓库信息，以及当天 pub.dev 最新稳定版的发布归档。下面保留 2026-09-28 的迁移决策和已确认的不兼容项，不是完整安全审计或逐行等价证明。
 
 ## 已完成的变更
 
@@ -42,3 +42,13 @@ VeneraNext 维护者负责自有 fork 的补丁选择、上游变更审查和发
 - Debian：Linux 容器内真实 `dpkg-deb` 构建与解包 amd64/arm64 测试通过，核对 Depends、ELF 架构、菜单入口和安装路径；使用最小 bundle fixture，不宣称完成 Linux 应用运行验证。
 - Python 本机测试共 36 项，35 项通过、1 项因需要 dpkg-deb 在 Windows 跳过（已在容器单独通过）。依赖检查器另有浮动分支、来源变化、子包遗漏和新增依赖回归测试。
 - macOS、iOS 与 Linux 完整应用构建尚未在本机验证，应由对应平台发布构建完成。
+
+## 后续更新：PhotoView 本地补丁（2026-10-05）
+
+上述 `photo_view` 判断保留为历史记录；当前来源已从 Git 改为 `path: packages/photo_view`，仍为 **0.14.0**。本地包复制自 [CyrilPeng/photo_view](https://github.com/CyrilPeng/photo_view) 的原锁定提交 `a1255d1b5945aad4b7323303ec2ecdf0c90ffc4c`，上游为 [renancaraujo/photo_view](https://github.com/renancaraujo/photo_view)。[MIT 许可证](../../packages/photo_view/LICENSE)、版权、包 manifest 和原 fork 接口保留；没有切换到此前审计的 pub.dev 0.15.0。
+
+新增补丁仅修复尺寸监听器未释放 `ImageInfo` 克隆的缺陷，并将三处已弃用调用等价更新为 `TickerMode.valuesOf(context).enabled`、`translateByDouble(dx, dy, 0.0, 1.0)` 和 `scaleByDouble(s, s, s, 1.0)`。后者保持锁定 vector_math 2.2.0 的原标量分支语义。16 个 Dart 源文件中仅三个在格式化归一后有差异；[LOCAL_PATCHES.md](../../packages/photo_view/LOCAL_PATCHES.md) 保存源文件 canonical LF Git blob SHA-256、差异说明、维护责任及回滚要求。其他 **156** 个依赖完整锁定记录和 SDK 锁定保持不变。
+
+验证记录：真实 PhotoView 的缓存与异步图片所有权两项回归在原源码上失败、修复后通过；覆盖帧替换、卸载、尺寸及缩放。包和回归测试的严格分析、格式检查、来源比较以及 `dart tool/check_git_dependencies.dart` 均通过。新的真实阅读器退出集成回归还覆盖可见图片的原始文件读取、native 帧等待、强制卸载和退出失败后的 PhotoView/连续模式恢复。此更新的局部验证不替代历史记录之外的平台完整构建。
+
+`photo_view` 已移出仅用于当前 Git 依赖的机器清单，来源记录迁至本地补丁文档。`.github/workflows/pr_build.yml` 已覆盖 `packages/`，无需更改构建触发规则。恢复 Git 来源需同步恢复依赖声明、锁文件及清单，并验证图片生命周期。

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:venera_next/components/side_bar.dart';
+import 'package:venera_next/foundation/navigation_admission.dart';
 
 /// Owns the shell's pending/open sidebar and its temporary interaction pause.
 class ReaderSidebarBinding {
@@ -18,14 +19,19 @@ class ReaderSidebarBinding {
   bool _disposed = false;
 
   void show(BuildContext context, Widget child, {double width = 400}) {
-    if (_disposed || _active != null || !context.mounted || !canOpen()) return;
+    if (_disposed ||
+        _active != null ||
+        !NavigationAdmission.allows(context) ||
+        !canOpen()) {
+      return;
+    }
     final operation = _active = _SidebarOperation();
     try {
       operation.release = acquireInteraction();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!identical(_active, operation)) return;
         try {
-          if (_disposed || !context.mounted || !canOpen()) {
+          if (_disposed || !NavigationAdmission.allows(context) || !canOpen()) {
             _finish(operation);
             return;
           }

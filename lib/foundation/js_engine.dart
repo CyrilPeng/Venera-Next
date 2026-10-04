@@ -2,10 +2,12 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:dio/io.dart';
 import 'package:enough_convert/enough_convert.dart';
-import 'package:flutter/foundation.dart' show protected, visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show FlutterError, FlutterErrorDetails, protected, visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:html/parser.dart' as html;
 import 'package:html/dom.dart' as dom;
@@ -70,12 +72,129 @@ abstract interface class JsUiMessageHandler {
   Object? handleUIMessage(Map<String, dynamic> message);
 }
 
+/// Expected termination when the owner releases a JavaScript operation.
+class JsDisposedError extends StateError {
+  JsDisposedError(super.message);
+}
+
+class JsResourceReleaseFailure implements Exception {
+  JsResourceReleaseFailure(
+    Iterable<({String resource, Object error, StackTrace stack})> failures,
+  ) : failures = List.unmodifiable(failures);
+  final List<({String resource, Object error, StackTrace stack})> failures;
+
+  @override
+  String toString() =>
+      'JS resource release failed: ${failures.map((e) => '${e.resource}: ${e.error}').join('; ')}';
+}
+
+class JsEngineInitializationFailure implements Exception {
+  JsEngineInitializationFailure(this.cause, this.cleanupError);
+  final Object cause;
+  final Object cleanupError;
+
+  @override
+  String toString() =>
+      'JS initialization failed: $cause; cleanup: $cleanupError';
+}
+
+void _releaseJsResources(
+  Iterable<({String name, void Function() release})> resources,
+) {
+  final failures = <({String resource, Object error, StackTrace stack})>[];
+  for (final resource in resources) {
+    try {
+      resource.release();
+    } catch (error, stack) {
+      failures.add((resource: resource.name, error: error, stack: stack));
+    }
+  }
+  if (failures.isNotEmpty) throw JsResourceReleaseFailure(failures);
+}
+
+/// A bridge result owns each distinct Dart reference once. The bridge may
+/// produce several independently duplicated wrappers for the same JS function.
+void _releaseJsResultReferences(Object? value) {
+  final visited = Set<Object>.identity();
+  final references = <JSRef>[];
+  void visit(Object? current) {
+    if (current == null || !visited.add(current)) return;
+    if (current is JSRef) {
+      references.add(current);
+    } else if (current is Map) {
+      for (final entry in current.entries.toList()) {
+        visit(entry.key);
+        visit(entry.value);
+      }
+    } else if (current is List && current is! TypedData) {
+      for (final child in current.toList()) {
+        visit(child);
+      }
+    }
+  }
+
+  visit(value);
+  _releaseJsResources([
+    for (final reference in references)
+      (name: 'result reference', release: reference.free),
+  ]);
+}
+
 class JsEngine with _JSEngineApi, Init {
   factory JsEngine() => _cache ?? (_cache = JsEngine._create());
 
   static JsEngine? _cache;
 
-  JsEngine._create();
+  JsEngine._create() : this.create();
+
+  /// Owns clients returned by the factory and releases them with this engine.
+  JsEngine.create({
+    Dio Function()? createHttpClient,
+    Future<Uint8List> Function()? loadInitScript,
+  }) : _createHttpClient = createHttpClient ?? _newHttpClient,
+       _loadInitScript = loadInitScript ?? _readInitScript;
+
+  final Dio Function() _createHttpClient;
+  final Future<Uint8List> Function() _loadInitScript;
+  bool _disposed = false;
+  final _temporaryClients = <Dio>{};
+  final _pendingResults = <Completer<dynamic>>{};
+  final _ownedReferences = Set<_OwnedJsReference>.identity();
+  final _ownedByRawReference = Expando<_OwnedJsReference>();
+
+  @visibleForTesting
+  int get debugOwnedReferenceCount => _ownedReferences.length;
+
+  /// Exercises bridge-result ownership without requiring native evaluation.
+  @visibleForTesting
+  dynamic debugOwnResult(dynamic result) {
+    _checkActive();
+    return _trackOwnedResult(result, _pendingResults, _engine);
+  }
+
+  static Dio _newHttpClient() => AppDio(
+    BaseOptions(
+      responseType: ResponseType.plain,
+      validateStatus: (status) => true,
+    ),
+  );
+
+  static Future<Uint8List> _readInitScript() async {
+    final cached = _jsInitCache;
+    if (cached != null) return cached;
+    final buffer = await rootBundle.load('assets/init.js');
+    return buffer.buffer.asUint8List();
+  }
+
+  void _checkActive() {
+    if (_disposed) throw StateError('JS engine is disposed');
+  }
+
+  @override
+  Future<void> init() {
+    if (_disposed) return Future.error(StateError('JS engine is disposed'));
+    return super.init();
+  }
 
   FlutterQjs? _engine;
   final _callbackScopes = <JsCallbackScope>{};
@@ -102,20 +221,20 @@ class JsEngine with _JSEngineApi, Init {
   JsUiMessageHandler get _uiMessageBridge =>
       _uiMessageHandler ?? (throw "JS UI message handler is not configured.");
 
-  static void reset() {
+  static Future<void> reset() {
     final oldEngine = _cache;
     _cache = null;
     oldEngine?.dispose();
-    JsEngine().init();
+    return JsEngine().init();
   }
 
   void resetDio() {
-    _dio = AppDio(
-      BaseOptions(
-        responseType: ResponseType.plain,
-        validateStatus: (status) => true,
-      ),
-    );
+    _checkActive();
+    final replacement = _createHttpClient();
+    final previous = _dio;
+    _dio = replacement;
+    // Let already accepted requests finish against the previous settings.
+    previous?.close();
   }
 
   static Uint8List? _jsInitCache;
@@ -134,35 +253,35 @@ class JsEngine with _JSEngineApi, Init {
       if (App.isInitialized) {
         await SingleInstanceCookieJar.createInstance();
       }
-      _dio ??= AppDio(
-        BaseOptions(
-          responseType: ResponseType.plain,
-          validateStatus: (status) => true,
-        ),
-      );
+      _checkActive();
+      _dio ??= _createHttpClient();
       _closed = false;
-      _engine = FlutterQjs();
+      _engine = FlutterQjs(
+        hostPromiseRejectionHandler: _handleUnhandledPromiseRejection,
+      );
       _engine!.dispatch();
       var setGlobalFunc = _engine!.evaluate(
         "(key, value) => { this[key] = value; }",
       );
-      (setGlobalFunc as JSInvokable)(["sendMessage", _messageReceiver]);
-      setGlobalFunc(["appVersion", App.version]);
-      setGlobalFunc.free();
-      Uint8List jsInit;
-      if (_jsInitCache != null) {
-        jsInit = _jsInitCache!;
-      } else {
-        var buffer = await rootBundle.load("assets/init.js");
-        jsInit = buffer.buffer.asUint8List();
+      try {
+        (setGlobalFunc as JSInvokable)(["sendMessage", _messageReceiver]);
+        setGlobalFunc(["appVersion", App.version]);
+      } finally {
+        (setGlobalFunc as JSInvokable).free();
       }
+      final jsInit = await _loadInitScript();
+      _checkActive();
       _engine!.evaluate(utf8.decode(jsInit), name: "<init>");
     } catch (e, s) {
+      try {
+        _releaseResources();
+      } catch (cleanupError) {
+        Error.throwWithStackTrace(
+          JsEngineInitializationFailure(e, cleanupError),
+          s,
+        );
+      }
       Log.error('JS Engine', 'JS Engine Init Error:\n$e\n$s');
-      _closed = true;
-      _engine?.close();
-      _engine?.port.close();
-      _engine = null;
       rethrow;
     }
   }
@@ -266,8 +385,10 @@ class JsEngine with _JSEngineApi, Init {
   Future<Map<String, dynamic>> _http(Map<String, dynamic> req) async {
     Response? response;
     String? error;
+    Dio? temporaryClient;
 
     try {
+      _checkActive();
       final scope = RequestScope.current;
       scope?.check();
       var headers = Map<String, dynamic>.from(req["headers"] ?? {});
@@ -283,7 +404,11 @@ class JsEngine with _JSEngineApi, Init {
             validateStatus: (status) => true,
           ),
         );
+        temporaryClient = dio;
+        _temporaryClients.add(dio);
         var proxy = await getProxy();
+        _checkActive();
+        scope?.check();
         dio.httpClientAdapter = IOHttpClientAdapter(
           createHttpClient: () {
             return HttpClient()
@@ -310,6 +435,11 @@ class JsEngine with _JSEngineApi, Init {
       );
     } catch (e) {
       error = e.toString();
+    } finally {
+      if (temporaryClient != null &&
+          _temporaryClients.remove(temporaryClient)) {
+        temporaryClient.close(force: true);
+      }
     }
 
     Map<String, String> headers = {};
@@ -332,19 +462,334 @@ class JsEngine with _JSEngineApi, Init {
   }
 
   dynamic runCode(String js, [String? name]) {
-    return _engine!.evaluate(js, name: name);
+    _checkActive();
+    return _trackResult(_engine!.evaluate(js, name: name), _pendingResults);
   }
 
-  Future<dynamic> runReadCode(String js, [String? name]) async {
+  /// Transfers every result reference to this runtime while preserving the
+  /// JSRef/JSInvokable API. Results of later callback calls keep this owner,
+  /// including references nested in returned maps, lists, or rejected values.
+  dynamic runOwnedCode(String js, [String? name]) {
+    _checkActive();
+    final nativeEngine = _engine;
+    if (nativeEngine == null || _closed) {
+      throw JsDisposedError('JavaScript runtime is not available');
+    }
+    final dynamic result;
+    try {
+      result = nativeEngine.evaluate(js, name: name);
+    } catch (error, stack) {
+      Error.throwWithStackTrace(
+        _ownResult(error, _pendingResults, nativeEngine) as Object,
+        stack,
+      );
+    }
+    return _trackOwnedResult(result, _pendingResults, nativeEngine);
+  }
+
+  bool _ownsRuntime(FlutterQjs? nativeEngine) =>
+      !_disposed &&
+      identical(_engine, nativeEngine) &&
+      (nativeEngine == null || !_closed);
+
+  dynamic _unwrapInvocationGraph(dynamic value, FlutterQjs? nativeEngine) {
+    final copies = Map<Object, dynamic>.identity();
+    dynamic copy(dynamic current) {
+      if (current == null) return null;
+      if (copies.containsKey(current)) return copies[current];
+      if (current is _OwnedJsReference) {
+        if (!identical(current.owner, this) ||
+            !identical(current.nativeEngine, nativeEngine)) {
+          throw StateError('JavaScript argument belongs to another runtime');
+        }
+        current.checkActive();
+        // Passing the public wrapper to flutter_qjs would create a new Dart
+        // callback bridge instead of passing the original JavaScript value.
+        return current._reference!;
+      }
+      if (current is TypedData || current is List<int>) return current;
+      if (current is Map) {
+        final Map<dynamic, dynamic> result = current is Map<String, dynamic>
+            ? <String, dynamic>{}
+            : <dynamic, dynamic>{};
+        copies[current] = result;
+        for (final entry in current.entries) {
+          result[copy(entry.key)] = copy(entry.value);
+        }
+        return result;
+      }
+      if (current is List) {
+        final result = <dynamic>[];
+        copies[current] = result;
+        for (final child in current) {
+          result.add(copy(child));
+        }
+        return result;
+      }
+      return current;
+    }
+
+    return copy(value);
+  }
+
+  dynamic _ownResult(
+    dynamic value,
+    Set<Completer<dynamic>> pending,
+    FlutterQjs? nativeEngine,
+  ) {
+    if (!_ownsRuntime(nativeEngine)) {
+      throw JsDisposedError('JavaScript result belongs to a closed runtime');
+    }
+    final copies = Map<Object, dynamic>.identity();
+    dynamic copy(dynamic current) {
+      if (current == null) return null;
+      if (copies.containsKey(current)) return copies[current];
+      if (current is _OwnedJsReference) {
+        if (!identical(current.owner, this) ||
+            !identical(current.nativeEngine, nativeEngine)) {
+          throw StateError('JavaScript reference belongs to another runtime');
+        }
+        current.checkActive();
+        return current;
+      }
+      if (current is JSRef) {
+        final previous = _ownedByRawReference[current];
+        if (previous != null) {
+          previous.checkActive();
+          if (!identical(previous.nativeEngine, nativeEngine)) {
+            throw JsDisposedError(
+              'JavaScript reference belongs to an old runtime',
+            );
+          }
+          return previous;
+        }
+        final owned = current is JSInvokable
+            ? _OwnedJsInvokable(this, nativeEngine, current)
+            : _OwnedJsReference(this, nativeEngine, current);
+        _ownedByRawReference[current] = owned;
+        _ownedReferences.add(owned);
+        return owned;
+      }
+      if (current is Future) {
+        final tracked = _trackOwnedResult(current, pending, nativeEngine);
+        copies[current] = tracked;
+        return tracked;
+      }
+      if (current is TypedData || current is List<int>) return current;
+      if (current is Map) {
+        final Map<dynamic, dynamic> result = current is Map<String, dynamic>
+            ? <String, dynamic>{}
+            : <dynamic, dynamic>{};
+        copies[current] = result;
+        for (final entry in current.entries) {
+          result[copy(entry.key)] = copy(entry.value);
+        }
+        return result;
+      }
+      if (current is List) {
+        final result = <dynamic>[];
+        copies[current] = result;
+        for (final child in current) {
+          result.add(copy(child));
+        }
+        return result;
+      }
+      return current;
+    }
+
+    return copy(value);
+  }
+
+  dynamic _trackOwnedResult(
+    dynamic result,
+    Set<Completer<dynamic>> pending,
+    FlutterQjs? nativeEngine,
+  ) {
+    if (result is! Future) return _ownResult(result, pending, nativeEngine);
+    final completion = Completer<dynamic>();
+    pending.add(completion);
+    unawaited(completion.future.then<void>((_) {}, onError: (Object _) {}));
+    void settle(dynamic value, StackTrace? failureStack) {
+      pending.remove(completion);
+      if (completion.isCompleted) {
+        // The native bridge may deliver after a callback has been released.
+        // Its runtime still owns any references until the runtime itself closes.
+        if (_ownsRuntime(nativeEngine)) {
+          try {
+            _releaseJsResultReferences(value);
+          } catch (error, stack) {
+            _reportBridgeDiagnostic(
+              error,
+              stack,
+              'late JavaScript result cleanup',
+            );
+          }
+        }
+        return;
+      }
+      try {
+        // Register native references before making completion visible. A
+        // separate .then(adopt) leaves a microtask where close can miss them.
+        final owned = _ownResult(value, pending, nativeEngine);
+        if (failureStack == null) {
+          completion.complete(owned);
+        } else {
+          completion.completeError(owned as Object, failureStack);
+        }
+      } catch (error, stack) {
+        completion.completeError(error, stack);
+      }
+    }
+
+    unawaited(
+      result.then<void>(
+        (value) => settle(value, null),
+        onError: (Object error, StackTrace stack) => settle(error, stack),
+      ),
+    );
+    return completion.future;
+  }
+
+  void _handleUnhandledPromiseRejection(dynamic reason) {
+    try {
+      Log.error('JS Engine', 'Unhandled promise rejection: $reason');
+    } catch (error, stack) {
+      _reportBridgeDiagnostic(error, stack, 'JavaScript rejection logging');
+    } finally {
+      // QuickJS constructs a separate Dart graph for this diagnostic callback.
+      // Merely printing it leaks its independently duplicated native wrappers.
+      try {
+        _releaseJsResultReferences(reason);
+      } catch (error, stack) {
+        _reportBridgeDiagnostic(error, stack, 'JavaScript rejection cleanup');
+      }
+    }
+  }
+
+  void _reportBridgeDiagnostic(Object error, StackTrace stack, String library) {
+    try {
+      FlutterError.reportError(
+        FlutterErrorDetails(exception: error, stack: stack, library: library),
+      );
+    } catch (_) {
+      // Diagnostics must not escape into the native bridge or skip cleanup.
+    }
+  }
+
+  dynamic _trackResult(dynamic result, Set<Completer<dynamic>> pending) {
+    if (result is! Future) return result;
+    final nativeEngine = _engine;
+    final completion = Completer<dynamic>();
+    pending.add(completion);
+    // Match the native bridge: ignored Promises do not emit uncaught errors,
+    // while callers awaiting the returned Future still observe their failure.
+    unawaited(completion.future.then<void>((_) {}, onError: (Object _) {}));
+    void discard(dynamic value) {
+      // A closed scope can receive a late native result while its engine lives.
+      // Never free old native references through a replacement runtime.
+      if (!_closed && identical(_engine, nativeEngine)) {
+        JSRef.freeRecursive(value);
+      }
+    }
+
+    result.then<void>(
+      (value) {
+        pending.remove(completion);
+        if (completion.isCompleted) {
+          discard(value);
+        } else {
+          completion.complete(value);
+        }
+      },
+      onError: (Object error, StackTrace stack) {
+        pending.remove(completion);
+        if (completion.isCompleted) {
+          discard(error);
+        } else {
+          completion.completeError(error, stack);
+        }
+      },
+    );
+    return completion.future;
+  }
+
+  void _failPendingResults(Set<Completer<dynamic>> pending, String message) {
+    for (final completion in pending) {
+      completion.completeError(JsDisposedError(message));
+    }
+    pending.clear();
+  }
+
+  Future<dynamic> runReadCode(String js, [String? name]) =>
+      _runReadCode(js, name, waitForCompletion: false);
+
+  /// Joins the original Promise and lends its result to a synchronous consumer.
+  /// The consumer must return detached Dart data: all native result/error
+  /// references are released before completion, including after cancellation.
+  Future<T> runReadCodeToCompletion<T>(
+    String js, {
+    required T Function(dynamic result) consume,
+    String? name,
+  }) async =>
+      await _runReadCode(js, name, waitForCompletion: true, consume: consume)
+          as T;
+
+  Future<dynamic> _consumeReadResult(
+    String js,
+    String? name,
+    RequestScope? scope,
+    dynamic Function(dynamic result) consume,
+  ) async {
+    Object? result;
+    Object? failure;
+    StackTrace? failureStack;
+    try {
+      result = await runOwnedCode(js, name);
+      scope?.check();
+      return consume(result);
+    } catch (error, stack) {
+      failure = error;
+      failureStack = stack;
+      rethrow;
+    } finally {
+      try {
+        _releaseJsResultReferences([result, failure]);
+      } on JsResourceReleaseFailure catch (cleanup) {
+        if (failure == null) rethrow;
+        throw JsResourceReleaseFailure([
+          (resource: 'source read', error: failure, stack: failureStack!),
+          ...cleanup.failures,
+        ]);
+      }
+    }
+  }
+
+  Future<dynamic> _runReadCode(
+    String js,
+    String? name, {
+    required bool waitForCompletion,
+    dynamic Function(dynamic result)? consume,
+  }) async {
     const maxRetries = 2;
     final scope = RequestScope.current;
     for (var retry = 0; ; retry++) {
       try {
         scope?.check();
+        if (waitForCompletion) {
+          return scope == null
+              ? await _consumeReadResult(js, name, scope, consume!)
+              : await scope.runToCompletion(
+                  () => _consumeReadResult(js, name, scope, consume!),
+                );
+        }
         return scope == null
             ? await runCode(js, name)
             : await scope.run(() => runCode(js, name));
       } catch (error) {
+        if (waitForCompletion &&
+            (scope?.isCancelled == true || error is JsResourceReleaseFailure)) {
+          rethrow;
+        }
         scope?.check();
         if (retry >= maxRetries || !_isRetryableReadError(error)) {
           rethrow;
@@ -370,15 +815,119 @@ class JsEngine with _JSEngineApi, Init {
     return _isRetryableReadError(error);
   }
 
-  void dispose() {
-    for (final scope in _callbackScopes.toList()) {
-      scope.dispose();
-    }
-    _cache = null;
+  void _releaseResources() {
+    _failPendingResults(_pendingResults, 'JS engine is disposed');
+    final scopes = _callbackScopes.toList();
+    final ownedReferences = _ownedReferences.toList();
     _closed = true;
-    _engine?.close();
-    _engine?.port.close();
+    final engine = _engine;
+    final client = _dio;
+    final temporaryClients = _temporaryClients.toList();
+    _engine = null;
+    _dio = null;
+    _temporaryClients.clear();
+    _releaseJsResources([
+      for (final reference in ownedReferences)
+        (name: 'owned result reference', release: reference.destroy),
+      for (final scope in scopes)
+        (name: 'callback scope', release: scope.dispose),
+      if (engine != null)
+        (
+          name: 'runtime',
+          release: () {
+            engine.close();
+          },
+        ),
+      if (engine != null) (name: 'runtime port', release: engine.port.close),
+      if (client != null)
+        (name: 'HTTP client', release: () => client.close(force: true)),
+      for (final temporary in temporaryClients)
+        (
+          name: 'temporary HTTP client',
+          release: () => temporary.close(force: true),
+        ),
+    ]);
   }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    if (identical(_cache, this)) _cache = null;
+    _releaseResources();
+  }
+}
+
+/// The Dart reference count belongs to callers; runtime shutdown can still
+/// destroy the adopted native reference regardless of outstanding dup calls.
+class _OwnedJsReference extends JSRef {
+  _OwnedJsReference(this.owner, this.nativeEngine, this._reference);
+
+  final JsEngine owner;
+  final FlutterQjs? nativeEngine;
+  JSRef? _reference;
+  final _pendingResults = <Completer<dynamic>>{};
+
+  void checkActive() {
+    if (_reference == null || !owner._ownsRuntime(nativeEngine)) {
+      throw JsDisposedError('JavaScript reference has been released');
+    }
+  }
+
+  @override
+  void dup() {
+    checkActive();
+    super.dup();
+  }
+
+  @override
+  void destroy() {
+    final reference = _reference;
+    if (reference == null) return;
+    _reference = null;
+    owner._ownedReferences.remove(this);
+    _releaseJsResources([
+      (
+        name: 'pending callback results',
+        release: () => owner._failPendingResults(
+          _pendingResults,
+          'JavaScript callback has been released',
+        ),
+      ),
+      (name: 'native reference', release: reference.free),
+    ]);
+  }
+}
+
+class _OwnedJsInvokable extends _OwnedJsReference implements JSInvokable {
+  _OwnedJsInvokable(
+    super.owner,
+    super.nativeEngine,
+    JSInvokable super.reference,
+  );
+
+  @override
+  dynamic invoke(List args, [dynamic thisVal]) {
+    checkActive();
+    // Both graphs share one identity map so argument/receiver aliases survive.
+    final invocation =
+        owner._unwrapInvocationGraph([args, thisVal], nativeEngine) as List;
+    final dynamic result;
+    try {
+      result = (_reference! as JSInvokable).invoke(
+        invocation[0] as List,
+        invocation[1],
+      );
+    } catch (error, stack) {
+      Error.throwWithStackTrace(
+        owner._ownResult(error, _pendingResults, nativeEngine) as Object,
+        stack,
+      );
+    }
+    return owner._trackOwnedResult(result, _pendingResults, nativeEngine);
+  }
+
+  @override
+  dynamic call(List args, [dynamic thisVal]) => invoke(args, thisVal);
 }
 
 bool _isRetryableReadError(Object error) {
@@ -855,6 +1404,7 @@ class JsCallbackScope {
   }
 
   final _functions = <JSInvokable>{};
+  final _pendingResults = <Completer<dynamic>>{};
   bool _disposed = false;
 
   dynamic Function(List<dynamic>) retain(JSInvokable function) {
@@ -862,21 +1412,28 @@ class JsCallbackScope {
     if (_functions.add(function)) function.dup();
     return (args) {
       if (_disposed) throw StateError('JavaScript callback scope is closed');
-      return function(args);
+      return _engine._trackResult(function(args), _pendingResults);
     };
   }
 
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    for (final child in _children.toList()) {
-      child.dispose();
-    }
+    _engine._failPendingResults(
+      _pendingResults,
+      'JavaScript callback scope is closed',
+    );
+    final children = _children.toList();
+    final functions = _functions.toList();
     _parent?._children.remove(this);
     _engine._callbackScopes.remove(this);
-    for (final function in _functions) {
-      function.free();
-    }
+    _children.clear();
     _functions.clear();
+    _releaseJsResources([
+      for (final child in children)
+        (name: 'child scope', release: child.dispose),
+      for (final function in functions)
+        (name: 'callback', release: function.free),
+    ]);
   }
 }

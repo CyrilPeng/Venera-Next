@@ -16,16 +16,27 @@ class LocalComicImageProvider
 
   final LocalComic comic;
 
+  @protected
+  File get coverFile => comic.coverFile;
+
+  @protected
+  Directory get comicDirectory => Directory(comic.baseDir);
+
   @override
   Future<Uint8List> load(chunkEvents, checkStop) async {
-    File? file = comic.coverFile;
-    if (!await file.exists()) {
+    checkStop();
+    File? file = coverFile;
+    final exists = await file.exists();
+    checkStop();
+    if (!exists) {
       file = null;
-      var dir = Directory(comic.baseDir);
-      if (!await dir.exists()) {
+      var dir = comicDirectory;
+      final directoryExists = await dir.exists();
+      checkStop();
+      if (!directoryExists) {
         throw "Error: Comic not found.";
       }
-      file = await _inferCover(dir);
+      file = await _inferCover(dir, checkStop);
     }
     if (file == null) {
       throw "Error: Cover not found.";
@@ -35,6 +46,7 @@ class LocalComicImageProvider
     if (data.isEmpty) {
       throw "Exception: Empty file(${file.path}).";
     }
+    checkStop();
     return data;
   }
 
@@ -47,8 +59,13 @@ class LocalComicImageProvider
   String get key => "local${comic.id}${comic.comicType.value}";
 }
 
-Future<File?> _inferCover(Directory directory) async {
+Future<File?> _inferCover(
+  Directory directory,
+  void Function() checkStop,
+) async {
+  checkStop();
   final entries = await directory.list().toList();
+  checkStop();
   final rootImages = sortedComicImageEntries(
     entries.whereType<File>(),
     nameOf: (file) => file.name,
@@ -67,8 +84,11 @@ Future<File?> _inferCover(Directory directory) async {
           .toList()
         ..sort((a, b) => compareComicFileNames(a.name, b.name));
   for (final chapter in directories) {
+    checkStop();
+    final entries = await chapter.list().toList();
+    checkStop();
     final images = sortedComicImageEntries(
-      (await chapter.list().toList()).whereType<File>(),
+      entries.whereType<File>(),
       nameOf: (file) => file.name,
     );
     final chapterCover = findNamedComicCover(

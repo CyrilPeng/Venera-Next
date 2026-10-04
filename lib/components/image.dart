@@ -91,7 +91,7 @@ class _AnimatedImageState extends State<AnimatedImage>
 
   static final Map<int, Size> _cache = {};
 
-  static clear() => _cache.clear();
+  static void clear() => _cache.clear();
 
   @override
   void initState() {

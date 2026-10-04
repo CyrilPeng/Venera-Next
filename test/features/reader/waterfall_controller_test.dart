@@ -1,12 +1,15 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/features/reader/waterfall_controller.dart';
 import 'package:venera_next/features/reader/waterfall_flow.dart';
 import 'package:venera_next/network/request_scope.dart';
 
 void main() {
   late WaterfallController controller;
+  late ImageWork work;
   late List<int> requests;
   late List<RequestScope> scopes;
   late List<Object> errors;
@@ -18,6 +21,7 @@ void main() {
     scopes = [];
     errors = [];
     changes = 0;
+    work = ImageWork();
     response = (chapter) async => ['$chapter-a', '$chapter-b'];
     controller =
         WaterfallController(
@@ -30,6 +34,7 @@ void main() {
           chapterId: (chapter) => 'chapter-$chapter',
           onChanged: () => changes++,
           onPreviousError: (error, stack) => errors.add(error),
+          imageWork: work,
         )..initialize(
           WaterfallChapterSegment(
             chapter: 3,
@@ -172,4 +177,236 @@ void main() {
     expect(requests, [4]);
     expect(controller.flow.lastChapter, 3);
   });
+
+  test('prepare waits for both original calls after UI cancellation', () async {
+    final next = Completer<List<String>>();
+    final previous = Completer<List<String>>();
+    response = (chapter) => chapter == 4 ? next.future : previous.future;
+    final after = controller.ensureAfter(current: 2, threshold: 1);
+    final before = controller.ensureBefore(current: 1, threshold: 1);
+    var prepared = false;
+    final preparing = work.prepareForExit().then((release) {
+      prepared = true;
+      return release;
+    });
+
+    await after;
+    expect(await before, 0);
+    expect(scopes.every((scope) => scope.isCancelled), true);
+    expect(controller.loadingAfter, false);
+    expect(controller.afterError, isNull);
+    expect(errors, isEmpty);
+    expect(prepared, false);
+    next.complete(['late next']);
+    await pumpEventQueue();
+    expect(prepared, false);
+    final changedAfterCancellation = changes;
+    previous.complete(['late previous']);
+    final release = await preparing;
+    expect(changes, changedAfterCancellation);
+    expect(controller.flow.segments.map((segment) => segment.chapter), [3]);
+
+    release();
+    response = (_) async => ['resumed'];
+    await controller.ensureAfter(current: 2, threshold: 1);
+    expect(controller.flow.lastChapter, 4);
+    expect(controller.afterError, isNull);
+  });
+
+  test(
+    'held work refuses requests and can resume every loading direction',
+    () async {
+      final release = work.holdForExit();
+      await controller.ensureAfter(current: 2, threshold: 1);
+      expect(await controller.ensureBefore(current: 1, threshold: 1), 0);
+      expect(await controller.navigate(7), false);
+      expect(requests, isEmpty);
+      expect(controller.loadingAfter, false);
+      expect(controller.afterError, isNull);
+      expect(errors, isEmpty);
+
+      release();
+      expect(await controller.ensureBefore(current: 1, threshold: 1), 2);
+      await controller.ensureAfter(current: 4, threshold: 1);
+      expect(await controller.navigate(7), true);
+      expect(requests, [2, 4, 7]);
+    },
+  );
+
+  test(
+    'late original failure reaches preparation with its original stack',
+    () async {
+      final pending = Completer<List<String>>();
+      final failure = StateError('late source failure');
+      final stack = StackTrace.fromString('original source stack');
+      response = (_) => pending.future;
+      final loading = controller.ensureAfter(current: 2, threshold: 1);
+      final failedPreparation = expectLater(
+        work.prepareForExit(),
+        throwsA(
+          isA<ImageWorkFailure>().having(
+            (error) => error.failures,
+            'original failure',
+            [(error: failure, stack: stack)],
+          ),
+        ),
+      );
+      await loading;
+      pending.completeError(failure, stack);
+      await failedPreparation;
+      expect(controller.afterError, isNull);
+      expect(errors, isEmpty);
+
+      response = (_) async => ['recovered'];
+      expect(await controller.navigate(7), true);
+      final release = await work.prepareForExit();
+      release();
+    },
+  );
+
+  test(
+    'replacement keeps retired requests owned until every original ends',
+    () async {
+      final pending = <int, Completer<List<String>>>{};
+      response = (chapter) => (pending[chapter] = Completer()).future;
+      final after = controller.ensureAfter(current: 2, threshold: 1);
+      final firstNavigation = controller.navigate(6);
+      final replacement = controller.navigate(7);
+      await after;
+      expect(await firstNavigation, false);
+      pending[7]!.complete(['current']);
+      expect(await replacement, true);
+
+      var prepared = false;
+      final preparing = work.prepareForExit().then((release) {
+        prepared = true;
+        return release;
+      });
+      pending[6]!.complete(['retired navigation']);
+      await pumpEventQueue();
+      expect(prepared, false);
+      pending[4]!.complete(['retired prefetch']);
+      final release = await preparing;
+      expect(controller.flow.segments.map((segment) => segment.chapter), [7]);
+      release();
+    },
+  );
+
+  test(
+    'failure of retired navigation is owned even before prepare starts',
+    () async {
+      final pending = Completer<List<String>>();
+      final failure = StateError('retired failure');
+      response = (_) => pending.future;
+      final retired = controller.navigate(7);
+      expect(await controller.navigate(3), true);
+      expect(await retired, false);
+      pending.completeError(failure);
+      await pumpEventQueue();
+      await expectLater(
+        work.prepareForExit(),
+        throwsA(
+          isA<ImageWorkFailure>().having(
+            (error) => error.failures.map((entry) => entry.error),
+            'retired error',
+            [failure],
+          ),
+        ),
+      );
+      expect(errors, isEmpty);
+      expect(controller.flow.firstChapter, 3);
+    },
+  );
+
+  test(
+    'dispose shares a join for originals without closing shared work',
+    () async {
+      final retired = Completer<List<String>>();
+      final active = Completer<List<String>>();
+      response = (chapter) => chapter == 4 ? retired.future : active.future;
+      final loading = controller.ensureAfter(current: 2, threshold: 1);
+      final navigation = controller.navigate(7);
+      final disposal = controller.dispose();
+      expect(identical(disposal, controller.dispose()), true);
+      var disposed = false;
+      unawaited(disposal.then((_) => disposed = true));
+      await loading;
+      expect(await navigation, false);
+      active.complete(['late current']);
+      await pumpEventQueue();
+      expect(disposed, false);
+      retired.complete(['late retired']);
+      await disposal;
+      expect(disposed, true);
+
+      final otherOwnerTask = work.start();
+      expect(otherOwnerTask, isNotNull);
+      otherOwnerTask!.finish();
+      final release = await work.prepareForExit();
+      release();
+    },
+  );
+
+  test(
+    'ordinary source failures stay on the existing UI error paths',
+    () async {
+      final failure = StateError('ordinary failure');
+      response = (_) => Future.error(failure);
+      await controller.ensureAfter(current: 2, threshold: 1);
+      expect(controller.afterError, contains('ordinary failure'));
+      expect(await controller.ensureBefore(current: 1, threshold: 1), 0);
+      expect(errors, [failure]);
+      await expectLater(controller.navigate(7), throwsA(same(failure)));
+      final release = await work.prepareForExit();
+      release();
+    },
+  );
+
+  for (final cancellation in [
+    const RequestCancelled(),
+    DioException(
+      requestOptions: RequestOptions(path: '/chapter'),
+      type: DioExceptionType.cancel,
+    ),
+  ]) {
+    test('late ${cancellation.runtimeType} cancellation is expected', () async {
+      final pending = Completer<List<String>>();
+      response = (_) => pending.future;
+      final loading = controller.ensureAfter(current: 2, threshold: 1);
+      final preparing = work.prepareForExit();
+      await loading;
+      pending.completeError(cancellation);
+      final release = await preparing;
+      expect(controller.afterError, isNull);
+      release();
+    });
+  }
+
+  test(
+    'reentrant hold retains synchronous source failure and request zone',
+    () async {
+      final failure = StateError('synchronous source failure');
+      late void Function() release;
+      response = (_) {
+        expect(RequestScope.current, same(scopes.single));
+        release = work.holdForExit();
+        throw failure;
+      };
+      await controller.ensureAfter(current: 2, threshold: 1);
+      expect(controller.afterError, isNull);
+      await expectLater(
+        work.prepareForExit(),
+        throwsA(
+          isA<ImageWorkFailure>().having(
+            (error) => error.failures.map((entry) => entry.error),
+            'synchronous error',
+            [failure],
+          ),
+        ),
+      );
+      release();
+      response = (_) async => ['recovered'];
+      expect(await controller.navigate(7), true);
+    },
+  );
 }

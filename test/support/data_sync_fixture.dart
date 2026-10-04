@@ -11,7 +11,7 @@ class SyncTestFixture {
   SyncTestFixture({
     SyncPreferenceStore? preferences,
     Future<void> Function()? saveSettings,
-    void Function()? persistImplicit,
+    FutureOr<void> Function()? persistImplicit,
     void Function() Function(void Function())? observeChanges,
     DateTime Function()? now,
     Timer Function(Duration, void Function())? createTimer,

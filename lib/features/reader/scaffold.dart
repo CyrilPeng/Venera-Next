@@ -29,17 +29,22 @@ import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/features/reader/image_export.dart';
+import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/features/reader/settings_effects.dart';
 import 'package:venera_next/features/reader/image_selection.dart';
 import 'package:venera_next/features/reader/image_picker.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
-import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/routing/settings.dart';
 
 class ReaderScaffold extends StatefulWidget {
-  const ReaderScaffold({super.key, required this.child});
+  const ReaderScaffold({
+    super.key,
+    required this.imageWork,
+    required this.child,
+  });
 
+  final ImageWork imageWork;
   final Widget child;
 
   @override
@@ -114,11 +119,20 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     _sidebarBinding.dispose();
     _imageFavoriteSwipe.dispose();
     _gesturePort = null;
-    _imageExporter.dispose();
+    unawaited(_exporter?.dispose());
     _imagePicker.dispose();
     _selectionOverlay.dispose();
     _eInkRefreshController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(ReaderScaffold oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.imageWork, widget.imageWork)) {
+      unawaited(_exporter?.dispose());
+      _exporter = null;
+    }
   }
 
   void _applySystemUiMode() {
@@ -242,7 +256,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     chapterTitle: context.reader.widget.chapters?.titles.elementAtOrNull(
       context.reader.chapter - 1,
     ),
-    onBack: () => Navigator.of(context).maybePop(),
+    onBack: () => unawaited(context.reader.requestExit()),
     actions: [
       if (shouldShowChapterComments())
         Tooltip(
@@ -474,7 +488,10 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     );
   }
 
-  late final _imageExporter = ReaderImageExporter(
+  ReaderImageExporter? _exporter;
+  ReaderImageExporter get _imageExporter => _exporter ??= ReaderImageExporter(
+    work: widget.imageWork,
+    cancelSelection: _selectionOverlay.cancel,
     select: _selectImageForExport,
     read: (selection) async {
       if (selection.imageKey.startsWith('file://')) {
@@ -485,12 +502,18 @@ class ReaderScaffoldState extends State<ReaderScaffold>
       return file.readAsBytes();
     },
     save: (image) async {
-      await saveFile(data: image.bytes, filename: image.filename);
+      await saveFile(
+        data: image.bytes,
+        filename: image.filename,
+        checkStop: image.checkStop,
+      );
     },
     share: (image) => Share.shareFile(
       data: image.bytes,
       filename: image.filename,
       mime: image.type.mime,
+      resolveOrigin: () => context.sharePositionOrigin,
+      checkStop: image.checkStop,
     ),
     onError: (error, stack) {
       Log.error('Reader', 'Failed to export image: $error', stack);

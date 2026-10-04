@@ -10,6 +10,9 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
 class _Source extends Fake implements ComicSource {
+  @override
+  Future<void> closeDataWrites() async {}
+
   Future<Res<List<Comment>>> Function(int) load = (_) async =>
       Res([], subData: 1);
   Future<Res<bool>> Function() send = () async => const Res(true);

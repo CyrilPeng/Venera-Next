@@ -1,6 +1,5 @@
 import 'package:venera_next/network/request_scope.dart';
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shimmer_animation/shimmer_animation.dart';
@@ -8,6 +7,7 @@ import 'package:venera_next/routing/local_reading.dart';
 import 'package:venera_next/routing/page_replacement.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/gesture.dart';
+import 'package:venera_next/components/image_save_binding.dart';
 import 'package:venera_next/components/image.dart';
 import 'package:venera_next/components/layout.dart';
 import 'package:venera_next/components/loading.dart';
@@ -31,7 +31,9 @@ import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/features/reader/reader.dart';
-import 'package:venera_next/foundation/file_type.dart';
+import 'package:venera_next/foundation/image_provider/read_image.dart';
+import 'package:venera_next/foundation/image_save_work.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -90,6 +92,19 @@ class ComicPage extends StatefulWidget {
 
 class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
     with ComicPageActions {
+  late final _saves = ImageSaveWork(
+    deliver: (bytes, filename, checkStop) =>
+        saveFile(data: bytes, filename: filename, checkStop: checkStop),
+    onError: (error, stack) {
+      Log.error('Image save', error, stack);
+      if (mounted) context.showMessage(message: 'Error'.tl);
+    },
+  );
+
+  @override
+  Widget build(BuildContext context) =>
+      ImageSaveBinding(work: _saves, child: super.build(context));
+
   @override
   History? history;
 
@@ -555,12 +570,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
       chapterProgress = "Chapter @ep".tlParams({"ep": currentHistory.ep});
     }
 
-    final parts = [
-      chapterProgress,
-      if (groupName != null) groupName,
-      chapterTitle,
-      "P$page",
-    ];
+    final parts = [chapterProgress, ?groupName, chapterTitle, "P$page"];
     return "${"Last Reading".tl}: ${parts.join(" - ")}";
   }
 
@@ -838,40 +848,20 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
     );
   }
 
-  void _saveCover(BuildContext context) async {
-    try {
-      final cover = _cover;
-      if (cover == null) {
-        return;
-      }
-      final imageProvider = CachedImageProvider(
-        cover,
-        sourceKey: comic.sourceKey,
-        cid: comic.id,
-      );
-
-      final imageStream = imageProvider.resolve(const ImageConfiguration());
-      final completer = Completer<Uint8List>();
-
-      imageStream.addListener(
-        ImageStreamListener((ImageInfo info, bool _) async {
-          final byteData = await info.image.toByteData(
-            format: ImageByteFormat.png,
-          );
-          if (byteData != null) {
-            completer.complete(byteData.buffer.asUint8List());
-          }
-        }),
-      );
-
-      final data = await completer.future;
-      final fileType = detectFileType(data);
-      await saveFile(filename: "cover${fileType.ext}", data: data);
-    } catch (e) {
-      if (context.mounted) {
-        context.showMessage(message: "Error".tl);
-      }
-    }
+  void _saveCover(BuildContext context) {
+    final cover = _cover;
+    if (cover == null) return;
+    final provider = CachedImageProvider(
+      cover,
+      sourceKey: comic.sourceKey,
+      cid: comic.id,
+    );
+    unawaited(
+      _saves.save(
+        read: (scope) => readImageProvider(provider, scope: scope),
+        name: 'cover',
+      ),
+    );
   }
 
   String? get _cover {

@@ -159,13 +159,23 @@ class SourceRepositories extends ChangeNotifier {
         });
   }
 
-  Future<void> migrate() async {
+  Future<void>? _migration;
+
+  Future<void> migrate() => _migration ??= _migrate().whenComplete(() {
+    _migration = null;
+  });
+
+  Future<void> _migrate() async {
     await appdata.ensureInit();
     if (appdata.settings['comicSourceRepositoriesMigrated'] == true) return;
     final legacy =
         appdata.settings['comicSourceListUrl']?.toString().trim() ?? '';
+    final previousRepositories = appdata.settings['comicSourceRepositories'];
+    final previousMigrated =
+        appdata.settings['comicSourceRepositoriesMigrated'];
+    List<Map<String, String>>? migratedRepositories;
     if (all.isEmpty && legacy.isNotEmpty) {
-      appdata.settings['comicSourceRepositories'] = [
+      migratedRepositories = [
         SourceRepository(
           id: const Uuid().v4(),
           name: Uri.tryParse(legacy)?.host.isNotEmpty == true
@@ -174,9 +184,26 @@ class SourceRepositories extends ChangeNotifier {
           url: legacy,
         ).toJson(),
       ];
+      appdata.settings['comicSourceRepositories'] = migratedRepositories;
     }
     appdata.settings['comicSourceRepositoriesMigrated'] = true;
-    await appdata.saveData(false);
+    try {
+      await appdata.saveData(false);
+    } catch (_) {
+      // Do not leave an unsaved completion flag that makes retry skip work.
+      // Preserve repository edits made while the settings write was pending.
+      if (migratedRepositories != null &&
+          identical(
+            appdata.settings['comicSourceRepositories'],
+            migratedRepositories,
+          )) {
+        appdata.settings['comicSourceRepositories'] = previousRepositories;
+      }
+      if (appdata.settings['comicSourceRepositoriesMigrated'] == true) {
+        appdata.settings['comicSourceRepositoriesMigrated'] = previousMigrated;
+      }
+      rethrow;
+    }
   }
 
   static String normalizeUrl(String value) {

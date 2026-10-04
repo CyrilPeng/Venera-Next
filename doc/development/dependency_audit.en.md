@@ -2,7 +2,7 @@
 
 [简体中文](dependency_audit.zh.md) · [Rules](dependencies.en.md) · [Inventory](git_dependencies.json)
 
-The baseline is the pre-migration lockfile. The inventory records exact current URLs, commits, and package paths. Evidence includes pinned local source and Git history, GitHub repository metadata, and the latest stable pub.dev archives available on the review date. This is a migration decision record with confirmed incompatibilities, not a complete security audit or proof of behavioral equivalence.
+The baseline is the pre-migration lockfile. The inventory records exact current Git URLs, commits, and package paths. Local path packages are documented in subsequent updates and the [governance rules](dependencies.en.md). Evidence includes pinned local source and Git history, GitHub repository metadata, and the latest stable pub.dev archives available on the review date. The original 2026-09-28 decisions remain below as a historical record of confirmed incompatibilities, not a complete security audit or proof of behavioral equivalence.
 
 ## Completed changes
 
@@ -42,3 +42,13 @@ Rollback source migration by restoring pubspec, lockfile and inventory together.
 - Linux container: real dpkg-deb creation/extraction passed for amd64 and arm64, checking Depends, ELF architecture, desktop entries and installation path. Minimal bundle fixtures do not establish Linux application runtime compatibility.
 - Local Python suite: 35 passed and one Linux-only dpkg-deb case skipped on Windows, separately passed in the container. Inventory tests cover floating branches, origin changes, platform omissions and new dependencies.
 - Complete macOS, iOS and Linux application builds remain for their platform release jobs.
+
+## Subsequent Update: Local PhotoView Patch (2026-10-05)
+
+The earlier `photo_view` decision remains as historical evidence. Its current source is `path: packages/photo_view`, still at **0.14.0**, copied from the previously pinned [CyrilPeng/photo_view](https://github.com/CyrilPeng/photo_view) commit `a1255d1b5945aad4b7323303ec2ecdf0c90ffc4c`, with [renancaraujo/photo_view](https://github.com/renancaraujo/photo_view) as upstream. The [MIT license](../../packages/photo_view/LICENSE), copyrights, package manifest, and fork interfaces are retained. This does not adopt the previously reviewed pub.dev 0.15.0 release.
+
+The new patch fixes discarded `ImageInfo` clones in the dimension listener and replaces three deprecated calls with equivalent `TickerMode.valuesOf(context).enabled`, `translateByDouble(dx, dy, 0.0, 1.0)`, and `scaleByDouble(s, s, s, 1.0)` calls. The latter preserves the scalar branch semantics of locked vector_math 2.2.0. Only three of the 16 Dart source files differ after formatter normalization. [LOCAL_PATCHES.md](../../packages/photo_view/LOCAL_PATCHES.md) records canonical LF Git blob SHA-256 hashes, changes, ownership, and rollback requirements. All **156** other complete dependency records and SDK locks remain unchanged.
+
+Validation: two real PhotoView ownership regressions, for cached and asynchronous images, failed on the original source and pass with the patch. They cover replacement, unmount, sizing, and zoom. Strict analysis of the package and regression tests, formatting, source comparison, and `dart tool/check_git_dependencies.dart` pass. New real-reader exit integration regressions also cover visible-image file reads, pending native frames, forced unmount, and recovery of PhotoView/continuous images after exit failure. This update's focused validation does not establish additional complete platform builds beyond the historical record.
+
+`photo_view` has left the inventory of active Git dependencies; its local patch document now preserves provenance. `.github/workflows/pr_build.yml` already includes `packages/`, so no build-trigger rule change is needed. Restoring the Git source requires restoring dependency declarations, lockfile, and inventory together and validating image lifetimes.

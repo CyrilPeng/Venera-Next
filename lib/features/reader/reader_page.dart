@@ -17,7 +17,9 @@ import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
 import 'package:venera_next/features/reader/reader_session.dart';
+import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/features/reader/history_writer.dart';
+import 'package:venera_next/features/reader/exit_guard.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
 import 'package:venera_next/features/reader/page_order_migration.dart';
@@ -91,6 +93,7 @@ class Reader extends StatefulWidget {
 
 class ReaderState extends State<Reader>
     with ReaderImagePerPageHandler, WidgetsBindingObserver {
+  final imageWork = ImageWork();
   late final controller = ReaderController(
     pageCount: () => totalPages,
     chapterCount: () => maxChapter,
@@ -126,6 +129,7 @@ class ReaderState extends State<Reader>
       toChapter(chapter - 1, toLastPage: toLastPage);
 
   void update() {
+    _cancelOutdatedLayout();
     if (mounted) setState(() {});
   }
 
@@ -224,8 +228,14 @@ class ReaderState extends State<Reader>
 
   late final ReaderSession _session;
   bool _hasPresentedImages = false;
-  ComicLayoutProbe? _layoutProbe;
+  _ReaderLayoutAttempt? _layoutAttempt;
   final _sampledChapters = <String>{};
+  int _layoutSaveRevision = 0;
+  int _successfulLayoutSaveRevision = 0;
+  int _failedLayoutSaveRevision = 0;
+
+  bool get _needsLayoutSaveRetry =>
+      _failedLayoutSaveRevision > _successfulLayoutSaveRevision;
 
   ReaderSettings get preferences =>
       appdata.settings.readerSettings(cid, type.sourceKey);
@@ -274,7 +284,8 @@ class ReaderState extends State<Reader>
     },
   )..addListener(update);
 
-  bool get isDetectingLayout => _layoutProbe != null;
+  bool get isDetectingLayout =>
+      _layoutAttempt != null && !_layoutAttempt!.task.isCancelled;
 
   @protected
   ComicLayoutProbe createLayoutProbe() => ComicLayoutProbe();
@@ -288,11 +299,14 @@ class ReaderState extends State<Reader>
 
   bool get _shouldDetectLayout =>
       _usesAutomaticReadingMode &&
-      appdata.settings.comicLayout(cid, type.sourceKey) == ComicLayout.unknown;
+      (appdata.settings.comicLayout(cid, type.sourceKey) ==
+              ComicLayout.unknown ||
+          _needsLayoutSaveRetry);
 
   /// Give first-open detection a small budget, then let reading proceed.
   Future<void> prepareReadingMode() async {
-    if (_shouldDetectLayout && !_sampledChapters.contains(eid)) {
+    if (_shouldDetectLayout &&
+        (!_sampledChapters.contains(eid) || _needsLayoutSaveRetry)) {
       final detection = detectLayout();
       if (!_hasPresentedImages) {
         await Future.any([
@@ -304,38 +318,159 @@ class ReaderState extends State<Reader>
     _hasPresentedImages = true;
   }
 
-  Future<void> detectLayout({bool force = false}) async {
-    if (!mounted || images == null || _layoutProbe != null) return;
-    if (!force && (!_shouldDetectLayout || _sampledChapters.contains(eid))) {
-      return;
+  Future<void> detectLayout({bool force = false}) {
+    final currentImages = images;
+    if (!mounted || currentImages == null) return Future.value();
+    final previous = _layoutAttempt;
+    if (previous != null) {
+      if (!force &&
+          _matchesLayoutInput(previous) &&
+          !previous.task.isCancelled &&
+          !previous.probe.isCancelled) {
+        return previous.result.future;
+      }
+      previous.task.cancel();
     }
-    _sampledChapters.add(eid);
-    final probe = createLayoutProbe();
-    _layoutProbe = probe;
-    update();
-    final detection = await probe.detect(
-      images: images!,
-      sourceKey: type.comicSource?.key,
-      comicId: cid,
-      chapterId: eid,
-    );
-    if (!mounted || _layoutProbe != probe) return;
-    _layoutProbe = null;
-    appdata.settings.setComicLayout(cid, type.sourceKey, detection);
-    unawaited(saveReadingSettings());
-    update();
-    if (detection.layout == ComicLayout.unknown || !_usesAutomaticReadingMode) {
-      return;
+    if (!force &&
+        (!_shouldDetectLayout ||
+            (_sampledChapters.contains(eid) && !_needsLayoutSaveRetry))) {
+      return Future.value();
     }
-    final next = ReaderMode.fromKey(preferences.readerMode);
-    if (next == mode) return;
-    applyReadingMode(next);
-    showToast(
-      context: context,
-      message: 'Switched to @mode'.tlParams({
-        'mode': readerModeLabels[next.key] ?? next.key,
-      }),
+    ComicLayoutProbe? probe;
+    _ReaderLayoutAttempt? attempt;
+    final task = imageWork.start(
+      onCancel: () {
+        try {
+          probe?.cancel();
+        } finally {
+          attempt?.completeResult();
+        }
+      },
     );
+    if (task == null) return Future.value();
+    try {
+      probe = createLayoutProbe();
+      final started = _ReaderLayoutAttempt(
+        probe: probe,
+        task: task,
+        images: currentImages,
+        comicId: cid,
+        sourceKey: type.sourceKey,
+        networkSourceKey: type.comicSource?.key,
+        chapter: chapter,
+        chapterId: eid,
+      );
+      attempt = started;
+      _layoutAttempt = started;
+      update();
+      unawaited(_runLayoutDetection(started));
+      return started.result.future;
+    } catch (error, stack) {
+      task.recordFailure(error, stack);
+      task.finish();
+      Log.error('Reader', 'Failed to start layout detection: $error', stack);
+      return Future.value();
+    }
+  }
+
+  bool _matchesLayoutInput(_ReaderLayoutAttempt attempt) =>
+      mounted &&
+      identical(images, attempt.images) &&
+      chapter == attempt.chapter &&
+      eid == attempt.chapterId &&
+      cid == attempt.comicId &&
+      type.sourceKey == attempt.sourceKey;
+
+  void _cancelOutdatedLayout() {
+    final attempt = _layoutAttempt;
+    if (attempt != null && !_matchesLayoutInput(attempt)) {
+      attempt.task.cancel();
+    }
+  }
+
+  bool _canPublishLayout(_ReaderLayoutAttempt attempt) =>
+      identical(_layoutAttempt, attempt) &&
+      _matchesLayoutInput(attempt) &&
+      !attempt.task.isCancelled &&
+      !attempt.probe.isCancelled;
+
+  Future<void> _runLayoutDetection(_ReaderLayoutAttempt attempt) async {
+    final reported = Set<Object>.identity();
+    void report(Object error, StackTrace stack) {
+      if (!reported.add(error)) return;
+      attempt.task.recordFailure(error, stack);
+      Log.error('Reader', 'Layout detection failed: $error', stack);
+    }
+
+    // Observe cleanup immediately, even if the presentation result is still
+    // pending. Both channels may report the same original failure.
+    var cleanupFailed = false;
+    final cleanup = attempt.probe.done.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {
+        cleanupFailed = true;
+        report(error, stack);
+      },
+    );
+    try {
+      final detection = await attempt.probe.detect(
+        images: List.of(attempt.images),
+        sourceKey: attempt.networkSourceKey,
+        comicId: attempt.comicId,
+        chapterId: attempt.chapterId,
+      );
+      if (!_canPublishLayout(attempt)) return;
+      await cleanup;
+      if (cleanupFailed || !_canPublishLayout(attempt)) return;
+      appdata.settings.setComicLayout(
+        attempt.comicId,
+        attempt.sourceKey,
+        detection,
+      );
+      final saveRevision = ++_layoutSaveRevision;
+      try {
+        await saveReadingSettings();
+      } catch (_) {
+        // Saving can fail after part of the global settings is persisted.
+        // The layout belongs to this comic, even if a different chapter or
+        // probe now owns the UI. A newer successful save repairs old failures.
+        if (saveRevision > _failedLayoutSaveRevision) {
+          _failedLayoutSaveRevision = saveRevision;
+        }
+        rethrow;
+      }
+      if (saveRevision > _successfulLayoutSaveRevision) {
+        _successfulLayoutSaveRevision = saveRevision;
+      }
+      if (!_canPublishLayout(attempt)) return;
+      _sampledChapters.add(attempt.chapterId);
+      if (detection.layout == ComicLayout.unknown ||
+          !_usesAutomaticReadingMode) {
+        return;
+      }
+      final next = ReaderMode.fromKey(preferences.readerMode);
+      if (!mounted || next == mode) return;
+      applyReadingMode(next);
+      showToast(
+        context: context,
+        message: 'Switched to @mode'.tlParams({
+          'mode': readerModeLabels[next.key] ?? next.key,
+        }),
+      );
+    } catch (error, stack) {
+      report(error, stack);
+      attempt.task.cancel();
+    } finally {
+      if (identical(_layoutAttempt, attempt)) {
+        _layoutAttempt = null;
+        if (mounted) update();
+      }
+      // Cancellation/timeout releases the UI budget while the original work
+      // and any accepted settings save remain owned by the reading session.
+      attempt.completeResult();
+      await cleanup;
+      attempt.task.finish();
+    }
   }
 
   void applyReadingMode(ReaderMode next) {
@@ -380,6 +515,7 @@ class ReaderState extends State<Reader>
     history = widget.history;
     final lifecycle = WidgetsBinding.instance.lifecycleState;
     _session = ReaderSession(
+      imageWork: imageWork,
       durations: ReadingSessionTracker(
         onDuration: (duration) =>
             HistoryManager().addReadDuration(widget.history, duration),
@@ -453,10 +589,18 @@ class ReaderState extends State<Reader>
 
   late final _volumeController = ReaderVolumeController(
     events: readerVolumeEvents,
-    nextPage: toNextPage,
-    previousPage: toPrevPage,
-    nextChapter: toNextChapter,
-    previousChapter: () => toPrevChapter(toLastPage: true),
+    nextPage: () {
+      return !_session.isHeld && toNextPage();
+    },
+    previousPage: () {
+      return !_session.isHeld && toPrevPage();
+    },
+    nextChapter: () {
+      if (!_session.isHeld) toNextChapter();
+    },
+    previousChapter: () {
+      if (!_session.isHeld) toPrevChapter(toLastPage: true);
+    },
     onError: (error, stack) =>
         Log.error('Reader', 'Volume navigation failed: $error', stack),
   );
@@ -469,17 +613,55 @@ class ReaderState extends State<Reader>
 
   ReaderWindowController? _windowController;
   WindowFrameController? _exitFrame;
+  final _exitGuardKey = GlobalKey<ReaderExitGuardState>();
+  void Function()? _windowSessionHold;
+  final Set<void Function()> _preparedSessionReleases = {};
 
-  Future<void> _closeSession() =>
-      _session.dispose().catchError((Object error, StackTrace stack) {
-        Log.error('Reader', 'Failed to close reading session: $error', stack);
-      });
+  Future<void> requestExit() =>
+      _exitGuardKey.currentState?.requestExit() ?? Future.value();
+
+  void _holdWindowSession() {
+    _windowSessionHold ??= _session.holdForExit();
+  }
+
+  Future<void> _prepareWindowSession() async {
+    final frame = _exitFrame;
+    final release = await _session.prepareForExit();
+    if (!mounted || !identical(_exitFrame, frame)) {
+      release();
+      return;
+    }
+    _preparedSessionReleases.add(release);
+  }
+
+  void _resumeWindowSession() {
+    final releases = _preparedSessionReleases.toList();
+    final hold = _windowSessionHold;
+    _preparedSessionReleases.clear();
+    _windowSessionHold = null;
+    final failures =
+        <({String operation, Object error, StackTrace stackTrace})>[];
+    for (final release in [...releases, ?hold]) {
+      try {
+        release();
+      } catch (error, stackTrace) {
+        failures.add((
+          operation: 'resume',
+          error: error,
+          stackTrace: stackTrace,
+        ));
+      }
+    }
+    if (failures.isNotEmpty) throw ReaderSessionFailure(failures);
+  }
 
   void initReaderWindow() {
     if (!App.isDesktop || _windowController != null) return;
     final frame = WindowFrame.of(context);
     _exitFrame = frame;
-    frame.addExitTask(_closeSession);
+    frame.addCloseStartListener(_holdWindowSession);
+    frame.addCloseFailureListener(_resumeWindowSession);
+    frame.addExitTask(_prepareWindowSession);
     final navigator = Navigator.of(context, rootNavigator: true);
     _windowController = ReaderWindowController(
       hide: windowManager.hide,
@@ -489,7 +671,13 @@ class ReaderState extends State<Reader>
       addCloseListener: frame.addCloseListener,
       removeCloseListener: frame.removeCloseListener,
       canPop: navigator.canPop,
-      pop: () => navigator.pop(),
+      pop: () {
+        if (ModalRoute.of(context)?.isCurrent == true) {
+          unawaited(requestExit());
+        } else {
+          unawaited(navigator.maybePop());
+        }
+      },
       onError: (error, stack) =>
           Log.error('Reader', 'Window transition failed: $error', stack),
     )..attach();
@@ -509,14 +697,22 @@ class ReaderState extends State<Reader>
   void dispose() {
     viewportBinding.dispose();
     controller.dispose();
-    _layoutProbe?.cancel();
-    _layoutProbe = null;
+    _layoutAttempt?.task.cancel();
+    _layoutAttempt = null;
     WidgetsBinding.instance.removeObserver(this);
+    final closing = _session.dispose();
     autoReading.dispose();
-    final closing = _closeSession();
-    _exitFrame?.removeExitTask(_closeSession);
+    _exitFrame?.removeCloseStartListener(_holdWindowSession);
+    _exitFrame?.removeCloseFailureListener(_resumeWindowSession);
+    _exitFrame?.removeExitTask(_prepareWindowSession);
     _exitFrame?.trackExitTask(closing);
-    unawaited(closing);
+    _exitFrame = null;
+    _resumeWindowSession();
+    unawaited(
+      closing.catchError((Object error, StackTrace stack) {
+        Log.error('Reader', 'Failed to close reading session: $error', stack);
+      }),
+    );
     focusNode.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     unawaited(_volumeController.dispose());
@@ -525,7 +721,11 @@ class ReaderState extends State<Reader>
     super.dispose();
   }
 
-  void onReaderContentLoading() => _session.setContentReady(false);
+  void onReaderContentLoading() {
+    // A reload can retain the old images while the replacement is fetched.
+    _layoutAttempt?.task.cancel();
+    _session.setContentReady(false);
+  }
 
   void onReaderContentReady() => _session.setContentReady(true);
 
@@ -537,16 +737,36 @@ class ReaderState extends State<Reader>
   @override
   Widget build(BuildContext context) {
     _checkImagesPerPageChange();
-    return KeyboardListener(
-      focusNode: focusNode,
-      autofocus: true,
-      onKeyEvent: onKeyEvent,
-      child: Overlay.wrap(
-        child: ReaderScaffold(
-          child: ReaderGestureDetector(
-            child: ReaderImagesHost(
-              reader: this,
-              key: Key(mode.isWaterfall ? mode.key : chapter.toString()),
+    return ReaderExitGuard(
+      key: _exitGuardKey,
+      prepare: _session.prepareForExit,
+      holdForLeave: _session.holdForExit,
+      onError: (error, stack) {
+        Log.error('Reader', 'Failed to save before leaving: $error', stack);
+        if (mounted) {
+          showToast(
+            message: 'Unable to close. Please try again.'.tl,
+            context: context,
+            seconds: 10,
+            trailing: TextButton(
+              onPressed: () => _exitGuardKey.currentState?.leaveWithoutSaving(),
+              child: Text('Leave without saving'.tl),
+            ),
+          );
+        }
+      },
+      child: KeyboardListener(
+        focusNode: focusNode,
+        autofocus: true,
+        onKeyEvent: onKeyEvent,
+        child: Overlay.wrap(
+          child: ReaderScaffold(
+            imageWork: imageWork,
+            child: ReaderGestureDetector(
+              child: ReaderImagesHost(
+                reader: this,
+                key: Key(mode.isWaterfall ? mode.key : chapter.toString()),
+              ),
             ),
           ),
         ),
@@ -582,6 +802,12 @@ class ReaderState extends State<Reader>
         time: DateTime.now(),
       );
       _session.scheduleProgress();
+      // A content/animation completion can arrive after the reader's own exit
+      // task returned while another owner is still preparing. Register the
+      // fresh drain so the window joins it before proceeding or restoring UI.
+      if (_windowSessionHold != null) {
+        _exitFrame?.trackExitTask(_prepareWindowSession());
+      }
     }
   }
 
@@ -668,6 +894,32 @@ abstract mixin class ReaderImagePerPageHandler {
       _lastImagesPerPage = currentImagesPerPage;
       _lastOrientation = currentOrientation;
     }
+  }
+}
+
+class _ReaderLayoutAttempt {
+  _ReaderLayoutAttempt({
+    required this.probe,
+    required this.task,
+    required this.images,
+    required this.comicId,
+    required this.sourceKey,
+    required this.networkSourceKey,
+    required this.chapter,
+    required this.chapterId,
+  });
+  final ComicLayoutProbe probe;
+  final ImageWorkTask task;
+  final List<String> images;
+  final String comicId;
+  final String sourceKey;
+  final String? networkSourceKey;
+  final int chapter;
+  final String chapterId;
+  final result = Completer<void>();
+
+  void completeResult() {
+    if (!result.isCompleted) result.complete();
   }
 }
 

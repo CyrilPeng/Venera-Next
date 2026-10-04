@@ -1,18 +1,26 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/navigation_admission.dart';
+import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:window_manager/window_manager.dart';
 
 const _kTitleBarHeight = 36.0;
 
 class WindowFrameController extends InheritedWidget {
+  /// Reads the live host state, including when this controller was retained
+  /// before close started. New owners must join an in-progress close.
+  bool get isClosing => _isClosing();
+  final bool Function() _isClosing;
+
   /// Whether the window frame is hidden.
   final bool isWindowFrameHidden;
 
@@ -26,22 +34,33 @@ class WindowFrameController extends InheritedWidget {
   /// Removes a close listener.
   final void Function(WindowCloseListener listener) removeCloseListener;
 
+  /// Synchronously freezes owners after guards accept close, before any waits.
+  final void Function(VoidCallback listener) addCloseStartListener,
+      removeCloseStartListener;
+
   /// Final shutdown tasks run in reverse registration order after close guards.
   final void Function(Future<void> Function() task) addExitTask, removeExitTask;
   final void Function(Future<void> task) trackExitTask;
+  final void Function(VoidCallback listener) addCloseFailureListener,
+      removeCloseFailureListener;
   final VoidCallback forceExit;
 
   const WindowFrameController._create({
+    required bool Function() isClosing,
     required this.isWindowFrameHidden,
     required this.setWindowFrame,
     required this.addCloseListener,
     required this.removeCloseListener,
+    required this.addCloseStartListener,
+    required this.removeCloseStartListener,
     required this.addExitTask,
     required this.removeExitTask,
     required this.trackExitTask,
+    required this.addCloseFailureListener,
+    required this.removeCloseFailureListener,
     required this.forceExit,
     required super.child,
-  });
+  }) : _isClosing = isClosing;
 
   @override
   bool updateShouldNotify(covariant InheritedWidget oldWidget) {
@@ -73,6 +92,15 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
   var closeListeners = <WindowCloseListener>[];
   final _exitTasks = <Future<void> Function()>[];
   final _pendingExitTasks = <Future<void>>{};
+  final _closeStartListeners = <VoidCallback>[];
+  final _closeFailureListeners = <VoidCallback>[];
+  final _activePointers = <int>{};
+  final _contentFocus = FocusScopeNode(debugLabel: 'window content');
+  final _shutdownFocus = FocusScopeNode(
+    debugLabel: 'window shutdown',
+    traversalEdgeBehavior: TraversalEdgeBehavior.closedLoop,
+  );
+  FocusNode? _previousFocus;
   bool _closing = false;
   bool _exited = false;
 
@@ -88,6 +116,8 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
   @override
   void dispose() {
     if (App.isDesktop) windowManager.removeListener(this);
+    _contentFocus.dispose();
+    _shutdownFocus.dispose();
     super.dispose();
   }
 
@@ -111,16 +141,30 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
 
   void _forceExit() {
     if (!mounted || _exited) return;
-    _exited = true;
+    setState(() => _exited = true);
     (widget.onExit ?? () => exit(0))();
   }
 
   void _trackExitTask(Future<void> task) {
     late final Future<void> pending;
-    pending = task.whenComplete(() => _pendingExitTasks.remove(pending));
+    pending = task.then<void>(
+      (_) {
+        _pendingExitTasks.remove(pending);
+      },
+      onError: (Object error, StackTrace stack) {
+        // Keep a failed write visible to the next drain during shutdown. It
+        // may fail while another owner's callback is still being awaited.
+        if (!_closing || !mounted) _pendingExitTasks.remove(pending);
+        Error.throwWithStackTrace(error, stack);
+      },
+    );
     _pendingExitTasks.add(pending);
     // Report failures even if no close attempt is currently waiting.
-    unawaited(pending.catchError(_reportExitError));
+    unawaited(
+      pending.catchError((Object error, StackTrace stack) {
+        if (!_closing || !mounted) _reportExitError(error, stack);
+      }),
+    );
   }
 
   void _reportExitError(Object error, StackTrace stack) {
@@ -136,26 +180,110 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
   void _onClose() async {
     if (_closing || _exited) return;
     for (var listener in List.of(closeListeners)) {
+      if (!closeListeners.contains(listener)) continue;
       if (!listener()) {
         return;
       }
     }
-    _closing = true;
+    _previousFocus = FocusManager.instance.primaryFocus;
+    _contentFocus.descendantsAreFocusable = false;
+    setState(() => _closing = true);
+    for (final pointer in _activePointers.toList()) {
+      GestureBinding.instance.cancelPointer(pointer);
+    }
     try {
+      final startFailures = <({Object error, StackTrace stack})>[];
+      for (final listener in _closeStartListeners.toList()) {
+        if (!_closeStartListeners.contains(listener)) continue;
+        try {
+          listener();
+        } catch (error, stack) {
+          // Keep freezing the remaining owners even if one cannot prepare.
+          // Recovery waits until all accepted work is drained below.
+          startFailures.add((error: error, stack: stack));
+        }
+      }
+      if (startFailures.isNotEmpty) {
+        for (final failure in startFailures.skip(1)) {
+          _reportExitError(failure.error, failure.stack);
+        }
+        final failure = startFailures.first;
+        Error.throwWithStackTrace(failure.error, failure.stack);
+      }
       // A disposed reader may already have detached its callback but still be
       // saving. Drain it before application-level sync inspects pending uploads.
-      while (_pendingExitTasks.isNotEmpty) {
-        await Future.wait(_pendingExitTasks.toList());
-      }
+      await _drainPendingExitTasks();
       for (final task in _exitTasks.reversed.toList()) {
         if (!mounted || _exited) return;
         if (_exitTasks.contains(task)) await task();
+        // A callback may dispose an owner and register its final writes.
+        // Join those writes before the next owner prepares or the host exits.
+        await _drainPendingExitTasks();
       }
       _forceExit();
     } catch (error, stack) {
+      // A callback can fail after registering writes. Keep admission closed
+      // until those writes have settled before releasing other services.
+      try {
+        await _drainPendingExitTasks();
+      } catch (drainError, drainStack) {
+        if (!identical(drainError, error)) {
+          _reportExitError(drainError, drainStack);
+        }
+      }
+      for (final listener in _closeFailureListeners.reversed.toList()) {
+        if (!_closeFailureListeners.contains(listener)) continue;
+        try {
+          listener();
+        } catch (releaseError, releaseStack) {
+          _reportExitError(releaseError, releaseStack);
+        }
+      }
       _reportExitError(error, stack);
+      if (mounted && !_exited) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text('Unable to close. Please try again.'.tl),
+            action: SnackBarAction(label: 'Retry'.tl, onPressed: _onClose),
+          ),
+        );
+      }
     } finally {
+      if (mounted) {
+        setState(() => _closing = false);
+        if (!_exited) {
+          _contentFocus.descendantsAreFocusable = true;
+          final previous = _previousFocus;
+          if (previous?.context != null && previous!.canRequestFocus) {
+            previous.requestFocus();
+          }
+        }
+      }
       _closing = false;
+      _previousFocus = null;
+    }
+  }
+
+  Future<void> _drainPendingExitTasks() async {
+    final failures = <({Object error, StackTrace stack})>[];
+    while (_pendingExitTasks.isNotEmpty) {
+      final batch = _pendingExitTasks.toList();
+      await Future.wait(
+        batch.map((task) async {
+          try {
+            await task;
+          } catch (error, stack) {
+            failures.add((error: error, stack: stack));
+          }
+        }),
+      );
+      _pendingExitTasks.removeAll(batch);
+    }
+    if (failures.isNotEmpty) {
+      for (final failure in failures.skip(1)) {
+        _reportExitError(failure.error, failure.stack);
+      }
+      Error.throwWithStackTrace(failures.first.error, failures.first.stack);
     }
   }
 
@@ -234,15 +362,81 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
     }
 
     return WindowFrameController._create(
+      isClosing: () => _closing || _exited,
       isWindowFrameHidden: isWindowFrameHidden,
       setWindowFrame: setWindowFrame,
       addCloseListener: addCloseListener,
       removeCloseListener: removeCloseListener,
+      addCloseStartListener: _closeStartListeners.add,
+      removeCloseStartListener: _closeStartListeners.remove,
       addExitTask: _exitTasks.add,
       removeExitTask: _exitTasks.remove,
       trackExitTask: _trackExitTask,
+      addCloseFailureListener: _closeFailureListeners.add,
+      removeCloseFailureListener: _closeFailureListeners.remove,
       forceExit: _forceExit,
-      child: body,
+      child: Listener(
+        onPointerDown: (event) => _activePointers.add(event.pointer),
+        onPointerUp: (event) => _activePointers.remove(event.pointer),
+        onPointerCancel: (event) => _activePointers.remove(event.pointer),
+        child: NavigationAdmission(
+          allowsNavigation: () => mounted && !_closing && !_exited,
+          child: Stack(
+            children: [
+              FocusScope(
+                node: _contentFocus,
+                child: ExcludeSemantics(
+                  excluding: _closing || _exited,
+                  child: AbsorbPointer(
+                    absorbing: _closing || _exited,
+                    child: body,
+                  ),
+                ),
+              ),
+              if (_closing && !_exited)
+                Positioned.fill(
+                  child: BlockSemantics(
+                    child: FocusScope(
+                      node: _shutdownFocus,
+                      autofocus: true,
+                      child: Shortcuts(
+                        shortcuts: const {
+                          SingleActivator(LogicalKeyboardKey.escape):
+                              DoNothingAndStopPropagationIntent(),
+                        },
+                        child: ColoredBox(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.scrim.withValues(alpha: 0.45),
+                          child: Center(
+                            child: AlertDialog(
+                              title: Semantics(
+                                liveRegion: true,
+                                child: Text('Closing...'.tl),
+                              ),
+                              content: TickerMode(
+                                enabled: !MediaQuery.disableAnimationsOf(
+                                  context,
+                                ),
+                                child: const LinearProgressIndicator(),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: _forceExit,
+                                  child: Text('Force Quit'.tl),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -563,95 +757,6 @@ Paint getPaint(Color color, [bool isAntiAlias = false]) => Paint()
   ..style = PaintingStyle.stroke
   ..isAntiAlias = isAntiAlias
   ..strokeWidth = 1;
-
-class WindowPlacement {
-  final Rect rect;
-
-  final bool isMaximized;
-
-  const WindowPlacement(this.rect, this.isMaximized);
-
-  Future<void> applyToWindow() async {
-    await windowManager.setBounds(rect);
-
-    if (!validate(rect)) {
-      await windowManager.center();
-    }
-
-    if (isMaximized) {
-      await windowManager.maximize();
-    }
-  }
-
-  Future<void> writeToFile() async {
-    var file = File("${App.dataPath}/window_placement");
-    await file.writeAsString(
-      jsonEncode({
-        'width': rect.width,
-        'height': rect.height,
-        'x': rect.topLeft.dx,
-        'y': rect.topLeft.dy,
-        'isMaximized': isMaximized,
-      }),
-    );
-  }
-
-  static Future<WindowPlacement> loadFromFile() async {
-    try {
-      var file = File("${App.dataPath}/window_placement");
-      if (!file.existsSync()) {
-        return defaultPlacement;
-      }
-      var json = jsonDecode(await file.readAsString());
-      var rect = Rect.fromLTWH(
-        json['x'],
-        json['y'],
-        json['width'],
-        json['height'],
-      );
-      return WindowPlacement(rect, json['isMaximized']);
-    } catch (e) {
-      return defaultPlacement;
-    }
-  }
-
-  static Rect? lastValidRect;
-
-  static Future<WindowPlacement> get current async {
-    var rect = await windowManager.getBounds();
-    if (validate(rect)) {
-      lastValidRect = rect;
-    } else {
-      rect = lastValidRect ?? defaultPlacement.rect;
-    }
-    var isMaximized = await windowManager.isMaximized();
-    return WindowPlacement(rect, isMaximized);
-  }
-
-  static const defaultPlacement = WindowPlacement(
-    Rect.fromLTWH(10, 10, 900, 600),
-    false,
-  );
-
-  static WindowPlacement cache = defaultPlacement;
-
-  static Timer? timer;
-
-  static void loop() async {
-    timer ??= Timer.periodic(const Duration(milliseconds: 100), (timer) async {
-      var placement = await WindowPlacement.current;
-      if (placement.rect != cache.rect ||
-          placement.isMaximized != cache.isMaximized) {
-        cache = placement;
-        await placement.writeToFile();
-      }
-    });
-  }
-
-  static bool validate(Rect rect) {
-    return rect.topLeft.dx >= 0 && rect.topLeft.dy >= 0;
-  }
-}
 
 class VirtualWindowFrame extends StatefulWidget {
   const VirtualWindowFrame({super.key, required this.child});

@@ -289,6 +289,8 @@ class _JSCallbackButtonState extends State<_JSCallbackButton> {
       }
       if (mounted) widget.onCallbackFinished?.call();
     } catch (error, stack) {
+      // A dismissed route can still be mounted during its exit animation.
+      if (error is JsDisposedError) return;
       Log.error('JS dialog callback', error, stack);
       if (mounted) context.showMessage(message: error.toString());
     } finally {

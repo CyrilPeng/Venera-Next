@@ -12,10 +12,10 @@ void main() {
       final directory = Directory.systemTemp.createTempSync('webdav-mount-');
       final sources = <WebDavLibrarySource>[];
       final manager = ComicSourceManager();
-      addTearDown(() {
+      addTearDown(() async {
         manager.remove(WebDavLibrarySource.sourceKey);
         for (final source in sources) {
-          source.dispose();
+          await source.closeAndWait();
         }
         directory.deleteSync(recursive: true);
       });

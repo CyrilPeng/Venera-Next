@@ -13,6 +13,9 @@ import 'package:venera_next/network/proxy.dart';
 import '../foundation/app.dart';
 import 'cloudflare.dart';
 import 'cookie_jar.dart';
+import 'rhttp_stream_request.dart';
+
+export 'rhttp_stream_request.dart' show RHttpCleanupFailure, RHttpCleanupError;
 
 export 'package:dio/dio.dart';
 
@@ -234,6 +237,15 @@ class AppDio with DioMixin {
 }
 
 class RHttpAdapter implements HttpClientAdapter {
+  RHttpAdapter({RHttpStreamCallFactory? startStreamCall})
+    : _startStreamCall = startStreamCall;
+
+  final RHttpStreamCallFactory? _startStreamCall;
+  final _streamRequests = <RHttpStreamRequest>{};
+  final _streamPending = <Future<void>>{};
+  final _streamCleanupFailures = <RHttpCleanupError>[];
+  bool _streamClosed = false;
+
   Future<rhttp.ClientSettings> get settings async {
     var proxy = await getProxy();
     final network = GlobalPreferenceStore(appdata.settings).network;
@@ -260,54 +272,79 @@ class RHttpAdapter implements HttpClientAdapter {
   }
 
   @override
-  void close({bool force = false}) {}
+  void close({bool force = false}) {
+    _streamClosed = true;
+    if (force) {
+      for (final request in _streamRequests.toList()) {
+        request.cancel();
+      }
+    }
+  }
+
+  /// Waits for actual native completion and upload/response resource release.
+  /// HTTP failures and ordinary cancellation remain on the request/response;
+  /// only cleanup failures are reported here, and remain failed on repeat waits.
+  Future<void> waitForIdle() async {
+    while (_streamPending.isNotEmpty) {
+      await Future.wait(_streamPending.toList());
+    }
+    if (_streamCleanupFailures.isNotEmpty) {
+      throw RHttpCleanupFailure(_streamCleanupFailures);
+    }
+  }
 
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
-  ) async {
+  ) {
+    if (_streamClosed) {
+      return Future.error(StateError('HTTP adapter is closed'));
+    }
+    final cancellation = options.cancelToken?.cancelError;
+    if (cancellation != null) return Future.error(cancellation);
+    _setUserAgent(options);
+    final request = RHttpStreamRequest(
+      options: options,
+      settings: Future.sync(() => settings),
+      upload: requestStream,
+      statusMessage: _getStatusMessage,
+      start: _startStreamCall,
+    );
+    _streamRequests.add(request);
+    late final Future<void> pending;
+    pending = request.done
+        .then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stack) {
+            if (error is RHttpCleanupFailure) {
+              _streamCleanupFailures.addAll(error.failures);
+            } else {
+              _streamCleanupFailures.add((
+                stage: 'release HTTP request',
+                error: error,
+                stack: stack,
+              ));
+            }
+          },
+        )
+        .whenComplete(() {
+          _streamRequests.remove(request);
+          _streamPending.remove(pending);
+        });
+    _streamPending.add(pending);
+    if (cancelFuture != null) {
+      unawaited(cancelFuture.then((_) => request.cancel()));
+    }
+    return request.response;
+  }
+
+  void _setUserAgent(RequestOptions options) {
     if (options.headers['User-Agent'] == null &&
         options.headers['user-agent'] == null) {
       options.headers['User-Agent'] = "VeneraNext/v${App.version}";
     }
-
-    final nativeCancelToken = cancelFuture == null ? null : rhttp.CancelToken();
-    if (nativeCancelToken != null) {
-      unawaited(cancelFuture!.then((_) => nativeCancelToken.cancel()));
-    }
-    var res = await rhttp.Rhttp.request(
-      cancelToken: nativeCancelToken,
-      method: rhttp.HttpMethod(options.method),
-      url: options.uri.toString(),
-      settings: await settings,
-      expectBody: rhttp.HttpExpectBody.stream,
-      body: requestStream == null ? null : rhttp.HttpBody.stream(requestStream),
-      headers: rhttp.HttpHeaders.rawMap(
-        Map.fromEntries(
-          options.headers.entries.map(
-            (e) => MapEntry(e.key, e.value.toString().trim()),
-          ),
-        ),
-      ),
-    );
-    if (res is! rhttp.HttpStreamResponse) {
-      throw Exception("Invalid response type: ${res.runtimeType}");
-    }
-    var headers = <String, List<String>>{};
-    for (var entry in res.headers) {
-      var key = entry.$1.toLowerCase();
-      headers[key] ??= [];
-      headers[key]!.add(entry.$2);
-    }
-    return ResponseBody(
-      res.body,
-      res.statusCode,
-      statusMessage: _getStatusMessage(res.statusCode),
-      isRedirect: false,
-      headers: headers,
-    );
   }
 
   static String _getStatusMessage(int statusCode) {

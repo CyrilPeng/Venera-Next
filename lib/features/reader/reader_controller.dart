@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart' show CancelToken, DioException;
 import 'package:venera_next/network/request_scope.dart';
+
+import 'package:venera_next/foundation/image_work.dart';
 
 /// Navigation capabilities shared by gallery and continuous view adapters.
 abstract interface class ReaderNavigationViewport {
@@ -36,6 +39,11 @@ class ReaderContentLoad {
   final scope = RequestScope();
   bool _started = false;
   bool _finished = false;
+  bool _waitingForImageWork = false;
+
+  /// This attempt was interrupted by image-work admission and may be replaced
+  /// when that same owner resumes. Supersession alone does not request a retry.
+  bool get waitingForImageWork => _waitingForImageWork;
 }
 
 enum ReaderContentLoadResult { ignored, ready, failed }
@@ -91,8 +99,20 @@ class ReaderController {
     required Future<void> Function() beforeLoad,
     required Future<List<String>> Function(RequestScope) loadImages,
     required Future<void> Function() prepareMode,
+    ImageWork? imageWork,
   }) async {
     if (!startContentLoad(attempt)) return ReaderContentLoadResult.ignored;
+    final task = imageWork?.start(
+      onCancel: () {
+        attempt._waitingForImageWork = true;
+        cancelContentLoad(attempt);
+      },
+    );
+    if (imageWork != null && task == null) {
+      attempt._waitingForImageWork = true;
+      cancelContentLoad(attempt);
+      return ReaderContentLoadResult.ignored;
+    }
     try {
       await beforeLoad();
       if (!_accepts(attempt)) return ReaderContentLoadResult.ignored;
@@ -104,10 +124,23 @@ class ReaderController {
       return completeContentLoad(attempt)
           ? ReaderContentLoadResult.ready
           : ReaderContentLoadResult.ignored;
-    } catch (error) {
+    } catch (error, stack) {
+      final cancelled =
+          error is RequestCancelled ||
+          error is ImageWorkTaskCancelled ||
+          (error is DioException && CancelToken.isCancel(error));
+      if (!_accepts(attempt) && !cancelled) {
+        task?.recordFailure(error, stack);
+      }
+      if (cancelled) {
+        cancelContentLoad(attempt);
+        return ReaderContentLoadResult.ignored;
+      }
       return failContentLoad(attempt, error)
           ? ReaderContentLoadResult.failed
           : ReaderContentLoadResult.ignored;
+    } finally {
+      task?.finish();
     }
   }
 

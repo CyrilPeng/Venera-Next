@@ -5,22 +5,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/webdav_library/webdav_library_api.dart';
 import 'package:venera_next/features/webdav_library/webdav_library_session.dart';
 import 'package:venera_next/features/webdav_library/webdav_library_snapshot_store.dart';
+import 'package:venera_next/foundation/log.dart';
 
 void main() {
   late Directory directory;
   late WebDavLibraryCache cache;
-  late WebDavLibrarySnapshotStore snapshots;
+  late _Snapshots snapshots;
   late WebDavLibrarySession session;
   late WebDavLibrarySynchronizer synchronizer;
   late WebDavLibrarySettings settings;
   late _Ops ops;
   late int now;
   late int changes;
+  late bool expectsCloseFailure;
 
   setUp(() {
     directory = Directory.systemTemp.createTempSync('webdav-coordinator-');
     cache = WebDavLibraryCache('${directory.path}/library.db');
-    snapshots = WebDavLibrarySnapshotStore(cache);
+    snapshots = _Snapshots(cache);
+    expectsCloseFailure = false;
     ops = _Ops();
     settings = WebDavLibrarySettings(
       connection: WebDavLibraryConfig(
@@ -49,8 +52,12 @@ void main() {
     );
   });
 
-  tearDown(() {
-    synchronizer.dispose();
+  tearDown(() async {
+    if (expectsCloseFailure) {
+      await synchronizer.closeAndWait().catchError((_) {});
+    } else {
+      await synchronizer.closeAndWait();
+    }
     session.cancel();
     ops.dispose();
     cache.dispose();
@@ -161,6 +168,248 @@ void main() {
       await expectLater(synchronizer.ensureIndex(session), throwsStateError);
     },
   );
+
+  test('close waits for replaced runs as well as the current run', () async {
+    final roots = <Completer<List<WebDavLibraryEntry>>>[];
+    ops.read = (_) {
+      final root = Completer<List<WebDavLibraryEntry>>();
+      roots.add(root);
+      return root.future;
+    };
+    final previous = synchronizer.synchronize();
+    await pumpEventQueue();
+    synchronizer.invalidate();
+    final current = synchronizer.synchronize();
+    await pumpEventQueue();
+    expect(roots, hasLength(2));
+
+    final closing = synchronizer.closeAndWait();
+    expect(identical(closing, synchronizer.closeAndWait()), isTrue);
+    var closed = false;
+    unawaited(closing.then((_) => closed = true));
+    expect(() => synchronizer.synchronize(), throwsStateError);
+    await expectLater(synchronizer.ensureIndex(session), throwsStateError);
+    synchronizer.checkForAutomaticSync();
+    expect(ops.paths, hasLength(2));
+    roots.last.complete(_Ops.root);
+    expect((await current).error, isTrue);
+    await pumpEventQueue();
+    expect(closed, isFalse);
+    expect(cache.hasDirectoryIndex(settings.connection.cacheKey), isFalse);
+
+    roots.first.complete(_Ops.root);
+    expect((await previous).error, isTrue);
+    await closing;
+    expect(closed, isTrue);
+    expect(changes, 0);
+    expect(session.isActive, isTrue);
+    expect(identical(closing, synchronizer.closeAndWait()), isTrue);
+  });
+
+  test(
+    'preparation holds every entry point and isolates stale releases',
+    () async {
+      cache.setLastSuccessfulSync(settings.connection.cacheKey, 123);
+      final root = Completer<List<WebDavLibraryEntry>>();
+      ops.read = (_) => root.future;
+      final pending = synchronizer.synchronize();
+      await pumpEventQueue();
+      final preparation = synchronizer.prepareForExit();
+      expect(identical(preparation, synchronizer.prepareForExit()), isTrue);
+      expect(synchronizer.status.value.isSyncing, isFalse);
+      expect(synchronizer.status.value.lastSuccessfulSync, 123);
+      expect((await synchronizer.synchronize(force: true)).error, isTrue);
+      expect((await synchronizer.ensureIndex(session)).error, isTrue);
+      synchronizer.checkForAutomaticSync();
+      synchronizer.updateSyncStatusFromCache();
+      expect(ops.paths, ['/books/']);
+      var prepared = false;
+      unawaited(preparation.then((_) => prepared = true));
+      await pumpEventQueue();
+      expect(prepared, isFalse);
+
+      root.complete(_Ops.root);
+      expect((await pending).error, isTrue);
+      final release = await preparation;
+      release();
+      ops.read = (path) async => path == '/books/' ? _Ops.root : _Ops.pages;
+      expect((await synchronizer.synchronize()).success, isTrue);
+      expect(cache.hasDirectoryIndex(settings.connection.cacheKey), isTrue);
+
+      final nextPreparation = synchronizer.prepareForExit();
+      expect(identical(preparation, nextPreparation), isFalse);
+      final nextRelease = await nextPreparation;
+      release();
+      expect((await synchronizer.ensureIndex(session)).error, isTrue);
+      expect((await synchronizer.synchronize()).error, isTrue);
+      final requestCount = ops.paths.length;
+      synchronizer.checkForAutomaticSync();
+      expect(ops.paths, hasLength(requestCount));
+      nextRelease();
+      nextRelease();
+      expect((await synchronizer.ensureIndex(session)).success, isTrue);
+    },
+  );
+
+  test(
+    'preparation invalidates a scheduled run before it opens storage',
+    () async {
+      final pending = synchronizer.synchronize();
+      final release = await synchronizer.prepareForExit();
+      expect((await pending).error, isTrue);
+      expect(ops.paths, isEmpty);
+      expect(File(cache.path).existsSync(), isFalse);
+      expect(changes, 0);
+      release();
+      expect((await synchronizer.synchronize()).success, isTrue);
+    },
+  );
+
+  test(
+    'disposing during preparation waits and makes its release inert',
+    () async {
+      final root = Completer<List<WebDavLibraryEntry>>();
+      ops.read = (_) => root.future;
+      final pending = synchronizer.synchronize();
+      await pumpEventQueue();
+      final preparation = synchronizer.prepareForExit();
+      synchronizer.dispose();
+      final closing = synchronizer.closeAndWait();
+      var closed = false;
+      unawaited(closing.then((_) => closed = true));
+      await pumpEventQueue();
+      expect(closed, isFalse);
+      root.complete([]);
+      expect((await pending).error, isTrue);
+      final release = await preparation;
+      await closing;
+      release();
+      synchronizer.checkForAutomaticSync();
+      expect(ops.paths, ['/books/']);
+      expect(() => synchronizer.synchronize(), throwsStateError);
+      await expectLater(synchronizer.prepareForExit(), throwsStateError);
+    },
+  );
+
+  test(
+    'failed preparation drains all generations and permits a later retry',
+    () async {
+      final roots = <Completer<List<WebDavLibraryEntry>>>[];
+      ops.read = (_) {
+        final root = Completer<List<WebDavLibraryEntry>>();
+        roots.add(root);
+        return root.future;
+      };
+      final first = synchronizer.synchronize();
+      await pumpEventQueue();
+      synchronizer.invalidate();
+      final second = synchronizer.synchronize();
+      await pumpEventQueue();
+      final failure = StateError('snapshot cleanup');
+      snapshots.clearFailure = failure;
+      final preparation = synchronizer.prepareForExit();
+      final checked = expectLater(
+        preparation,
+        throwsA(
+          isA<WebDavLibrarySyncLifecycleFailure>()
+              .having(
+                (error) => error.failures.single.operation,
+                'operation',
+                'snapshots',
+              )
+              .having(
+                (error) => error.failures.single.error,
+                'cleanup failure',
+                same(failure),
+              ),
+        ),
+      );
+      var completed = false;
+      preparation.then<void>(
+        (_) {
+          completed = true;
+        },
+        onError: (Object _, StackTrace _) {
+          completed = true;
+        },
+      );
+      expect(synchronizer.status.value.isSyncing, isFalse);
+      roots.last.complete([]);
+      await second;
+      await pumpEventQueue();
+      expect(completed, isFalse);
+      expect((await synchronizer.synchronize()).error, isTrue);
+      roots.first.complete([]);
+      await first;
+      await checked;
+
+      snapshots.clearFailure = null;
+      ops.read = (path) async => path == '/books/' ? _Ops.root : _Ops.pages;
+      expect((await synchronizer.synchronize()).success, isTrue);
+      final release = await synchronizer.prepareForExit();
+      release();
+    },
+  );
+
+  test(
+    'close reports cleanup failure only after outstanding work settles',
+    () async {
+      final root = Completer<List<WebDavLibraryEntry>>();
+      ops.read = (_) => root.future;
+      final pending = synchronizer.synchronize();
+      await pumpEventQueue();
+      final failure = StateError('snapshot release');
+      snapshots.clearFailure = failure;
+      expectsCloseFailure = true;
+      Log.isMuted = true;
+      addTearDown(() => Log.isMuted = false);
+      final closing = synchronizer.closeAndWait();
+      late WebDavLibrarySyncLifecycleFailure actual;
+      final checked = expectLater(
+        closing,
+        throwsA(
+          isA<WebDavLibrarySyncLifecycleFailure>().having(
+            (error) {
+              actual = error;
+              return error.failures.single.error;
+            },
+            'cleanup failure',
+            same(failure),
+          ),
+        ),
+      );
+      var closed = false;
+      closing.then<void>(
+        (_) {
+          closed = true;
+        },
+        onError: (Object _, StackTrace _) {
+          closed = true;
+        },
+      );
+      expect(() => synchronizer.status.addListener(() {}), throwsFlutterError);
+      await pumpEventQueue();
+      expect(closed, isFalse);
+      expect(cache.count(settings.connection.cacheKey), 0);
+      root.complete(_Ops.root);
+      expect((await pending).error, isTrue);
+      await checked;
+      expect(identical(closing, synchronizer.closeAndWait()), isTrue);
+      await expectLater(synchronizer.closeAndWait(), throwsA(same(actual)));
+    },
+  );
+}
+
+class _Snapshots extends WebDavLibrarySnapshotStore {
+  _Snapshots(super.cache);
+  Object? clearFailure;
+
+  @override
+  void clear() {
+    final failure = clearFailure;
+    if (failure != null) throw failure;
+    super.clear();
+  }
 }
 
 class _Ops extends WebDavLibraryOps {

@@ -1,6 +1,7 @@
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/app_runtime/data_sync.dart';
 import 'package:venera_next/app_runtime/bootstrap_core.dart';
+import 'package:venera_next/app_runtime/image_loading.dart';
 import 'package:venera_next/app_runtime/follow_updates.dart';
 import 'package:venera_next/app_runtime/webdav_library.dart';
 import 'package:venera_next/features/reader/reader.dart'
@@ -8,6 +9,7 @@ import 'package:venera_next/features/reader/reader.dart'
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/app_runtime/background_sync.dart';
 import 'package:venera_next/app_runtime/interactive_bindings.dart';
+import 'package:venera_next/app_runtime/window_placement.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
 import 'package:venera_next/app_runtime/sync_window_binding.dart';
@@ -21,7 +23,6 @@ import 'package:venera_next/app_runtime/app_runtime.dart';
 import 'package:venera_next/app_shell/app_shell.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
-import 'package:window_manager/window_manager.dart';
 import 'components/gesture.dart';
 import 'components/js_ui.dart';
 import 'components/message.dart';
@@ -55,32 +56,15 @@ void main(List<String> args) {
           configureComicSourceDataSavedHandler(null);
           rethrow;
         }
-        runApp(MyApp(dataSync: sync));
-        if (App.isDesktop) {
-          await windowManager.ensureInitialized();
-          // WindowFrame owns the async close flow, including native close events.
-          await windowManager.setPreventClose(true);
-          windowManager.waitUntilReadyToShow().then((_) async {
-            await windowManager.setTitleBarStyle(
-              TitleBarStyle.hidden,
-              windowButtonVisibility: App.isMacOS,
-            );
-            if (App.isLinux) {
-              await windowManager.setBackgroundColor(Colors.transparent);
-            }
-            await windowManager.setMinimumSize(const Size(500, 600));
-            var placement = await WindowPlacement.loadFromFile();
-            if (App.isLinux) {
-              await windowManager.show();
-              await placement.applyToWindow();
-            } else {
-              await placement.applyToWindow();
-              await windowManager.show();
-            }
-
-            WindowPlacement.loop();
-          });
-        }
+        final placement = App.isDesktop
+            ? WindowPlacementHost.platform(
+                dataPath: App.dataPath,
+                linux: App.isLinux,
+                macos: App.isMacOS,
+              )
+            : null;
+        runApp(MyApp(dataSync: sync, windowPlacement: placement));
+        await placement?.initialize();
       },
       (error, stack) {
         Log.error("Unhandled Exception", error, stack);
@@ -90,10 +74,13 @@ void main(List<String> args) {
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, required this.dataSync});
+  const MyApp({super.key, required this.dataSync, this.windowPlacement});
 
   /// The host owns this controller beyond an individual widget mount.
   final DataSyncController dataSync;
+
+  /// Native initialization and writer handoff survive individual widget mounts.
+  final WindowPlacementHost? windowPlacement;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -101,7 +88,9 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   final _library = webDavLibrary;
-  final _interactiveBindings = InteractiveBindings.platform();
+  late final _interactiveBindings = InteractiveBindings.platform(
+    placement: widget.windowPlacement?.attach(),
+  );
   late final _dataSync = widget.dataSync;
   late final _followUpdates = createFollowUpdatesRuntime(_dataSync);
   late final _backgroundSync = BackgroundSync.platform(_dataSync);
@@ -133,7 +122,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // Stop timers while retaining observation for late reader writes/remounts.
     _backgroundSync.stop();
     _library.source.dispose();
-    unawaited(_interactiveBindings.dispose());
+    unawaited(
+      _interactiveBindings.dispose().catchError((
+        Object error,
+        StackTrace stack,
+      ) {
+        Log.error('Interactive bindings', error, stack);
+      }),
+    );
     super.dispose();
   }
 
@@ -349,18 +345,28 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
               widget = ReaderOrientationScope(child: OverlayWidget(widget));
               if (App.isDesktop) {
-                widget = Shortcuts(
-                  shortcuts: {
-                    LogicalKeySet(LogicalKeyboardKey.escape):
-                        VoidCallbackIntent(App.pop),
-                  },
-                  child: MouseBackDetector(
-                    onTapDown: App.pop,
-                    child: WindowFrame(
-                      SyncWindowBinding(controller: _dataSync, child: widget),
-                      debugAction: reloadComicSourcesForDebug,
+                widget = WindowFrame(
+                  Shortcuts(
+                    shortcuts: {
+                      LogicalKeySet(LogicalKeyboardKey.escape):
+                          VoidCallbackIntent(App.pop),
+                    },
+                    child: MouseBackDetector(
+                      onTapDown: App.pop,
+                      child: SyncWindowBinding(
+                        controller: _dataSync,
+                        prepareInteractive: _interactiveBindings.prepareForExit,
+                        prepareFollowUpdates: () =>
+                            prepareApplicationFollowUpdatesForExit(
+                              _followUpdates,
+                            ),
+                        prepareWebDavLibrary: _library.source.prepareForExit,
+                        prepareImages: prepareImageLoadingForExit,
+                        child: widget,
+                      ),
                     ),
                   ),
+                  debugAction: reloadComicSourcesForDebug,
                 );
               }
               widget = FollowUpdatesScope(

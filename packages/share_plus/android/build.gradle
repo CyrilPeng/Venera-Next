@@ -1,0 +1,64 @@
+group 'dev.fluttercommunity.plus.share'
+version '1.0-SNAPSHOT'
+
+buildscript {
+    ext.kotlin_version = '2.2.0'
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.12.1'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+// Run the real file/request ownership primitives on a JVM without an emulator
+// or a new test dependency: :share_plus:testShareOwnership.
+tasks.register('testShareOwnership', JavaExec) {
+    group = 'verification'
+    description = 'Checks share file retention, rollback and native result ownership.'
+    dependsOn 'compileDebugUnitTestKotlin'
+    mainClass = 'dev.fluttercommunity.plus.share.ShareOwnershipTest'
+    classpath = files(tasks.named('testDebugUnitTest').map { it.classpath })
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace 'dev.fluttercommunity.plus.share'
+    compileSdk = flutter.compileSdkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = 17
+    }
+
+    defaultConfig {
+        minSdk 19
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    lintOptions {
+        disable 'InvalidPackage'
+    }
+
+    dependencies {
+        implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+        implementation 'androidx.core:core-ktx:1.16.0'
+        implementation 'androidx.annotation:annotation:1.9.1'
+    }
+}

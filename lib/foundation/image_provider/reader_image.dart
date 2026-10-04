@@ -34,20 +34,27 @@ class ReaderImageProvider
   @override
   final bool enableResize;
 
+  @protected
+  File createLocalFile(String path) => File(path);
+
   @override
   bool get retryFileSystemErrors => !imageKey.startsWith('file://');
 
   @override
   Future<Uint8List> load(chunkEvents, checkStop) async {
+    checkStop();
     Uint8List? imageBytes;
     if (imageKey.startsWith('file://')) {
-      var file = File(imageKey.substring(7));
-      if (await file.exists()) {
+      final file = createLocalFile(imageKey.substring(7));
+      final exists = await file.exists();
+      checkStop();
+      if (exists) {
         imageBytes = await readFileBytesChecked(
           file,
           requireNonEmpty: true,
           checkStop: checkStop,
           cancelSignal: BaseImageProvider.cancelSignalOf(checkStop),
+          canRetry: () => BaseImageProvider.canRetryAfterFailure(checkStop),
         );
       } else {
         throw FileSystemException('File not found', file.path);
@@ -68,6 +75,7 @@ class ReaderImageProvider
     if (imageBytes == null) {
       throw "Error: Empty response body.";
     }
+    checkStop();
     if (appdata.settings['enableCustomImageProcessing']) {
       var script = appdata.settings['customImageProcessing'].toString();
       if (!script.contains('function processImage')) {

@@ -35,6 +35,9 @@ class ReaderImageSelectionOverlay {
     _disposed = true;
     _dismiss();
   }
+
+  /// End the current selection while allowing a later export after recovery.
+  void cancel() => _dismiss();
 }
 
 class _SelectImageOverlayContent extends StatelessWidget {

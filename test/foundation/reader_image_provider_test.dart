@@ -19,9 +19,14 @@ void main() {
         cancelSignal: signal.future,
       );
       signal.complete();
-      await expectLater(result, throwsStateError);
-      image.complete({'unused': callback});
+      var finished = false;
+      final observed = expectLater(result, throwsStateError).then((_) {
+        finished = true;
+      });
       await pumpEventQueue();
+      expect(finished, isFalse);
+      image.complete({'unused': callback});
+      await observed;
       expect(callback.destroyed, 1);
     },
   );
@@ -77,10 +82,72 @@ void main() {
     );
 
     cancelSignal.complete();
-
-    await expectLater(result, throwsA(isA<StateError>()));
+    final observed = expectLater(result, throwsA(isA<StateError>()));
+    await pumpEventQueue();
     expect(canceled, isTrue);
+    expect(checkedStop, isFalse);
+    image.complete(Uint8List(0));
+    await observed;
     expect(checkedStop, isTrue);
+  });
+
+  test('cancellation drains both image and asynchronous hook', () async {
+    final image = Completer<dynamic>();
+    final hook = Completer<dynamic>();
+    final signal = Completer<void>();
+    final imageReference = _ResultCallback();
+    final hookReference = _ResultCallback();
+    var finished = false;
+    final result = waitForReaderImageProcessingResult(
+      image.future,
+      () => hook.future,
+      () => throw StateError('stopped'),
+      cancelSignal: signal.future,
+    );
+    final observed = expectLater(result, throwsStateError).then((_) {
+      finished = true;
+    });
+    signal.complete();
+    await pumpEventQueue();
+    image.complete({'reference': imageReference});
+    await pumpEventQueue();
+    expect(finished, isFalse);
+    hook.complete({'reference': hookReference});
+    await observed;
+    expect(imageReference.destroyed, 1);
+    expect(hookReference.destroyed, 1);
+  });
+
+  test('late error graphs and hook errors preserve all failures', () async {
+    final image = Completer<dynamic>();
+    final hook = Completer<dynamic>();
+    final signal = Completer<void>();
+    final reference = _ResultCallback();
+    final error = <String, dynamic>{'reference': reference};
+    error['self'] = error;
+    final result = waitForReaderImageProcessingResult(
+      image.future,
+      () => hook.future,
+      () => throw StateError('stopped'),
+      cancelSignal: signal.future,
+    );
+    final observed = expectLater(
+      result,
+      throwsA(
+        isA<ReaderImageProcessingFailure>().having(
+          (failure) => failure.failures.length,
+          'failure count',
+          3,
+        ),
+      ),
+    );
+    signal.complete();
+    await pumpEventQueue();
+    hook.completeError(StateError('hook failed'));
+    await pumpEventQueue();
+    image.completeError(error);
+    await observed;
+    expect(reference.destroyed, 1);
   });
 
   test('reader image processing keeps null result as empty bytes', () async {

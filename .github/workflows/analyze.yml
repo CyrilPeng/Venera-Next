@@ -14,6 +14,17 @@ permissions:
   contents: read
 
 jobs:
+  rhttp-native:
+    name: Rhttp 原生回调生命周期
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: 验证锁定原生源码的取消与回调收尾
+        env:
+          RUSTFLAGS: --cfg reqwest_unstable
+        run: cargo test --locked --manifest-path packages/rhttp/rust/Cargo.toml --lib
+
   analyze:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -55,7 +66,7 @@ jobs:
             exit 0
           fi
           dart format --output=none --set-exit-if-changed "${dart_files[@]}"
-      - run: flutter analyze --no-fatal-infos --fatal-warnings
+      - run: flutter analyze --fatal-infos --fatal-warnings
       - run: flutter test --coverage
       - name: 汇总 Dart 覆盖率
         run: python3 .github/scripts/report_dart_coverage.py coverage/lcov.info --github-summary

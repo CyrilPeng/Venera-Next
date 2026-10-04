@@ -368,15 +368,11 @@ void _closeCookieJarForImport() {
     SingleInstanceCookieJar.instance?.dispose();
   } catch (_) {
     // ignore partially initialized cookie jars
-  } finally {
-    SingleInstanceCookieJar.instance = null;
   }
 }
 
 void _openCookieJarForImport() {
-  SingleInstanceCookieJar.instance = SingleInstanceCookieJar(
-    FilePath.join(App.dataPath, "cookie.db"),
-  );
+  SingleInstanceCookieJar(FilePath.join(App.dataPath, "cookie.db"));
 }
 
 Future<void> importPicaData(File file) => AppDataOperations.instance.run(

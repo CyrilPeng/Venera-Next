@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -50,6 +51,104 @@ void main() {
 
       expect(savedData['token'], 'third');
       expect(uploadCount, 2);
+    },
+  );
+
+  test(
+    'close drains coalesced writes and their change notifications',
+    () async {
+      final root = Directory.systemTemp.createTempSync('source-save-close-');
+      addTearDown(() => root.deleteSync(recursive: true));
+      App.dataPath = root.path;
+      final notified = Completer<void>();
+      final releaseNotification = Completer<void>();
+      var notifications = 0;
+      configureComicSourceDataSavedHandler(() async {
+        notifications++;
+        if (notifications == 1) {
+          notified.complete();
+          await releaseNotification.future;
+        }
+      });
+
+      final source = _source();
+      source.data = {'token': 'first'};
+      final first = source.saveData();
+      await notified.future;
+      source.data = {'token': 'second'};
+      final second = source.saveData();
+      source.data = {'token': 'latest'};
+      final third = source.saveData();
+      expect(third, same(second));
+      final closing = source.closeDataWrites();
+      expect(source.closeDataWrites(), same(closing));
+      var closed = false;
+      final observed = closing.then((_) => closed = true);
+      await expectLater(source.saveData(), throwsStateError);
+      await pumpEventQueue();
+      expect(closed, isFalse);
+
+      releaseNotification.complete();
+      await Future.wait([first, second, third, observed]);
+      expect(notifications, 2);
+      expect(
+        jsonDecode(
+          File('${root.path}/comic_source/test.data').readAsStringSync(),
+        ),
+        {'token': 'latest'},
+      );
+    },
+  );
+
+  test(
+    'close retains an unobserved file failure after the save settles',
+    () async {
+      final root = Directory.systemTemp.createTempSync('source-save-failure-');
+      addTearDown(() => root.deleteSync(recursive: true));
+      App.dataPath = root.path;
+      Directory(
+        '${root.path}/comic_source/test.data',
+      ).createSync(recursive: true);
+      final source = _source();
+      // The production JavaScript bridge intentionally cannot await saveData.
+      source.saveData();
+      await pumpEventQueue();
+      await expectLater(
+        source.closeDataWrites(),
+        throwsA(isA<FileSystemException>()),
+      );
+    },
+  );
+
+  test('a successful retry repairs the retained save failure', () async {
+    final root = Directory.systemTemp.createTempSync('source-save-retry-');
+    addTearDown(() => root.deleteSync(recursive: true));
+    App.dataPath = root.path;
+    final obstruction = Directory('${root.path}/comic_source/test.data')
+      ..createSync(recursive: true);
+    final source = _source();
+    await expectLater(source.saveData(), throwsA(isA<FileSystemException>()));
+    obstruction.deleteSync();
+    source.data = {'token': 'recovered'};
+    await source.saveData();
+    await source.closeDataWrites();
+    expect(
+      jsonDecode(
+        File('${root.path}/comic_source/test.data').readAsStringSync(),
+      ),
+      {'token': 'recovered'},
+    );
+  });
+
+  test(
+    'closed source observes ignored saves and still rejects awaiters',
+    () async {
+      final source = _source();
+      await source.closeDataWrites();
+      // JavaScript save_data returns void, including during shutdown.
+      source.saveData();
+      await pumpEventQueue();
+      await expectLater(source.saveData(), throwsStateError);
     },
   );
 

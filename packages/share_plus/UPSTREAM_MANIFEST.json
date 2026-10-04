@@ -1,0 +1,146 @@
+[
+  {
+    "path": "android/build.gradle",
+    "sha256": "9F3C6DD13B48C2E333C8922E334DCEB05E1B6EA812D28CE0B9E77E97969411AB"
+  },
+  {
+    "path": "android/gradle.properties",
+    "sha256": "034FD3F15AC7A699CF7393150E318CD3E0AFB51826B0DECC69A548DB53FA1116"
+  },
+  {
+    "path": "android/settings.gradle",
+    "sha256": "FD780F02F9319168781AE7C36885D98C5E65CA55611CF136888C13386D086E17"
+  },
+  {
+    "path": "android/src/main/AndroidManifest.xml",
+    "sha256": "3E1C953FD617A2967A2F28FBD7018DC587554FB9D6F7B1E6A56646207AEA2C55"
+  },
+  {
+    "path": "android/src/main/kotlin/dev/fluttercommunity/plus/share/MethodCallHandler.kt",
+    "sha256": "836797637F4A44CB5BF0F89925845B576C58D0AB4DD45E71952391D96EA2F711"
+  },
+  {
+    "path": "android/src/main/kotlin/dev/fluttercommunity/plus/share/Share.kt",
+    "sha256": "BD89148F4D677B518E0A697EC593E33FC4F3D5C940EB8EA00FE76F85CE8B2ADD"
+  },
+  {
+    "path": "android/src/main/kotlin/dev/fluttercommunity/plus/share/ShareFileProvider.kt",
+    "sha256": "6F60B68D6DC542D86EC8B18B5B6F335E573E2A8C54D8CBE5E7ED8E9D7D790085"
+  },
+  {
+    "path": "android/src/main/kotlin/dev/fluttercommunity/plus/share/SharePlusPendingIntent.kt",
+    "sha256": "BE8F7873B465373AF6A3A618C17E2646850D97E9FAB9D9163196A4A32B35757A"
+  },
+  {
+    "path": "android/src/main/kotlin/dev/fluttercommunity/plus/share/SharePlusPlugin.kt",
+    "sha256": "A620DDE9A3F1E5822B9CDBEFF155514A7C8F3D3DA0AAC92B1879791AFB4B80B9"
+  },
+  {
+    "path": "android/src/main/kotlin/dev/fluttercommunity/plus/share/ShareSuccessManager.kt",
+    "sha256": "0C3DD5E5326929A21C84E7754646D26D61B2A7364F3524990CD75AB545CE5E22"
+  },
+  {
+    "path": "android/src/main/res/xml/flutter_share_file_paths.xml",
+    "sha256": "1DD60BE35B3E9F61D2BBBF059120D51068CEA7431FB142131A38F84BCBD2A708"
+  },
+  {
+    "path": "CHANGELOG.md",
+    "sha256": "E12E1F0FD2514E1E76D90EA1095D117DEEA5D7A76AAA283EF6119B5A48E3B4E9"
+  },
+  {
+    "path": "ios/share_plus.podspec",
+    "sha256": "2ED6F45EFFFC1C01B57F884FDBF62C7DF917F97F75107283D15DD9A087F79E02"
+  },
+  {
+    "path": "ios/share_plus/Package.swift",
+    "sha256": "D66EF4847F891B9F35161447053A72854ACB727785C59B9ED841F3B9768986D5"
+  },
+  {
+    "path": "ios/share_plus/Sources/share_plus/FPPSharePlusPlugin.m",
+    "sha256": "FACD850F80725905EDEEF6F103F41C8E2DDE63348CB88615E2679533F4A1C40E"
+  },
+  {
+    "path": "ios/share_plus/Sources/share_plus/include/share_plus/FPPSharePlusPlugin.h",
+    "sha256": "68728308E8997605C9DBC546F34A165E3118EF6A096A93F285FCEDBC57C2547D"
+  },
+  {
+    "path": "ios/share_plus/Sources/share_plus/PrivacyInfo.xcprivacy",
+    "sha256": "6D2DA0D8D930227D428C1D9363B0AD6E3A12E2C9B68C5CE297158A7412FC8C31"
+  },
+  {
+    "path": "lib/share_plus.dart",
+    "sha256": "F57AA04EB70BCFC0D9B09C74AA022046750C0CD028860D1B350A38AE68A3166E"
+  },
+  {
+    "path": "lib/src/share_plus_linux.dart",
+    "sha256": "AC90E7744BE2C131D07209E729B484F00F01CA3DB6590C02CB941BD874BF00A4"
+  },
+  {
+    "path": "lib/src/share_plus_macos.dart",
+    "sha256": "9848BDE3051A6D78B5DD780277CF6D6010E04D783168BB781A9821C6265002BE"
+  },
+  {
+    "path": "lib/src/share_plus_web.dart",
+    "sha256": "275848EB8F1098E11AB38289F5E509F9C81C716959031897B723F4973FCF10AC"
+  },
+  {
+    "path": "lib/src/share_plus_windows.dart",
+    "sha256": "8775859856886B01ECC6751C9638D123B68E07679CF4C42D802C8EE774958FD1"
+  },
+  {
+    "path": "lib/src/windows_version_helper.dart",
+    "sha256": "8FDB72CCD830A84B00D083B201EF465EAB8730397EB7C8299DAAD50522BC9931"
+  },
+  {
+    "path": "LICENSE",
+    "sha256": "EB9741A672906EBD01FD9B3BEF38F6C82EFF250E91149CF404539EE7981079FD"
+  },
+  {
+    "path": "macos/share_plus.podspec",
+    "sha256": "685B10419ABF09233BFD240A6D5FEF92597460862802A6B44BE68EB9A5AD640D"
+  },
+  {
+    "path": "macos/share_plus/Package.swift",
+    "sha256": "C289A1D81C7FD1F70141921C0E25D79CBED291C087CC028C867FECCBD6DEDE0D"
+  },
+  {
+    "path": "macos/share_plus/Sources/share_plus/PrivacyInfo.xcprivacy",
+    "sha256": "204D035A88EAB2281B3D914F46C796766AE78E3CB82537711928DCA9E28DBBB8"
+  },
+  {
+    "path": "macos/share_plus/Sources/share_plus/SharePlusMacosPlugin.swift",
+    "sha256": "67ED9545C992F9B612A99244E99EEC869C7E5F9CCC5E0DC15F1415EC8CC92BF9"
+  },
+  {
+    "path": "pubspec.yaml",
+    "sha256": "5641DB6D0699DA562409C4850A0B8B4EF89941ADD96BB4974F6A3814619D3CE6"
+  },
+  {
+    "path": "README.md",
+    "sha256": "4A9C219DBF36453E73516658FD3932C52D85E6D05338D25E869AEC30DD8FB601"
+  },
+  {
+    "path": "windows/CMakeLists.txt",
+    "sha256": "65B58D65AB272B2873FFACDE510AE7E58113CAE64DC4308C8EC21FC6C149ECF2"
+  },
+  {
+    "path": "windows/include/share_plus/share_plus_windows_plugin_c_api.h",
+    "sha256": "87319DF03DEE082198895F8FE9966290288F8A304EA532BA502875EC4D5CE386"
+  },
+  {
+    "path": "windows/share_plus_plugin_c_api.cpp",
+    "sha256": "2591525D1D22E8246AFA916488206F43A3A04D120FB50A334E9A7C15CF5FF537"
+  },
+  {
+    "path": "windows/share_plus_plugin.cpp",
+    "sha256": "694285139F03A27FEE13582862DDA8A7AC51CA03EBA80115817536F710D00385"
+  },
+  {
+    "path": "windows/share_plus_windows_plugin.h",
+    "sha256": "5B3B8A55483D3974A69AD11AAE810F45185EB31DF56234A61CC656CDD8B2C5F4"
+  },
+  {
+    "path": "windows/vector.h",
+    "sha256": "F3E44DFC7D7CE5CBFEDF605C44EE7523747F19DAF667F8E4B66A60517A9B070F"
+  }
+]

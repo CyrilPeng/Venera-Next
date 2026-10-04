@@ -59,6 +59,7 @@ void main() {
           manager.remove(key);
         }
         await appdata.saveData(false);
+        expect(JsEngine().debugOwnedReferenceCount, 0);
         JsEngine().dispose();
         settings.forEach((key, value) => appdata.settings[key] = value);
         Log.isMuted = false;
@@ -152,6 +153,59 @@ void main() {
             ),
             isEmpty,
           );
+        },
+      );
+      for (final expression in [
+        'throw {message:"nested processing failure", details:{callback:()=>1}};',
+        'return Promise.reject({message:"nested processing failure", details:{callback:()=>1}});',
+      ]) {
+        test('exception reference graph is released: $expression', () async {
+          await expectLater(
+            process('function processImage() { $expression }'),
+            throwsA(
+              predicate(
+                (error) =>
+                    error.toString().contains('nested processing failure'),
+              ),
+            ),
+          );
+          expect(JsEngine().debugOwnedReferenceCount, 0);
+        });
+      }
+      test(
+        'native async cancel hook is drained and its result is released',
+        () async {
+          var stopped = false;
+          final signal = Completer<void>();
+          var completed = false;
+          final result = process(
+            r'''
+          function processImage() {
+            const image = new Promise(resolve => globalThis.finishImage = resolve);
+            return { image, unused: () => 1, onCancel: () => {
+              globalThis.hookStarted = true;
+              return new Promise(resolve => globalThis.finishHook = resolve);
+            }};
+          }
+        ''',
+            cancelSignal: signal.future,
+            checkStop: () {
+              if (stopped) throw StateError('stopped');
+            },
+          );
+          final observed = expectLater(result, throwsStateError).then((_) {
+            completed = true;
+          });
+          stopped = true;
+          signal.complete();
+          await pumpEventQueue();
+          expect(JsEngine().runCode('globalThis.hookStarted'), isTrue);
+          JsEngine().runCode('globalThis.finishImage({unused:()=>1})');
+          await pumpEventQueue();
+          expect(completed, isFalse);
+          JsEngine().runCode('globalThis.finishHook({unused:()=>2})');
+          await observed;
+          expect(JsEngine().debugOwnedReferenceCount, 0);
         },
       );
     },

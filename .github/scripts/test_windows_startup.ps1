@@ -92,15 +92,37 @@ function Wait-ForExit(
     }
 }
 
-function Start-TestProcess([string]$Path, [string]$Name) {
+function Start-TestProcess([string]$Path, [string]$Name, [string[]]$Arguments = @()) {
+    $options = @{}
+    if ($Arguments.Count -gt 0) { $options.ArgumentList = $Arguments }
     $process = Start-Process -FilePath $Path -WorkingDirectory $testRoot `
-        -PassThru `
+        -WindowStyle Hidden -PassThru @options `
         -RedirectStandardOutput (Join-Path $testRoot "$Name.stdout.log") `
         -RedirectStandardError (Join-Path $testRoot "$Name.stderr.log")
     $started.Add($process)
     # Retain the handle so even a fast secondary launch has a readable exit code.
     $null = $process.Handle
     return $process
+}
+
+function Assert-HeadlessOutput([string]$LogPath, [string]$ExpectedMessage) {
+    $messages = @(Get-Content -LiteralPath $LogPath | ForEach-Object {
+        if ($_.StartsWith('[CLI PRINT] ')) {
+            $_.Substring('[CLI PRINT] '.Length) | ConvertFrom-Json -ErrorAction Stop
+        }
+    })
+    if ($messages.Count -eq 0) { throw 'Headless command produced no CLI JSON output.' }
+    $last = $messages[-1]
+    if ($last.status -ne 'error' -or $last.message -cne $ExpectedMessage) {
+        throw "Unexpected headless result; expected: $ExpectedMessage"
+    }
+}
+
+function Test-HeadlessCommand([string]$Name, [string[]]$Arguments, [string]$ExpectedMessage) {
+    $process = Start-TestProcess $appPath $Name $Arguments
+    Wait-ForExit $process 60 1
+    Assert-HeadlessOutput (Join-Path $testRoot "$Name.stdout.log") $ExpectedMessage
+    Write-Output "PASS: $Name returned CLI JSON and exit code 1."
 }
 
 function Has-StartupEvent([int]$ProcessId, [string]$Event) {
@@ -147,6 +169,19 @@ try {
     if (-not (Test-Path -LiteralPath $appPath -PathType Leaf)) {
         throw "Application not found: $appPath"
     }
+
+    # Run before interactive startup, using only this runner's fresh profile.
+    # These commands require no server credentials or source downloads.
+    Test-HeadlessCommand 'cli-missing-command' @('--headless') `
+        'No command provided for headless mode.'
+    Test-HeadlessCommand 'cli-invalid-webdav' @('--headless', 'webdav', 'invalid') `
+        'Invalid webdav command. Use "up" or "down".'
+    Test-HeadlessCommand 'cli-webdav-up' @('--headless', 'webdav', 'up', '--ignore-disheadless-log') `
+        'WebDAV sync is not configured.'
+    Test-HeadlessCommand 'cli-webdav-down' @('--headless', 'webdav', 'down', '--ignore-disheadless-log') `
+        'WebDAV sync is not configured.'
+    Test-HeadlessCommand 'cli-subscriptions' @('--headless', 'updatesubscribe', '--ignore-disheadless-log') `
+        'Follow updates folder is not configured.'
 
     $primary = Start-TestProcess $appPath 'primary'
     Wait-ForCondition {

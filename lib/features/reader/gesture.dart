@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'gesture_port.dart';
 import 'image_action.dart';
 import 'package:flutter/gestures.dart';
@@ -340,7 +342,7 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
         icon: Icons.exit_to_app,
         text: "Exit".tl,
         onClick: () {
-          context.pop();
+          unawaited(context.reader.requestExit());
         },
       ),
       if (App.isDesktop && !reader.isLoading)
@@ -399,6 +401,7 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
     final images = reader.images;
     final chapter = reader.chapter;
     await useReaderImage(
+      work: reader.imageWork,
       read: () => viewport.getImageByOffset(location),
       isCurrent: () =>
           mounted &&

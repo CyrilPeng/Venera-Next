@@ -26,23 +26,41 @@ class Image {
 
   Image.empty(this.width, this.height) : _data = Uint32List(width * height);
 
-  static Future<Image> decodeImage(Uint8List data) async {
-    var codec = await ui.instantiateImageCodec(data);
-    var frame = await codec.getNextFrame();
-    codec.dispose();
-    var info = await frame.image.toByteData(
-      format: ui.ImageByteFormat.rawStraightRgba,
-    );
-    if (info == null) {
-      throw Exception('Failed to decode image');
+  static Future<Image> decodeImage(
+    Uint8List data, {
+    Future<ui.Codec> Function(Uint8List)? instantiateCodec,
+  }) async {
+    ui.Codec? codec;
+    ui.Image? decoded;
+    Image? result;
+    Object? failure;
+    StackTrace? failureStack;
+    final cleanup = <ImageProcessingResourceFailure>[];
+    try {
+      codec = await (instantiateCodec ?? ui.instantiateImageCodec)(data);
+      decoded = (await codec.getNextFrame()).image;
+      final info = await decoded.toByteData(
+        format: ui.ImageByteFormat.rawStraightRgba,
+      );
+      if (info == null) throw Exception('Failed to decode image');
+      result = Image(
+        info.buffer.asUint32List(info.offsetInBytes, info.lengthInBytes ~/ 4),
+        decoded.width,
+        decoded.height,
+      );
+    } catch (error, stack) {
+      failure = error;
+      failureStack = stack;
+    } finally {
+      if (decoded != null) {
+        _releaseImageResource('decoded image', decoded.dispose, cleanup);
+      }
+      if (codec != null) {
+        _releaseImageResource('image codec', codec.dispose, cleanup);
+      }
     }
-    var image = Image(
-      info.buffer.asUint32List(),
-      frame.image.width,
-      frame.image.height,
-    );
-    frame.image.dispose();
-    return image;
+    _throwImageProcessingFailure(failure, failureStack, cleanup);
+    return result!;
   }
 
   Color getPixelAtIndex(int index) {
@@ -198,27 +216,7 @@ class Color {
   int get a => (value >> 24) & 0xFF;
 }
 
-class JsEngine {
-  static final JsEngine _instance = JsEngine._();
-
-  factory JsEngine() => _instance;
-
-  JsEngine._() {
-    _engine = FlutterQjs();
-    _engine!.dispatch();
-    var setGlobalFunc = _engine!.evaluate(
-      "(key, value) => { this[key] = value; }",
-    );
-    (setGlobalFunc as JSInvokable)(["sendMessage", _messageReceiver]);
-    setGlobalFunc.free();
-  }
-
-  FlutterQjs? _engine;
-
-  dynamic runCode(String js, [String? name]) {
-    return _engine!.evaluate(js, name: name);
-  }
-
+class _ImageScriptBridge {
   var images = <int, Image>{};
 
   int _key = 0;
@@ -306,26 +304,162 @@ Future<T> debugRunWithImageScriptSlot<T>(Future<T> Function() task) {
 
 Future<Uint8List> modifyImageWithScript(Uint8List data, String script) async {
   return _imageScriptSlots.run(() async {
-    var image = await Image.decodeImage(data);
-    var initJs = await rootBundle.loadString('assets/init.js');
-    return await Isolate.run(() {
-      var jsEngine = JsEngine();
-      jsEngine.runCode(initJs, '<init>');
-      jsEngine.runCode(script);
-      var key = jsEngine.setImage(image);
-      var res = jsEngine.runCode('''
-        let func = () => {
-          let image = new Image($key);
-          let result = modifyImage(image);
-          return result.key;
-        }
-        func();
-      ''');
-      var newImage = jsEngine.images[res];
-      var data = newImage!.encodePng();
-      return Uint8List.fromList(data);
-    });
+    final image = await Image.decodeImage(data);
+    final initJs = await rootBundle.loadString('assets/init.js');
+    return Isolate.run(
+      () => runImageScript(image, script, initializationScript: initJs),
+    );
   });
+}
+
+typedef ImageProcessingResourceFailure = ({
+  String resource,
+  Object error,
+  StackTrace stack,
+});
+
+class ImageProcessingFailure implements Exception {
+  ImageProcessingFailure({
+    required this.cause,
+    required this.causeStack,
+    required Iterable<ImageProcessingResourceFailure> failures,
+  }) : failures = List.unmodifiable(failures);
+
+  final Object? cause;
+  final StackTrace? causeStack;
+  final List<ImageProcessingResourceFailure> failures;
+
+  @override
+  String toString() =>
+      'Image processing failed: ${cause ?? 'resource cleanup'}; '
+      '${failures.map((failure) => '${failure.resource}: ${failure.error}').join('; ')}';
+}
+
+void _releaseImageResource(
+  String resource,
+  void Function() release,
+  List<ImageProcessingResourceFailure> failures,
+) {
+  try {
+    release();
+  } catch (error, stack) {
+    failures.add((resource: resource, error: error, stack: stack));
+  }
+}
+
+void _throwImageProcessingFailure(
+  Object? cause,
+  StackTrace? causeStack,
+  List<ImageProcessingResourceFailure> failures,
+) {
+  if (failures.isNotEmpty) {
+    throw ImageProcessingFailure(
+      cause: cause,
+      causeStack: causeStack,
+      failures: failures,
+    );
+  }
+  if (cause != null) Error.throwWithStackTrace(cause, causeStack!);
+}
+
+/// One synchronous image-script task owns its runtime and all returned values.
+/// Dispatch is joined after closing the port, including on partial startup.
+Future<Uint8List> runImageScript(
+  Image image,
+  String script, {
+  required String initializationScript,
+  FlutterQjs Function()? createEngine,
+  Uint8List Function(Image)? encodeImage,
+}) async {
+  FlutterQjs? engine;
+  Future<void>? dispatch;
+  final bridge = _ImageScriptBridge();
+  final values = <Object?>[];
+  final cleanup = <ImageProcessingResourceFailure>[];
+  Object? failure;
+  StackTrace? failureStack;
+  Uint8List? result;
+  dynamic evaluate(String code, [String? name]) {
+    final value = engine!.evaluate(code, name: name);
+    values.add(value);
+    return value;
+  }
+
+  try {
+    engine = (createEngine ?? FlutterQjs.new)();
+    dispatch = engine.dispatch();
+    dispatch.ignore();
+    final setGlobal = evaluate('(key, value) => { this[key] = value; }');
+    values.add(
+      (setGlobal as JSInvokable)(['sendMessage', bridge._messageReceiver]),
+    );
+    // The protocol is synchronous; unused statement results stay inside JS.
+    evaluate('$initializationScript\n;void 0;', '<init>');
+    evaluate('$script\n;void 0;');
+    final key = bridge.setImage(image);
+    final resultKey = evaluate('''
+      (() => {
+        const image = new Image($key);
+        const result = modifyImage(image);
+        return result.key;
+      })();
+    ''');
+    final modified = resultKey is int ? bridge.images[resultKey] : null;
+    if (modified == null) {
+      throw StateError('modifyImage must return an Image synchronously');
+    }
+    result = Uint8List.fromList(
+      (encodeImage ?? (image) => image.encodePng())(modified),
+    );
+  } catch (error, stack) {
+    // JavaScript may throw a graph containing native references as well.
+    values.add(error);
+    failure = error;
+    failureStack = stack;
+  } finally {
+    final visited = Set<Object>.identity();
+    void releaseValue(Object? value) {
+      if (value == null || !visited.add(value)) return;
+      if (value is JSRef) {
+        _releaseImageResource('JS result', value.free, cleanup);
+      } else if (value is Map) {
+        for (final entry in value.entries) {
+          releaseValue(entry.key);
+          releaseValue(entry.value);
+        }
+      } else if (value is List && value is! TypedData) {
+        for (final entry in value) {
+          releaseValue(entry);
+        }
+      }
+    }
+
+    for (final value in values) {
+      _releaseImageResource(
+        'JS result graph',
+        () => releaseValue(value),
+        cleanup,
+      );
+    }
+    if (engine != null) {
+      _releaseImageResource('JS runtime', () => engine!.close(), cleanup);
+      _releaseImageResource(
+        'JS runtime port',
+        () => engine!.port.close(),
+        cleanup,
+      );
+    }
+    if (dispatch != null) {
+      try {
+        await dispatch;
+      } catch (error, stack) {
+        cleanup.add((resource: 'JS dispatch', error: error, stack: stack));
+      }
+    }
+    bridge.images.clear();
+  }
+  _throwImageProcessingFailure(failure, failureStack, cleanup);
+  return result!;
 }
 
 class _AsyncSemaphore {

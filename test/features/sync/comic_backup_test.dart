@@ -178,7 +178,7 @@ void main() {
         final result = await ComicBackupManager.backup([
           dupComic,
           freshComic,
-        ], onProgress: (_, _, __) {});
+        ], onProgress: (_, _, _) {});
         uploadedPaths.addAll(fakeOps.uploadedRemotePaths);
 
         expect(result.success, 1);

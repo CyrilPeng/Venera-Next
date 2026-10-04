@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:yaml/yaml.dart';
 
 import 'appdata.dart';
+import 'navigation_admission.dart';
 
 Locale resolveAppLocale(String preference, List<Locale> systemLocales) {
   final selected = switch (preference) {
@@ -82,10 +83,15 @@ class _App {
   ];
 
   void rootPop() {
-    rootNavigatorKey.currentState?.maybePop();
+    final navigator = rootNavigatorKey.currentState;
+    if (navigator != null && NavigationAdmission.allows(navigator.context)) {
+      navigator.maybePop();
+    }
   }
 
   void pop() {
+    final context = rootNavigatorKey.currentContext;
+    if (context != null && !NavigationAdmission.allows(context)) return;
     if (rootNavigatorKey.currentState?.canPop() ?? false) {
       rootNavigatorKey.currentState?.pop();
     } else if (mainNavigatorKey?.currentState?.canPop() ?? false) {

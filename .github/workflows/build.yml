@@ -126,6 +126,9 @@ jobs:
         run: rustup show
       - run: flutter pub get --enforce-lockfile
       - run: flutter build apk --release
+      - name: 验证 Android 分享文件与回调归属
+        working-directory: android
+        run: ./gradlew :share_plus:testShareOwnership
       - name: 上传 APK (armeabi-v7a)
         uses: actions/upload-artifact@v7
         with:
@@ -173,6 +176,15 @@ jobs:
         run: |
           flutter pub get --enforce-lockfile
           python windows/build.py
+      - name: 验证 Windows 分享请求与 COM 归属
+        shell: pwsh
+        run: |
+          cmake -S packages/share_plus/windows/tests -B build/share-plus-tests -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/share-plus-tests --config Debug
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build/share-plus-tests -C Debug --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: 校验 Windows 构建产物
         shell: pwsh
         run: |
@@ -210,9 +222,9 @@ jobs:
           cmake -S windows/tests -B build/windows/startup_tests -A x64
           cmake --build build/windows/startup_tests --config Release
           ctest --test-dir build/windows/startup_tests -C Release --output-on-failure
-      - name: 验证 Windows 静默安装与实际启动
+      - name: 验证 Windows 安装、无头命令与实际启动
         shell: pwsh
-        timeout-minutes: 7
+        timeout-minutes: 12
         run: |
           $installers = @(Get-ChildItem -Path build/windows -File -Filter 'VeneraNext-*-windows-installer.exe')
           if ($installers.Count -ne 1) { throw '静默安装测试需要恰好一个安装包。' }

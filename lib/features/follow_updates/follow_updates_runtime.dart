@@ -38,9 +38,11 @@ class FollowUpdatesRuntime {
   /// Subscription setup must be atomic and return its release callback.
   void start() {
     if (_disposed) throw StateError('Follow updates runtime is disposed');
-    if (isRunning) return;
+    if (isRunning || _service.isPreparingForExit) return;
     try {
-      _unsubscribe = _observeChanges(notifyChanged);
+      // Exit restoration may have stopped scheduling while this runtime's
+      // final-change subscription remained attached.
+      _unsubscribe ??= _observeChanges(notifyChanged);
       _service.start();
     } catch (_) {
       stop();
@@ -49,6 +51,15 @@ class FollowUpdatesRuntime {
   }
 
   void cancelChecking() => _service.cancelChecking();
+
+  /// Keep the subscription alive for final changes from accepted tasks. The
+  /// held service rejects new checks until the host releases its preparation.
+  Future<VoidCallback> prepareForExit() {
+    if (_disposed) {
+      return Future.error(StateError('Follow updates runtime is disposed'));
+    }
+    return _service.prepareForExit();
+  }
 
   void stop() {
     final unsubscribe = _unsubscribe;

@@ -47,19 +47,26 @@ class CacheManager {
   /// Finish accepted operations before closing SQLite. No new work is accepted.
   Future<void> dispose() {
     _closing = true;
-    return _disposal ??= _operations.then((_) => _db.dispose());
+    return _disposal ??= _operations.then((_) {
+      _db.dispose();
+      // Do not reopen the singleton while accepted writes are still draining.
+      if (identical(instance, this)) instance = null;
+    });
   }
 
   CacheManager.open({
     required String dataPath,
     required String cacheRoot,
     CacheScanner scanner = scanCacheDirectory,
+    Database Function(String)? openDatabase,
   }) : _dbPath = '$dataPath/cache.db',
        _cachePath = '$cacheRoot/cache',
        _scan = scanner {
     Directory(_cachePath).createSync(recursive: true);
-    _db = openSqliteDatabase(_dbPath);
-    _db.execute('''
+    // The manager owns the returned connection, even if schema setup fails.
+    final database = (openDatabase ?? openSqliteDatabase)(_dbPath);
+    try {
+      database.execute('''
       CREATE TABLE IF NOT EXISTS cache (
         key TEXT PRIMARY KEY NOT NULL,
         dir TEXT NOT NULL,
@@ -67,7 +74,12 @@ class CacheManager {
         expires INTEGER NOT NULL,
         type TEXT
       )
-    ''');
+      ''');
+      _db = database;
+    } catch (_) {
+      database.dispose();
+      rethrow;
+    }
   }
 
   Future<void> _runInitialScan() async {

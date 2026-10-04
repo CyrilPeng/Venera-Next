@@ -814,7 +814,7 @@ class _SliverSearchBarDelegate extends SliverPersistentHeaderDelegate {
                     );
             },
           ),
-          if (action != null) action!,
+          ?action,
           const SizedBox(width: 8),
         ],
       ),

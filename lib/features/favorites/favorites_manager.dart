@@ -14,7 +14,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/appdata.dart';
-import 'package:venera_next/features/favorites/local_favorite_image.dart';
+import 'favorite_cover_cache.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
@@ -669,7 +669,7 @@ class LocalFavoritesManager with ChangeNotifier {
     for (final (id, type) in identities) {
       if (_repository.findFolders(folders, id, type).isNotEmpty) continue;
       try {
-        LocalFavoriteImageProvider.delete(id, type);
+        deleteFavoriteCover(dataDirectory: App.dataPath, id: id, intKey: type);
       } catch (error, stack) {
         Log.error('Favorite cover cleanup', error, stack);
       }

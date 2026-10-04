@@ -96,7 +96,7 @@ class _SliverSearchResultState extends State<_SliverSearchResult>
 
   static const _kComicHeight = 162.0;
 
-  get _comicWidth => _kComicHeight * 0.7;
+  double get _comicWidth => _kComicHeight * 0.7;
 
   static const _kLeftPadding = 16.0;
 

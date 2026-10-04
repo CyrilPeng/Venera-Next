@@ -1,14 +1,21 @@
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:venera_next/network/request_scope.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/source_images_parser.dart';
+import 'package:venera_next/features/comic_source/source_parser_context.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/features/reader/chapter_loader.dart';
+import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/features/reader/waterfall_controller.dart';
+import 'package:venera_next/features/reader/waterfall_flow.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/comic_type.dart';
+import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
@@ -53,6 +60,23 @@ ComicSource source(LoadComicPagesFunc load) => ComicSource(
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  var nativeAvailable = true;
+  try {
+    if (Platform.isWindows) {
+      final path = Directory('build/windows/x64/runner/Release').absolute.path;
+      DynamicLibrary.open('$path/flutter_windows.dll');
+      DynamicLibrary.open('$path/flutter_qjs_plugin.dll');
+    } else {
+      DynamicLibrary.open(
+        Platform.isLinux
+            ? 'libflutter_qjs_plugin.so'
+            : 'flutter_qjs.framework/flutter_qjs',
+      );
+    }
+  } catch (_) {
+    nativeAvailable = false;
+  }
   late Directory temporary;
   late String root;
   late LocalManager manager;
@@ -124,7 +148,7 @@ void main() {
     scope.dispose();
   });
 
-  test('cancellation releases caller and suppresses late recovery', () async {
+  test('cancellation waits for source and suppresses late recovery', () async {
     await add(writeImage: false);
     final response = Completer<Res<List<String>>>();
     final started = Completer<RequestScope>();
@@ -138,13 +162,18 @@ void main() {
     final owner = RequestScope();
     var notified = false;
     final pending = load(scope: owner, onOnlineFallback: () => notified = true);
-    final expectation = expectLater(pending, throwsA(isA<RequestCancelled>()));
+    var settled = false;
+    final expectation = expectLater(
+      pending,
+      throwsA(isA<RequestCancelled>()),
+    ).then((_) => settled = true);
     final child = await started.future;
     owner.cancel();
-    await expectation;
+    await pumpEventQueue();
+    expect(settled, false);
     expect(child.cancelToken.isCancelled, true);
     response.complete(Res(['https://example.invalid/late.jpg']));
-    await Future<void>.delayed(Duration.zero);
+    await expectation;
     expect(notified, false);
     owner.dispose();
   });
@@ -168,13 +197,36 @@ void main() {
     final remaining = load(scope: second);
     expect(responses.length, 2);
     first.cancel();
-    await cancelled;
     responses[1].complete(Res(['second.jpg']));
     expect(await remaining, ['second.jpg']);
     responses[0].complete(Res(['first.jpg']));
+    await cancelled;
     first.dispose();
     second.dispose();
   });
+
+  test(
+    'structured late source failure keeps original cause and stack',
+    () async {
+      final response = Completer<Res<List<String>>>();
+      final failure = StateError('late source cause');
+      final stack = StackTrace.fromString('original chapter source stack');
+      ComicSourceManager().remove(_key);
+      ComicSourceManager().add(source((id, ep) => response.future));
+      final owner = RequestScope();
+      final checked = load(scope: owner).then<void>(
+        (_) => fail('unexpected success'),
+        onError: (Object error, StackTrace actualStack) {
+          expect(error, same(failure));
+          expect(actualStack, same(stack));
+        },
+      );
+      owner.cancel();
+      response.complete(Res.fromException(failure, stack));
+      await checked;
+      owner.dispose();
+    },
+  );
 
   test(
     'downloaded chapter remains readable after reopening the database',
@@ -263,4 +315,90 @@ void main() {
       expect(manager.find('book', ComicType.local), isNotNull);
     },
   );
+
+  for (final reject in [false, true]) {
+    test(
+      'waterfall exit joins production chapter JS Promise; reject=$reject',
+      () async {
+        App.version = 'test';
+        App.isInitialized = false;
+        JsEngine.cacheJsInit(await File('assets/init.js').readAsBytes());
+        final engine = JsEngine();
+        await engine.init();
+        final callbacks = JsCallbackScope();
+        final parser = SourceImagesParser(
+          SourceParserContext(
+            key: _key,
+            name: 'Chapter completion test',
+            callbacks: callbacks,
+          ),
+        );
+        engine.runCode('''
+        void (globalThis.nativeChapterCalls = 0);
+        void (ComicSource.sources.$_key = {comic: {
+          loadEp: (id, episode) => {
+            ++nativeChapterCalls;
+            return new Promise((resolve, reject) => {
+              globalThis.finishNativeChapter = resolve;
+              globalThis.failNativeChapter = reject;
+            });
+          }
+        }});
+      ''');
+        ComicSourceManager().remove(_key);
+        ComicSourceManager().add(source(parser.parseLoadComicPagesFunc()!));
+        final work = ImageWork();
+        final controller =
+            WaterfallController(
+              maxChapter: 2,
+              imageWork: work,
+              load: (chapter, scope) => load(chapter: chapter, scope: scope),
+              chapterId: (chapter) => _chapters.ids.elementAt(chapter - 1),
+              onChanged: () {},
+              onPreviousError: (_, _) => fail('unexpected UI error'),
+            )..initialize(
+              WaterfallChapterSegment(
+                chapter: 1,
+                eid: 'first',
+                images: ['first-page'],
+              ),
+            );
+        final loading = controller.ensureAfter(current: 1, threshold: 1);
+        expect(engine.runCode('nativeChapterCalls'), 1);
+        var prepared = false;
+        final preparation = work.prepareForExit();
+        final checked = reject
+            ? expectLater(
+                preparation,
+                throwsA(
+                  isA<ImageWorkFailure>().having(
+                    (error) => error.failures.map((entry) => entry.error),
+                    'original JS rejection',
+                    ['Connection reset by peer'],
+                  ),
+                ),
+              ).then((_) => prepared = true)
+            : preparation.then((release) {
+                prepared = true;
+                release();
+              });
+        await loading;
+        await pumpEventQueue();
+        expect(prepared, false);
+        engine.runCode(
+          reject
+              ? 'void failNativeChapter("Connection reset by peer")'
+              : 'void finishNativeChapter({images: ["late-native-page"]})',
+        );
+        await checked;
+        expect(engine.runCode('nativeChapterCalls'), 1);
+        expect(controller.flow.lastChapter, 1);
+        expect(controller.afterError, isNull);
+        await controller.dispose();
+        callbacks.dispose();
+        engine.dispose();
+      },
+      skip: !nativeAvailable ? 'QuickJS native library unavailable' : false,
+    );
+  }
 }

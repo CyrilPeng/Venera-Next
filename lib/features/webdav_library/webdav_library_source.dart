@@ -6,6 +6,7 @@ import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/features/webdav_library/webdav_library_cache.dart';
 import 'package:venera_next/features/webdav_library/webdav_library_config.dart';
 import 'package:venera_next/features/webdav_library/webdav_library_settings.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
 import 'webdav_library_entries.dart';
@@ -13,6 +14,19 @@ import 'webdav_library_session.dart';
 import 'webdav_library_transport.dart';
 import 'webdav_library_snapshot_store.dart';
 import 'webdav_library_synchronizer.dart';
+
+class WebDavLibraryLifecycleFailure implements Exception {
+  WebDavLibraryLifecycleFailure(
+    Iterable<({String operation, Object error, StackTrace stack})> failures,
+  ) : failures = List.unmodifiable(failures);
+
+  final List<({String operation, Object error, StackTrace stack})> failures;
+
+  @override
+  String toString() =>
+      'WebDAV library cleanup failed: '
+      '${failures.map((failure) => '${failure.operation}: ${failure.error}').join('; ')}';
+}
 
 class WebDavLibrarySource {
   WebDavLibrarySource({
@@ -39,6 +53,10 @@ class WebDavLibrarySource {
   final WebDavLibraryOps _ops;
   WebDavLibrarySession? _session;
   bool _disposed = false;
+  int _generation = 0;
+  final _pending = <Future<void>>{};
+  Future<void>? _closing;
+  Future<void Function()>? _exitPreparation;
   bool get isDisposed => _disposed;
 
   static const sourceKey = 'webdav_library';
@@ -65,7 +83,7 @@ class WebDavLibrarySource {
   }
 
   WebDavLibrarySession _currentSession() {
-    if (_disposed) throw StateError('WebDAV library is disposed');
+    _checkAvailable();
     final config = _readSettings().connection;
     final previous = _session;
     if (previous != null &&
@@ -77,25 +95,132 @@ class WebDavLibrarySource {
       _ops,
       isCurrent: () =>
           !_disposed &&
+          _exitPreparation == null &&
           _readSettings().connection.connectionKey == config.connectionKey,
     );
   }
 
-  /// Cancels ownership immediately; late transport completions cannot commit.
-  /// The source owns its injected cache and transport for its entire lifetime.
+  void _checkAvailable() {
+    if (_disposed) throw StateError('WebDAV library is disposed');
+    if (_exitPreparation != null) {
+      throw StateError('WebDAV library is preparing to exit');
+    }
+  }
+
+  Future<T> _own<T>(Future<T> Function() work) {
+    final settled = Completer<void>();
+    _pending.add(settled.future);
+    return Future<T>.sync(work).whenComplete(() {
+      _pending.remove(settled.future);
+      settled.complete();
+    });
+  }
+
+  Future<void> _drainCalls() async {
+    while (_pending.isNotEmpty) {
+      await Future.wait(_pending.toList());
+    }
+  }
+
+  void _cancelSession() {
+    _generation++;
+    _session?.cancel();
+    _session = null;
+  }
+
+  /// Freeze immediately; cache and notifications stay alive until all owned
+  /// work finishes. Use closeAndWait when shutdown failures must be observed.
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    _session?.cancel();
-    synchronizer.dispose();
-    try {
-      _ops.dispose();
-    } finally {
-      try {
-        _cache.dispose();
-      } finally {
-        contentVersion.dispose();
+    _cancelSession();
+    final ready = Completer<void>();
+    _closing = ready.future;
+    final failures = <({String operation, Object error, StackTrace stack})>[];
+    final waits = [
+      _attempt('synchronizer', synchronizer.closeAndWait, failures),
+      _attempt('snapshots', _snapshots.closeAndWait, failures),
+      _attempt('transport cancellation', _ops.cancelPending, failures),
+      _attempt('transport', _ops.dispose, failures),
+      _drainCalls(),
+    ];
+    _finishClose(
+      waits,
+      failures,
+    ).then((_) => ready.complete(), onError: ready.completeError);
+    _closing!.catchError((Object error, StackTrace stack) {
+      Log.error('WebDAV Library shutdown', error, stack);
+    }).ignore();
+  }
+
+  Future<void> closeAndWait() {
+    dispose();
+    return _closing!;
+  }
+
+  Future<void> _finishClose(
+    List<Future<void>> waits,
+    List<({String operation, Object error, StackTrace stack})> failures,
+  ) async {
+    await Future.wait(waits);
+    await _attempt('transport completion', _ops.drainPending, failures);
+    await _attempt('cache', _cache.dispose, failures);
+    await _attempt('content notifications', contentVersion.dispose, failures);
+    if (failures.isNotEmpty) throw WebDavLibraryLifecycleFailure(failures);
+  }
+
+  /// Temporarily stop admissions and cancel active requests while retaining
+  /// storage and clients for a cancelled window close.
+  Future<void Function()> prepareForExit() {
+    if (_disposed) {
+      return Future.error(StateError('WebDAV library is disposed'));
+    }
+    final existing = _exitPreparation;
+    if (existing != null) return existing;
+    final ready = Completer<void Function()>();
+    final preparation = _exitPreparation = ready.future;
+    _cancelSession();
+    final releases = <void Function()>[];
+    final failures = <({String operation, Object error, StackTrace stack})>[];
+    void release() {
+      if (!identical(_exitPreparation, preparation)) return;
+      for (final release in releases.reversed) {
+        release();
       }
+      _exitPreparation = null;
+    }
+
+    final waits = [
+      _attempt('synchronizer', () async {
+        releases.add(await synchronizer.prepareForExit());
+      }, failures),
+      _attempt('snapshots', () async {
+        releases.add(await _snapshots.prepareForExit());
+      }, failures),
+      _attempt('transport cancellation', _ops.cancelPending, failures),
+      _drainCalls(),
+    ];
+    Future.wait(waits).then((_) async {
+      await _attempt('transport completion', _ops.drainPending, failures);
+      if (failures.isEmpty) {
+        ready.complete(release);
+      } else {
+        release();
+        ready.completeError(WebDavLibraryLifecycleFailure(failures));
+      }
+    });
+    return preparation;
+  }
+
+  Future<void> _attempt(
+    String operation,
+    FutureOr<void> Function() cleanup,
+    List<({String operation, Object error, StackTrace stack})> failures,
+  ) async {
+    try {
+      await cleanup();
+    } catch (error, stack) {
+      failures.add((operation: operation, error: error, stack: stack));
     }
   }
 
@@ -150,21 +275,24 @@ class WebDavLibrarySource {
     );
   }
 
-  Future<Res<bool>> testConnection(WebDavLibraryConfig config) async {
-    if (!config.isValid) {
-      return const Res.error('Invalid WebDAV comic library configuration');
-    }
-    try {
-      if (_disposed) throw StateError('WebDAV library is disposed');
-      await _ops.test(config);
-      if (_disposed) throw StateError('WebDAV library is disposed');
-      return const Res(true);
-    } catch (e) {
-      return Res.error(e.toString());
-    }
-  }
+  Future<Res<bool>> testConnection(WebDavLibraryConfig config) =>
+      _own(() async {
+        if (!config.isValid) {
+          return const Res.error('Invalid WebDAV comic library configuration');
+        }
+        try {
+          _checkAvailable();
+          final generation = _generation;
+          await _ops.test(config);
+          _checkAvailable();
+          if (generation != _generation) throw const WebDavLibraryCancelled();
+          return const Res(true);
+        } catch (e) {
+          return Res.error(e.toString());
+        }
+      });
 
-  Future<Res<List<Comic>>> loadComics(int page) async {
+  Future<Res<List<Comic>>> loadComics(int page) => _own(() async {
     final session = _currentSession();
     final config = session.config;
     if (!config.isValid) {
@@ -201,9 +329,9 @@ class WebDavLibrarySource {
     } catch (e) {
       return Res.error(e.toString());
     }
-  }
+  });
 
-  Future<Res<ComicDetails>> loadComicInfo(String id) async {
+  Future<Res<ComicDetails>> loadComicInfo(String id) => _own(() async {
     final session = _currentSession();
     final config = session.config;
     if (!config.isValid) {
@@ -243,61 +371,64 @@ class WebDavLibrarySource {
     } catch (e) {
       return Res.error(e.toString());
     }
-  }
+  });
 
-  Future<Res<List<String>>> loadComicPages(String id, String? ep) async {
-    final session = _currentSession();
-    final config = session.config;
-    if (!config.isValid) {
-      return const Res.error('Invalid WebDAV comic library configuration');
-    }
-    try {
-      final comicPath = config.childDirectoryPath(id);
-      if (ep != null &&
-          ep != rootChapterId &&
-          !ep.startsWith(webDavMetadataChapterPrefix)) {
-        final path = config.childDirectoryPathFrom(comicPath, ep);
-        final entries = List<WebDavLibraryEntry>.from(
-          await session.readDir(path),
-        );
-        session.check();
-        final files = webDavImageEntries(entries)
-            .where((entry) => !isNamedComicCover(entry.name))
-            .map((entry) => config.childFilePath(path, entry.name))
-            .toList();
-        if (files.isEmpty) {
-          return const Res.error('No images found in the WebDAV chapter');
+  Future<Res<List<String>>> loadComicPages(String id, String? ep) =>
+      _own(() async {
+        final session = _currentSession();
+        final config = session.config;
+        if (!config.isValid) {
+          return const Res.error('Invalid WebDAV comic library configuration');
         }
-        return Res(files);
-      }
+        try {
+          final comicPath = config.childDirectoryPath(id);
+          if (ep != null &&
+              ep != rootChapterId &&
+              !ep.startsWith(webDavMetadataChapterPrefix)) {
+            final path = config.childDirectoryPathFrom(comicPath, ep);
+            final entries = List<WebDavLibraryEntry>.from(
+              await session.readDir(path),
+            );
+            session.check();
+            final files = webDavImageEntries(entries)
+                .where((entry) => !isNamedComicCover(entry.name))
+                .map((entry) => config.childFilePath(path, entry.name))
+                .toList();
+            if (files.isEmpty) {
+              return const Res.error('No images found in the WebDAV chapter');
+            }
+            return Res(files);
+          }
 
-      final snapshot = await _snapshots.load(session, id);
-      session.check();
-      final metadataChapter = ep == null ? null : snapshot.metadataChapters[ep];
-      if (metadataChapter != null) {
-        final files = snapshot.rootImages
-            .sublist(metadataChapter.start - 1, metadataChapter.end)
-            .map((entry) => config.childFilePath(comicPath, entry.name))
-            .toList();
-        return Res(files);
-      }
-      if (ep?.startsWith(webDavMetadataChapterPrefix) == true) {
-        return const Res.error('Invalid WebDAV metadata chapter');
-      }
-      if (ep == null || ep == rootChapterId) {
-        final files = snapshot.rootImages
-            .map((entry) => config.childFilePath(comicPath, entry.name))
-            .toList();
-        if (files.isEmpty) {
+          final snapshot = await _snapshots.load(session, id);
+          session.check();
+          final metadataChapter = ep == null
+              ? null
+              : snapshot.metadataChapters[ep];
+          if (metadataChapter != null) {
+            final files = snapshot.rootImages
+                .sublist(metadataChapter.start - 1, metadataChapter.end)
+                .map((entry) => config.childFilePath(comicPath, entry.name))
+                .toList();
+            return Res(files);
+          }
+          if (ep?.startsWith(webDavMetadataChapterPrefix) == true) {
+            return const Res.error('Invalid WebDAV metadata chapter');
+          }
+          if (ep == null || ep == rootChapterId) {
+            final files = snapshot.rootImages
+                .map((entry) => config.childFilePath(comicPath, entry.name))
+                .toList();
+            if (files.isEmpty) {
+              return const Res.error('No images found in the WebDAV chapter');
+            }
+            return Res(files);
+          }
           return const Res.error('No images found in the WebDAV chapter');
+        } catch (e) {
+          return Res.error(e.toString());
         }
-        return Res(files);
-      }
-      return const Res.error('No images found in the WebDAV chapter');
-    } catch (e) {
-      return Res.error(e.toString());
-    }
-  }
+      });
 
   Future<Map<String, dynamic>> getImageLoadingConfig(
     String imageKey,

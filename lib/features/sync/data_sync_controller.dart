@@ -48,7 +48,7 @@ class DataSyncController with ChangeNotifier {
     required SyncPreferenceStore preferences,
     required DataSyncTransfer Function() transfer,
     required Future<void> Function() saveSettings,
-    required void Function() persistImplicit,
+    required FutureOr<void> Function() persistImplicit,
     required void Function() Function(void Function()) observeChanges,
     DateTime Function()? now,
     Timer Function(Duration, void Function())? createTimer,
@@ -66,7 +66,7 @@ class DataSyncController with ChangeNotifier {
   RequestScope? _transferScope;
   DataSyncTransfer get _dataTransfer => _transfer ??= _transferFactory();
   final Future<void> Function() _saveSettings;
-  final void Function() _persistImplicit;
+  final FutureOr<void> Function() _persistImplicit;
 
   /// Subscribing must be atomic; the returned callback releases this subscription.
   final void Function() Function(void Function()) _observeChanges;
@@ -110,11 +110,23 @@ class DataSyncController with ChangeNotifier {
     _changeGeneration++;
     if (!hasPendingChanges) {
       _syncPreferences.pending = true;
-      _persistImplicit();
+      unawaited(
+        Future<void>.sync(_persistState).catchError((
+          Object error,
+          StackTrace stack,
+        ) {
+          Log.error('Data Sync persistence', error, stack);
+          if (!_disposed) {
+            _lastError = error.toString();
+            notifyListeners();
+          }
+        }),
+      );
     }
     if (_started &&
         isEnabled &&
         currentMode == DataSyncMode.realtime &&
+        !_exitHeld &&
         !_configuring) {
       unawaited(uploadData());
     }
@@ -145,6 +157,7 @@ class DataSyncController with ChangeNotifier {
     if (!_started ||
         _disposed ||
         _configuring ||
+        _exitHeld ||
         !isEnabled ||
         _activeTask != null) {
       return;
@@ -185,7 +198,9 @@ class DataSyncController with ChangeNotifier {
   }) async {
     if (_disposed) return const Res.error('Sync service is disposed');
     if (_configuring) return const Res.error('Sync configuration is busy');
+    if (_exitHeld) return const Res.error('Sync service is preparing to exit');
     _configuring = true;
+    final configurationDone = _configurationDone = Completer<void>();
     _scheduleTimer?.cancel();
     SyncPreferenceCheckpoint? previous;
     var previousGeneration = _changeGeneration;
@@ -204,7 +219,11 @@ class DataSyncController with ChangeNotifier {
         if (config.isNotEmpty && !hasConfiguration) {
           result = const Res.error('Invalid WebDAV configuration');
         } else if (config.isNotEmpty && syncMode != DataSyncMode.manual) {
-          result = initialUpload ? await uploadData() : await downloadData();
+          // This configuration was admitted before any exit barrier. Its
+          // required transfer must finish even after public admissions close.
+          result = initialUpload
+              ? await _startTask(_DataSyncTask.upload, _uploadNow)
+              : await _startTask(_DataSyncTask.download, _downloadNow);
         }
         if (_disposed) result = const Res.error('Sync service is disposed');
         if (result.success) {
@@ -212,8 +231,7 @@ class DataSyncController with ChangeNotifier {
           _syncPreferences.setSchedule(selected, minutes);
           _syncPreferences.lastAttempt = _now.millisecondsSinceEpoch;
           if (config.isEmpty) _syncPreferences.pending = false;
-          _persistImplicit();
-          await _saveSettings();
+          await _persistConfiguration();
           if (_disposed) {
             result = const Res.error('Sync service is disposed');
           } else {
@@ -231,8 +249,7 @@ class DataSyncController with ChangeNotifier {
           if (_changeGeneration != previousGeneration && hasConfiguration) {
             _syncPreferences.pending = true;
           }
-          _persistImplicit();
-          await _saveSettings();
+          await _persistConfiguration();
         }
       } catch (error, stack) {
         Log.error('Data Sync rollback', error, stack);
@@ -242,6 +259,8 @@ class DataSyncController with ChangeNotifier {
         );
       } finally {
         _configuring = false;
+        _configurationDone = null;
+        configurationDone.complete();
         if (!_disposed) {
           _lastRealtimeCheck = _now;
           if (currentMode == DataSyncMode.scheduled) checkForAutomaticSync();
@@ -333,6 +352,7 @@ class DataSyncController with ChangeNotifier {
 
   Future<Res<bool>> uploadData() async {
     if (_disposed) return const Res.error('Sync service is disposed');
+    if (_exitHeld) return const Res.error('Sync service is preparing to exit');
     if (_activeTaskType == _DataSyncTask.download) {
       return const Res(true);
     }
@@ -344,6 +364,7 @@ class DataSyncController with ChangeNotifier {
 
   Future<Res<bool>> downloadData() async {
     if (_disposed) return const Res.error('Sync service is disposed');
+    if (_exitHeld) return const Res.error('Sync service is preparing to exit');
     if (_activeTask != null) {
       return _schedulePendingTask(_DataSyncTask.download, _downloadNow);
     }
@@ -375,6 +396,73 @@ class DataSyncController with ChangeNotifier {
     return pendingTask;
   }
 
+  Completer<void>? _configurationDone;
+  Future<VoidCallback>? _exitPreparation;
+  bool _exitHeld = false;
+  int _exitGeneration = 0;
+
+  /// Freeze admissions until the host exits or releases this preparation.
+  /// Accepted configuration/transfer work is allowed to finish before saving.
+  Future<VoidCallback> prepareForExit() {
+    if (_disposed) return Future.error(StateError('Sync service is disposed'));
+    final existing = _exitPreparation;
+    if (existing != null) return existing;
+    _exitHeld = true;
+    _scheduleTimer?.cancel();
+    _scheduleTimer = null;
+    final generation = ++_exitGeneration;
+    void release() {
+      if (!_exitHeld || generation != _exitGeneration) return;
+      _exitHeld = false;
+      _exitPreparation = null;
+      if (!_disposed) checkForAutomaticSync();
+    }
+
+    return _exitPreparation = _prepareForExit(release);
+  }
+
+  Future<VoidCallback> _prepareForExit(VoidCallback release) async {
+    try {
+      final configuring = _configurationDone;
+      if (configuring != null) await configuring.future;
+      while (_activeTask != null || _pendingTask != null) {
+        await (_pendingTask ?? _activeTask!);
+      }
+      await flushPersistence();
+      return release;
+    } catch (_) {
+      release();
+      rethrow;
+    }
+  }
+
+  final _pendingPersistence = <Future<void>>{};
+
+  FutureOr<void> _persistState() {
+    final result = _persistImplicit();
+    if (result is! Future<void>) return null;
+    late Future<void> tracked;
+    tracked = result.whenComplete(() => _pendingPersistence.remove(tracked));
+    _pendingPersistence.add(tracked);
+    return tracked;
+  }
+
+  /// Persist the latest state (also retrying an earlier failed background save)
+  /// and drain writes accepted while flushing. This does not stop scheduling.
+  Future<void> flushPersistence() async {
+    await Future<void>.sync(_persistState);
+    while (_pendingPersistence.isNotEmpty) {
+      await Future.wait(List<Future<void>>.of(_pendingPersistence));
+    }
+  }
+
+  /// Both files must settle before commit or rollback. A failure writing one
+  /// must not prevent attempting to restore the other.
+  Future<void> _persistConfiguration() => Future.wait<void>([
+    Future<void>.sync(_persistState),
+    Future<void>.sync(_saveSettings),
+  ]).then((_) {});
+
   Future<Res<bool>> _startTask(
     _DataSyncTask task,
     Future<Res<bool>> Function() run,
@@ -405,34 +493,47 @@ class DataSyncController with ChangeNotifier {
     _downloadApplied = false;
     _lastError = null;
     final generation = _changeGeneration;
-    if (hasConfiguration && !_configuring) {
-      _syncPreferences.lastAttempt = _now.millisecondsSinceEpoch;
-      _persistImplicit();
-    }
-    notifyListeners();
+    var clearedPending = false;
+    Res<bool>? transferResult;
     try {
-      final result = await run();
+      notifyListeners();
+      if (_disposed) return const Res.error('Sync service is disposed');
+      if (hasConfiguration && !_configuring) {
+        _syncPreferences.lastAttempt = _now.millisecondsSinceEpoch;
+        final saving = _persistState();
+        if (saving is Future<void>) await saving;
+      }
+      if (_disposed) return const Res.error('Sync service is disposed');
+      final result = transferResult = await run();
       if (_disposed) return result;
       if (result.error) {
         _lastError = result.errorMessage;
       } else if (hasConfiguration &&
           generation == _changeGeneration &&
           (task == _DataSyncTask.upload || _downloadApplied)) {
+        clearedPending = hasPendingChanges;
         _syncPreferences.pending = false;
       }
+      if (hasConfiguration && !_configuring) {
+        _syncPreferences.lastAttempt = _now.millisecondsSinceEpoch;
+        final saving = _persistState();
+        if (saving is Future<void>) await saving;
+      }
       return result;
-    } catch (e, s) {
-      Log.error(_taskLogTag(task), e, s);
-      _lastError = e.toString();
-      return Res.error(e.toString());
+    } catch (error, stack) {
+      if (clearedPending && !_disposed && hasConfiguration) {
+        _syncPreferences.pending = true;
+      }
+      Log.error(_taskLogTag(task), error, stack);
+      final transferError = transferResult?.errorMessage;
+      _lastError = transferError == null
+          ? error.toString()
+          : '$transferError; Failed to persist sync state: $error';
+      return Res.error(_lastError!);
     } finally {
       _activeTaskType = null;
       _isUploading = false;
       _isDownloading = false;
-      if (hasConfiguration && !_configuring && !_disposed) {
-        _syncPreferences.lastAttempt = _now.millisecondsSinceEpoch;
-        _persistImplicit();
-      }
       if (!_disposed) notifyListeners();
     }
   }

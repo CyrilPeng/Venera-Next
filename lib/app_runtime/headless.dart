@@ -5,6 +5,7 @@ import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/init.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 
 import 'bootstrap_core.dart';
@@ -15,6 +16,7 @@ import 'headless_source_update_command.dart';
 import 'headless_sync_command.dart';
 import 'headless_subscription_command.dart';
 import 'headless_output.dart';
+import 'headless_shutdown.dart';
 
 Future<void> runHeadlessMode(List<String> args) async {
   final parsed = parseHeadlessArguments(args);
@@ -33,21 +35,12 @@ Future<void> runHeadlessMode(List<String> args) async {
   // Need to initialize the app for some features to work
   configureHeadlessBindings();
   final sync = createApplicationDataSync();
-  try {
-    await createCoreBootstrap(onDataChanged: sync.onDataChanged).start();
-  } catch (error, stack) {
-    sync.dispose();
-    configureComicSourceDataSavedHandler(null);
-    Log.error('Headless startup', error, stack);
-    cliPrint({
-      'status': 'error',
-      'message': 'Core initialization failed: $error',
-    });
-    exit(1);
-  }
-
+  final core = createCoreBootstrap(onDataChanged: sync.onDataChanged);
+  var initialized = false;
   var commandExitCode = 0;
   try {
+    await core.start();
+    initialized = true;
     switch (request.command) {
       case HeadlessCommand.webdav:
         commandExitCode = await runHeadlessSyncCommand(
@@ -90,12 +83,36 @@ Future<void> runHeadlessMode(List<String> args) async {
         break;
     }
   } catch (error, stack) {
-    Log.error('Headless command', error, stack);
-    cliPrint({'status': 'error', 'message': 'Command failed: $error'});
     commandExitCode = 1;
+    Log.error(
+      initialized ? 'Headless command' : 'Headless startup',
+      error,
+      stack,
+    );
+    cliPrint({
+      'status': 'error',
+      'message': initialized
+          ? 'Command failed: $error'
+          : 'Core initialization failed: $error',
+    });
   } finally {
-    sync.dispose();
-    configureComicSourceDataSavedHandler(null);
+    final closed = await finishHeadlessRuntime(
+      closeCore: core.close,
+      disposeBindings: () {
+        sync.dispose();
+        configureComicSourceDataSavedHandler(null);
+      },
+      flushPersistence: () async {
+        // A failed settings load must not overwrite its file with defaults.
+        if (appdata.initializationState == InitializationState.ready) {
+          await sync.flushPersistence();
+        }
+      },
+      emit: cliPrint,
+      reportError: (error, stack) =>
+          Log.error('Headless shutdown', error, stack),
+    );
+    if (!closed) commandExitCode = 1;
   }
 
   // Exit after command execution

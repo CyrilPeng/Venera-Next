@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/side_bar.dart';
+import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/features/comic_details/archive_download_dialog.dart';
 import 'package:venera_next/features/comic_details/comments_page.dart';
 import 'package:venera_next/features/comic_details/favorite.dart';
@@ -17,6 +20,8 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
+import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/routing/page_jump_target.dart';
 import 'package:venera_next/foundation/res.dart';
@@ -139,12 +144,56 @@ abstract mixin class ComicPageActions {
     },
   );
 
-  void share() {
-    var text = comic.title;
-    if (comic.url != null) {
-      text += '\n${comic.url}';
-    }
-    Share.shareText(text);
+  Future<void>? _sharing;
+
+  Future<void> share() {
+    if (_sharing case final pending?) return pending;
+    final owner = context;
+    if (!NavigationAdmission.allows(owner)) return Future.value();
+    final target = comic;
+    final route = ModalRoute.of(owner);
+    bool isCurrentOwner() =>
+        owner.mounted &&
+        isComicActive(target) &&
+        route?.isCurrent != false &&
+        identical(ModalRoute.of(owner), route);
+    final text =
+        '${target.title}${target.url == null ? '' : '\n${target.url}'}';
+    final window = owner.getInheritedWidgetOfExactType<WindowFrameController>();
+    final operation = () async {
+      try {
+        await Share.shareText(
+          text,
+          resolveOrigin: () => owner.sharePositionOrigin,
+          canShare: () =>
+              isCurrentOwner() &&
+              window?.isClosing != true &&
+              NavigationAdmission.allows(owner),
+        );
+      } catch (error, stack) {
+        Log.error('Share', error, stack);
+        if (owner.mounted && isCurrentOwner() && window?.isClosing != true) {
+          owner.showMessage(message: 'Error'.tl);
+        } else {
+          Error.throwWithStackTrace(error, stack);
+        }
+      }
+    }();
+    _sharing = operation;
+    // Queued requests check admission again before opening native UI. Once
+    // dispatched, the window must join acknowledgment even after page removal.
+    window?.trackExitTask(operation);
+    unawaited(
+      operation.then<void>(
+        (_) {
+          if (identical(_sharing, operation)) _sharing = null;
+        },
+        onError: (Object _, StackTrace _) {
+          if (identical(_sharing, operation)) _sharing = null;
+        },
+      ),
+    );
+    return operation;
   }
 
   /// read the comic

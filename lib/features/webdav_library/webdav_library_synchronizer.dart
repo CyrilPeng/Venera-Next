@@ -46,6 +46,19 @@ class _WebDavLibrarySyncRun {
   final Future<Res<bool>> complete;
 }
 
+class WebDavLibrarySyncLifecycleFailure implements Exception {
+  WebDavLibrarySyncLifecycleFailure(
+    Iterable<({String operation, Object error, StackTrace stack})> failures,
+  ) : failures = List.unmodifiable(failures);
+
+  final List<({String operation, Object error, StackTrace stack})> failures;
+
+  @override
+  String toString() =>
+      'WebDAV synchronization cleanup failed: '
+      '${failures.map((failure) => '${failure.operation}: ${failure.error}').join('; ')}';
+}
+
 /// Owns synchronization runs; transport/session/storage lifetimes stay with the caller.
 class WebDavLibrarySynchronizer {
   WebDavLibrarySynchronizer({
@@ -74,6 +87,9 @@ class WebDavLibrarySynchronizer {
   );
   ValueListenable<WebDavLibrarySyncStatus> get status => _status;
   _WebDavLibrarySyncRun? _syncRun;
+  final _runs = <_WebDavLibrarySyncRun>{};
+  Future<void>? _closing;
+  Future<void Function()>? _exitPreparation;
   bool _disposed = false;
   int _generation = 0;
 
@@ -81,24 +97,110 @@ class WebDavLibrarySynchronizer {
     if (_disposed) return;
     _generation++;
     _syncRun = null;
-    _snapshots.clear();
-    _status.value = const WebDavLibrarySyncStatus(
-      isSyncing: false,
-      lastSuccessfulSync: 0,
-    );
+    try {
+      _snapshots.clear();
+    } finally {
+      _status.value = const WebDavLibrarySyncStatus(
+        isSyncing: false,
+        lastSuccessfulSync: 0,
+      );
+    }
   }
 
+  /// Stop admissions and invalidate every run immediately. The caller retains
+  /// its cache and transport until closeAndWait has joined outstanding work.
   void dispose() {
     if (_disposed) return;
     _disposed = true;
     _generation++;
     _syncRun = null;
-    _snapshots.clear();
-    _status.dispose();
+    final ready = Completer<void>();
+    _closing = ready.future;
+    final failures = <({String operation, Object error, StackTrace stack})>[];
+    _attemptCleanup('snapshots', _snapshots.clear, failures);
+    _attemptCleanup('status', _status.dispose, failures);
+    _drainRuns(
+      _runs.toList(),
+      failures,
+    ).then((_) => ready.complete(), onError: ready.completeError);
+    _closing!.catchError((Object error, StackTrace stack) {
+      Log.error('WebDAV Library shutdown', error, stack);
+    }).ignore();
+  }
+
+  Future<void> closeAndWait() {
+    dispose();
+    return _closing!;
+  }
+
+  /// Hold automatic, manual and index-triggered work until this preparation is
+  /// released. Replaced runs stay owned until their actual futures finish.
+  Future<void Function()> prepareForExit() {
+    if (_disposed) {
+      return Future.error(StateError('WebDAV synchronizer is disposed'));
+    }
+    final existing = _exitPreparation;
+    if (existing != null) return existing;
+    final ready = Completer<void Function()>();
+    final preparation = _exitPreparation = ready.future;
+    _generation++;
+    _syncRun = null;
+    final failures = <({String operation, Object error, StackTrace stack})>[];
+    _attemptCleanup('snapshots', _snapshots.clear, failures);
+    _attemptCleanup('status', () {
+      _status.value = WebDavLibrarySyncStatus(
+        isSyncing: false,
+        lastSuccessfulSync: _status.value.lastSuccessfulSync,
+      );
+    }, failures);
+    void release() {
+      if (identical(_exitPreparation, preparation)) _exitPreparation = null;
+    }
+
+    _drainRuns(_runs.toList(), failures).then(
+      (_) => ready.complete(release),
+      onError: (Object error, StackTrace stack) {
+        release();
+        ready.completeError(error, stack);
+      },
+    );
+    return preparation;
+  }
+
+  void _attemptCleanup(
+    String operation,
+    void Function() cleanup,
+    List<({String operation, Object error, StackTrace stack})> failures,
+  ) {
+    try {
+      cleanup();
+    } catch (error, stack) {
+      failures.add((operation: operation, error: error, stack: stack));
+    }
+  }
+
+  Future<void> _drainRuns(
+    List<_WebDavLibrarySyncRun> runs,
+    List<({String operation, Object error, StackTrace stack})> failures,
+  ) async {
+    await Future.wait(
+      runs.map((run) async {
+        try {
+          await run.complete;
+        } catch (error, stack) {
+          failures.add((
+            operation: 'synchronization',
+            error: error,
+            stack: stack,
+          ));
+        }
+      }),
+    );
+    if (failures.isNotEmpty) throw WebDavLibrarySyncLifecycleFailure(failures);
   }
 
   void updateSyncStatusFromCache() {
-    if (_disposed) return;
+    if (_disposed || _exitPreparation != null) return;
     final session = _currentSession();
     if (_status.value.isSyncing) return;
     final config = session.config;
@@ -112,8 +214,9 @@ class WebDavLibrarySynchronizer {
   }
 
   void checkForAutomaticSync() {
-    if (_disposed) return;
+    if (_disposed || _exitPreparation != null) return;
     updateSyncStatusFromCache();
+    if (_disposed || _exitPreparation != null) return;
     final configuration = _readSettings();
     final config = configuration.connection;
     if (!config.isValid || !configuration.autoSync) {
@@ -130,6 +233,9 @@ class WebDavLibrarySynchronizer {
 
   Future<Res<bool>> ensureIndex(WebDavLibrarySession session) async {
     if (_disposed) throw StateError('WebDAV synchronizer is disposed');
+    if (_exitPreparation != null) {
+      return const Res.error('WebDAV request cancelled');
+    }
     session.check();
     final config = session.config;
     if (_cache.hasDirectoryIndex(config.cacheKey)) {
@@ -141,6 +247,9 @@ class WebDavLibrarySynchronizer {
 
   Future<Res<bool>> synchronize({bool force = false}) {
     if (_disposed) throw StateError('WebDAV synchronizer is disposed');
+    if (_exitPreparation != null) {
+      return Future.value(const Res.error('WebDAV request cancelled'));
+    }
     final session = _currentSession();
     final config = session.config;
     if (!config.isValid) {
@@ -156,6 +265,7 @@ class WebDavLibrarySynchronizer {
     bool force = false,
   }) {
     if (_disposed) throw StateError('WebDAV synchronizer is disposed');
+    if (_exitPreparation != null) throw const WebDavLibraryCancelled();
     final current = _syncRun;
     if (current != null) return current;
 
@@ -167,21 +277,31 @@ class WebDavLibrarySynchronizer {
           !_disposed && _generation == generation && session.isActive,
     );
     final indexReady = Completer<Res<bool>>();
-    final complete = Future<Res<bool>>.microtask(
-      () => _runSynchronization(runSession, indexReady, force: force),
-    );
-    final run = _WebDavLibrarySyncRun(
+    indexReady.future.ignore();
+    late final _WebDavLibrarySyncRun run;
+    final complete =
+        Future<Res<bool>>.microtask(() async {
+          try {
+            return await _runSynchronization(
+              runSession,
+              indexReady,
+              force: force,
+            );
+          } catch (error, stack) {
+            if (!indexReady.isCompleted) indexReady.completeError(error, stack);
+            rethrow;
+          }
+        }).whenComplete(() {
+          _runs.remove(run);
+          if (identical(_syncRun, run)) _syncRun = null;
+        });
+    run = _WebDavLibrarySyncRun(
       indexReady: indexReady.future,
       complete: complete,
     );
     _syncRun = run;
-    unawaited(
-      complete.whenComplete(() {
-        if (identical(_syncRun, run)) {
-          _syncRun = null;
-        }
-      }),
-    );
+    _runs.add(run);
+    complete.ignore();
     return run;
   }
 

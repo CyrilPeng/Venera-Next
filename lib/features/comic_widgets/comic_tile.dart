@@ -209,7 +209,7 @@ class ComicTile extends StatelessWidget {
     );
   }
 
-  void _onLongPressed(context) {
+  void _onLongPressed(BuildContext context) {
     if (onLongPressed != null) {
       onLongPressed!();
       return;

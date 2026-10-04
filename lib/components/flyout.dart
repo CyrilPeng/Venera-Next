@@ -222,7 +222,7 @@ class FlyoutContent extends StatelessWidget {
                     fontSize: 16,
                   ),
                 ),
-                if (content != null) content!,
+                ?content,
                 const SizedBox(height: 12),
                 Row(
                   mainAxisSize: MainAxisSize.min,

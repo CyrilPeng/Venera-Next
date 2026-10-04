@@ -585,7 +585,7 @@ abstract class CBZ {
     return values.toSet().toList();
   }
 
-  static _compress(String src, String dst) async {
+  static Future<void> _compress(String src, String dst) async {
     await ZipFile.compressFolderAsync(src, dst, 4);
   }
 }

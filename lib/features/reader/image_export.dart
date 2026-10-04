@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:venera_next/foundation/file_type.dart';
-import 'package:venera_next/network/request_scope.dart';
+import 'package:venera_next/foundation/image_work.dart';
 
 class ReaderImageSelection {
   const ReaderImageSelection({
@@ -25,53 +25,90 @@ class ReaderImageSelection {
 }
 
 class ReaderImageExport {
-  ReaderImageExport(ReaderImageSelection selection, this.bytes)
-    : type = detectFileType(bytes),
-      _stem =
-          '${selection.title}_EP${selection.chapter}_P${selection.imageNumber}';
+  ReaderImageExport(
+    ReaderImageSelection selection,
+    this.bytes, {
+    void Function()? checkStop,
+  }) : _checkStop = checkStop,
+       type = detectFileType(bytes),
+       _stem =
+           '${selection.title}_EP${selection.chapter}_P${selection.imageNumber}';
   final Uint8List bytes;
   final FileType type;
   final String _stem;
+  final void Function()? _checkStop;
   String get filename => '$_stem${type.ext}';
+
+  /// Recheck task admission after queuing/preparation, before native dispatch.
+  /// An already-started native call still owns its original completion.
+  void checkStop() => _checkStop?.call();
 }
 
 /// Selection, reading and platform delivery are adapters; identity is captured
 /// before reading so navigation cannot rename an already selected image.
 class ReaderImageExporter {
   ReaderImageExporter({
+    required this.work,
     required this.select,
     required this.read,
     required this.save,
     required this.share,
     required this.onError,
+    this.cancelSelection,
   });
+  final ImageWork work;
   final Future<ReaderImageSelection?> Function() select;
   final Future<Uint8List> Function(ReaderImageSelection) read;
   final FutureOr<void> Function(ReaderImageExport) save;
   final FutureOr<void> Function(ReaderImageExport) share;
   final void Function(Object, StackTrace) onError;
-  final _lifetime = RequestScope();
+  final void Function()? cancelSelection;
+  final _tasks = <ImageWorkTask>{};
+  bool _disposed = false;
 
   Future<void> export({required bool sharing}) async {
-    if (_lifetime.isCancelled) return;
-    final request = RequestScope(parent: _lifetime);
+    if (_disposed) return;
+    final request = work.start(cancelSelection: cancelSelection);
+    if (request == null) return;
+    _tasks.add(request);
     try {
-      final selection = await request.run(select);
+      final selection = await request.select(select);
       if (selection == null) return;
-      final bytes = await request.run(() => read(selection));
+      final bytes = await request.read(() => read(selection));
       request.check();
-      final result = ReaderImageExport(selection, bytes);
-      // Once handed to the platform, its dialog/share sheet owns completion.
+      final result = ReaderImageExport(
+        selection,
+        bytes,
+        checkStop: request.check,
+      );
+      // Wait for the plugin's acknowledgment; on Windows this does not mean
+      // the external receiver has finished reading the shared file.
       await (sharing ? share(result) : save(result));
     } catch (error, stack) {
-      if (!request.isCancelled) onError(error, stack);
+      if (error is! ImageWorkTaskCancelled) {
+        if (request.isCancelled || _disposed) {
+          request.recordFailure(error, stack);
+        } else {
+          try {
+            onError(error, stack);
+          } catch (reportError, reportStack) {
+            request.recordFailure(error, stack);
+            request.recordFailure(reportError, reportStack);
+          }
+        }
+      }
     } finally {
-      request.dispose();
+      _tasks.remove(request);
+      request.finish();
     }
   }
 
-  void dispose() {
-    _lifetime.cancel();
-    _lifetime.dispose();
+  Future<void> dispose() {
+    _disposed = true;
+    final tasks = _tasks.toList();
+    for (final task in tasks) {
+      task.cancel();
+    }
+    return Future.wait(tasks.map((task) => task.done)).then<void>((_) {});
   }
 }

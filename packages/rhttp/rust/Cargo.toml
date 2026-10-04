@@ -1,0 +1,46 @@
+[package]
+name = "rhttp"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+chrono = "0.4.42"
+flutter_rust_bridge = { version = "=2.11.1", features = ["chrono"] }
+futures-util = "0.3.31"
+tokio = { version = "1.48.0", features = ["full"] }
+tokio-util = "0.7.17"
+
+[dependencies.reqwest]
+version = "0.12.25"
+default-features = false
+features = [
+    "charset",
+    "cookies",
+    "http2",
+    "http3",
+    "rustls-tls-webpki-roots",
+    "stream",
+    "multipart",
+    "socks",
+
+    # Compression
+    "brotli",
+    "gzip",
+]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
+[profile.release]
+opt-level = 3
+strip = true
+panic = "abort"
+lto = true
+codegen-units = 1
+
+[profile.dev]
+opt-level = 3
+panic = "abort"

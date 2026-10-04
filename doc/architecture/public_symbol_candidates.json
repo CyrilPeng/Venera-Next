@@ -2409,7 +2409,13 @@
       "test_identifier_tokens": 2,
       "exact_production_string_literals": 0,
       "category": "compatibility_protocol",
-      "reason": "Explicit override of a framework or interface contract; name-only counts do not identify virtual dispatch."
+      "reason": "Explicit override of a framework or interface contract; name-only counts do not identify virtual dispatch.",
+      "resolution": {
+        "status": "removed",
+        "date": "2026-10-05",
+        "evidence": "optimization_progress.en.md",
+        "note": "No production constructor, tear-off or type use of the owner remains. Its sole static deletion caller now uses favorite_cover_cache.dart; original scan counts are historical."
+      }
     },
     {
       "file": "lib/features/favorites/local_favorites_page.dart",

@@ -18,12 +18,23 @@ class SourceComicParser {
   LoadComicFunc? parseLoadComicFunc() {
     return (id) async {
       try {
-        var res = await JsEngine().runReadCode("""
+        final details = await JsEngine().runReadCodeToCompletion<ComicDetails>(
+          """
           ComicSource.sources.${context.key}.comic.loadInfo(${jsonEncode(id)})
-        """);
-        res = normalizeComicSourceComicDetails(res, context.key, id);
-        if (res == null) throw "Invalid data";
-        return Res(ComicDetails.fromJson(res));
+        """,
+          consume: (raw) {
+            final normalized = normalizeComicSourceComicDetails(
+              raw,
+              context.key,
+              id,
+            );
+            if (normalized == null) throw 'Invalid data';
+            // The model copies its collections and retains only Dart values.
+            // Complete conversion before the borrowed JS result is released.
+            return ComicDetails.fromJson(normalized);
+          },
+        );
+        return Res(details);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
         return Res.fromException(e, s);

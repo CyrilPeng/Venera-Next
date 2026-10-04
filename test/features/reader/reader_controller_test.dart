@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
+import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/network/request_scope.dart';
 
 class _Viewport implements ReaderNavigationViewport {
   final animations = <Completer<void>>[];
@@ -46,6 +48,57 @@ void main() {
     );
   });
   tearDown(() => controller.dispose());
+
+  for (final phase in ['before', 'images', 'mode']) {
+    test(
+      'current $phase error stays in the UI without poisoning image work',
+      () async {
+        final work = ImageWork();
+        final failure = StateError('current $phase failure');
+        final result = await controller.loadContent(
+          controller.beginContentLoad(),
+          imageWork: work,
+          beforeLoad: () async {
+            if (phase == 'before') throw failure;
+          },
+          loadImages: (_) async {
+            if (phase == 'images') throw failure;
+            return ['current'];
+          },
+          prepareMode: () async {
+            if (phase == 'mode') throw failure;
+          },
+        );
+        expect(result, ReaderContentLoadResult.failed);
+        expect(controller.content.error, failure.toString());
+        (await work.prepareForExit())();
+        await work.dispose();
+      },
+    );
+  }
+
+  test(
+    'owned content suppresses cancellation sentinels after the original phase ends',
+    () async {
+      final work = ImageWork();
+      final source = Completer<List<String>>();
+      final attempt = controller.beginContentLoad();
+      final loading = controller.loadContent(
+        attempt,
+        imageWork: work,
+        beforeLoad: () async {},
+        loadImages: (_) => source.future,
+        prepareMode: () async => fail('cancelled content must not prepare'),
+      );
+      await pumpEventQueue();
+      final preparing = work.prepareForExit();
+      expect(attempt.scope.isCancelled, isTrue);
+      source.completeError(const RequestCancelled());
+      expect(await loading, ReaderContentLoadResult.ignored);
+      (await preparing)();
+      await work.dispose();
+    },
+  );
 
   test(
     'owned load deduplicates and completes only after mode preparation',

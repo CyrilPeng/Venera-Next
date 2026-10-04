@@ -22,6 +22,9 @@ class _Callback extends JSInvokable {
 }
 
 class _Source extends Fake implements ComicSource {
+  @override
+  Future<void> closeDataWrites() async {}
+
   final root = JsCallbackScope();
   final callbacks = <_Callback>[];
   Object? Function() action = () => null;

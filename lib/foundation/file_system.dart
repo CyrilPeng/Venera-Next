@@ -15,15 +15,16 @@ Future<Uint8List> readFileBytesChecked(
   bool synchronousIO = false,
   void Function()? checkStop,
   Future<void>? cancelSignal,
+  bool Function()? canRetry,
 }) async {
   for (var attempt = 0; ; attempt++) {
     checkStop?.call();
     try {
       final expected = synchronousIO ? file.lengthSync() : await file.length();
+      checkStop?.call();
       final data = synchronousIO
           ? file.readAsBytesSync()
           : await file.readAsBytes();
-      checkStop?.call();
       if ((requireNonEmpty && data.isEmpty) ||
           (expected > 0 && data.length != expected)) {
         throw FileSystemException(
@@ -31,9 +32,12 @@ Future<Uint8List> readFileBytesChecked(
           file.path,
         );
       }
+      checkStop?.call();
       return data;
     } on FileSystemException {
-      if (attempt >= 2) rethrow;
+      // An owner can decline a retry without replacing this read's failure
+      // with a later cancellation check. Existing callers retain three tries.
+      if (attempt >= 2 || canRetry?.call() == false) rethrow;
       final delay = Future<void>.delayed(
         Duration(milliseconds: 150 * (attempt + 1)),
       );
@@ -128,7 +132,7 @@ extension DirectoryExtension on Directory {
   }
 
   /// Delete the contents of the directory.
-  Future<void> deleteContents({recursive = true}) async {
+  Future<void> deleteContents({bool recursive = true}) async {
     if (!existsSync()) return;
     for (var f in listSync()) {
       await f.deleteIfExists(recursive: recursive);

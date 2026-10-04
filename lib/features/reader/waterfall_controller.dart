@@ -1,5 +1,9 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:venera_next/network/request_scope.dart';
 
+import 'package:venera_next/foundation/image_work.dart';
 import 'waterfall_flow.dart';
 
 /// Chapter loading policy; scrolling and frame callbacks belong to the view.
@@ -10,13 +14,17 @@ class WaterfallController {
     required this.chapterId,
     required this.onChanged,
     required this.onPreviousError,
-  });
+    ImageWork? imageWork,
+  }) : _imageWork = imageWork ?? ImageWork();
 
   final int maxChapter;
   final Future<List<String>> Function(int chapter, RequestScope scope) load;
   final String Function(int chapter) chapterId;
   final void Function() onChanged;
   final void Function(Object, StackTrace) onPreviousError;
+  final ImageWork _imageWork;
+  final _pending = <ImageWorkTask>{};
+  Future<void>? _disposal;
   final _flow = WaterfallChapterFlow();
   WaterfallFlowView get flow => _flow;
   RequestScope _scope = RequestScope();
@@ -40,15 +48,55 @@ class WaterfallController {
 
   Future<WaterfallChapterSegment> _load(int chapter, RequestScope scope) async {
     final request = RequestScope(parent: scope);
+    final task = _imageWork.start(onCancel: request.cancel);
+    if (task == null) {
+      request.dispose();
+      throw const RequestCancelled();
+    }
+    _pending.add(task);
+    final completed = Completer<void>();
+    var started = false;
+    ({Object error, StackTrace stack})? failure;
+
+    Future<List<String>> runOriginal() async {
+      started = true;
+      try {
+        return await load(chapter, request);
+      } catch (error, stack) {
+        failure = (error: error, stack: stack);
+        rethrow;
+      } finally {
+        completed.complete();
+      }
+    }
+
+    Future<void> finish() async {
+      // The UI may stop awaiting RequestScope.run before the accepted source
+      // call returns. Keep its scope and session ownership until that return.
+      if (started && !completed.isCompleted) await completed.future;
+      final lateFailure = failure;
+      if (lateFailure != null &&
+          request.isCancelled &&
+          lateFailure.error is! RequestCancelled &&
+          !(lateFailure.error is DioException &&
+              (lateFailure.error as DioException).type ==
+                  DioExceptionType.cancel)) {
+        task.recordFailure(lateFailure.error, lateFailure.stack);
+      }
+      request.dispose();
+      _pending.remove(task);
+      task.finish();
+    }
+
     try {
-      final images = await request.run(() => load(chapter, request));
+      final images = await request.run(runOriginal);
       return WaterfallChapterSegment(
         chapter: chapter,
         eid: chapterId(chapter),
         images: List.unmodifiable(images),
       );
     } finally {
-      request.dispose();
+      unawaited(finish());
     }
   }
 
@@ -87,6 +135,8 @@ class WaterfallController {
         _flow.addAfter(segment);
         onChanged();
       }
+    } on RequestCancelled {
+      // Exit preparation is reversible; cancellation is not a retry error.
     } catch (error) {
       if (_current(scope)) _afterError = error.toString();
     } finally {
@@ -114,6 +164,8 @@ class WaterfallController {
       final segment = await _load(_flow.firstChapter! - 1, scope);
       if (!_current(scope)) return 0;
       return _flow.addBefore(segment);
+    } on RequestCancelled {
+      return 0;
     } catch (error, stack) {
       if (_current(scope)) onPreviousError(error, stack);
       return 0;
@@ -139,6 +191,8 @@ class WaterfallController {
       _flow.reset(segment);
       _afterError = null;
       return true;
+    } on RequestCancelled {
+      return false;
     } catch (_) {
       if (!_current(scope)) return false;
       rethrow;
@@ -150,11 +204,17 @@ class WaterfallController {
     }
   }
 
-  void dispose() {
-    if (_disposed) return;
+  Future<void> dispose() {
+    if (_disposal != null) return _disposal!;
+    final completion = Completer<void>();
+    _disposal = completion.future;
     _disposed = true;
     _revision++;
     _scope.cancel();
     _scope.dispose();
+    completion.complete(
+      Future.wait(_pending.map((task) => task.done).toList()).then((_) {}),
+    );
+    return completion.future;
   }
 }

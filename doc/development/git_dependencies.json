@@ -12,16 +12,6 @@
       }
     },
     {
-      "dependency": "photo_view",
-      "url": "https://github.com/CyrilPeng/photo_view",
-      "commit": "a1255d1b5945aad4b7323303ec2ecdf0c90ffc4c",
-      "status": "maintained-fork",
-      "reason": "Reader uses getInitialScale and customized gesture/animation behavior absent from the stable package.",
-      "packages": {
-        "photo_view": "."
-      }
-    },
-    {
       "dependency": "scrollable_positioned_list",
       "url": "https://github.com/CyrilPeng/flutter.widgets",
       "commit": "09e756b1f1b04e6298318d99ec20a787fb360f59",

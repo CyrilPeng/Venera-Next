@@ -23,8 +23,6 @@ class ImageFavoriteManager with ChangeNotifier {
 
   factory ImageFavoriteManager() => (_cache ??= ImageFavoriteManager._());
 
-  void init() => _repository.initialize();
-
   void addOrUpdateOrDelete(ImageFavoritesComic favorite, [bool notify = true]) {
     _repository.save(favorite);
     if (notify) notifyListeners();

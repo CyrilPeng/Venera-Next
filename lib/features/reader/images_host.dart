@@ -35,6 +35,7 @@ class ReaderImagesHost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ReaderImages(
+    imageWork: reader.imageWork,
     controller: reader.controller,
     beforeLoad: (scope) =>
         reader.prepareLocalPageOrder(() => scope.isCancelled),
@@ -83,6 +84,7 @@ class ReaderImagesHost extends StatelessWidget {
       final source = reader.type.comicSource;
       final chapters = reader.widget.chapters;
       return ReaderGalleryView(
+        imageWork: reader.imageWork,
         key: Key(
           '${reader.mode.key}_${reader.imagesPerPage}_${showComments}_$showCommentsAtEnd',
         ),
@@ -130,6 +132,7 @@ class ReaderImagesHost extends StatelessWidget {
     } else {
       final preferences = reader.preferences;
       return ReaderContinuousView(
+        imageWork: reader.imageWork,
         key: Key(reader.mode.key),
         data: ReaderContinuousData(
           vertical: reader.mode.isTopToBottom,

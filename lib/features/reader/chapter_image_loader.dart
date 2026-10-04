@@ -27,7 +27,9 @@ class ChapterImageLoader {
   }) async {
     final request = RequestScope(parent: scope);
     try {
-      return await request.run(() => _load(request, onOnlineFallback));
+      return await request.runToCompletion(
+        () => _load(request, onOnlineFallback),
+      );
     } finally {
       request.dispose();
     }
@@ -47,7 +49,7 @@ class ChapterImageLoader {
         }
         return images;
       } on FileSystemException catch (error, stack) {
-        scope.check();
+        if (scope.isCancelled) rethrow;
         onLocalFailure(error, stack);
         if (loadOnline == null) throw localUnavailable(error.path ?? localPath);
         missingLocal = true;

@@ -27,11 +27,10 @@ dependencies:
   url_launcher: ^6.3.2
   path: ^1.9.0
   photo_view:
-    git:
-      url: https://github.com/CyrilPeng/photo_view
-      ref: a1255d1b5945aad4b7323303ec2ecdf0c90ffc4c
+    path: packages/photo_view
   mime: ^2.1.0
-  share_plus: ^12.0.2
+  share_plus:
+    path: packages/share_plus
   scrollable_positioned_list:
     git:
       url: https://github.com/CyrilPeng/flutter.widgets
@@ -58,7 +57,9 @@ dependencies:
     git:
       url: https://github.com/venera-app/lodepng_flutter
       ref: ac7d05dde32e8d728102a9ff66e6b55f05d94ba1
-  rhttp: ^0.15.1
+  rhttp:
+    path: packages/rhttp
+  flutter_rust_bridge: 2.11.1
   webdav_client:
     git:
       url: https://github.com/CyrilPeng/webdav_client

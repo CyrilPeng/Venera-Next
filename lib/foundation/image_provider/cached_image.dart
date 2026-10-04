@@ -1,10 +1,12 @@
-import 'dart:async' show Completer, Future, FutureOr;
+import 'dart:async' show Completer, Future, FutureOr, StreamController;
 import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/network/images.dart';
+import 'package:venera_next/network/image_stream.dart';
 import 'base_image_provider.dart';
+import 'image_provider_lifecycle.dart';
 import 'cached_image.dart' as image_provider;
 
 class CachedImageProvider
@@ -30,6 +32,9 @@ class CachedImageProvider
 
   final FutureOr<Uint8List?> Function()? fallback;
 
+  @protected
+  File createLocalFile(String path) => File(path);
+
   static int loadingCount = 0;
 
   static const _kMaxLoadingCount = 8;
@@ -40,13 +45,19 @@ class CachedImageProvider
   static Future<T> debugRunWithThumbnailSlot<T>(
     Future<T> Function() task, {
     void Function()? checkStop,
+    Future<void>? cancelSignal,
   }) {
-    return _runWithThumbnailSlot(task, checkStop: checkStop);
+    return _runWithThumbnailSlot(
+      task,
+      checkStop: checkStop,
+      cancelSignal: cancelSignal,
+    );
   }
 
   static Future<T> _runWithThumbnailSlot<T>(
     Future<T> Function() task, {
     void Function()? checkStop,
+    Future<void>? cancelSignal,
   }) {
     return _thumbnailLoadSlots.run(() async {
       checkStop?.call();
@@ -56,7 +67,7 @@ class CachedImageProvider
       } finally {
         loadingCount--;
       }
-    });
+    }, cancelSignal: cancelSignal);
   }
 
   @override
@@ -64,34 +75,43 @@ class CachedImageProvider
     return _runWithThumbnailSlot(
       () => _loadImage(chunkEvents, checkStop),
       checkStop: checkStop,
+      cancelSignal: BaseImageProvider.cancelSignalOf(checkStop),
     );
   }
 
-  Future<Uint8List> _loadImage(chunkEvents, checkStop) async {
+  Future<Uint8List> _loadImage(
+    StreamController<ImageChunkEvent> chunkEvents,
+    void Function() checkStop,
+  ) async {
     try {
+      checkStop();
       if (url.startsWith("file://")) {
-        var file = File(url.substring(7));
-        return await file.readAsBytes();
-      }
-      await for (var progress in ImageDownloader.loadThumbnail(
-        url,
-        sourceKey,
-        cid,
-      )) {
+        final file = createLocalFile(url.substring(7));
+        final bytes = await file.readAsBytes();
         checkStop();
-        chunkEvents.add(
+        return bytes;
+      }
+      final bytes = await readImageStream(
+        ImageDownloader.loadThumbnail(url, sourceKey, cid),
+        cancelSignal: BaseImageProvider.cancelSignalOf(checkStop),
+        checkStop: checkStop,
+        onProgress: (progress) => chunkEvents.add(
           ImageChunkEvent(
             cumulativeBytesLoaded: progress.currentBytes,
             expectedTotalBytes: progress.totalBytes,
           ),
-        );
-        if (progress.imageBytes != null) {
-          return progress.imageBytes!;
-        }
-      }
+        ),
+      );
+      if (bytes != null) return bytes;
       throw "Error: Empty response body.";
     } catch (e) {
+      if (BaseImageProvider.isCancellation(e) ||
+          BaseImageProvider.isCleanupFailure(e) ||
+          !BaseImageProvider.canRetryAfterFailure(checkStop)) {
+        rethrow;
+      }
       final fallbackImage = await fallback?.call();
+      checkStop();
       if (fallbackImage != null) {
         if (fallbackImage.isNotEmpty) {
           return fallbackImage;
@@ -115,12 +135,17 @@ class _AsyncSemaphore {
 
   int _active = 0;
 
-  final _waiters = Queue<Completer<void>>();
+  final _waiters = Queue<Completer<bool>>();
 
   _AsyncSemaphore(this.maxConcurrent);
 
-  Future<T> run<T>(Future<T> Function() task) async {
-    await _acquire();
+  Future<T> run<T>(
+    Future<T> Function() task, {
+    Future<void>? cancelSignal,
+  }) async {
+    if (!await _acquire(cancelSignal)) {
+      throw const ImageProviderLoadCancelled();
+    }
     try {
       return await task();
     } finally {
@@ -128,19 +153,22 @@ class _AsyncSemaphore {
     }
   }
 
-  Future<void> _acquire() {
+  Future<bool> _acquire(Future<void>? cancelSignal) {
     if (_active < maxConcurrent) {
       _active++;
-      return Future.value();
+      return Future.value(true);
     }
-    final completer = Completer<void>();
+    final completer = Completer<bool>();
     _waiters.add(completer);
+    cancelSignal?.then((_) {
+      if (_waiters.remove(completer)) completer.complete(false);
+    });
     return completer.future;
   }
 
   void _release() {
     if (_waiters.isNotEmpty) {
-      _waiters.removeFirst().complete();
+      _waiters.removeFirst().complete(true);
       return;
     }
     _active--;

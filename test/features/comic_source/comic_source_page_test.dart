@@ -381,10 +381,15 @@ void main() {
 }
 
 Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
-  for (var i = 0; i < 100; i++) {
+  // These scenarios write real files. A fixed number of virtual-clock pumps
+  // can finish before the OS completes I/O under full-suite load.
+  final elapsed = Stopwatch()..start();
+  while (elapsed.elapsed < const Duration(seconds: 10)) {
     await tester.pump(const Duration(milliseconds: 20));
     if (condition()) return;
-    await tester.runAsync(() => pumpEventQueue());
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
   }
   fail('The expected asynchronous source operation did not complete.');
 }

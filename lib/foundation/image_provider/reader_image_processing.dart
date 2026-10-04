@@ -1,46 +1,80 @@
+import 'dart:async';
 import 'dart:typed_data';
+
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:venera_next/foundation/js_engine.dart';
+import 'package:venera_next/network/image_loading_config.dart';
 
-final Object _imageProcessingCanceled = Object();
+import 'image_provider_lifecycle.dart';
 
+class ReaderImageProcessingFailure implements Exception {
+  ReaderImageProcessingFailure(
+    Iterable<({Object error, StackTrace stack})> failures,
+  ) : failures = List.unmodifiable(failures);
+
+  final List<({Object error, StackTrace stack})> failures;
+
+  @override
+  String toString() =>
+      'Image processing failed: '
+      '${failures.map((failure) => failure.error).join('; ')}';
+}
+
+/// Cancellation asks the script to stop, but completion still belongs to its
+/// original image Future and the optional asynchronous cancellation hook.
 Future<dynamic> waitForReaderImageProcessingResult(
   Future<dynamic> image,
-  void Function() onCancel,
+  dynamic Function() onCancel,
   void Function() checkStop, {
   required Future<void> cancelSignal,
+  ImageLoadingConfigOwner? owner,
 }) async {
-  var abandoned = false;
-  var completed = false;
-  dynamic completedValue;
-  final tracked = image.then((value) {
-    completed = true;
-    completedValue = value;
-    if (abandoned) JSRef.freeRecursive(value);
-    return value;
+  final references = owner ?? ImageLoadingConfigOwner(null);
+  final failures = <({Object error, StackTrace stack})>[];
+  var imageDone = false;
+  Future<void>? cancelTask;
+  Object? hookValue;
+  Object? value;
+
+  // Observe the hook independently so a rejection cannot become unhandled
+  // while the original processing Future is still running.
+  cancelSignal.then((_) {
+    if (imageDone) return;
+    cancelTask = Future<dynamic>.sync(onCancel).then<void>(
+      (result) => hookValue = result,
+      onError: (Object error, StackTrace stack) {
+        failures.add((error: error, stack: stack));
+      },
+    );
   });
-  void abandon() {
-    if (abandoned) return;
-    abandoned = true;
-    if (completed) JSRef.freeRecursive(completedValue);
+  try {
+    value = await image;
+  } catch (error, stack) {
+    failures.add((error: error, stack: stack));
+  }
+  imageDone = true;
+  await cancelTask;
+  try {
+    checkStop();
+    if (cancelTask != null) throw const ImageProviderLoadCancelled();
+  } catch (error, stack) {
+    failures.add((error: error, stack: stack));
   }
 
-  try {
-    final result = await Future.any<dynamic>([
-      tracked,
-      cancelSignal.then((_) => _imageProcessingCanceled),
-    ]);
-    if (identical(result, _imageProcessingCanceled)) {
-      abandon();
-      onCancel();
-      checkStop();
-    }
-    checkStop();
-    return result ?? Uint8List(0);
-  } catch (_) {
-    abandon();
-    rethrow;
+  if (failures.isNotEmpty) {
+    final error = failures.length == 1
+        ? failures.single.error
+        : ReaderImageProcessingFailure(failures);
+    final stack = failures.first.stack;
+    references.discard(
+      [value, hookValue, for (final failure in failures) failure.error],
+      cause: error,
+      stackTrace: stack,
+    );
+    Error.throwWithStackTrace(error, stack);
   }
+  references.discard(hookValue);
+  return value ?? Uint8List(0);
 }
 
 /// Execute the existing custom-image protocol with operation-owned callbacks.
@@ -55,51 +89,42 @@ Future<Uint8List> processReaderImageBytes(
   required Future<void> cancelSignal,
 }) async {
   checkStop();
-  final callbacks = JsCallbackScope();
-  dynamic function;
-  dynamic result;
+  final values = <Object?>[];
+  final owner = ImageLoadingConfigOwner(values);
   try {
-    function = JsEngine().runCode('''
+    final function = JsEngine().runOwnedCode('''
       (() => {
         $script
         return processImage;
       })()
     ''');
+    values.add(function);
     if (function is! JSInvokable) return bytes;
-    final process = callbacks.retain(function);
-    JSRef.freeRecursive(function);
-    function = null;
-    result = process([bytes, comicId, episodeId, page, sourceKey]);
+    final result = function([bytes, comicId, episodeId, page, sourceKey]);
+    values.add(result);
     dynamic image = result;
-    void Function() onCancel = () {};
+    dynamic Function() onCancel = () {};
     if (result is Map) {
       image = result['image'];
       final cancel = result['onCancel'];
-      if (cancel is JSInvokable) {
-        final retained = callbacks.retain(cancel);
-        onCancel = () => retained([]);
-      }
+      if (cancel is JSInvokable) onCancel = () => cancel([]);
     }
-    JSRef.freeRecursive(result);
-    result = null;
     if (image is Future) {
-      final resolved = await waitForReaderImageProcessingResult(
+      image = await waitForReaderImageProcessingResult(
         image,
         onCancel,
         checkStop,
         cancelSignal: cancelSignal,
+        owner: owner,
       );
-      try {
-        return resolved is Uint8List ? resolved : bytes;
-      } finally {
-        JSRef.freeRecursive(resolved);
-      }
+      values.add(image);
     }
     checkStop();
     return image is Uint8List ? image : bytes;
+  } catch (error, stack) {
+    owner.dispose(cause: error, stackTrace: stack);
+    rethrow;
   } finally {
-    JSRef.freeRecursive(result);
-    JSRef.freeRecursive(function);
-    callbacks.dispose();
+    owner.dispose();
   }
 }

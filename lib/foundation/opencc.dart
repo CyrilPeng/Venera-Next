@@ -1,67 +1,39 @@
 import 'dart:convert';
-
 import 'package:flutter/services.dart';
+import 'opencc_table.dart';
 
 abstract class OpenCC {
-  static late final Map<int, int> _s2t;
-  static late final Map<int, int> _t2s;
+  static OpenCCTable? _table;
+  static Future<void>? _initialization;
 
-  static Future<void> init() async {
-    var data = await rootBundle.load("assets/opencc.txt");
-    var txt = utf8.decode(data.buffer.asUint8List());
-    _s2t = <int, int>{};
-    _t2s = <int, int>{};
-    for (var line in txt.split('\n')) {
-      if (line.isEmpty || line.startsWith('#') || line.length != 2) continue;
-      var s = line.runes.elementAt(0);
-      var t = line.runes.elementAt(1);
-      _s2t[s] = t;
-      _t2s[t] = s;
-    }
+  /// Concurrent calls share one load. Failed loads can be retried; successful
+  /// tables remain immutable and are reused for the application lifetime.
+  static Future<void> init({AssetBundle? bundle}) =>
+      _initialization ??= _load(bundle ?? rootBundle).then(
+        (_) {},
+        onError: (Object error, StackTrace stack) {
+          _initialization = null;
+          Error.throwWithStackTrace(error, stack);
+        },
+      );
+
+  static Future<void> _load(AssetBundle bundle) async {
+    final data = await bundle.load('assets/opencc.txt');
+    final table = OpenCCTable.parse(
+      utf8.decode(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+      ),
+    );
+    _table = table;
   }
 
-  static bool hasChineseSimplified(String text) {
-    if (text != "监禁") {
-      return false;
-    }
-    for (var rune in text.runes) {
-      if (_s2t.containsKey(rune)) {
-        return true;
-      }
-    }
-    return false;
-  }
+  static OpenCCTable get _ready =>
+      _table ?? (throw StateError('OpenCC is not initialized'));
 
-  static bool hasChineseTraditional(String text) {
-    for (var rune in text.runes) {
-      if (_t2s.containsKey(rune)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  static String simplifiedToTraditional(String text) {
-    var sb = StringBuffer();
-    for (var rune in text.runes) {
-      if (_s2t.containsKey(rune)) {
-        sb.write(String.fromCharCodes([_s2t[rune]!]));
-      } else {
-        sb.write(String.fromCharCodes([rune]));
-      }
-    }
-    return sb.toString();
-  }
-
-  static String traditionalToSimplified(String text) {
-    var sb = StringBuffer();
-    for (var rune in text.runes) {
-      if (_t2s.containsKey(rune)) {
-        sb.write(String.fromCharCodes([_t2s[rune]!]));
-      } else {
-        sb.write(String.fromCharCodes([rune]));
-      }
-    }
-    return sb.toString();
-  }
+  static bool hasChineseSimplified(String text) => _ready.hasSimplified(text);
+  static bool hasChineseTraditional(String text) => _ready.hasTraditional(text);
+  static String simplifiedToTraditional(String text) =>
+      _ready.toTraditional(text);
+  static String traditionalToSimplified(String text) =>
+      _ready.toSimplified(text);
 }

@@ -2,6 +2,9 @@
 #include "flutter_window.h"
 #include "startup_log.h"
 #include <optional>
+#include <cstdlib>
+#include <iostream>
+#include <variant>
 #include <winhttp.h>
 #include <Windows.h>
 #include <winbase.h>
@@ -11,15 +14,10 @@
 #include <flutter/event_stream_handler_functions.h>
 #include <flutter/standard_method_codec.h>
 #include "flutter/generated_plugin_registrant.h"
-#include <thread>
 
 #define _CRT_SECURE_NO_WARNINGS
 
 std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& mouseEvents = nullptr;
-
-std::atomic<bool> mainThreadAlive(true);
-std::atomic<std::chrono::steady_clock::time_point> lastHeartbeat(std::chrono::steady_clock::now());
-std::thread* monitorThread = nullptr;
 
 char* wideCharToMultiByte(wchar_t* pWCStrKey)
 {
@@ -47,25 +45,12 @@ char* getProxy() {
 }
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
-    : project_(project) {}
+    : project_(project), heartbeat_monitor_([] {
+        std::cerr << "The UI thread is dead. Terminate the application.";
+        std::exit(0);
+      }) {}
 
 FlutterWindow::~FlutterWindow() {}
-
-void monitorUIThread() {
-    const auto timeout = std::chrono::seconds(5);
-
-    while (mainThreadAlive.load()) {
-        auto now = std::chrono::steady_clock::now();
-        auto duration = now - lastHeartbeat.load();
-
-        if (duration > timeout) {
-            std::cerr << "The UI thread is dead. Terminate the application.";
-            std::exit(0);
-        }
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
-}
 
 bool FlutterWindow::OnCreate() {
   if (!Win32Window::OnCreate()) {
@@ -97,7 +82,7 @@ bool FlutterWindow::OnCreate() {
       &flutter::StandardMethodCodec::GetInstance()
   );
   channel.SetMethodCallHandler(
-    [](const flutter::MethodCall<>& call,const std::unique_ptr<flutter::MethodResult<>>& result) {
+    [this](const flutter::MethodCall<>& call,const std::unique_ptr<flutter::MethodResult<>>& result) {
       if(call.method_name() == "getProxy"){
         const auto res = getProxy();
         if (res != nullptr){
@@ -109,17 +94,35 @@ bool FlutterWindow::OnCreate() {
         delete(res);
         return;
       }
+      else if (call.method_name() == "startHeartbeat") {
 #ifdef NDEBUG
-      else if (call.method_name() == "heartBeat") {
-
-          if (monitorThread == nullptr) {
-              monitorThread = new std::thread{ monitorUIThread };
+          result->Success(flutter::EncodableValue(heartbeat_monitor_.Start()));
+#else
+          // Preserve the existing policy: no watchdog while debugging.
+          result->Success(flutter::EncodableValue(std::int64_t{0}));
+#endif
+          return;
+      }
+      else if (call.method_name() == "heartBeat" ||
+               call.method_name() == "stopHeartbeat") {
+          const auto* arguments = call.arguments();
+          std::int64_t owner;
+          if (arguments && std::holds_alternative<std::int64_t>(*arguments)) {
+              owner = std::get<std::int64_t>(*arguments);
+          } else if (arguments && std::holds_alternative<std::int32_t>(*arguments)) {
+              owner = std::get<std::int32_t>(*arguments);
+          } else {
+              result->Error("invalid_heartbeat_owner", "Expected a heartbeat owner id");
+              return;
           }
-          lastHeartbeat = std::chrono::steady_clock::now();
+          if (call.method_name() == "heartBeat") {
+              heartbeat_monitor_.Beat(owner);
+          } else {
+              heartbeat_monitor_.Stop(owner);
+          }
           result->Success();
           return;
       }
-#endif
       result->Success(); // Default response for unhandled method calls
   });
 
@@ -202,15 +205,12 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  heartbeat_monitor_.Shutdown();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
 
   Win32Window::OnDestroy();
-  if (monitorThread != nullptr) {
-      mainThreadAlive = false;
-      monitorThread->join();
-  }
 }
 
 void mouse_side_button_listener(unsigned int input)

@@ -541,3 +541,21 @@ routing/page_replacement.dart 负责把当前路由替换为根导航页面，�
 reader/image_action.dart 共用复制/保存的异步读取与消费流程；gesture.dart 负责检查挂载、视口、图片列表与章节身份，并在展示处检查 mounted。读取结果过期时不启动平台操作；已启动的平台操作继续完成，迟到异常不更新旧页面。该纯 Dart 入口纳入架构门禁。
 
 网络收藏导入提交结果与缓存/通知发布已分离，刷新失败保留成功计数并仅重试发布；本地 JSON 导入、跨进程通知恢复及其他提交后发布边界仍待验收。
+
+SourceRepositories.migrate 共享迁移尝试并在写入失败后恢复可重试状态；初始化等待与资源审计见 initialization_ownership_audit.zh.md。
+
+HistoryManager.init 现在共享一次完成结果，仅在过期清理与已接受写入完成后通知就绪；图片收藏表直接由所属连接初始化，已删除无调用的 ImageFavoriteManager.init 转发。失败清理、关闭重开与独立实例边界有专项覆盖，核心服务整体退出仍未验收。
+
+JsEngine.create 允许显式注入其拥有的 HTTP 客户端工厂和初始化脚本加载器；生产单例使用默认装配。初始化失败和销毁共用释放逻辑，临时 dart:io 客户端按请求释放，resetDio 允许旧请求结束后关闭连接。reset 返回可等待 Future，销毁对象不可复用。
+
+CookieJarSql 在构造阶段拥有并初始化数据库，建表失败释放连接，关闭后访问明确失败；SingleInstanceCookieJar.dispose 仅清除自己的全局引用，导入装配不再手动写空/重复赋值。移除无外部调用的 init 入口，防止重复打开泄漏连接。
+
+foundation/opencc_table.dart 是不依赖 Flutter 的不可变单字转换表，按 Unicode 码点解析并处理 CRLF，保留重复键末项优先。OpenCC 仅负责资源加载/共享初始化与原有静态 API 适配，加载失败可重试；新增第 78 个业务入口门禁。
+
+ComicSourceManager 启动加载复用 ComicSourceParser 的 retainRollback 协议；整批加载失败清理本次注册，成功后才释放回滚句柄并启动源 init。单个坏脚本继续隔离。全量 reload 的旧源恢复、后台 init 取消和监听器退出仍需验收。
+
+全量源重载复用 _loadSources 和解析器回滚，保留原 Dart 列表与 JS 注册表；已有脚本解析失败或整批失败恢复原状态，成功后才释放未复用旧源。复用的运行时对象失败时不被释放，新增坏脚本与删除文件沿用原有语义。
+
+P8 类型门禁：CI 使用 flutter analyze --fatal-infos --fatal-warnings。组件与图片流程明确 bool/double/BuildContext/StreamController<ImageChunkEvent>/void 回调，章节解析返回 ComicChapters?，压缩返回 Future<void>。Settings 动态访问保留为旧异构兼容桥，不能据此宣称全配置消费端已类型化。
+
+features/sync/legacy_auto_sync_migration.dart 承担旧 WebDAV 自动同步偏好的缺省迁移、保存等待和失败标记恢复；bootstrap_core 在 finish 阶段调用，Appdata 返回真实保存 Future。该纯 Dart 文件纳入第 79 个业务入口门禁。

@@ -28,10 +28,7 @@ void main() {
   });
 
   tearDown(() async {
-    if (source.synchronizer.status.value.isSyncing) {
-      await source.synchronizer.synchronize();
-    }
-    source.dispose();
+    await source.closeAndWait();
     dataDir.deleteSync(recursive: true);
   });
 

@@ -431,3 +431,21 @@ routing/page_replacement.dart redirects the current route to a root page while r
 reader/image_action.dart shares asynchronous image reading and consumption for copy/save. gesture.dart owns mounted, viewport, image-list and chapter identity checks and guards presentation locally. Stale reads never start platform operations; already started operations may finish, with late errors suppressed for the old owner. The pure Dart entry is enrolled in the architecture gate.
 
 Network-favorite import now separates committed results from cache/notification publication; refresh failure preserves success counts and retries publication only. Local JSON import, cross-process notification recovery and other post-commit boundaries still need acceptance.
+
+SourceRepositories.migrate shares migration attempts and restores retryable state after persistence failure. Initialization wait/resource audit: initialization_ownership_audit.en.md.
+
+HistoryManager.init now shares completion and notifies readiness only after retention and accepted writes finish. Image-favorite schema initialization uses its owned connection; the unused ImageFavoriteManager.init forwarder was removed. Focused coverage includes failure cleanup, close/reopen and independent instances; overall core shutdown remains unverified.
+
+JsEngine.create accepts an owned HTTP-client factory and an initialization-script loader; the production singleton uses defaults. Failure/disposal share cleanup, temporary dart:io clients are released per request, and resetDio closes gracefully so accepted requests can finish. reset returns an awaitable Future; disposed instances cannot be reused.
+
+CookieJarSql owns and initializes its database during construction, releases schema failures and rejects access after closure. SingleInstanceCookieJar.dispose clears only its own global slot; import composition no longer manually clears/reassigns it. The unused public init entry was removed to prevent repeated-open leaks.
+
+foundation/opencc_table.dart is a Flutter-independent immutable character conversion table with Unicode code-point/CRLF parsing and last-duplicate-wins semantics. OpenCC owns asset loading/shared initialization and the existing static API adapter, permitting retry after load failure. The table is the 78th enrolled business entry.
+
+ComicSourceManager startup reuses ComicSourceParser retainRollback: failed batches remove their registrations, while successful batches release rollback handles before launching source init. Individual bad scripts stay isolated. Old-source restoration on full reload, background init cancellation and listener shutdown remain pending.
+
+Full source reload reuses _loadSources/parser rollback while retaining the old Dart list and JS registry. Existing-file parse failure or batch failure restores them; success disposes only non-reused old sources. Reused runtime objects survive failure, and new bad/deleted-file behavior is preserved.
+
+P8 typing gate: CI uses flutter analyze --fatal-infos --fatal-warnings. Component/image boundaries specify bool/double/BuildContext/StreamController<ImageChunkEvent>/void callbacks; chapter parsing returns ComicChapters? and compression returns Future<void>. Settings retains its heterogeneous dynamic compatibility bridge; this does not prove all configuration consumers are typed.
+
+features/sync/legacy_auto_sync_migration.dart owns legacy WebDAV auto-sync default migration, persistence waiting and marker rollback. bootstrap_core calls it during finish, while Appdata returns the actual save Future. This pure Dart file is the 79th enrolled business entry.

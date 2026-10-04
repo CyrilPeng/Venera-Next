@@ -146,14 +146,10 @@ class Appdata with Init {
     await Future.wait(futures);
   }
 
-  void writeImplicitData() {
-    unawaited(
-      _enqueueWrite(() async {
-        var file = File(FilePath.join(App.dataPath, 'implicitData.json'));
-        await _writeTextAtomically(file, jsonEncode(implicitData));
-      }),
-    );
-  }
+  Future<void> writeImplicitData() => _enqueueWrite(() async {
+    var file = File(FilePath.join(App.dataPath, 'implicitData.json'));
+    await _writeTextAtomically(file, jsonEncode(implicitData));
+  });
 
   @override
   Future<void> doInit() async {
@@ -395,12 +391,13 @@ class Settings with ChangeNotifier {
     'autoCloseFavoritePanel': false,
   };
 
-  operator [](String key) {
+  /// Legacy heterogeneous settings bridge; typed consumers use preference snapshots.
+  dynamic operator [](String key) {
     if (key == 'longPressAction') return _longPressAction(_data) ?? 'zoom';
     return _data[key];
   }
 
-  operator []=(String key, dynamic value) {
+  void operator []=(String key, dynamic value) {
     _data[key] = value;
     if (key != "dataVersion") {
       notifyListeners();

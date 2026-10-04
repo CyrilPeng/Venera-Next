@@ -66,6 +66,150 @@ void main() {
       });
 
       test(
+        'failed startup removes staged sources and callbacks before explicit retry',
+        () async {
+          await appdata.init();
+          await File(
+            '${directory.path}/comic_source/a.js',
+          ).writeAsString(capabilityScript('transaction_a'));
+          ComicSource? staged;
+          configureRuntimeComicSourcesProvider(() {
+            staged = manager.find('transaction_a');
+            throw StateError('runtime provider unavailable');
+          });
+          try {
+            await expectLater(manager.init(), throwsStateError);
+            expect(manager.initializationState, InitializationState.failed);
+            expect(staged, isNotNull);
+            expect(manager.find('transaction_a'), isNull);
+            expect(
+              JsEngine().runCode(
+                'ComicSource.sources.transaction_a === undefined',
+              ),
+              isTrue,
+            );
+            expect(
+              () => staged!.createSettingsCallbackScope(),
+              throwsStateError,
+            );
+            configureRuntimeComicSourcesProvider(null);
+            await manager.retryInit();
+            expect(manager.initializationState, InitializationState.ready);
+            expect(
+              manager.all().where((source) => source.key == 'transaction_a'),
+              hasLength(1),
+            );
+            expect(
+              manager.find('transaction_a')!.onTagSuggestionSelected!(
+                'namespace',
+                'tag',
+              ),
+              'transaction_a',
+            );
+          } finally {
+            configureRuntimeComicSourcesProvider(null);
+          }
+        },
+      );
+
+      test(
+        'individual malformed file is skipped while valid source registration commits',
+        () async {
+          await appdata.init();
+          await File(
+            '${directory.path}/comic_source/broken.js',
+          ).writeAsString('not a source');
+          await File(
+            '${directory.path}/comic_source/a.js',
+          ).writeAsString(capabilityScript('transaction_a'));
+          await manager.reload();
+          expect(
+            manager.all().where((source) => source.key == 'transaction_a'),
+            hasLength(1),
+          );
+          expect(
+            manager.find('transaction_a')!.onTagSuggestionSelected!(
+              'namespace',
+              'tag',
+            ),
+            'transaction_a',
+          );
+        },
+      );
+
+      test(
+        'failed reload preserves old source, JS state and callback ownership',
+        () async {
+          await appdata.init();
+          final path = '${directory.path}/comic_source/a.js';
+          await File(path).writeAsString(capabilityScript('transaction_a'));
+          await manager.reload();
+          final original = manager.find('transaction_a')!;
+          JsEngine().runCode('ComicSource.sources.transaction_a.marker = 73;');
+          final runtime = await ComicSourceParser().parse(
+            capabilityScript('transaction_b'),
+            '${directory.path}/runtime.js',
+          );
+          manager.add(runtime);
+          configureRuntimeComicSourcesProvider(() sync* {
+            yield runtime;
+            throw StateError('provider failure');
+          });
+          try {
+            await expectLater(manager.reload(), throwsStateError);
+          } finally {
+            configureRuntimeComicSourcesProvider(null);
+          }
+          expect(manager.find('transaction_a'), same(original));
+          expect(manager.find('transaction_b'), same(runtime));
+          runtime.createSettingsCallbackScope().dispose();
+          expect(
+            JsEngine().runCode('ComicSource.sources.transaction_a.marker'),
+            73,
+          );
+          original.createSettingsCallbackScope().dispose();
+          expect(
+            original.onTagSuggestionSelected!('namespace', 'tag'),
+            'transaction_a',
+          );
+          await File(path).writeAsString('invalid replacement');
+          await expectLater(
+            manager.reload(),
+            throwsA(isA<ComicSourceParseException>()),
+          );
+          expect(manager.find('transaction_a'), same(original));
+          expect(
+            JsEngine().runCode('ComicSource.sources.transaction_a.marker'),
+            73,
+          );
+          await File(path).writeAsString(capabilityScript('transaction_a'));
+          await manager.reload();
+          expect(manager.find('transaction_a'), isNot(same(original)));
+          expect(original.createSettingsCallbackScope, throwsStateError);
+          expect(
+            manager.all().where((source) => source.key == 'transaction_a'),
+            hasLength(1),
+          );
+        },
+      );
+
+      test('successful reload removes deliberately deleted files', () async {
+        await appdata.init();
+        final file = File('${directory.path}/comic_source/a.js');
+        await file.writeAsString(capabilityScript('transaction_a'));
+        await manager.reload();
+        final original = manager.find('transaction_a')!;
+        await file.delete();
+        await manager.reload();
+        expect(manager.find('transaction_a'), isNull);
+        expect(
+          JsEngine().runCode('ComicSource.sources.transaction_a === undefined'),
+          isTrue,
+        );
+        expect(original.createSettingsCallbackScope, throwsStateError);
+      });
+
+      test(
         'capability callbacks retain source identity when parser is reused',
         () async {
           final parser = ComicSourceParser();
@@ -106,7 +250,7 @@ void main() {
               source.key,
             );
             expect(
-              source.getThumbnailLoadingConfig!('image')['url'],
+              (await source.getThumbnailLoadingConfig!('image'))['url'],
               source.key,
             );
             expect(

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:isolate';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:venera_next/foundation/js_engine.dart';
@@ -19,6 +18,9 @@ class JSPool {
   static final int _maxInstances = 4;
   final List<JsPoolEngine> _instances = [];
   Future<void>? _initFuture;
+  Future<void>? _closeFuture;
+  int _generation = 0;
+  bool _cleanupRequired = false;
 
   static final JSPool _singleton = JSPool._internal();
 
@@ -26,47 +28,96 @@ class JSPool {
     return _singleton;
   }
 
-  JSPool._internal();
+  JSPool._internal() : this.create();
 
-  Future<void> init() async {
+  /// Owns every engine returned by the factory, including partial startup.
+  JSPool.create({
+    Future<Uint8List> Function()? loadJsInit,
+    JsPoolEngine Function(Uint8List)? createEngine,
+  }) : _loadJsInit = loadJsInit ?? _loadBundledScript,
+       _createEngine = createEngine ?? IsolateJsEngine.new;
+
+  final Future<Uint8List> Function() _loadJsInit;
+  final JsPoolEngine Function(Uint8List) _createEngine;
+
+  Future<void> init() {
+    if (_closeFuture != null) {
+      return Future.error(StateError('JS pool is closing'));
+    }
+    if (_cleanupRequired) {
+      return Future.error(
+        StateError('JS pool requires failed resource cleanup'),
+      );
+    }
     if (_instances.isNotEmpty) {
-      return;
+      return Future.value();
     }
     return _initFuture ??= _init();
   }
 
   Future<void> _init() async {
+    final created = <JsPoolEngine>[];
     try {
       if (_instances.isNotEmpty) {
         return;
       }
       var jsInit = await _loadJsInit();
       for (int i = 0; i < _maxInstances; i++) {
-        _instances.add(_createEngine(jsInit));
+        created.add(_createEngine(jsInit));
       }
+      _instances.addAll(created);
+    } catch (error, stack) {
+      final cleanupErrors = <Object>[];
+      final failedCleanup = <JsPoolEngine>[];
+      await Future.wait(
+        created.map((engine) async {
+          try {
+            await engine.close();
+          } catch (cleanupError) {
+            cleanupErrors.add(cleanupError);
+            failedCleanup.add(engine);
+          }
+        }),
+      );
+      if (cleanupErrors.isNotEmpty) {
+        _instances.addAll(failedCleanup);
+        _cleanupRequired = true;
+        Error.throwWithStackTrace(
+          JsPoolInitializationFailure(error, cleanupErrors),
+          stack,
+        );
+      }
+      Error.throwWithStackTrace(error, stack);
     } finally {
       _initFuture = null;
     }
   }
 
-  Future<Uint8List> _loadJsInit() async {
-    var debugLoad = debugLoadJsInit;
-    if (debugLoad != null) {
-      return debugLoad();
-    }
+  static Future<Uint8List> _loadBundledScript() async {
     var jsInitBuffer = await rootBundle.load("assets/init.js");
     return jsInitBuffer.buffer.asUint8List();
   }
 
-  JsPoolEngine _createEngine(Uint8List jsInit) {
-    var debugCreate = debugCreateEngine;
-    if (debugCreate != null) {
-      return debugCreate(jsInit);
-    }
-    return IsolateJsEngine(jsInit);
+  Future<void> close() {
+    final closing = _closeFuture;
+    if (closing != null) return closing;
+    final completion = Completer<void>();
+    _closeFuture = completion.future;
+    _generation++;
+    _close().then<void>(
+      (_) {
+        _closeFuture = null;
+        completion.complete();
+      },
+      onError: (Object error, StackTrace stack) {
+        _closeFuture = null;
+        completion.completeError(error, stack);
+      },
+    );
+    return completion.future;
   }
 
-  Future<void> close() async {
+  Future<void> _close() async {
     var initFuture = _initFuture;
     if (initFuture != null) {
       try {
@@ -77,28 +128,29 @@ class JSPool {
     }
     var instances = List<JsPoolEngine>.from(_instances);
     _instances.clear();
-    await Future.wait(instances.map((instance) => instance.close()));
+    final errors = <({Object error, StackTrace stack})>[];
+    await Future.wait(
+      instances.map((instance) async {
+        try {
+          await instance.close();
+        } catch (error, stack) {
+          _instances.add(instance);
+          errors.add((error: error, stack: stack));
+        }
+      }),
+    );
+    _cleanupRequired = errors.isNotEmpty;
+    if (errors.isNotEmpty) {
+      Error.throwWithStackTrace(errors.first.error, errors.first.stack);
+    }
   }
-
-  @visibleForTesting
-  static Future<Uint8List> Function()? debugLoadJsInit;
-
-  @visibleForTesting
-  static JsPoolEngine Function(Uint8List jsInit)? debugCreateEngine;
-
-  @visibleForTesting
-  static Future<void> resetForTesting() async {
-    await _singleton.close();
-    _singleton._initFuture = null;
-    debugLoadJsInit = null;
-    debugCreateEngine = null;
-  }
-
-  @visibleForTesting
-  int get debugInstanceCount => _instances.length;
 
   Future<dynamic> execute(String jsFunction, List<dynamic> args) async {
+    final generation = _generation;
     await init();
+    if (_closeFuture != null || generation != _generation) {
+      throw StateError('JS pool closed before task admission');
+    }
     if (_instances.isEmpty) {
       throw Exception("JSPool failed to initialize.");
     }
@@ -112,12 +164,31 @@ class JSPool {
   }
 }
 
-class _IsolateJsEngineInitParam {
-  final SendPort sendPort;
+class JsPoolInitializationFailure implements Exception {
+  JsPoolInitializationFailure(this.cause, Iterable<Object> cleanupErrors)
+    : cleanupErrors = List.unmodifiable(cleanupErrors);
 
-  final Uint8List jsInit;
+  final Object cause;
+  final List<Object> cleanupErrors;
 
-  _IsolateJsEngineInitParam(this.sendPort, this.jsInit);
+  @override
+  String toString() =>
+      'JS pool initialization failed: $cause; cleanup: $cleanupErrors';
+}
+
+/// A worker sends its task SendPort, then one TaskResult per accepted Task.
+/// Isolate errors and exit notifications are managed by the owning engine.
+typedef JsWorkerStart = ({SendPort replies, Uint8List script});
+
+/// Sent after accepted tasks drain; the worker releases resources and replies
+/// with JsWorkerStopped before exiting.
+class JsWorkerStop {
+  const JsWorkerStop();
+}
+
+class JsWorkerStopped {
+  const JsWorkerStopped([this.error]);
+  final String? error;
 }
 
 class IsolateJsEngine implements JsPoolEngine {
@@ -131,38 +202,77 @@ class IsolateJsEngine implements JsPoolEngine {
   final Map<int, Completer<dynamic>> _tasks = {};
 
   bool _isClosed = false;
+  Future<void>? _closeFuture;
+  late final Future<void> _spawnFuture;
+  final _exited = Completer<void>();
+  final _transportReady = Completer<SendPort>();
+  bool _workerFailed = false;
+  bool _stopRequested = false;
+  bool _stopAcknowledged = false;
+  String? _cleanupError;
 
   @override
   int get pendingTasks => _tasks.length;
 
-  IsolateJsEngine(Uint8List jsInit) {
+  IsolateJsEngine(
+    Uint8List jsInit, {
+    void Function(JsWorkerStart)? entryPoint,
+  }) {
     _receivePort = ReceivePort();
     _receivePort!.listen(_onMessage);
-    Isolate.spawn(
-      _run,
-      _IsolateJsEngineInitParam(_receivePort!.sendPort, jsInit),
-    ).then(
-      (isolate) {
-        if (_isClosed) {
-          isolate.kill(priority: Isolate.immediate);
-        } else {
-          _isolate = isolate;
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        _completeStartupError(error, stackTrace);
-        _completeAllTasksError(error, stackTrace);
-        _receivePort?.close();
-        _isClosed = true;
-      },
-    );
+    _spawnFuture =
+        Isolate.spawn(
+          entryPoint ?? _run,
+          (replies: _receivePort!.sendPort, script: jsInit),
+          onExit: _receivePort!.sendPort,
+          onError: _receivePort!.sendPort,
+          errorsAreFatal: true,
+        ).then<void>(
+          (isolate) {
+            // close waits for spawn before releasing the owned isolate. Killing a
+            // late handle here could interrupt tasks that close is still draining.
+            if (!_exited.isCompleted) {
+              _isolate = isolate;
+              if (_workerFailed) isolate.kill(priority: Isolate.immediate);
+            }
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            _completeStartupError(error, stackTrace);
+            _completeAllTasksError(error, stackTrace);
+            _exited.complete();
+            _backgroundClose();
+          },
+        );
   }
 
   void _onMessage(dynamic message) {
-    if (message is SendPort) {
+    if (message == null) {
+      if (_stopRequested && !_stopAcknowledged && !_workerFailed) {
+        _cleanupError = 'JS worker exited without confirming resource cleanup';
+      }
+      if (!_isClosed || _tasks.isNotEmpty) {
+        final error = StateError('JS worker exited before completing its work');
+        _completeStartupError(error, StackTrace.current);
+        _completeAllTasksError(error, StackTrace.current);
+      }
+      if (!_exited.isCompleted) _exited.complete();
+      _isolate = null;
+      _backgroundClose();
+    } else if (message is List && message.length == 2) {
+      final error = RemoteError(message[0].toString(), message[1].toString());
+      _completeStartupError(error, error.stackTrace);
+      _completeAllTasksError(error, error.stackTrace);
+      _workerFailed = true;
+      _isolate?.kill(priority: Isolate.immediate);
+      _backgroundClose();
+    } else if (message is SendPort) {
+      if (!_transportReady.isCompleted) _transportReady.complete(message);
       if (!_sendPortCompleter.isCompleted) {
         _sendPortCompleter.complete(message);
       }
+    } else if (message is JsWorkerStopped) {
+      _stopAcknowledged = true;
+      _cleanupError = message.error;
     } else if (message is TaskResult) {
       final completer = _tasks.remove(message.id);
       if (completer != null) {
@@ -177,37 +287,91 @@ class IsolateJsEngine implements JsPoolEngine {
       Log.error("IsolateJsEngine", message.toString());
       _completeStartupError(message, StackTrace.current);
       _completeAllTasksError(message, StackTrace.current);
-      unawaited(close());
+      _workerFailed = true;
+      _isolate?.kill(priority: Isolate.immediate);
+      _backgroundClose();
     }
   }
 
-  static void _run(_IsolateJsEngineInitParam params) async {
-    var sendPort = params.sendPort;
+  void _backgroundClose() {
+    unawaited(
+      close().catchError((Object error, StackTrace stack) {
+        Log.error('JS worker close', error, stack);
+      }),
+    );
+  }
+
+  static void _run(JsWorkerStart params) async {
+    var sendPort = params.replies;
     final port = ReceivePort();
     sendPort.send(port.sendPort);
     final engine = JsEngine();
+    Exception? failure;
     try {
-      JsEngine.cacheJsInit(params.jsInit);
+      JsEngine.cacheJsInit(params.script);
       await engine.init();
-    } catch (e, s) {
-      sendPort.send(Exception("Failed to initialize JS engine: $e\n$s"));
-      return;
-    }
-    await for (final message in port) {
-      if (message is Task) {
-        try {
-          final jsFunc = engine.runCode(message.jsFunction);
-          if (jsFunc is! JSInvokable) {
-            throw Exception(
-              "The provided code does not evaluate to a function.",
-            );
+      await for (final message in port) {
+        if (message is JsWorkerStop) break;
+        if (message is Task) {
+          JSInvokable? jsFunc;
+          dynamic result;
+          try {
+            final evaluated = engine.runCode(message.jsFunction);
+            if (evaluated is! JSInvokable) {
+              result = evaluated;
+              throw Exception(
+                "The provided code does not evaluate to a function.",
+              );
+            }
+            jsFunc = evaluated;
+            result = await jsFunc.invoke(message.args);
+            _validateTransferValue(result, Set<Object>.identity());
+            sendPort.send(TaskResult(message.id, result, null));
+          } catch (e) {
+            sendPort.send(TaskResult(message.id, null, e.toString()));
+          } finally {
+            JSRef.freeRecursive(result);
+            jsFunc?.free();
           }
-          final result = jsFunc.invoke(message.args);
-          jsFunc.free();
-          sendPort.send(TaskResult(message.id, result, null));
-        } catch (e) {
-          sendPort.send(TaskResult(message.id, null, e.toString()));
         }
+      }
+    } catch (e, s) {
+      // Publishing the failure triggers the parent's forced-close path. Defer
+      // it until owned resources finish cleanup so that path cannot interrupt us.
+      failure = Exception("JS worker failed: $e\n$s");
+    } finally {
+      final errors = <String>[];
+      try {
+        engine.dispose();
+      } catch (error) {
+        errors.add('engine: $error');
+      }
+      try {
+        await JSPool().close();
+      } catch (error) {
+        errors.add('compute pool: $error');
+      }
+      port.close();
+      sendPort.send(JsWorkerStopped(errors.isEmpty ? null : errors.join('; ')));
+      if (failure != null) sendPort.send(failure);
+      Isolate.exit();
+    }
+  }
+
+  static void _validateTransferValue(dynamic value, Set<Object> seen) {
+    if (value is JSRef) {
+      throw StateError(
+        'JS compute cannot transfer native JavaScript references',
+      );
+    }
+    if (value is Map && seen.add(value)) {
+      for (final entry in value.entries) {
+        _validateTransferValue(entry.key, seen);
+        _validateTransferValue(entry.value, seen);
+      }
+    } else if (value is List && seen.add(value)) {
+      for (final item in value) {
+        _validateTransferValue(item, seen);
       }
     }
   }
@@ -217,6 +381,7 @@ class IsolateJsEngine implements JsPoolEngine {
     if (_isClosed) {
       throw Exception("IsolateJsEngine is closed.");
     }
+    _validateTransferValue(args, Set<Object>.identity());
     final sendPort = await _sendPortCompleter.future;
     if (_isClosed) {
       throw Exception("IsolateJsEngine is closed.");
@@ -228,15 +393,20 @@ class IsolateJsEngine implements JsPoolEngine {
     }
     _tasks[taskId] = completer;
     final task = Task(taskId, jsFunction, args);
-    sendPort.send(task);
+    try {
+      sendPort.send(task);
+    } catch (_) {
+      _tasks.remove(taskId);
+      _completeIdleIfNeeded();
+      rethrow;
+    }
     return completer.future;
   }
 
   @override
-  Future<void> close() async {
-    if (_isClosed) {
-      return;
-    }
+  Future<void> close() => _closeFuture ??= _close();
+
+  Future<void> _close() async {
     _isClosed = true;
     if (!_sendPortCompleter.isCompleted) {
       _completeStartupError(
@@ -247,11 +417,25 @@ class IsolateJsEngine implements JsPoolEngine {
     try {
       await _waitForIdle();
     } finally {
+      await _spawnFuture;
+      await Future.any<void>([
+        _transportReady.future.then<void>((_) {}),
+        _exited.future,
+      ]);
+      if (!_exited.isCompleted) {
+        if (_workerFailed) {
+          _isolate?.kill(priority: Isolate.immediate);
+        } else {
+          _stopRequested = true;
+          (await _transportReady.future).send(const JsWorkerStop());
+        }
+      }
+      await _exited.future;
+      _isolate = null;
       _receivePort?.close();
       _receivePort = null;
-      _isolate?.kill(priority: Isolate.immediate);
-      _isolate = null;
     }
+    if (_cleanupError != null) throw StateError(_cleanupError!);
   }
 
   Future<void> _waitForIdle() {

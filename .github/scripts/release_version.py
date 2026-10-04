@@ -57,8 +57,9 @@ def pubspec_version(config: dict) -> str:
 
 
 def _pubspec_version_line() -> re.Pattern:
+    # Accept CRLF without consuming its CR, so substitutions preserve newlines.
     return re.compile(
-        r"^version:[^\S\r\n]*(?P<version>\S+)[^\S\r\n]*$",
+        r"^version:[^\S\r\n]*(?P<version>\S+)[^\S\r\n]*(?=\r?$)",
         re.MULTILINE,
     )
 
@@ -81,13 +82,13 @@ def sync_changelog_heading(config: dict) -> bool:
     text = _read(CHANGELOG_PATH)
     tag = release_tag(config)
     if re.search(
-        rf"^##[^\S\r\n]+{re.escape(tag)}[^\S\r\n]*$",
+        rf"^##[^\S\r\n]+{re.escape(tag)}[^\S\r\n]*(?=\r?$)",
         text,
         re.MULTILINE,
     ):
         return False
     updated = re.sub(
-        r"^##[^\S\r\n]+(?:未发布|Unreleased)[^\S\r\n]*$",
+        r"^##[^\S\r\n]+(?:未发布|Unreleased)[^\S\r\n]*(?=\r?$)",
         f"## {tag}",
         text,
         count=1,
@@ -128,7 +129,7 @@ def check_release_files(tag: str | None = None) -> None:
 
     changelog_text = _read(CHANGELOG_PATH)
     if not re.search(
-        rf"^##[^\S\r\n]+{re.escape(expected_tag)}[^\S\r\n]*$",
+        rf"^##[^\S\r\n]+{re.escape(expected_tag)}[^\S\r\n]*(?=\r?$)",
         changelog_text,
         re.MULTILINE,
     ):

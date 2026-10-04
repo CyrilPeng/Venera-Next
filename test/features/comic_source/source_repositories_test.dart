@@ -264,6 +264,101 @@ void main() {
 
   group('migrate', () {
     test(
+      'concurrent failed saves share failure and can retry durably',
+      () async {
+        final previous = appdata.settings['comicSourceRepositories'];
+        appdata.settings['comicSourceListUrl'] =
+            'https://legacy.example/index.json';
+        final blocked = File('${dataDir.path}/blocked')
+          ..writeAsStringSync('file');
+        App.dataPath = blocked.path;
+        try {
+          final first = SourceRepositories.instance.migrate();
+          final second = SourceRepositories.instance.migrate();
+          expect(second, same(first));
+          await expectLater(first, throwsA(isA<FileSystemException>()));
+          expect(appdata.settings['comicSourceRepositoriesMigrated'], isFalse);
+          expect(appdata.settings['comicSourceRepositories'], same(previous));
+        } finally {
+          App.dataPath = dataDir.path;
+        }
+        await SourceRepositories.instance.migrate();
+        final saved = _persistedSettings(dataDir);
+        expect(saved['comicSourceRepositoriesMigrated'], isTrue);
+        expect(saved['comicSourceRepositories'], hasLength(1));
+      },
+    );
+
+    test(
+      'failed migration does not replace a concurrent repository edit',
+      () async {
+        appdata.settings['comicSourceListUrl'] =
+            'https://legacy.example/index.json';
+        final edited = [
+          _repoMap('edited', 'Edited', 'https://edited.example/index.json'),
+        ];
+        void edit() {
+          if (appdata.settings['comicSourceRepositoriesMigrated'] == true &&
+              !identical(appdata.settings['comicSourceRepositories'], edited)) {
+            appdata.settings['comicSourceRepositories'] = edited;
+          }
+        }
+
+        final blocked = File('${dataDir.path}/blocked')
+          ..writeAsStringSync('file');
+        App.dataPath = blocked.path;
+        appdata.settings.addListener(edit);
+        try {
+          await expectLater(
+            SourceRepositories.instance.migrate(),
+            throwsA(isA<FileSystemException>()),
+          );
+          expect(appdata.settings['comicSourceRepositories'], same(edited));
+          expect(appdata.settings['comicSourceRepositoriesMigrated'], isFalse);
+        } finally {
+          appdata.settings.removeListener(edit);
+          App.dataPath = dataDir.path;
+        }
+        await SourceRepositories.instance.migrate();
+        final saved = _persistedSettings(dataDir);
+        expect(saved['comicSourceRepositoriesMigrated'], isTrue);
+        expect(
+          (saved['comicSourceRepositories'] as List).single['id'],
+          'edited',
+        );
+      },
+    );
+
+    test(
+      'failed flag-only migration keeps existing repositories on retry',
+      () async {
+        final existing = [
+          _repoMap('keep', 'Keep', 'https://keep.example/index.json'),
+        ];
+        appdata.settings['comicSourceRepositories'] = existing;
+        final blocked = File('${dataDir.path}/blocked')
+          ..writeAsStringSync('file');
+        App.dataPath = blocked.path;
+        try {
+          await expectLater(
+            SourceRepositories.instance.migrate(),
+            throwsA(isA<FileSystemException>()),
+          );
+          expect(appdata.settings['comicSourceRepositories'], same(existing));
+          expect(appdata.settings['comicSourceRepositoriesMigrated'], isFalse);
+        } finally {
+          App.dataPath = dataDir.path;
+        }
+        await SourceRepositories.instance.migrate();
+        expect(
+          (_persistedSettings(dataDir)['comicSourceRepositories'] as List)
+              .single['id'],
+          'keep',
+        );
+      },
+    );
+
+    test(
       'migrates the legacy catalog url into one repository only once',
       () async {
         appdata.settings['comicSourceListUrl'] =

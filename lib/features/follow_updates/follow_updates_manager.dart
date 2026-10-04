@@ -23,7 +23,15 @@ Future<ComicUpdateResult> updateComic(
   Duration timeout = const Duration(seconds: 45),
 }) async {
   final request = RequestScope(parent: scope, timeout: timeout);
+  if (FollowUpdateJob._exitPreparation != null) {
+    request.cancel();
+    request.dispose();
+    return ComicUpdateResult(false, null, cancelled: true);
+  }
+  final done = Completer<void>();
+  FollowUpdateJob._updates[request] = done.future;
   try {
+    request.check();
     final source = comic.type.comicSource;
     if (source?.loadComicInfo == null) {
       return ComicUpdateResult(false, 'Comic source not found');
@@ -44,6 +52,7 @@ Future<ComicUpdateResult> updateComic(
       }
       tags.addAll(entry.value.map((tag) => '${entry.key}:$tag'));
     }
+    request.check();
     LocalFavoritesManager().updateInfo(
       folder,
       FavoriteItem(
@@ -59,6 +68,7 @@ Future<ComicUpdateResult> updateComic(
     );
     final updateTime = info.findUpdateTime();
     final updated = updateTime != null && updateTime != comic.updateTime;
+    request.check();
     if (updated) {
       LocalFavoritesManager().updateUpdateTime(
         folder,
@@ -78,6 +88,8 @@ Future<ComicUpdateResult> updateComic(
     return ComicUpdateResult(false, error.toString());
   } finally {
     request.dispose();
+    FollowUpdateJob._updates.remove(request);
+    done.complete();
   }
 }
 
@@ -103,37 +115,110 @@ class UpdateProgress {
 class FollowUpdateJob implements FollowUpdateTask {
   FollowUpdateJob(this.folder, this.ignoreCheckTime) {
     _controller = StreamController<UpdateProgress>(
-      onListen: () => unawaited(_run()),
+      onListen: _start,
       onCancel: cancel,
     );
+    // Existing callers consume progress only. Keep that error channel usable
+    // while lifecycle owners can independently await a failed completion.
+    _done.future.ignore();
+    if (_exitPreparation == null) {
+      _jobs.add(this);
+    } else {
+      cancel();
+    }
   }
   static FollowUpdateJob? _active;
+  static final _jobs = <FollowUpdateJob>{};
+  static final _updates = <RequestScope, Future<void>>{};
+  static Future<void Function()>? _exitPreparation;
   static bool get isChecking => _active != null && !_active!._scope.isCancelled;
   static void cancelActive() => _active?.cancel();
+
+  /// Freeze both jobs and direct updates, then cancel their remaining checks.
+  /// All accepted writes and final notifications settle before this returns.
+  /// Cancelled source calls may still finish their own underlying transport;
+  /// their late results cannot enter the update's guarded database writes.
+  static Future<void Function()> prepareForExit() {
+    final existing = _exitPreparation;
+    if (existing != null) return existing;
+    final ready = Completer<void Function()>();
+    final preparation = _exitPreparation = ready.future;
+    final jobs = _jobs.toList();
+    final updates = Map<RequestScope, Future<void>>.of(_updates);
+    for (final job in jobs) {
+      job.cancel();
+    }
+    for (final scope in updates.keys) {
+      scope.cancel();
+    }
+    void release() {
+      if (identical(_exitPreparation, preparation)) _exitPreparation = null;
+    }
+
+    Future.wait([for (final job in jobs) job.done, ...updates.values]).then(
+      (_) => ready.complete(release),
+      onError: (Object error, StackTrace stack) {
+        release();
+        ready.completeError(error, stack);
+      },
+    );
+    return preparation;
+  }
+
   final String folder;
   final bool ignoreCheckTime;
   final _scope = RequestScope();
+  final _done = Completer<void>();
+  bool _started = false;
   bool _finished = false;
   late final StreamController<UpdateProgress> _controller;
   Stream<UpdateProgress> get progress => _controller.stream;
   @override
   Stream<int> get updatedCounts => progress.map((value) => value.updated);
+  @override
+  Future<void> get done => _done.future;
   bool get isCancelled => _scope.isCancelled;
   @override
   void cancel() {
-    if (!_finished) _scope.cancel();
+    if (_finished) return;
+    _scope.cancel();
+    if (!_started) _finish();
+  }
+
+  void _start() {
+    if (_finished) return;
+    if (_exitPreparation != null || isCancelled) {
+      cancel();
+      return;
+    }
+    _started = true;
+    _active?.cancel();
+    _active = this;
+    unawaited(_run());
+  }
+
+  void _finish([Object? failure, StackTrace? failureStack]) {
+    _finished = true;
+    if (identical(_active, this)) _active = null;
+    _jobs.remove(this);
+    _scope.dispose();
+    if (failure != null) {
+      if (_controller.hasListener) _controller.addError(failure, failureStack);
+      _done.completeError(failure, failureStack);
+    } else {
+      _done.complete();
+    }
+    // A paused or absent subscriber must not delay task ownership release.
+    unawaited(_controller.close());
   }
 
   Future<void> _run() async {
-    if (isCancelled) {
-      unawaited(_controller.close());
-      return;
-    }
-    _active?.cancel();
-    _active = this;
     var current = 0;
     var errors = 0;
     var updated = 0;
+    final pending = <Future<void>>[];
+    Object? failure;
+    StackTrace? failureStack;
     try {
       final comics = LocalFavoritesManager()
           .getComicsWithUpdatesInfo(folder)
@@ -164,25 +249,41 @@ class FollowUpdateJob implements FollowUpdateTask {
         comics,
         scope: _scope,
         sourceKey: (comic) => comic.type.sourceKey,
-        run: (comic) async {
-          final result = await updateComic(comic, folder, scope: _scope);
-          if (isCancelled || result.cancelled) return;
-          current++;
-          if (result.updated) updated++;
-          if (result.errorMessage != null) errors++;
-          emit(comic, result.errorMessage);
+        run: (comic) {
+          final work = () async {
+            final result = await updateComic(comic, folder, scope: _scope);
+            if (isCancelled || result.cancelled) return;
+            current++;
+            if (result.updated) updated++;
+            if (result.errorMessage != null) errors++;
+            emit(comic, result.errorMessage);
+          }();
+          pending.add(work);
+          return work;
         },
       );
     } catch (error, stack) {
-      if (error is! RequestCancelled && _controller.hasListener) {
-        _controller.addError(error, stack);
+      if (error is! RequestCancelled) {
+        failure = error;
+        failureStack = stack;
       }
     } finally {
-      _finished = true;
-      if (updated > 0) LocalFavoritesManager().notifyChanges();
-      if (identical(_active, this)) _active = null;
-      _scope.dispose();
-      unawaited(_controller.close());
+      try {
+        // The queue can finish its cancellation race before the underlying
+        // update callback has run its finally block. Join that business work.
+        await Future.wait(pending);
+      } catch (error, stack) {
+        failure ??= error;
+        failureStack ??= stack;
+      }
+      try {
+        if (updated > 0) LocalFavoritesManager().notifyChanges();
+      } catch (error, stack) {
+        failure ??= error;
+        failureStack ??= stack;
+      } finally {
+        _finish(failure, failureStack);
+      }
     }
   }
 }

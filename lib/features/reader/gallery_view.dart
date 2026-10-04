@@ -7,12 +7,14 @@ import 'package:photo_view/photo_view_gallery.dart';
 import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/features/reader/image_downloads.dart';
 import 'package:venera_next/features/reader/image_precache.dart';
+import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_provider/reader_image.dart';
 
 import 'gallery_data.dart';
+import 'display_image_provider.dart';
 import 'reader_controller.dart';
 import 'reader_viewport.dart';
 
@@ -20,6 +22,7 @@ class ReaderGalleryView extends StatefulWidget {
   const ReaderGalleryView({
     super.key,
     required this.data,
+    required this.imageWork,
     required this.navigation,
     required this.onViewportChanged,
     required this.onReady,
@@ -32,6 +35,7 @@ class ReaderGalleryView extends StatefulWidget {
   });
 
   final ReaderGalleryData data;
+  final ImageWork imageWork;
   final ReaderController navigation;
   final void Function(ReaderImageViewController viewport, bool attached)
   onViewportChanged;
@@ -49,8 +53,8 @@ class ReaderGalleryView extends StatefulWidget {
 
 class GalleryModeState extends State<ReaderGalleryView>
     implements ReaderImageViewController, AutoReadingViewport {
-  final _imageDownloads = ReaderImageDownloads();
-  final _imagePrecache = ReaderImagePrecache();
+  late var _imageDownloads = ReaderImageDownloads(work: widget.imageWork);
+  late var _imagePrecache = ReaderImagePrecache(work: widget.imageWork);
 
   late PageController controller;
 
@@ -72,6 +76,9 @@ class GalleryModeState extends State<ReaderGalleryView>
     page,
   );
 
+  ReaderDisplayImageProvider _displayImage(String key) =>
+      ReaderDisplayImageProvider(_imageProvider(key), widget.imageWork);
+
   var imageStates = <State<ComicImage>>{};
 
   bool isLongPressing = false;
@@ -91,6 +98,12 @@ class GalleryModeState extends State<ReaderGalleryView>
   @override
   void didUpdateWidget(covariant ReaderGalleryView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.imageWork, widget.imageWork)) {
+      unawaited(_imageDownloads.dispose());
+      unawaited(_imagePrecache.dispose());
+      _imageDownloads = ReaderImageDownloads(work: widget.imageWork);
+      _imagePrecache = ReaderImagePrecache(work: widget.imageWork);
+    }
     if (oldWidget.onViewportChanged != widget.onViewportChanged) {
       oldWidget.onViewportChanged(this, false);
       widget.onViewportChanged(this, true);
@@ -101,7 +114,7 @@ class GalleryModeState extends State<ReaderGalleryView>
   void dispose() {
     widget.onViewportChanged(this, false);
     keyRepeatTimer?.cancel();
-    _imagePrecache.dispose();
+    unawaited(_imagePrecache.dispose());
     unawaited(_imageDownloads.dispose());
     super.dispose();
   }
@@ -231,7 +244,7 @@ class GalleryModeState extends State<ReaderGalleryView>
               return PhotoViewGalleryPageOptions(
                 filterQuality: FilterQuality.medium,
                 controller: photoViewControllers[index],
-                imageProvider: _imageProvider(pageImages[0]),
+                imageProvider: _displayImage(pageImages[0]),
                 fit: BoxFit.contain,
                 errorBuilder: (_, error, s, retry) {
                   return NetworkError(message: error.toString(), retry: retry);
@@ -330,7 +343,7 @@ class GalleryModeState extends State<ReaderGalleryView>
           child: ComicImage(
             width: double.infinity,
             height: double.infinity,
-            image: _imageProvider(images[0]),
+            image: _displayImage(images[0]),
             fit: BoxFit.contain,
             alignment: axis == Axis.vertical
                 ? Alignment.bottomCenter
@@ -343,7 +356,7 @@ class GalleryModeState extends State<ReaderGalleryView>
           child: ComicImage(
             width: double.infinity,
             height: double.infinity,
-            image: _imageProvider(images[1]),
+            image: _displayImage(images[1]),
             fit: BoxFit.contain,
             alignment: axis == Axis.vertical
                 ? Alignment.topCenter
@@ -355,7 +368,7 @@ class GalleryModeState extends State<ReaderGalleryView>
       ];
     } else {
       imageWidgets = images.map((imageKey) {
-        ImageProvider imageProvider = _imageProvider(imageKey);
+        ImageProvider imageProvider = _displayImage(imageKey);
         return Expanded(
           child: ComicImage(
             image: imageProvider,
@@ -521,7 +534,7 @@ class GalleryModeState extends State<ReaderGalleryView>
     for (var imageState in imageStates) {
       if ((imageState as ComicImageState).containsPoint(offset)) {
         var imageKey =
-            (imageState.widget.image as ReaderImageProvider).imageKey;
+            (imageState.widget.image as ReaderDisplayImageProvider).imageKey;
         int index = data.images.indexOf(imageKey);
         if (index >= startIndex && index < endIndex) {
           return imageKey;

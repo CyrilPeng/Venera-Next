@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
+import 'package:venera_next/foundation/image_provider/image_provider_lifecycle.dart';
 
 void main() {
   test('cached image provider limits concurrent thumbnail loads', () async {
@@ -91,17 +92,74 @@ void main() {
     expect(CachedImageProvider.loadingCount, 0);
   });
 
-  test('cached image provider uses fallback after primary load fails', () async {
-    final chunkEvents = StreamController<ImageChunkEvent>.broadcast();
-    addTearDown(chunkEvents.close);
+  test(
+    'cached image provider uses fallback after primary load fails',
+    () async {
+      final chunkEvents = StreamController<ImageChunkEvent>.broadcast();
+      addTearDown(chunkEvents.close);
 
+      final provider = CachedImageProvider(
+        'file://missing-cover.jpg',
+        fallback: () => Uint8List.fromList([1, 2, 3]),
+      );
+
+      final data = await provider.load(chunkEvents, () {});
+
+      expect(data, [1, 2, 3]);
+    },
+  );
+
+  test(
+    'queued cancellation drains without waiting for an active slot',
+    () async {
+      final release = Completer<void>();
+      final holders = List.generate(
+        9,
+        (_) =>
+            CachedImageProvider.debugRunWithThumbnailSlot(() => release.future),
+      );
+      await pumpEventQueue();
+      final cancel = Completer<void>();
+      var ran = false;
+      final queued = CachedImageProvider.debugRunWithThumbnailSlot(() async {
+        ran = true;
+      }, cancelSignal: cancel.future);
+      final observed = expectLater(
+        queued,
+        throwsA(isA<ImageProviderLoadCancelled>()),
+      );
+      cancel.complete();
+      await observed;
+      expect(ran, isFalse);
+      expect(CachedImageProvider.loadingCount, 9);
+      release.complete();
+      await Future.wait(holders);
+      expect(
+        await CachedImageProvider.debugRunWithThumbnailSlot(() async => 7),
+        7,
+      );
+      expect(CachedImageProvider.loadingCount, 0);
+    },
+  );
+
+  test('cancelled local load does not invoke fallback', () async {
+    final events = StreamController<ImageChunkEvent>.broadcast();
+    addTearDown(events.close);
+    var fallbacks = 0;
     final provider = CachedImageProvider(
       'file://missing-cover.jpg',
-      fallback: () => Uint8List.fromList([1, 2, 3]),
+      fallback: () {
+        fallbacks++;
+        return Uint8List(1);
+      },
     );
-
-    final data = await provider.load(chunkEvents, () {});
-
-    expect(data, [1, 2, 3]);
+    await expectLater(
+      provider.load(events, () {
+        throw const ImageProviderLoadCancelled();
+      }),
+      throwsA(isA<ImageProviderLoadCancelled>()),
+    );
+    expect(fallbacks, 0);
+    expect(CachedImageProvider.loadingCount, 0);
   });
 }

@@ -124,4 +124,97 @@ void main() {
       ),
     );
   });
+
+  test(
+    'last cancellation joins source finally while other owners remain independent',
+    () async {
+      final started = Completer<void>();
+      final cleaning = Completer<void>();
+      final cleanup = Completer<void>();
+      var closed = 0;
+      late RequestScope scope;
+      final shared = SharedRequestStream<int>((request) async* {
+        scope = request;
+        started.complete();
+        try {
+          await scope.whenCancelled;
+          scope.check();
+        } finally {
+          cleaning.complete();
+          await cleanup.future;
+        }
+      }, (_) => closed++);
+      final first = shared.stream.listen((_) {});
+      final second = shared.stream.listen((_) {});
+      await started.future;
+      await first.cancel();
+      expect(scope.isCancelled, isFalse);
+      var cancelled = false;
+      final cancelling = second.cancel();
+      unawaited(cancelling.then((_) => cancelled = true));
+      await cleaning.future;
+      expect(scope.isCancelled, isTrue);
+      expect(shared.isClosed, isTrue);
+      expect(closed, 1);
+      expect(identical(shared.done, shared.cancel()), isTrue);
+      await pumpEventQueue();
+      expect(cancelled, isFalse);
+      cleanup.complete();
+      await cancelling;
+      await shared.done;
+      expect(cancelled, isTrue);
+      expect(closed, 1);
+    },
+  );
+
+  test(
+    'source cleanup errors remain observable after admission closes',
+    () async {
+      final cleanup = Completer<void>();
+      final cleanupError = StateError('cleanup');
+      final source = StreamController<int>(onCancel: () => cleanup.future);
+      final shared = SharedRequestStream<int>((_) => source.stream, (_) {});
+      final subscription = shared.stream.listen((_) {});
+      final cancelled = subscription.cancel();
+      final checked = expectLater(cancelled, throwsA(same(cleanupError)));
+      final checkedDone = expectLater(shared.done, throwsA(same(cleanupError)));
+      expect(shared.isClosed, isTrue);
+      cleanup.completeError(cleanupError);
+      await checked;
+      await checkedDone;
+      await source.close();
+    },
+  );
+
+  test(
+    'explicit cancellation closes all listeners and joins source cleanup',
+    () async {
+      final cleanup = Completer<void>();
+      final source = StreamController<int>(onCancel: () => cleanup.future);
+      final shared = SharedRequestStream<int>((_) => source.stream, (_) {});
+      final first = shared.stream.toList();
+      final second = shared.stream.toList();
+      source.add(1);
+      await pumpEventQueue();
+      var done = false;
+      final cancelling = shared.cancel();
+      unawaited(cancelling.then((_) => done = true));
+      await pumpEventQueue();
+      expect(done, isFalse);
+      cleanup.complete();
+      await cancelling;
+      expect(await first, [1]);
+      expect(await second, [1]);
+      await source.close();
+    },
+  );
+
+  test('cancelling before listen never starts a source', () async {
+    final shared = SharedRequestStream<int>((_) {
+      fail('unexpected source start');
+    }, (_) {});
+    await shared.cancel();
+    await shared.done;
+    expect(await shared.stream.toList(), isEmpty);
+  });
 }

@@ -9,6 +9,9 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:share_plus/share_plus.dart' as s;
 import 'package:venera_next/foundation/file_type.dart';
+import 'file_save_operation.dart';
+import 'platform_dialog_queue.dart';
+import 'share_file_operation.dart';
 
 export 'dart:io';
 export 'dart:typed_data';
@@ -19,9 +22,22 @@ class IO {
   ///
   /// Select file and other similar file operations will launch external programs,
   /// causing the app to lose focus. AppLifecycleState will be set to paused.
-  static bool get isSelectingFiles => _isSelectingFiles;
+  static bool get isSelectingFiles => _selections.isNotEmpty;
 
-  static bool _isSelectingFiles = false;
+  static final _selections = <Object>{};
+
+  static void Function() _beginSelection() {
+    final token = Object();
+    _selections.add(token);
+    var finished = false;
+    return () {
+      if (finished) return;
+      finished = true;
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _selections.remove(token);
+      });
+    };
+  }
 }
 
 /// Copy the **contents** of the source directory to the destination directory.
@@ -51,7 +67,7 @@ class DirectoryPicker {
   static const _methodChannel = MethodChannel("venera/method_channel");
 
   Future<Directory?> pickDirectory({bool directAccess = false}) async {
-    IO._isSelectingFiles = true;
+    final releaseSelection = IO._beginSelection();
     try {
       String? directory;
       if (App.isWindows || App.isLinux) {
@@ -78,9 +94,7 @@ class DirectoryPicker {
       _finalizer.attach(this, directory);
       return Directory(directory);
     } finally {
-      Future.delayed(const Duration(milliseconds: 100), () {
-        IO._isSelectingFiles = false;
-      });
+      releaseSelection();
     }
   }
 }
@@ -90,7 +104,7 @@ class IOSDirectoryPicker {
 
   // 调用 iOS 目录选择方法
   static Future<String?> selectDirectory() async {
-    IO._isSelectingFiles = true;
+    final releaseSelection = IO._beginSelection();
     try {
       final String? path = await _channel.invokeMethod('selectDirectory');
       return path;
@@ -98,15 +112,13 @@ class IOSDirectoryPicker {
       // 返回报错信息
       return e.toString();
     } finally {
-      Future.delayed(const Duration(milliseconds: 100), () {
-        IO._isSelectingFiles = false;
-      });
+      releaseSelection();
     }
   }
 }
 
 Future<FileSelectResult?> selectFile({required List<String> ext}) async {
-  IO._isSelectingFiles = true;
+  final releaseSelection = IO._beginSelection();
   try {
     var extensions = App.isMacOS || App.isIOS ? null : ext;
     file_selector.XTypeGroup typeGroup = file_selector.XTypeGroup(
@@ -145,9 +157,7 @@ Future<FileSelectResult?> selectFile({required List<String> ext}) async {
     }
     return file;
   } finally {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      IO._isSelectingFiles = false;
-    });
+    releaseSelection();
   }
 }
 
@@ -155,7 +165,7 @@ Future<List<FileSelection>> selectFiles({
   required List<String> ext,
   List<String>? uniformTypeIdentifiers,
 }) async {
-  IO._isSelectingFiles = true;
+  final releaseSelection = IO._beginSelection();
   try {
     if (App.isAndroid) {
       final mimeType = ext.length == 1
@@ -184,9 +194,7 @@ Future<List<FileSelection>> selectFiles({
     );
     return files.map((file) => FileSelection(file.path)).toList();
   } finally {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      IO._isSelectingFiles = false;
-    });
+    releaseSelection();
   }
 }
 
@@ -241,14 +249,12 @@ class FileSelection {
 }
 
 Future<String?> selectDirectory() async {
-  IO._isSelectingFiles = true;
+  final releaseSelection = IO._beginSelection();
   try {
     var path = await file_selector.getDirectoryPath();
     return path;
   } finally {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      IO._isSelectingFiles = false;
-    });
+    releaseSelection();
   }
 }
 
@@ -257,48 +263,52 @@ Future<String?> selectDirectoryIOS() async {
   return IOSDirectoryPicker.selectDirectory();
 }
 
+final _mobileFileSaves = PlatformDialogQueue();
+
 /// Returns `true` if the file was saved, `false` if the user cancelled.
+/// The Future includes platform completion and owned temporary-source cleanup.
 Future<bool> saveFile({
   Uint8List? data,
   required String filename,
   File? file,
+  void Function()? checkStop,
 }) async {
+  checkStop?.call();
   if (data == null && file == null) {
     throw Exception("data and file cannot be null at the same time");
   }
-  IO._isSelectingFiles = true;
+  final releaseSelection = IO._beginSelection();
   try {
-    if (data != null) {
-      var cache = FilePath.join(App.cachePath, filename);
-      if (File(cache).existsSync()) {
-        File(cache).deleteSync();
-      }
-      await File(cache).writeAsBytes(data);
-      file = File(cache);
-    }
-    if (App.isMobile) {
-      // FIX: iOS export dialog cannot show filename and save.
-      final params = SaveFileDialogParams(
-        sourceFilePath: file!.path,
-        fileName: App.isIOS ? filename : null,
-      );
-      final result = await FlutterFileDialog.saveFile(params: params);
-      return result != null;
-    } else {
-      final result = await file_selector.getSaveLocation(
-        suggestedName: filename,
-      );
-      if (result != null) {
-        var xFile = file_selector.XFile(file!.path);
-        await xFile.saveTo(result.path);
+    return await withSaveFileSource(
+      data: data,
+      file: file,
+      filename: filename,
+      cacheDirectory: Directory(App.cachePath),
+      // iOS's fileName parameter creates/deletes a fixed temporary path. Export
+      // our uniquely owned source with the correct basename instead, including
+      // when the original file belongs to a caller.
+      copySource: App.isMobile,
+      checkStop: checkStop,
+      save: (source) async {
+        if (App.isMobile) {
+          return _mobileFileSaves.run(() async {
+            checkStop?.call();
+            final result = await FlutterFileDialog.saveFile(
+              params: SaveFileDialogParams(sourceFilePath: source.path),
+            );
+            return result != null;
+          });
+        }
+        final result = await file_selector.getSaveLocation(
+          suggestedName: filename,
+        );
+        if (result == null) return false;
+        await file_selector.XFile(source.path).saveTo(result.path);
         return true;
-      }
-      return false;
-    }
+      },
+    );
   } finally {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      IO._isSelectingFiles = false;
-    });
+    releaseSelection();
   }
 }
 
@@ -338,29 +348,56 @@ T overrideIO<T>(T Function() f) {
 }
 
 class Share {
-  static void shareFile({
+  static final _dialogs = PlatformDialogQueue();
+
+  static Future<void> shareFile({
     required Uint8List data,
     required String filename,
     required String mime,
-  }) {
-    if (!App.isWindows) {
-      s.SharePlus.instance.share(
-        s.ShareParams(
-          files: [s.XFile.fromData(data, mimeType: mime)],
-          fileNameOverrides: [filename],
-        ),
-      );
-    } else {
-      // write to cache
-      var file = File(FilePath.join(App.cachePath, filename));
-      file.writeAsBytesSync(data);
-      s.SharePlus.instance.share(s.ShareParams(files: [s.XFile(file.path)]));
+    Rect? origin,
+    Rect Function()? resolveOrigin,
+    void Function()? checkStop,
+  }) => _dialogs.run(() async {
+    checkStop?.call();
+    if (App.isLinux) {
+      throw UnsupportedError('File sharing is unavailable on Linux');
     }
-  }
+    Rect? actualOrigin;
+    await withShareFileSource(
+      data: data,
+      filename: filename,
+      cacheDirectory: Directory(FilePath.join(App.cachePath, 'shares')),
+      // Android copies the input before acknowledging the method. The other
+      // platforms can pass its URL/path to a receiver after acknowledgment.
+      retainAfterDispatch: !App.isAndroid,
+      checkStop: () {
+        checkStop?.call();
+        actualOrigin = resolveOrigin?.call() ?? origin;
+      },
+      share: (source) => s.SharePlus.instance.share(
+        s.ShareParams(
+          files: [s.XFile(source.path, mimeType: mime)],
+          title: source.name,
+          sharePositionOrigin: actualOrigin,
+        ),
+      ),
+    );
+  });
 
-  static void shareText(String text) {
-    s.SharePlus.instance.share(s.ShareParams(text: text));
-  }
+  static Future<void> shareText(
+    String text, {
+    Rect? origin,
+    Rect Function()? resolveOrigin,
+    bool Function()? canShare,
+  }) => _dialogs.run(() async {
+    if (canShare?.call() == false) return;
+    await s.SharePlus.instance.share(
+      s.ShareParams(
+        text: text,
+        sharePositionOrigin: resolveOrigin?.call() ?? origin,
+      ),
+    );
+  });
 }
 
 class FileSelectResult {

@@ -57,6 +57,18 @@ class RequestScope {
     return result;
   }
 
+  /// Propagates cancellation immediately, but joins the accepted action before
+  /// completing. Its failure remains observable even if cancellation came first.
+  Future<T> runToCompletion<T>(FutureOr<T> Function() action) async {
+    check();
+    final result = await runZoned(
+      () => Future<T>.sync(action),
+      zoneValues: {_zoneKey: this},
+    );
+    check();
+    return result;
+  }
+
   Future<void> wait(Duration duration) async {
     check();
     final done = Completer<void>();

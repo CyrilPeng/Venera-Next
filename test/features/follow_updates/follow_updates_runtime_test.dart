@@ -43,18 +43,30 @@ class _Fixture {
     }
     await pumpEventQueue();
     for (final task in tasks) {
-      await task.stream.close();
+      await task.finish();
     }
   }
 }
 
 class _Task implements FollowUpdateTask {
+  _Task() {
+    done.ignore();
+  }
+
   final stream = StreamController<int>();
+  final finished = Completer<void>();
   int cancellations = 0;
+  @override
+  Future<void> get done => finished.future;
   @override
   Stream<int> get updatedCounts => stream.stream;
   @override
   void cancel() => cancellations++;
+
+  Future<void> finish() async {
+    if (!finished.isCompleted) finished.complete();
+    await stream.close();
+  }
 }
 
 void main() {
@@ -125,9 +137,161 @@ void main() {
       fixture.downloads.last.complete();
       await pumpEventQueue();
       fixture.tasks.single.stream.add(2);
-      await fixture.tasks.single.stream.close();
+      await fixture.tasks.single.finish();
       await pumpEventQueue();
       expect(fixture.runtime.changes.value, 1);
+      expect(fixture.releases, 1);
+    },
+  );
+
+  test(
+    'exit retains final-change observation and freezes duplicate starts',
+    () async {
+      final fixture = _Fixture();
+      addTearDown(fixture.finish);
+      fixture.runtime.start();
+      fixture.downloads.single.complete();
+      await pumpEventQueue();
+      final task = fixture.tasks.single;
+      final preparing = fixture.runtime.prepareForExit();
+      expect(fixture.runtime.prepareForExit(), same(preparing));
+      expect(fixture.runtime.isRunning, isFalse);
+      expect(task.cancellations, 1);
+      fixture.runtime.start();
+      fixture.runtime.start();
+      expect(fixture.observers, hasLength(1));
+      expect(fixture.downloads, hasLength(1));
+      fixture.observers.single();
+      expect(fixture.runtime.changes.value, 1);
+      var ready = false;
+      unawaited(preparing.then((_) => ready = true));
+      await task.stream.close();
+      await pumpEventQueue();
+      expect(ready, isFalse);
+      task.finished.complete();
+      final release = await preparing;
+      release();
+      release();
+      expect(fixture.runtime.isRunning, isTrue);
+      expect(fixture.observers, hasLength(1));
+      expect(fixture.downloads, hasLength(2));
+      expect(fixture.releases, 0);
+    },
+  );
+
+  test(
+    'disposing during preparation cannot be undone by its release',
+    () async {
+      final fixture = _Fixture();
+      addTearDown(fixture.finish);
+      fixture.runtime.start();
+      fixture.downloads.single.complete();
+      await pumpEventQueue();
+      final task = fixture.tasks.single;
+      final preparing = fixture.runtime.prepareForExit();
+      fixture.runtime.dispose();
+      expect(fixture.observers, isEmpty);
+      expect(fixture.releases, 1);
+      expect(task.cancellations, 1);
+      task.finished.complete();
+      final release = await preparing;
+      release();
+      release();
+      expect(fixture.runtime.isRunning, isFalse);
+      expect(fixture.observers, isEmpty);
+      expect(fixture.downloads, hasLength(1));
+      expect(fixture.runtime.start, throwsStateError);
+      await expectLater(fixture.runtime.prepareForExit(), throwsStateError);
+    },
+  );
+
+  test(
+    'stop while held suppresses restoration and later start remains usable',
+    () async {
+      final fixture = _Fixture();
+      addTearDown(fixture.finish);
+      fixture.runtime.start();
+      final preparing = fixture.runtime.prepareForExit();
+      fixture.runtime.stop();
+      fixture.runtime.start();
+      final release = await preparing;
+      expect(fixture.downloads.single.isCompleted, isFalse);
+      release();
+      expect(fixture.runtime.isRunning, isFalse);
+      expect(fixture.observers, isEmpty);
+      expect(fixture.releases, 1);
+      fixture.runtime.start();
+      expect(fixture.runtime.isRunning, isTrue);
+      expect(fixture.observers, hasLength(1));
+      expect(fixture.downloads, hasLength(2));
+    },
+  );
+
+  test(
+    'failed preparation restores the same subscription and can retry',
+    () async {
+      final fixture = _Fixture();
+      addTearDown(fixture.finish);
+      fixture.runtime.start();
+      fixture.downloads.single.complete();
+      await pumpEventQueue();
+      final task = fixture.tasks.single;
+      final preparing = fixture.runtime.prepareForExit();
+      final error = StateError('final writes failed');
+      final checked = expectLater(preparing, throwsA(same(error)));
+      task.finished.completeError(error);
+      await checked;
+      expect(fixture.runtime.isRunning, isTrue);
+      expect(fixture.observers, hasLength(1));
+      expect(fixture.releases, 0);
+      expect(fixture.downloads, hasLength(2));
+      final retried = fixture.runtime.prepareForExit();
+      final release = await retried;
+      release();
+      expect(fixture.runtime.isRunning, isTrue);
+      expect(fixture.observers, hasLength(1));
+    },
+  );
+
+  test('old releases cannot unfreeze a later runtime preparation', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.finish);
+    fixture.runtime.start();
+    final first = await fixture.runtime.prepareForExit();
+    first();
+    final second = await fixture.runtime.prepareForExit();
+    first();
+    fixture.runtime.start();
+    expect(fixture.runtime.isRunning, isFalse);
+    expect(fixture.observers, hasLength(1));
+    expect(fixture.downloads, hasLength(2));
+    second();
+    expect(fixture.runtime.isRunning, isTrue);
+    expect(fixture.downloads, hasLength(3));
+  });
+
+  test(
+    'failed restoration can restart without duplicating its subscription',
+    () async {
+      final fixture = _Fixture();
+      addTearDown(fixture.finish);
+      fixture.runtime.start();
+      fixture.downloads.single.complete();
+      await pumpEventQueue();
+      final preparing = fixture.runtime.prepareForExit();
+      final error = StateError('final writes failed');
+      final checked = expectLater(preparing, throwsA(same(error)));
+      fixture.failFolder = true;
+      fixture.tasks.single.finished.completeError(error);
+      await checked;
+      expect(fixture.runtime.isRunning, isFalse);
+      expect(fixture.observers, hasLength(1));
+      fixture.failFolder = false;
+      fixture.runtime.start();
+      expect(fixture.runtime.isRunning, isTrue);
+      expect(fixture.observers, hasLength(1));
+      fixture.runtime.stop();
+      expect(fixture.observers, isEmpty);
       expect(fixture.releases, 1);
     },
   );

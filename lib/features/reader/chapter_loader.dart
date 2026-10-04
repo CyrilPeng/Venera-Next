@@ -56,7 +56,16 @@ Future<List<String>> loadReaderChapterImages({
         ? null
         : () async {
             final result = await source!.loadComicPages!(comicId, chapterId);
-            if (result.error) throw result.errorMessage!;
+            if (result.error) {
+              final failure = result.failure;
+              if (failure != null) {
+                final cause = failure.cause ?? failure;
+                final stack = failure.stackTrace;
+                if (stack != null) Error.throwWithStackTrace(cause, stack);
+                throw cause;
+              }
+              throw result.errorMessage!;
+            }
             return result.data;
           },
     localPath: local?.baseDir ?? manager.path,

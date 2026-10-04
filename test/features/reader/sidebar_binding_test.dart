@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/side_bar.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/sidebar_binding.dart';
+import 'package:venera_next/foundation/navigation_admission.dart';
 
 class _Host extends StatefulWidget {
   const _Host({super.key, required this.binding});
@@ -92,6 +93,35 @@ void main() {
     await tester.pumpAndSettle();
     expect(events, ['pause', 'release', 'pause', 'release']);
     expect(errors, isEmpty);
+  });
+
+  testWidgets('host navigation hold cancels a queued sidebar and can resume', (
+    tester,
+  ) async {
+    var admitting = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (_, child) => NavigationAdmission(
+          allowsNavigation: () => admitting,
+          child: child!,
+        ),
+        home: _Host(key: host, binding: binding),
+      ),
+    );
+    host.currentState!.open('old sidebar');
+    admitting = false;
+    await tester.pumpAndSettle();
+    expect(events, ['pause', 'release']);
+    expect(find.text('old sidebar'), findsNothing);
+    host.currentState!.open('blocked sidebar');
+    expect(events, ['pause', 'release']);
+    admitting = true;
+    host.currentState!.open('new sidebar');
+    await tester.pumpAndSettle();
+    expect(find.text('new sidebar'), findsOneWidget);
+    expect(errors, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
   });
 
   testWidgets(

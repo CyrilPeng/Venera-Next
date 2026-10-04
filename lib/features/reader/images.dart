@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:venera_next/network/request_scope.dart';
+import 'package:venera_next/foundation/image_work.dart';
 import 'reader_controller.dart';
 
 /// Owns the view lifetime of a content attempt, independent of ReaderState.
@@ -8,6 +9,7 @@ class ReaderImages extends StatefulWidget {
   const ReaderImages({
     super.key,
     required this.controller,
+    this.imageWork,
     required this.beforeLoad,
     required this.loadImages,
     required this.prepareMode,
@@ -20,6 +22,7 @@ class ReaderImages extends StatefulWidget {
   });
 
   final ReaderController controller;
+  final ImageWork? imageWork;
   final Future<void> Function(RequestScope) beforeLoad;
   final Future<List<String>> Function(RequestScope) loadImages;
   final Future<void> Function() prepareMode;
@@ -36,6 +39,19 @@ class ReaderImages extends StatefulWidget {
 
 class _ReaderImagesState extends State<ReaderImages> {
   late ReaderContentLoad _attempt;
+  VoidCallback? _unsubscribeResume;
+
+  void _listenForResume() {
+    final owner = widget.imageWork;
+    _unsubscribeResume = owner?.addResumeListener(() {
+      if (!mounted ||
+          !identical(widget.imageWork, owner) ||
+          !_attempt.waitingForImageWork) {
+        return;
+      }
+      setState(_begin);
+    });
+  }
 
   void _begin() {
     widget.onLoading();
@@ -46,19 +62,24 @@ class _ReaderImagesState extends State<ReaderImages> {
   void initState() {
     super.initState();
     _begin();
+    _listenForResume();
   }
 
   @override
   void didUpdateWidget(covariant ReaderImages oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
+    if (!identical(oldWidget.controller, widget.controller) ||
+        !identical(oldWidget.imageWork, widget.imageWork)) {
+      _unsubscribeResume?.call();
       oldWidget.controller.cancelContentLoad(_attempt);
       _begin();
+      _listenForResume();
     }
   }
 
   @override
   void dispose() {
+    _unsubscribeResume?.call();
     widget.controller.cancelContentLoad(_attempt);
     super.dispose();
   }
@@ -69,12 +90,14 @@ class _ReaderImagesState extends State<ReaderImages> {
     bool isCurrent() =>
         mounted &&
         identical(_attempt, attempt) &&
-        identical(widget.controller, inputs.controller);
+        identical(widget.controller, inputs.controller) &&
+        identical(widget.imageWork, inputs.imageWork);
     final result = await inputs.controller.loadContent(
       attempt,
       beforeLoad: () => inputs.beforeLoad(attempt.scope),
       loadImages: inputs.loadImages,
       prepareMode: inputs.prepareMode,
+      imageWork: inputs.imageWork,
     );
     if (!isCurrent() || result == ReaderContentLoadResult.ignored) return;
     if (result == ReaderContentLoadResult.ready) {
@@ -90,6 +113,9 @@ class _ReaderImagesState extends State<ReaderImages> {
   @override
   Widget build(BuildContext context) {
     final content = widget.controller.content;
+    if (_attempt.waitingForImageWork) {
+      return const Center(child: CircularProgressIndicator());
+    }
     if (content.isLoading) {
       unawaited(_load());
       return const Center(child: CircularProgressIndicator());

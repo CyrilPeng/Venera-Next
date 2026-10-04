@@ -20,6 +20,96 @@ class _UnreliableFile implements File {
 }
 
 void main() {
+  for (final size in [0, 1, 3]) {
+    test(
+      'cancelled byte read preserves integrity failure for $size bytes',
+      () async {
+        final bytes = Completer<Uint8List>();
+        final file = _PendingFile(bytes.future);
+        final cancellation = StateError('cancelled');
+        var cancelled = false;
+        final reading = readFileBytesChecked(
+          file,
+          requireNonEmpty: true,
+          checkStop: () {
+            if (cancelled) throw cancellation;
+          },
+          canRetry: () => !cancelled,
+        );
+        final expected = expectLater(
+          reading,
+          throwsA(size < 3 ? isA<FileSystemException>() : same(cancellation)),
+        );
+        await pumpEventQueue();
+        expect(file.reads, 1);
+        cancelled = true;
+        bytes.complete(Uint8List(size));
+        await expected;
+        expect(file.reads, 1);
+      },
+    );
+  }
+
+  test(
+    'cancellation during length lookup does not start a byte read',
+    () async {
+      final length = Completer<int>();
+      final file = _PendingFile(
+        Future.value(Uint8List(3)),
+        size: length.future,
+      );
+      var cancelled = false;
+      final cancellation = StateError('cancelled');
+      final reading = readFileBytesChecked(
+        file,
+        checkStop: () {
+          if (cancelled) throw cancellation;
+        },
+      );
+      final expected = expectLater(reading, throwsA(same(cancellation)));
+      cancelled = true;
+      length.complete(3);
+      await expected;
+      expect(file.reads, 0);
+    },
+  );
+
+  test('declining a retry retains a late read failure and its stack', () async {
+    final failedRead = Completer<Uint8List>();
+    final file = _PendingFile(failedRead.future);
+    final failure = FileSystemException('late native read', file.path);
+    final stack = StackTrace.fromString('original read stack');
+    var cancelled = false;
+    var retryChecks = 0;
+    final pending = readFileBytesChecked(
+      file,
+      checkStop: () {
+        if (cancelled) throw StateError('cancelled');
+      },
+      canRetry: () {
+        retryChecks++;
+        return !cancelled;
+      },
+    );
+    Object? observed;
+    StackTrace? observedStack;
+    final checked = pending.then<void>(
+      (_) => fail('read should fail'),
+      onError: (Object error, StackTrace trace) {
+        observed = error;
+        observedStack = trace;
+      },
+    );
+    await pumpEventQueue();
+    cancelled = true;
+    failedRead.completeError(failure, stack);
+    await checked;
+    expect(observed, same(failure));
+    expect(observedStack, same(stack));
+    expect(file.reads, 1);
+    expect(retryChecks, 1);
+  });
+
   test('recovers from empty and short SAF reads', () async {
     final file = _UnreliableFile([
       [],
@@ -88,4 +178,20 @@ void main() {
       expect(File('${target.path}/chapter/2.jpg').existsSync(), isFalse);
     },
   );
+}
+
+class _PendingFile extends Fake implements File {
+  _PendingFile(this.result, {this.size});
+  final Future<Uint8List> result;
+  final Future<int>? size;
+  int reads = 0;
+  @override
+  String get path => 'pending.bin';
+  @override
+  Future<int> length() async => size == null ? 3 : await size!;
+  @override
+  Future<Uint8List> readAsBytes() {
+    reads++;
+    return result;
+  }
 }

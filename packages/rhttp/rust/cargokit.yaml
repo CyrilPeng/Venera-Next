@@ -1,0 +1,3 @@
+# Compile the checked-in patched source on every supported platform.
+# Deliberately no precompiled_binaries: upstream binaries lack the callback fix.
+{}

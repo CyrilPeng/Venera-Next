@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:venera_next/foundation/res.dart';
 
 import 'models.dart';
@@ -55,7 +57,7 @@ typedef GetImageLoadingConfigFunc =
       String epId,
     )?;
 typedef GetThumbnailLoadingConfigFunc =
-    Map<String, dynamic> Function(String imageKey)?;
+    FutureOr<Map<String, dynamic>> Function(String imageKey)?;
 
 typedef ComicThumbnailLoader =
     Future<Res<List<String>>> Function(String comicId, String? next);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:image/image.dart' as img;
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:venera_next/features/reader/gallery_data.dart';
 import 'package:venera_next/features/reader/gallery_view.dart';
+import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/features/reader/page_layout.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
@@ -19,6 +21,7 @@ void main() {
         final file = File('${directory.path}/page.png')
           ..writeAsBytesSync(img.encodePng(img.Image(width: 20, height: 30)));
         var binding = ReaderViewportBinding();
+        final imageWork = ImageWork();
         var ready = 0;
         var collected = 0;
         final reports = <(bool, bool)>[];
@@ -58,6 +61,7 @@ void main() {
         data = inputs();
         Widget build() => MaterialApp(
           home: ReaderGalleryView(
+            imageWork: imageWork,
             data: data,
             navigation: navigation,
             onViewportChanged: binding.update,
@@ -112,13 +116,29 @@ void main() {
           await tester.pump();
           expect(binding.current, isNull);
         } finally {
+          await tester.pumpWidget(const SizedBox());
+          final closingImages = imageWork.dispose();
+          var imagesClosed = false;
+          unawaited(
+            closingImages.then<void>(
+              (_) => imagesClosed = true,
+              onError: (Object error, StackTrace stack) => imagesClosed = true,
+            ),
+          );
+          // Real file/native callbacks and their fake-async continuations must
+          // both advance; only the owner's completion permits deleting files.
+          while (!imagesClosed) {
+            await tester.pump();
+            await tester.runAsync(() => pumpEventQueue());
+          }
           navigation.dispose();
           await tester.runAsync(() async {
-            await Future<void>.delayed(const Duration(milliseconds: 50));
+            await closingImages;
             directory.deleteSync(recursive: true);
           });
         }
       },
+      timeout: const Timeout(Duration(seconds: 30)),
     );
   }
 }

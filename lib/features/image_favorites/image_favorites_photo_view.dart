@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:venera_next/components/effects.dart';
+import 'package:venera_next/components/image_save_binding.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/features/history/history.dart';
@@ -11,7 +14,8 @@ import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
-import 'package:venera_next/foundation/file_type.dart';
+import 'package:venera_next/foundation/image_save_work.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
@@ -39,6 +43,21 @@ class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView> {
   int currentPage = 0;
 
   bool isAppBarShow = false;
+
+  late final _saves = ImageSaveWork(
+    deliver: (bytes, filename, checkStop) =>
+        saveFile(data: bytes, filename: filename, checkStop: checkStop),
+    onError: (error, stack) {
+      Log.error('Image save', error, stack);
+      if (mounted) context.showMessage(message: 'Error'.tl);
+    },
+  );
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -91,76 +110,80 @@ class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      onPopInvokedWithResult: (bool didPop, Object? result) async {
-        if (didPop) {
-          onPop();
-        }
-      },
-      child: Listener(
-        onPointerSignal: (event) {
-          if (HardwareKeyboard.instance.isControlPressed) {
-            return;
-          }
-          if (event is PointerScrollEvent) {
-            if (event.scrollDelta.dy > 0) {
-              if (controller.page! >= images.length - 1) {
-                return;
-              }
-              controller.nextPage(
-                duration: Duration(milliseconds: 180),
-                curve: Curves.ease,
-              );
-            } else {
-              if (controller.page! <= 0) {
-                return;
-              }
-              controller.previousPage(
-                duration: Duration(milliseconds: 180),
-                curve: Curves.ease,
-              );
-            }
+    return ImageSaveBinding(
+      work: _saves,
+      child: PopScope(
+        onPopInvokedWithResult: (bool didPop, Object? result) async {
+          if (didPop) {
+            onPop();
           }
         },
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: PhotoViewGallery.builder(
-                backgroundDecoration: BoxDecoration(
-                  color: context.colorScheme.surface,
-                ),
-                builder: _buildItem,
-                itemCount: images.length,
-                loadingBuilder: (context, event) => Center(
-                  child: SizedBox(
-                    width: 20.0,
-                    height: 20.0,
-                    child: CircularProgressIndicator(
-                      backgroundColor: context.colorScheme.surfaceContainerHigh,
-                      value: event == null || event.expectedTotalBytes == null
-                          ? null
-                          : event.cumulativeBytesLoaded /
-                                event.expectedTotalBytes!,
+        child: Listener(
+          onPointerSignal: (event) {
+            if (HardwareKeyboard.instance.isControlPressed) {
+              return;
+            }
+            if (event is PointerScrollEvent) {
+              if (event.scrollDelta.dy > 0) {
+                if (controller.page! >= images.length - 1) {
+                  return;
+                }
+                controller.nextPage(
+                  duration: Duration(milliseconds: 180),
+                  curve: Curves.ease,
+                );
+              } else {
+                if (controller.page! <= 0) {
+                  return;
+                }
+                controller.previousPage(
+                  duration: Duration(milliseconds: 180),
+                  curve: Curves.ease,
+                );
+              }
+            }
+          },
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: PhotoViewGallery.builder(
+                  backgroundDecoration: BoxDecoration(
+                    color: context.colorScheme.surface,
+                  ),
+                  builder: _buildItem,
+                  itemCount: images.length,
+                  loadingBuilder: (context, event) => Center(
+                    child: SizedBox(
+                      width: 20.0,
+                      height: 20.0,
+                      child: CircularProgressIndicator(
+                        backgroundColor:
+                            context.colorScheme.surfaceContainerHigh,
+                        value: event == null || event.expectedTotalBytes == null
+                            ? null
+                            : event.cumulativeBytesLoaded /
+                                  event.expectedTotalBytes!,
+                      ),
                     ),
                   ),
+                  pageController: controller,
+                  onPageChanged: (index) {
+                    setState(() {
+                      currentPage = index;
+                    });
+                  },
                 ),
-                pageController: controller,
-                onPageChanged: (index) {
-                  setState(() {
-                    currentPage = index;
-                  });
-                },
               ),
-            ),
-            buildPageInfo(),
-            AnimatedPositioned(
-              top: isAppBarShow ? 0 : -(context.padding.top + 52),
-              left: 0,
-              right: 0,
-              duration: Duration(milliseconds: 180),
-              child: buildAppBar(),
-            ),
-          ],
+              buildPageInfo(),
+              AnimatedPositioned(
+                top: isAppBarShow ? 0 : -(context.padding.top + 52),
+                left: 0,
+                right: 0,
+                duration: Duration(milliseconds: 180),
+                child: buildAppBar(),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -213,7 +236,7 @@ class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView> {
               IconButton(
                 icon: Icon(Icons.close),
                 onPressed: () {
-                  Navigator.of(context).pop();
+                  Navigator.of(context).maybePop();
                 },
               ),
               const SizedBox(width: 8),
@@ -234,13 +257,19 @@ class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView> {
       MenuEntry(
         icon: Icons.image_outlined,
         text: "Save Image".tl,
-        onClick: () async {
-          var temp = images[currentPage];
-          var imageProvider = ImageFavoritesProvider(temp);
-          var data = await imageProvider.load(null, null);
-          var fileType = detectFileType(data);
-          var fileName = "${currentPage + 1}.${fileType.ext}";
-          await saveFile(filename: fileName, data: data);
+        onClick: () {
+          final page = currentPage;
+          final image = images[page].copyWith();
+          final provider = ImageFavoritesProvider(image);
+          unawaited(
+            _saves.save(
+              name: '${page + 1}',
+              read: (scope) => provider.readBytes(
+                checkStop: scope.check,
+                cancelSignal: scope.whenCancelled,
+              ),
+            ),
+          );
         },
       ),
       MenuEntry(

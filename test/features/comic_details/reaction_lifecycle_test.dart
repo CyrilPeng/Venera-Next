@@ -8,6 +8,9 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/foundation/res.dart';
 
 class _Source extends Fake implements ComicSource {
+  @override
+  Future<void> closeDataWrites() async {}
+
   late LikeOrUnlikeComicFunc like;
   @override
   LikeOrUnlikeComicFunc get likeOrUnlikeComic => like;

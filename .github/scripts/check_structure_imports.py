@@ -13,6 +13,12 @@ FOUNDATION_EXTENSIONS_BARREL = LIB_DIR / "foundation" / "extensions.dart"
 FOUNDATION_WIDGET_UTILS_PATH = (LIB_DIR / "foundation" / "widget_utils.dart").resolve()
 PAGES_DIR = LIB_DIR / "pages"
 RETIRED_DART_PATHS = {
+    LIB_DIR / "features" / "reader" / "image_work.dart": (
+        "shared image operation ownership belongs in foundation/image_work.dart"
+    ),
+    LIB_DIR / "features/favorites/local_favorite_image.dart": (
+        "unused image provider retired; favorite_cover_cache owns legacy cover deletion"
+    ),
     LIB_DIR / "features/local_comics/import_export/comic_export.dart": (
         "unused batch archive executor retired; legacy metadata has a dedicated codec"
     ),
@@ -903,7 +909,7 @@ FEATURE_ENTRYPOINT_TARGETS = {
 
 FILE_SYSTEM_DIRECT_IMPORT_SOURCES = {
     _feature_path("comic_source", "comic_source_manager.dart"),
-    _feature_path("favorites", "local_favorite_image.dart"),
+    _feature_path("favorites", "favorite_cover_cache.dart"),
     _feature_path("history", "image_favorites_provider.dart"),
     _feature_path("local_comics", "downloading_page.dart"),
     _feature_path("local_comics", "import_export", "cbz.dart"),

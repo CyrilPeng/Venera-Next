@@ -9,6 +9,7 @@ import 'package:photo_view/photo_view.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/features/reader/image_downloads.dart';
+import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/features/reader/image_position.dart';
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
@@ -20,6 +21,7 @@ import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/features/reader/waterfall_controller.dart';
 
 import 'continuous_data.dart';
+import 'display_image_provider.dart';
 import 'reader_controller.dart';
 import 'reader_viewport.dart';
 import 'package:venera_next/network/request_scope.dart';
@@ -37,6 +39,7 @@ class ReaderContinuousView extends StatefulWidget {
   const ReaderContinuousView({
     super.key,
     required this.data,
+    required this.imageWork,
     required this.navigation,
     required this.loadChapter,
     required this.chapterId,
@@ -54,6 +57,7 @@ class ReaderContinuousView extends StatefulWidget {
   });
 
   final ReaderContinuousData data;
+  final ImageWork imageWork;
   final ReaderController navigation;
   final Future<List<String>> Function(int, RequestScope) loadChapter;
   final String Function(int) chapterId;
@@ -75,7 +79,7 @@ class ReaderContinuousView extends StatefulWidget {
 
 class ContinuousModeState extends State<ReaderContinuousView>
     implements ReaderImageViewController, AutoReadingViewport {
-  final _imageDownloads = ReaderImageDownloads();
+  late var _imageDownloads = ReaderImageDownloads(work: widget.imageWork);
 
   @override
   (int, int)? get currentImageRange => (currentPage - 1, currentPage);
@@ -101,7 +105,10 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   late List<bool> cached;
 
-  late final _waterfall = WaterfallController(
+  late var _waterfall = _createWaterfall();
+
+  WaterfallController _createWaterfall() => WaterfallController(
+    imageWork: widget.imageWork,
     maxChapter: data.maxChapter,
     load: (chapter, scope) => widget.loadChapter(chapter, scope),
     chapterId: (chapter) => widget.chapterId(chapter),
@@ -115,6 +122,27 @@ class ContinuousModeState extends State<ReaderContinuousView>
   bool _isRestoringPrependedSegmentPosition = false;
 
   bool _isNavigatingWaterfallLocation = false;
+
+  void Function({bool notify})? _releaseWaterfallLoading;
+
+  VoidCallback _holdWaterfallLoading(bool needsLoading) {
+    _releaseWaterfallLoading?.call();
+    if (!needsLoading) return () {};
+    final onLoading = widget.onContentLoading;
+    var active = true;
+    void release({bool notify = true}) {
+      if (!active) return;
+      active = false;
+      if (identical(_releaseWaterfallLoading, release)) {
+        _releaseWaterfallLoading = null;
+      }
+      if (notify) onLoading(false);
+    }
+
+    _releaseWaterfallLoading = release;
+    onLoading(true);
+    return () => release();
+  }
 
   int get preCacheCount => data.preloadCount;
 
@@ -195,21 +223,26 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   Future<void> _ensureWaterfallImagesBefore(int current) async {
     if (!crossChapter || !mounted) return;
-    final revision = _waterfall.revision;
-    final insertedCount = await _waterfall.ensureBefore(
+    final waterfall = _waterfall;
+    final revision = waterfall.revision;
+    bool isCurrent() =>
+        mounted &&
+        identical(_waterfall, waterfall) &&
+        revision == waterfall.revision;
+    final insertedCount = await waterfall.ensureBefore(
       current: current,
       threshold: math.max(preCacheCount, 1),
     );
-    if (!mounted || revision != _waterfall.revision || insertedCount == 0) {
+    if (!isCurrent() || insertedCount == 0) {
       return;
     }
     _isRestoringPrependedSegmentPosition = true;
     setState(() {});
     SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || revision != _waterfall.revision) return;
+      if (!isCurrent()) return;
       itemScrollController.jumpTo(index: current + insertedCount);
       SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (mounted && revision == _waterfall.revision) {
+        if (isCurrent()) {
           _isRestoringPrependedSegmentPosition = false;
         }
       });
@@ -223,8 +256,11 @@ class ContinuousModeState extends State<ReaderContinuousView>
       navigation.restoreChapter(imageRef.position.chapter);
       navigation.replaceChapterImages(segment.images);
       // Wait until the scroll/layout callback has finished before updating UI.
+      final waterfall = _waterfall;
       Future.microtask(() {
-        if (mounted) widget.onActiveChapterChanged();
+        if (mounted && identical(_waterfall, waterfall)) {
+          widget.onActiveChapterChanged();
+        }
       });
     }
     if (chapterChanged || currentPage != imageRef.position.imageNumber) {
@@ -245,11 +281,14 @@ class ContinuousModeState extends State<ReaderContinuousView>
     );
   }
 
-  Future<bool> _loadWaterfallNavigationChapter(int chapter) async {
+  Future<bool> _loadWaterfallNavigationChapter(
+    WaterfallController waterfall,
+    int chapter,
+  ) async {
     try {
-      return await _waterfall.navigate(chapter);
+      return await waterfall.navigate(chapter);
     } catch (e, stack) {
-      if (!mounted) return false;
+      if (!mounted || !identical(_waterfall, waterfall)) return false;
       widget.onNavigationError(chapter, e, stack);
       return false;
     }
@@ -259,19 +298,24 @@ class ContinuousModeState extends State<ReaderContinuousView>
     int chapter, {
     required bool toLastPage,
   }) async {
+    final waterfall = _waterfall;
     final needsLoading = _segmentOfChapter(chapter) == null;
-    if (needsLoading) widget.onContentLoading(true);
+    final releaseLoading = _holdWaterfallLoading(needsLoading);
     _isRestoringPrependedSegmentPosition = false;
     _isNavigatingWaterfallLocation = false;
-    final loading = _loadWaterfallNavigationChapter(chapter);
-    final revision = _waterfall.revision;
+    final loading = _loadWaterfallNavigationChapter(waterfall, chapter);
+    final revision = waterfall.revision;
+    bool isCurrent() =>
+        mounted &&
+        identical(_waterfall, waterfall) &&
+        revision == waterfall.revision;
     try {
-      if (!await loading || !mounted || revision != _waterfall.revision) {
+      if (!await loading || !isCurrent()) {
         return;
       }
     } finally {
-      if (mounted && revision == _waterfall.revision) {
-        widget.onContentLoading(false);
+      if (isCurrent()) {
+        releaseLoading();
       }
     }
     var segment = _segmentOfChapter(chapter);
@@ -288,12 +332,12 @@ class ContinuousModeState extends State<ReaderContinuousView>
     });
     widget.onUpdate();
     SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || revision != _waterfall.revision) return;
+      if (!isCurrent()) return;
       itemScrollController.jumpTo(index: index);
       _futurePosition = null;
       cacheImages(index);
       SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (mounted && revision == _waterfall.revision) {
+        if (isCurrent()) {
           _isNavigatingWaterfallLocation = false;
         }
       });
@@ -316,6 +360,16 @@ class ContinuousModeState extends State<ReaderContinuousView>
   @override
   void didUpdateWidget(covariant ReaderContinuousView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.imageWork, widget.imageWork)) {
+      unawaited(_imageDownloads.dispose());
+      _imageDownloads = ReaderImageDownloads(work: widget.imageWork);
+      unawaited(_waterfall.dispose());
+      _waterfall = _createWaterfall();
+      _isRestoringPrependedSegmentPosition = false;
+      _isNavigatingWaterfallLocation = false;
+      _releaseWaterfallLoading?.call();
+      _initSegments();
+    }
     if (oldWidget.onViewportChanged != widget.onViewportChanged) {
       oldWidget.onViewportChanged(this, false);
       widget.onViewportChanged(this, true);
@@ -325,7 +379,10 @@ class ContinuousModeState extends State<ReaderContinuousView>
   @override
   void dispose() {
     widget.onViewportChanged(this, false);
-    _waterfall.dispose();
+    // A parent content reload may already have marked its replacement loading.
+    // Retire this view's notification without publishing readiness on disposal.
+    _releaseWaterfallLoading?.call(notify: false);
+    unawaited(_waterfall.dispose());
     unawaited(_imageDownloads.dispose());
     itemPositionsListener.itemPositions.removeListener(onPositionChanged);
     super.dispose();
@@ -673,7 +730,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
           width = double.infinity;
         }
 
-        ImageProvider image = ReaderImageProvider(
+        final image = ReaderImageProvider(
           imageRef.imageKey,
           data.sourceKey,
           data.comicId,
@@ -684,7 +741,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
         var comicImage = ComicImage(
           filterQuality: FilterQuality.medium,
-          image: image,
+          image: ReaderDisplayImageProvider(image, this.widget.imageWork),
           width: width,
           height: height,
           fit: BoxFit.contain,
@@ -1033,7 +1090,8 @@ class ContinuousModeState extends State<ReaderContinuousView>
     String? imageKey;
     for (var imageState in imageStates) {
       if ((imageState as ComicImageState).containsPoint(offset)) {
-        imageKey = (imageState.widget.image as ReaderImageProvider).imageKey;
+        imageKey =
+            (imageState.widget.image as ReaderDisplayImageProvider).imageKey;
       }
     }
     return imageKey;

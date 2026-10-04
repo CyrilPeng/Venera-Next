@@ -99,8 +99,7 @@ class ComicSource {
 
   final GetImageLoadingConfigFunc? getImageLoadingConfig;
 
-  final Map<String, dynamic> Function(String imageKey)?
-  getThumbnailLoadingConfig;
+  final GetThumbnailLoadingConfigFunc? getThumbnailLoadingConfig;
 
   var data = <String, dynamic>{};
 
@@ -156,6 +155,8 @@ class ComicSource {
 
   Future<void>? _activeSave;
   Future<void>? _pendingSave;
+  Future<void>? _dataCloseFuture;
+  ({Object error, StackTrace stack})? _saveFailure;
   bool _stagingData = false;
   bool _stagedSave = false;
 
@@ -174,16 +175,24 @@ class ComicSource {
         if (await temporary.exists()) await temporary.delete();
       }
       _stagedSave = false;
-      final sync = _comicSourceDataSavedHandler?.call();
-      if (sync != null) unawaited(sync);
+      await _comicSourceDataSavedHandler?.call();
     }
     _stagingData = false;
   }
 
-  Future<void> saveData() async {
+  Future<void> saveData() {
+    if (_dataCloseFuture != null) {
+      final rejected = Future<void>.error(
+        StateError('Comic source data is closing'),
+      );
+      // Late void bridge calls are rejected without becoming unhandled errors.
+      // Explicit awaiters still receive the original failure.
+      unawaited(rejected.catchError((Object _, StackTrace _) {}));
+      return rejected;
+    }
     if (_stagingData) {
       _stagedSave = true;
-      return;
+      return Future.value();
     }
     if (_activeSave != null) {
       return _schedulePendingSave();
@@ -191,9 +200,27 @@ class ComicSource {
     return _startSave();
   }
 
+  /// Stop new saves after the host has drained source work, then settle every
+  /// accepted write and its data-change notification before releasing bindings.
+  Future<void> closeDataWrites() => _dataCloseFuture ??= _closeDataWrites();
+
+  Future<void> _closeDataWrites() async {
+    while (_activeSave != null || _pendingSave != null) {
+      try {
+        await (_pendingSave ?? _activeSave!);
+      } catch (_) {
+        // A queued save can repair a failed write. Its final result is retained.
+      }
+    }
+    final failure = _saveFailure;
+    if (failure != null) {
+      Error.throwWithStackTrace(failure.error, failure.stack);
+    }
+  }
+
   Future<void> _schedulePendingSave() {
     if (_pendingSave != null) {
-      return Future.value();
+      return _pendingSave!;
     }
     var activeSave = _activeSave!;
     var pendingSave = activeSave.then(
@@ -207,6 +234,9 @@ class ComicSource {
       },
     );
     _pendingSave = pendingSave;
+    // JS save_data is a void bridge. Keep ignored saves observed while returning
+    // the original failing Future to callers that explicitly await persistence.
+    unawaited(pendingSave.catchError((Object _, StackTrace _) {}));
     return pendingSave;
   }
 
@@ -218,6 +248,15 @@ class ComicSource {
       }
     });
     _activeSave = activeSave;
+    unawaited(
+      activeSave.then<void>(
+        (_) => _saveFailure = null,
+        onError: (Object error, StackTrace stack) {
+          _saveFailure = (error: error, stack: stack);
+          Log.error('ComicSource data', '$name: $error', stack);
+        },
+      ),
+    );
     return activeSave;
   }
 
@@ -227,10 +266,7 @@ class ComicSource {
       await file.create(recursive: true);
     }
     await file.writeAsString(jsonEncode(data));
-    final sync = _comicSourceDataSavedHandler?.call();
-    if (sync != null) {
-      unawaited(sync);
-    }
+    await _comicSourceDataSavedHandler?.call();
   }
 
   Future<bool> reLogin() async {

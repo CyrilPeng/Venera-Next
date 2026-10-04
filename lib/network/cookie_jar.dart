@@ -7,28 +7,33 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/extensions.dart';
 
 class CookieJarSql {
-  late Database _db;
+  Database? _database;
+  Database get _db =>
+      _database ?? (throw StateError('Cookie database is closed'));
 
   final String path;
 
-  CookieJarSql(this.path) {
-    init();
-  }
-
-  void init() {
-    _db = sqlite3.open(path);
-    _db.execute('''
-      CREATE TABLE IF NOT EXISTS cookies (
-        name TEXT NOT NULL,
-        value TEXT NOT NULL,
-        domain TEXT NOT NULL,
-        path TEXT,
-        expires INTEGER,
-        secure INTEGER,
-        httpOnly INTEGER,
-        PRIMARY KEY (name, domain, path)
-      );
-    ''');
+  /// Owns the returned connection, including schema-initialization failures.
+  CookieJarSql(this.path, {Database Function(String)? openDatabase}) {
+    final database = (openDatabase ?? sqlite3.open)(path);
+    try {
+      database.execute('''
+        CREATE TABLE IF NOT EXISTS cookies (
+          name TEXT NOT NULL,
+          value TEXT NOT NULL,
+          domain TEXT NOT NULL,
+          path TEXT,
+          expires INTEGER,
+          secure INTEGER,
+          httpOnly INTEGER,
+          PRIMARY KEY (name, domain, path)
+        );
+      ''');
+      _database = database;
+    } catch (_) {
+      database.dispose();
+      rethrow;
+    }
   }
 
   void saveFromResponse(Uri uri, List<Cookie> cookies) {
@@ -205,7 +210,9 @@ class CookieJarSql {
   }
 
   void dispose() {
-    _db.dispose();
+    final database = _database;
+    _database = null;
+    database?.dispose();
   }
 }
 
@@ -216,6 +223,12 @@ class SingleInstanceCookieJar extends CookieJarSql {
   SingleInstanceCookieJar._create(super.path);
 
   static SingleInstanceCookieJar? instance;
+
+  @override
+  void dispose() {
+    if (identical(instance, this)) instance = null;
+    super.dispose();
+  }
 
   static Future<SingleInstanceCookieJar> createInstance({
     String? directory,

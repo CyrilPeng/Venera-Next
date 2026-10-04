@@ -10,24 +10,40 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
-import 'package:venera_next/features/history/image_favorites.dart';
+import 'image_favorites_repository.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
+import 'package:venera_next/foundation/sqlite_transaction.dart';
+import 'package:venera_next/foundation/persistence_failure.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/throttled_task_runner.dart';
 
 typedef HistoryMetadataUpdater =
     Future<bool> Function({String? title, String? subtitle, String? cover});
 
+/// Persists one increment on its owned connection. Failures carry an explicit
+/// commit state; an unclassified failure is treated as an unknown outcome.
+typedef HistoryDurationStorageWriter =
+    Future<void> Function(
+      String databasePath,
+      History snapshot,
+      int durationMs,
+    );
+
 class HistoryManager with ChangeNotifier {
   static HistoryManager? cache;
 
-  HistoryManager.create();
+  HistoryManager.create({HistoryDurationStorageWriter? writeDuration})
+    : _writeDuration = writeDuration ?? _addReadDurationAsync;
+
+  final HistoryDurationStorageWriter _writeDuration;
 
   factory HistoryManager() =>
       cache == null ? (cache = HistoryManager.create()) : cache!;
 
-  late Database _db;
+  Database? _database;
+  Database get _db =>
+      _database ?? (throw StateError('History database is closed'));
 
   Database get imageFavoritesDatabase => _db;
 
@@ -45,22 +61,63 @@ class HistoryManager with ChangeNotifier {
   bool isInitialized = false;
   int _generation = 0;
 
-  Future<void> init() async {
-    if (isInitialized) {
-      return;
-    }
-    ++_generation;
-    _dbPath = "${App.dataPath}/history.db";
-    _db = openSqliteDatabase(_dbPath);
+  Future<void>? _initialization;
 
-    _repository.initialize();
-
-    notifyListeners();
-    ImageFavoriteManager().init();
-    isInitialized = true;
-    await clearExpiredHistory(
-      (appdata.settings['historyRetentionDays'] as num?)?.round() ?? 0,
+  Future<void> init() {
+    final pending = _initialization;
+    if (pending != null) return pending;
+    if (isInitialized) return Future.value();
+    final generation = ++_generation;
+    final attempt = Completer<void>();
+    _initialization = attempt.future;
+    Future<void>.sync(() => _initialize(generation)).then(
+      (_) {
+        if (identical(_initialization, attempt.future)) _initialization = null;
+        attempt.complete();
+      },
+      onError: (Object error, StackTrace stack) {
+        if (identical(_initialization, attempt.future)) _initialization = null;
+        attempt.completeError(error, stack);
+      },
     );
+    return attempt.future;
+  }
+
+  void _checkInitialization(int generation) {
+    if (generation != _generation || _database == null) {
+      throw StateError('History initialization was closed');
+    }
+  }
+
+  Future<void> _initialize(int generation) async {
+    Database? database;
+    try {
+      _dbPath = "${App.dataPath}/history.db";
+      database = openSqliteDatabase(_dbPath);
+      _database = database;
+      HistoryRepository(database).initialize();
+      ImageFavoritesRepository(database).initialize();
+      // Retention uses the ordered mutation queue. Even when disabled, drain
+      // previously accepted writes before declaring this connection ready.
+      await clearExpiredHistory(
+        (appdata.settings['historyRetentionDays'] as num?)?.round() ?? 0,
+      );
+      _checkInitialization(generation);
+      if (hasPendingWrites) await waitForAsyncWrites();
+      _checkInitialization(generation);
+      isInitialized = true;
+      notifyListeners();
+      _checkInitialization(generation);
+    } catch (_) {
+      // Closing an old attempt must never dispose a replacement connection.
+      if (identical(_database, database) && generation == _generation) {
+        isInitialized = false;
+        _historyCache.clear();
+        _database = null;
+        database?.dispose();
+      }
+      rethrow;
+    }
   }
 
   static Future<void> _addHistoryAsync(
@@ -87,15 +144,62 @@ class HistoryManager with ChangeNotifier {
     String dbPath,
     History item,
     int durationMs,
-  ) {
-    return Isolate.run(() {
-      var db = openSqliteDatabase(dbPath);
-      try {
-        HistoryRepository(db).addReadDuration(item, durationMs);
-      } finally {
-        db.dispose();
-      }
-    });
+  ) async {
+    try {
+      await Isolate.run(() {
+        Database? db;
+        PersistenceFailure? failure;
+        var committed = false;
+        try {
+          db = openSqliteDatabase(dbPath);
+          // This repository call owns a complete transaction on this fresh
+          // connection. A rollback failure leaves its commit state uncertain.
+          HistoryRepository(db).addReadDuration(item, durationMs);
+          committed = true;
+        } catch (error, stack) {
+          failure = PersistenceFailure(
+            commitState: error is SqliteTransactionRollbackError
+                ? PersistenceCommitState.unknown
+                : PersistenceCommitState.notCommitted,
+            cause: error,
+            stackTrace: stack,
+          );
+        } finally {
+          try {
+            db?.dispose();
+          } catch (error, stack) {
+            final original = failure;
+            failure = PersistenceFailure(
+              commitState:
+                  original?.commitState ??
+                  (committed
+                      ? PersistenceCommitState.committed
+                      : PersistenceCommitState.notCommitted),
+              cause: original?.cause ?? error,
+              stackTrace: original?.stackTrace ?? stack,
+              cleanupFailures: original == null
+                  ? const []
+                  : [
+                      ...original.cleanupFailures,
+                      (error: error, stackTrace: stack),
+                    ],
+            );
+          }
+        }
+        if (failure != null) {
+          Error.throwWithStackTrace(failure, failure.stackTrace);
+        }
+      });
+    } on PersistenceFailure {
+      rethrow;
+    } catch (error, stack) {
+      // Losing the worker/result channel does not prove that SQL rolled back.
+      throw PersistenceFailure(
+        commitState: PersistenceCommitState.unknown,
+        cause: error,
+        stackTrace: stack,
+      );
+    }
   }
 
   Future<void> _asyncHistoryQueue = Future.value();
@@ -154,7 +258,12 @@ class HistoryManager with ChangeNotifier {
     _asyncHistoryQueue = next.then<void>(
       (_) {},
       onError: (Object error, StackTrace stackTrace) {
-        Log.error("History", error, stackTrace);
+        try {
+          Log.error("History", error, stackTrace);
+        } catch (_) {
+          // The caller still receives the original error through next. A
+          // failing log sink must not poison unrelated queued mutations.
+        }
       },
     );
     return next;
@@ -173,17 +282,59 @@ class HistoryManager with ChangeNotifier {
   Future<void> addReadDuration(History item, Duration duration) {
     final durationMs = duration.inMilliseconds;
     if (durationMs <= 0) return Future.value();
+    if (!isInitialized) {
+      return Future.error(
+        PersistenceFailure(
+          commitState: PersistenceCommitState.notCommitted,
+          cause: StateError('History database is closed'),
+          stackTrace: StackTrace.current,
+        ),
+      );
+    }
     final snapshot = item.copy();
     final path = _dbPath;
     final generation = _generation;
     return _enqueueAsyncWrite(() async {
-      await _addReadDurationAsync(path, snapshot, durationMs);
-      if (item.id == snapshot.id && item.type == snapshot.type) {
-        item.readDurationMs += durationMs;
+      PersistenceFailure? committedFailure;
+      try {
+        await _writeDuration(path, snapshot, durationMs);
+      } on PersistenceFailure catch (error) {
+        if (error.commitState != PersistenceCommitState.committed) rethrow;
+        committedFailure = error;
+      } catch (error, stack) {
+        throw PersistenceFailure(
+          commitState: PersistenceCommitState.unknown,
+          cause: error,
+          stackTrace: stack,
+        );
       }
-      if (isInitialized && generation == _generation) {
-        _cachePersistedHistory(snapshot.id, snapshot.type.value);
-        notifyListeners();
+      try {
+        if (item.id == snapshot.id && item.type == snapshot.type) {
+          item.readDurationMs += durationMs;
+        }
+        if (isInitialized && generation == _generation) {
+          _cachePersistedHistory(snapshot.id, snapshot.type.value);
+          notifyListeners();
+        }
+      } catch (error, stack) {
+        final original = committedFailure;
+        throw PersistenceFailure(
+          commitState: PersistenceCommitState.committed,
+          cause: original?.cause ?? error,
+          stackTrace: original?.stackTrace ?? stack,
+          cleanupFailures: original == null
+              ? const []
+              : [
+                  ...original.cleanupFailures,
+                  (error: error, stackTrace: stack),
+                ],
+        );
+      }
+      if (committedFailure != null) {
+        Error.throwWithStackTrace(
+          committedFailure,
+          committedFailure.stackTrace,
+        );
       }
     });
   }
@@ -316,8 +467,11 @@ class HistoryManager with ChangeNotifier {
   void close() {
     ++_generation;
     isInitialized = false;
+    _initialization = null;
     _historyCache.clear();
-    _db.dispose();
+    final database = _database;
+    _database = null;
+    database?.dispose();
   }
 
   void notifyChanges() {

@@ -50,6 +50,23 @@ void main() {
     });
   }
 
+  scheduleTest(
+    'exit preparation freezes timers and release restores overdue work',
+    (clock, calls) async {
+      final sync = calls.controller..start();
+      final release = await sync.prepareForExit();
+      await clock.elapse(const Duration(hours: 2));
+      expect(calls.uploads + calls.downloads, 0);
+      sync.onDataChanged();
+      await clock.elapse();
+      expect(calls.uploads + calls.downloads, 0);
+      release();
+      await clock.elapse();
+      expect(calls.uploads, 1);
+      expect(sync.hasPendingChanges, isFalse);
+    },
+  );
+
   scheduleTest('construction is inert and repeated start subscribes once', (
     clock,
     calls,
@@ -398,6 +415,17 @@ void main() {
 class _ScheduleClock {
   DateTime current = DateTime(2026, 9, 27);
   final timers = <_ScheduledTimer>[];
+  final pendingSaves = <Future<void>>{};
+
+  Future<void> persistImplicit() {
+    late Future<void> saving;
+    saving = appdata.writeImplicitData().whenComplete(
+      () => pendingSaves.remove(saving),
+    );
+    pendingSaves.add(saving);
+    return saving;
+  }
+
   DateTime now() => current;
 
   Timer createTimer(Duration duration, void Function() callback) {
@@ -411,7 +439,14 @@ class _ScheduleClock {
     for (final timer in timers.toList()) {
       if (timer.isActive && !timer.due.isAfter(current)) timer.fire();
     }
-    await pumpEventQueue();
+    // Advancing the scheduling clock is separate from real filesystem I/O.
+    // Drain saves spawned by task completion, without waiting on a controlled
+    // transfer that a scenario intentionally keeps in flight.
+    while (true) {
+      await pumpEventQueue();
+      if (pendingSaves.isEmpty) break;
+      await Future.wait(List<Future<void>>.of(pendingSaves));
+    }
   }
 }
 
@@ -437,7 +472,7 @@ class _Calls extends SyncTestFixture {
     : super(
         preferences: createAppSyncPreferences(appdata),
         saveSettings: () => appdata.saveData(false),
-        persistImplicit: appdata.writeImplicitData,
+        persistImplicit: clock.persistImplicit,
         observeChanges: (changed) {
           appdata.registerSyncDataRequestHandler(changed);
           return () => appdata.registerSyncDataRequestHandler(null);

@@ -31,3 +31,13 @@ add_custom_command(TARGET windows_startup_tests POST_BUILD
 enable_testing()
 add_test(NAME windows_startup COMMAND windows_startup_tests)
 set_tests_properties(windows_startup PROPERTIES TIMEOUT 30)
+
+add_executable(windows_heartbeat_tests
+  heartbeat_test.cpp
+  "${RUNNER_DIR}/heartbeat_monitor.cpp"
+)
+target_compile_features(windows_heartbeat_tests PRIVATE cxx_std_17)
+target_compile_options(windows_heartbeat_tests PRIVATE /W4 /WX /EHsc)
+target_include_directories(windows_heartbeat_tests PRIVATE "${RUNNER_DIR}")
+add_test(NAME windows_heartbeat COMMAND windows_heartbeat_tests)
+set_tests_properties(windows_heartbeat PROPERTIES TIMEOUT 15)

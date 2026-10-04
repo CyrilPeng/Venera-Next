@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_qjs/flutter_qjs.dart' show JSInvokable;
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/extensions.dart';
@@ -33,9 +34,16 @@ class ComicSourceManager with ChangeNotifier, Init {
   final List<ComicSource> _sources = [];
 
   static ComicSourceManager? _instance;
+  bool _closing = false;
+  Future<void>? _closeFuture;
+  JsEngine? _sourceEngine;
+  final _pendingInitializations = <Future<void>>{};
+  final _pendingDataClosures = <Future<void>>{};
+  final _dataWriteFailures =
+      <({String resource, Object error, StackTrace stack})>[];
 
   ComicSourceManager._create() {
-    SourceRepositories.instance.addListener(() => updateAvailableUpdates({}));
+    SourceRepositories.instance.addListener(_repositoriesChanged);
     configureComicSourceRegistry(
       all: all,
       find: find,
@@ -48,6 +56,132 @@ class ComicSourceManager with ChangeNotifier, Init {
   }
 
   factory ComicSourceManager() => _instance ??= ComicSourceManager._create();
+
+  void _repositoriesChanged() => updateAvailableUpdates({});
+
+  void _checkAccepting() {
+    if (_closing) throw StateError('Comic source manager is closing');
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_closing) super.notifyListeners();
+  }
+
+  /// Release the notifier immediately; retain native callbacks until accepted
+  /// mutations and actual init Promises (including timed-out waits) settle.
+  @override
+  void dispose() {
+    if (_closing) return;
+    _closing = true;
+    SourceRepositories.instance.removeListener(_repositoriesChanged);
+    super.dispose();
+    _closeFuture = _closeResources();
+    unawaited(
+      _closeFuture!.catchError((Object error, StackTrace stack) {
+        Log.error('ComicSource close', error, stack);
+      }),
+    );
+  }
+
+  Future<void> closeAndWait() {
+    dispose();
+    return _closeFuture!;
+  }
+
+  @override
+  Future<void> init() {
+    if (_closing) {
+      return Future.error(StateError('Comic source manager is closing'));
+    }
+    return super.init();
+  }
+
+  @override
+  Future<void> ensureInit() {
+    if (_closing) {
+      return Future.error(StateError('Comic source manager is closing'));
+    }
+    return super.ensureInit();
+  }
+
+  Future<void> _closeResources() async {
+    await _mutationTail;
+    while (_pendingInitializations.isNotEmpty) {
+      await Future.wait(_pendingInitializations.toList());
+    }
+    for (final source in _sources) {
+      _retireSourceDataWrites(source);
+    }
+    while (_pendingDataClosures.isNotEmpty) {
+      await Future.wait(_pendingDataClosures.toList());
+    }
+    final failures = List.of(_dataWriteFailures);
+    _dataWriteFailures.clear();
+    for (final source in _sources) {
+      try {
+        if (source.filePath.isNotEmpty) {
+          _sourceEngine?.runCode(
+            'delete ComicSource.sources[${jsonEncode(source.key)}];',
+          );
+        }
+      } catch (error, stack) {
+        failures.add((
+          resource: '${source.key} registry',
+          error: error,
+          stack: stack,
+        ));
+      }
+      try {
+        source.disposeRuntimeCallbacks();
+      } catch (error, stack) {
+        failures.add((
+          resource: '${source.key} callbacks',
+          error: error,
+          stack: stack,
+        ));
+      }
+    }
+    _sources.clear();
+    _availableUpdates.clear();
+    _sourceEngine = null;
+    if (identical(_instance, this)) {
+      _instance = null;
+      configureComicSourceRegistry(
+        all: () => [],
+        find: (_) => null,
+        fromIntKey: (_) => null,
+        isEmpty: () => true,
+      );
+      configureCategoryDataResolver(null);
+      configureFavoriteDataResolver(null);
+      configureComicSourceImageDownloader(
+        thumbnailLoadingConfig: (_, _) => {},
+        thumbnailCover: (_, _) async => null,
+        comicImageLoadingConfig: (_, _, _, _) async => {},
+      );
+    }
+    if (failures.isNotEmpty) throw JsResourceReleaseFailure(failures);
+  }
+
+  // Replaced and removed sources can still own accepted file writes even after
+  // leaving the registry. Keep their completion and failures in this host.
+  void _retireSourceDataWrites(ComicSource source) {
+    late final Future<void> settled;
+    settled = Future<void>.sync(source.closeDataWrites)
+        .then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stack) {
+            _dataWriteFailures.add((
+              resource: '${source.key} data',
+              error: error,
+              stack: stack,
+            ));
+          },
+        )
+        .whenComplete(() => _pendingDataClosures.remove(settled));
+    _pendingDataClosures.add(settled);
+  }
 
   List<ComicSource> all() => List.from(_sources);
 
@@ -72,7 +206,14 @@ class ComicSourceManager with ChangeNotifier, Init {
 
   @override
   @protected
-  Future<void> doInit() async {
+  // Initial loading mutates the same Dart/JS registries as reload and install.
+  // Keep it inside their queue so no later mutation can replace staged state.
+  Future<void> doInit() => _mutate(_loadSources);
+
+  Future<void> _loadSources({
+    Set<String> existingFiles = const {},
+    Set<ComicSource> preservedSources = const {},
+  }) async {
     await SourceRepositories.instance.migrate();
     configureComicTypeSourceKeyResolver();
     configureComicSourceImageDownloader(
@@ -83,31 +224,63 @@ class ComicSourceManager with ChangeNotifier, Init {
     configureComicSourceJsDataBridge();
     await JsEngine().ensureInit();
     final loaded = <ComicSource>[];
-    final path = "${App.dataPath}/comic_source";
-    if (!(await Directory(path).exists())) {
-      await Directory(path).create();
-    } else {
-      await for (var entity in Directory(path).list()) {
-        if (entity is File && entity.path.endsWith(".js")) {
-          try {
-            var source = await ComicSourceParser().parse(
-              await entity.readAsString(),
-              entity.absolute.path,
-            );
-            _sources.add(source);
-            loaded.add(source);
-          } catch (e, s) {
-            Log.error("ComicSource", "$e\n$s");
+    final parsers = <ComicSourceParser>[];
+    final addedRuntime = <ComicSource>[];
+    try {
+      final path = "${App.dataPath}/comic_source";
+      if (!(await Directory(path).exists())) {
+        await Directory(path).create();
+      } else {
+        await for (var entity in Directory(path).list()) {
+          if (entity is File && entity.path.endsWith(".js")) {
+            try {
+              final parser = ComicSourceParser();
+              final source = await parser.parse(
+                await entity.readAsString(),
+                entity.absolute.path,
+                retainRollback: true,
+              );
+              parsers.add(parser);
+              _sources.add(source);
+              loaded.add(source);
+            } catch (e, s) {
+              if (existingFiles.contains(entity.absolute.path)) rethrow;
+              Log.error("ComicSource", "$e\n$s");
+            }
           }
         }
       }
-    }
-    final runtimeSources =
-        _runtimeComicSourcesProvider?.call() ?? const <ComicSource>[];
-    for (final source in runtimeSources) {
-      if (find(source.key) == null) {
-        _sources.add(source);
+      final runtimeSources =
+          _runtimeComicSourcesProvider?.call() ?? const <ComicSource>[];
+      for (final source in runtimeSources) {
+        if (find(source.key) == null) {
+          _sources.add(source);
+          addedRuntime.add(source);
+        }
       }
+    } catch (_) {
+      // Only remove this attempt's registrations. Parser rollback restores the
+      // previous JS slot and frees the callbacks belonging to each loaded file.
+      final staged = Set<ComicSource>.identity()
+        ..addAll(loaded)
+        ..addAll(addedRuntime);
+      _sources.removeWhere(staged.contains);
+      for (final parser in parsers.reversed) {
+        try {
+          parser.rollback();
+        } catch (error, stack) {
+          Log.error('ComicSource rollback', error, stack);
+        }
+      }
+      for (final source in addedRuntime) {
+        if (!preservedSources.contains(source)) {
+          source.disposeRuntimeCallbacks();
+        }
+      }
+      rethrow;
+    }
+    for (final parser in parsers) {
+      parser.commit();
     }
     // Register every source before invoking init. Network work in one source
     // must not hold up startup or prevent the other sources from initializing.
@@ -123,7 +296,13 @@ class ComicSourceManager with ChangeNotifier, Init {
   Future<void> _mutationTail = Future.value();
 
   Future<T> _mutate<T>(Future<T> Function() action) {
-    final result = _mutationTail.then((_) => action());
+    if (_closing) {
+      return Future.error(StateError('Comic source manager is closing'));
+    }
+    final result = _mutationTail.then((_) {
+      _sourceEngine = JsEngine();
+      return action();
+    });
     _mutationTail = result.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
@@ -134,12 +313,41 @@ class ComicSourceManager with ChangeNotifier, Init {
   Future<void> reload() => _mutate(_reloadSources);
 
   Future<void> _reloadSources() async {
-    for (final source in _sources) {
-      source.disposeRuntimeCallbacks();
-    }
+    final previous = List<ComicSource>.of(_sources);
+    final preserved = Set<ComicSource>.identity()..addAll(previous);
+    final engine = JsEngine();
+    final restore =
+        engine.runCode('''(() => {
+      const previous = ComicSource.sources;
+      ComicSource.sources = {};
+      return () => { ComicSource.sources = previous; };
+    })()''')
+            as JSInvokable;
     _sources.clear();
-    JsEngine().runCode('ComicSource.sources = {};');
-    await doInit();
+    try {
+      await _loadSources(
+        existingFiles: previous
+            .where((source) => source.filePath.isNotEmpty)
+            .map((source) => File(source.filePath).absolute.path)
+            .toSet(),
+        preservedSources: preserved,
+      );
+    } catch (_) {
+      _sources
+        ..clear()
+        ..addAll(previous);
+      restore.invoke([]);
+      rethrow;
+    } finally {
+      restore.free();
+    }
+    final current = Set<ComicSource>.identity()..addAll(_sources);
+    for (final source in previous) {
+      if (!current.contains(source)) {
+        _retireSourceDataWrites(source);
+        source.disposeRuntimeCallbacks();
+      }
+    }
     notifyListeners();
   }
 
@@ -161,13 +369,19 @@ class ComicSourceManager with ChangeNotifier, Init {
   });
 
   Future<void> _initializeSource(ComicSource source) async {
-    await Future.sync(
+    final running = Future<void>.sync(
       () => JsEngine().runCode('''(() => {
         const result = ComicSource.sources[${jsonEncode(source.key)}]?.init?.();
         return result && typeof result.then === 'function'
           ? result.then(() => undefined) : undefined;
       })()''', source.filePath),
-    ).timeout(const Duration(seconds: 15));
+    );
+    late final Future<void> settled;
+    settled = running
+        .then<void>((_) {}, onError: (Object _, StackTrace _) {})
+        .whenComplete(() => _pendingInitializations.remove(settled));
+    _pendingInitializations.add(settled);
+    await running.timeout(const Duration(seconds: 15));
   }
 
   Map<String, dynamic> _snapshotPages() => {
@@ -292,6 +506,7 @@ class ComicSourceManager with ChangeNotifier, Init {
       }
       await replacement.commitDataWrites();
       parser.commit();
+      _retireSourceDataWrites(source);
       source.disposeRuntimeCallbacks();
       clearSourceUpdate(source.key);
       notifyListeners();
@@ -316,7 +531,7 @@ class ComicSourceManager with ChangeNotifier, Init {
 
   Future<void> uninstallScript(ComicSource source) => _mutate(() async {
     await File(source.filePath).deleteIfExists();
-    remove(source.key);
+    _remove(source.key);
     JsEngine().runCode(
       'delete ComicSource.sources[${jsonEncode(source.key)}];',
     );
@@ -324,12 +539,20 @@ class ComicSourceManager with ChangeNotifier, Init {
   });
 
   void add(ComicSource source) {
+    _checkAccepting();
+    _sourceEngine = JsEngine();
     _sources.add(source);
     notifyListeners();
   }
 
   void remove(String key) {
+    _checkAccepting();
+    _remove(key);
+  }
+
+  void _remove(String key) {
     for (final source in _sources.where((source) => source.key == key)) {
+      _retireSourceDataWrites(source);
       source.disposeRuntimeCallbacks();
     }
     _sources.removeWhere((element) => element.key == key);
@@ -369,7 +592,7 @@ class ComicSourceManager with ChangeNotifier, Init {
 
   bool get isEmpty => _sources.isEmpty;
 
-  Map<String, dynamic> _getThumbnailLoadingConfig(
+  FutureOr<Map<String, dynamic>> _getThumbnailLoadingConfig(
     String sourceKey,
     String url,
   ) {
@@ -401,6 +624,7 @@ class ComicSourceManager with ChangeNotifier, Init {
   final _availableUpdates = <String, String>{};
 
   void updateAvailableUpdates(Map<String, String> updates) {
+    _checkAccepting();
     _availableUpdates.clear();
     _availableUpdates.addAll(updates);
     notifyListeners();
@@ -409,6 +633,7 @@ class ComicSourceManager with ChangeNotifier, Init {
   Map<String, String> get availableUpdates => Map.from(_availableUpdates);
 
   void clearSourceUpdate(String key) {
+    _checkAccepting();
     _availableUpdates.remove(key);
     notifyListeners();
   }

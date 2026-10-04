@@ -14,6 +14,9 @@ import 'package:venera_next/foundation/res.dart';
 class _Source extends Fake implements ComicSource {
   _Source(this.account);
   @override
+  Future<void> closeDataWrites() async {}
+
+  @override
   final AccountConfig account;
   @override
   String get key => 'login_test';

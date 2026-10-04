@@ -282,7 +282,7 @@ class ComicSourceParser {
     return source;
   }
 
-  _checkKeyValidation() {
+  void _checkKeyValidation() {
     // 仅允许数字和字母以及下划线
     if (!_key!.contains(RegExp(r"^[a-zA-Z_][a-zA-Z0-9_]*$"))) {
       throw ComicSourceParseException("key $_key is invalid");
