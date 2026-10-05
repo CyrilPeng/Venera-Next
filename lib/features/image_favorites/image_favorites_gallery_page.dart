@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/image.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/image_favorites/image_favorites_photo_view.dart';
@@ -34,18 +35,34 @@ class _ImageFavoritesGalleryPageState extends State<ImageFavoritesGalleryPage> {
     ImageFavoriteManager().addListener(_onDataChanged);
   }
 
-  void _onDataChanged() {
-    if (!mounted) return;
-    final updated = ImageFavoriteManager().find(comic.id, comic.sourceKey);
-    if (updated == null) {
-      Navigator.of(context).pop();
-      return;
+  int _refreshGeneration = 0;
+  bool _deleting = false;
+  bool _unavailable = false;
+
+  Future<void> _onDataChanged() async {
+    final generation = ++_refreshGeneration;
+    try {
+      final updated = await ImageFavoriteManager().find(
+        comic.id,
+        comic.sourceKey,
+      );
+      if (!mounted || generation != _refreshGeneration) return;
+      if (updated == null && ModalRoute.of(context)?.isCurrent == true) {
+        Navigator.of(context).pop();
+        return;
+      }
+      setState(() {
+        _unavailable = updated == null;
+        if (updated != null) comic = updated;
+        selectedImages.clear();
+        multiSelectMode = false;
+      });
+    } catch (error, stack) {
+      Log.error('Image Favorites', error, stack);
+      if (mounted && generation == _refreshGeneration) {
+        context.showMessage(message: 'Error'.tl);
+      }
     }
-    setState(() {
-      comic = updated;
-      selectedImages.clear();
-      multiSelectMode = false;
-    });
   }
 
   bool multiSelectMode = false;
@@ -79,9 +96,17 @@ class _ImageFavoritesGalleryPageState extends State<ImageFavoritesGalleryPage> {
     });
   }
 
-  void deleteSelected() {
-    if (selectedImages.isEmpty) return;
-    ImageFavoriteManager().deleteImageFavorite(selectedImages.keys);
+  Future<void> deleteSelected() async {
+    if (_deleting || selectedImages.isEmpty) return;
+    setState(() => _deleting = true);
+    try {
+      await ImageFavoriteManager().deleteImageFavorite(selectedImages.keys);
+    } catch (error, stack) {
+      Log.error('Image Favorites', error, stack);
+      if (mounted) context.showMessage(message: 'Error'.tl);
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
   }
 
   void goPhotoView(ImageFavorite image) {
@@ -113,7 +138,7 @@ class _ImageFavoritesGalleryPageState extends State<ImageFavoritesGalleryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final imgList = images;
+    final imgList = _unavailable ? <ImageFavorite>[] : images;
 
     Widget buildSliverAppBar() {
       if (multiSelectMode) {
@@ -138,9 +163,14 @@ class _ImageFavoritesGalleryPageState extends State<ImageFavoritesGalleryPage> {
               onPressed: deselectAll,
             ),
             IconButton(
-              icon: const Icon(Icons.delete_outline),
+              icon: _deleting
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.delete_outline),
               tooltip: "Delete".tl,
-              onPressed: deleteSelected,
+              onPressed: _deleting ? null : deleteSelected,
             ),
           ],
         );

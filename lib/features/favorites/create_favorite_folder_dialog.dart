@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -13,9 +14,9 @@ class CreateFavoriteFolderDialog extends StatefulWidget {
     required this.importJson,
   });
   final String? Function(String) validate;
-  final void Function(String) create;
+  final FutureOr<void> Function(String) create;
   final Future<String?> Function() selectImport;
-  final void Function(String) importJson;
+  final FutureOr<void> Function(String) importJson;
 
   @override
   State<CreateFavoriteFolderDialog> createState() =>
@@ -36,6 +37,7 @@ class _CreateFavoriteFolderDialogState
 
   Future<void> import() async {
     if (importing) return;
+    final route = ModalRoute.of(context);
     setState(() {
       importing = true;
       error = null;
@@ -43,8 +45,8 @@ class _CreateFavoriteFolderDialogState
     try {
       final json = await widget.selectImport();
       if (!mounted || json == null) return;
-      widget.importJson(json);
-      if (mounted) context.pop();
+      await widget.importJson(json);
+      if (mounted && route?.isCurrent != false) context.pop();
     } catch (_) {
       if (mounted) setState(() => error = "Failed to import".tl);
     } finally {
@@ -52,18 +54,22 @@ class _CreateFavoriteFolderDialogState
     }
   }
 
-  void create() {
+  Future<void> create() async {
     if (importing) return;
+    final route = ModalRoute.of(context);
     try {
       final failure = widget.validate(controller.text);
       if (failure != null) {
         setState(() => error = failure);
         return;
       }
-      widget.create(controller.text);
-      context.pop();
+      setState(() => importing = true);
+      await widget.create(controller.text);
+      if (mounted && route?.isCurrent != false) context.pop();
     } catch (failure) {
-      setState(() => error = failure.toString());
+      if (mounted) setState(() => error = failure.toString());
+    } finally {
+      if (mounted) setState(() => importing = false);
     }
   }
 

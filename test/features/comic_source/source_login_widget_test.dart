@@ -6,10 +6,12 @@ import 'package:venera_next/features/comic_source/comic_source_manager.dart';
 import 'package:venera_next/features/comic_source/comic_source_page.dart';
 import 'package:venera_next/features/comic_source/source.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
+import 'package:venera_next/network/cookie_jar.dart';
 
 class _Source extends Fake implements ComicSource {
   _Source(this.account);
@@ -79,6 +81,52 @@ void main() {
         await tester.enterText(fields.at(i), 'value$i');
       }
     }
+  }
+
+  for (final unmount in [false, true]) {
+    testWidgets(
+      'webview capture reports unavailable cookies; unmount=$unmount',
+      (tester) async {
+        final previous = SingleInstanceCookieJar.instance;
+        SingleInstanceCookieJar.instance = null;
+        addTearDown(() => SingleInstanceCookieJar.instance = previous);
+        final source = _Source(
+          AccountConfig(
+            null,
+            'https://example.test/',
+            null,
+            () {},
+            null,
+            null,
+            null,
+            null,
+          ),
+        );
+        await show(tester, source);
+        final release = Completer<void>();
+        final replacement = AppDataOperations.instance.run(
+          () => release.future,
+        );
+        await tester.tap(find.text('Login with webview'));
+        await tester.pump();
+        expect(messages, isEmpty);
+        if (unmount) await tester.pumpWidget(const SizedBox());
+        release.complete();
+        await tester.pumpAndSettle();
+        await replacement;
+        if (unmount) {
+          expect(messages, isEmpty);
+        } else {
+          expect(
+            messages.single,
+            contains('Cookie database is not initialized'),
+          );
+          expect(find.text('Login with webview'), findsOneWidget);
+        }
+        expect(source.saves, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   for (final cookies in [false, true]) {

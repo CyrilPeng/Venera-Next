@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/network/request_scope.dart';
 import 'favorite_models.dart';
@@ -19,8 +21,12 @@ class NetworkFavoriteImportDialog extends StatefulWidget {
     void Function(FavoriteImportProgress),
   )
   collect;
-  final NetworkFavoriteImportCommit Function(List<FavoriteItem>) commit;
-  final void Function(NetworkFavoriteImportCommit) publish;
+  final FutureOr<NetworkFavoriteImportCommit> Function(
+    List<FavoriteItem>,
+    RequestScope,
+  )
+  commit;
+  final FutureOr<void> Function(NetworkFavoriteImportCommit) publish;
   @override
   State<NetworkFavoriteImportDialog> createState() =>
       _NetworkFavoriteImportDialogState();
@@ -33,6 +39,7 @@ class _NetworkFavoriteImportDialogState
   String? error;
   NetworkFavoriteImportCommit? committed;
   String? publicationError;
+  bool publishing = false;
   @override
   void initState() {
     super.initState();
@@ -46,10 +53,10 @@ class _NetworkFavoriteImportDialogState
       });
       scope.check();
       if (!mounted) return;
-      final result = widget.commit(items);
+      final result = await widget.commit(items, scope);
       if (mounted) setState(() => committed = result);
       // SQL has committed. Publication errors cannot change this outcome.
-      publish(result);
+      await publish(result);
     } catch (failure) {
       if (mounted && !scope.isCancelled) {
         setState(() => error = failure.toString());
@@ -57,13 +64,18 @@ class _NetworkFavoriteImportDialogState
     }
   }
 
-  void publish(NetworkFavoriteImportCommit result) {
+  Future<void> publish(NetworkFavoriteImportCommit result) async {
+    if (publishing) return;
+    publishing = true;
+    if (mounted) setState(() {});
     String? failure;
     try {
-      widget.publish(result);
-    } catch (error) {
+      await widget.publish(result);
+    } catch (error, stack) {
+      Log.error('Favorite import publication', error, stack);
       failure = error.toString();
     }
+    publishing = false;
     if (mounted && !scope.isCancelled) {
       setState(() => publicationError = failure);
     }
@@ -112,6 +124,7 @@ class _NetworkFavoriteImportDialogState
       actions: [
         if (publicationError != null && committed != null)
           Button.text(
+            isLoading: publishing,
             onPressed: () => publish(committed!),
             child: Text('Refresh'.tl),
           ),

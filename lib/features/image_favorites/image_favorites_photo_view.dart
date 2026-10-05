@@ -8,7 +8,6 @@ import 'package:photo_view/photo_view_gallery.dart';
 import 'package:venera_next/components/effects.dart';
 import 'package:venera_next/components/image_save_binding.dart';
 import 'package:venera_next/components/menu.dart';
-import 'package:venera_next/components/message.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -75,17 +74,29 @@ class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView> {
     super.initState();
   }
 
-  void onPop() {
-    List<ImageFavorite> tempList = cancelImageFavorites.entries
-        .where((e) => e.value == true)
-        .map((e) => e.key)
+  bool _submittedRemovals = false;
+
+  Future<void> onPop() async {
+    if (_submittedRemovals) return;
+    _submittedRemovals = true;
+    final images = cancelImageFavorites.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
         .toList();
-    if (tempList.isNotEmpty) {
-      ImageFavoriteManager().deleteImageFavorite(tempList);
-      showToast(
-        message: "Delete @a images".tlParams({'a': tempList.length}),
-        context: context,
-      );
+    if (images.isEmpty) return;
+    final messages = ScaffoldMessenger.of(context);
+    final success = 'Delete @a images'.tlParams({'a': images.length});
+    final failure = 'Error'.tl;
+    try {
+      await ImageFavoriteManager().deleteImageFavorite(images);
+      if (messages.mounted) {
+        messages.showSnackBar(SnackBar(content: Text(success)));
+      }
+    } catch (error, stack) {
+      Log.error('Image Favorites', error, stack);
+      if (messages.mounted) {
+        messages.showSnackBar(SnackBar(content: Text(failure)));
+      }
     }
   }
 
@@ -115,7 +126,7 @@ class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView> {
       child: PopScope(
         onPopInvokedWithResult: (bool didPop, Object? result) async {
           if (didPop) {
-            onPop();
+            await onPop();
           }
         },
         child: Listener(

@@ -1,5 +1,6 @@
 import 'favorite_models.dart';
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +14,7 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/components/select.dart';
+import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
@@ -24,11 +26,12 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/opencc.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -82,6 +85,8 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   LocalFavoritesManager get manager => LocalFavoritesManager();
 
   bool isLoading = false;
+  int _queryGeneration = 0;
+  Object? _loadError;
 
   late String readFilterSelect;
 
@@ -105,43 +110,57 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   void updateComics() {
-    if (isLoading) return;
-    if (isAllFolder) {
-      var totalComics = manager.totalComics;
-      if (totalComics < _asyncDataFetchLimit) {
-        comics = manager.getAllComics();
+    if (!mounted) return;
+    final generation = ++_queryGeneration;
+    final folder = widget.folder;
+    _loadError = null;
+    isLoading = false;
+    try {
+      final count = isAllFolder
+          ? manager.totalComics
+          : manager.folderComics(folder);
+      if (!isAllFolder && !manager.existsFolder(folder)) {
+        comics = [];
+      } else if (count < _asyncDataFetchLimit) {
+        comics = isAllFolder
+            ? manager.getAllComics()
+            : manager.getFolderComics(folder);
       } else {
         isLoading = true;
-        manager
-            .getAllComicsAsync()
-            .minTime(const Duration(milliseconds: 200))
-            .then((value) {
-              if (mounted) {
-                setState(() {
-                  isLoading = false;
-                  comics = value;
-                });
+        final reading = isAllFolder
+            ? manager.getAllComicsAsync()
+            : manager.getFolderComicsAsync(folder);
+        unawaited(
+          reading.then<void>(
+            (value) {
+              if (!mounted ||
+                  generation != _queryGeneration ||
+                  widget.folder != folder) {
+                return;
               }
-            });
-      }
-    } else {
-      var folderComics = manager.folderComics(widget.folder);
-      if (folderComics < _asyncDataFetchLimit) {
-        comics = manager.getFolderComics(widget.folder);
-      } else {
-        isLoading = true;
-        manager
-            .getFolderComicsAsync(widget.folder)
-            .minTime(const Duration(milliseconds: 200))
-            .then((value) {
-              if (mounted) {
-                setState(() {
-                  isLoading = false;
-                  comics = value;
-                });
+              setState(() {
+                isLoading = false;
+                comics = value;
+              });
+            },
+            onError: (Object error, StackTrace stack) {
+              Log.error('Favorites query', error, stack);
+              if (!mounted ||
+                  generation != _queryGeneration ||
+                  widget.folder != folder) {
+                return;
               }
-            });
+              setState(() {
+                isLoading = false;
+                _loadError = error;
+              });
+            },
+          ),
+        );
       }
+    } catch (error, stack) {
+      Log.error('Favorites query', error, stack);
+      _loadError = error;
     }
     setState(() {});
   }
@@ -435,21 +454,32 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       icon: Icons.edit_outlined,
                       text: "Rename".tl,
                       onClick: () {
+                        final target = widget;
+                        final generation = manager.connectionGeneration;
                         showInputDialog(
                           context: App.rootContext,
                           title: "Rename".tl,
                           hintText: "New Name".tl,
-                          onConfirm: (value) {
+                          onConfirm: (value) async {
                             var err = validateFolderName(value.toString());
                             if (err != null) {
                               return err;
                             }
-                            LocalFavoritesManager().rename(
-                              widget.folder,
-                              value.toString(),
-                            );
-                            widget.updateFolderList();
-                            widget.onFolderSelected(false, value.toString());
+                            await AppDataOperations.instance.access(() async {
+                              if (manager.connectionGeneration != generation) {
+                                throw StateError(
+                                  'Favorites database changed. Try again.',
+                                );
+                              }
+                              await manager.rename(
+                                target.folder,
+                                value.toString(),
+                              );
+                            });
+                            if (mounted && widget.folder == target.folder) {
+                              target.updateFolderList();
+                              target.onFolderSelected(false, value.toString());
+                            }
                             return null;
                           },
                         );
@@ -464,7 +494,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                               return _ReorderComicsPage(widget.folder, (
                                 comics,
                               ) {
-                                this.comics = comics;
+                                if (mounted) this.comics = comics;
                               });
                             })
                             .then((value) {
@@ -491,8 +521,12 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       icon: Icons.update,
                       text: "Update Comics Info".tl,
                       onClick: () {
-                        updateComicsInfo(widget.folder).then((newComics) {
-                          if (mounted) {
+                        final folder = widget.folder;
+                        final generation = manager.connectionGeneration;
+                        updateComicsInfo(folder).then((newComics) {
+                          if (mounted &&
+                              widget.folder == folder &&
+                              manager.connectionGeneration == generation) {
                             setState(() {
                               comics = newComics;
                             });
@@ -505,17 +539,28 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       text: "Delete Folder".tl,
                       color: context.colorScheme.error,
                       onClick: () {
-                        showConfirmDialog(
+                        final target = widget;
+                        final generation = manager.connectionGeneration;
+                        showAsyncConfirmDialog(
                           context: App.rootContext,
                           title: "Delete".tl,
                           content: "Delete folder '@f' ?".tlParams({
                             "f": widget.folder,
                           }),
                           btnColor: context.colorScheme.error,
-                          onConfirm: () {
-                            widget.onFolderSelected(false, null);
-                            LocalFavoritesManager().deleteFolder(widget.folder);
-                            widget.updateFolderList();
+                          onConfirm: () async {
+                            await AppDataOperations.instance.access(() async {
+                              if (manager.connectionGeneration != generation) {
+                                throw StateError(
+                                  'Favorites database changed. Try again.',
+                                );
+                              }
+                              await manager.deleteFolder(target.folder);
+                            });
+                            if (mounted && widget.folder == target.folder) {
+                              target.updateFolderList();
+                              target.onFolderSelected(false, null);
+                            }
                           },
                         );
                       },
@@ -580,16 +625,20 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       text: "Delete Comic".tl,
                       color: context.colorScheme.error,
                       onClick: () {
-                        showConfirmDialog(
+                        final folder = widget.folder;
+                        final generation = manager.connectionGeneration;
+                        final items = selectedComics.keys
+                            .cast<FavoriteItem>()
+                            .toList();
+                        showAsyncConfirmDialog(
                           context: context,
                           title: "Delete".tl,
                           content: "Delete @c comics?".tlParams({
                             "c": selectedComics.length,
                           }),
                           btnColor: context.colorScheme.error,
-                          onConfirm: () {
-                            _deleteComicWithId();
-                          },
+                          onConfirm: () =>
+                              _deleteComicWithId(folder, generation, items),
                         );
                       },
                     ),
@@ -669,7 +718,16 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
               },
             ).paddingBottom(8).paddingRight(8),
           ),
-        if (isLoading)
+        if (_loadError != null)
+          SliverToBoxAdapter(
+            child: Column(
+              children: [
+                Text(_loadError.toString()),
+                TextButton(onPressed: updateComics, child: Text('Retry'.tl)),
+              ],
+            ),
+          )
+        else if (isLoading)
           SliverToBoxAdapter(
             child: SizedBox(
               height: 200,
@@ -687,8 +745,8 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                   MenuEntry(
                     icon: Icons.delete,
                     text: "Delete".tl,
-                    onClick: () {
-                      LocalFavoritesManager().deleteComicWithId(
+                    onClick: () async {
+                      await LocalFavoritesManager().deleteComicWithId(
                         widget.folder,
                         c.id,
                         (c as FavoriteItem).type,
@@ -827,6 +885,12 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   void favoriteOption(String option) {
+    final sourceFolder = widget.folder;
+    final generation = manager.connectionGeneration;
+    final items = selectedComics.keys.cast<FavoriteItem>().toList();
+    final selectedLocalFolders = <String>{};
+    var saving = false;
+    String? error;
     var targetFolders = LocalFavoritesManager().folderNames
         .where((folder) => folder != widget.folder)
         .toList();
@@ -857,6 +921,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                                 child: TextButton(
                                   onPressed: () {
                                     newFolder().then((v) {
+                                      if (!context.mounted) return;
                                       setState(() {
                                         targetFolders = LocalFavoritesManager()
                                             .folderNames
@@ -899,7 +964,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                               ],
                             ),
                             value: selectedLocalFolders.contains(folder),
-                            onChanged: disabled
+                            onChanged: disabled || saving
                                 ? null
                                 : (v) {
                                     setState(() {
@@ -916,40 +981,72 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                     ),
                     Center(
                       child: FilledButton(
-                        onPressed: () {
-                          if (selectedLocalFolders.isEmpty) {
-                            return;
-                          }
-                          if (option == 'move') {
-                            var comics = selectedComics.keys
-                                .map((e) => e as FavoriteItem)
-                                .toList();
-                            for (var f in selectedLocalFolders) {
-                              LocalFavoritesManager().batchMoveFavorites(
-                                widget.folder,
-                                f,
-                                comics,
-                              );
-                            }
-                          } else {
-                            var comics = selectedComics.keys
-                                .map((e) => e as FavoriteItem)
-                                .toList();
-                            for (var f in selectedLocalFolders) {
-                              LocalFavoritesManager().batchCopyFavorites(
-                                widget.folder,
-                                f,
-                                comics,
-                              );
-                            }
-                          }
-                          App.rootContext.pop();
-                          updateComics();
-                          _cancel();
-                        },
-                        child: Text(option == 'move' ? "Move".tl : "Add".tl),
+                        onPressed: saving
+                            ? null
+                            : () async {
+                                if (selectedLocalFolders.isEmpty) {
+                                  return;
+                                }
+                                final targets = selectedLocalFolders.toList();
+                                final route = ModalRoute.of(context);
+                                setState(() {
+                                  saving = true;
+                                  error = null;
+                                });
+                                try {
+                                  await AppDataOperations.instance.access(
+                                    () async {
+                                      if (!context.mounted ||
+                                          route?.isCurrent == false) {
+                                        return;
+                                      }
+                                      if (manager.connectionGeneration !=
+                                          generation) {
+                                        throw StateError(
+                                          'Favorites database changed. Reopen this dialog.',
+                                        );
+                                      }
+                                      await manager.transferFavorites(
+                                        sourceFolder,
+                                        targets,
+                                        items,
+                                        move: option == 'move',
+                                      );
+                                    },
+                                  );
+                                  if (context.mounted &&
+                                      route?.isCurrent != false) {
+                                    context.pop();
+                                  }
+                                  if (mounted &&
+                                      widget.folder == sourceFolder) {
+                                    updateComics();
+                                    _cancel();
+                                  }
+                                } catch (failure, stack) {
+                                  Log.error(
+                                    'Transfer favorites',
+                                    failure,
+                                    stack,
+                                  );
+                                  error = failure.toString();
+                                } finally {
+                                  if (context.mounted) {
+                                    setState(() => saving = false);
+                                  }
+                                }
+                              },
+                        child: saving
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(option == 'move' ? "Move".tl : "Add".tl),
                       ),
                     ),
+                    if (error != null) Text(error!),
                   ],
                 ),
               ),
@@ -975,12 +1072,18 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     });
   }
 
-  void _deleteComicWithId() {
-    var toBeDeleted = selectedComics.keys
-        .map((e) => e as FavoriteItem)
-        .toList();
-    LocalFavoritesManager().batchDeleteComics(widget.folder, toBeDeleted);
-    _cancel();
+  Future<void> _deleteComicWithId(
+    String folder,
+    int generation,
+    List<FavoriteItem> toBeDeleted,
+  ) async {
+    await AppDataOperations.instance.access(() async {
+      if (manager.connectionGeneration != generation) {
+        throw StateError('Favorites database changed. Try again.');
+      }
+      await manager.batchDeleteComics(folder, toBeDeleted);
+    });
+    if (mounted && widget.folder == folder) _cancel();
   }
 }
 
@@ -1001,10 +1104,83 @@ class _ReorderComicsPageState extends State<_ReorderComicsPage> {
   final _scrollController = ScrollController();
   late var comics = LocalFavoritesManager().getFolderComics(widget.name);
   bool changed = false;
+  late final _manager = LocalFavoritesManager();
+  late final int _generation;
+  Future<void> _pendingSave = Future.value();
+  int _saveRevision = 0;
+  Object? _saveError;
+  bool _leaving = false;
+  WindowFrameController? _window;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final window = context
+        .getInheritedWidgetOfExactType<WindowFrameController>();
+    if (identical(window, _window)) return;
+    _window?.removeExitTask(_flushOrder);
+    _window = window;
+    _window?.addExitTask(_flushOrder);
+  }
+
+  Future<void> _flushOrder() => _pendingSave;
+
+  void _saveOrder() {
+    final revision = ++_saveRevision;
+    final snapshot = comics.toList();
+    final folder = widget.name;
+    changed = true;
+    _saveError = null;
+    _pendingSave = AppDataOperations.instance
+        .access(() async {
+          if (_manager.connectionGeneration != _generation) {
+            throw StateError('Favorites database changed. Reopen this page.');
+          }
+          await _manager.reorder(snapshot, folder);
+        })
+        .then<void>(
+          (_) {
+            if (revision != _saveRevision) return;
+            changed = false;
+            if (mounted) {
+              widget.onReorder(snapshot);
+              setState(() {});
+            }
+          },
+          onError: (Object error, StackTrace stack) {
+            if (revision == _saveRevision) {
+              _saveError = error;
+              if (mounted) setState(() {});
+            }
+            Error.throwWithStackTrace(error, stack);
+          },
+        );
+    unawaited(
+      _pendingSave.catchError((Object error, StackTrace stack) {
+        Log.error('Reorder favorites', error, stack);
+      }),
+    );
+  }
+
+  Future<void> _leave() async {
+    if (_leaving) return;
+    final route = ModalRoute.of(context);
+    setState(() => _leaving = true);
+    try {
+      await _flushOrder();
+      if (mounted && route?.isCurrent != false) context.pop();
+    } catch (error) {
+      if (mounted) context.showMessage(message: error.toString());
+    } finally {
+      if (mounted) setState(() => _leaving = false);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    // Bind the connection before the first user edit or a data replacement.
+    _generation = _manager.connectionGeneration;
     appdata.settings.addListener(_onDisplaySettingsChanged);
   }
 
@@ -1031,12 +1207,8 @@ class _ReorderComicsPageState extends State<_ReorderComicsPage> {
   void dispose() {
     appdata.settings.removeListener(_onDisplaySettingsChanged);
     _scrollController.dispose();
-    if (changed) {
-      // Delay to ensure navigation is completed
-      Future.delayed(const Duration(milliseconds: 200), () {
-        LocalFavoritesManager().reorder(comics, widget.name);
-      });
-    }
+    _window?.removeExitTask(_flushOrder);
+    _window?.trackExitTask(_pendingSave);
     super.dispose();
   }
 
@@ -1069,69 +1241,88 @@ class _ReorderComicsPageState extends State<_ReorderComicsPage> {
         ),
       );
     }).toList();
-    return Scaffold(
-      appBar: Appbar(
-        title: Text("Reorder".tl),
-        actions: [
-          Tooltip(
-            message: "Information".tl,
-            child: IconButton(
-              icon: const Icon(Icons.info_outline),
-              onPressed: () {
-                showInfoDialog(
-                  context: context,
-                  title: "Reorder".tl,
-                  content: "Long press and drag to reorder.".tl,
-                );
-              },
-            ),
+    return PopScope(
+      canPop: !changed && !_leaving,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) unawaited(_leave());
+      },
+      child: AbsorbPointer(
+        absorbing: _leaving,
+        child: Scaffold(
+          appBar: Appbar(
+            title: Text("Reorder".tl),
+            actions: [
+              if (_saveError != null)
+                TextButton(onPressed: _saveOrder, child: Text('Retry'.tl)),
+              if (changed && _saveError == null)
+                const Center(
+                  child: SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              Tooltip(
+                message: "Information".tl,
+                child: IconButton(
+                  icon: const Icon(Icons.info_outline),
+                  onPressed: () {
+                    showInfoDialog(
+                      context: context,
+                      title: "Reorder".tl,
+                      content: "Long press and drag to reorder.".tl,
+                    );
+                  },
+                ),
+              ),
+              Tooltip(
+                message: "Reverse".tl,
+                child: IconButton(
+                  icon: const Icon(Icons.swap_vert),
+                  onPressed: () {
+                    setState(() {
+                      comics = comics.reversed.toList();
+                      changed = true;
+                    });
+                    _saveOrder();
+                  },
+                ),
+              ),
+            ],
           ),
-          Tooltip(
-            message: "Reverse".tl,
-            child: IconButton(
-              icon: const Icon(Icons.swap_vert),
-              onPressed: () {
-                setState(() {
-                  comics = comics.reversed.toList();
-                  changed = true;
-                });
-              },
+          body: ReorderableBuilder<FavoriteItem>(
+            key: reorderWidgetKey,
+            scrollController: _scrollController,
+            longPressDelay: App.isDesktop
+                ? const Duration(milliseconds: 100)
+                : const Duration(milliseconds: 500),
+            onReorder: (reorderFunc) {
+              changed = true;
+              setState(() {
+                comics = reorderFunc(comics);
+              });
+              _saveOrder();
+            },
+            dragChildBoxDecoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: lightenColor(
+                Theme.of(context).splashColor.withAlpha(255),
+                0.2,
+              ),
             ),
-          ),
-        ],
-      ),
-      body: ReorderableBuilder<FavoriteItem>(
-        key: reorderWidgetKey,
-        scrollController: _scrollController,
-        longPressDelay: App.isDesktop
-            ? const Duration(milliseconds: 100)
-            : const Duration(milliseconds: 500),
-        onReorder: (reorderFunc) {
-          changed = true;
-          setState(() {
-            comics = reorderFunc(comics);
-          });
-          widget.onReorder(comics);
-        },
-        dragChildBoxDecoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: lightenColor(
-            Theme.of(context).splashColor.withAlpha(255),
-            0.2,
+            builder: (children) {
+              return GridView(
+                key: _key,
+                controller: _scrollController,
+                gridDelegate: SliverGridDelegateWithComics(
+                  galleryColumns: gallery ? favoriteGalleryColumns() : null,
+                  forceDetailed: !gallery,
+                ),
+                children: children,
+              );
+            },
+            children: tiles,
           ),
         ),
-        builder: (children) {
-          return GridView(
-            key: _key,
-            controller: _scrollController,
-            gridDelegate: SliverGridDelegateWithComics(
-              galleryColumns: gallery ? favoriteGalleryColumns() : null,
-              forceDetailed: !gallery,
-            ),
-            children: children,
-          );
-        },
-        children: tiles,
       ),
     );
   }

@@ -20,6 +20,7 @@ Future<ComicUpdateResult> updateComic(
   FavoriteItemWithUpdateInfo comic,
   String folder, {
   RequestScope? scope,
+  int? generation,
   Duration timeout = const Duration(seconds: 45),
 }) async {
   final request = RequestScope(parent: scope, timeout: timeout);
@@ -35,6 +36,11 @@ Future<ComicUpdateResult> updateComic(
     final source = comic.type.comicSource;
     if (source?.loadComicInfo == null) {
       return ComicUpdateResult(false, 'Comic source not found');
+    }
+    final favorites = LocalFavoritesManager();
+    final sourceGeneration = generation ?? favorites.connectionGeneration;
+    if (sourceGeneration != favorites.connectionGeneration) {
+      throw StateError('Favorites database changed');
     }
     // Transient failures are retried by the JS bridge, once per source call.
     final response = await request.run(() => source!.loadComicInfo!(comic.id));
@@ -53,7 +59,7 @@ Future<ComicUpdateResult> updateComic(
       tags.addAll(entry.value.map((tag) => '${entry.key}:$tag'));
     }
     request.check();
-    LocalFavoritesManager().updateInfo(
+    final updated = await favorites.applyFollowUpdate(
       folder,
       FavoriteItem(
         id: comic.id,
@@ -64,21 +70,10 @@ Future<ComicUpdateResult> updateComic(
         type: comic.type,
         tags: tags,
       ),
-      false,
+      info.findUpdateTime(),
+      generation: sourceGeneration,
+      checkActive: request.check,
     );
-    final updateTime = info.findUpdateTime();
-    final updated = updateTime != null && updateTime != comic.updateTime;
-    request.check();
-    if (updated) {
-      LocalFavoritesManager().updateUpdateTime(
-        folder,
-        comic.id,
-        comic.type,
-        updateTime,
-      );
-    } else {
-      LocalFavoritesManager().updateCheckTime(folder, comic.id, comic.type);
-    }
     return ComicUpdateResult(updated, null);
   } catch (error, stack) {
     if (scope?.isCancelled == true || error is RequestCancelled) {
@@ -220,7 +215,9 @@ class FollowUpdateJob implements FollowUpdateTask {
     Object? failure;
     StackTrace? failureStack;
     try {
-      final comics = LocalFavoritesManager()
+      final favorites = LocalFavoritesManager();
+      final generation = favorites.connectionGeneration;
+      final comics = favorites
           .getComicsWithUpdatesInfo(folder)
           .where(
             (comic) =>
@@ -251,7 +248,12 @@ class FollowUpdateJob implements FollowUpdateTask {
         sourceKey: (comic) => comic.type.sourceKey,
         run: (comic) {
           final work = () async {
-            final result = await updateComic(comic, folder, scope: _scope);
+            final result = await updateComic(
+              comic,
+              folder,
+              scope: _scope,
+              generation: generation,
+            );
             if (isCancelled || result.cancelled) return;
             current++;
             if (result.updated) updated++;

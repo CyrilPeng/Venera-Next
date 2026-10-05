@@ -1,10 +1,13 @@
 # 漫画源能力兼容性矩阵
 
+2026-10-05 收藏调用方补充：普通收藏导入和追更/详情更新固定来源数据库代次，排队取消在 SQL 前检查；追更详情与时间在单个事务提交。网络导入的异步提交/发布分别保留结果，卸载后继续发布已提交结果，旧 receipt 不跨重开刷新缓存。该证据来自真实 SQLite 和可控页面/调用方测试，不新增对真实网络源或 JS 桥错误矩阵的完成声明；精确范围见最新 optimization_progress。
+
 验证环境：Windows Flutter test + 实际 QuickJS 动态库；使用 assets/init.js 与合成源，独立临时数据目录，无网络或个人源数据。原生库不可用的环境会明确跳过，不能沿用本机结果宣称通过。这里记录行为范围，不代表 P7 整体验收完成。
 
 | 能力 | 已执行的行为 | 测试证据 | 尚未覆盖的主要边界 |
 |---|---|---|---|
 | 账户 | 带引号/中文/反斜杠的登录参数、身份落盘；网页登录判断及成功回调、Cookie 校验、登出回调 | source_capabilities_test.dart | 实际网页/Cookie 存储与 UI；登录期间取消及保存失败 |
+| Cookie 桥 | 真实 QuickJS 同步 set/get/delete 顺序和返回值，替换忙碌/缺库同步失败；真实 SQLite/Dio 请求与旧响应的连接归属 | test/foundation/js_cookie_admission_test.dart; test/network/cookie_admission_test.dart | 实际 WebView 采集与账户/localStorage 的联合事务、五平台前后台与源生命周期 |
 | 收藏 | 未登录时不发请求；过期后只重登录一次；重登录失败、再次过期停止；多文件夹读取/新增/删除 | source_capabilities_test.dart | 收藏添加删除、收藏游标、所有重登录操作分支；结构化取消 |
 | 搜索 | 页码/游标入口、参数顺序、下一页标记、标签建议；解析器复用时源身份隔离 | source_capabilities_test.dart; source_lifecycle_test.dart | 搜索选项全部形式、畸形响应交叉矩阵 |
 | 发现 | 页码/游标列表、下一页标记及参数 | 同上 | 多分区及混合布局返回类型 |

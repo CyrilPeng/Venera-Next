@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -49,6 +50,57 @@ class WebDavEndpoint {
         .join('/');
     return '$base/$path';
   }
+}
+
+/// Retires one owned WebDAV client, including work after Dio reports failure.
+Future<void> closeWebDavClient(
+  Client client, {
+  Object? cause,
+  StackTrace? stackTrace,
+}) async {
+  final dio = client.c;
+  final adapter = dio.httpClientAdapter;
+  final failures = <RHttpCleanupError>[];
+  Future<void> release(String stage, FutureOr<void> Function() action) async {
+    try {
+      await action();
+    } catch (error, stack) {
+      if (error is RHttpCleanupFailure) {
+        failures.addAll(error.failures);
+      } else {
+        failures.add((stage: stage, error: error, stack: stack));
+      }
+    }
+  }
+
+  await release('close WebDAV client', () => dio.close(force: true));
+  if (adapter is RHttpAdapter) {
+    await release('drain WebDAV native requests', adapter.waitForIdle);
+  }
+  if (failures.isNotEmpty) {
+    throw WebDavClientCleanupFailure(
+      cause: cause,
+      stackTrace: stackTrace,
+      failures: failures,
+    );
+  }
+}
+
+class WebDavClientCleanupFailure implements Exception {
+  WebDavClientCleanupFailure({
+    required this.cause,
+    required this.stackTrace,
+    required Iterable<RHttpCleanupError> failures,
+  }) : failures = List.unmodifiable(failures);
+
+  final Object? cause;
+  final StackTrace? stackTrace;
+  final List<RHttpCleanupError> failures;
+
+  @override
+  String toString() =>
+      '${cause == null ? '' : '$cause; '}WebDAV client cleanup failed: '
+      '${failures.map((failure) => '${failure.stage}: ${failure.error}').join('; ')}';
 }
 
 class _WebDavDiagnostics extends Interceptor {

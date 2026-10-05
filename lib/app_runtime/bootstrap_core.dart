@@ -7,6 +7,7 @@ import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
+import 'package:venera_next/features/sync/app_data_import_journal.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
@@ -33,7 +34,17 @@ CoreBootstrap createCoreBootstrap({
   return CoreBootstrap(
     failureCleanup: cleanup,
     environment: environment ?? App.init,
-    settings: appdata.init,
+    settings: () async {
+      // Import recovery precedes settings fallback and every database opener.
+      // No live application resource may observe a partly replaced snapshot.
+      final imports = AppDataImportJournal.open(App.dataPath);
+      try {
+        await imports.recoverPending();
+      } finally {
+        imports.close();
+      }
+      await appdata.init();
+    },
     infrastructure: () async {
       final previousCookies = SingleInstanceCookieJar.instance;
       await initializeCoreInfrastructure(

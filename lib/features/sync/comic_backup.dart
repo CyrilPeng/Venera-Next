@@ -120,66 +120,95 @@ abstract class ComicBackupWebDavOps {
   Future<void> deleteFile(BackupConfig config, String remotePath);
 }
 
-class _WebDavComicBackupOps implements ComicBackupWebDavOps {
-  Client _client(BackupConfig config) {
-    return config.endpoint.createClient();
+class WebDavComicBackupOps implements ComicBackupWebDavOps {
+  WebDavComicBackupOps({Client Function(BackupConfig)? createClient})
+    : _createClient =
+          createClient ?? ((config) => config.endpoint.createClient());
+
+  final Client Function(BackupConfig) _createClient;
+
+  Future<T> _request<T>(
+    BackupConfig config,
+    Future<T> Function(Client client) action,
+  ) async {
+    final client = _createClient(config);
+    Object? cause;
+    StackTrace? stack;
+    try {
+      return await action(client);
+    } catch (error, trace) {
+      cause = error;
+      stack = trace;
+      rethrow;
+    } finally {
+      // A failed SDK Future can precede native completion. Keep files borrowed
+      // by this operation until its own client has actually finished releasing.
+      await closeWebDavClient(client, cause: cause, stackTrace: stack);
+    }
   }
 
   @override
-  Future<void> test(BackupConfig config) async {
-    await _client(config).readDir(config.remotePath);
-  }
+  Future<void> test(BackupConfig config) => _request(config, (client) async {
+    await client.readDir(config.remotePath);
+  });
 
   @override
-  Future<List<BackupFile>> list(BackupConfig config) async {
-    final entries = await _client(config).readDir(config.remotePath);
-    return entries
-        .where((entry) => entry.isDir != true && entry.name != null)
-        .map(
-          (entry) => BackupFile(
-            name: entry.name!,
-            size: entry.size ?? 0,
-            modified: entry.mTime ?? DateTime.fromMillisecondsSinceEpoch(0),
-          ),
-        )
-        .toList();
-  }
+  Future<List<BackupFile>> list(BackupConfig config) =>
+      _request(config, (client) async {
+        final entries = await client.readDir(config.remotePath);
+        return entries
+            .where((entry) => entry.isDir != true && entry.name != null)
+            .map(
+              (entry) => BackupFile(
+                name: entry.name!,
+                size: entry.size ?? 0,
+                modified: entry.mTime ?? DateTime.fromMillisecondsSinceEpoch(0),
+              ),
+            )
+            .toList();
+      });
 
   @override
-  Future<bool> exists(BackupConfig config, String remotePath) async {
-    final entries = await _client(config).readDir(config.remotePath);
-    final name = remotePath.split('/').last;
-    return entries.any((entry) => entry.name == name);
-  }
+  Future<bool> exists(BackupConfig config, String remotePath) =>
+      _request(config, (client) async {
+        final entries = await client.readDir(config.remotePath);
+        final name = remotePath.split('/').last;
+        return entries.any((entry) => entry.name == name);
+      });
 
   @override
-  Future<void> ensureDirectory(BackupConfig config) async {
-    await _client(config).mkdirAll(config.remotePath);
-  }
+  Future<void> ensureDirectory(BackupConfig config) =>
+      _request(config, (client) async {
+        await client.mkdirAll(config.remotePath);
+      });
 
   @override
   Future<void> uploadFile(
     BackupConfig config,
     String localPath,
     String remotePath,
-  ) async {
-    await _client(config).writeFromFile(localPath, remotePath);
-  }
+  ) => _request(config, (client) async {
+    await client.writeFromFile(localPath, remotePath);
+  });
 
   @override
   Future<void> downloadFile(
     BackupConfig config,
     String remotePath,
     String localPath,
-  ) async {
-    await _client(config).read2File(remotePath, localPath);
-  }
+  ) => _request(config, (client) async {
+    await client.read2File(remotePath, localPath);
+  });
 
   @override
-  Future<void> deleteFile(BackupConfig config, String remotePath) async {
-    await _client(config).remove(remotePath);
-  }
+  Future<void> deleteFile(BackupConfig config, String remotePath) =>
+      _request(config, (client) async {
+        await client.remove(remotePath);
+      });
 }
+
+/// Original diagnostics retained alongside the batch's display messages.
+typedef BackupFailure = ({Object error, StackTrace stack});
 
 /// Aggregate result for backup and restore operations.
 class BackupResult {
@@ -188,22 +217,26 @@ class BackupResult {
     required this.skipped,
     required this.failed,
     this.errors = const [],
+    this.failures = const [],
   });
 
   final int success;
   final int skipped;
   final int failed;
   final List<String> errors;
+
+  /// Original operation/cleanup diagnostics behind the displayed messages.
+  final List<BackupFailure> failures;
 }
 
 /// Manager for WebDAV comic archive backup and restore operations.
 class ComicBackupManager {
   const ComicBackupManager._();
 
-  static ComicBackupWebDavOps ops = _WebDavComicBackupOps();
+  static ComicBackupWebDavOps ops = WebDavComicBackupOps();
 
   static void resetOps() {
-    ops = _WebDavComicBackupOps();
+    ops = WebDavComicBackupOps();
   }
 
   static Future<void> Function(LocalComic comic, String outputPath)?
@@ -222,8 +255,8 @@ class ComicBackupManager {
     try {
       await ops.test(config);
       return const Res(true);
-    } catch (e) {
-      return Res.error(e.toString());
+    } catch (error, stack) {
+      return Res.fromException(error, stack);
     }
   }
 
@@ -240,8 +273,8 @@ class ComicBackupManager {
               .toList()
             ..sort((a, b) => b.modified.compareTo(a.modified));
       return Res(cbzFiles);
-    } catch (e) {
-      return Res.error(e.toString());
+    } catch (error, stack) {
+      return Res.fromException(error, stack);
     }
   }
 
@@ -263,14 +296,16 @@ class ComicBackupManager {
     var skipped = 0;
     var failed = 0;
     final errors = <String>[];
+    final failures = <BackupFailure>[];
     try {
       await ops.ensureDirectory(config);
-    } catch (e) {
+    } catch (e, stack) {
       return BackupResult(
         success: 0,
         skipped: 0,
         failed: comics.length,
         errors: [e.toString()],
+        failures: [(error: e, stack: stack)],
       );
     }
     // 批量获取远端已有文件，避免逐本 PROPFIND
@@ -282,6 +317,16 @@ class ComicBackupManager {
         remoteFileNames.add(f.name);
       }
       listSuccess = true;
+    } on WebDavClientCleanupFailure catch (error, stack) {
+      // Ordinary listing failure can fall back to per-file checks, but a
+      // resource-release failure must not disappear into a later success.
+      return BackupResult(
+        success: 0,
+        skipped: 0,
+        failed: comics.length,
+        errors: [error.toString()],
+        failures: [(error: error, stack: stack)],
+      );
     } catch (_) {
       // 列表失败忽略，后续退化为逐本检查
     }
@@ -312,9 +357,10 @@ class ComicBackupManager {
         }
         await ops.uploadFile(config, localPath, remotePath);
         success++;
-      } catch (e) {
+      } catch (e, stack) {
         failed++;
         errors.add('${comic.title}: $e');
+        failures.add((error: e, stack: stack));
       } finally {
         await localFile.deleteIgnoreError();
       }
@@ -324,6 +370,7 @@ class ComicBackupManager {
       skipped: skipped,
       failed: failed,
       errors: errors,
+      failures: failures,
     );
   }
 
@@ -344,6 +391,7 @@ class ComicBackupManager {
     var success = 0;
     var failed = 0;
     final errors = <String>[];
+    final failures = <BackupFailure>[];
     for (var i = 0; i < files.length; i++) {
       if (isCancelled?.call() == true) break;
       final backup = files[i];
@@ -375,9 +423,10 @@ class ComicBackupManager {
           await CBZ.import(localFile, registerComic: register);
         }
         success++;
-      } catch (e) {
+      } catch (e, stack) {
         failed++;
         errors.add('${backup.name}: $e');
+        failures.add((error: e, stack: stack));
       } finally {
         await localFile.deleteIgnoreError();
       }
@@ -387,6 +436,7 @@ class ComicBackupManager {
       skipped: 0,
       failed: failed,
       errors: errors,
+      failures: failures,
     );
   }
 
@@ -398,8 +448,8 @@ class ComicBackupManager {
     try {
       await ops.deleteFile(config, config.remoteFilePath(file.name));
       return const Res(true);
-    } catch (e) {
-      return Res.error(e.toString());
+    } catch (error, stack) {
+      return Res.fromException(error, stack);
     }
   }
 

@@ -101,6 +101,23 @@ void main() {
           (await exportAppData()).readAsBytesSync(),
         );
         expect(_settings(unfiltered)['language'], 'en-US');
+        final owned = Directory('${App.dataPath}/owned-upload')..createSync();
+        final destination = File('${owned.path}/snapshot.venera');
+        appdata.settings['disableSyncFields'] = 'language';
+        await exportSyncAppData(excludeFields: true, destination: destination);
+        final ownedArchive = ZipDecoder().decodeBytes(
+          destination.readAsBytesSync(),
+        );
+        expect(_settings(ownedArchive).containsKey('language'), isFalse);
+        expect(ownedArchive.findFile('history.db'), isNotNull);
+        expect(owned.listSync(), hasLength(1));
+        expect(
+          FileSystemEntity.identicalSync(
+            owned.listSync().single.path,
+            destination.path,
+          ),
+          isTrue,
+        );
         File(
           '${App.dataPath}/cookie.db',
         ).writeAsBytesSync(List.filled(4096, 42));

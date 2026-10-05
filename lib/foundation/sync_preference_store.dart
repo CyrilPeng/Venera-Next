@@ -23,6 +23,16 @@ class SyncPreferenceStore {
   bool get pending => _implicitData()['webdavSyncPending'] == true;
   set pending(bool value) => _implicitData()['webdavSyncPending'] = value;
 
+  /// Keep malformed persisted records visible for the operation decoder.
+  Object? get pendingOperation => _implicitData()['webdavSyncOperation'];
+  set pendingOperation(Object? value) {
+    if (value == null) {
+      _implicitData().remove('webdavSyncOperation');
+    } else {
+      _implicitData()['webdavSyncOperation'] = value;
+    }
+  }
+
   int? get lastAttempt {
     final value = _implicitData()['webdavSyncLastAttempt'];
     return value is int ? value : null;
@@ -40,14 +50,17 @@ class SyncPreferenceStore {
   ];
 
   SyncPreferenceCheckpoint capture() => SyncPreferenceCheckpoint._(
-    _readSetting('webdav'),
-    _readSetting('disableSyncFields'),
+    _copyConfigurationValue(_readSetting('webdav')),
+    _copyConfigurationValue(_readSetting('disableSyncFields')),
     {for (final key in _scheduleKeys) key: _implicitData()[key]},
   );
 
   void restore(SyncPreferenceCheckpoint checkpoint) {
-    _writeSetting('webdav', checkpoint._connection);
-    _writeSetting('disableSyncFields', checkpoint._excludedFields);
+    _writeSetting('webdav', _copyConfigurationValue(checkpoint._connection));
+    _writeSetting(
+      'disableSyncFields',
+      _copyConfigurationValue(checkpoint._excludedFields),
+    );
     for (final entry in checkpoint._schedule.entries) {
       if (entry.value == null) {
         _implicitData().remove(entry.key);
@@ -70,6 +83,15 @@ class SyncPreferenceStore {
   }
 }
 
+Object? _copyConfigurationValue(Object? value) => switch (value) {
+  List<String>() => List<String>.of(value),
+  List() => value.map(_copyConfigurationValue).toList(),
+  Map() => value.map(
+    (key, item) => MapEntry(key, _copyConfigurationValue(item)),
+  ),
+  _ => value,
+};
+
 /// Raw rollback values deliberately bypass normalization to preserve old data.
 class SyncPreferenceCheckpoint {
   SyncPreferenceCheckpoint._(
@@ -80,4 +102,34 @@ class SyncPreferenceCheckpoint {
   final Object? _connection;
   final Object? _excludedFields;
   final Map<String, Object?> _schedule;
+
+  Map<String, Object?> toJson() => {
+    'connection': _copyConfigurationValue(_connection),
+    'excludedFields': _copyConfigurationValue(_excludedFields),
+    'schedule': _copyConfigurationValue(_schedule),
+  };
+
+  factory SyncPreferenceCheckpoint.fromJson(Object? value) {
+    if (value is! Map ||
+        !value.containsKey('connection') ||
+        !value.containsKey('excludedFields') ||
+        value['schedule'] is! Map) {
+      throw const FormatException('Invalid sync configuration checkpoint');
+    }
+    final schedule = value['schedule'] as Map;
+    if (schedule.length != SyncPreferenceStore._scheduleKeys.length ||
+        SyncPreferenceStore._scheduleKeys.any(
+          (key) => !schedule.containsKey(key),
+        )) {
+      throw const FormatException('Invalid sync schedule checkpoint');
+    }
+    return SyncPreferenceCheckpoint._(
+      _copyConfigurationValue(value['connection']),
+      _copyConfigurationValue(value['excludedFields']),
+      {
+        for (final key in SyncPreferenceStore._scheduleKeys)
+          key: _copyConfigurationValue(schedule[key]),
+      },
+    );
+  }
 }

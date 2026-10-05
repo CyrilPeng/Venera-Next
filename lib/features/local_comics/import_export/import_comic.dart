@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/foundation/comic_type.dart';
@@ -277,7 +278,7 @@ class ImportComic {
           imported[folderName] = validComics;
           if (validComics.isNotEmpty &&
               !LocalFavoritesManager().existsFolder(folderName)) {
-            LocalFavoritesManager().createFolder(folderName);
+            await LocalFavoritesManager().createFolder(folderName);
           }
         }
       } finally {
@@ -592,7 +593,12 @@ class ImportComic {
     return true;
   }
 
-  Future<void> registerComic(LocalComic comic, {String? folder}) async {
+  Future<void> registerComic(LocalComic comic, {String? folder}) =>
+      AppDataOperations.instance.access(
+        () => _registerComic(comic, folder: folder),
+      );
+
+  Future<void> _registerComic(LocalComic comic, {String? folder}) async {
     final manager = LocalManager();
     final id = manager.findValidId(ComicType.local);
     final favorites = folder == null ? null : LocalFavoritesManager();
@@ -602,7 +608,7 @@ class ImportComic {
     await manager.add(comic, id);
     try {
       if (folder != null) {
-        favorites!.addComic(
+        await favorites!.addComic(
           folder,
           FavoriteItem(
             id: id,
@@ -619,7 +625,7 @@ class ImportComic {
       manager.remove(id, comic.comicType);
       if (folder != null &&
           favorites!.find(id, comic.comicType).contains(folder)) {
-        favorites.deleteComicWithId(folder, id, comic.comicType);
+        await favorites.deleteComicWithId(folder, id, comic.comicType);
       }
       rethrow;
     }

@@ -28,7 +28,7 @@ class _ImageFavoritesSummaryState extends State<ImageFavoritesSummary> {
   void refreshImageFavorites() async {
     final generation = ++_refreshGeneration;
     try {
-      final result = await ImageFavoriteManager.computeImageFavorites();
+      final result = await ImageFavoriteManager().compute();
       if (!mounted || generation != _refreshGeneration) return;
       setState(() => imageFavoritesCompute = result);
     } catch (e, stackTrace) {

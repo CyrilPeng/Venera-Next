@@ -62,8 +62,8 @@ void main() {
     final directory = Directory('${local.path}/book')..createSync();
     page = File('${directory.path}/1.jpg')..writeAsStringSync('keep');
     for (final folder in ['first', 'second']) {
-      favorites.createFolder(folder);
-      favorites.addComic(
+      await favorites.createFolder(folder);
+      await favorites.addComic(
         folder,
         FavoriteItem(
           id: comic.id,
@@ -194,8 +194,8 @@ void main() {
     () async {
       faultDb.execute('DROP TRIGGER reject_delete;');
       for (final folder in ['comics', 'quoted"folder']) {
-        favorites.createFolder(folder);
-        favorites.addComic(
+        await favorites.createFolder(folder);
+        await favorites.addComic(
           folder,
           FavoriteItem(
             id: comic.id,

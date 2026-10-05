@@ -974,7 +974,9 @@ class _LoginPageState extends State<_LoginPage> {
                     children: [
                       const Icon(Icons.error_outline),
                       const SizedBox(width: 8),
-                      Text("Login with password is disabled".tl),
+                      Flexible(
+                        child: Text("Login with password is disabled".tl),
+                      ),
                     ],
                   )
                 else
@@ -1062,6 +1064,8 @@ class _LoginPageState extends State<_LoginPage> {
   }
 
   void loginWithWebview() async {
+    final cookieJar = await captureWebviewCookies();
+    if (cookieJar == null || !mounted) return;
     var url = widget.config.loginWebsite!;
     var title = '';
     bool success = false;
@@ -1079,10 +1083,10 @@ class _LoginPageState extends State<_LoginPage> {
         }
         widget.source.data['_localStorage'] = mappedLocalStorage;
         await widget.source.saveData();
-        SingleInstanceCookieJar.instance?.saveFromResponse(
-          Uri.parse(url),
-          cookies,
-        );
+        if (!await saveWebviewCookies(cookieJar, Uri.parse(url), cookies)) {
+          return;
+        }
+        if (!mounted) return;
         success = true;
         widget.config.onLoginWithWebviewSuccess?.call();
         App.mainNavigatorKey?.currentContext?.pop();
@@ -1113,6 +1117,8 @@ class _LoginPageState extends State<_LoginPage> {
 
   // for linux
   void loginWithWebview2() async {
+    final cookieJar = await captureWebviewCookies();
+    if (cookieJar == null || !mounted) return;
     final available = await DesktopWebview.isAvailable();
     if (!mounted) return;
     if (!available) {
@@ -1143,10 +1149,9 @@ class _LoginPageState extends State<_LoginPage> {
         cookiesMap.forEach((key, value) {
           cookies.add(io.Cookie(key, value));
         });
-        SingleInstanceCookieJar.instance?.saveFromResponse(
-          Uri.parse(url),
-          cookies,
-        );
+        if (!await saveWebviewCookies(cookieJar, Uri.parse(url), cookies)) {
+          return;
+        }
         var localStorageJson = await webview.evaluateJavascript(
           "JSON.stringify(window.localStorage);",
         );
@@ -1182,5 +1187,30 @@ class _LoginPageState extends State<_LoginPage> {
     );
 
     webview.open();
+  }
+
+  Future<CookieJarSql?> captureWebviewCookies() async {
+    try {
+      return await SingleInstanceCookieJar.captureInstance();
+    } catch (error, stack) {
+      Log.error('Source login', error, stack);
+      if (mounted) context.showMessage(message: error.toString());
+      return null;
+    }
+  }
+
+  Future<bool> saveWebviewCookies(
+    CookieJarSql cookieJar,
+    Uri uri,
+    List<io.Cookie> cookies,
+  ) async {
+    try {
+      await cookieJar.saveFromResponseAsync(uri, cookies);
+      return true;
+    } catch (error, stack) {
+      Log.error('Source login', error, stack);
+      if (mounted) context.showMessage(message: error.toString());
+      return false;
+    }
   }
 }

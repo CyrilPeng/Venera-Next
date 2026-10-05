@@ -79,18 +79,18 @@ void main() {
   test(
     'collisions, rename, deletion and recreation preserve user folders',
     () async {
-      manager.createFolder('Later');
-      manager.createFolder('Later (2)');
+      await manager.createFolder('Later');
+      await manager.createFolder('Later (2)');
       await manager.setReadLater(
         _comic('1'),
         included: true,
         folderName: 'Later',
       );
       expect(manager.readLaterFolder, 'Later (3)');
-      manager.rename('Later (3)', 'My queue');
+      await manager.rename('Later (3)', 'My queue');
       expect(manager.readLaterFolder, 'My queue');
       expect(manager.isInReadLater('1', ComicType.local), isTrue);
-      manager.deleteFolder('My queue');
+      await manager.deleteFolder('My queue');
       expect(manager.readLaterFolder, isNull);
       expect(manager.getReadLaterComics(), isEmpty);
       await manager.setReadLater(
@@ -117,7 +117,7 @@ void main() {
         folderName: 'Later',
       );
       appdata.settings['moveFavoriteAfterRead'] = 'start';
-      manager.onRead('1', ComicType.local);
+      await manager.onRead('1', ComicType.local);
       expect(manager.getReadLaterComics().map((c) => c.id), ['2', '1']);
       final saved = {
         'settings': Map<String, dynamic>.from(
@@ -130,7 +130,7 @@ void main() {
       appdata.settings['readLaterFolder'] = null;
       manager = LocalFavoritesManager();
       await manager.init();
-      appdata.syncData(saved);
+      await appdata.syncData(saved);
       expect(manager.readLaterFolder, 'Later');
       expect(manager.getReadLaterComics(limit: 1).single.id, '2');
     },

@@ -15,11 +15,13 @@ void main() {
     bool chapters = true,
     bool selected = false,
     bool playing = false,
+    bool collecting = false,
     ReaderOrientation orientation = ReaderOrientation.system,
   }) => buildReaderBottomActions(
     context,
     imageCollected: selected,
-    onCollect: () => calls.add('collect'),
+    onCollect: collecting ? null : () => calls.add('collect'),
+    imageCollecting: collecting,
     onFullscreen: desktop ? () => calls.add('fullscreen') : null,
     orientation: orientation,
     onRotate: android ? () => calls.add('rotate') : null,
@@ -34,6 +36,32 @@ void main() {
     onChapters: chapters ? () => calls.add('chapters') : null,
     onSave: () => calls.add('save'),
     onShare: () => calls.add('share'),
+  );
+
+  testWidgets(
+    'pending image collection disables repeat submission with feedback',
+    (tester) async {
+      final calls = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Row(children: actions(context, calls, collecting: true)),
+            ),
+          ),
+        ),
+      );
+      final progress = find.byType(CircularProgressIndicator);
+      expect(progress, findsOneWidget);
+      final button = find.ancestor(
+        of: progress,
+        matching: find.byType(IconButton),
+      );
+      expect(tester.widget<IconButton>(button).onPressed, isNull);
+      await tester.tap(button);
+      expect(calls, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+    },
   );
 
   for (final size in [

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
 import 'package:venera_next/foundation/reader_settings.dart';
 import 'package:venera_next/foundation/reader_preferences.dart';
@@ -31,7 +32,7 @@ class Appdata with Init {
     await _enqueueWrite(_writeAppData);
     final handler = _syncDataRequestHandler;
     if (sync && handler != null) {
-      unawaited(Future.sync(handler));
+      AppDataOperations.instance.publish(() => unawaited(Future.sync(handler)));
     }
   }
 
@@ -86,8 +87,9 @@ class Appdata with Init {
 
   static const _archiveSyncFields = ["backupWebdav", "backupWebdavPath"];
 
-  /// Sync data from another device
-  void syncData(Map<String, dynamic> data) {
+  /// Apply imported data and acknowledge its actual persistence. Importing a
+  /// remote snapshot must not announce the same data as a new local edit.
+  Future<void> syncData(Map<String, dynamic> data) async {
     if (data['settings'] is Map) {
       var settings = data['settings'] as Map<String, dynamic>;
 
@@ -111,7 +113,22 @@ class Appdata with Init {
       }
     }
     searchHistory = List.from(data['searchHistory'] ?? []);
-    saveData();
+    await saveData(false);
+  }
+
+  AppdataImportCheckpoint captureImportCheckpoint() =>
+      AppdataImportCheckpoint._(jsonEncode(toJson()));
+
+  /// Restore every imported setting, including removal of newly introduced
+  /// keys, before acknowledging that an archive rollback has completed.
+  Future<void> restoreImportCheckpoint(
+    AppdataImportCheckpoint checkpoint, {
+    bool persist = true,
+  }) async {
+    final data = jsonDecode(checkpoint.json) as Map<String, dynamic>;
+    searchHistory = List<String>.from(data['searchHistory'] as List);
+    settings._restoreImportData(data['settings'] as Map<String, dynamic>);
+    if (persist) await saveData(false);
   }
 
   var implicitData = <String, dynamic>{};
@@ -125,11 +142,20 @@ class Appdata with Init {
   }
 
   Future<void> _writeAppData() async {
-    var futures = <Future>[];
+    final futures = <Future<void>>[];
+    final failures = <AppdataWriteDiagnostic>[];
+    Future<void> write(File file, String content) async {
+      try {
+        await _writeTextAtomically(file, content);
+      } catch (error, stack) {
+        failures.add((path: file.path, error: error, stack: stack));
+      }
+    }
+
     var json = toJson();
     var data = jsonEncode(json);
     var file = File(FilePath.join(App.dataPath, 'appdata.json'));
-    futures.add(_writeTextAtomically(file, data));
+    futures.add(write(file, data));
 
     var disableSyncFields = json["settings"]["disableSyncFields"] as String;
     if (disableSyncFields.isNotEmpty) {
@@ -140,10 +166,14 @@ class Appdata with Init {
       }
       var data4sync = jsonEncode(json4sync);
       var file4sync = File(FilePath.join(App.dataPath, 'syncdata.json'));
-      futures.add(_writeTextAtomically(file4sync, data4sync));
+      futures.add(write(file4sync, data4sync));
     }
 
     await Future.wait(futures);
+    if (failures.length == 1) {
+      Error.throwWithStackTrace(failures.single.error, failures.single.stack);
+    }
+    if (failures.isNotEmpty) throw AppdataWriteFailure(failures);
   }
 
   Future<void> writeImplicitData() => _enqueueWrite(() async {
@@ -327,9 +357,43 @@ class Appdata with Init {
   }
 }
 
+/// Immutable recovery image owned by one application-data import.
+class AppdataImportCheckpoint {
+  const AppdataImportCheckpoint._(this.json);
+  final String json;
+}
+
+typedef AppdataWriteDiagnostic = ({
+  String path,
+  Object error,
+  StackTrace stack,
+});
+
+/// Both metadata files have finished, and each failed write remains observable.
+class AppdataWriteFailure implements Exception {
+  AppdataWriteFailure(Iterable<AppdataWriteDiagnostic> failures)
+    : failures = List.unmodifiable(failures);
+  final List<AppdataWriteDiagnostic> failures;
+
+  @override
+  String toString() =>
+      failures.map((failure) => '${failure.path}: ${failure.error}').join('; ');
+}
+
 final appdata = Appdata._create();
 
 class Settings with ChangeNotifier {
+  @override
+  void notifyListeners() =>
+      AppDataOperations.instance.publish(super.notifyListeners);
+
+  void _restoreImportData(Map<String, dynamic> values) {
+    _data
+      ..clear()
+      ..addAll(values);
+    notifyListeners();
+  }
+
   Settings._create();
 
   final _data = <String, dynamic>{

@@ -7,6 +7,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
@@ -33,10 +34,37 @@ typedef HistoryDurationStorageWriter =
 class HistoryManager with ChangeNotifier {
   static HistoryManager? cache;
 
-  HistoryManager.create({HistoryDurationStorageWriter? writeDuration})
-    : _writeDuration = writeDuration ?? _addReadDurationAsync;
+  HistoryManager.create({
+    HistoryDurationStorageWriter? writeDuration,
+    AppDataOperations? operations,
+  }) : _writeDuration = writeDuration ?? _addReadDurationAsync,
+       _operations = operations ?? AppDataOperations.instance;
 
   final HistoryDurationStorageWriter _writeDuration;
+  final AppDataOperations _operations;
+
+  @override
+  void notifyListeners() => _operations.publish(super.notifyListeners);
+
+  /// Image favorites share this database lifetime and ordered access queue.
+  /// The callback may own a background reader, and must await its actual close.
+  Future<T> accessImageFavorites<T>(
+    FutureOr<T> Function(ImageFavoritesRepository repository, String path)
+    action,
+  ) => _enqueueAsyncWrite(() {
+    if (!isInitialized) throw StateError('History database is closed');
+    final path = _dbPath;
+    final generation = _generation;
+    return () async {
+      if (!isInitialized || generation != _generation) {
+        throw StateError('Image favorites belong to a closed connection');
+      }
+      return action(ImageFavoritesRepository(_db), path);
+    };
+  });
+
+  /// Notifications from either table must not lend data access to listeners.
+  void publishChange(void Function() notify) => _operations.publish(notify);
 
   factory HistoryManager() =>
       cache == null ? (cache = HistoryManager.create()) : cache!;
@@ -61,26 +89,33 @@ class HistoryManager with ChangeNotifier {
   bool isInitialized = false;
   int _generation = 0;
 
-  Future<void>? _initialization;
+  _HistoryInitialization? _initialization;
 
   Future<void> init() {
-    final pending = _initialization;
-    if (pending != null) return pending;
-    if (isInitialized) return Future.value();
-    final generation = ++_generation;
-    final attempt = Completer<void>();
-    _initialization = attempt.future;
-    Future<void>.sync(() => _initialize(generation)).then(
-      (_) {
-        if (identical(_initialization, attempt.future)) _initialization = null;
-        attempt.complete();
-      },
-      onError: (Object error, StackTrace stack) {
-        if (identical(_initialization, attempt.future)) _initialization = null;
-        attempt.completeError(error, stack);
-      },
-    );
-    return attempt.future;
+    if (_initialization == null && isInitialized) return Future.value();
+    final attempt = _initialization ??= _HistoryInitialization(++_generation);
+    // Every caller offers its own admission, while sharing one initialization.
+    // An exclusive importer can start a pending attempt itself instead of
+    // awaiting the external caller queued behind that same importer.
+    _operations
+        .access(() => attempt.work ??= _initialize(attempt.generation))
+        .then(
+          (_) {
+            if (identical(_initialization, attempt)) {
+              _initialization = null;
+            }
+            if (!attempt.result.isCompleted) attempt.result.complete();
+          },
+          onError: (Object error, StackTrace stack) {
+            if (identical(_initialization, attempt)) {
+              _initialization = null;
+            }
+            if (!attempt.result.isCompleted) {
+              attempt.result.completeError(error, stack);
+            }
+          },
+        );
+    return attempt.result.future;
   }
 
   void _checkInitialization(int generation) {
@@ -92,6 +127,9 @@ class HistoryManager with ChangeNotifier {
   Future<void> _initialize(int generation) async {
     Database? database;
     try {
+      if (generation != _generation) {
+        throw StateError('History initialization was closed before admission');
+      }
       _dbPath = "${App.dataPath}/history.db";
       database = openSqliteDatabase(_dbPath);
       _database = database;
@@ -221,52 +259,64 @@ class HistoryManager with ChangeNotifier {
     void Function(String databasePath) write, {
     required void Function() onCommitted,
   }) {
-    if (!isInitialized) {
-      return Future.error(StateError('History database is closed'));
-    }
-    final generation = _generation;
-    final path = _dbPath;
-    return _enqueueAsyncWrite(() async {
-      if (!isInitialized || generation != _generation) {
-        throw StateError('History import belongs to a closed connection');
+    return _enqueueAsyncWrite(() {
+      if (!isInitialized) {
+        throw StateError('History database is closed');
       }
-      write(path);
-      _historyCache.refresh(invalidateRecords: true);
-      onCommitted();
-      notifyListeners();
+      final generation = _generation;
+      final path = _dbPath;
+      return () async {
+        if (!isInitialized || generation != _generation) {
+          throw StateError('History import belongs to a closed connection');
+        }
+        write(path);
+        _historyCache.refresh(invalidateRecords: true);
+        _operations.publish(onCommitted);
+        notifyListeners();
+      };
     });
   }
 
   Future<void> _writeHistory(History newItem, {required bool replaceMetadata}) {
     final snapshot = newItem.copy();
-    final path = _dbPath;
-    final generation = _generation;
-    return _enqueueAsyncWrite(() async {
-      await _addHistoryAsync(path, snapshot, replaceMetadata);
-      if (isInitialized && generation == _generation) {
-        _cachePersistedHistory(snapshot.id, snapshot.type.value);
-        notifyListeners();
-      }
+    return _enqueueAsyncWrite(() {
+      if (_database == null) throw StateError('History database is closed');
+      final path = _dbPath;
+      final generation = _generation;
+      return () async {
+        await _addHistoryAsync(path, snapshot, replaceMetadata);
+        if (isInitialized && generation == _generation) {
+          _cachePersistedHistory(snapshot.id, snapshot.type.value);
+          notifyListeners();
+        }
+      };
     });
   }
 
-  Future<T> _enqueueAsyncWrite<T>(Future<T> Function() write) {
+  Future<T> _enqueueAsyncWrite<T>(Future<T> Function() Function() prepare) {
     _pendingWrites++;
-    final next = _asyncHistoryQueue.then((_) => write()).whenComplete(() {
-      _pendingWrites--;
-    });
-    _asyncHistoryQueue = next.then<void>(
-      (_) {},
-      onError: (Object error, StackTrace stackTrace) {
-        try {
-          Log.error("History", error, stackTrace);
-        } catch (_) {
-          // The caller still receives the original error through next. A
-          // failing log sink must not poison unrelated queued mutations.
-        }
-      },
-    );
-    return next;
+    // Acquire before appending to the local queue. An import already holding
+    // exclusive access must not wait for writes queued behind that import.
+    return _operations
+        .access(() {
+          // Capture connection ownership at global admission, before waiting
+          // for older local writes. Direct close/reopen cannot retarget work
+          // already accepted; a replacement queued earlier is allowed to finish.
+          final write = prepare();
+          final next = _asyncHistoryQueue.then((_) => write());
+          _asyncHistoryQueue = next.then<void>(
+            (_) {},
+            onError: (Object error, StackTrace stackTrace) {
+              try {
+                Log.error("History", error, stackTrace);
+              } catch (_) {
+                // The caller still receives the original error through next.
+              }
+            },
+          );
+          return next;
+        })
+        .whenComplete(() => _pendingWrites--);
   }
 
   void _cachePersistedHistory(String id, int type) {
@@ -282,64 +332,66 @@ class HistoryManager with ChangeNotifier {
   Future<void> addReadDuration(History item, Duration duration) {
     final durationMs = duration.inMilliseconds;
     if (durationMs <= 0) return Future.value();
-    if (!isInitialized) {
-      return Future.error(
-        PersistenceFailure(
+    final snapshot = item.copy();
+    return _enqueueAsyncWrite(() {
+      if (!isInitialized) {
+        throw PersistenceFailure(
           commitState: PersistenceCommitState.notCommitted,
           cause: StateError('History database is closed'),
           stackTrace: StackTrace.current,
-        ),
-      );
-    }
-    final snapshot = item.copy();
-    final path = _dbPath;
-    final generation = _generation;
-    return _enqueueAsyncWrite(() async {
-      PersistenceFailure? committedFailure;
-      try {
-        await _writeDuration(path, snapshot, durationMs);
-      } on PersistenceFailure catch (error) {
-        if (error.commitState != PersistenceCommitState.committed) rethrow;
-        committedFailure = error;
-      } catch (error, stack) {
-        throw PersistenceFailure(
-          commitState: PersistenceCommitState.unknown,
-          cause: error,
-          stackTrace: stack,
         );
       }
-      try {
-        if (item.id == snapshot.id && item.type == snapshot.type) {
-          item.readDurationMs += durationMs;
+      final path = _dbPath;
+      final generation = _generation;
+      return () async {
+        PersistenceFailure? committedFailure;
+        try {
+          await _writeDuration(path, snapshot, durationMs);
+        } on PersistenceFailure catch (error) {
+          if (error.commitState != PersistenceCommitState.committed) rethrow;
+          committedFailure = error;
+        } catch (error, stack) {
+          throw PersistenceFailure(
+            commitState: PersistenceCommitState.unknown,
+            cause: error,
+            stackTrace: stack,
+          );
         }
-        if (isInitialized && generation == _generation) {
-          _cachePersistedHistory(snapshot.id, snapshot.type.value);
-          notifyListeners();
+        try {
+          if (item.id == snapshot.id && item.type == snapshot.type) {
+            item.readDurationMs += durationMs;
+          }
+          if (isInitialized && generation == _generation) {
+            _cachePersistedHistory(snapshot.id, snapshot.type.value);
+            notifyListeners();
+          }
+        } catch (error, stack) {
+          final original = committedFailure;
+          throw PersistenceFailure(
+            commitState: PersistenceCommitState.committed,
+            cause: original?.cause ?? error,
+            stackTrace: original?.stackTrace ?? stack,
+            cleanupFailures: original == null
+                ? const []
+                : [
+                    ...original.cleanupFailures,
+                    (error: error, stackTrace: stack),
+                  ],
+          );
         }
-      } catch (error, stack) {
-        final original = committedFailure;
-        throw PersistenceFailure(
-          commitState: PersistenceCommitState.committed,
-          cause: original?.cause ?? error,
-          stackTrace: original?.stackTrace ?? stack,
-          cleanupFailures: original == null
-              ? const []
-              : [
-                  ...original.cleanupFailures,
-                  (error: error, stackTrace: stack),
-                ],
-        );
-      }
-      if (committedFailure != null) {
-        Error.throwWithStackTrace(
-          committedFailure,
-          committedFailure.stackTrace,
-        );
-      }
+        if (committedFailure != null) {
+          Error.throwWithStackTrace(
+            committedFailure,
+            committedFailure.stackTrace,
+          );
+        }
+      };
     });
   }
 
-  Future<void> waitForAsyncWrites() async {
+  Future<void> waitForAsyncWrites() => _operations.access(_waitForLocalWrites);
+
+  Future<void> _waitForLocalWrites() async {
     do {
       final accepted = _asyncHistoryQueue;
       await accepted;
@@ -358,21 +410,24 @@ class HistoryManager with ChangeNotifier {
       if (path == null || !isInitialized || generation != _generation) {
         return Future.value(false);
       }
-      return _enqueueAsyncWrite(() async {
-        final changed = await _updateMetadataAsync(
-          path,
-          id,
-          type,
-          title: title,
-          subtitle: subtitle,
-          cover: cover,
-        );
-        if (changed && isInitialized && generation == _generation) {
-          _cachePersistedHistory(id, type);
-          notifyListeners();
-        }
-        return changed;
-      });
+      return _enqueueAsyncWrite(
+        () => () async {
+          if (!isInitialized || generation != _generation) return false;
+          final changed = await _updateMetadataAsync(
+            path,
+            id,
+            type,
+            title: title,
+            subtitle: subtitle,
+            cover: cover,
+          );
+          if (changed && isInitialized && generation == _generation) {
+            _cachePersistedHistory(id, type);
+            notifyListeners();
+          }
+          return changed;
+        },
+      );
     };
   }
 
@@ -413,14 +468,17 @@ class HistoryManager with ChangeNotifier {
   });
 
   Future<void> _delete(void Function(HistoryRepository) mutate) {
-    final path = _dbPath;
-    final generation = _generation;
-    return _enqueueAsyncWrite(() async {
-      await _mutateDatabase(path, mutate);
-      if (isInitialized && generation == _generation) {
-        updateCache();
-        notifyListeners();
-      }
+    return _enqueueAsyncWrite(() {
+      if (_database == null) throw StateError('History database is closed');
+      final path = _dbPath;
+      final generation = _generation;
+      return () async {
+        await _mutateDatabase(path, mutate);
+        if (isInitialized && generation == _generation) {
+          updateCache();
+          notifyListeners();
+        }
+      };
     });
   }
 
@@ -614,6 +672,13 @@ class HistoryManager with ChangeNotifier {
       await controller.close();
     }
   }
+}
+
+class _HistoryInitialization {
+  _HistoryInitialization(this.generation);
+  final int generation;
+  final result = Completer<void>();
+  Future<void>? work;
 }
 
 class RefreshProgress {

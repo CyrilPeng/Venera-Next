@@ -551,9 +551,44 @@ class ReaderState extends State<Reader>
       handleVolumeEvent();
     }
     setImageCacheSize();
-    Future.delayed(const Duration(milliseconds: 200), () {
-      LocalFavoritesManager().onRead(cid, type);
-    });
+    final favorites = LocalFavoritesManager();
+    final favoriteGeneration = favorites.connectionGeneration;
+    final comicId = cid;
+    final comicType = type;
+    final readingDelay = Completer<void>();
+    Timer? readingTimer;
+    final readingTask = imageWork.start(
+      onCancel: () {
+        readingTimer?.cancel();
+        if (!readingDelay.isCompleted) readingDelay.complete();
+      },
+    );
+    if (readingTask != null) {
+      readingTimer = Timer(
+        const Duration(milliseconds: 200),
+        readingDelay.complete,
+      );
+      unawaited(() async {
+        try {
+          // Retain the original post-navigation delay, but own it through exit.
+          await readingDelay.future;
+          readingTask.check();
+          await favorites.onRead(
+            comicId,
+            comicType,
+            generation: favoriteGeneration,
+            checkActive: readingTask.check,
+          );
+        } on ImageWorkTaskCancelled {
+          // Leaving before admission does not start another write.
+        } catch (error, stack) {
+          readingTask.recordFailure(error, stack);
+          Log.error('Reader favorites', error, stack);
+        } finally {
+          readingTask.finish();
+        }
+      }());
+    }
     super.initState();
     WidgetsBinding.instance.addObserver(this);
   }

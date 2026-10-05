@@ -1,5 +1,7 @@
 # 项目结构约定
 
+2026-10-05 普通收藏更新：LocalFavoritesManager 的异步修改、后台读取和身份索引刷新统一先全局准入、后局部排队；后台 SQLite 使用只读连接。局部存储 import/exclusive 同样先取得全局访问，再取得自身所有权。页面等待写入结果；排序保存和阅读器延迟收藏更新纳入现有退出所有权。详情见最新 optimization_progress 记录，不代表所有 appdata、源与跨库入口已完成。
+
 本文档记录 `lib/` 与 `test/` 的目录边界，用于后续新增功能、迁移旧代码和审查结构调整。
 
 ## 总体原则
@@ -340,7 +342,7 @@ FavoriteIdentityIndex 使用完整 (id, type) 保存收藏身份引用数，追�
 
 清空使用同目录临时备份保留原数据库，只有新库初始化成功后才删除备份；初始化失败先排空新读取，再恢复旧库及追更/快捷收藏设置并重开，恢复错误记录原路径和备份位置。文件恢复失败时保留备份，不把清理失败误报为清空失败。foundation/FileReplacement 被清空与应用数据导入共同使用，确认备份存在后才删除目标，防止缺失备份时销毁最后一份文件；目录导入沿用现有实现。测试覆盖普通异常下的恢复与重试，不代表断电/崩溃后的自动恢复或跨进程锁已实现，跨域全程互斥仍待完成。
 
-AppDataOperations 在应用主 Isolate 内按提交顺序串行执行应用数据导入、Pica 导入、导出与收藏清空，覆盖解压/压缩 Isolate、文件替换、回滚及清理；单次失败不阻塞后续请求。收藏区分排队中的 clearRequest 与执行中的 clearing，避免导入等待排队清空而形成循环等待。导出使用 UUID 文件名，失败关闭压缩句柄并删除半成品；设置页导入暂存文件也独立命名并在复制失败时清理。应用数据解压改用已有 archive 流式 ZIP 解码器，输入/输出显式关闭并传播写入错误，避开 zip_flutter 0.0.13 原生解压回调参数被手动释放及终结器重复释放的风险；普通/Pica 导入复用同一路径，并拒绝符号链接和越界条目。该队列保护这些批量操作，不阻止普通业务 SQL 写入，不是跨进程锁或一致性数据库快照；本地漫画目录迁移仍由 LocalComicStorageGuard 管理，其涉及的文件集合与上述归档不同。
+AppDataOperations 在应用主 Isolate 内按提交顺序串行执行应用数据导入、Pica 导入、导出与收藏清空，覆盖解压/压缩 Isolate、文件替换、回滚及清理；单次失败不阻塞后续请求。收藏区分排队中的 clearRequest 与执行中的 clearing，避免导入等待排队清空而形成循环等待。导出使用 UUID 文件名，失败关闭压缩句柄并删除半成品；设置页导入暂存文件也独立命名并在复制失败时清理。应用数据解压改用已有 archive 流式 ZIP 解码器，输入/输出显式关闭并传播写入错误，避开 zip_flutter 0.0.13 原生解压回调参数被手动释放及终结器重复释放的风险；普通/Pica 导入复用同一路径，并拒绝符号链接和越界条目。该队列现也协调已接入的历史、图片收藏、普通收藏和 Cookie 普通访问；其余 appdata、源与跨库写入仍需接入，不是跨进程锁或全部数据的一致性快照；本地漫画目录迁移仍由 LocalComicStorageGuard 管理，其涉及的文件集合与上述归档不同。
 
 应用数据导出先等待历史已接受写入并保存设置，再冻结当前 JSON（同步模式复用既有字段拆分规则过滤），不再依赖可能过期的 syncdata.json。createAppDataSnapshot 在独立暂存目录生成历史/收藏/cookie 数据库副本和设置/源文件副本，压缩仅访问暂存文件，成功/失败均清理目录。createSqliteSnapshot 以只读方式打开源库、设置 5 秒锁等待、建立读事务后使用 SQLite backup，包含已提交 WAL 页面并保留 schema/rowid/二进制字段；不切换源库 journal mode，不创建缺失源库或覆盖已有目标。读取事务固定每个库的视图，新的普通写入不改变已固定副本；三个数据库按顺序取快照，非跨库同一时刻事务。批量队列继续覆盖整个暂存/压缩/清理过程，失败不返回半成品归档。
 
@@ -350,7 +352,7 @@ LegacyPicaReader 使用调用方拥有的 SQLite 连接提供旧版收藏、关�
 
 LegacyPicaData 在导入写入前一次性物化收藏、历史和可用来源图片记录，源连接全部释放后返回；解析/schema 失败直接传播，不再由写入分区捕获后报告成功。它只依赖路径、SQLite、解码器与模型 API，来源可用性由调用方提供，并纳入业务依赖检查。关联 JSON 仍按既有链接优先规则在协调器逐条处理，无效链接不阻止其他数据。空数据分区不再触发重写。该预检占用与导入模型量相关的内存；它覆盖源数据解码失败，尚不覆盖目标写入异常的跨库原子性及通知回滚。
 
-ImageFavoritesRepository 以调用方拥有的连接处理图片收藏 schema、SQL、紧凑 JSON 写入和批量事务，image_favorites_row 负责行解码，image_favorites_models 不再依赖 SQLite。管理器保留业务删除集合、通知、缓存清理及统计计算，查询解码失败沿用日志/空列表回退，SQL 错误继续传播。saveAll 在一次事务中更新或删除所有输入漫画；批量删除提交后才按固定输入清理缓存并通知，缓存清理错误不撤销已提交数据。缓存删除与 provider 写入使用相同完整键。旧版导入跨收藏/历史/图片的统一事务尚未接入，仓储/映射器边界检查不等同于该导入原子性已完成。
+ImageFavoritesRepository 使用调用方连接处理 schema、行存储和批量删除事务。ImageFavoriteManager 的读取、切换、删除和统计经 HistoryManager.accessImageFavorites 进入同一准入与局部队列；切换在准入后读取当前记录，ImageFavoriteActions 保留同步领域规则。通知脱离数据操作权限，缓存删除全部完成后报告结构化提交后失败。image_favorites_statistics.dart 是第 103 个受控业务入口，大量数据在固定路径的只读连接中统计并关闭，不初始化应用。页面等待异步结果并检查挂载/查询代次，阅读器收藏纳入既有 ImageWork 退出等待。旧 addOrUpdateOrDelete、同步查询、search/comics/length 转发和静态统计入口已移除。其余存储写入者、持久 dirty/内容基线与跨域生命周期仍需完成。
 
 foundation/runSqliteTransaction 统一同步事务所有权：连接处于自动提交模式时建立根事务并保留调用方选择的 deferred/immediate 锁策略，否则建立唯一保存点。内层不能提前提交外层，异常回退到自身保存点后释放；SQLite 已自动回滚则直接保留原错误。回滚也失败时使用 SqliteTransactionRollbackError 保留两组错误/堆栈。收藏、历史及图片收藏仓储共同调用该入口，组合回调仅允许同步 SQL，不得自行结束事务或关闭连接。该机制尚未接入旧版跨文件导入，不能替代附加库、提交后的缓存/通知协调或跨进程恢复验证。
 
@@ -448,13 +450,17 @@ WebDAV 在线库的连接与路径模型位于 `webdav_library_config.dart`；�
 
 应用同步的传输协议位于 `features/sync/data_sync_transfer.dart`，客户端适配位于 `data_sync_remote.dart`；应用数据版本、导入导出和管理器通知由 `app_runtime/data_sync_transfer.dart` 的参与者连接。DataSyncController 负责调度与 pending，显式注入设置、持久化、时钟、定时器与订阅。SyncPreferenceStore 不依赖 appdata，应用适配在 foundation/app_sync_preferences.dart。旧 DataSync 单例、reset 和静态测试钩子均已删除；app_runtime/data_sync.dart 提供无静态实例的应用工厂，测试通过端口注入。传输使用单次连接及独立下载临时目录。
 
-importAppData 以 bool 区分内嵌版本检查跳过与原导入路径完成；运行时参与者传回结果，传输和 DataSync 仅在导入路径完成后按原规则处理通知、时间戳与 pending。未开启版本检查的手动导入仍允许旧版本。
+同步提交证据位于 `features/sync/data_sync_commit.dart`，区分未应用、已应用及需要恢复；跨层错误保留阶段、原异常与堆栈。`data_sync_operation.dart` 定义持久操作记录，控制器在副作用前保存 intent，在状态和配置保存后移除；操作记录不参与普通配置回滚。传输层拥有真实剩余收尾，控制器拥有其续作、原始 generation 与配置恢复，重试不重复上传或导入。AppDataImportJournal 在应用数据目录的独立 SQLite 日志中记录固定资源清单、原内容哈希与逐步替换状态，备份保持不可变直到终态。启动在 appdata 读取与数据库打开前恢复未提交导入，已提交记录只清自己的恢复目录。data_sync_recovery 提供仅读终态收据、通知、固定同步时间与确认的窄端口；v2 操作记录包含配置变更前 checkpoint，控制器凭匹配收据恢复收尾，先持久清除同步标记再确认导入记录。旧记录、损坏或不匹配证据继续阻止重复。全参与者写入屏障与内容基线仍属 P6 待办。
+
+上传由 data_sync_upload_journal 与纯 Dart data_sync_upload_executor 持有快照、精确远端身份、条件创建及收尾；data_sync_remote_port 提供全内容核验与强 ETag 条件删除接口，生产 WebDAV 适配拒绝重定向。v3 上传恢复使用原 endpoint 和原版本，匹配内容后只补未完成收尾；快照和导出暂存目录位于 App.dataPath 的已拥有操作目录，实际远端关闭后再清理。旧上传记录继续阻断，新终态在持久清除控制器 marker 后才确认。
+
+importAppData 返回 DataSyncCommitState 区分未应用与已应用，失败保留恢复状态；运行时参与者传回结果，传输和控制器仅依据提交证据处理通知、时间戳与 pending。未开启版本检查的手动导入仍允许旧版本。
 
 DataSyncScope 向状态摘要与同步设置提供应用持有的控制器，作用域不销毁该实例；后台同步和窗口退出绑定通过构造参数接收同一个控制器。摘要监听随作用域实例替换自动迁移。交互与无头入口分别显式创建控制器，并向 CoreBootstrap 传入保存通知。ReaderSessionScope 向阅读入口传递 onClosed；MyApp 借用宿主持有的控制器，卸载只停止调度，保留对延迟写入的观察。
 
 同步传输端口显式接收 RequestScope，控制器销毁时取消并关闭该次连接，同时等待临时文件清理。importSyncAppData 在取得导入队列后及创建替换备份前检查取消；进入替换阶段后必须完整提交或回滚，完成的导入仍通知状态变化。手工 importAppData 保持原接口。远端已发送写入及原先保留策略不具备事务性撤销保证。
 
-远端上传先确认新归档写入成功，再删除原策略选择的旧归档。清理候选去重并排除新文件名；写入失败不主动删除旧恢复点，清理失败保留 pending，但远端可能已完成新文件提交。同名覆盖、并发写入和响应丢失仍不具备远端事务保证。
+远端上传先确认新归档，再按原全局策略处理已记录的留存候选。候选去重并排除新文件；删除用完整内容身份与强 ETag 条件保护，缺少强验证器时明确保留待清理任务。上传用唯一操作名与条件创建拒绝覆盖，响应丢失通过内容核验恢复；这不构成服务端多文件事务或全写入者并发编辑保护。
 
 归档下载及保留策略共用 data_sync_archive_order.dart 的自然顺序，数字日数/版本不按字符串大小排序。当日清理选择该顺序下最旧项，不依赖服务端列表顺序；非数字名称仍参与原 .venera 筛选，数字等值拼写以原名稳定排序。
 
@@ -549,6 +555,8 @@ HistoryManager.init 现在共享一次完成结果，仅在过期清理与已接
 JsEngine.create 允许显式注入其拥有的 HTTP 客户端工厂和初始化脚本加载器；生产单例使用默认装配。初始化失败和销毁共用释放逻辑，临时 dart:io 客户端按请求释放，resetDio 允许旧请求结束后关闭连接。reset 返回可等待 Future，销毁对象不可复用。
 
 CookieJarSql 在构造阶段拥有并初始化数据库，建表失败释放连接，关闭后访问明确失败；SingleInstanceCookieJar.dispose 仅清除自己的全局引用，导入装配不再手动写空/重复赋值。移除无外部调用的 init 入口，防止重复打开泄漏连接。
+
+Cookie 的全部 SQL（包括 loadForRequest 的过期删除）、打开和关闭现通过 AppDataOperations。同步 JS 桥使用 accessSync，遇到已排队或正在执行的替换就明确拒绝；异步 Dio 请求及网页登录保存等待 access。CookieManagerSql 按 RequestOptions 对象登记原连接，响应准入后核对连接身份，同路径重开也不能接收旧响应的 Cookie；SQL 异常返回原始原因/堆栈。captureInstance 只取得当前所有者，不隐式创建缺失数据库；saveFromResponseAsync 捕获可变 Cookie 内容并拒绝写入已关闭所有者。该接入不代表源账户/localStorage 与 Cookie 的跨资源事务或全写入者/持久 dirty 已完成。
 
 foundation/opencc_table.dart 是不依赖 Flutter 的不可变单字转换表，按 Unicode 码点解析并处理 CRLF，保留重复键末项优先。OpenCC 仅负责资源加载/共享初始化与原有静态 API 适配，加载失败可重试；新增第 78 个业务入口门禁。
 

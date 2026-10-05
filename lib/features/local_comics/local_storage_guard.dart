@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:venera_next/foundation/app_data_operations.dart';
 
 class LocalComicStorageBusy implements Exception {
   const LocalComicStorageBusy(this.message);
@@ -23,7 +24,10 @@ class LocalComicStorageGuard {
   /// Completion of the current migration/recovery, including failed operations.
   Future<void>? get pendingExclusive => _exclusive?.future;
 
-  Future<T> runImport<T>(Future<T> Function() action) async {
+  Future<T> runImport<T>(Future<T> Function() action) =>
+      AppDataOperations.instance.access(() => _runImport(action));
+
+  Future<T> _runImport<T>(Future<T> Function() action) async {
     _checkAdmission();
     final done = Completer<void>();
     _imports.add(done);
@@ -38,7 +42,10 @@ class LocalComicStorageGuard {
     }
   }
 
-  Future<T> runExclusive<T>(Future<T> Function() action) async {
+  Future<T> runExclusive<T>(Future<T> Function() action) =>
+      AppDataOperations.instance.access(() => _runExclusive(action));
+
+  Future<T> _runExclusive<T>(Future<T> Function() action) async {
     _checkAdmission();
     if (_imports.isNotEmpty) {
       throw const LocalComicStorageBusy(

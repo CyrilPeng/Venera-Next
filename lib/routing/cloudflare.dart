@@ -11,17 +11,44 @@ import 'package:venera_next/routing/webview.dart';
 import 'package:venera_next/foundation/extensions.dart';
 
 void passCloudflare(CloudflareException e, void Function() onFinished) async {
+  final rootContext = App.rootContext;
   var url = e.url;
   var uri = Uri.parse(url);
 
-  void saveCookies(Map<String, String> cookies) {
+  final CookieJarSql cookieJar;
+  try {
+    cookieJar = await SingleInstanceCookieJar.captureInstance();
+  } catch (error, stack) {
+    Log.error('Cloudflare', error, stack);
+    if (rootContext.mounted) rootContext.showMessage(message: error.toString());
+    onFinished();
+    return;
+  }
+  if (!rootContext.mounted) {
+    onFinished();
+    return;
+  }
+
+  Future<bool> persistCookies(List<io.Cookie> cookies) async {
+    try {
+      await cookieJar.saveFromResponseAsync(uri, cookies);
+      return true;
+    } catch (error, stack) {
+      Log.error('Cloudflare', error, stack);
+      if (rootContext.mounted) {
+        rootContext.showMessage(message: error.toString());
+      }
+      return false;
+    }
+  }
+
+  Future<bool> saveCookies(Map<String, String> cookies) {
     var domain = uri.host;
     var splits = domain.split('.');
     if (splits.length > 1) {
       domain = ".${splits[splits.length - 2]}.${splits[splits.length - 1]}";
     }
-    SingleInstanceCookieJar.instance!.saveFromResponse(
-      uri,
+    return persistCookies(
       List<io.Cookie>.generate(cookies.length, (index) {
         var cookie = io.Cookie(
           cookies.keys.elementAt(index),
@@ -66,7 +93,7 @@ void passCloudflare(CloudflareException e, void Function() onFinished) async {
           if (cookiesMap['cf_clearance'] == null) {
             return;
           }
-          saveCookies(cookiesMap);
+          if (!await saveCookies(cookiesMap)) return;
           controller.close();
           onFinished();
         }
@@ -107,7 +134,7 @@ void passCloudflare(CloudflareException e, void Function() onFinished) async {
             null) {
           return;
         }
-        SingleInstanceCookieJar.instance?.saveFromResponse(uri, cookies);
+        if (!await persistCookies(cookies)) return;
         if (!success) {
           App.rootPop();
           success = true;
@@ -115,7 +142,7 @@ void passCloudflare(CloudflareException e, void Function() onFinished) async {
       }
     }
 
-    await App.rootContext.to(
+    await rootContext.to(
       () => AppWebview(
         initialUrl: url,
         singlePage: true,
@@ -132,7 +159,7 @@ void passCloudflare(CloudflareException e, void Function() onFinished) async {
             appdata.writeImplicitData();
           }
           var cookies = await controller.getCookies(url) ?? [];
-          SingleInstanceCookieJar.instance?.saveFromResponse(uri, cookies);
+          await persistCookies(cookies);
         },
       ),
     );

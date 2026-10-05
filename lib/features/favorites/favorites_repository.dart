@@ -198,6 +198,45 @@ class FavoritesRepository {
     );
   }
 
+  /// Metadata and tracking time are one logical commit. An unchanged time
+  /// preserves an unread update flag from a previous check.
+  bool applyFollowUpdate(
+    String folder,
+    FavoriteItem item,
+    String? updateTime,
+    int checkedAt,
+  ) => _transaction(() {
+    final row = db.select(
+      'SELECT last_update_time FROM ${_table(folder)} WHERE id = ? AND type = ?;',
+      [item.id, item.type.value],
+    ).firstOrNull;
+    if (row == null) throw StateError('Favorite no longer exists');
+    updateInfo(folder, item);
+    if (updateTime == null || row['last_update_time'] == updateTime) {
+      updateCheckTime(folder, item.id, item.type.value, checkedAt);
+      return false;
+    }
+    return updateUpdateTime(
+      folder,
+      item.id,
+      item.type.value,
+      updateTime,
+      checkedAt,
+    );
+  });
+
+  void transferToFolders(
+    String source,
+    List<String> targets,
+    List<(String, int)> identities, {
+    required bool move,
+  }) => _transaction(() {
+    for (final target in targets) {
+      copyMany(source, target, identities);
+    }
+    if (move) deleteComics([source], identities);
+  });
+
   T _transaction<T>(T Function() action) => runSqliteTransaction(db, action);
 
   void _copyRecord(

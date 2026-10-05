@@ -12,12 +12,22 @@ abstract final class AppDataArchive {
     required String cachePath,
     required String destinationPath,
     required String settingsJson,
+    String? stagingDirectoryPath,
   }) async {
     final destination = File(destinationPath);
     if (destination.existsSync()) {
       throw StateError('Archive destination already exists');
     }
-    final staging = Directory(cachePath).createTempSync('.app_data_export_');
+    final Directory staging;
+    if (stagingDirectoryPath == null) {
+      staging = Directory(cachePath).createTempSync('.app_data_export_');
+    } else {
+      if (FileSystemEntity.typeSync(stagingDirectoryPath, followLinks: false) !=
+          FileSystemEntityType.notFound) {
+        throw StateError('Archive staging directory already exists');
+      }
+      staging = Directory(stagingDirectoryPath)..createSync();
+    }
     final stagingPath = staging.path;
     try {
       await Isolate.run(() async {

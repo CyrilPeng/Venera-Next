@@ -3,6 +3,7 @@ import 'package:venera_next/foundation/res.dart';
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:venera_next/features/sync/data_sync_commit.dart';
 import 'package:venera_next/features/sync/data_sync_controller.dart';
 import 'package:venera_next/features/sync/data_sync_transfer.dart';
 import 'package:venera_next/foundation/sync_configuration.dart';
@@ -124,9 +125,16 @@ void main() {
           minutes: 15,
           initialUpload: true,
         );
+        expect(result.error, isTrue);
+        final failure = result.failure! as DataSyncFailure;
+        expect(failure.commitState, DataSyncCommitState.notApplied);
+        expect(failure.failures, fixture.persistenceFailures);
+        expect(failure.failures, hasLength(2));
         expect(
-          result.errorMessage,
-          contains('Failed to restore sync configuration'),
+          failure.failures.map((failure) => failure.stage),
+          everyElement(
+            implicitFailure ? 'save implicit sync state' : 'save sync settings',
+          ),
         );
         expect(fixture.settings['webdav'], ['https://example.com', '', '']);
         expect(fixture.settings['disableSyncFields'], 'old-field');
@@ -173,6 +181,7 @@ void main() {
       final gate = Completer<void>();
       fixture.transfer.uploadGate = gate.future;
       final upload = fixture.controller.uploadData();
+      await pumpEventQueue();
       final configured = fixture.controller.configure(
         config: ['https://new.example.com', '', ''],
         excludedFields: '',
@@ -204,6 +213,7 @@ void main() {
         initialUpload: true,
       );
       expect(fixture.settings['webdav'], ['https://new.example.com', '', '']);
+      await pumpEventQueue();
       fixture.controller.dispose();
       expect(fixture.transfer.uploadScope!.isCancelled, isTrue);
       gate.complete();
@@ -247,6 +257,7 @@ class _Fixture {
   int implicitFailures = 0;
   int readFailures = 0;
   int unsubscribeCount = 0;
+  final persistenceFailures = <DataSyncDiagnostic>[];
   late final preferences = SyncPreferenceStore(
     readSetting: (key) {
       if (readFailures > 0) {
@@ -265,13 +276,27 @@ class _Fixture {
       saveCount++;
       if (saveFailures > 0) {
         saveFailures--;
-        throw StateError('save failed');
+        final error = StateError('save failed');
+        final stack = StackTrace.current;
+        persistenceFailures.add((
+          stage: 'save sync settings',
+          error: error,
+          stack: stack,
+        ));
+        Error.throwWithStackTrace(error, stack);
       }
     },
     persistImplicit: () {
       if (implicitFailures > 0) {
         implicitFailures--;
-        throw StateError('implicit save failed');
+        final error = StateError('implicit save failed');
+        final stack = StackTrace.current;
+        persistenceFailures.add((
+          stage: 'save implicit sync state',
+          error: error,
+          stack: stack,
+        ));
+        Error.throwWithStackTrace(error, stack);
       }
     },
     observeChanges: (changed) {
@@ -306,6 +331,8 @@ class _Transfer implements DataSyncTransfer {
   Future<bool> download(
     WebDavEndpoint connection, {
     required RequestScope scope,
+    void Function(void Function())? publishImported,
+    String? syncOperationId,
   }) async {
     downloads++;
     return false;
@@ -316,9 +343,11 @@ class _Transfer implements DataSyncTransfer {
     WebDavEndpoint connection, {
     required bool excludeFields,
     required RequestScope scope,
+    String? syncOperationId,
   }) async {
     uploadScope = scope;
     await uploadGate;
+    scope.check();
     final error = uploadError;
     if (error != null) throw error;
   }

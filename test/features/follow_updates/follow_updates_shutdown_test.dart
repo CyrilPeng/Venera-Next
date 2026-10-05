@@ -337,17 +337,20 @@ class _Favorites extends Fake implements LocalFavoritesManager {
   }
 
   @override
-  void updateInfo(String folder, FavoriteItem comic, [bool notify = true]) =>
-      writes++;
+  int get connectionGeneration => 1;
   @override
-  void updateCheckTime(String folder, String id, ComicType type) => writes++;
-  @override
-  void updateUpdateTime(
+  Future<bool> applyFollowUpdate(
     String folder,
-    String id,
-    ComicType type,
-    String updateTime,
-  ) => writes++;
+    FavoriteItem comic,
+    String? updateTime, {
+    required int generation,
+    required void Function() checkActive,
+  }) async {
+    checkActive();
+    writes += 2;
+    return updateTime != null;
+  }
+
   @override
   void notifyChanges() {
     notifications++;

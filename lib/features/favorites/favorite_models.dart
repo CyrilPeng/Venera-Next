@@ -41,6 +41,17 @@ class FavoriteItem implements Comic {
     required this.time,
   });
 
+  /// Detach mutable source/UI values before a queued database operation.
+  FavoriteItem detached() => FavoriteItem.withTime(
+    id: id,
+    name: name,
+    coverPath: coverPath,
+    author: author,
+    type: type,
+    tags: List.of(tags),
+    time: time,
+  );
+
   @override
   bool operator ==(Object other) {
     return other is FavoriteItem && other.id == id && other.type == type;

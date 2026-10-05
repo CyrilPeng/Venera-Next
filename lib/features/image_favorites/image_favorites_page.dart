@@ -14,6 +14,7 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/extensions.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
@@ -54,18 +55,60 @@ class _ImageFavoritesPageState extends State<ImageFavoritesPage> {
     }
   }
 
-  void updateImageFavorites() async {
-    comics = searchMode
-        ? ImageFavoriteManager().search(keyword)
-        : ImageFavoriteManager().getAll();
-    sortImageFavorites();
-    update();
+  int _refreshGeneration = 0;
+  bool _loading = false;
+  bool _deleting = false;
+  Object? _loadError;
+  List<ImageFavoritesComic> _loadedComics = [];
+
+  Future<void> updateImageFavorites() async {
+    final generation = ++_refreshGeneration;
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    try {
+      final result = await ImageFavoriteManager().getAll(
+        searchMode ? keyword : null,
+      );
+      if (!mounted || generation != _refreshGeneration) return;
+      setState(() {
+        _loadedComics = result;
+        _loading = false;
+        sortImageFavorites();
+      });
+    } catch (error, stack) {
+      Log.error('Image Favorites', error, stack);
+      if (!mounted || generation != _refreshGeneration) return;
+      setState(() {
+        _loading = false;
+        _loadError = error;
+      });
+    }
+  }
+
+  Future<void> deleteSelected() async {
+    if (_deleting || selectedImageFavorites.isEmpty) return;
+    setState(() => _deleting = true);
+    try {
+      await ImageFavoriteManager().deleteImageFavorite(
+        selectedImageFavorites.keys,
+      );
+      if (!mounted) return;
+      setState(() {
+        multiSelectMode = false;
+        selectedImageFavorites.clear();
+      });
+    } catch (error, stack) {
+      Log.error('Image Favorites', error, stack);
+      if (mounted) context.showMessage(message: 'Error'.tl);
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
   }
 
   void sortImageFavorites() {
-    comics = searchMode
-        ? ImageFavoriteManager().search(keyword)
-        : ImageFavoriteManager().getAll();
+    comics = List.of(_loadedComics);
     // 筛选到最终列表
     comics = comics.where((ele) {
       bool isFilter = true;
@@ -121,6 +164,7 @@ class _ImageFavoritesPageState extends State<ImageFavoritesPage> {
   void dispose() {
     ImageFavoriteManager().removeListener(updateImageFavorites);
     scrollController.dispose();
+    controller.dispose();
     super.dispose();
   }
 
@@ -130,15 +174,7 @@ class _ImageFavoritesPageState extends State<ImageFavoritesPage> {
         MenuEntry(
           icon: Icons.delete_outline,
           text: "Delete".tl,
-          onClick: () {
-            ImageFavoriteManager().deleteImageFavorite(
-              selectedImageFavorites.keys,
-            );
-            setState(() {
-              multiSelectMode = false;
-              selectedImageFavorites.clear();
-            });
-          },
+          onClick: deleteSelected,
         ),
       ],
     );
@@ -279,6 +315,16 @@ class _ImageFavoritesPageState extends State<ImageFavoritesPage> {
               },
             ),
           ),
+        if (_loading || _deleting)
+          const SliverToBoxAdapter(child: LinearProgressIndicator()),
+        if (_loadError != null)
+          SliverToBoxAdapter(
+            child: TextButton.icon(
+              onPressed: updateImageFavorites,
+              icon: const Icon(Icons.refresh),
+              label: Text('Retry'.tl),
+            ),
+          ),
         SliverList(
           delegate: SliverChildBuilderDelegate((context, index) {
             return ImageFavoritesItem(
@@ -335,8 +381,8 @@ class _ImageFavoritesPageState extends State<ImageFavoritesPage> {
               this.sortType = sortType;
               timeFilterSelect = timeFilter;
               numFilterSelect = numFilter;
+              sortImageFavorites();
             });
-            sortImageFavorites();
           },
         );
       },

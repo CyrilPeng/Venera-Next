@@ -2,6 +2,8 @@ import '../../support/data_sync_fixture.dart';
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:venera_next/features/sync/data_sync_commit.dart';
+import 'package:venera_next/features/sync/data_sync_transfer.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
@@ -36,6 +38,7 @@ void main() {
       final waitFuture = sync.waitForUpload().then((_) {
         waitCompleted = true;
       });
+      await pumpEventQueue();
 
       expect(sync.isUploading, isTrue);
       expect(uploads, hasLength(1));
@@ -153,6 +156,7 @@ void main() {
       sync.addListener(() => notifications++);
       final active = sync.uploadData();
       final queued = sync.uploadData();
+      await pumpEventQueue();
       sync.dispose();
       final before = notifications;
       gate.complete(const Res(true));
@@ -177,4 +181,57 @@ void main() {
     expect(sync.lastError, result.errorMessage);
     expect(sync.isDownloading, isFalse);
   });
+
+  for (final download in [false, true]) {
+    final direction = download ? 'downloadData' : 'uploadData';
+    test(
+      '$direction retains transfer cleanup errors and their stacks',
+      () async {
+        final operationError = StateError('request failed');
+        final operationStack = StackTrace.fromString('original request stack');
+        final closeError = StateError('remote close failed');
+        final closeStack = StackTrace.fromString('original close stack');
+        final fileError = StateError('file cleanup failed');
+        final fileStack = StackTrace.fromString('original file cleanup stack');
+        final cleanup = DataSyncTransferFailure(
+          commitState: DataSyncCommitState.notApplied,
+          failures: [
+            (stage: 'transfer', error: operationError, stack: operationStack),
+            (stage: 'remote close', error: closeError, stack: closeStack),
+            (stage: 'file cleanup', error: fileError, stack: fileStack),
+          ],
+        );
+        Future<Res<bool>> failTransfer() async =>
+            Error.throwWithStackTrace(cleanup, operationStack);
+        if (download) {
+          fixture.transfer.onDownload = failTransfer;
+        } else {
+          fixture.transfer.onUpload = failTransfer;
+        }
+
+        final sync = fixture.controller;
+        final result = await (download
+            ? sync.downloadData()
+            : sync.uploadData());
+
+        expect(result.error, isTrue);
+        expect(result.failure, same(cleanup));
+        expect(
+          result.failure?.stackTrace.toString(),
+          operationStack.toString(),
+        );
+        final retained = result.failure! as DataSyncTransferFailure;
+        expect(retained.commitState, DataSyncCommitState.notApplied);
+        expect(retained.failures, [
+          (stage: 'transfer', error: operationError, stack: operationStack),
+          (stage: 'remote close', error: closeError, stack: closeStack),
+          (stage: 'file cleanup', error: fileError, stack: fileStack),
+        ]);
+        expect(result.errorMessage, cleanup.toString());
+        expect(sync.statusSnapshot.lastError, result.errorMessage);
+        expect(sync.isUploading, isFalse);
+        expect(sync.isDownloading, isFalse);
+      },
+    );
+  }
 }

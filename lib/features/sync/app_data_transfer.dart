@@ -1,28 +1,39 @@
-import 'package:venera_next/foundation/directory_replacement.dart';
+import 'app_data_import_journal.dart';
 import 'pica_import.dart';
 import 'app_data_archive.dart';
+import 'data_sync_commit.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
-import 'package:venera_next/foundation/file_replacement.dart';
 
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
-import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/cookie_jar.dart';
 import 'package:venera_next/foundation/file_system.dart';
 
 Future<File> exportAppData([bool sync = true]) =>
     AppDataOperations.instance.run(() => _exportAppData(sync));
 
-Future<File> _exportAppData(bool sync) async {
-  final cacheFilePath = FilePath.join(
-    App.cachePath,
-    '${const Uuid().v4()}.venera',
-  );
+/// The upload journal owns this destination and its staging directory before
+/// export starts, so interrupted work can be cleaned without scanning caches.
+Future<void> exportSyncAppData({
+  required bool excludeFields,
+  required File destination,
+}) => AppDataOperations.instance.run(() async {
+  await _exportAppData(excludeFields, destination: destination);
+});
+
+Future<File> _exportAppData(bool sync, {File? destination}) async {
+  final cacheFilePath =
+      destination?.path ??
+      FilePath.join(App.cachePath, '${const Uuid().v4()}.venera');
+  final stagingDirectoryPath = destination == null
+      ? null
+      : FilePath.join(destination.parent.path, 'export-staging');
   final cacheFile = File(cacheFilePath);
   final dataPath = App.dataPath;
   await HistoryManager.cache?.waitForAsyncWrites();
@@ -43,48 +54,59 @@ Future<File> _exportAppData(bool sync) async {
     cachePath: App.cachePath,
     destinationPath: cacheFilePath,
     settingsJson: settingsJson,
+    stagingDirectoryPath: stagingDirectoryPath,
   );
   return cacheFile;
 }
 
-/// False means the archive was skipped by its embedded version check.
-Future<bool> importAppData(File file, [bool checkVersion = false]) =>
-    AppDataOperations.instance.run(() => _importAppData(file, checkVersion));
+/// An older archive is [DataSyncCommitState.notApplied]. Failures after the
+/// replacement boundary carry explicit commit or recovery evidence.
+Future<DataSyncCommitState> importAppData(
+  File file, [
+  bool checkVersion = false,
+]) => AppDataOperations.instance.run(() => _importAppData(file, checkVersion));
 
 /// Sync cancellation is checked after queueing and immediately before replacement.
 /// Once replacement starts, the existing commit/rollback path must finish.
-Future<bool> importSyncAppData(
+/// [publishImported] wraps only notifications originating from the snapshot or
+/// its rollback, including a repository's deferred cache publication.
+Future<DataSyncCommitState> importSyncAppData(
   File file, {
   required void Function() checkActive,
+  void Function(void Function())? publishImported,
+  String? syncOperationId,
 }) => AppDataOperations.instance.run(
-  () => _importAppData(file, true, checkActive),
+  () => _importAppData(
+    file,
+    true,
+    checkActive: checkActive,
+    publishImported: publishImported,
+    syncOperationId: syncOperationId,
+  ),
 );
 
-Future<bool> _importAppData(
+Future<DataSyncCommitState> _importAppData(
   File file,
-  bool checkVersion, [
+  bool checkVersion, {
   void Function()? checkActive,
-]) async {
+  void Function(void Function())? publishImported,
+  String? syncOperationId,
+}) async {
   checkActive?.call();
-  var cacheDirPath = FilePath.join(App.cachePath, 'temp_data');
-  var cacheDir = Directory(cacheDirPath);
-  var backupDir = Directory(
-    FilePath.join(
-      App.dataPath,
-      '.import_backup_${DateTime.now().microsecondsSinceEpoch}',
-    ),
-  );
-  var replacements = <_ImportReplacement>[];
+  final cacheDir = await Directory(
+    App.cachePath,
+  ).createTemp('app-data-import-');
+  final cacheDirPath = cacheDir.path;
+  AppDataImportJournal? journal;
+  AppDataImportTransaction? transaction;
+  AppdataImportCheckpoint? checkpoint;
   var reloadHistory = false;
   var reloadLocalFavorites = false;
   var reloadCookies = false;
   var reloadComicSources = false;
-  var success = false;
-  var rolledBack = false;
-  if (cacheDir.existsSync()) {
-    cacheDir.deleteSync(recursive: true);
-  }
-  cacheDir.createSync();
+  var mutationStarted = false;
+  var state = DataSyncCommitState.notApplied;
+  final failures = <DataSyncDiagnostic>[];
   try {
     await AppDataArchive.extract(file.path, cacheDirPath);
     var historyFile = cacheDir.joinFile("history.db");
@@ -102,55 +124,70 @@ Future<bool> _importAppData(
           ? importedSettings["dataVersion"]
           : null;
       if (version is int && version <= appdata.settings["dataVersion"]) {
-        return false;
+        return DataSyncCommitState.notApplied;
       }
     }
 
     checkActive?.call();
-    backupDir.createSync();
-
+    journal = AppDataImportJournal.open(App.dataPath);
+    journal.checkReadyForImport();
+    // Close every participating database before creating immutable backups.
+    // A failed close leaves its live file untouched and the other hosts reopen.
+    await appdata.saveData(false);
+    checkActive?.call();
+    checkpoint = appdata.captureImportCheckpoint();
     if (await historyFile.exists()) {
-      await _closeHistoryManagerForImport();
       reloadHistory = true;
-      await _replaceFileForImport(
-        source: historyFile,
-        targetPath: FilePath.join(App.dataPath, "history.db"),
-        backupDir: backupDir,
-        backupName: "history.db",
-        replacements: replacements,
-      );
+      await _closeHistoryManagerForImport();
     }
     if (await localFavoriteFile.exists()) {
-      await _closeLocalFavoritesManagerForImport();
       reloadLocalFavorites = true;
-      await _replaceFileForImport(
-        source: localFavoriteFile,
-        targetPath: FilePath.join(App.dataPath, "local_favorite.db"),
-        backupDir: backupDir,
-        backupName: "local_favorite.db",
-        replacements: replacements,
-      );
+      await _closeLocalFavoritesManagerForImport();
     }
     if (await cookieFile.exists()) {
-      _closeCookieJarForImport();
       reloadCookies = true;
-      await _replaceFileForImport(
-        source: cookieFile,
-        targetPath: FilePath.join(App.dataPath, "cookie.db"),
-        backupDir: backupDir,
-        backupName: "cookie.db",
-        replacements: replacements,
-      );
+      _closeCookieJarForImport();
     }
     var comicSourceDir = FilePath.join(cacheDirPath, "comic_source");
-    if (Directory(comicSourceDir).existsSync()) {
+    final hasComicSources = Directory(comicSourceDir).existsSync();
+    checkActive?.call();
+    transaction = await journal.prepare(
+      resources: {
+        if (reloadHistory) 'history.db',
+        if (reloadLocalFavorites) 'local_favorite.db',
+        if (reloadCookies) 'cookie.db',
+        if (hasComicSources) 'comic_source',
+      },
+      syncOperationId: syncOperationId,
+    );
+    checkActive?.call();
+    mutationStarted = true;
+    // Repository reopen and source initialization can save settings as well.
+    // Register all fallback channels before permitting any of those effects.
+    for (final name in const [
+      'appdata.json',
+      'appdata.json.bak',
+      'appdata.json.tmp',
+      'syncdata.json',
+      'syncdata.json.bak',
+      'syncdata.json.tmp',
+    ]) {
+      await transaction.markChanging(name);
+    }
+    if (reloadHistory) {
+      await transaction.replaceFile('history.db', historyFile);
+    }
+    if (reloadLocalFavorites) {
+      await transaction.replaceFile('local_favorite.db', localFavoriteFile);
+    }
+    if (reloadCookies) {
+      await transaction.replaceFile('cookie.db', cookieFile);
+    }
+    if (hasComicSources) {
       reloadComicSources = true;
-      await _replaceDirectoryForImport(
-        source: Directory(comicSourceDir),
-        targetPath: FilePath.join(App.dataPath, "comic_source"),
-        backupDir: backupDir,
-        backupName: "comic_source",
-        replacements: replacements,
+      await transaction.replaceDirectory(
+        'comic_source',
+        Directory(comicSourceDir),
       );
     }
 
@@ -158,44 +195,170 @@ Future<bool> _importAppData(
       await HistoryManager().init();
     }
     if (reloadLocalFavorites) {
-      await LocalFavoritesManager().init();
+      await LocalFavoritesManager().init(publishChange: publishImported);
     }
     if (reloadCookies) {
       _openCookieJarForImport();
     }
     if (reloadComicSources) {
-      await ComicSourceManager().reload();
+      await ComicSourceManager().reload(publishChange: publishImported);
     }
 
     if (importedAppdata != null) {
-      appdata.syncData(importedAppdata);
+      await appdata.syncData(importedAppdata);
+    } else {
+      // Reopening a repository may have repaired metadata settings.
+      await appdata.saveData(false);
     }
-    success = true;
-    return true;
+    await transaction.markApplied(DateTime.now().millisecondsSinceEpoch);
+    state = DataSyncCommitState.applied;
   } catch (error, stackTrace) {
-    try {
-      await _rollbackImport(
-        replacements: replacements,
-        reloadHistory: reloadHistory,
-        reloadLocalFavorites: reloadLocalFavorites,
-        reloadCookies: reloadCookies,
-        reloadComicSources: reloadComicSources,
-      );
-      rolledBack = true;
-    } catch (rollbackError, rollbackStackTrace) {
-      Log.error(
-        "Import Data",
-        "Failed to rollback app data import: $rollbackError",
-        rollbackStackTrace,
-      );
+    if (error is DataSyncFailure) state = error.commitState;
+    failures.add((stage: 'import app data', error: error, stack: stackTrace));
+    // A durable applied marker is authoritative even if a later callback fails.
+    var outcomeReadable = true;
+    if (transaction != null) {
+      state = DataSyncCommitState.recoveryRequired;
+      try {
+        state = transaction.state;
+      } catch (error, stack) {
+        outcomeReadable = false;
+        failures.add((
+          stage: 'read import outcome',
+          error: error,
+          stack: stack,
+        ));
+      }
     }
-    Error.throwWithStackTrace(error, stackTrace);
+    if (state != DataSyncCommitState.applied &&
+        outcomeReadable &&
+        checkpoint != null) {
+      state = DataSyncCommitState.recoveryRequired;
+      try {
+        final rollbackFailures = await _rollbackImport(
+          transaction: transaction,
+          reloadHistory: reloadHistory,
+          reloadLocalFavorites: reloadLocalFavorites,
+          reloadCookies: reloadCookies,
+          reloadComicSources: reloadComicSources,
+          checkpoint: checkpoint,
+          publishImported: publishImported,
+        );
+        failures.addAll(rollbackFailures);
+        if (rollbackFailures.isEmpty) state = DataSyncCommitState.notApplied;
+      } catch (error, stack) {
+        failures.add((stage: 'rollback import', error: error, stack: stack));
+      }
+    }
   } finally {
-    await cacheDir.deleteIgnoreError(recursive: true);
-    if (success || rolledBack) {
-      await backupDir.deleteIgnoreError(recursive: true);
+    final recoveryPath = transaction?.directoryPath;
+    final cleanup = _ImportCleanup(
+      [(stage: 'remove import staging', directory: cacheDir)],
+      recoveryPath: recoveryPath,
+      dataPath: App.dataPath,
+      journalId: state == DataSyncCommitState.recoveryRequired
+          ? null
+          : transaction?.id,
+    );
+    try {
+      journal?.close();
+    } catch (error, stack) {
+      failures.add((stage: 'close import journal', error: error, stack: stack));
+    }
+    final cleanupFailures = await cleanup.attempt();
+    if (cleanupFailures.isNotEmpty) {
+      failures.addAll(cleanupFailures);
+      final failure = DataSyncImportFailure(
+        commitState: state,
+        failures: failures,
+        recoveryPath: recoveryPath,
+        resume: state == DataSyncCommitState.applied ? cleanup.resume : null,
+      );
+      Error.throwWithStackTrace(failure, failures.first.stack);
     }
   }
+  if (failures.isNotEmpty) {
+    if (!mutationStarted && failures.length == 1) {
+      Error.throwWithStackTrace(failures.first.error, failures.first.stack);
+    }
+    Error.throwWithStackTrace(
+      DataSyncImportFailure(
+        commitState: state,
+        failures: failures,
+        recoveryPath: state == DataSyncCommitState.recoveryRequired
+            ? transaction?.directoryPath
+            : null,
+      ),
+      failures.first.stack,
+    );
+  }
+  return state;
+}
+
+class _ImportCleanup {
+  _ImportCleanup(
+    this.pending, {
+    required this.recoveryPath,
+    required this.dataPath,
+    required this.journalId,
+  });
+  final List<({String stage, Directory directory})> pending;
+  final String? recoveryPath;
+  final String dataPath;
+  String? journalId;
+
+  Future<List<DataSyncDiagnostic>> attempt() async {
+    final failures = <DataSyncDiagnostic>[];
+    for (final entry in pending.toList()) {
+      try {
+        if (await entry.directory.exists()) {
+          await entry.directory.delete(recursive: true);
+        }
+        pending.remove(entry);
+      } catch (error, stack) {
+        failures.add((stage: entry.stage, error: error, stack: stack));
+      }
+    }
+    if (journalId case final id?) {
+      AppDataImportJournal? journal;
+      try {
+        journal = AppDataImportJournal.open(dataPath);
+        await journal.cleanup(id);
+        journalId = null;
+      } catch (error, stack) {
+        failures.add((
+          stage: 'remove import backup',
+          error: error,
+          stack: stack,
+        ));
+      } finally {
+        try {
+          journal?.close();
+        } catch (error, stack) {
+          failures.add((
+            stage: 'close cleanup journal',
+            error: error,
+            stack: stack,
+          ));
+        }
+      }
+    }
+    return failures;
+  }
+
+  Future<DataSyncCommitState> resume() =>
+      AppDataOperations.instance.run(() async {
+        final failures = await attempt();
+        if (failures.isNotEmpty) {
+          throw DataSyncImportFailure(
+            commitState: DataSyncCommitState.applied,
+            failures: failures,
+            recoveryPath: recoveryPath,
+            resume: resume,
+          );
+        }
+        return DataSyncCommitState.applied;
+      });
 }
 
 Map<String, dynamic> _decodeImportAppdata(String content) {
@@ -222,141 +385,101 @@ Map<String, dynamic> _decodeImportAppdata(String content) {
   return result;
 }
 
-class _ImportReplacement {
-  _ImportReplacement._({
-    required this.targetPath,
-    required this.backupPath,
-    required this.isDirectory,
-  });
-
-  factory _ImportReplacement.file(
-    String targetPath,
-    Directory backupDir,
-    String backupName,
-  ) {
-    return _ImportReplacement._(
-      targetPath: targetPath,
-      backupPath: FilePath.join(backupDir.path, backupName),
-      isDirectory: false,
-    );
-  }
-
-  factory _ImportReplacement.directory(
-    String targetPath,
-    Directory backupDir,
-    String backupName,
-  ) {
-    return _ImportReplacement._(
-      targetPath: targetPath,
-      backupPath: FilePath.join(backupDir.path, backupName),
-      isDirectory: true,
-    );
-  }
-
-  final String targetPath;
-  final String backupPath;
-  final bool isDirectory;
-
-  FileReplacement? _fileReplacement;
-  DirectoryReplacement? _directoryReplacement;
-
-  void backup() {
-    if (!isDirectory) {
-      final replacement = FileReplacement(targetPath, backupPath);
-      replacement.backup();
-      _fileReplacement = replacement;
-      return;
-    }
-    final replacement = DirectoryReplacement(targetPath, backupPath);
-    replacement.backup();
-    _directoryReplacement = replacement;
-  }
-
-  void restore() {
-    if (isDirectory) {
-      _directoryReplacement!.restore();
-    } else {
-      _fileReplacement!.restore();
-    }
-  }
-}
-
-Future<void> _replaceFileForImport({
-  required File source,
-  required String targetPath,
-  required Directory backupDir,
-  required String backupName,
-  required List<_ImportReplacement> replacements,
-}) async {
-  var replacement = _ImportReplacement.file(targetPath, backupDir, backupName);
-  replacement.backup();
-  replacements.add(replacement);
-  await source.copy(targetPath);
-}
-
-Future<void> _replaceDirectoryForImport({
-  required Directory source,
-  required String targetPath,
-  required Directory backupDir,
-  required String backupName,
-  required List<_ImportReplacement> replacements,
-}) async {
-  var replacement = _ImportReplacement.directory(
-    targetPath,
-    backupDir,
-    backupName,
-  );
-  replacement.backup();
-  replacements.add(replacement);
-  await copyDirectory(source, Directory(targetPath));
-}
-
-Future<void> _rollbackImport({
-  required List<_ImportReplacement> replacements,
+Future<List<DataSyncDiagnostic>> _rollbackImport({
+  required AppDataImportTransaction? transaction,
   required bool reloadHistory,
   required bool reloadLocalFavorites,
   required bool reloadCookies,
   required bool reloadComicSources,
+  required AppdataImportCheckpoint checkpoint,
+  void Function(void Function())? publishImported,
 }) async {
-  if (reloadHistory) {
-    await _closeHistoryManagerForImport();
-  }
-  if (reloadLocalFavorites) {
-    await _closeLocalFavoritesManagerForImport();
-  }
-  if (reloadCookies) {
-    _closeCookieJarForImport();
-  }
-
-  for (var replacement in replacements.reversed) {
-    replacement.restore();
+  final failures = <DataSyncDiagnostic>[];
+  Future<bool> attempt(String stage, FutureOr<void> Function() action) async {
+    try {
+      await action();
+      return true;
+    } catch (error, stack) {
+      failures.add((stage: stage, error: error, stack: stack));
+      return false;
+    }
   }
 
-  if (reloadHistory) {
-    await HistoryManager().init();
+  final historyClosed =
+      !reloadHistory ||
+      await attempt(
+        'close history for rollback',
+        _closeHistoryManagerForImport,
+      );
+  final favoritesClosed =
+      !reloadLocalFavorites ||
+      await attempt(
+        'close favorites for rollback',
+        _closeLocalFavoritesManagerForImport,
+      );
+  final cookiesClosed =
+      !reloadCookies ||
+      await attempt('close cookies for rollback', _closeCookieJarForImport);
+
+  final unrestored = <String>{
+    if (!historyClosed) 'history.db',
+    if (!favoritesClosed) 'local_favorite.db',
+    if (!cookiesClosed) 'cookie.db',
+  };
+  if (transaction != null) {
+    await attempt('restore import files', () async {
+      failures.addAll(await transaction.restore(skip: unrestored));
+    });
+    final outcomeReadable = await attempt('read restored resources', () {
+      unrestored.addAll(transaction.unrestoredResources);
+    });
+    if (!outcomeReadable) {
+      unrestored.addAll(const {
+        'history.db',
+        'local_favorite.db',
+        'cookie.db',
+        'comic_source',
+      });
+      return failures;
+    }
   }
-  if (reloadLocalFavorites) {
-    await LocalFavoritesManager().init();
+  await attempt(
+    'restore appdata memory',
+    () => appdata.restoreImportCheckpoint(checkpoint, persist: false),
+  );
+
+  if (reloadHistory && historyClosed && !unrestored.contains('history.db')) {
+    await attempt('reopen restored history', () => HistoryManager().init());
   }
-  if (reloadCookies) {
-    _openCookieJarForImport();
+  if (reloadLocalFavorites &&
+      favoritesClosed &&
+      !unrestored.contains('local_favorite.db')) {
+    await attempt(
+      'reopen restored favorites',
+      () => LocalFavoritesManager().init(publishChange: publishImported),
+    );
   }
-  if (reloadComicSources) {
-    await ComicSourceManager().reload();
+  if (reloadCookies && cookiesClosed && !unrestored.contains('cookie.db')) {
+    await attempt('reopen restored cookies', _openCookieJarForImport);
   }
+  if (reloadComicSources && !unrestored.contains('comic_source')) {
+    await attempt(
+      'reload restored comic sources',
+      () => ComicSourceManager().reload(publishChange: publishImported),
+    );
+  }
+  await attempt('save restored appdata', () => appdata.saveData(false));
+  if (failures.isEmpty && transaction != null) {
+    await attempt('mark import rolled back', transaction.markRolledBack);
+  }
+  return failures;
 }
 
 Future<void> _closeHistoryManagerForImport() async {
-  try {
-    final manager = HistoryManager.cache;
-    if (manager == null) {
-      return;
-    }
-    await manager.waitForAsyncWrites();
-    manager.close();
-  } catch (_) {
-    // ignore partially initialized managers
-  }
+  final manager = HistoryManager.cache;
+  if (manager == null) return;
+  await manager.waitForAsyncWrites();
+  manager.close();
 }
 
 Future<void> _closeLocalFavoritesManagerForImport() async {
@@ -364,11 +487,7 @@ Future<void> _closeLocalFavoritesManagerForImport() async {
 }
 
 void _closeCookieJarForImport() {
-  try {
-    SingleInstanceCookieJar.instance?.dispose();
-  } catch (_) {
-    // ignore partially initialized cookie jars
-  }
+  SingleInstanceCookieJar.instance?.dispose();
 }
 
 void _openCookieJarForImport() {

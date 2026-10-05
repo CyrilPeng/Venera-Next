@@ -122,9 +122,9 @@ void main() {
           await tester.runAsync(() async {
             await manager.init();
             await history.init();
-            manager.createFolder('Reorder test');
+            await manager.createFolder('Reorder test');
             for (var i = 0; i < 6; i++) {
-              manager.addComic(
+              await manager.addComic(
                 'Reorder test',
                 FavoriteItem(
                   id: 'comic-$i',

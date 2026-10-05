@@ -20,7 +20,8 @@ class ReaderAutomaticReadingAction {
 List<Widget> buildReaderBottomActions(
   BuildContext context, {
   required bool imageCollected,
-  required VoidCallback onCollect,
+  required VoidCallback? onCollect,
+  bool imageCollecting = false,
   VoidCallback? onFullscreen,
   required ReaderOrientation orientation,
   VoidCallback? onRotate,
@@ -35,7 +36,12 @@ List<Widget> buildReaderBottomActions(
     Tooltip(
       message: "Collect the image".tl,
       child: IconButton(
-        icon: Icon(imageCollected ? Icons.favorite : Icons.favorite_border),
+        icon: imageCollecting
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(imageCollected ? Icons.favorite : Icons.favorite_border),
         onPressed: onCollect,
       ),
     ),

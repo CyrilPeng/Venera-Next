@@ -879,7 +879,18 @@ class _History extends Fake implements History {}
 
 class _Favorites extends ChangeNotifier implements LocalFavoritesManager {
   @override
-  void onRead(String id, ComicType type) {}
+  int get connectionGeneration => 1;
+
+  @override
+  Future<void> onRead(
+    String id,
+    ComicType type, {
+    int? generation,
+    void Function()? checkActive,
+  }) async {
+    checkActive?.call();
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

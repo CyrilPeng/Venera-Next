@@ -17,6 +17,7 @@ import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/features/search/search_shortcuts.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
@@ -94,6 +95,8 @@ abstract mixin class ComicPageActions {
   }
 
   void openFavPanel() {
+    final target = comic;
+    final owner = context;
     showSideBar(
       App.rootContext,
       ComicFavoritePanel(
@@ -101,6 +104,7 @@ abstract mixin class ComicPageActions {
         type: comic.comicType,
         isFavorite: isFavorite,
         onFavorite: (local, network) {
+          if (!owner.mounted || !isComicActive(target)) return;
           if (network != null) {
             isFavorite = network;
           }
@@ -115,22 +119,43 @@ abstract mixin class ComicPageActions {
     );
   }
 
-  void quickFavorite() {
+  ComicDetails? _addingQuickFavorite;
+
+  Future<void> quickFavorite() async {
+    if (_addingQuickFavorite != null) return;
     var folder = appdata.settings['quickFavorite'];
     if (folder is! String) {
       return;
     }
-    LocalFavoritesManager().addComic(
-      folder,
-      _toFavoriteItem(),
-      null,
-      comic.findUpdateTime(),
-    );
-    isAddToLocalFav = true;
-    update();
-    App.rootContext.showMessage(
-      message: "Added to @folder".tlParams({"folder": folder}),
-    );
+    final owner = context;
+    final target = comic;
+    final item = _toFavoriteItem();
+    final updateTime = target.findUpdateTime();
+    final manager = LocalFavoritesManager();
+    final generation = manager.connectionGeneration;
+    _addingQuickFavorite = target;
+    try {
+      await AppDataOperations.instance.access(() async {
+        if (!owner.mounted || !isComicActive(target)) return;
+        if (manager.connectionGeneration != generation) {
+          throw StateError('Favorites database changed. Try again.');
+        }
+        await manager.addComic(folder, item, null, updateTime);
+      });
+      if (!owner.mounted || !isComicActive(target)) return;
+      isAddToLocalFav = true;
+      update();
+      owner.showMessage(
+        message: 'Added to @folder'.tlParams({'folder': folder}),
+      );
+    } catch (error, stack) {
+      Log.error('Quick favorite', error, stack);
+      if (owner.mounted && isComicActive(target)) {
+        owner.showMessage(message: error.toString());
+      }
+    } finally {
+      if (identical(_addingQuickFavorite, target)) _addingQuickFavorite = null;
+    }
   }
 
   Widget buildReadLaterAction() => ReadLaterButton(

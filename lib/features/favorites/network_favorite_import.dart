@@ -11,12 +11,18 @@ typedef FavoriteImportProgress = ({int pages, int received, int collected});
 
 /// Durable SQL result. Publishing this result never repeats the import.
 class NetworkFavoriteImportCommit {
-  NetworkFavoriteImportCommit(this.folder, Iterable<FavoriteItem> added)
-    : identities = List.unmodifiable(
-        added.map((item) => (item.id, item.type.value)),
-      );
+  NetworkFavoriteImportCommit(
+    this.folder,
+    Iterable<FavoriteItem> added, {
+    this.owner,
+    this.generation,
+  }) : identities = List.unmodifiable(
+         added.map((item) => (item.id, item.type.value)),
+       );
 
   final String folder;
+  final Object? owner;
+  final int? generation;
   final List<(String, int)> identities;
   int get count => identities.length;
 }

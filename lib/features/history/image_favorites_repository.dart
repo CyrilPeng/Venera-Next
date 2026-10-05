@@ -143,6 +143,37 @@ class ImageFavoritesRepository {
   int count() =>
       db.select('SELECT count(*) AS total FROM $_table;').first['total'] as int;
 
+  /// Re-read under the caller's admission and commit all selected removals in
+  /// one transaction. Source/chapter/page identity retains legacy semantics.
+  void removeImages(Iterable<ImageFavorite> images) =>
+      runSqliteTransaction(db, () {
+        final comics = <ImageFavoritesComic>{};
+        for (final image in images) {
+          final comic =
+              comics
+                  .where(
+                    (comic) =>
+                        comic.id == image.id &&
+                        comic.sourceKey == image.sourceKey,
+                  )
+                  .firstOrNull ??
+              find(image.id, image.sourceKey);
+          if (comic == null) continue;
+          final chapter = comic.imageFavoritesEp
+              .where((ep) => ep.ep == image.ep)
+              .firstOrNull;
+          if (chapter == null) continue;
+          chapter.imageFavorites.remove(image);
+          if (chapter.imageFavorites.isEmpty) {
+            comic.imageFavoritesEp.remove(chapter);
+          }
+          comics.add(comic);
+        }
+        for (final comic in comics) {
+          save(comic);
+        }
+      }, immediate: true);
+
   void saveAll(Iterable<ImageFavoritesComic> comics) =>
       runSqliteTransaction(db, () {
         for (final comic in comics) {

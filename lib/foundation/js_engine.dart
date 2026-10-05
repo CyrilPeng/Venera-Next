@@ -30,6 +30,7 @@ import 'package:venera_next/foundation/js_pool.dart';
 import 'package:venera_next/network/app_dio.dart';
 import 'package:venera_next/network/cache.dart';
 import 'package:venera_next/network/cookie_jar.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/network/proxy.dart';
 import 'package:venera_next/network/request_scope.dart';
 import 'package:venera_next/foundation/init.dart';
@@ -1034,54 +1035,47 @@ mixin class _JSEngineApi {
     return null;
   }
 
-  dynamic handleCookieCallback(Map<String, dynamic> data) {
-    switch (data["function"]) {
-      case "set":
-        SingleInstanceCookieJar.instance?.saveFromResponse(
-          Uri.parse(data["url"]),
-          (data["cookies"] as List).map((e) {
-            var c = Cookie(e["name"], e["value"]);
-            if (e['domain'] != null) {
-              c.domain = e['domain'];
-            }
-            return c;
-          }).toList(),
-        );
-        return null;
-      case "get":
-        var cookies =
-            SingleInstanceCookieJar.instance?.loadForRequest(
+  dynamic handleCookieCallback(Map<String, dynamic> data) =>
+      AppDataOperations.instance.accessSync(() {
+        final cookieJar =
+            SingleInstanceCookieJar.instance ??
+            (throw StateError('Cookie database is not initialized'));
+        switch (data["function"]) {
+          case "set":
+            cookieJar.saveFromResponse(
               Uri.parse(data["url"]),
-            ) ??
-            [];
-        return cookies
-            .map(
-              (e) => {
-                "name": e.name,
-                "value": e.value,
-                "domain": e.domain,
-                "path": e.path,
-                "expires": e.expires,
-                "max-age": e.maxAge,
-                "secure": e.secure,
-                "httpOnly": e.httpOnly,
-                "session": e.expires == null,
-              },
-            )
-            .toList();
-      case "delete":
-        clearCookies([data["url"]]);
+              (data["cookies"] as List).map((e) {
+                var c = Cookie(e["name"], e["value"]);
+                if (e['domain'] != null) {
+                  c.domain = e['domain'];
+                }
+                return c;
+              }).toList(),
+            );
+            return null;
+          case "get":
+            var cookies = cookieJar.loadForRequest(Uri.parse(data["url"]));
+            return cookies
+                .map(
+                  (e) => {
+                    "name": e.name,
+                    "value": e.value,
+                    "domain": e.domain,
+                    "path": e.path,
+                    "expires": e.expires,
+                    "max-age": e.maxAge,
+                    "secure": e.secure,
+                    "httpOnly": e.httpOnly,
+                    "session": e.expires == null,
+                  },
+                )
+                .toList();
+          case "delete":
+            cookieJar.deleteUri(Uri.parse(data["url"]));
+            return null;
+        }
         return null;
-    }
-  }
-
-  void clearCookies(List<String> domains) async {
-    for (var domain in domains) {
-      var uri = Uri.tryParse(domain);
-      if (uri == null) continue;
-      SingleInstanceCookieJar.instance?.deleteUri(uri);
-    }
-  }
+      });
 
   Object? _convert(Map<String, dynamic> data) {
     String type = data["type"];

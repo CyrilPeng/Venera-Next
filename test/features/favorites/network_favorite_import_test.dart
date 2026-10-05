@@ -34,6 +34,30 @@ Future<List<FavoriteItem>> collect(
   onProgress: (_) {},
 );
 void main() {
+  testWidgets(
+    'committed import publishes after its dialog is forcibly unmounted',
+    (tester) async {
+      final pending = Completer<NetworkFavoriteImportCommit>();
+      var publications = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: NetworkFavoriteImportDialog(
+            collect: (_, progress) async => [item('one')],
+            commit: (_, scope) => pending.future,
+            publish: (_) async {
+              publications++;
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox());
+      pending.complete(NetworkFavoriteImportCommit('Target', [item('one')]));
+      await tester.pump();
+      expect(publications, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
   test(
     'oldest-first initial page is clamped and duplicates collapse',
     () async {
@@ -236,7 +260,7 @@ void main() {
               collections++;
               return [item('one')];
             },
-            commit: (items) {
+            commit: (items, scope) {
               commits++;
               return NetworkFavoriteImportCommit(
                 'Target',
@@ -288,7 +312,7 @@ void main() {
       MaterialApp(
         home: NetworkFavoriteImportDialog(
           collect: (_, progress) async => [item('one')],
-          commit: (_) => throw StateError('SQL failed'),
+          commit: (_, scope) => throw StateError('SQL failed'),
           publish: (_) {
             publications++;
           },
@@ -324,7 +348,7 @@ void main() {
           builder: (_) => NetworkFavoriteImportDialog(
             publish: (_) {},
             collect: (_, progress) => pending.future,
-            commit: (_) {
+            commit: (_, scope) {
               commits++;
               return NetworkFavoriteImportCommit('Target', [item('one')]);
             },
@@ -356,7 +380,7 @@ void main() {
               scope = value;
               return pending.future;
             },
-            commit: (_) {
+            commit: (_, scope) {
               commits++;
               return NetworkFavoriteImportCommit('Target', [item('one')]);
             },
@@ -380,7 +404,7 @@ void main() {
         home: NetworkFavoriteImportDialog(
           publish: (_) {},
           collect: (_, progress) async => throw StateError('offline'),
-          commit: (_) {
+          commit: (_, scope) {
             commits++;
             return NetworkFavoriteImportCommit('Target', [item('one')]);
           },

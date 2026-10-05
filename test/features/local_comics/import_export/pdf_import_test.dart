@@ -186,7 +186,7 @@ void main() {
         'registers multiple comics in the selected favorites folder',
         () async {
           await withFavorites((favorites) async {
-            final folder = favorites.createFolder('PDFs');
+            final folder = await favorites.createFolder('PDFs');
             for (var index = 1; index <= 2; index++) {
               await PdfComicImporter.importDocument(
                 _Document([_Page()]),
@@ -207,7 +207,7 @@ void main() {
         'favorite insertion failure rolls back the local record and converted pages',
         () async {
           await withFavorites((favorites) async {
-            final folder = favorites.createFolder('PDFs');
+            final folder = await favorites.createFolder('PDFs');
             final database = sqlite3.open(
               FilePath.join(App.dataPath, 'local_favorite.db'),
             );

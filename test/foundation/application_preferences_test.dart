@@ -98,7 +98,10 @@ void main() {
         appdata.toJson()['settings'] as Map,
       );
       imported['proxy'] = 'remote-proxy';
-      appdata.syncData({'settings': imported, 'searchHistory': <String>[]});
+      await appdata.syncData({
+        'settings': imported,
+        'searchHistory': <String>[],
+      });
       await appdata.saveData(false);
       expect(store.network.proxy, 'direct');
     },

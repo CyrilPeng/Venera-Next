@@ -1,200 +1,122 @@
-import 'image_favorites_repository.dart';
-import 'dart:isolate';
-
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'package:sqlite3/sqlite3.dart';
-import 'package:venera_next/features/history/history_manager.dart';
-import 'package:venera_next/features/history/image_favorites_models.dart';
-import 'package:venera_next/features/history/image_favorites_provider.dart';
-import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/foundation/extensions.dart';
-import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/persistence_failure.dart';
+import 'history_manager.dart';
+import 'image_favorite_actions.dart';
+import 'image_favorites_models.dart';
+import 'image_favorites_provider.dart';
+import 'image_favorites_statistics.dart';
 
 class ImageFavoriteManager with ChangeNotifier {
-  ImageFavoritesRepository get _repository =>
-      ImageFavoritesRepository(HistoryManager().imageFavoritesDatabase);
+  ImageFavoriteManager.create({
+    required HistoryManager history,
+    Future<void> Function(ImageFavorite)? deleteCache,
+    Future<ImageFavoritesComputed> Function(String)? readStatistics,
+  }) : _history = (() => history),
+       _deleteCache = deleteCache ?? ImageFavoritesProvider.deleteFromCache,
+       _readStatistics = readStatistics ?? readImageFavoritesStatistics;
 
-  List<ImageFavoritesComic> get comics => getAll();
+  ImageFavoriteManager._()
+    : _history = HistoryManager.new,
+      _deleteCache = ImageFavoritesProvider.deleteFromCache,
+      _readStatistics = readImageFavoritesStatistics;
 
   static ImageFavoriteManager? _cache;
-
-  ImageFavoriteManager._();
-
   factory ImageFavoriteManager() => (_cache ??= ImageFavoriteManager._());
+  final HistoryManager Function() _history;
+  final Future<void> Function(ImageFavorite) _deleteCache;
+  final Future<ImageFavoritesComputed> Function(String) _readStatistics;
 
-  void addOrUpdateOrDelete(ImageFavoritesComic favorite, [bool notify = true]) {
-    _repository.save(favorite);
-    if (notify) notifyListeners();
+  @override
+  void notifyListeners() => _history().publishChange(super.notifyListeners);
+
+  Future<List<ImageFavoritesComic>> getAll([String? keyword]) => _history()
+      .accessImageFavorites((repository, _) => repository.getAll(keyword));
+
+  Future<ImageFavoritesComic?> find(String id, String sourceKey) => _history()
+      .accessImageFavorites((repository, _) => repository.find(id, sourceKey));
+
+  Future<bool> isCollected(String id, String sourceKey, String eid, int page) =>
+      _history().accessImageFavorites(
+        (repository, _) =>
+            repository
+                .find(id, sourceKey)
+                ?.images
+                .any((image) => image.eid == eid && image.page == page) ??
+            false,
+      );
+
+  /// Capture the intent now; read and mutate current data only after admission.
+  Future<ImageFavoriteResult> toggle(
+    ImageFavoriteInput input, {
+    void Function()? checkActive,
+  }) {
+    final snapshot = input.detached();
+    return _history().accessImageFavorites((repository, _) async {
+      checkActive?.call();
+      final removed = <ImageFavorite>[];
+      var changed = false;
+      final result = ImageFavoriteActions(
+        findComic: repository.find,
+        save: (comic) {
+          repository.save(comic);
+          changed = true;
+        },
+        remove: (image) {
+          repository.removeImages([image]);
+          removed.add(image);
+          changed = true;
+        },
+      ).toggle(snapshot);
+      if (changed) await _finishCommit(removed);
+      return result;
+    });
   }
 
-  List<ImageFavoritesComic> getAll([String? keyword]) {
-    try {
-      return _repository.getAll(keyword);
-    } on SqliteException {
-      rethrow;
-    } catch (e, stackTrace) {
-      Log.error("Unhandled Exception", e.toString(), stackTrace);
-      return [];
-    }
+  Future<void> deleteImageFavorite(Iterable<ImageFavorite> selected) {
+    final images = selected.map((image) => image.copyWith()).toList();
+    if (images.isEmpty) return Future.value();
+    return _history().accessImageFavorites((repository, _) async {
+      repository.removeImages(images);
+      await _finishCommit(images);
+    });
   }
 
-  void deleteImageFavorite(Iterable<ImageFavorite> imageFavoriteList) {
-    final images = imageFavoriteList.toList();
-    if (images.isEmpty) {
-      return;
-    }
-    var comics = <ImageFavoritesComic>{};
-    for (var i in images) {
-      var comic =
-          comics
-              .where((c) => c.id == i.id && c.sourceKey == i.sourceKey)
-              .firstOrNull ??
-          find(i.id, i.sourceKey);
-      if (comic == null) {
-        continue;
-      }
-      var ep = comic.imageFavoritesEp.firstWhereOrNull((e) => e.ep == i.ep);
-      if (ep == null) {
-        continue;
-      }
-      ep.imageFavorites.remove(i);
-      if (ep.imageFavorites.isEmpty) {
-        comic.imageFavoritesEp.remove(ep);
-      }
-      comics.add(comic);
-    }
-    _repository.saveAll(comics);
-    for (final image in images) {
-      ImageFavoritesProvider.deleteFromCache(image).catchError((
-        Object error,
-        StackTrace stack,
-      ) {
-        Log.error('Image Favorites', error, stack);
-      });
-    }
-    notifyListeners();
-  }
-
-  int get length => _repository.count();
-
-  void notifyChanges() {
-    notifyListeners();
-  }
-
-  List<ImageFavoritesComic> search(String keyword) {
-    if (keyword == "") {
-      return [];
-    }
-    return getAll(keyword);
-  }
-
-  static Future<ImageFavoritesComputed> computeImageFavorites() {
-    var token = ServicesBinding.rootIsolateToken!;
-    var count = ImageFavoriteManager().length;
-    if (count == 0) {
-      return Future.value(ImageFavoritesComputed([], [], [], 0));
-    } else if (count > 100) {
-      return Isolate.run(() async {
-        BackgroundIsolateBinaryMessenger.ensureInitialized(token);
-        await App.init();
-        await HistoryManager().init();
-        return _computeImageFavorites();
-      });
-    } else {
-      return Future.value(_computeImageFavorites());
-    }
-  }
-
-  static ImageFavoritesComputed _computeImageFavorites() {
-    const maxLength = 20;
-
-    var comics = ImageFavoriteManager().getAll();
-    // 去掉这些没有意义的标签
-    const List<String> exceptTags = [
-      '連載中',
-      '',
-      'translated',
-      'chinese',
-      'sole male',
-      'sole female',
-      'original',
-      'doujinshi',
-      'manga',
-      'multi-work series',
-      'mosaic censorship',
-      'dilf',
-      'bbm',
-      'uncensored',
-      'full censorship',
-    ];
-
-    Map<String, int> tagCount = {};
-    Map<String, int> authorCount = {};
-    Map<ImageFavoritesComic, int> comicImageCount = {};
-    Map<ImageFavoritesComic, int> comicMaxPages = {};
-    int count = 0;
-
-    for (var comic in comics) {
-      count += comic.images.length;
-      for (var tag in comic.tags) {
-        String finalTag = tag.split(":").last;
-        tagCount[finalTag] = (tagCount[finalTag] ?? 0) + 1;
-      }
-
-      if (comic.author != "") {
-        String finalAuthor = comic.author;
-        authorCount[finalAuthor] =
-            (authorCount[finalAuthor] ?? 0) + comic.images.length;
-      }
-      // 小于10页的漫画不统计
-      if (comic.maxPageFromEp < 10) {
-        continue;
-      }
-      comicImageCount[comic] =
-          (comicImageCount[comic] ?? 0) + comic.images.length;
-      comicMaxPages[comic] = (comicMaxPages[comic] ?? 0) + comic.maxPageFromEp;
-    }
-
-    // 按数量排序标签
-    List<String> sortedTags = tagCount.keys.toList()
-      ..sort((a, b) => tagCount[b]!.compareTo(tagCount[a]!));
-
-    // 按数量排序作者
-    List<String> sortedAuthors = authorCount.keys.toList()
-      ..sort((a, b) => authorCount[b]!.compareTo(authorCount[a]!));
-
-    // 按收藏数量排序漫画
-    List<MapEntry<ImageFavoritesComic, int>> sortedComicsByNum =
-        comicImageCount.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
-
-    validateTag(String tag) {
-      if (tag.startsWith("Category:")) {
-        return false;
-      }
-      return !exceptTags.contains(tag.split(":").last.toLowerCase()) &&
-          !tag.isNum;
-    }
-
-    return ImageFavoritesComputed(
-      sortedTags
-          .where(validateTag)
-          .map((tag) => TextWithCount(tag, tagCount[tag]!))
-          .take(maxLength)
-          .toList(),
-      sortedAuthors
-          .map((author) => TextWithCount(author, authorCount[author]!))
-          .take(maxLength)
-          .toList(),
-      sortedComicsByNum
-          .map((comic) => TextWithCount(comic.key.title, comic.value))
-          .take(maxLength)
-          .toList(),
-      count,
+  Future<void> _finishCommit(List<ImageFavorite> removed) async {
+    final failures = <({Object error, StackTrace stackTrace})>[];
+    // Start all cache removals before yielding; each captures its original path.
+    await Future.wait(
+      removed.map((image) async {
+        try {
+          await _deleteCache(image);
+        } catch (error, stack) {
+          failures.add((error: error, stackTrace: stack));
+        }
+      }),
     );
+    try {
+      notifyListeners();
+    } catch (error, stack) {
+      failures.add((error: error, stackTrace: stack));
+    }
+    if (failures.isNotEmpty) {
+      final first = failures.first;
+      Error.throwWithStackTrace(
+        PersistenceFailure(
+          commitState: PersistenceCommitState.committed,
+          cause: first.error,
+          stackTrace: first.stackTrace,
+          cleanupFailures: failures.skip(1).toList(),
+        ),
+        first.stackTrace,
+      );
+    }
   }
 
-  ImageFavoritesComic? find(String id, String sourceKey) =>
-      _repository.find(id, sourceKey);
+  void notifyChanges() => notifyListeners();
+
+  Future<ImageFavoritesComputed> compute() =>
+      _history().accessImageFavorites((repository, path) {
+        if (repository.count() > 100) return _readStatistics(path);
+        return computeImageFavorites(repository.getAll());
+      });
 }

@@ -574,6 +574,7 @@ let Network = {
      * Sets cookies for a specific URL.
      * @param {string} url - The URL to set the cookies for.
      * @param {Cookie[]} cookies - The cookies to set.
+     * @throws If application data is being replaced or cookies cannot be saved.
      */
     setCookies(url, cookies) {
         sendMessage({
@@ -587,7 +588,8 @@ let Network = {
     /**
      * Retrieves cookies for a specific URL.
      * @param {string} url - The URL to get the cookies from.
-     * @returns {Promise<Cookie[]>} The cookies for the given URL.
+     * @returns {Cookie[]} The cookies for the given URL (synchronous).
+     * @throws If application data is being replaced or cookies cannot be read.
      */
     getCookies(url) {
         return sendMessage({
@@ -600,6 +602,7 @@ let Network = {
     /**
      * Deletes cookies for a specific URL.
      * @param {string} url - The URL to delete the cookies from.
+     * @throws If application data is being replaced or cookies cannot be deleted.
      */
     deleteCookies(url) {
         sendMessage({

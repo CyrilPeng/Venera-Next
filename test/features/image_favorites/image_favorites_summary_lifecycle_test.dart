@@ -17,7 +17,7 @@ void main() {
   late HistoryManager? previous;
   late String previousData;
   late String previousCache;
-  setUp(() async {
+  Future<void> prepare() async {
     root = Directory.systemTemp.createTempSync('summary-lifecycle-');
     previousData = App.dataPath;
     previousCache = App.cachePath;
@@ -27,10 +27,13 @@ void main() {
     history = HistoryManager.create();
     HistoryManager.cache = history;
     await history.init();
-    ImageFavoriteManager().addOrUpdateOrDelete(comic('sample'));
-  });
-  tearDown(() async {
-    await history.waitForAsyncWrites();
+    await history.accessImageFavorites(
+      (repository, _) => repository.save(comic('sample')),
+    );
+  }
+
+  tearDown(() {
+    expect(history.hasPendingWrites, isFalse);
     history.close();
     HistoryManager.cache = previous;
     App.dataPath = previousData;
@@ -41,6 +44,7 @@ void main() {
   testWidgets('chart switch without a smooth-scroll ancestor remains usable', (
     tester,
   ) async {
+    await prepare();
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -59,6 +63,7 @@ void main() {
   testWidgets('chart frame callback is harmless after summary disposal', (
     tester,
   ) async {
+    await prepare();
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -76,6 +81,7 @@ void main() {
   testWidgets('rapid chart switches use the latest layout before scrolling', (
     tester,
   ) async {
+    await prepare();
     final controller = ScrollController();
     await tester.pumpWidget(
       MaterialApp(

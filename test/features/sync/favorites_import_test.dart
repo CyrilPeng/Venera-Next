@@ -9,6 +9,7 @@ import 'package:zip_flutter/zip_flutter.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/favorites/favorites_repository.dart';
 import 'package:venera_next/features/sync/app_data_transfer.dart';
+import 'package:venera_next/features/sync/data_sync_commit.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
@@ -42,8 +43,8 @@ void main() {
           db.dispose();
         }
         await manager.init();
-        manager.createFolder('original');
-        manager.addComic('original', _item('old'));
+        await manager.createFolder('original');
+        await manager.addComic('original', _item('old'));
         await appdata.saveData(false);
         final incomingPath = '${root.path}/incoming.db';
         final incoming = sqlite3.open(incomingPath);
@@ -162,8 +163,8 @@ void main() {
           App.dataPath = (Directory('${root.path}/data')..createSync()).path;
           App.cachePath = (Directory('${root.path}/cache')..createSync()).path;
           await manager.init();
-          manager.createFolder('original');
-          manager.addComic('original', _item('old'));
+          await manager.createFolder('original');
+          await manager.addComic('original', _item('old'));
           final incomingPath = '${root.path}/incoming.db';
           if (corrupt) {
             File(incomingPath).writeAsBytesSync(List.filled(4096, 42));
@@ -199,7 +200,19 @@ void main() {
           if (corrupt) {
             await expectLater(
               importAppData(File(archivePath)),
-              throwsA(isA<SqliteException>()),
+              throwsA(
+                isA<DataSyncImportFailure>()
+                    .having(
+                      (error) => error.commitState,
+                      'rollback outcome',
+                      DataSyncCommitState.notApplied,
+                    )
+                    .having(
+                      (error) => error.cause,
+                      'original SQL error',
+                      isA<SqliteException>(),
+                    ),
+              ),
             );
             expect(manager.getFolderComics('original').single.id, 'old');
           } else {

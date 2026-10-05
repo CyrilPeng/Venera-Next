@@ -2,6 +2,8 @@
 
 Date: 2026-10-03.
 
+2026-10-05 update: commit and publication return awaited futures and join the favorites queue after global admission. Collection retains the source connection generation; queued cancellation is checked before SQL and old results cannot write into a reopened database. Receipts retain owner and generation. Publication of a retired receipt becomes a no-op after reopen; initialization rebuilds the current cache. This supersedes the historical close/reopen publication-retry contract below. Forced dialog removal still completes publication of committed results; failure retains the count and retry only republishes. See the latest optimization_progress entry for exact validation.
+
 - Collection is read-only. Folder identity is checked before loading and again inside the commit transaction. New folders are created only after successful collection. Cancellation/load failure leaves neither a new empty folder nor staged records; this intentionally fixes the former partial-write behavior.
 - Prefetch and each page allow at most three attempts. RequestScope checks surround attempts, result application and final submission. Cancellation stops waiting/further scheduling, not necessarily every underlying JS/network operation.
 - Oldest-first paging prefetches total pages and clamps the initial page to one. Page limits bound collection. Page-count/cursor types are validated and repeated cursors fail. In-batch IDs deduplicate; storage still deduplicates by id/type.

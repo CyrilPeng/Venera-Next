@@ -2,6 +2,7 @@ import 'package:venera_next/network/request_scope.dart';
 import 'dart:async';
 import 'package:venera_next/features/sync/data_sync_controller.dart';
 import 'package:venera_next/features/sync/data_sync_transfer.dart';
+import 'package:venera_next/features/sync/data_sync_recovery.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/sync_preference_store.dart';
 import 'package:venera_next/network/webdav.dart';
@@ -15,6 +16,7 @@ class SyncTestFixture {
     void Function() Function(void Function())? observeChanges,
     DateTime Function()? now,
     Timer Function(Duration, void Function())? createTimer,
+    DataSyncImportRecovery? importRecovery,
   }) {
     final settings = <String, dynamic>{
       'webdav': ['https://example.com/dav', 'user', 'password'],
@@ -34,6 +36,7 @@ class SyncTestFixture {
       observeChanges: observeChanges ?? (_) => () {},
       now: now,
       createTimer: createTimer,
+      importRecovery: importRecovery,
     );
   }
 
@@ -51,13 +54,18 @@ class SyncTestFixture {
 class ControlledSyncTransfer implements DataSyncTransfer {
   Future<Res<bool>> Function() onUpload = () async => const Res(true);
   Future<Res<bool>> Function() onDownload = () async => const Res(false);
+  void Function()? onImported;
+  String? uploadOperationId;
+  String? downloadOperationId;
 
   @override
   Future<void> upload(
     WebDavEndpoint connection, {
     required bool excludeFields,
     required RequestScope scope,
+    String? syncOperationId,
   }) async {
+    uploadOperationId = syncOperationId;
     final result = await onUpload();
     if (result.error) throw _TransferFailure(result.errorMessage!);
   }
@@ -66,9 +74,20 @@ class ControlledSyncTransfer implements DataSyncTransfer {
   Future<bool> download(
     WebDavEndpoint connection, {
     required RequestScope scope,
+    void Function(void Function())? publishImported,
+    String? syncOperationId,
   }) async {
+    downloadOperationId = syncOperationId;
     final result = await onDownload();
     if (result.error) throw _TransferFailure(result.errorMessage!);
+    final notify = onImported;
+    if (result.data && notify != null) {
+      if (publishImported != null) {
+        publishImported(notify);
+      } else {
+        notify();
+      }
+    }
     return result.data;
   }
 }

@@ -22,9 +22,10 @@ void main() {
       HistoryManager.cache = history;
       final manager = ImageFavoriteManager();
       var notifications = 0;
+      Future<List<ImageFavoritesComic>>? observed;
       void changed() {
         notifications++;
-        expect(manager.length, 0);
+        observed = manager.getAll();
       }
 
       try {
@@ -33,8 +34,9 @@ void main() {
         await history.init();
         final first = comic('first');
         final second = comic('second');
-        manager.addOrUpdateOrDelete(first);
-        manager.addOrUpdateOrDelete(second);
+        await history.accessImageFavorites(
+          (repository, _) => repository.saveAll([first, second]),
+        );
         final provider = ImageFavoritesProvider(first.images.single);
         await provider.writeToCache(Uint8List.fromList([1, 2, 3]));
         final db = history.imageFavoritesDatabase;
@@ -42,23 +44,18 @@ void main() {
           "CREATE TRIGGER fail_delete BEFORE DELETE ON image_favorites WHEN old.id = 'second' BEGIN SELECT RAISE(ABORT, 'injected'); END;",
         );
         manager.addListener(changed);
-        expect(
-          () =>
-              manager.deleteImageFavorite([...first.images, ...second.images]),
+        await expectLater(
+          manager.deleteImageFavorite([...first.images, ...second.images]),
           throwsA(isA<SqliteException>()),
         );
-        expect(manager.length, 2);
-        expect(manager.find('first', 'source')!.images, hasLength(1));
+        expect(await manager.getAll(), hasLength(2));
+        expect((await manager.find('first', 'source'))!.images, hasLength(1));
         expect(await provider.readFromCache(), [1, 2, 3]);
         expect(notifications, 0);
         db.execute('DROP TRIGGER fail_delete;');
-        manager.deleteImageFavorite([...first.images, ...second.images]);
+        await manager.deleteImageFavorite([...first.images, ...second.images]);
         expect(notifications, 1);
-        // The public delete API remains synchronous; its cache cleanup is async.
-        for (var attempt = 0; attempt < 50; attempt++) {
-          if (await provider.readFromCache() == null) break;
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-        }
+        expect(await observed, isEmpty);
         expect(await provider.readFromCache(), isNull);
       } finally {
         manager.removeListener(changed);

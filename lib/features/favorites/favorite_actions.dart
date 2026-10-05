@@ -12,6 +12,8 @@ import 'package:venera_next/components/select.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -24,12 +26,12 @@ Future<void> newFolder() => showDialog<void>(
   context: App.rootContext,
   builder: (_) => CreateFavoriteFolderDialog(
     validate: validateFolderName,
-    create: (name) => LocalFavoritesManager().createFolder(name),
+    create: (name) async => await LocalFavoritesManager().createFolder(name),
     selectImport: () async {
       final file = await selectFile(ext: ['json']);
       return file == null ? null : utf8.decode(await file.readAsBytes());
     },
-    importJson: (json) => LocalFavoritesManager().fromJson(json),
+    importJson: (json) async => await LocalFavoritesManager().fromJson(json),
   ),
 );
 
@@ -46,55 +48,98 @@ String? validateFolderName(String newFolderName) {
 }
 
 void addFavorite(List<Comic> comics) {
-  var folders = LocalFavoritesManager().folderNames;
+  final manager = LocalFavoritesManager();
+  final generation = manager.connectionGeneration;
+  final folders = manager.folderNames;
+  final items = comics
+      .map(
+        (comic) => FavoriteItem(
+          id: comic.id,
+          name: comic.title,
+          coverPath: comic.cover,
+          author: comic.subtitle ?? '',
+          type: ComicType(
+            comic.sourceKey == 'local' ? 0 : comic.sourceKey.hashCode,
+          ),
+          tags: List.of(comic.tags ?? []),
+        ),
+      )
+      .toList();
+  var saving = false;
+  String? error;
+  String? selectedFolder = appdata.settings['quickFavorite'];
 
   showDialog(
     context: App.rootContext,
     builder: (context) {
-      String? selectedFolder = appdata.settings['quickFavorite'];
-
       return StatefulBuilder(
         builder: (context, setState) {
           return ContentDialog(
             title: "Select a folder".tl,
-            content: ListTile(
-              title: Text("Folder".tl),
-              trailing: Select(
-                current: selectedFolder,
-                values: folders,
-                minWidth: 112,
-                onTap: (v) {
-                  setState(() {
-                    selectedFolder = folders[v];
-                  });
-                },
-              ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: Text("Folder".tl),
+                  trailing: Select(
+                    current: selectedFolder,
+                    values: folders,
+                    minWidth: 112,
+                    onTap: (v) {
+                      if (saving) return;
+                      setState(() {
+                        selectedFolder = folders[v];
+                      });
+                    },
+                  ),
+                ),
+                if (error != null) Text(error!),
+              ],
             ),
             actions: [
               FilledButton(
-                onPressed: () {
-                  if (selectedFolder != null) {
-                    for (var comic in comics) {
-                      LocalFavoritesManager().addComic(
-                        selectedFolder!,
-                        FavoriteItem(
-                          id: comic.id,
-                          name: comic.title,
-                          coverPath: comic.cover,
-                          author: comic.subtitle ?? '',
-                          type: ComicType(
-                            (comic.sourceKey == 'local'
-                                ? 0
-                                : comic.sourceKey.hashCode),
-                          ),
-                          tags: comic.tags ?? [],
-                        ),
-                      );
-                    }
-                    context.pop();
-                  }
-                },
-                child: Text("Confirm".tl),
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (selectedFolder != null) {
+                          final folder = selectedFolder!;
+                          final route = ModalRoute.of(context);
+                          setState(() {
+                            saving = true;
+                            error = null;
+                          });
+                          try {
+                            await AppDataOperations.instance.access(() async {
+                              if (!context.mounted ||
+                                  route?.isCurrent == false) {
+                                return;
+                              }
+                              if (manager.connectionGeneration != generation) {
+                                throw StateError(
+                                  'Favorites database changed. Reopen this dialog.',
+                                );
+                              }
+                              for (final item in items) {
+                                await manager.addComic(folder, item);
+                              }
+                            });
+                            if (context.mounted && route?.isCurrent != false) {
+                              context.pop();
+                            }
+                          } catch (failure, stack) {
+                            Log.error('Add favorites', failure, stack);
+                            error = failure.toString();
+                          } finally {
+                            if (context.mounted) setState(() => saving = false);
+                          }
+                        }
+                      },
+                child: saving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text("Confirm".tl),
               ),
             ],
           );
@@ -105,13 +150,23 @@ void addFavorite(List<Comic> comics) {
 }
 
 Future<List<FavoriteItem>> updateComicsInfo(String folder) async {
-  var comics = LocalFavoritesManager().getFolderComics(folder);
+  final manager = LocalFavoritesManager();
+  final generation = manager.connectionGeneration;
+  var comics = manager.getFolderComics(folder);
+  bool isCanceled = false;
+
+  void checkActive() {
+    if (isCanceled || manager.connectionGeneration != generation) {
+      throw StateError('Favorite update was cancelled or its database changed');
+    }
+  }
 
   Future<void> updateSingleComic(int index) async {
     int retry = 3;
 
     while (true) {
       try {
+        checkActive();
         var c = comics[index];
         var comicSource = c.type.comicSource;
         if (comicSource == null) return;
@@ -130,7 +185,7 @@ Future<List<FavoriteItem>> updateComicsInfo(String folder) async {
           }
         }
 
-        comics[index] = FavoriteItem(
+        final updated = FavoriteItem(
           id: c.id,
           name: newInfo.title,
           coverPath: newInfo.cover,
@@ -142,9 +197,16 @@ Future<List<FavoriteItem>> updateComicsInfo(String folder) async {
           tags: newTags,
         );
 
-        LocalFavoritesManager().updateInfo(folder, comics[index]);
+        await manager.updateInfo(
+          folder,
+          updated,
+          generation: generation,
+          checkActive: checkActive,
+        );
+        comics[index] = updated;
         return;
       } catch (e) {
+        checkActive();
         retry--;
         if (retry == 0) {
           rethrow;
@@ -159,8 +221,6 @@ Future<List<FavoriteItem>> updateComicsInfo(String folder) async {
   var errors = 0;
 
   var index = 0;
-
-  bool isCanceled = false;
 
   showDialog(
     context: App.rootContext,
@@ -232,7 +292,10 @@ Future<List<FavoriteItem>> updateComicsInfo(String folder) async {
 }
 
 Future<void> sortFolders() async {
-  var folders = LocalFavoritesManager().folderNames;
+  final manager = LocalFavoritesManager();
+  final generation = manager.connectionGeneration;
+  final owner = App.rootContext;
+  var folders = manager.folderNames;
 
   await showPopUpWidget(
     App.rootContext,
@@ -278,7 +341,17 @@ Future<void> sortFolders() async {
     ),
   );
 
-  LocalFavoritesManager().updateOrder(folders);
+  try {
+    await AppDataOperations.instance.access(() async {
+      if (manager.connectionGeneration != generation) {
+        throw StateError('Favorites database changed. Try again.');
+      }
+      await manager.updateOrder(folders);
+    });
+  } catch (error, stack) {
+    Log.error('Sort favorite folders', error, stack);
+    if (owner.mounted) owner.showMessage(message: error.toString());
+  }
 }
 
 Future<void> importNetworkFolder(
@@ -299,6 +372,7 @@ Future<void> importNetworkFolder(
     App.rootContext.showMessage(message: 'Folder already exists'.tl);
     return;
   }
+  final generation = manager.connectionGeneration;
   await showDialog<void>(
     context: App.rootContext,
     builder: (_) => NetworkFavoriteImportDialog(
@@ -314,12 +388,14 @@ Future<void> importNetworkFolder(
         onProgress: progress,
       ),
       publish: manager.publishNetworkFavoriteImport,
-      commit: (items) => manager.importNetworkFavorites(
+      commit: (items, scope) async => await manager.importNetworkFavorites(
         resultName,
         source,
         folderID ?? '',
         items,
         oldToNew: data.isOldToNewSort ?? false,
+        checkActive: scope.check,
+        generation: generation,
       ),
     ),
   );

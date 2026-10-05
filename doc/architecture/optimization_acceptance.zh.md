@@ -6,18 +6,62 @@
 
 进度口径（2026-10-05）：下表共 52 个原方案子项，23 项 I、28 项 P、1 项 U；已有实现证据占 44.2%，不是整体工作量或最终验收完成率。部分项已包含多次独立提交，不能视为尚未开始，也不能主观折算为完成百分比。当前主要缺口为残余业务/UI 与配置边界、桌面核心及图片/原生任务完整关闭、阅读壳和真实平台行为、数据/源失败矩阵、兼容层退出，以及完整 CLI、五平台和固定设备性能验收。原方案的 8 条总体验收尚未全部通过。
 
-验证口径（2026-10-05）：本轮冻结 Dart 源码的 Windows Flutter 全量 2316 项通过、2 项宿主平台跳过，严格分析零诊断，LCOV 22,187/36,786 行（60.31%）；25 个 Dart 文件格式、结构/架构（95 个业务入口）、Git 依赖、版本与 Python 74 项/3 项既有跳过均通过。Windows 分享最终原生 CTest 1 个可执行文件/6 组通过，实际 Android 项目 :share_plus:testShareOwnership 编译和 13 项 JVM 回归通过，Windows release 构建成功。产物及打包 CHANGELOG 一致性见仓库外 share-artifact-hashes.json。以上不含分享 UI 或外部接收者实机验证。本机 Flutter 3.41.6/Dart 3.11.4 不等于声明 Flutter 3.41.4。日志与覆盖率位于仓库外 ../venera_next_task_artifacts/2026-10-04-01a104a6/。上一基线 842cf06 的 2278 项/60.20% 保留历史含义；原用户修改此前已按授权撤销，初始审计数字不代表当前工作区。
+## 本轮增量：普通收藏准入与调用方等待（2026-10-05）
 
-本轮范围：分享在 `App.cachePath/shares` 使用独立来源目录，规范文件名并保留操作/清理双重失败；Windows/Apple 在派发后（包括错误）保留输入，Android 复制后清理应用输入并独立保留插件副本，不以平台返回作为外部消费结束。文件/文本分享共用 PlatformDialogQueue，保存使用独立实例；文本分享交给 WindowFrame 等待并保留原漫画归属，阅读和文本分享提供 iPad origin。share_plus 同版本本地补丁修复 Windows 请求/订阅/COM 所有权与 Android 副本/回调隔离；Apple 原生未改，无 TTL/启动清扫，真实外部消费清理仍待验收。受控入口由 93 增至 95，新增 platform_dialog_queue、share_file_operation，未扩大例外；ImageWork 本轮未改，原 52 项状态保持不变。
+普通收藏修改、异步读取及身份索引刷新接入全局准入和局部队列；初始化等待索引，关闭等待已接纳工作。多目标移动与追更详情/时间使用完整事务，文件夹设置保存被等待；旧网络结果和导入 receipt 不跨连接代次写入或发布。页面等待/错误反馈、排序保存和阅读器收藏更新的退出归属已补充；本地存储任务统一先全局准入再进入局部所有权。新增 16 项回归，扩展组合 210 项通过，最终验证见最新执行记录。其余 appdata/源/跨库写入、持久 revision/内容基线和整体平台/CLI/性能验收继续待办；52 项状态与 103 个受控入口均不变。
+
+最终冻结全量 **2674 项通过、2 项既有跳过**，LCOV **62.98%**；严格分析、格式、Python、静态门禁和 Windows release 全部通过，打包 CHANGELOG/JS 初始化脚本匹配源码。中断全量的延时取消问题已修复，最终验证顺序及产物哈希见执行记录。
+
+## 前一单元：Cookie 准入与请求归属（2026-10-05）
+
+Cookie SQL、过期清理和连接生命周期均接入准入，同步 JS API 在替换期间明确拒绝并保留既有同步返回约定；Dio 和网页验证保存等待准入。请求绑定原连接，旧响应不能跨同路径重开污染新会话，未换库的导出后响应正常保存，真实 SQL 失败保留原因/堆栈。新增 24 项权限、SQLite/Dio、QuickJS 与页面生命周期回归；精确验证结果见最新执行记录。普通收藏、appdata、源和跨库写入、持久 dirty/revision/内容基线及其他总体验收仍待完成；受控入口 103、52 项状态均不变。
+
+最终生产源码全量 **2658 项通过、2 项既有跳过**，LCOV **63.06%**；新增 QuickJS 测试补齐原生库不可用跳过条件后，本机 4 项实际执行通过，生产源码未改。严格分析、格式、Python、静态门禁与 Windows release 均通过，打包 CHANGELOG/JS 初始化脚本与源码一致；完整验证顺序见最新执行记录。
+
+## 前一单元：图片收藏准入（2026-10-05）
+
+图片收藏的查询、切换、删除和统计接入历史数据库准入与局部队列；在准入后读取当前记录执行修改，缓存清理失败保留已提交状态。统计 worker 使用固定路径的只读连接，不再初始化全应用，替换/退出排空等待其关闭。页面适配异步结果、查询错误/重试、忙碌状态与路由身份，阅读器收藏接入已有 ImageWork。新增 15 项回归，具体冻结验证见最新执行记录；受控业务入口为 103。其他写入者、dirty/revision/有效内容基线与其余总体验收未完成，52 项状态不变。
+
+全量 **2634 项通过、2 项既有跳过**，LCOV **62.86%**。全量后仅修正公开入口引用和格式，随后 127 项相关专项、最终格式后的 18 项数据专项、严格分析、所有静态门禁及 Windows release 通过。精确验证顺序、日志和工具链边界见最新执行记录。
+
+## 前一单元：历史写入准入（2026-10-05）
+
+历史写入先全局准入再入局部队列，独占导入/导出排空旧写入并阻止新写入越过；连接归属在准入时捕获，旧元数据拒绝跨代次。内部初始化/排空可重入，通知及提交回调发起的新工作独立排队；导入重开与外部排队初始化共用一次真实工作，避免等待环。联合专项 50 项通过，冻结全量结果及工具链边界见最新执行记录。图片收藏、其他存储与源写入、跨库操作和通知边界仍待接入，持久 dirty/revision/内容基线尚未完成，原 52 项状态不变。
+
+最终全量 **2619 项通过、2 项既有跳过**，LCOV **62.42%（24,207/38,781）**，严格分析零诊断；格式、diff、Python 74 项/3 项既有跳过、结构/架构/依赖/版本门禁及 Windows release 通过。日志、产物哈希和工具链边界见最新执行记录。
+
+## 前一单元：上传持久恢复（2026-10-05）
+
+原清单状态不变。上传 journal、稳定快照、条件创建和完整内容核验已接入；v3 intent 按原 endpoint 恢复，确认后只补留存/固定时间/实际连接关闭/本地清理，持久清 marker 后才 ack。快照与导出暂存目录归 App.dataPath 下本次操作所有。保留全局留存策略，强 ETag 缺失明确留下待清理任务，异内容不覆盖，已确认后被删除的远端文件不重建。22 项真实进程恢复、20 项执行器（含真实 SQLite 持久写失败）、3 项生产组件 HTTP 组合及 38 项远端协议专项分别通过；集合和后续全量不简单相加。全量冻结结果及平台边界见最新执行记录。
+
+全部写入者屏障、内容基线与 dirty 持久窗口、并发导入编辑冲突、其余生命周期和最终 CLI/平台/性能验收仍未完成；业务入口受控数量增至 102。
+
+本轮最终验证：**2605 项 Windows Flutter 测试通过、2 项既有宿主跳过；LCOV 62.35%（24,139/38,714），严格分析零诊断，25 个 Dart 文件格式及 diff、Python 74 项/3 项既有跳过、结构/架构（102 个入口）/依赖/版本门禁及 Windows release 全部通过。** 工具链边界、日志与产物哈希见最新执行记录。
+
+## 前一单元：导入持久恢复（2026-10-05）
+
+原清单状态不变。独立导入 journal 与启动前恢复已接入，v2 同步下载依据匹配终态记录恢复收尾，先持久清 marker 再确认 receipt。真实进程终止、导入器/控制器重建及 bootstrap 分别验证；详见最新执行记录。全部参与者的写入屏障、持久内容基线、远端上传对账与其余总体验收尚未完成。
+
+本轮最终验证：**2500 项 Windows Flutter 测试通过、2 项既有宿主跳过，LCOV 61.69%（23,450/38,011），严格分析零诊断，23 个 Dart 文件格式及 diff、Python 74 项/3 项既有跳过、结构/架构（99 个入口）/Git 依赖/版本门禁及 Windows release 全部通过。** 日志、产物哈希和工具链边界见最新执行记录。
+
+## 前一单元：同步提交状态验证（2026-10-05）
+
+本轮从 `0d552c9` 开始。严格分析零诊断，Python 74 项/3 项既有跳过，结构、架构（97 个业务入口）、版本与 Git 依赖门禁通过，未扩大例外；持久化专项 20 项通过。**最终全量 2429 项通过、2 项既有宿主跳过，LCOV 22,772/37,284 行（61.08%），25 个 Dart 文件格式及 diff 检查、Windows release 构建通过。** 日志继续位于仓库外 `../venera_next_task_artifacts/2026-10-04-01a104a6/`，详见最新执行记录；旧单元构建不作为本轮验证。
+
+本轮范围：同步三态保留已应用与不确定结果，导入等待 `saveData` 并在替换前持久化精确 checkpoint，独立执行各资源回滚。控制器先保存 intent，再执行传输；同进程失败只补收尾，按 generation 清旧 pending 并继续实时上传新编辑。配置仅在 `notApplied` 时回滚，提交与回滚两类保存的四路错误完整保留。重建或损坏 marker 阻止重复同步；远端文件名/哈希 journal 与自动跨进程 reconciliation 尚未实现。数据落盘到 dirty 标记持久化的窗口、导入期间真实本地编辑冲突、备份导入提交/删除失败、其余生命周期以及完整 CLI、五平台和固定设备性能仍待处理，52 项状态不变。
+
+上一单元验证（临时 WebDAV 客户端）：Windows Flutter 全量 2369 项通过、2 项既有宿主跳过，严格分析零诊断，LCOV 22,289/36,839 行（60.50%），11 个 Dart 文件格式、结构/架构（95 个入口）、Git 依赖/版本/diff 检查及 Windows release 通过。真实原生断链、上传清理与 SDK/同步专项保留证据，日志为 `logs/sync-client-*.log`，产物记录为 `sync-client-artifact-hashes.json`。更早的 59ffa38 单元 2316 项/60.31%、Windows 分享 6 组及 Android 13 项回归继续保留。本机 Flutter 3.41.6/Dart 3.11.4 不替代声明 Flutter 3.41.4 或其他平台验收。
 
 初始审计证据（最新阶段结果见执行记录）：全量 Windows Flutter 986 项通过；分析零错误/警告、23 个 info；LCOV 13,988/31,156 行（44.90%）。覆盖率是本机最新 `coverage/lcov.info`，不是性能结果，也不证明目标行为完整。架构报告有 36 个受控业务入口；功能聚合环仍为 comic_details、favorites、history、local_comics、reader、search、sync，包含 UI，不据此断言纯业务环已消除。
+
+## 原方案逐项状态
 
 | 原方案项 | 状态 | 要求 | 已检查证据 | 尚需执行/验收 |
 |---|---|---|---|---|
 | P0.1 | I | 起点与工作区隔离 | `optimization_progress.zh.md` | 保留起点 550fcff 与用户改动清单；后续提交继续选择性暂存。 |
 | P0.2 | I | 分析范围 | `analysis_options.yaml` | 仅排除 build；检查正式源码仍启用。 |
-| P0.3 | P | 测试与覆盖率 | `optimization_progress.zh.md` 最新执行记录 | 本轮 Windows Flutter 2316 项通过、2 项宿主跳过，LCOV 60.31%；Python 74 项/3 项既有跳过，Windows CTest 1 个可执行文件/6 组和 Android 13 项 JVM 回归通过。其他平台及完整验收矩阵仍未完成。 |
-| P0.4 | P | 依赖报告与例外 | `dependency_baseline.json; check_architecture_dependencies.py` | 本轮登记 95 个业务入口，新增 platform_dialog_queue 与 share_file_operation，未扩大依赖例外；结构与架构门禁通过。继续扩展到未迁移服务并核查业务环。 |
+| P0.3 | P | 测试与覆盖率 | `optimization_progress.zh.md` 最新执行记录 | 本轮最终生产源码全量 2658 项通过/2 项既有跳过、LCOV 63.06%；补齐测试原生库可用性判断后，4 项 QuickJS 实际执行通过，生产源码未改。严格分析、格式、Python 74 项/3 项既有跳过、静态门禁与 Windows release 均通过；其他平台及完整验收矩阵仍未完成。 |
+| P0.4 | P | 依赖报告与例外 | `dependency_baseline.json; check_architecture_dependencies.py` | 本轮登记 103 个业务入口，结构与架构门禁通过且未扩大依赖例外。继续扩展到未迁移服务并核查业务环。 |
 | P0.5 | U | 设备性能基线 | `optimization_progress.zh.md: 性能基线与平台补验` | 固定设备、样本和构建模式测量六类场景，记录至少三次波动。 |
 | P1.1 | I | Channel 清理 | `git ls-files lib/foundation/channel.dart` | 文件已不再跟踪；历史判定见执行记录。 |
 | P1.2 | I | 组件聚合入口 | `git ls-files lib/components/components.dart` | 文件已不再跟踪；保留使用中的组件。 |
@@ -52,19 +96,19 @@
 | P6.2 | P | 收藏业务职责 | `lib/features/favorites/read_later_service.dart; lib/features/favorites/favorite_updates_service.dart; lib/features/favorites/favorites_manager.dart` | 稍后阅读/追更已分离；管理器仍有全局依赖和统一生命周期待收束。 |
 | P6.3 | P | 本地库与导入下载 | `lib/features/local_comics/local.dart; lib/features/local_comics/local_deletion_paths.dart` | 队列/仓储/迁移已拆分；删除保护同时核对文本路径和原生实际路径，保留章节也参与引用检查，真实 Windows 联接回归通过。SAF 仍用提供者路径；外部路径并发替换、删除回滚和未受保护写入者继续处理。 add/remove 已校验写入所有权，页序迁移持有存储保留；下载及外部 SQL 剩余边界见 local_storage_writer_audit.zh.md。 |
 | P6.4 | I | WebDAV 实例化与拆分 | `lib/features/webdav_library/webdav_library_synchronizer.dart; lib/features/webdav_library/webdav_library_snapshot_store.dart; lib/features/webdav_library/webdav_library_source.dart` | 配置/发现/快照与缓存/同步协调/源适配已分离，实例注入和路径、增量同步、取消回归已有证据；仍受 P6 总体数据/性能/平台退出条件约束。 |
-| P6.5 | P | 应用同步职责 | `lib/features/sync/data_sync_controller.dart; lib/app_runtime/data_sync.dart` | 归档/窗口/传输/参与者已分离，生产单例与测试钩子已删除；继续配置失败清理和运行中销毁的最终验收。 |
-| P6.6 | P | 同步窄接口与协议 | `lib/features/sync/data_sync_controller.dart; test/features/sync/data_sync_schedule_test.dart` | 控制器端口和应用回调显式注入，旧入口已退场；重启/不回传的最终矩阵与协议失败边界仍需验收。 |
+| P6.5 | P | 应用同步职责 | `lib/features/sync/data_sync_controller.dart; lib/features/sync/app_data_import_journal.dart; lib/app_runtime/data_sync.dart` | 独立导入日志与启动前恢复已接入，替换前保留不可变备份及完整资源清单；提交后清理和未提交回滚可跨进程续作。恢复中再次终止、真实导入器和 bootstrap 有回归；全写入者屏障、备份导入及其他数据/平台失败矩阵仍需完成。 |
+| P6.6 | P | 同步窄接口与协议 | `lib/features/sync/data_sync_operation.dart; lib/features/sync/data_sync_recovery.dart; test/features/sync/data_sync_recovery_test.dart` | v2 操作关联导入终态与旧配置 checkpoint；匹配收据恢复通知/固定时间/设置，持久清 marker 后才 ack，不重复传输。退出排空真实恢复 I/O；重启保守保留 pending。v3 上传 journal/内容对账与条件写入已接入并有真实进程和生产 HTTP 组合回归，使用原 endpoint/快照/版本；旧记录、损坏或不匹配证据继续阻断。dirty 持久化窗口及导入期间真实编辑冲突仍需处理。 |
 | P6.7 | P | 原子性约束 | `local_deletion_recovery.zh.md; local_deletion_journal.dart; local_deletion_storage.dart` | 三库事务与持久隔离目录日志已接入；异常回滚、清理重试、重开连接和管理器恢复均有测试。SAF 真机、强制终止/断电、外部写入与恢复冲突修复入口仍需验收。 已验证 Windows 独立 VM 三个确定终止窗口的三库/日志恢复协议；不替代完整应用、SAF、其他平台或断电验收。 |
 | P7.1 | I | 按能力拆解析器 | `lib/features/comic_source/parser.dart; source_*_parser.dart; source_parser_context.dart` | 已拆分账户、发现、分类、搜索、收藏、图片、评论、漫画及元数据；源身份上下文固定。完整能力/错误矩阵继续按 P7.2/P7.5 验收。 |
 | P7.2 | P | JS 与最小源兼容 | `source_capability_matrix.zh.md; test/features/comic_source/source_capabilities_test.dart; test/features/comic_source/source_comic_completion_test.dart` | 真实 QuickJS 已覆盖登录、重登录、游标、新旧分类、多能力隔离、图片配置/回调及图片脚本释放；本轮补详情原始 Promise 等待、嵌套模型脱离 JS 图及结果/异常引用释放专项。归档/投票/其余元数据、其他回调所有权与完整取消矩阵仍待补齐，专项不替代最终全量。 |
 | P7.3 | I | 重复流程对照表 | `repeated_workflow_matrix.zh.md` | 已核对更新、图片、归档、同步和导入的调度、取消、所有权与提交差异；登记已有共享原语和不可合并语义。P7.4/P7.5 及数据/平台验收继续追踪。 |
-| P7.4 | P | 仅抽真实共性 | `lib/foundation/throttled_task_runner.dart; lib/network/request_scope.dart; lib/foundation/platform_dialog_queue.dart` | FileSaveQueue 提取/更名为 PlatformDialogQueue 且无旧别名；文件/文本分享共用一个实例，保存保留独立实例，以真实弹窗串行协议复用。继续以 P7.3 对照证明其他新增抽象并删除重复实现。 |
+| P7.4 | P | 仅抽真实共性 | `lib/foundation/throttled_task_runner.dart; lib/network/request_scope.dart; lib/foundation/platform_dialog_queue.dart; lib/network/webdav.dart` | 分享/保存用独立 PlatformDialogQueue 实例，无旧别名；closeWebDavClient 由数据同步和漫画备份复用临时连接释放，书库长连接保留独立协议。继续以 P7.3 对照核查其他共性与重复实现。 |
 | P7.5 | P | 结构化错误 | `lib/features/comic_source/source_update_service.dart; lib/foundation/res.dart; lib/foundation/share_file_operation.dart` | 源仓库/更新与目录预览已有稳定错误码、原始异常及范围，UI/CLI 在边界展示；取消不误计 CLI 成功，FailureDetails/Res 区分失败、取消和 UnsupportedError，八类源解析器保留异常。本轮 ShareFileCleanupFailure 保留操作/清理双重错误与堆栈，Windows 保留 HRESULT，Android 保留 suppressed 清理诊断。其他服务、Apple activity 报错、字符串校验失败和全消费端分类展示仍待迁移。 |
 | P7.6 | P | 技术规则复用 | `lib/features/comic_source/parser.dart:23; lib/features/comic_storage/archive_metadata.dart` | 元数据/文件规则已有公共实现；版本比较/日期等仍需用途和兼容审查。 |
 | P8.1 | P | 兼容与测试开关退场 | `lib/features/local_comics/local.dart:52; lib/app_runtime/data_sync.dart` | 同步单例/reset/debug、9 个归一化 debug 转发及 JSAutoFreeFunction 已删除；本地漫画等域仍有 reset/debug，聚合导出继续审查。 无调用的旧批量归档执行器已退役，历史元数据编解码独立保留，不构成当前导入入口。  原 36 项调查现已全部处理；最终复扫 379 个生产文件、6036 个声明、304 个候选，无新增未分类项。详见 investigation_resolution.zh.md；历史数量不代表当前扫描。 |
 | P8.2 | P | 恢复 lint 与边界类型 | `analysis_options.yaml` | collection_methods_unrelated_type 已启用并提升为 warning，25 处诊断已处理；use_build_context_synchronously 已提升为 warning，导入展示修复 21 处、评论视图修复 8 处、源页面修复 8 处、本地库修复 3 处、同步窗口修复 1 处，历史页面修复 2 处，收藏面板修复 7 处，网络收藏页修复 9 处，应用设置修复 9 处，本地收藏设置/图片统计各修复 1 处，富文本评论修复 1 处，详情点赞/评分修复 4 处，详情下载修复 3 处，本地收藏文件导入修复 2 处，网络收藏批量导入修复 1 处，调试提示/本地跳转各修复 1 处，阅读手势最后 2 处已修复，剩余 0；剩余 21 项 info 已处理，严格分析清零且 CI 对 info 失败；Settings 异构兼容入口仍显式 dynamic，全面消费端类型化按 P3 继续，P8.2 尚不代表全部边界已收束。 |
 | P8.3 | P | CI 与覆盖趋势 | `.github/workflows/analyze.yml` | 检查和覆盖上传已有；未登记服务仍不受业务入口门禁约束。 |
-| P8.4 | P | 最终平台与性能验收 | `optimization_progress.zh.md; platform_validation_2026_10_04.zh.md; .github/workflows/build.yml` | 本轮 Windows release 成功，分享 CTest 1 个可执行文件/6 组、Android 实际项目编译和 13 项 JVM 回归通过；未验证分享 UI/外部接收者。更早原生/心跳单元 CTest 2/2 保留历史证据。Flutter 本机版本不同于声明。早期 Android 三种 ABI/universal 构建不包含本轮；五平台安装启动与固定设备性能仍待补验。 |
+| P8.4 | P | 最终平台与性能验收 | `optimization_progress.zh.md; platform_validation_2026_10_04.zh.md; .github/workflows/build.yml` | 本轮 Windows release 构建成功，打包 CHANGELOG 与源码哈希一致；上一单元构建与真实原生断链/上传清理、59ffa38 分享 Windows 6 组及 Android 13 项回归保留历史证据。分享 UI/外部接收者未验收，Flutter 本机版本不同于声明，完整 CLI、五平台安装启动与固定设备性能仍待补验。 |
 | P8.5 | P | 最终删除/技术债报告 | `optimization_acceptance.zh.md` | 本清单建立追踪入口；剩余项完成后逐项复核，不用总测试数替代验收。 |
 
 ## 总体验收（原方案第 9 节）
@@ -72,15 +116,15 @@
 | 条目 | 当前结论 | 完成所需证据 |
 |---|---|---|
 | 9.1 业务不依赖页面/State | 未完成 | ReaderImages/全局手势 State 已有退场证据；继续扩展业务入口登记并移除残余反向 UI 引用 |
-| 9.2 业务环与 CI | 未证明 | 对全部关键业务服务检查传递依赖，分类保留 UI 环；本轮登记 95 个入口，最终门禁待记录，受控入口结果仍不是全库证明 |
+| 9.2 业务环与 CI | 未证明 | 对全部关键业务服务检查传递依赖，分类保留 UI 环；103 个受控入口结构/架构门禁通过，仍不是全库无业务环的证明 |
 | 9.3 阅读器控制器与策略 | 部分 | P5.3/P5.5 已有实现证据；完成 P5.6 剩余阅读壳职责、七模式及平台效果联合验收。原用户未提交功能已按授权撤销 |
 | 9.4 依赖与生命周期 | 部分 | WebDAV 实例隔离和 DataSync 端口注入已有回归；继续宿主/核心/图片/原生完整退出、其他生产全局 reset 退场和失败释放矩阵 |
 | 9.5 删除与兼容层 | 未完成 | P1 候选判定已完成一轮；继续所有兼容转发真实调用审查、P8.1 退场及最终复扫 |
 | 9.6 数据/JS/CLI/平台 | 未证明 | 旧样本/合成源/真实 CLI 子进程及五平台证据，列明不支持项和实际跳过原因 |
-| 9.7 性能与覆盖 | 未证明 | 固定设备前后数据；最新 60.20% 仅为行覆盖快照，不作为通过阈值 |
+| 9.7 性能与覆盖 | 未证明 | 固定设备前后数据；最新 LCOV 仅为行覆盖快照，不作为性能通过阈值 |
 | 9.8 文档与代码一致 | 进行中 | 本清单和执行记录已建立；每一阶段更新结构、边界与 CHANGELOG，最终复核失效说明 |
 
-## 命令与交付物核对
+## 命令与交付物核对（图片收藏/封面保存历史单元）
 
 - 本轮图片收藏/封面保存的最终全量、严格分析、覆盖率、Windows release 构建及门禁均通过；日志均在上述仓库外 artifacts 目录。构建日志 `logs/favorite-save-windows-release.log`，产物记录 `favorite-save-artifact-hashes.json`，打包 CHANGELOG 与源码哈希一致。
 - `flutter test --no-pub --coverage --coverage-path <仓库外路径> --reporter expanded`：最终日志 `logs/favorite-save-full-final.log`，2278 项通过；覆盖率 `coverage/favorite-save-lcov.info`，22,078/36,674 行（60.20%）。
@@ -94,7 +138,7 @@
 
 ## 后续执行顺序
 
-1. 本轮图片收藏/封面保存、独立临时文件、provider 本地/旧导入恢复和源详情释放已通过 Windows 冻结验证。继续 live-only 图片失败重试、未改动的分享临时文件，以及 DataSyncRemote/comic_backup 等同步和网络消费者；保持 foundation ImageWork、可见图片、主章节/瀑布流和窗口排空，不以保存完成替代其余退出验收。
+1. 继续普通收藏、appdata、源与跨库写入的准入，处理数据落盘到 dirty 持久化窗口、内容基线、导入期间真实编辑冲突及漫画备份导入/删除失败。此前图片、分享和远端关闭证据保留；其余消费者、live-only 重试及窗口/核心排空仍逐项验收。
 2. 窗口位置保存及其跨挂载交接已有实现；继续桌面宿主持有核心、其他服务跨挂载归属和不可逆关闭终态，同步补 SAF/剩余网络等原生生命周期，不能在任务尚未排空时先关闭核心资源。
 3. 完成 P2/P3 的遗留业务与配置边界、P5 的阅读壳，以及 P6 的存储/同步失败恢复矩阵；保留已完成的 WebDAV/仓储/控制器拆分和旧协议。
 4. 补齐 P7 其余能力/错误/取消矩阵、同 key 源保存与替换互斥、技术规则复用和 P8 兼容层退场。解析器能力拆分与重复机制对照已完成一轮；严格 lint 已清零，后续保持。

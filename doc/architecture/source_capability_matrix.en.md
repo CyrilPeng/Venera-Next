@@ -1,10 +1,13 @@
 # Comic-source capability compatibility matrix
 
+2026-10-05 favorite-caller update: ordinary-favorite imports and follow/detail updates retain the originating database generation and check queued cancellation before SQL. Follow metadata and times commit in one transaction. Awaited network-import commit/publication preserve separate outcomes, continue publication after unmount and suppress old receipts after reopen. Evidence comes from real SQLite and controlled caller/widget tests; this does not add a completion claim for real-source or JS-bridge error matrices. See the latest optimization_progress entry for exact scope.
+
 Environment: Windows Flutter tests with the real QuickJS library, assets/init.js, synthetic sources and temporary data directories; no network or personal source data. Environments without the native library explicitly skip these tests and cannot inherit this machine's pass claim. This records behavioral scope, not whole-P7 acceptance.
 
 | Capability | Executed behavior | Test evidence | Main remaining boundaries |
 |---|---|---|---|
 | Account | Quoted/Unicode/backslash login arguments and persisted identity; webview predicate/success callback, cookie validation and logout callback | source_capabilities_test.dart | Real webview/cookie storage/UI; cancellation and save failures |
+| Cookie bridge | Real QuickJS synchronous set/get/delete ordering/returns and synchronous busy/missing-store errors; real SQLite/Dio request/old-response connection ownership | test/foundation/js_cookie_admission_test.dart; test/network/cookie_admission_test.dart | Real WebView collection and account/localStorage transactions, five-platform background/source lifecycle |
 | Favorites | No request without login; one re-login after expiry; failed re-login/repeated expiry stop; folder list/create/delete | source_capabilities_test.dart | Add/remove favorites, favorite cursors, other re-login branches and structured cancellation |
 | Search | Page/cursor callbacks, argument order, next token, tag suggestion and identity after parser reuse | source_capabilities_test.dart; source_lifecycle_test.dart | All option forms and malformed-response matrix |
 | Explore | Page/cursor lists, next tokens and arguments | Same as above | Multipart and mixed layouts |

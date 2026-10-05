@@ -48,6 +48,44 @@ void main() {
         .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
   });
 
+  for (final detach in [false, true]) {
+    testWidgets(
+      'favorite write blocks ${detach ? 'window after forced unmount' : 'reader back'} until real completion',
+      (tester) async {
+        final fixture = await _ReaderFixture.create(tester);
+        final pending = Completer<void>();
+        final favorites = LocalFavoritesManager.cache! as _Favorites;
+        favorites.reading = pending.future;
+        try {
+          await fixture.mount(tester, pushed: true);
+          expect(favorites.reads, 1);
+          if (detach) {
+            App.rootNavigatorKey.currentState!.pop();
+            await tester.pumpAndSettle();
+            fixture.closeWindow(tester);
+            await tester.pump();
+            expect(fixture.exits, 0);
+          } else {
+            unawaited(App.rootNavigatorKey.currentState!.maybePop());
+            await tester.pump(const Duration(milliseconds: 400));
+            expect(fixture.readerKey.currentState, isNotNull);
+          }
+          pending.complete();
+          await _pumpUntil(
+            tester,
+            () => detach
+                ? fixture.exits == 1
+                : fixture.readerKey.currentState == null,
+          );
+          expect(tester.takeException(), isNull);
+        } finally {
+          if (!pending.isCompleted) pending.complete();
+          await fixture.dispose(tester);
+        }
+      },
+    );
+  }
+
   for (final nativeFrame in [false, true]) {
     for (final detachReader in [false, true]) {
       testWidgets(
@@ -1351,7 +1389,21 @@ class _ControlledHistory extends HistoryManager {
 
 class _Favorites extends ChangeNotifier implements LocalFavoritesManager {
   @override
-  void onRead(String id, ComicType type) {}
+  int get connectionGeneration => 1;
+  Future<void>? reading;
+  int reads = 0;
+
+  @override
+  Future<void> onRead(
+    String id,
+    ComicType type, {
+    int? generation,
+    void Function()? checkActive,
+  }) async {
+    checkActive?.call();
+    reads++;
+    await reading;
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

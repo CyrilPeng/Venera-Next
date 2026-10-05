@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:shimmer_animation/shimmer_animation.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -490,6 +492,53 @@ class _LocalSection extends StatefulWidget {
 class _LocalSectionState extends State<_LocalSection> {
   late List<String> localFolders;
   late Set<String> localAdded;
+  bool saving = false;
+
+  Future<void> changeFavorite(String folder, bool remove) async {
+    if (saving) return;
+    final target = widget;
+    bool sameTarget() => widget.cid == target.cid && widget.type == target.type;
+    final owner = context;
+    final route = ModalRoute.of(owner);
+    final manager = LocalFavoritesManager();
+    final generation = manager.connectionGeneration;
+    setState(() => saving = true);
+    try {
+      await AppDataOperations.instance.access(() async {
+        if (!mounted || !sameTarget()) return;
+        if (manager.connectionGeneration != generation) {
+          throw StateError('Favorites database changed. Try again.');
+        }
+        if (remove) {
+          await manager.deleteComicWithId(folder, target.cid, target.type);
+        } else {
+          await manager.addComic(
+            folder,
+            target.favoriteItem,
+            null,
+            target.updateTime,
+          );
+        }
+      });
+      if (!mounted || !sameTarget()) return;
+      setState(() {
+        localAdded = manager.find(target.cid, target.type).toSet();
+      });
+      target.onFavorite(localAdded.isNotEmpty);
+      if (owner.mounted &&
+          route?.isCurrent != false &&
+          (appdata.settings['autoCloseFavoritePanel'] ?? false)) {
+        owner.pop();
+      }
+    } catch (error, stack) {
+      Log.error('Local favorite', error, stack);
+      if (owner.mounted && sameTarget()) {
+        owner.showMessage(message: error.toString());
+      }
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
 
   @override
   void initState() {
@@ -537,33 +586,8 @@ class _LocalSectionState extends State<_LocalSection> {
             ),
             trailing: _HoverButton(
               isFavorite: isAdded,
-              onTap: () {
-                if (isAdded) {
-                  LocalFavoritesManager().deleteComicWithId(
-                    folder,
-                    widget.cid,
-                    widget.type,
-                  );
-                  setState(() {
-                    localAdded.remove(folder);
-                  });
-                  widget.onFavorite(false);
-                } else {
-                  LocalFavoritesManager().addComic(
-                    folder,
-                    widget.favoriteItem,
-                    null,
-                    widget.updateTime,
-                  );
-                  setState(() {
-                    localAdded.add(folder);
-                  });
-                  widget.onFavorite(true);
-                }
-                if (appdata.settings['autoCloseFavoritePanel'] ?? false) {
-                  context.pop();
-                }
-              },
+              enabled: !saving,
+              onTap: () => changeFavorite(folder, isAdded),
             ),
           );
         }),

@@ -245,9 +245,9 @@ void main() {
     final sync = calls.controller..start();
     calls.transfer.onDownload = () async {
       calls.downloads++;
-      sync.onDataChanged();
       return const Res(true);
     };
+    calls.transfer.onImported = sync.onDataChanged;
     await clock.elapse(const Duration(minutes: 60));
     expect(calls.downloads, 1);
     expect(sync.hasPendingChanges, isFalse);

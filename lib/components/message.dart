@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/persistence_failure.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
@@ -240,6 +242,75 @@ Future<void> showConfirmDialog({
           child: Text(confirmText.tl),
         ),
       ],
+    ),
+  );
+}
+
+/// Wait for mutations, surface errors, and never replay a committed operation.
+Future<void> showAsyncConfirmDialog({
+  required BuildContext context,
+  required String title,
+  required String content,
+  required Future<void> Function() onConfirm,
+  Color? btnColor,
+}) {
+  var saving = false;
+  var committed = false;
+  String? error;
+  return showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => StatefulBuilder(
+      builder: (context, setState) {
+        return PopScope(
+          canPop: !saving,
+          child: ContentDialog(
+            title: title,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [Text(content), if (error != null) Text(error!)],
+            ).paddingHorizontal(16).paddingVertical(8),
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => context.pop(),
+                child: Text('Cancel'.tl),
+              ),
+              Button.filled(
+                color: btnColor,
+                isLoading: saving,
+                onPressed: () async {
+                  if (saving) return;
+                  if (committed) {
+                    context.pop();
+                    return;
+                  }
+                  final route = ModalRoute.of(context);
+                  setState(() {
+                    saving = true;
+                    error = null;
+                  });
+                  try {
+                    await onConfirm();
+                    committed = true;
+                    if (context.mounted && route?.isCurrent != false) {
+                      context.pop();
+                    }
+                  } catch (failure, stack) {
+                    Log.error('Confirm operation', failure, stack);
+                    committed =
+                        failure is PersistenceFailure &&
+                        failure.commitState == PersistenceCommitState.committed;
+                    error = failure.toString();
+                  } finally {
+                    if (context.mounted) setState(() => saving = false);
+                  }
+                },
+                child: Text(committed ? 'OK'.tl : 'Confirm'.tl),
+              ),
+            ],
+          ),
+        );
+      },
     ),
   );
 }

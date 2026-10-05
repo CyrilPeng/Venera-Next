@@ -115,7 +115,15 @@ class ReaderScaffoldState extends State<ReaderScaffold>
   }
 
   @override
+  void initState() {
+    super.initState();
+    ImageFavoriteManager().addListener(_imageFavoritesChanged);
+  }
+
+  @override
   void dispose() {
+    ImageFavoriteManager().removeListener(_imageFavoritesChanged);
+    _collectTask?.cancel();
     _sidebarBinding.dispose();
     _imageFavoriteSwipe.dispose();
     _gesturePort = null;
@@ -130,6 +138,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
   void didUpdateWidget(ReaderScaffold oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.imageWork, widget.imageWork)) {
+      _collectTask?.cancel();
       unawaited(_exporter?.dispose());
       _exporter = null;
     }
@@ -276,22 +285,24 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     ],
   );
 
-  late final _imageFavorites = ImageFavoriteActions(
-    findComic: (id, sourceKey) => ImageFavoriteManager().find(id, sourceKey),
-    save: (comic) => ImageFavoriteManager().addOrUpdateOrDelete(comic),
-    remove: (image) => ImageFavoriteManager().deleteImageFavorite([image]),
-  );
+  ImageWorkTask? _collectTask;
+  int _favoriteRevision = 0;
+  (String, String, String, int, int)? _favoriteQuery;
+  Future<bool>? _favoriteStatus;
 
-  bool isLiked() =>
-      _imageFavorites.find(
-        context.reader.cid,
-        context.reader.type.sourceKey,
-        context.reader.eid,
-        context.reader.page,
-      ) !=
-      null;
+  void _imageFavoritesChanged() {
+    _favoriteRevision++;
+    if (mounted) update();
+  }
 
   void addImageFavorite() async {
+    if (_collectTask != null) return;
+    final task = widget.imageWork.start(
+      cancelSelection: _selectionOverlay.cancel,
+    );
+    if (task == null) return;
+    _collectTask = task;
+    update();
     try {
       if (context.reader.images![0].contains('file://')) {
         showToast(
@@ -306,7 +317,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
       final title = context.reader.history!.title;
       final subtitle = context.reader.history!.subtitle;
       final maxPage = context.reader.images!.length;
-      final selection = await _imagePicker.pick();
+      final selection = await task.select(_imagePicker.pick);
       if (!mounted ||
           selection == null ||
           !selection.isCurrent(_imagePickContext())) {
@@ -314,7 +325,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
       }
       final index = selection.index;
       final reader = context.reader;
-      final result = _imageFavorites.toggle(
+      final result = await ImageFavoriteManager().toggle(
         ImageFavoriteInput(
           id: id,
           sourceKey: reader.type.sourceKey,
@@ -328,7 +339,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
           title: title,
           subtitle: subtitle,
           author: reader.widget.author,
-          tags: reader.widget.tags,
+          tags: List.of(reader.widget.tags),
           translatedTags: reader.widget.tags
               .map((e) => e.translateTagsToCN)
               .toList(),
@@ -337,7 +348,18 @@ class ReaderScaffoldState extends State<ReaderScaffold>
           imageKey: reader.images![index],
           coverKey: reader.images![0],
         ),
+        checkActive: () {
+          task.check();
+          if (!mounted || !selection.isCurrent(_imagePickContext())) {
+            throw const ImageWorkTaskCancelled();
+          }
+        },
       );
+      if (!mounted ||
+          task.isCancelled ||
+          !selection.isCurrent(_imagePickContext())) {
+        return;
+      }
       switch (result) {
         case ImageFavoriteResult.protectedCover:
           showToast(
@@ -368,12 +390,50 @@ class ReaderScaffoldState extends State<ReaderScaffold>
       }
       update();
     } catch (e, stackTrace) {
-      Log.error("Image Favorite", e, stackTrace);
-      showToast(message: e.toString(), context: context, seconds: 1);
+      if (e is! ImageWorkTaskCancelled) {
+        Log.error("Image Favorite", e, stackTrace);
+        if (!mounted || task.isCancelled) {
+          task.recordFailure(e, stackTrace);
+        } else {
+          showToast(message: e.toString(), context: context, seconds: 1);
+        }
+      }
+    } finally {
+      task.finish();
+      if (identical(_collectTask, task)) _collectTask = null;
+      if (mounted) update();
     }
   }
 
   Widget buildBottom() {
+    final reader = context.reader;
+    final query = (
+      reader.cid,
+      reader.type.sourceKey,
+      reader.eid,
+      reader.page,
+      _favoriteRevision,
+    );
+    if (_favoriteQuery != query) {
+      _favoriteQuery = query;
+      _favoriteStatus = ImageFavoriteManager().isCollected(
+        query.$1,
+        query.$2,
+        query.$3,
+        query.$4,
+      );
+    }
+    return FutureBuilder<bool>(
+      key: ValueKey(query),
+      future: _favoriteStatus,
+      builder: (context, snapshot) => _buildBottom(
+        snapshot.data ?? false,
+        loading: snapshot.connectionState != ConnectionState.done,
+      ),
+    );
+  }
+
+  Widget _buildBottom(bool collected, {required bool loading}) {
     // Use maxPage for display (excluding chapter comments page)
     final displayPage = context.reader.page.clamp(1, context.reader.maxPage);
     var text = "E${context.reader.chapter} : P$displayPage";
@@ -383,8 +443,9 @@ class ReaderScaffoldState extends State<ReaderScaffold>
 
     final buttons = buildReaderBottomActions(
       context,
-      imageCollected: isLiked(),
-      onCollect: addImageFavorite,
+      imageCollected: collected,
+      imageCollecting: _collectTask != null,
+      onCollect: loading || _collectTask != null ? null : addImageFavorite,
       onFullscreen: App.isDesktop ? () => context.reader.fullscreen() : null,
       orientation: readerOrientation,
       onRotate: App.isAndroid ? cycleReaderOrientation : null,

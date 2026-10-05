@@ -325,8 +325,8 @@ void main() {
           final favorites = LocalFavoritesManager();
           await favorites.init();
           try {
-            final folder = favorites.createFolder('kept');
-            favorites.addComic(
+            final folder = await favorites.createFolder('kept');
+            await favorites.addComic(
               folder,
               FavoriteItem(
                 id: 'favorite',
@@ -342,7 +342,11 @@ void main() {
               manager.addHistory(_history('not-favorite')),
             ];
             final clear = manager.clearUnfavoritedHistory();
-            favorites.deleteComicWithId(folder, 'favorite', ComicType.local);
+            await favorites.deleteComicWithId(
+              folder,
+              'favorite',
+              ComicType.local,
+            );
             await Future.wait([...writes, clear]);
             expect(manager.getAll().map((item) => item.id), ['favorite']);
           } finally {

@@ -18,6 +18,7 @@
 |---|---|---|
 | `lib/foundation/throttled_task_runner.dart` | history_manager 的刷新；webdav_library_synchronizer 的目录刷新（并发 4、无批次延迟） | 只共享有限并发和批次节流；取消检查阻止继续调度，不中断已开始任务；单项错误策略由调用者决定 |
 | `lib/foundation/platform_dialog_queue.dart` | `file_interaction.dart` 中两个独立实例：`_mobileFileSaves` 供移动 `saveFile` 使用；`Share._dialogs` 由 `Share.shareFile` 和 `Share.shareText` 共用 | 当前 `run` 回调的原 Future 返回或失败后才放行下一项；取消准入、文件清理和错误展示仍由调用者负责。两个实例不相互排队，也不覆盖网络、图片读取或桌面保存；平台确认不证明外部接收者消费完成 |
+| `lib/network/webdav.dart` 的 `closeWebDavClient` | `WebDavDataSyncRemote` 的单次传输连接；`WebDavComicBackupOps` 的七类临时客户端操作 | 捕获实际 adapter，强制关闭失败仍等原生与上传/响应清理；保留主错误及清理错误。同步取消与 finally 共用关闭 Future，文件随后清理；备份每项独立连接。不能用于每次请求后销毁需要恢复与复用的 WebDAV 书库连接 |
 | `lib/network/request_scope.dart` | chapter_image_loader、reader_controller、data_sync_transfer、JS 引擎、follow_updates | 父子取消、超时、HTTP token 和取消等待；run 可以先结束等待，不能证明底层工作已停止；dispose 仅释放计时器/父关系，不等于 cancel |
 | `lib/foundation/sqlite_transaction.dart` | local/history/favorites 仓储及收藏导入 | 同步 SQL 事务和嵌套 savepoint；禁止异步工作，不能覆盖文件写入；保留原操作与回滚双重失败 |
 | `lib/foundation/directory_replacement.dart` | app_data_transfer 的恢复协调 | 调用者先停用资源，目录备份/恢复；路径重叠和目标类型校验不等于全链符号链接或崩溃恢复验收 |

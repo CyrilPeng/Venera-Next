@@ -9,6 +9,8 @@ import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/components/select.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
@@ -166,6 +168,8 @@ class FollowUpdatesPage extends StatefulWidget {
 }
 
 class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
+  int _folderChange = 0;
+  FollowUpdateJob? _folderJob;
   FollowUpdatesRuntime? _runtime;
 
   @override
@@ -212,6 +216,8 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
   @override
   void dispose() {
     _runtime?.changes.removeListener(updateComics);
+    _folderChange++;
+    _folderJob?.cancel();
     super.dispose();
   }
 
@@ -337,21 +343,32 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
                   IconButton(
                     icon: Icon(Icons.clear_all),
                     onPressed: () {
-                      showConfirmDialog(
+                      final manager = LocalFavoritesManager();
+                      final generation = manager.connectionGeneration;
+                      final items = updatedComics.toList();
+                      final runtime = _runtime;
+                      showAsyncConfirmDialog(
                         context: App.rootContext,
                         title: "Mark all as read".tl,
                         content: "Do you want to mark all as read?".tl,
-                        onConfirm: () {
-                          for (var comic in updatedComics) {
-                            LocalFavoritesManager().markAsRead(
-                              comic.id,
-                              comic.type,
-                              notify: false,
-                            );
-                          }
-                          LocalFavoritesManager().notifyChanges();
-                          _runtime!.notifyChanged();
-                          appdata.saveData();
+                        onConfirm: () async {
+                          await AppDataOperations.instance.access(() async {
+                            if (manager.connectionGeneration != generation) {
+                              throw StateError(
+                                'Favorites database changed. Try again.',
+                              );
+                            }
+                            for (var comic in items) {
+                              await manager.markAsRead(
+                                comic.id,
+                                comic.type,
+                                notify: false,
+                              );
+                            }
+                            manager.notifyChanges();
+                            await appdata.saveData();
+                          });
+                          runtime?.notifyChanged();
                         },
                       );
                     },
@@ -484,53 +501,65 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
     );
   }
 
-  void disable() {
+  Future<void> disable() async {
+    _folderChange++;
+    _folderJob?.cancel();
     _runtime!.cancelChecking();
     FollowUpdateJob.cancelActive();
-    appdata.settings["followUpdatesFolder"] = null;
-    LocalFavoritesManager().refreshUpdateIds();
-    appdata.saveData();
-    _runtime!.notifyChanged();
+    final manager = LocalFavoritesManager();
+    try {
+      await manager.setFollowUpdatesFolder(
+        null,
+        generation: manager.connectionGeneration,
+      );
+      if (mounted) _runtime!.notifyChanged();
+    } catch (error, stack) {
+      Log.error('Follow updates folder', error, stack);
+      if (mounted) context.showMessage(message: error.toString());
+    }
   }
 
-  void setFolder(String folder) async {
+  Future<void> setFolder(String folder) async {
+    final revision = ++_folderChange;
+    _folderJob?.cancel();
+    final manager = LocalFavoritesManager();
+    final generation = manager.connectionGeneration;
     _runtime!.cancelChecking();
-    LocalFavoritesManager().prepareTableForFollowUpdates(folder);
-
-    var count = LocalFavoritesManager().count(folder);
-
-    if (count > 0) {
-      final job = FollowUpdateJob(folder, true);
-
-      var loadingController = showLoadingDialog(
-        App.rootContext,
-        withProgress: true,
-        cancelButtonText: "Cancel".tl,
-        onCancel: job.cancel,
-        message: "Updating comics...".tl,
-      );
-
-      try {
-        await for (var progress in job.progress) {
-          loadingController.setProgress(progress.fraction);
+    bool active() => mounted && revision == _folderChange;
+    try {
+      await AppDataOperations.instance.access(() async {
+        if (!active()) return;
+        if (manager.connectionGeneration != generation) {
+          throw StateError('Favorites database changed. Try again.');
         }
-      } catch (error) {
-        if (mounted) context.showMessage(message: error.toString());
-        return;
-      } finally {
-        loadingController.close();
+        await manager.prepareTableForFollowUpdates(folder);
+      });
+      if (!mounted || !active()) return;
+      if (manager.count(folder) > 0) {
+        final job = _folderJob = FollowUpdateJob(folder, true);
+        final loading = showLoadingDialog(
+          context,
+          withProgress: true,
+          cancelButtonText: 'Cancel'.tl,
+          onCancel: job.cancel,
+          message: 'Updating comics...'.tl,
+        );
+        try {
+          await for (var progress in job.progress) {
+            loading.setProgress(progress.fraction);
+          }
+        } finally {
+          loading.close();
+        }
+        if (job.isCancelled || !active()) return;
       }
-      if (job.isCancelled || !mounted) return;
+      if (!active()) return;
+      await manager.setFollowUpdatesFolder(folder, generation: generation);
+      if (active()) updateComics();
+    } catch (error, stack) {
+      Log.error('Follow updates folder', error, stack);
+      if (mounted && active()) context.showMessage(message: error.toString());
     }
-
-    setState(() {
-      appdata.settings["followUpdatesFolder"] = folder;
-      LocalFavoritesManager().refreshUpdateIds();
-      updatedComics = [];
-      allComics = LocalFavoritesManager().getComicsWithUpdatesInfo(folder);
-      sortComics();
-    });
-    appdata.saveData();
   }
 
   void checkNow() async {

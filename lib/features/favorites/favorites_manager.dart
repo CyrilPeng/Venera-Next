@@ -3,6 +3,7 @@ import 'favorite_folder_import.dart';
 import 'favorite_updates_service.dart';
 import 'read_later_service.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
+import 'package:venera_next/foundation/persistence_failure.dart';
 import 'favorite_identity_index.dart';
 import 'package:venera_next/foundation/file_replacement.dart';
 import 'favorites_repository.dart';
@@ -35,7 +36,9 @@ void registerFollowUpdatesChangeListener(
 }
 
 void _notifyFollowUpdatesChanged() {
-  _followUpdatesChangeListener?.call();
+  AppDataOperations.instance.publish(
+    () => _followUpdatesChangeListener?.call(),
+  );
 }
 
 class LocalFavoritesManager with ChangeNotifier {
@@ -43,6 +46,286 @@ class LocalFavoritesManager with ChangeNotifier {
       cache ?? (cache = LocalFavoritesManager._create());
 
   LocalFavoritesManager._create();
+
+  Future<void>? _mutationTail;
+
+  /// Acquire global admission before joining this owner's local mutation queue.
+  /// Paths and connection generations belong to admission, never late execution.
+  Future<T> _mutate<T>(FutureOr<T> Function() action) =>
+      AppDataOperations.instance.access(() {
+        if (_database == null || _isClosed) {
+          throw StateError('Favorites database is closed');
+        }
+        final generation = _connectionGeneration;
+        final path = _dbPath;
+        final result = Completer<T>();
+        void execute() {
+          Future<T>.sync(() {
+            if (generation != _connectionGeneration ||
+                path != _dbPath ||
+                _isClosed) {
+              throw StateError(
+                'Favorites mutation belongs to a closed connection',
+              );
+            }
+            return action();
+          }).then(result.complete, onError: result.completeError);
+        }
+
+        final previous = _mutationTail;
+        late Future<void> settled;
+        settled = result.future
+            .then<void>((_) {}, onError: (Object error, StackTrace stack) {})
+            .whenComplete(() {
+              if (identical(_mutationTail, settled)) _mutationTail = null;
+            });
+        _mutationTail = settled;
+        if (previous == null) {
+          execute();
+        } else {
+          previous.then((_) => execute());
+        }
+        return result.future;
+      });
+
+  Future<void> updateOrder(List<String> folders) {
+    final captured = List<String>.of(folders);
+    return _mutate(() => _updateOrder(captured));
+  }
+
+  Future<void> addTagTo(String folder, String id, String tag) =>
+      _mutate(() => _addTagTo(folder, id, tag));
+
+  Future<String> createFolder(
+    String name, [
+    bool renameWhenInvalidName = false,
+  ]) => _mutate(() => _createFolder(name, renameWhenInvalidName));
+
+  Future<void> linkFolderToNetwork(
+    String folder,
+    String source,
+    String networkFolder,
+  ) => _mutate(() => _linkFolderToNetwork(folder, source, networkFolder));
+
+  Future<bool> addComic(
+    String folder,
+    FavoriteItem comic, [
+    int? order,
+    String? updateTime,
+  ]) {
+    final captured = comic.detached();
+    return _mutate(() => _addComic(folder, captured, order, updateTime));
+  }
+
+  Future<void> moveFavorite(
+    String sourceFolder,
+    String targetFolder,
+    String id,
+    ComicType type,
+  ) => _mutate(() => _moveFavorite(sourceFolder, targetFolder, id, type));
+
+  Future<void> batchMoveFavorites(
+    String sourceFolder,
+    String targetFolder,
+    List<FavoriteItem> items,
+  ) {
+    final captured = items.map((item) => item.detached()).toList();
+    return _mutate(
+      () => _batchMoveFavorites(sourceFolder, targetFolder, captured),
+    );
+  }
+
+  Future<void> batchCopyFavorites(
+    String sourceFolder,
+    String targetFolder,
+    List<FavoriteItem> items,
+  ) {
+    final captured = items.map((item) => item.detached()).toList();
+    return _mutate(
+      () => _batchCopyFavorites(sourceFolder, targetFolder, captured),
+    );
+  }
+
+  Future<void> deleteFolder(String name) => _mutate(() => _deleteFolder(name));
+
+  Future<void> transferFavorites(
+    String source,
+    Iterable<String> targets,
+    List<FavoriteItem> items, {
+    required bool move,
+  }) {
+    final destinations = targets
+        .where((folder) => folder != source)
+        .toSet()
+        .toList();
+    final identities = items.map((item) => (item.id, item.type.value)).toList();
+    return _mutate(() {
+      if (destinations.isEmpty || identities.isEmpty) return;
+      _repository.transferToFolders(
+        source,
+        destinations,
+        identities,
+        move: move,
+      );
+      for (final folder in [source, ...destinations]) {
+        counts[folder] = count(folder);
+      }
+      _refreshIdentityCounts(identities);
+      _syncFollowUpdatesIfAffected([source, ...destinations]);
+      notifyListeners();
+    });
+  }
+
+  Future<void> deleteComicWithId(String folder, String id, ComicType type) =>
+      _mutate(() => _deleteComicWithId(folder, id, type));
+
+  Future<void> batchDeleteComics(String folder, List<FavoriteItem> comics) {
+    final captured = comics.map((item) => item.detached()).toList();
+    return _mutate(() => _batchDeleteComics(folder, captured));
+  }
+
+  Future<int> removeInvalid() => _mutate(_removeInvalid);
+
+  Future<void> reorder(List<FavoriteItem> newFolder, String folder) {
+    final captured = newFolder.map((item) => item.detached()).toList();
+    return _mutate(() => _reorder(captured, folder));
+  }
+
+  Future<void> rename(String before, String after) =>
+      _mutate(() => _rename(before, after));
+
+  Future<void> onRead(
+    String id,
+    ComicType type, {
+    int? generation,
+    void Function()? checkActive,
+  }) => _mutate(() {
+    if (generation != null) _checkSourceGeneration(generation);
+    checkActive?.call();
+    _onRead(id, type);
+  });
+
+  Future<void> editTags(String id, String folder, List<String> tags) {
+    final captured = List<String>.of(tags);
+    return _mutate(() => _editTags(id, folder, captured));
+  }
+
+  int get connectionGeneration => _connectionGeneration;
+
+  void _checkSourceGeneration(int generation) {
+    if (generation != _connectionGeneration) {
+      throw StateError(
+        'Favorite source response belongs to a replaced database',
+      );
+    }
+  }
+
+  Future<void> updateInfo(
+    String folder,
+    FavoriteItem comic, {
+    required int generation,
+    void Function()? checkActive,
+  }) {
+    final captured = comic.detached();
+    return _mutate(() {
+      _checkSourceGeneration(generation);
+      checkActive?.call();
+      _updateInfo(folder, captured);
+    });
+  }
+
+  Future<bool> applyFollowUpdate(
+    String folder,
+    FavoriteItem comic,
+    String? updateTime, {
+    required int generation,
+    required void Function() checkActive,
+  }) {
+    final captured = comic.detached();
+    return _mutate(() {
+      _checkSourceGeneration(generation);
+      checkActive();
+      final updated = _repository.applyFollowUpdate(
+        folder,
+        captured,
+        updateTime,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+      if (updated) {
+        _updates.recordCommittedUpdate(
+          folder,
+          captured.id,
+          captured.type.value,
+          true,
+        );
+      }
+      return updated;
+    });
+  }
+
+  Future<NetworkFavoriteImportCommit> importNetworkFavorites(
+    String folder,
+    String source,
+    String folderId,
+    List<FavoriteItem> items, {
+    required bool oldToNew,
+    void Function()? checkActive,
+    int? generation,
+  }) {
+    final captured = items.map((item) => item.detached()).toList();
+    return _mutate(() {
+      if (generation != null) _checkSourceGeneration(generation);
+      checkActive?.call();
+      return _importNetworkFavorites(
+        folder,
+        source,
+        folderId,
+        captured,
+        oldToNew: oldToNew,
+      );
+    });
+  }
+
+  Future<void> fromJson(String json) => _mutate(() => _fromJson(json));
+
+  Future<void> prepareTableForFollowUpdates(
+    String table, [
+    bool clearData = true,
+  ]) => _mutate(() => _prepareTableForFollowUpdates(table, clearData));
+
+  Future<void> updateUpdateTime(
+    String folder,
+    String id,
+    ComicType type,
+    String updateTime,
+  ) => _mutate(() => _updateUpdateTime(folder, id, type, updateTime));
+
+  Future<void> updateCheckTime(String folder, String id, ComicType type) =>
+      _mutate(() => _updateCheckTime(folder, id, type));
+
+  Future<void> markAsRead(String id, ComicType type, {bool notify = true}) =>
+      _mutate(() => _markAsRead(id, type, notify: notify));
+
+  Future<void> setFollowUpdatesFolder(
+    String? folder, {
+    required int generation,
+  }) => _mutate(() async {
+    _checkSourceGeneration(generation);
+    if (folder != null && !existsFolder(folder)) {
+      throw StateError('Favorite folder no longer exists');
+    }
+    appdata.settings['followUpdatesFolder'] = folder;
+    refreshUpdateIds();
+    await _finishFolderMutation(
+      true,
+      true,
+      commitState: PersistenceCommitState.unknown,
+    );
+  });
+
+  @override
+  void notifyListeners() =>
+      AppDataOperations.instance.publish(super.notifyListeners);
 
   static LocalFavoritesManager? cache;
 
@@ -108,10 +391,18 @@ class LocalFavoritesManager with ChangeNotifier {
     return counts[folder] ?? 0;
   }
 
-  Future<void> init() =>
-      _initializeAfterTransitions('${App.dataPath}/local_favorite.db');
+  Future<void> init({void Function(void Function())? publishChange}) =>
+      AppDataOperations.instance.access(
+        () => _initializeAfterTransitions(
+          '${App.dataPath}/local_favorite.db',
+          publishChange: publishChange,
+        ),
+      );
 
-  Future<void> _initializeAfterTransitions(String path) {
+  Future<void> _initializeAfterTransitions(
+    String path, {
+    void Function(void Function())? publishChange,
+  }) {
     final clearing = _clearing;
     if (clearing != null) {
       if (path != _dbPath) {
@@ -123,12 +414,17 @@ class LocalFavoritesManager with ChangeNotifier {
     }
     final closing = _closing;
     if (closing != null) {
-      return closing.then((_) => _initializeAfterTransitions(path));
+      return closing.then(
+        (_) => _initializeAfterTransitions(path, publishChange: publishChange),
+      );
     }
-    return _startInitialization(path);
+    return _startInitialization(path, publishChange: publishChange);
   }
 
-  Future<void> _startInitialization(String path) {
+  Future<void> _startInitialization(
+    String path, {
+    void Function(void Function())? publishChange,
+  }) {
     final existing = _initialization;
     if (existing != null) {
       if (_dbPath != path) {
@@ -142,7 +438,9 @@ class LocalFavoritesManager with ChangeNotifier {
     _initialization = attempt.future;
     _dbPath = path;
     final generation = ++_connectionGeneration;
-    Future<void>.sync(() => _initialize(path, generation)).then(
+    Future<void>.sync(
+      () => _initialize(path, generation, publishChange: publishChange),
+    ).then(
       (_) {
         if (generation != _connectionGeneration) {
           attempt.completeError(
@@ -168,7 +466,11 @@ class LocalFavoritesManager with ChangeNotifier {
     }
   }
 
-  Future<void> _initialize(String path, int generation) async {
+  Future<void> _initialize(
+    String path,
+    int generation, {
+    void Function(void Function())? publishChange,
+  }) async {
     Database? database;
     var published = false;
     try {
@@ -215,7 +517,7 @@ class LocalFavoritesManager with ChangeNotifier {
       appdata.settings['quickFavorite'] = nextQuickFavorite;
       if (settingsChanged) await appdata.saveData(false);
       _checkInitialization(generation);
-      initCounts();
+      await _initCounts(publishChange: publishChange);
     } catch (_) {
       if (!published) {
         database?.dispose();
@@ -226,17 +528,17 @@ class LocalFavoritesManager with ChangeNotifier {
     }
   }
 
-  void initCounts() {
+  Future<void> _initCounts({
+    void Function(void Function())? publishChange,
+  }) async {
     for (var folder in folderNames) {
       counts[folder] = count(folder);
     }
     refreshUpdateIds();
-    _refreshHashedIds(folderNames);
+    await _refreshHashedIds(publishChange: publishChange);
   }
 
-  void refreshHashedIds() {
-    _refreshHashedIds(folderNames);
-  }
+  Future<void> refreshHashedIds() => _refreshHashedIds();
 
   static const String trackingFolderName = "追更";
 
@@ -245,13 +547,13 @@ class LocalFavoritesManager with ChangeNotifier {
     configuredFolder: () => appdata.settings['readLaterFolder'],
     selectFolder: (folder) => appdata.settings['readLaterFolder'] = folder,
     createFolder: (folder) {
-      createFolder(folder);
+      _createFolder(folder);
     },
     addFirst: (folder, comic) {
-      addComic(folder, comic, minValue(folder) - 1);
+      _addComic(folder, comic, minValue(folder) - 1);
     },
     remove: (folder, id, type) {
-      deleteComicWithId(folder, id, type);
+      _deleteComicWithId(folder, id, type);
     },
     saveSettings: () => appdata.saveData(),
   );
@@ -268,33 +570,52 @@ class LocalFavoritesManager with ChangeNotifier {
     FavoriteItem comic, {
     required bool included,
     required String folderName,
-  }) => _readLater.set(comic, included: included, folderName: folderName);
+  }) {
+    final captured = comic.detached();
+    return _mutate(
+      () =>
+          _readLater.set(captured, included: included, folderName: folderName),
+    );
+  }
 
-  void _refreshHashedIds(List<String> folders) {
-    final generation = _identityIndex.beginRefresh();
-    if (folders.isEmpty) {
-      _identityIndex.completeRefresh(generation, {});
-      _hashedIdsRefresh = Future.value();
-      return;
-    }
+  Future<void> _refreshHashedIds({
+    void Function(void Function())? publishChange,
+  }) {
     late Future<void> refresh;
-    refresh = _runRead((path) => _initHashedIds(folders, path)).then(
-      (value) {
-        if (_isClosed || !identical(_hashedIdsRefresh, refresh)) {
+    refresh = _mutate(() async {
+      final folders = folderNames;
+      final generation = _identityIndex.beginRefresh();
+      try {
+        if (folders.isEmpty) {
+          _identityIndex.completeRefresh(generation, {});
           return;
         }
-        if (_identityIndex.completeRefresh(generation, value)) {
-          notifyListeners();
+        final value = await _startRead((path) => _initHashedIds(folders, path));
+        if (_isClosed || !_identityIndex.completeRefresh(generation, value)) {
+          return;
         }
-      },
-      onError: (Object error, StackTrace stackTrace) {
+        if (publishChange == null) {
+          notifyListeners();
+        } else {
+          AppDataOperations.instance.publish(
+            () => publishChange(notifyListeners),
+          );
+        }
+      } catch (_) {
         _identityIndex.failRefresh(generation);
+        rethrow;
+      }
+    });
+    refresh.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {
         if (!_isClosed && identical(_hashedIdsRefresh, refresh)) {
-          Log.error("LocalFavoritesManager", error, stackTrace);
+          Log.error('LocalFavoritesManager', error, stack);
         }
       },
     );
     _hashedIdsRefresh = refresh;
+    return refresh;
   }
 
   @visibleForTesting
@@ -326,7 +647,7 @@ class LocalFavoritesManager with ChangeNotifier {
     String dbPath,
   ) {
     return Isolate.run(() {
-      var db = openSqliteDatabase(dbPath);
+      var db = sqlite3.open(dbPath, mode: OpenMode.readOnly);
       try {
         var identities = <(String, int), int>{};
         for (var folder in folders) {
@@ -345,10 +666,13 @@ class LocalFavoritesManager with ChangeNotifier {
   List<String> find(String id, ComicType type) =>
       _repository.findFolders(folderNames, id, type.value);
 
-  Future<List<String>> findWithModel(FavoriteItem item) async =>
-      find(item.id, item.type);
+  Future<List<String>> findWithModel(FavoriteItem item) {
+    final id = item.id;
+    final type = item.type;
+    return _mutate(() => find(id, type));
+  }
 
-  void updateOrder(List<String> folders) {
+  void _updateOrder(List<String> folders) {
     _repository.updateOrder(folders);
     notifyListeners();
   }
@@ -364,7 +688,10 @@ class LocalFavoritesManager with ChangeNotifier {
   List<FavoriteItem> getFolderComics(String folder) =>
       _repository.getFolderComics(folder);
 
-  Future<T> _runRead<T>(Future<T> Function(String path) read) {
+  Future<T> _runRead<T>(Future<T> Function(String path) read) =>
+      _mutate(() => _startRead(read));
+
+  Future<T> _startRead<T>(Future<T> Function(String path) read) {
     if (_database == null || _isClosed) {
       return Future.error(StateError('Favorites database is closed'));
     }
@@ -390,7 +717,7 @@ class LocalFavoritesManager with ChangeNotifier {
     String dbPath,
   ) {
     return Isolate.run(() {
-      var db = openSqliteDatabase(dbPath);
+      var db = sqlite3.open(dbPath, mode: OpenMode.readOnly);
       try {
         return FavoritesRepository(db).getFolderComics(folder);
       } finally {
@@ -411,7 +738,7 @@ class LocalFavoritesManager with ChangeNotifier {
     String dbPath,
   ) {
     return Isolate.run(() {
-      var db = openSqliteDatabase(dbPath);
+      var db = sqlite3.open(dbPath, mode: OpenMode.readOnly);
       try {
         return FavoritesRepository(db).getAllComics(folders);
       } finally {
@@ -422,14 +749,10 @@ class LocalFavoritesManager with ChangeNotifier {
 
   /// Start a new isolate to get all the comics
   Future<List<FavoriteItem>> getAllComicsAsync() {
-    if (_database == null || _isClosed) {
-      return Future.error(StateError('Favorites database is closed'));
-    }
-    final folders = folderNames;
-    return _runRead((path) => _getAllComicsAsync(folders, path));
+    return _runRead((path) => _getAllComicsAsync(folderNames, path));
   }
 
-  void addTagTo(String folder, String id, String tag) {
+  void _addTagTo(String folder, String id, String tag) {
     _repository.addTagTo(folder, id, tag);
     notifyListeners();
   }
@@ -442,7 +765,7 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   /// create a folder
-  String createFolder(String name, [bool renameWhenInvalidName = false]) {
+  String _createFolder(String name, [bool renameWhenInvalidName = false]) {
     if (name.isEmpty) {
       if (renameWhenInvalidName) {
         int i = 0;
@@ -472,7 +795,7 @@ class LocalFavoritesManager with ChangeNotifier {
     return name;
   }
 
-  void linkFolderToNetwork(
+  void _linkFolderToNetwork(
     String folder,
     String source,
     String networkFolder,
@@ -507,7 +830,7 @@ class LocalFavoritesManager with ChangeNotifier {
 
   /// add comic to a folder.
   /// return true if success, false if already exists
-  bool addComic(
+  bool _addComic(
     String folder,
     FavoriteItem comic, [
     int? order,
@@ -536,7 +859,7 @@ class LocalFavoritesManager with ChangeNotifier {
     return true;
   }
 
-  void moveFavorite(
+  void _moveFavorite(
     String sourceFolder,
     String targetFolder,
     String id,
@@ -560,7 +883,7 @@ class LocalFavoritesManager with ChangeNotifier {
     notifyListeners();
   }
 
-  void batchMoveFavorites(
+  void _batchMoveFavorites(
     String sourceFolder,
     String targetFolder,
     List<FavoriteItem> items,
@@ -583,7 +906,7 @@ class LocalFavoritesManager with ChangeNotifier {
       );
     } catch (e) {
       Log.error("Batch Move Favorites", e.toString());
-      return;
+      rethrow;
     }
 
     // Update counts
@@ -595,7 +918,7 @@ class LocalFavoritesManager with ChangeNotifier {
     notifyListeners();
   }
 
-  void batchCopyFavorites(
+  void _batchCopyFavorites(
     String sourceFolder,
     String targetFolder,
     List<FavoriteItem> items,
@@ -618,7 +941,7 @@ class LocalFavoritesManager with ChangeNotifier {
       );
     } catch (e) {
       Log.error("Batch Copy Favorites", e.toString());
-      return;
+      rethrow;
     }
 
     // Update counts
@@ -630,27 +953,63 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   /// delete a folder
-  void deleteFolder(String name) {
+  Future<void> _deleteFolder(String name) async {
     var wasFollowUpdatesFolder =
         appdata.settings['followUpdatesFolder'] == name;
     final removedIdentities = _repository.identities(name);
     _repository.deleteFolder(name);
     counts.remove(name);
-    for (final key in ['readLaterFolder', 'quickFavorite']) {
+    var settingsChanged = false;
+    for (final key in [
+      'readLaterFolder',
+      'quickFavorite',
+      'followUpdatesFolder',
+    ]) {
       if (appdata.settings[key] == name) {
         appdata.settings[key] = null;
-        appdata.saveData();
+        settingsChanged = true;
       }
     }
     _refreshIdentityCounts(removedIdentities);
-    refreshHashedIds();
-    if (wasFollowUpdatesFolder) {
-      appdata.settings['followUpdatesFolder'] = null;
-      refreshUpdateIds();
-      _notifyFollowUpdatesChanged();
-      appdata.saveData();
+    refreshUpdateIds();
+    await _finishFolderMutation(settingsChanged, wasFollowUpdatesFolder);
+  }
+
+  /// SQL is already committed. Publish the resulting state even when saving
+  /// its settings fails, and retain that outcome so callers cannot replay SQL.
+  Future<void> _finishFolderMutation(
+    bool saveSettings,
+    bool followChanged, {
+    PersistenceCommitState commitState = PersistenceCommitState.committed,
+  }) async {
+    final failures = <({Object error, StackTrace stackTrace})>[];
+    if (saveSettings) {
+      try {
+        await appdata.saveData();
+      } catch (error, stack) {
+        failures.add((error: error, stackTrace: stack));
+      }
+    }
+    if (followChanged) {
+      try {
+        _notifyFollowUpdatesChanged();
+      } catch (error, stack) {
+        failures.add((error: error, stackTrace: stack));
+      }
     }
     notifyListeners();
+    if (failures.isNotEmpty) {
+      final first = failures.first;
+      Error.throwWithStackTrace(
+        PersistenceFailure(
+          commitState: commitState,
+          cause: first.error,
+          stackTrace: first.stackTrace,
+          cleanupFailures: failures.skip(1),
+        ),
+        first.stackTrace,
+      );
+    }
   }
 
   void _applyDeletedComics(Map<String, List<(String, int)>> removed) {
@@ -682,11 +1041,11 @@ class LocalFavoritesManager with ChangeNotifier {
   void refreshDeletedFavorites(Map<String, List<(String, int)>> removed) =>
       _applyDeletedComics(removed);
 
-  void deleteComicWithId(String folder, String id, ComicType type) {
+  void _deleteComicWithId(String folder, String id, ComicType type) {
     _applyDeletedComics(_repository.deleteComics([folder], [(id, type.value)]));
   }
 
-  void batchDeleteComics(String folder, List<FavoriteItem> comics) {
+  void _batchDeleteComics(String folder, List<FavoriteItem> comics) {
     if (comics.isEmpty) return;
     late Map<String, List<(String, int)>> removed;
     try {
@@ -695,12 +1054,12 @@ class LocalFavoritesManager with ChangeNotifier {
       ], comics.map((comic) => (comic.id, comic.type.value)));
     } catch (error) {
       Log.error('Batch Delete Comics', error.toString());
-      return;
+      rethrow;
     }
     _applyDeletedComics(removed);
   }
 
-  Future<int> removeInvalid() async {
+  Future<int> _removeInvalid() async {
     int count = 0;
     await Future.microtask(() {
       var all = allComics();
@@ -709,7 +1068,7 @@ class LocalFavoritesManager with ChangeNotifier {
         if ((c.type == ComicType.local &&
                 LocalManager().find(c.id, c.type) == null) ||
             (c.type != ComicType.local && comicSource == null)) {
-          deleteComicWithId(c.folder, c.id, c.type);
+          _deleteComicWithId(c.folder, c.id, c.type);
           count++;
         }
       }
@@ -728,6 +1087,9 @@ class LocalFavoritesManager with ChangeNotifier {
     _clearRequest = attempt.future;
     AppDataOperations.instance
         .run(() async {
+          if (_dbPath != path) {
+            throw StateError('Favorites clear belongs to another data path');
+          }
           _clearing = attempt.future;
           await _clearDatabase(path);
         })
@@ -809,7 +1171,7 @@ class LocalFavoritesManager with ChangeNotifier {
     }
   }
 
-  void reorder(List<FavoriteItem> newFolder, String folder) async {
+  void _reorder(List<FavoriteItem> newFolder, String folder) {
     if (!existsFolder(folder)) {
       throw Exception("Failed to reorder: folder not found");
     }
@@ -820,12 +1182,12 @@ class LocalFavoritesManager with ChangeNotifier {
       );
     } catch (e) {
       Log.error("Reorder", e.toString());
-      return;
+      rethrow;
     }
     notifyListeners();
   }
 
-  void rename(String before, String after) {
+  Future<void> _rename(String before, String after) async {
     if (existsFolder(after)) {
       throw "Name already exists!";
     }
@@ -837,25 +1199,24 @@ class LocalFavoritesManager with ChangeNotifier {
     _repository.renameFolder(before, after);
     counts[after] = counts[before] ?? 0;
     counts.remove(before);
-    refreshHashedIds();
-    for (final key in ['readLaterFolder', 'quickFavorite']) {
+    var settingsChanged = false;
+    for (final key in [
+      'readLaterFolder',
+      'quickFavorite',
+      'followUpdatesFolder',
+    ]) {
       if (appdata.settings[key] == before) {
         appdata.settings[key] = after;
-        appdata.saveData();
+        settingsChanged = true;
       }
     }
-    if (wasFollowUpdatesFolder) {
-      appdata.settings['followUpdatesFolder'] = after;
-      refreshUpdateIds();
-      _notifyFollowUpdatesChanged();
-      appdata.saveData();
-    }
-    notifyListeners();
+    refreshUpdateIds();
+    await _finishFolderMutation(settingsChanged, wasFollowUpdatesFolder);
   }
 
-  void onRead(String id, ComicType type) {
+  void _onRead(String id, ComicType type) {
     if (appdata.settings['moveFavoriteAfterRead'] == "none") {
-      markAsRead(id, type);
+      _markAsRead(id, type);
       return;
     }
     var followUpdatesFolder = appdata.settings['followUpdatesFolder'];
@@ -886,7 +1247,7 @@ class LocalFavoritesManager with ChangeNotifier {
   List<FavoriteItem> search(String keyword) =>
       _repository.search(folderNames, keyword);
 
-  void editTags(String id, String folder, List<String> tags) {
+  void _editTags(String id, String folder, List<String> tags) {
     _repository.editTags(folder, id, tags);
     notifyListeners();
   }
@@ -898,7 +1259,7 @@ class LocalFavoritesManager with ChangeNotifier {
   bool hasNewUpdate(String id, ComicType type) =>
       _updates.contains(id, type.value);
 
-  void updateInfo(String folder, FavoriteItem comic, [bool notify = true]) {
+  void _updateInfo(String folder, FavoriteItem comic, [bool notify = true]) {
     _repository.updateInfo(folder, comic);
     if (notify) {
       notifyListeners();
@@ -916,7 +1277,7 @@ class LocalFavoritesManager with ChangeNotifier {
     });
   }
 
-  NetworkFavoriteImportCommit importNetworkFavorites(
+  NetworkFavoriteImportCommit _importNetworkFavorites(
     String folder,
     String source,
     String folderId,
@@ -933,11 +1294,24 @@ class LocalFavoritesManager with ChangeNotifier {
       oldToNew: oldToNew,
       translateTags: _translateTags,
     );
-    return NetworkFavoriteImportCommit(folder, added);
+    return NetworkFavoriteImportCommit(
+      folder,
+      added,
+      owner: this,
+      generation: _connectionGeneration,
+    );
   }
 
   /// Retryable publication of an already committed import; never writes SQL.
-  void publishNetworkFavoriteImport(NetworkFavoriteImportCommit result) {
+  Future<void> publishNetworkFavoriteImport(
+    NetworkFavoriteImportCommit result,
+  ) => _mutate(() {
+    // Reopening rebuilds the current cache. An old receipt has no authority to
+    // publish into that connection, even when the path and folder are reused.
+    if (!identical(result.owner, this) ||
+        result.generation != _connectionGeneration) {
+      return;
+    }
     counts[result.folder] = count(result.folder);
     _refreshIdentityCounts(result.identities);
     refreshUpdateIds();
@@ -947,9 +1321,9 @@ class LocalFavoritesManager with ChangeNotifier {
       // A follow-up observer must not prevent ordinary views from refreshing.
       notifyListeners();
     }
-  }
+  });
 
-  void fromJson(String json) {
+  void _fromJson(String json) {
     final (folder, comics) = importFavoriteFolder(
       json,
       _repository,
@@ -960,14 +1334,14 @@ class LocalFavoritesManager with ChangeNotifier {
     notifyImportedFavorites([folder]);
   }
 
-  void prepareTableForFollowUpdates(String table, [bool clearData = true]) {
+  void _prepareTableForFollowUpdates(String table, [bool clearData = true]) {
     _repository.prepareForFollowUpdates(table, clearData: clearData);
     if (appdata.settings['followUpdatesFolder'] == table) {
       refreshUpdateIds();
     }
   }
 
-  void updateUpdateTime(
+  void _updateUpdateTime(
     String folder,
     String id,
     ComicType type,
@@ -983,7 +1357,7 @@ class LocalFavoritesManager with ChangeNotifier {
     _updates.recordCommittedUpdate(folder, id, type.value, hasNewUpdate);
   }
 
-  void updateCheckTime(String folder, String id, ComicType type) =>
+  void _updateCheckTime(String folder, String id, ComicType type) =>
       _repository.updateCheckTime(
         folder,
         id,
@@ -996,7 +1370,7 @@ class LocalFavoritesManager with ChangeNotifier {
   List<FavoriteItemWithUpdateInfo> getComicsWithUpdatesInfo(String folder) =>
       existsFolder(folder) ? _repository.getComicsWithUpdatesInfo(folder) : [];
 
-  void markAsRead(String id, ComicType type, {bool notify = true}) {
+  void _markAsRead(String id, ComicType type, {bool notify = true}) {
     var folder = appdata.settings['followUpdatesFolder'];
     if (folder is! String || !existsFolder(folder)) {
       return;
@@ -1009,8 +1383,11 @@ class LocalFavoritesManager with ChangeNotifier {
     }
   }
 
-  /// Close immediately, then wait for all accepted reads to release connections.
-  Future<void> closeAndWait() {
+  /// Freeze new accesses and wait for accepted reads/writes before closing.
+  Future<void> closeAndWait() =>
+      AppDataOperations.instance.run(() => _closeAfterClear());
+
+  Future<void> _closeAfterClear() {
     final clearing = _clearing;
     if (clearing != null) {
       return clearing.then(
@@ -1035,7 +1412,9 @@ class LocalFavoritesManager with ChangeNotifier {
     return closing;
   }
 
-  void close() {
+  void close() => AppDataOperations.instance.accessSync(_closeImmediately);
+
+  void _closeImmediately() {
     _connectionGeneration++;
     _initialization = null;
     _isClosed = true;

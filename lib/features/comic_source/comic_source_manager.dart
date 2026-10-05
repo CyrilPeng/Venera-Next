@@ -310,9 +310,14 @@ class ComicSourceManager with ChangeNotifier, Init {
     return result;
   }
 
-  Future<void> reload() => _mutate(_reloadSources);
+  /// A publisher may identify this reload's synchronous notification without
+  /// suppressing independent changes while loading or initializing sources.
+  Future<void> reload({void Function(void Function())? publishChange}) =>
+      _mutate(() => _reloadSources(publishChange: publishChange));
 
-  Future<void> _reloadSources() async {
+  Future<void> _reloadSources({
+    void Function(void Function())? publishChange,
+  }) async {
     final previous = List<ComicSource>.of(_sources);
     final preserved = Set<ComicSource>.identity()..addAll(previous);
     final engine = JsEngine();
@@ -348,7 +353,11 @@ class ComicSourceManager with ChangeNotifier, Init {
         source.disposeRuntimeCallbacks();
       }
     }
-    notifyListeners();
+    if (publishChange == null) {
+      notifyListeners();
+    } else {
+      publishChange(notifyListeners);
+    }
   }
 
   Future<void> reloadForDebug() => _mutate(() async {

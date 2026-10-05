@@ -307,7 +307,13 @@ class RHttpAdapter implements HttpClientAdapter {
     _setUserAgent(options);
     final request = RHttpStreamRequest(
       options: options,
-      settings: Future.sync(() => settings),
+      settings: Future.sync(() => settings).then(
+        (settings) => settings.copyWith(
+          redirectSettings: options.followRedirects
+              ? rhttp.RedirectSettings.limited(options.maxRedirects)
+              : const rhttp.RedirectSettings.none(),
+        ),
+      ),
       upload: requestStream,
       statusMessage: _getStatusMessage,
       start: _startStreamCall,

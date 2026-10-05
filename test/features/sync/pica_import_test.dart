@@ -166,8 +166,8 @@ void main() {
       App.cachePath = (Directory('${root.path}/cache')..createSync()).path;
       await favorites.init();
       await history.init();
-      favorites.createFolder('existing');
-      favorites.addComic(
+      await favorites.createFolder('existing');
+      await favorites.addComic(
         'existing',
         FavoriteItem(
           id: 'keep',

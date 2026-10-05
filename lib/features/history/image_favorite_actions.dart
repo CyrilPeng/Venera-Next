@@ -37,6 +37,23 @@ class ImageFavoriteInput {
       coverKey;
   final int ep, maxPage, page;
   final List<String> tags, translatedTags;
+
+  ImageFavoriteInput detached() => ImageFavoriteInput(
+    id: id,
+    sourceKey: sourceKey,
+    eid: eid,
+    ep: ep,
+    epName: epName,
+    title: title,
+    subtitle: subtitle,
+    author: author,
+    tags: List.of(tags),
+    translatedTags: List.of(translatedTags),
+    maxPage: maxPage,
+    page: page,
+    imageKey: imageKey,
+    coverKey: coverKey,
+  );
 }
 
 /// Collection policy; the adapter owns storage, translation and UI feedback.
