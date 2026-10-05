@@ -685,7 +685,24 @@ void main() {
         try {
           await expectLater(
             manager.clearAll(),
-            throwsA(isA<FileSystemException>()),
+            throwsA(
+              isA<PersistenceFailure>()
+                  .having(
+                    (e) => e.commitState,
+                    'state',
+                    PersistenceCommitState.unknown,
+                  )
+                  .having(
+                    (e) => e.cause,
+                    'original write',
+                    isA<FileSystemException>(),
+                  )
+                  .having(
+                    (e) => e.cleanupFailures.single.error,
+                    'recovery write',
+                    isA<FileSystemException>(),
+                  ),
+            ),
           );
           expect(manager.getFolderComics('preserved').single.id, 'original');
           expect(appdata.settings['followUpdatesFolder'], 'preserved');

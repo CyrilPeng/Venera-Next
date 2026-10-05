@@ -40,14 +40,18 @@ def validate_pubspec_version(tag: str) -> None:
 
 def validate_flutter_rust_bridge_lock() -> None:
     text = read_text("pubspec.lock")
-    pattern = (
-        r"flutter_rust_bridge:\s*\n"
-        r"\s+dependency:\s+\"?direct overridden\"?\s*\n"
-        r"(?:.*\n){0,8}?"
-        r"\s+version:\s+\"2\.11\.1\""
+    entry = re.search(
+        r"^  flutter_rust_bridge:\s*\n(?P<body>(?:[ ]{4,}[^\n]*\n?)+)",
+        text,
+        re.MULTILINE,
     )
-    if not re.search(pattern, text):
-        fail("pubspec.lock must lock flutter_rust_bridge as direct overridden version 2.11.1")
+    body = entry.group("body") if entry else ""
+    # Pub can label an identical direct dependency/override as direct main.
+    # Check the selected package and version, not that serialization detail.
+    direct = re.search(r'^    dependency: "?direct (?:main|overridden)"?\s*$', body, re.MULTILINE)
+    version = re.search(r'^    version: "2\.11\.1"\s*$', body, re.MULTILINE)
+    if not direct or not version:
+        fail("pubspec.lock must lock direct flutter_rust_bridge version 2.11.1")
 
 
 def validate_windows_installer_metadata() -> None:

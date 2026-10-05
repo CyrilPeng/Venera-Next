@@ -26,8 +26,10 @@ import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/features/reader/reader_session.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
+import 'package:venera_next/features/reader/brightness.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -47,6 +49,77 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
   });
+
+  for (final detach in [false, true]) {
+    testWidgets(
+      'real reader dimming previews while saving and blocks ${detach ? 'window after removal' : 'back'}',
+      (tester) async {
+        final fixture = await _ReaderFixture.create(tester);
+        final release = Completer<void>();
+        Future<void>? exclusive;
+        try {
+          appdata.settings['readerBrightnessEnabled'] = true;
+          appdata.settings['readerBrightness'] = 50;
+          appdata.settings['disableSyncFields'] = '';
+          await fixture.mount(tester, pushed: true);
+          final reader = fixture.readerKey.currentState!;
+          exclusive = AppDataOperations.instance.run(() => release.future);
+          tester
+              .widget<ReaderBrightnessControl>(
+                find.byType(ReaderBrightnessControl),
+              )
+              .onBrightnessChanged(20);
+          await tester.pump();
+          expect(appdata.settings['readerBrightness'], 50);
+          expect(
+            tester
+                .widget<ReaderBrightnessOverlay>(
+                  find.byType(ReaderBrightnessOverlay),
+                )
+                .brightness,
+            20,
+          );
+          if (detach) {
+            App.rootNavigatorKey.currentState!.pop();
+            await tester.pumpAndSettle();
+            expect(fixture.readerKey.currentState, isNull);
+            fixture.closeWindow(tester);
+          } else {
+            await App.rootNavigatorKey.currentState!.maybePop();
+          }
+          await tester.pump();
+          expect(fixture.exits, 0);
+          if (!detach) expect(fixture.readerKey.currentState, same(reader));
+          release.complete();
+          var saved = false;
+          final saving = Future.wait([
+            exclusive,
+            appdata.saveData(false),
+          ]).then((_) => saved = true);
+          await _pumpUntil(tester, () => saved);
+          await saving;
+          await tester.pumpAndSettle();
+          expect(appdata.settings['readerBrightness'], 20);
+          expect(fixture.readerKey.currentState, isNull);
+          expect(fixture.exits, detach ? 1 : 0);
+          expect(tester.takeException(), isNull);
+        } finally {
+          if (!release.isCompleted) release.complete();
+          if (exclusive != null) {
+            var drained = false;
+            final draining = Future.wait([
+              exclusive,
+              appdata.saveData(false),
+            ]).then((_) => drained = true);
+            await _pumpUntil(tester, () => drained);
+            await draining;
+          }
+          await fixture.dispose(tester);
+        }
+      },
+      skip: !Platform.isWindows,
+    );
+  }
 
   for (final detach in [false, true]) {
     testWidgets(
@@ -1319,9 +1392,13 @@ class _TestReaderState extends ReaderState {
       layoutProbe ?? super.createLayoutProbe();
 
   @override
-  Future<void> saveReadingSettings() {
+  Future<void> saveReadingSettings(void Function(Settings draft) edit) {
     settingsSaves++;
-    return onSaveSettings?.call() ?? super.saveReadingSettings();
+    if (onSaveSettings case final save?) {
+      edit(appdata.settings);
+      return save();
+    }
+    return super.saveReadingSettings(edit);
   }
 
   @override

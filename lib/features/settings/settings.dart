@@ -7,6 +7,7 @@ export 'local_favorites.dart';
 export 'logs.dart';
 export 'network.dart';
 export 'reader.dart';
+export 'reader_brightness.dart' show ReaderBrightnessSetting;
 export 'settings_page.dart';
 export 'sponsors.dart';
 export 'webdav_connection_fields.dart';

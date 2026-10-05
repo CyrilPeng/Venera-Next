@@ -1,17 +1,21 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/layout.dart';
+import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
-class ComicChaptersView extends StatelessWidget {
+class ComicChaptersView extends StatefulWidget {
   const ComicChaptersView({
     super.key,
     required this.chapters,
@@ -26,18 +30,78 @@ class ComicChaptersView extends StatelessWidget {
   final void Function(int chapter) readChapter;
 
   @override
+  State<ComicChaptersView> createState() => _ComicChaptersViewState();
+}
+
+class _ComicChaptersViewState extends SettingsSaveState<ComicChaptersView> {
+  bool? _preview;
+  int _request = 0;
+
+  bool get reverse =>
+      _preview ??
+      GlobalPreferenceStore(
+        appdata.settings,
+      ).read(AppPreferences.reverseChapterOrder);
+
+  @override
+  void initState() {
+    super.initState();
+    appdata.settings.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  void _setReverse(bool value) {
+    if (!acceptsSettingsChanges || value == reverse) return;
+    final request = ++_request;
+    setState(() => _preview = value);
+    saveSetting(
+      AppPreferences.reverseChapterOrder.key,
+      () => appdata.updateSettings((draft) {
+        GlobalPreferenceStore(
+          draft,
+        ).write(AppPreferences.reverseChapterOrder, value);
+      }),
+      onSaved: () {
+        if (request == _request) setState(() => _preview = null);
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return chapters.isGrouped
+    final orderControl = protectSettings(
+      Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          settingsSaveStatus,
+          _ChapterOrderSegment(reverse: reverse, onChanged: _setReverse),
+        ],
+      ),
+    );
+    return widget.chapters.isGrouped
         ? _GroupedComicChapters(
-            chapters: chapters,
-            history: history,
-            readChapter: readChapter,
+            chapters: widget.chapters,
+            history: widget.history,
+            readChapter: widget.readChapter,
+            reverse: reverse,
+            orderControl: orderControl,
           )
         : _NormalComicChapters(
-            chapters: chapters,
-            history: history,
-            readChapter: readChapter,
+            chapters: widget.chapters,
+            history: widget.history,
+            readChapter: widget.readChapter,
+            reverse: reverse,
+            orderControl: orderControl,
           );
+  }
+
+  @override
+  void dispose() {
+    appdata.settings.removeListener(_refresh);
+    super.dispose();
   }
 }
 
@@ -46,9 +110,13 @@ class _NormalComicChapters extends StatefulWidget {
     required this.chapters,
     this.history,
     required this.readChapter,
+    required this.reverse,
+    required this.orderControl,
   });
 
   final ComicChapters chapters;
+  final bool reverse;
+  final Widget orderControl;
 
   final History? history;
 
@@ -59,8 +127,6 @@ class _NormalComicChapters extends StatefulWidget {
 }
 
 class _NormalComicChaptersState extends State<_NormalComicChapters> {
-  late bool reverse;
-
   bool showAll = false;
 
   late History? history;
@@ -68,7 +134,6 @@ class _NormalComicChaptersState extends State<_NormalComicChapters> {
   @override
   void initState() {
     super.initState();
-    reverse = appdata.settings["reverseChapterOrder"] ?? false;
     history = widget.history;
   }
 
@@ -78,15 +143,6 @@ class _NormalComicChaptersState extends State<_NormalComicChapters> {
     setState(() {
       history = widget.history;
     });
-  }
-
-  void setReverse(bool value) {
-    if (reverse == value) return;
-    setState(() {
-      reverse = value;
-    });
-    appdata.settings["reverseChapterOrder"] = value;
-    appdata.saveData();
   }
 
   @override
@@ -111,17 +167,29 @@ class _NormalComicChaptersState extends State<_NormalComicChapters> {
         return SliverMainAxisGroup(
           slivers: [
             SliverToBoxAdapter(
-              child: ListTile(
-                title: Text("Chapters".tl),
-                trailing: _ChapterOrderSegment(
-                  reverse: reverse,
-                  onChanged: setReverse,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Wrap(
+                  spacing: 16,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      "Chapters".tl,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    widget.orderControl,
+                  ],
                 ),
               ),
             ),
             SliverGrid(
               delegate: SliverChildBuilderDelegate((context, i) {
-                if (reverse) {
+                if (widget.reverse) {
                   i = chapters.length - i - 1;
                 }
                 var key = chapters.ids.elementAt(i);
@@ -189,9 +257,13 @@ class _GroupedComicChapters extends StatefulWidget {
     required this.chapters,
     this.history,
     required this.readChapter,
+    required this.reverse,
+    required this.orderControl,
   });
 
   final ComicChapters chapters;
+  final bool reverse;
+  final Widget orderControl;
 
   final History? history;
 
@@ -202,9 +274,7 @@ class _GroupedComicChapters extends StatefulWidget {
 }
 
 class _GroupedComicChaptersState extends State<_GroupedComicChapters>
-    with SingleTickerProviderStateMixin {
-  late bool reverse;
-
+    with TickerProviderStateMixin {
   bool showAll = false;
 
   late History? history;
@@ -212,20 +282,24 @@ class _GroupedComicChaptersState extends State<_GroupedComicChapters>
   late TabController tabController;
 
   late int index;
+  late List<String> _groups;
 
   @override
   void initState() {
     super.initState();
-    reverse = appdata.settings["reverseChapterOrder"] ?? false;
     history = widget.history;
-    if (history?.group != null) {
-      index = history!.group! - 1;
-    } else {
-      index = 0;
-    }
+    _groups = widget.chapters.groups.toList();
+    index = ((history?.group ?? 1) - 1).clamp(
+      0,
+      math.max(0, _groups.length - 1),
+    );
+    _createTabs();
+  }
+
+  void _createTabs() {
     tabController = TabController(
       initialIndex: index,
-      length: widget.chapters.ids.length,
+      length: _groups.length,
       vsync: this,
     );
     tabController.addListener(onTabChange);
@@ -242,18 +316,17 @@ class _GroupedComicChaptersState extends State<_GroupedComicChapters>
   @override
   void didUpdateWidget(covariant _GroupedComicChapters oldWidget) {
     super.didUpdateWidget(oldWidget);
-    setState(() {
-      history = widget.history;
-    });
-  }
-
-  void setReverse(bool value) {
-    if (reverse == value) return;
-    setState(() {
-      reverse = value;
-    });
-    appdata.settings["reverseChapterOrder"] = value;
-    appdata.saveData();
+    final groups = widget.chapters.groups.toList();
+    final previousGroup = _groups.elementAtOrNull(index);
+    history = widget.history;
+    if (!listEquals(groups, _groups)) {
+      tabController.removeListener(onTabChange);
+      tabController.dispose();
+      _groups = groups;
+      index = math.max(0, groups.indexOf(previousGroup ?? ''));
+      showAll = false;
+      _createTabs();
+    }
   }
 
   @override
@@ -268,7 +341,9 @@ class _GroupedComicChaptersState extends State<_GroupedComicChapters>
     final chapters = widget.chapters;
     return SliverLayoutBuilder(
       builder: (context, constrains) {
-        var group = chapters.getGroupByIndex(index);
+        var group = _groups.isEmpty
+            ? const <String, String>{}
+            : chapters.getGroupByIndex(index);
         int length = group.length;
         bool canShowAll = showAll;
         if (!showAll) {
@@ -286,11 +361,23 @@ class _GroupedComicChaptersState extends State<_GroupedComicChapters>
         return SliverMainAxisGroup(
           slivers: [
             SliverToBoxAdapter(
-              child: ListTile(
-                title: Text("Chapters".tl),
-                trailing: _ChapterOrderSegment(
-                  reverse: reverse,
-                  onChanged: setReverse,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Wrap(
+                  spacing: 16,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      "Chapters".tl,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    widget.orderControl,
+                  ],
                 ),
               ),
             ),
@@ -304,7 +391,7 @@ class _GroupedComicChaptersState extends State<_GroupedComicChapters>
             SliverPadding(padding: const EdgeInsets.only(top: 8)),
             SliverGrid(
               delegate: SliverChildBuilderDelegate((context, i) {
-                if (reverse) {
+                if (widget.reverse) {
                   i = group.length - i - 1;
                 }
                 var key = group.keys.elementAt(i);

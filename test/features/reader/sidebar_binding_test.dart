@@ -95,6 +95,25 @@ void main() {
     expect(errors, isEmpty);
   });
 
+  testWidgets(
+    'replacement closes the old route without retiring a new request',
+    (tester) async {
+      await mount(tester);
+      host.currentState!.open('old');
+      await tester.pumpAndSettle();
+      binding.close();
+      host.currentState!.open('new');
+      await tester.pumpAndSettle();
+      expect(find.text('old'), findsNothing);
+      expect(find.text('new'), findsOneWidget);
+      expect(events, ['pause', 'pause', 'release']);
+      navigator.currentState!.pop();
+      await tester.pumpAndSettle();
+      expect(events, ['pause', 'pause', 'release', 'release']);
+      expect(errors, isEmpty);
+    },
+  );
+
   testWidgets('host navigation hold cancels a queued sidebar and can resume', (
     tester,
   ) async {

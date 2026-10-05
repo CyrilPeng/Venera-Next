@@ -83,9 +83,9 @@ class ReaderSidebarBinding {
     }
   }
 
-  void dispose() {
-    if (_disposed) return;
-    _disposed = true;
+  /// Retire the current request/route when its reader input is replaced.
+  /// The binding remains available to open a sidebar for the new input.
+  void close() {
     final operation = _active;
     if (operation == null) return;
     // Navigator and reader listeners may still be in tree finalization.
@@ -100,6 +100,12 @@ class ReaderSidebarBinding {
         _release(operation);
       }
     });
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    close();
   }
 }
 

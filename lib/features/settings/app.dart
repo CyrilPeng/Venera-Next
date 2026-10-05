@@ -4,20 +4,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:local_auth/local_auth.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/button.dart';
-import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
+import 'package:venera_next/features/settings/app_controls.dart';
 import 'package:venera_next/features/settings/settings_task_presenter.dart';
 import 'package:venera_next/features/settings/data_sync_schedule_fields.dart';
-import 'package:venera_next/features/settings/webdav_connection_fields.dart';
+import 'package:venera_next/features/settings/webdav_settings.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/features/webdav_library/webdav_library.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -25,7 +23,6 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
-import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
@@ -38,7 +35,6 @@ class AppSettings extends StatefulWidget {
 
 class _AppSettingsState extends State<AppSettings> {
   final _tasks = SettingsTaskPresenter();
-  int _authorizationCheck = 0;
   @override
   Widget build(BuildContext context) {
     return SmoothCustomScrollView(
@@ -99,26 +95,7 @@ class _AppSettingsState extends State<AppSettings> {
             );
           },
         ).toSliver(),
-        CallbackSetting(
-          title: "Cache Limit".tl,
-          subtitle: "${appdata.settings['cacheSize']} MB",
-          callback: () {
-            showInputDialog(
-              context: context,
-              title: "Set Cache Limit".tl,
-              hintText: "Size in MB".tl,
-              inputValidator: RegExp(r"^\d+$"),
-              onConfirm: (value) {
-                appdata.settings['cacheSize'] = int.parse(value);
-                appdata.saveData();
-                setState(() {});
-                CacheManager().setLimitSize(appdata.settings['cacheSize']);
-                return null;
-              },
-            );
-          },
-          actionTitle: 'Set'.tl,
-        ).toSliver(),
+        const CacheLimitSetting().toSliver(),
         SliderSetting(
           title: "Auto Clear History".tl,
           settingsIndex: "historyRetentionDays",
@@ -189,7 +166,7 @@ class _AppSettingsState extends State<AppSettings> {
           title: "Comic Archive Backup".tl,
           subtitle: "This is only used for CBZ archive backup and restore.".tl,
           callback: () async {
-            showPopUpWidget(context, const _BackupWebdavSetting());
+            showPopUpWidget(context, const BackupWebdavSetting());
           },
           actionTitle: 'Set'.tl,
         ).toSliver(),
@@ -201,7 +178,7 @@ class _AppSettingsState extends State<AppSettings> {
           callback: () async {
             showPopUpWidget(
               context,
-              _WebDavComicLibrarySetting(WebDavLibraryScope.of(context)),
+              WebDavComicLibrarySetting(WebDavLibraryScope.of(context)),
             );
           },
           actionTitle: 'Set'.tl,
@@ -220,31 +197,7 @@ class _AppSettingsState extends State<AppSettings> {
             App.forceRebuild();
           },
         ).toSliver(),
-        if (!App.isLinux)
-          SwitchSetting(
-            title: "Authorization Required".tl,
-            settingKey: "authorizationRequired",
-            onChanged: () async {
-              final check = ++_authorizationCheck;
-              if (appdata.settings['authorizationRequired'] != true) return;
-              bool supported;
-              try {
-                final auth = LocalAuthentication();
-                supported =
-                    await auth.canCheckBiometrics ||
-                    await auth.isDeviceSupported();
-              } catch (error, stack) {
-                Log.error('Authorization support', error.toString(), stack);
-                supported = false;
-              }
-              if (check != _authorizationCheck || supported) return;
-              appdata.settings['authorizationRequired'] = false;
-              await appdata.saveData();
-              if (!context.mounted) return;
-              context.showMessage(message: "Biometrics not supported".tl);
-              setState(() {});
-            },
-          ).toSliver(),
+        if (!App.isLinux) const AuthorizationRequiredSetting().toSliver(),
       ],
     );
   }
@@ -527,482 +480,5 @@ class _WebdavSettingState extends State<_WebdavSetting> {
     } else {
       context.showMessage(message: "Connection successful".tl);
     }
-  }
-}
-
-class _BackupWebdavSetting extends StatefulWidget {
-  const _BackupWebdavSetting();
-
-  @override
-  State<_BackupWebdavSetting> createState() => _BackupWebdavSettingState();
-}
-
-class _BackupWebdavSettingState extends State<_BackupWebdavSetting> {
-  late final WebDavConnectionControllers _connectionControllers;
-  bool syncEnabled = false;
-  bool isTesting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final config = BackupConfig.fromSettings();
-    _connectionControllers = WebDavConnectionControllers(
-      url: config.url,
-      user: config.user,
-      password: config.pass,
-      remotePath: config.remotePath,
-    );
-    syncEnabled = appdata.settings['backupWebdavSyncEnabled'] == true;
-  }
-
-  @override
-  void dispose() {
-    _connectionControllers.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return PopUpWidgetScaffold(
-      title: "Comic Archive Backup".tl,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            WebDavConnectionFields(
-              controllers: _connectionControllers,
-              remotePathHint: '/venera_backup/',
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "This is only used for CBZ archive backup and restore."
-                          .tl,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: Icon(Icons.sync),
-              title: Text("Sync archive config".tl),
-              subtitle: Text(
-                "Sync archive WebDAV URL, username, password and remote path with app data."
-                    .tl,
-              ),
-              trailing: Switch(
-                value: syncEnabled,
-                onChanged: (v) {
-                  setState(() {
-                    syncEnabled = v;
-                  });
-                },
-              ),
-              contentPadding: EdgeInsets.zero,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Button.outlined(
-                    isLoading: isTesting,
-                    onPressed: testConnection,
-                    child: Text("Test Connection".tl),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Button.filled(
-                    isLoading: isTesting,
-                    onPressed: save,
-                    child: Text("Continue".tl),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ).paddingHorizontal(16),
-      ),
-    );
-  }
-
-  BackupConfig get currentConfig => BackupConfig(
-    url: _connectionControllers.url.text,
-    user: _connectionControllers.user.text,
-    pass: _connectionControllers.password.text,
-    remotePath: _connectionControllers.remotePath.text,
-  );
-
-  Future<void> testConnection() async {
-    if (isTesting) return;
-    setState(() {
-      isTesting = true;
-    });
-    final result = await ComicBackupManager.testConnection(currentConfig);
-    if (!mounted) return;
-    setState(() {
-      isTesting = false;
-    });
-    if (result.error) {
-      context.showMessage(message: result.errorMessage!.tl);
-    } else {
-      context.showMessage(message: "Connection successful".tl);
-    }
-  }
-
-  Future<void> save() async {
-    if (isTesting) return;
-    appdata.settings['backupWebdavSyncEnabled'] = syncEnabled;
-    final config = currentConfig;
-    if (!config.isValid && config.user.trim().isEmpty && config.pass.isEmpty) {
-      await BackupConfig.saveToSettings(config);
-      if (!mounted) return;
-      context.showMessage(message: "Saved".tl);
-      App.rootPop();
-      return;
-    }
-    setState(() {
-      isTesting = true;
-    });
-    final result = await ComicBackupManager.testConnection(config);
-    if (!mounted) return;
-    setState(() {
-      isTesting = false;
-    });
-    if (result.error) {
-      context.showMessage(message: result.errorMessage!);
-      context.showMessage(message: "Saved Failed".tl);
-    } else {
-      await BackupConfig.saveToSettings(config);
-      if (!mounted) return;
-      context.showMessage(message: "Saved".tl);
-      App.rootPop();
-    }
-  }
-}
-
-class _WebDavComicLibrarySetting extends StatefulWidget {
-  const _WebDavComicLibrarySetting(this.services);
-
-  final WebDavLibraryServices services;
-
-  @override
-  State<_WebDavComicLibrarySetting> createState() =>
-      _WebDavComicLibrarySettingState();
-}
-
-class _WebDavComicLibrarySettingState
-    extends State<_WebDavComicLibrarySetting> {
-  late final WebDavConnectionControllers _connectionControllers;
-  bool isTesting = false;
-  bool isSyncing = false;
-  late bool autoSyncEnabled;
-  late int syncIntervalMinutes;
-
-  @override
-  void initState() {
-    super.initState();
-    final config = widget.services.settings.read().connection;
-    _connectionControllers = WebDavConnectionControllers(
-      url: config.url,
-      user: config.user,
-      password: config.pass,
-      remotePath: config.remotePath,
-    );
-    widget.services.source.synchronizer.updateSyncStatusFromCache();
-    final configuration = widget.services.settings.read();
-    autoSyncEnabled = configuration.autoSync;
-    syncIntervalMinutes = configuration.intervalMinutes;
-  }
-
-  @override
-  void dispose() {
-    _connectionControllers.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return PopUpWidgetScaffold(
-      title: "WebDAV Comic Library".tl,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            WebDavConnectionFields(
-              controllers: _connectionControllers,
-              remotePathHint: '/venera_comics/',
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "Online reading uses directory image structure only; CBZ is kept for archive backup and restore."
-                          .tl,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('Automatic library updates'.tl),
-              subtitle: Text(
-                'Refresh the cached WebDAV library while the app is running.'
-                    .tl,
-              ),
-              value: autoSyncEnabled,
-              onChanged: (value) {
-                setState(() {
-                  autoSyncEnabled = value;
-                });
-              },
-            ),
-            if (autoSyncEnabled) ...[
-              const SizedBox(height: 8),
-              DropdownButtonFormField<int>(
-                initialValue: syncIntervalMinutes,
-                decoration: InputDecoration(
-                  labelText: 'Update interval'.tl,
-                  border: const OutlineInputBorder(),
-                ),
-                items: [
-                  if (![15, 60, 360, 1440].contains(syncIntervalMinutes))
-                    DropdownMenuItem(
-                      value: syncIntervalMinutes,
-                      child: Text(
-                        '@minutes min'.tlParams({
-                          'minutes': '$syncIntervalMinutes',
-                        }),
-                      ),
-                    ),
-                  DropdownMenuItem(
-                    value: 15,
-                    child: Text('Every 15 minutes'.tl),
-                  ),
-                  DropdownMenuItem(value: 60, child: Text('Every hour'.tl)),
-                  DropdownMenuItem(value: 360, child: Text('Every 6 hours'.tl)),
-                  DropdownMenuItem(value: 1440, child: Text('Every day'.tl)),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() {
-                      syncIntervalMinutes = value;
-                    });
-                  }
-                },
-              ),
-            ],
-            const SizedBox(height: 16),
-            ValueListenableBuilder<WebDavLibrarySyncStatus>(
-              valueListenable: widget.services.source.synchronizer.status,
-              builder: (context, status, _) {
-                final text = switch (status) {
-                  WebDavLibrarySyncStatus(isSyncing: true, total: > 0) =>
-                    'Updating WebDAV library: @current/@total'.tlParams({
-                      'current': status.processed,
-                      'total': status.total,
-                    }),
-                  WebDavLibrarySyncStatus(isSyncing: true) =>
-                    'Updating WebDAV library'.tl,
-                  WebDavLibrarySyncStatus(errorMessage: != null) =>
-                    'Last sync failed'.tl,
-                  WebDavLibrarySyncStatus(lastSuccessfulSync: > 0) =>
-                    '${'Last synced'.tl}: '
-                        '${status.formattedLastSuccessfulSync}',
-                  _ => 'Not synced yet'.tl,
-                };
-                return Row(
-                  children: [
-                    Icon(
-                      status.errorMessage == null
-                          ? Icons.sync_outlined
-                          : Icons.sync_problem_outlined,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(text)),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Button.outlined(
-                    isLoading: isTesting,
-                    onPressed: testConnection,
-                    child: Text("Test Connection".tl),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (widget.services.settings.read().connection.isValid) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: Button.outlined(
-                      isLoading: isSyncing,
-                      onPressed: syncNow,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.sync, size: 18),
-                          const SizedBox(width: 8),
-                          Text('Sync now'.tl),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-            ],
-            Row(
-              children: [
-                Expanded(
-                  child: Button.filled(
-                    isLoading: isTesting && !isSyncing,
-                    onPressed: save,
-                    child: Text('Save and sync'.tl),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ).paddingHorizontal(16),
-      ),
-    );
-  }
-
-  WebDavLibraryConfig get currentConfig => WebDavLibraryConfig(
-    url: _connectionControllers.url.text,
-    user: _connectionControllers.user.text,
-    pass: _connectionControllers.password.text,
-    remotePath: _connectionControllers.remotePath.text,
-  );
-
-  Future<void> testConnection() async {
-    if (isTesting || isSyncing) return;
-    setState(() {
-      isTesting = true;
-    });
-    final result = await widget.services.source.testConnection(currentConfig);
-    if (!mounted) return;
-    setState(() {
-      isTesting = false;
-    });
-    if (result.error) {
-      context.showMessage(message: result.errorMessage!.tl);
-    } else {
-      context.showMessage(message: "Connection successful".tl);
-    }
-  }
-
-  Future<void> save() async {
-    if (isTesting || isSyncing) return;
-    if (!await _persistConfiguration() || !mounted) return;
-    final config = widget.services.settings.read().connection;
-    if (config.isValid) {
-      unawaited(widget.services.source.synchronizer.synchronize(force: true));
-    }
-    if (!mounted) return;
-    context.showMessage(message: 'Saved'.tl);
-    App.rootPop();
-  }
-
-  Future<void> syncNow() async {
-    if (isTesting || isSyncing) return;
-    if (!await _persistConfiguration() || !mounted) return;
-    if (!widget.services.settings.read().connection.isValid) return;
-    setState(() {
-      isSyncing = true;
-    });
-    final result = await widget.services.source.synchronizer.synchronize(
-      force: true,
-    );
-    if (!mounted) return;
-    setState(() {
-      isSyncing = false;
-    });
-    if (result.error) {
-      context.showMessage(message: result.errorMessage!);
-    } else {
-      context.showMessage(message: 'WebDAV library updated'.tl);
-    }
-  }
-
-  Future<bool> _persistConfiguration() async {
-    final config = currentConfig;
-    final configuration = WebDavLibrarySettings(
-      connection: config,
-      autoSync: autoSyncEnabled,
-      intervalMinutes: syncIntervalMinutes,
-    );
-    if (!config.isValid && config.user.isEmpty && config.pass.isEmpty) {
-      await widget.services.settings.save(configuration);
-      if (!mounted) return false;
-      _refreshWebDavLibrarySource(enabled: false);
-      return true;
-    }
-    setState(() {
-      isTesting = true;
-    });
-    final result = await widget.services.source.testConnection(config);
-    if (!mounted) return false;
-    setState(() {
-      isTesting = false;
-    });
-    if (result.error) {
-      context.showMessage(message: result.errorMessage!);
-      context.showMessage(message: "Saved Failed".tl);
-      return false;
-    } else {
-      await widget.services.settings.save(configuration);
-      if (!mounted) return false;
-      _refreshWebDavLibrarySource(enabled: true);
-      return true;
-    }
-  }
-
-  void _refreshWebDavLibrarySource({required bool enabled}) {
-    final manager = ComicSourceManager();
-    manager.remove(WebDavLibrarySource.sourceKey);
-    final pages = List<String>.from(appdata.settings['explore_pages']);
-    pages.remove(WebDavLibrarySource.explorePageTitle);
-    if (enabled) {
-      manager.add(widget.services.source.create());
-      pages.add(WebDavLibrarySource.explorePageTitle);
-    }
-    appdata.settings['explore_pages'] = pages;
-    appdata.saveData(false);
   }
 }

@@ -231,6 +231,8 @@
     ]
   ],
   "business_entrypoints": [
+    "app_runtime/webdav_library.dart",
+    "app_runtime/cache_settings.dart",
     "features/local_comics/local_storage_migration.dart",
     "features/local_comics/local_deletion_paths.dart",
     "features/local_comics/local_deletion_storage.dart",
@@ -336,6 +338,9 @@
     "foundation/window_placement_tracker.dart"
   ],
   "ui_files": [
+    "features/settings/webdav_settings.dart",
+    "features/follow_updates/follow_updates_folder_dialog.dart",
+    "features/settings/app_controls.dart",
     "app_shell/auth_page.dart",
     "app_shell/home_page.dart",
     "app_shell/main_page.dart",

@@ -1,8 +1,9 @@
 import 'dart:math';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -23,7 +24,8 @@ class FavoritesPage extends StatefulWidget {
   State<FavoritesPage> createState() => _FavoritesPageState();
 }
 
-class _FavoritesPageState extends State<FavoritesPage> {
+class _FavoritesPageState extends SettingsSaveState<FavoritesPage> {
+  Route<void>? _folderSelector;
   String? folder;
 
   bool isNetwork = false;
@@ -31,16 +33,18 @@ class _FavoritesPageState extends State<FavoritesPage> {
   FolderList? folderList;
 
   void setFolder(bool isNetwork, String? folder) {
+    if (!acceptsSettingsChanges) return;
     setState(() {
       this.isNetwork = isNetwork;
       this.folder = folder;
     });
     folderList?.update();
-    appdata.implicitData['favoriteFolder'] = {
-      'name': folder,
-      'isNetwork': isNetwork,
-    };
-    appdata.writeImplicitData();
+    saveSetting(
+      'favoriteFolder',
+      () => appdata.updateImplicit((draft) {
+        draft['favoriteFolder'] = {'name': folder, 'isNetwork': isNetwork};
+      }),
+    );
   }
 
   @override
@@ -60,34 +64,45 @@ class _FavoritesPageState extends State<FavoritesPage> {
 
   @override
   Widget build(BuildContext context) {
-    return IconTheme(
-      data: IconThemeData(color: Theme.of(context).colorScheme.secondary),
-      child: Stack(
+    return protectSettings(
+      Column(
         children: [
-          AnimatedPositioned(
-            left: context.width <= favoritesTwoPanelChangeWidth
-                ? -_kLeftBarWidth
-                : 0,
-            top: 0,
-            bottom: 0,
-            duration: const Duration(milliseconds: 200),
-            child: FavoritesFolderSidebar(
-              selectedFolder: folder,
-              isNetworkSelected: isNetwork,
-              onFolderSelected: setFolder,
-              onFolderListReady: (list) {
-                folderList = list;
-              },
-            ).fixWidth(_kLeftBarWidth),
-          ),
-          Positioned(
-            top: 0,
-            left: context.width <= favoritesTwoPanelChangeWidth
-                ? 0
-                : _kLeftBarWidth,
-            right: 0,
-            bottom: 0,
-            child: buildBody(),
+          if (savingSettings || hasSettingsSaveError) settingsSaveStatus,
+          Expanded(
+            child: IconTheme(
+              data: IconThemeData(
+                color: Theme.of(context).colorScheme.secondary,
+              ),
+              child: Stack(
+                children: [
+                  AnimatedPositioned(
+                    left: context.width <= favoritesTwoPanelChangeWidth
+                        ? -_kLeftBarWidth
+                        : 0,
+                    top: 0,
+                    bottom: 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: FavoritesFolderSidebar(
+                      selectedFolder: folder,
+                      isNetworkSelected: isNetwork,
+                      onFolderSelected: setFolder,
+                      onFolderListReady: (list) {
+                        folderList = list;
+                      },
+                    ).fixWidth(_kLeftBarWidth),
+                  ),
+                  Positioned(
+                    top: 0,
+                    left: context.width <= favoritesTwoPanelChangeWidth
+                        ? 0
+                        : _kLeftBarWidth,
+                    right: 0,
+                    bottom: 0,
+                    child: buildBody(),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -95,48 +110,74 @@ class _FavoritesPageState extends State<FavoritesPage> {
   }
 
   void showFolderSelector() {
-    Navigator.of(App.rootContext).push(
-      PageRouteBuilder(
-        barrierDismissible: true,
-        fullscreenDialog: true,
-        opaque: false,
-        barrierColor: Colors.black.toOpacity(0.36),
-        pageBuilder: (context, animation, secondary) {
-          return Align(
-            alignment: Alignment.centerLeft,
-            child: Material(
-              child: SizedBox(
-                width: min(300, context.width - 16),
-                child: FavoritesFolderSidebar(
-                  withAppbar: true,
-                  selectedFolder: folder,
-                  isNetworkSelected: isNetwork,
-                  onFolderSelected: setFolder,
-                  onFolderListReady: (list) {
-                    folderList = list;
-                  },
-                  onSelected: () {
-                    context.pop();
-                  },
-                ),
+    if (!acceptsSettingsChanges || _folderSelector != null) return;
+    final origin = ModalRoute.of(context);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final route = PageRouteBuilder<void>(
+      barrierDismissible: true,
+      fullscreenDialog: true,
+      opaque: false,
+      barrierColor: Colors.black.toOpacity(0.36),
+      pageBuilder: (context, animation, secondary) {
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: Material(
+            child: SizedBox(
+              width: min(300, context.width - 16),
+              child: FavoritesFolderSidebar(
+                withAppbar: true,
+                selectedFolder: folder,
+                isNetworkSelected: isNetwork,
+                onFolderSelected: (network, name) {
+                  if (mounted &&
+                      identical(ModalRoute.of(this.context), origin)) {
+                    setFolder(network, name);
+                  }
+                },
+                onFolderListReady: (list) {
+                  folderList = list;
+                },
+                onSelected: () {
+                  if (context.mounted &&
+                      ModalRoute.of(context)?.isCurrent == true) {
+                    Navigator.of(context).maybePop();
+                  }
+                },
               ),
             ),
-          );
-        },
-        transitionsBuilder: (context, animation, secondary, child) {
-          var offset = Tween<Offset>(
-            begin: const Offset(-1, 0),
-            end: const Offset(0, 0),
-          );
-          return SlideTransition(
-            position: offset.animate(
-              CurvedAnimation(parent: animation, curve: Curves.fastOutSlowIn),
-            ),
-            child: child,
-          );
-        },
-      ),
+          ),
+        );
+      },
+      transitionsBuilder: (context, animation, secondary, child) {
+        var offset = Tween<Offset>(
+          begin: const Offset(-1, 0),
+          end: const Offset(0, 0),
+        );
+        return SlideTransition(
+          position: offset.animate(
+            CurvedAnimation(parent: animation, curve: Curves.fastOutSlowIn),
+          ),
+          child: child,
+        );
+      },
     );
+    _folderSelector = route;
+    navigator.push(route).whenComplete(() {
+      if (identical(_folderSelector, route)) _folderSelector = null;
+    });
+  }
+
+  @override
+  void dispose() {
+    final route = _folderSelector;
+    _folderSelector = null;
+    scheduleMicrotask(() {
+      final navigator = route?.navigator;
+      if (navigator?.mounted == true && route!.isActive) {
+        navigator!.removeRoute(route);
+      }
+    });
+    super.dispose();
   }
 
   Widget buildBody() {

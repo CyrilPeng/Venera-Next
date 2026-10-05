@@ -123,16 +123,25 @@ Future<void> _checkAppUpdates() async {
   if (now - lastCheck < 24 * 60 * 60 * 1000) {
     return;
   }
-  appdata.implicitData['lastCheckUpdate'] = now;
-  appdata.writeImplicitData();
-  SourceUpdateService.instance.checkUpdates();
+  final admitted = await appdata.updateImplicit((data) {
+    final latest = data['lastCheckUpdate'] ?? 0;
+    if (now - latest < 24 * 60 * 60 * 1000) return false;
+    data['lastCheckUpdate'] = now;
+    return true;
+  });
+  if (!admitted) return;
+  await SourceUpdateService.instance.checkUpdates();
   if (appdata.settings['checkUpdateOnStart']) {
     await checkUpdateUi(false, true);
   }
 }
 
 void checkUpdates() {
-  _checkAppUpdates();
+  unawaited(
+    _checkAppUpdates().catchError((Object error, StackTrace stack) {
+      Log.error('Check updates', error, stack);
+    }),
+  );
 }
 
 void reloadComicSourcesForDebug() async {

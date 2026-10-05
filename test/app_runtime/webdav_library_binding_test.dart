@@ -26,9 +26,7 @@ void main() {
         late WebDavLibrarySource source;
         final settings = WebDavLibrarySettingsStore(
           readValue: (key) => values[key],
-          persist: (patch) async => values.addAll(patch),
-          onConnectionChanged: (previous) =>
-              source.onConfigurationChanged(previous),
+          persist: (patch) async => values.addAll(patch.toSettings()),
         );
         source = WebDavLibrarySource(
           readSettings: settings.read,

@@ -47,28 +47,20 @@ class WebDavLibrarySettings {
   };
 }
 
-/// Persistence and runtime invalidation are supplied by the composition owner.
-/// The persistence callback owns storage failure/rollback semantics.
+/// The composition owner persists a captured configuration and reconciles its
+/// runtime effects with the actual published state, including partial failure.
 class WebDavLibrarySettingsStore {
   WebDavLibrarySettingsStore({
     required Object? Function(String) readValue,
-    required Future<void> Function(Map<String, Object>) persist,
-    required void Function(WebDavLibraryConfig) onConnectionChanged,
+    required Future<void> Function(WebDavLibrarySettings) persist,
   }) : _readValue = readValue,
-       _persist = persist,
-       _onConnectionChanged = onConnectionChanged;
+       _persist = persist;
 
   final Object? Function(String) _readValue;
-  final Future<void> Function(Map<String, Object>) _persist;
-  final void Function(WebDavLibraryConfig) _onConnectionChanged;
+  final Future<void> Function(WebDavLibrarySettings) _persist;
 
   WebDavLibrarySettings read() => WebDavLibrarySettings.read(_readValue);
 
-  Future<void> save(WebDavLibrarySettings configuration) async {
-    final previous = read().connection;
-    await _persist(configuration.toSettings());
-    if (previous.connectionKey != configuration.connection.connectionKey) {
-      _onConnectionChanged(previous);
-    }
-  }
+  Future<void> save(WebDavLibrarySettings configuration) =>
+      _persist(configuration);
 }

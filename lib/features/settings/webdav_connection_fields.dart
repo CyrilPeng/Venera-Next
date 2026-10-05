@@ -30,16 +30,19 @@ class WebDavConnectionFields extends StatelessWidget {
     super.key,
     required this.controllers,
     required this.remotePathHint,
+    this.enabled = true,
   });
 
   final WebDavConnectionControllers controllers;
   final String remotePathHint;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         TextField(
+          enabled: enabled,
           decoration: InputDecoration(
             labelText: 'URL',
             hintText: 'A valid WebDav directory URL'.tl,
@@ -49,6 +52,7 @@ class WebDavConnectionFields extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         TextField(
+          enabled: enabled,
           decoration: InputDecoration(
             labelText: 'Username'.tl,
             border: const OutlineInputBorder(),
@@ -57,6 +61,7 @@ class WebDavConnectionFields extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         TextField(
+          enabled: enabled,
           decoration: InputDecoration(
             labelText: 'Password'.tl,
             border: const OutlineInputBorder(),
@@ -66,6 +71,7 @@ class WebDavConnectionFields extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         TextField(
+          enabled: enabled,
           decoration: InputDecoration(
             labelText: 'Remote Path'.tl,
             hintText: remotePathHint,

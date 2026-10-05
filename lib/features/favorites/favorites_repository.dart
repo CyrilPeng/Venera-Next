@@ -40,6 +40,10 @@ class FavoritesRepository {
     }
   });
 
+  bool isPreparedForFollowUpdates(String folder) => _columns(
+    folder,
+  ).containsAll(['last_update_time', 'has_new_update', 'last_check_time']);
+
   void prepareForFollowUpdates(String folder, {required bool clearData}) =>
       _transaction(() {
         final columns = _columns(folder);

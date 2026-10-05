@@ -61,6 +61,9 @@ void main() {
       expect(librarySource.isDisposed, isFalse);
       expect(history.isInitialized, isTrue);
       await appdata.saveData(false);
+      await appdata.updateSettings((draft) => draft['cacheSize'] = 0);
+      await cache.writeCache('limit-from-settings', [1]);
+      expect(await cache.findCache('limit-from-settings'), isNull);
 
       // Sync import closes and reconstructs the same application's cookie jar.
       // Use a different spelling of the path to exercise normalized ownership.
@@ -99,6 +102,8 @@ void main() {
       expect(() => history.length, throwsStateError);
       expect(() => favorites.databasePath, throwsStateError);
       expect(() => local.count, throwsStateError);
+      expect(CacheManager.instance, isNull);
+      appdata.settings['cacheSize'] = 1;
       expect(CacheManager.instance, isNull);
       await expectLater(cache.findCache('closed'), throwsStateError);
       expect(librarySource.isDisposed, isTrue);

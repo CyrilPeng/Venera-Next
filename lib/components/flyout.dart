@@ -145,7 +145,11 @@ class FlyoutState extends State<Flyout> {
               Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: navigator.pop,
+                  onTap: () {
+                    if (ModalRoute.of(context)?.isCurrent == true) {
+                      navigator.maybePop();
+                    }
+                  },
                   child: AnimatedBuilder(
                     animation: animation,
                     builder: (context, builder) {
@@ -222,7 +226,8 @@ class FlyoutContent extends StatelessWidget {
                     fontSize: 16,
                   ),
                 ),
-                ?content,
+                if (content != null)
+                  Flexible(child: SingleChildScrollView(child: content)),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisSize: MainAxisSize.min,

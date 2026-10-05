@@ -16,24 +16,24 @@ void main() {
   });
   tearDown(() => previous.forEach((key, value) => settings[key] = value));
 
-  test('active writes follow scope switches without recreating a binding', () {
-    final binding = ReaderPreferenceStore(
+  test('active writes follow scope switches without recreating the store', () {
+    final store = ReaderPreferenceStore(
       settings: settings,
       comicId: 'comic',
       sourceKey: 'source',
-    ).bind(ReaderPreferences.readerBrightness);
-    binding.write(40);
+    );
+    store.write(ReaderPreferences.readerBrightness, 40);
     expect(settings['readerBrightness'], 40);
     settings.setEnabledDeviceSpecificSettings(true);
-    binding.write(60);
+    store.write(ReaderPreferences.readerBrightness, 60);
     expect(settings['readerBrightness'], 40);
     expect(settings.getDeviceReaderSetting('readerBrightness'), 60);
     settings.setEnabledComicSpecificSettings('comic', 'source', true);
-    binding.write(80);
-    expect(binding.read(), 80);
+    store.write(ReaderPreferences.readerBrightness, 80);
+    expect(store.read(ReaderPreferences.readerBrightness), 80);
     expect(settings.getDeviceReaderSetting('readerBrightness'), 60);
     settings.setEnabledComicSpecificSettings('comic', 'source', false);
-    expect(binding.read(), 60);
+    expect(store.read(ReaderPreferences.readerBrightness), 60);
   });
 
   test('explicit scope writes are isolated and preserve unknown fields', () {
@@ -76,6 +76,33 @@ void main() {
     store.write(ReaderPreferences.readerScrollSpeed, 1.5);
     expect(settings['readerScrollSpeed'], 1.5);
   });
+
+  test(
+    'turning off comments clears the chapter-end option in the same scope',
+    () {
+      settings['showChapterComments'] = true;
+      settings['showChapterCommentsAtEnd'] = true;
+      settings.setEnabledDeviceSpecificSettings(true);
+      settings.setEnabledComicSpecificSettings('comic', 'source', true);
+      final comic = ReaderPreferenceStore(
+        settings: settings,
+        comicId: 'comic',
+        sourceKey: 'source',
+      );
+      comic.write(ReaderPreferences.showChapterComments, false);
+      expect(comic.read(ReaderPreferences.showChapterCommentsAtEnd), isFalse);
+      expect(
+        settings.getDeviceReaderSetting('showChapterCommentsAtEnd'),
+        isTrue,
+      );
+      final device = ReaderPreferenceStore(settings: settings);
+      device.write(ReaderPreferences.showChapterComments, false);
+      expect(device.read(ReaderPreferences.showChapterCommentsAtEnd), isFalse);
+      expect(settings['showChapterCommentsAtEnd'], isTrue);
+      comic.write(ReaderPreferences.showChapterComments, true);
+      expect(comic.read(ReaderPreferences.showChapterCommentsAtEnd), isFalse);
+    },
+  );
 
   test('default schema retains null long-press migration and slider steps', () {
     final defaults = ReaderPreferences.storageDefaults;

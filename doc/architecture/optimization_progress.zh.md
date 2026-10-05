@@ -4,6 +4,115 @@
 
 English: [Execution Record](optimization_progress.en.md)
 
+## P3/P4/P6：收藏初始化与复合保存恢复（2026-10-05）
+
+- 基线 `71580cd`。收藏初始化在 appdata 草稿队首解析最新追更/快捷收藏引用；排队的新选择保留，所选追更表在发布修复前准备且不清空更新标记。草稿保持同步纯编辑，SQL 准备在其外执行；无变化时不写盘，之前失败的修复在同一管理器按路径保留重试标记。该标记不是跨进程持久 dirty 基线。
+- appdata 增加可选的无变化免写和指定字段恢复入口，普通同值保存仍会写盘，支持已发布值的失败重试；恢复固定输入，只恢复操作拥有的字段并保留其他排队编辑。测试等待入口同时等待本次初始化，避免设置排队阶段误等旧索引任务。
+- ReadLaterService 只负责 SQL 策略与提交结果，文件夹创建/加入或删除在同一事务内；管理器先全局独占再本地排队，在短本地操作内协调设置保存和缓存发布。已提交 SQL 的设置/发布失败返回 committed，SQLite 回滚失败返回 unknown 且保留两组异常。重复加入不移动成员，既有封面清理行为保留。
+- 清空失败分别尝试关闭、数据库恢复、字段恢复、重开和落盘；设置写入失败不阻止已恢复数据库可读。有恢复错误时保留原错误及全部恢复错误，失败恢复保留备份；成功清空后的清理失败报告 committed，不回滚新库。完整进程崩溃恢复仍由其他持久日志工作追踪。
+- 新增 11 项真实文件/SQLite 回归，并加强原清空失败断言；初轮测试夹具 import/base 声明、等待旧索引和缺少成员的失败日志保留，最终扩展专项及冻结验证另列。未修改 UI，不据此完成稍后阅读路由/窗口任务所有权或整个生命周期。业务入口仍为 105、依赖例外不变；其他源/同步/跨库写入、持久 revision/内容基线、核心关闭、P5/P7/P8 及完整 CLI/五平台/固定设备性能仍待完成。52 项保持 23 I / 28 P / 1 U，无依赖升级。
+
+- 扩展专项 210 项通过后补充同名追更表重建回归；队首改查实际列结构，避免复用过期准备记录。首轮全量为此主动停止，日志保留为 `logs/favorite-settings-full-before-schema-recheck.log`，不作为完成证据。最终代码重新冻结后验证另列。
+
+- 最终冻结全量 **2791 项通过、2 项既有宿主跳过**，LCOV **27,157/40,350（67.30%）**；8 个 Dart 文件格式及冻结哈希一致，严格分析零诊断。Python **80 项/3 项既有跳过**，结构/架构（105 入口）/Git 依赖/版本/完整发布元数据检查通过。仓库外日志为 `logs/favorite-settings-{full-final,analyze-frozen,format-final,python-final,structure-frozen,architecture-frozen,git-dependencies-verified,version-final,release-validation-final,coverage-final}.log`，覆盖率为 `coverage/favorite-settings-lcov.info`。实际 Flutter 3.41.6/Dart 3.11.4，不替代声明 Flutter 3.41.4、其他平台和固定设备性能验收。
+
+- Windows release 构建成功（104.5 秒，`logs/favorite-settings-windows-release.log`），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `82E54EBD782EDDCC29A9356F46D0CBE8A049CD73720CC86AF35D8A95793B88D7`；exe/rhttp/share DLL 与上一单元一致。打包 CHANGELOG 和 assets/init.js 匹配源码，8 个冻结 Dart 文件构建后哈希仍一致；完整记录为仓库外 `favorite-settings-artifact-hashes.json`。下一批审计见 `favorite-settings-next-audit.md` 与 `favorite-settings-next-writers.txt`。
+
+## P2/P3/P4/P6：备份与 WebDAV 书库配置保存（2026-10-05）
+
+- 基线 `05ae509`。备份配置、目录和同步开关在同一 `updateSettings` 草稿赋值，保留原凭据归一化与同步排除语义。连接检查失败不先修改全局开关；表单提交固定原始输入，保存失败重试复用本次已完成检查。
+- 两个表单移到 `features/settings/webdav_settings.dart`，使用公共 SettingsSaveState，返回、窗口退出及强制卸载等待已接纳检查和保存。服务替换后重新装载新表单并隔离旧回调；书库同步必须在保存成功、原服务/连接仍有效、页面未离开且导航准入后派发。同步结果也被等待，失败保留可见反馈；新动作不复用旧失败请求。
+- `app_runtime/webdav_library.dart` 捕获原数据目录、源管理器和书库实例，先取得全局访问再入本地保存队列。草稿中同时更新四个配置字段及最新探索页列表，队首验证所属实例；网络不包在普通访问内。配置存储只负责传递不可变配置，失效/注册副作用归应用层，删除 UI 内直接操作源管理器和二次保存。
+- 运行时按实际发布值处理部分落盘失败，仍返回原保存错误；缓存失效失败和注册错误保留提交状态及全部原始异常。未完成的旧缓存失效保留到重试，即使配置已相同也不会误报已修复。注册实例以源管理器身份隔离，旧表单不能替换后续挂载，已关闭实例的迟到挂载无效。导入后的全部隐式更新与全应用核心关闭仍需整体审计，不能据此宣布全部配置生命周期完成。
+- 新增 16 项真实文件/SQLite/UI 回归，覆盖排队合并、缓存清理触发器失败、保存重试、连接失败、原窗口等待、服务和注册实例替换、返回及后续连接隔离、375px/横屏暗色 3.2 倍字号和减少动画。早期夹具初始化/模拟时钟清理等待、控件签名及 54px 同步按钮溢出失败保留诊断；修复后的扩展专项 139 项通过，其后补两项派发边界，以最终冻结结果为准。
+- 新增两项 Python 门禁回归，监视当前 `data_sync_controller.dart` 与 `app_runtime/data_sync.dart`，并限制表单直接读取已迁移配置。书库装配登记为业务入口，总数 105；未扩大依赖例外。其他同步控制、源/收藏初始化与恢复、跨库写入、持久 dirty/revision/业务内容基线、P2/P3/P5/P7/P8 剩余边界、完整 CLI/五平台/固定设备性能仍待完成。52 项保持 23 I / 28 P / 1 U，无依赖升级。最终全量、门禁和构建另列。
+
+- 最终冻结全量 **2780 项通过、2 项既有宿主跳过**，LCOV **27,099/40,282（67.27%）**；10 个 Dart 文件格式及冻结哈希一致，严格分析零诊断。Python **80 项/3 项既有跳过**，结构/架构（105 入口）/Git 依赖/版本/完整发布元数据检查通过。仓库外日志为 `logs/webdav-settings-{targeted,full,analyze,format,structure,architecture,git-dependencies,version,release-validation,coverage}-final.log` 与 `logs/webdav-settings-python.log`，覆盖率为 `coverage/webdav-settings-lcov.info`。实际 Flutter 3.41.6/Dart 3.11.4，不替代声明 Flutter 3.41.4、其他平台和固定设备性能验收。
+
+- Windows release 构建成功（92.0 秒，`logs/webdav-settings-windows-release.log`），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `F6269EDBAF6584F5BDA1BF8E1E87041A484BF24EA237AB198973EDC6CB43FC39`；exe/rhttp/share DLL 与上一单元一致。打包 CHANGELOG 和 assets/init.js 匹配源码，10 个冻结 Dart 文件构建后哈希仍一致；完整记录为仓库外 `webdav-settings-artifact-hashes.json`。后续审计见 `webdav-settings-next-writers.txt` 与 `webdav-settings-next-audit.md`。
+
+## P2/P3/P4/P6：章节排序与追更文件夹保存（2026-10-05）
+
+- 基线 `de59813`。ComicChaptersView 共用 SettingsSaveState，普通/分组列表不再各自直接写入排序；类型化默认值不变，最新选择即时显示，保存、重试、返回和卸载交接共用公共所有者。标题与操作可换行。分组控制器原先错误地按章节数创建，现按组数创建，组变化保留有效组名并释放旧控制器，空组安全。
+- 新 `follow_updates_folder_dialog.dart` 持有原管理器、打开时连接代次、文件夹快照和运行时。准备 SQL 在队首复核有效性；网络检查单独等待 done，保留真实进度，等待期间不占住全局普通访问。取消、换运行时或父页退休取消准备并等待结束。最终设置赋值交给公共保存所有者，已接纳后即使卸载仍完成；重试只保存固定配置，不重放准备 SQL 或网络检查。迟到回调不通知新目标。
+- 预览中的失效文件夹修复使用草稿，并在队首检查仍为原配置且文件夹仍不存在；后台修复也交接原窗口。设置文件夹、重命名和删除的配置引用进入同一草稿队列，读取前序更新后的值，只替换仍指向旧文件夹的引用。数据库已提交后的保存/索引刷新/通知错误保持提交状态和原始异常。
+- ContentDialog 的关闭按钮改为尊重 maybePop 与导航准入；追更操作区可换行。新增 14 项回归涵盖真实文件/SQLite、排队合并、恢复文件夹、原窗口交接、数据库重开、取消与网络完成、单次检查后的保存重试、分组变更以及 375px 暗色 1.8 倍字体。章节 4 项和追更 10 项分别通过；早期夹具、setState 返回 Future、布局与动画等待问题的日志保留，不代替最终冻结结果。新增 UI 文件登记门禁，业务入口保持 104，未扩大依赖例外。
+- 其余 backup/WebDAV/源配置、同步控制与 implicit 写入、管理器初始化/清空恢复写入、源可变数据/跨库入口、持久 dirty/revision/有效业务内容基线及 upload receipt 关联、其他手动任务与核心最终关闭继续待办。52 项仍为 23 I / 28 P / 1 U；P2/P3/P5/P7/P8 剩余边界、完整 CLI、五平台和固定设备性能仍需验收，无依赖升级。最终全量、门禁和构建另列。
+
+- 首轮全量 2764 项通过、2 项既有跳过，但结构门禁发现新追更弹窗直接导入收藏管理器；已改经收藏公开入口，未增加例外。首轮日志保留为 `logs/chapter-follow-full-before-entrypoint.log`，门禁失败保留为 `logs/chapter-follow-structure-final.log`；最终源码重新冻结，验证结果另列。
+
+- 最终冻结全量 **2764 项通过、2 项既有宿主跳过**，LCOV **26,780/40,207（66.61%）**；9 个 Dart 文件格式及冻结哈希一致，严格分析零诊断。Python **78 项/3 项既有跳过**，结构/架构（104 入口）/Git 依赖/版本/完整发布元数据检查通过。仓库外日志为 `logs/chapter-follow-{full,format,python,architecture,git-dependencies,version,release-validation,coverage}-final.log`、`logs/chapter-follow-analyze-frozen.log` 与 `logs/chapter-follow-structure-verified.log`，覆盖率为 `coverage/chapter-follow-lcov.info`。本机 Flutter 3.41.6/Dart 3.11.4，不替代声明 Flutter 3.41.4、其他平台与固定设备性能验收。
+
+- Windows release 构建成功（91.8 秒，`logs/chapter-follow-windows-release.log`），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `73C7A7F8B75AF969CBE937F16CF0BD7EE2E99EC35FA8A15489C750678F3A4871`；exe/rhttp/share DLL 与上一单元一致。打包 CHANGELOG 和 assets/init.js 匹配源码，9 个冻结 Dart 文件构建后哈希仍一致；完整产物记录为仓库外 `chapter-follow-artifact-hashes.json`。下一批写入审计见 `chapter-follow-next-writers.txt` 与 `chapter-follow-next-audit.md`，备份/WebDAV 设置和收藏初始化/恢复仍未迁移。
+
+## P2/P3/P4/P6：收藏视图、缓存上限与授权保存（2026-10-05）
+
+- 基线 `981a58b`。收藏文件夹选择、阅读状态过滤和网络更新页数使用 `updateImplicit` 草稿，固定输入、返回等待、失败重试及强制卸载后的原窗口交接。过滤保存只通知仍有效的父页；修正单个过滤标签与旧 TabController 长度不一致。
+- 同步面板自己持有选择、保存与提交状态，删除 builder 内临时 GlobalKey，缩放保留待保存页数。先等待保存，再核对最初来源、文件夹、回调、连接代次及导航准入派发；父页退休或目标变化关闭自己的旧路由。Flyout 遮罩使用 maybePop，长内容滚动并保留操作按钮。
+- AppPreferences 集中原缓存/授权默认值，缓存输入限制非负整数 MiB 和安全 64 位字节数。核心持有 `app_runtime/cache_settings.dart`，通知更新捕获的缓存，关闭前解除监听；迟到 UI 不创建单例。授权检查属于已接纳设置任务，在检查完成和草稿队首复核请求，旧不支持结果不能覆盖新开启，重试复用原检查 Future，替换检查提供者使旧结果失效。应用入口使用相同类型化读取。
+- 新增 14 项真实文件/SQLite/UI 回归，并增强核心装配测试。初始 13 项与既有组合 39 项通过；随后窄屏暗色 1.8 倍字体遮罩回归发现 7px 底部溢出，滚动修复后收藏视图 5 项通过。初始夹具构造/签名编译失败、布局失败及中断日志保留，不作为通过证据。新增绑定传递依赖已核对，受控业务入口增至 104，未扩大例外。
+- 章节顺序、追更、backup/WebDAV 源配置、同步控制与其他 implicit 写入，源可变数据/跨库入口、持久 dirty/revision/有效业务内容基线与 upload receipt 关联、核心最终关闭和 P2/P3/P5/P7/P8 剩余边界继续待办。52 项保持 23 I / 28 P / 1 U；完整 CLI、五平台及固定设备性能尚未验收，无依赖升级。最终冻结验证另列。
+
+- 最终冻结全量 **2750 项通过、2 项既有宿主跳过**，LCOV **26,336/40,043（65.77%）**；15 个 Dart 文件格式及冻结哈希一致，严格分析零诊断。Python **78 项/3 项既有跳过**，结构/架构（104 入口）/Git 依赖/版本/完整发布元数据检查通过。日志为仓库外 `logs/view-app-settings-{full,format,python,structure,architecture,git-dependencies,version,release-validation,coverage}-final.log` 及 `logs/view-app-settings-analyze-frozen.log`，覆盖率为 `coverage/view-app-settings-lcov.info`。本机 Flutter 3.41.6/Dart 3.11.4，不替代声明 Flutter 3.41.4、其他平台与固定设备性能验收。
+
+- Windows release 构建成功（`logs/view-app-settings-windows-release.log`），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `32B06AA2887274EA578F3A128E8CDD6D05F884BF080E66C56D5BB3C4AB6CA17F`；exe/rhttp/share DLL 与上一单元一致。打包 CHANGELOG/JS 初始化脚本匹配源码，15 个冻结 Dart 文件构建后哈希仍一致；完整产物记录为仓库外 `view-app-settings-artifact-hashes.json`。下一单元审计见 `view-app-settings-next-audit.txt` 与 `view-app-settings-next-writers.txt`。
+
+## P2/P3/P4/P6：过滤词与收藏显示保存（2026-10-05）
+
+- 基线 `464e2df`。漫画/评论过滤词共用 `KeywordBlockingSettings`，增删使用 `updateSettings`，在准入后根据最新草稿合并。提交时固定列表和词值，删除不再使用迟到索引；同词旧重复项一起取消屏蔽。添加检查当前重复词，并在队首再次按成员关系合并；失败重试不会重复添加，也不覆盖并行保存的其他词。
+- 列表删除与输入弹窗分别拥有保存，路由返回、弹窗遮罩及窗口关闭等待真实完成；强制移除输入弹窗后向窗口交接已接纳保存。失败保留固定词值的重试，保存/失败期间禁止编辑输入，成功后核对自身路由关闭；TextEditingController 随 State 释放，不使用全局根 context 更新父页面。保留空词、大小写、顺序和既有配置键语义。
+- 收藏显示模式和画廊列数改为草稿赋值，原按钮内显示等待/重试，保持占用宽度。菜单固定原路由及请求代次，已卸载或迁移所有者的迟到选择不写入；已经接纳的保存仍由原窗口等待。移除仅由旧按钮消费的两个同步顶层 setter，列数归一化入口接收 Object?，保留原范围与回退规则。
+- `SettingsSaveState` / `SettingsSaveScope` 完整迁到 `components/settings_save_state.dart`，设置、收藏显示和阅读器直接使用公共 UI 保存所有者；删除旧文件及 settings/routing 中的 Scope 转发，不保留兼容别名。业务草稿与 I/O 仍归 appdata，架构基线不放宽，受控业务入口保持 103。
+- 新增 12 项真实文件与 UI 回归：两类词表的排队重排和合并、重复词、写入失败重试、弹窗返回/强制移除、收藏模式/列数、迟到菜单、窗口接管和 375px 暗色 1.8 倍字体。首批 10 项通过后新增两项，与设置及真实阅读器退出组合 **89 项通过**。早期测试遗漏 import 和 dataPath 初始化的失败日志保留，不作为通过证据。
+- 缓存上限、授权回退、章节顺序、追更与其他应用/同步控制字段、收藏隐式视图状态、源可变数据及跨库入口仍待迁移；持久 dirty/revision/有效内容基线和上传 receipt、核心最终关闭与完整 CLI/五平台/固定设备性能仍未完成。52 项保持 23 I / 28 P / 1 U，P0–P8 总范围不变，无依赖升级。最终冻结验证与构建另列。
+
+- 最终冻结全量 **2736 项通过、2 项既有宿主跳过**，LCOV **25,947/39,847（65.12%）**；15 个 Dart 文件格式、冻结哈希及 diff 检查通过，严格分析零诊断。共享保存文件迁移前后 Git blob 相同。Python **78 项/3 项既有跳过**，结构/架构（103 入口）/Git 依赖/版本/完整发布元数据检查通过。仓库外日志为 `logs/keyword-display-{full,analyze,format,python,structure,architecture,git-dependencies,version,release-validation,coverage}-final.log`，覆盖率为 `coverage/keyword-display-lcov.info`。实际 Flutter 3.41.6/Dart 3.11.4 不替代声明 Flutter 3.41.4、其他平台及固定设备性能验收。
+
+- Windows release 构建成功（`logs/keyword-display-windows-release.log`），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `8D590E4714EE913C58363C432DFD945D684217E1F6F9EB1F316E12F14F796F0C`；exe/rhttp/share DLL 与上一单元一致。打包 CHANGELOG 和 assets/init.js 匹配源码，完整记录为仓库外 `keyword-display-artifact-hashes.json`；下一批写入审计见 `keyword-display-next-writers.txt`。
+
+## P3/P4/P6：阅读器亮度、范围与评论保存（2026-10-05）
+
+- 基线 `4791b3b`。亮度及开关、漫画/设备范围开关和重置迁移到 `updateSettings` 草稿；提交时捕获漫画、源及值，亮度的有效范围在队首解析，使前序范围开关先应用。关闭章节评论在同一存储范围、同一草稿中同时关闭末尾评论，其他漫画和设备保持隔离。
+- `ReaderBrightnessSetting` 复用公共保存所有者，阅读器持有 `ReaderBrightnessPreview`，工具栏和侧栏共享即时显示；每次滑块变化立即登记保存，不依赖 drag end 或 dispose。每字段仅最新预览可释放，已接纳写入完成前，即使表单卸载也保留共享预览；更换阅读目标替换预览并退休旧侧栏。
+- `SettingsSaveScope` 把侧栏中的公共/自定义保存与工具栏亮度保存接入原阅读会话 ImageWork。退出停止新准入，已接纳的赋值等待真实保存，原窗口交接规则继续生效；更换 work 或目标不通知新阅读器。布局识别仍由既有任务协议拥有，不重复包裹整个识别流程。
+- ImageWork 每条失败具有独立身份，返回只清除尚未被排空消费的 acknowledgment。设置同字段最新赋值成功后清理该字段旧失败链，其他字段继续保留；已经被退出观察者接收的结果不会被迟到成功修改。侧栏绑定新增可重用的 close，旧路由完成不影响后续新侧栏。
+- 首次架构检查发现阅读器直接引用设置内部文件；改经设置公开入口和既有 `routing/settings.dart` UI 适配入口导出所需组件，未放宽依赖基线。首次全量在 895 项通过时主动停止，保留为 `logs/reader-settings-full-before-routing.log`，不作为最终通过证据；修正后重新冻结验证。
+- 新增 13 项回归覆盖真实文件、准入排队、设备/漫画范围、无 drag end 保存、卸载预览、失败修复、旧目标隔离、评论联动、失败身份和侧栏重开。扩展专项 **112 项通过**；另强化设备范围测试，在独占屏障后连续排入范围开启与亮度修改，以最终全量验证该队列顺序。真实 ReaderScaffold/Overlay 的两项回归验证亮度未落盘时的预览、返回等待及卸载后的窗口等待。
+- 其余应用设置、过滤词、章节顺序、收藏显示、追更和同步控制字段、implicit 写入、源可变数据/保存、跨库入口与核心最终关闭仍待迁移。持久 dirty/revision/有效业务内容基线及上传 receipt 关联、P2/P3 其余边界、P5 阅读壳、P7 矩阵、P8 兼容层和完整 CLI/五平台/固定设备性能仍未完成。52 项保持 23 I / 28 P / 1 U，受控入口仍为 103；无依赖升级。最终全量、门禁及构建另列。
+
+- 最终冻结全量 **2724 项通过、2 项既有宿主跳过**，LCOV **25,820/39,849（64.79%）**；15 个 Dart 源码/测试文件哈希一致，格式及 diff 检查通过，严格分析零诊断。Python **78 项/3 项既有跳过**，结构、架构（103 入口）、Git 依赖、版本与完整发布元数据检查通过。日志为仓库外 `logs/reader-settings-{full,analyze,format,python,structure,architecture,git-dependencies,version,release-validation,coverage}-final.log`，覆盖率为 `coverage/reader-settings-lcov.info`。实际工具链 Flutter 3.41.6/Dart 3.11.4，不替代声明 Flutter 3.41.4、其他平台或固定设备性能验收；更新验收索引中已迁移的同步控制器文件路径，未把历史删除证据当成缺失文件。
+
+- Windows release 构建成功（`logs/reader-settings-windows-release.log`），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `CDA720DE4E540803D556DB380281166C0EE5562E28D110CACC1EE8A835DB300D`；exe/rhttp/share DLL 与上一单元一致。打包 CHANGELOG 和 assets/init.js 匹配源码，完整记录为仓库外 `reader-settings-artifact-hashes.json`；剩余写入审计保存在 `reader-settings-next-writers.txt` 和 `logs/reader-settings-remaining-writers.log`，候选匹配不等于每个调用都缺少准入。
+
+## P3/P4/P6：自定义设置保存与返回等待（2026-10-05）
+
+- 基线 `462a8e5`。阅读模式、单漫画模式覆盖、代理、DNS 覆盖与自定义图片处理脚本改为 `updateSettings` 草稿编辑；提交前固定输入及漫画身份，旧菜单目标失效后不写入，已提交旧目标的保存仍完成但不通知新目标。DNS 和脚本每次编辑立即登记保存，不在 dispose 中发起写入；代理表单保留输入，DNS 按控制器身份移除并释放资源。
+- 提取 UI 层 `SettingsSaveState`，公共开关/选择器/滑块/排序和自定义页面共用真实保存等待、窗口交接与失败重试，删除重复旧所有权实现。同字段后续保存可修复旧失败，不同字段的失败分别保留，多个失败汇总原始异常及堆栈。该重试入口只接收固定目标的幂等赋值，不用于重放增量业务操作。
+- 保存准入同步更新路由 PopEntry；设置弹窗向内层页面暴露自己的外层路由，返回按钮、遮罩和系统返回等待保存，iOS 手势尊重阻止返回状态。多个所有者只等待自己的工作并尊重其他返回守卫；迟到返回核对原路由，强制卸载交接已登记保存，跨窗口迁移向旧窗口交接当时的任务快照。关闭失败后可继续编辑与重试；本单元未完成所有平台的真实手势验收。
+- 阅读器布局识别在队首检查原始识别任务、图片与章节身份，再写入草稿；排队期间取消不发布布局。保留 ImageWork 的真实保存等待、修订号和失败重试协议；测试替身继续控制保存时机，新增两项直接使用生产草稿保存与真实文件的准入/取消回归。
+- 新增 13 项设置回归，覆盖多字段失败、实际文件保存、弹窗两层返回、多个所有者、窗口卸载交接、旧漫画目标、DNS 行身份、代理失败重试、脚本编辑/重置，以及 375px/横屏的大字体暗色布局。与阅读器及设置既有测试组合 **97 项通过**；修复发现的公共选择器长标题溢出，弹窗标题为操作区保留可用空间。最初路径夹具、遗漏 import 与溢出失败日志保留，不作为通过证据。
+- 上述组合后新增第 14 项设置回归：真实窗口已开始关闭时，将同一 GlobalKey 控件迁到另一个窗口，再接纳新保存。旧实现错误地继续等待新窗口的任务，回归先失败；窗口退出改为在调用时固定保存快照，修复后与公共保存/排序组合 20 项通过。较早全量 2710 项通过/2 项既有跳过保留为 `logs/custom-settings-full-before-window.log`，不代替修复后的最终全量；新增 Flutter 回归合计 16 项。
+- 额外发布校验发现 HEAD 已有的同版本锁标记误报：`direct main` 被旧脚本拒绝。校验限定在 flutter_rust_bridge 自身记录内，兼容 direct main/overridden，继续要求直接依赖与精确 2.11.1；新增四项 Python 回归防止错误版本、邻接包版本及传递依赖误通过，无依赖升级。
+- 尚未迁移阅读器亮度、范围开关/重置及评论联动设置，其余应用配置/同步控制字段和隐式数据入口仍待处理；持久 dirty/revision/有效内容基线、源保存、跨库写入、核心关闭与完整 CLI/五平台/固定设备性能仍未完成。52 项保持 23 I / 28 P / 1 U，受控业务入口仍为 103。最终冻结全量、门禁和构建另列。
+
+- 最终冻结源码全量 **2711 项通过、2 项既有宿主跳过**，LCOV **25,570/39,715（64.38%）**；严格分析零诊断，10 个 Dart 文件格式与 diff 检查通过。Python **78 项/3 项既有跳过**，结构、架构（103 入口）、Git 依赖、版本同步及完整发布元数据检查通过。冻结的 12 个源码/测试文件哈希核对一致；本机工具链 Flutter 3.41.6/Dart 3.11.4，不替代声明 Flutter 3.41.4、其他平台或固定设备性能验收。日志为仓库外 `logs/custom-settings-{full,analyze,format,python,structure,architecture,git-dependencies,version,release-validation,coverage}-final.log`，覆盖率为 `coverage/custom-settings-lcov.info`。
+
+- Windows release 构建成功（`logs/custom-settings-windows-release.log`），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `FE41939ACB1D0AED234A8CB21CC8D7033FB645CB7E30610DA4BFADA117526821`；exe/rhttp/share DLL 与上一单元一致。打包 CHANGELOG 与 assets/init.js 匹配源码，完整产物记录为仓库外 `custom-settings-artifact-hashes.json`。
+
+## P6/P3/P4：appdata 草稿编辑与公共设置保存（2026-10-05）
+
+- 基线 `e056652`。新增 `updateSettings` / `updateImplicit`，先取得全局普通访问，再进入局部队列；目录在准入时固定，编辑读取队列中最新状态。回调使用独立草稿，完成同步编辑与 JSON/排除字段校验后才发布；保留的草稿或嵌套集合不能迟到修改已发布值。误传异步回调会被拒绝，其后续草稿仍独立，迟到异常被观察；该约定不授权回调执行其他副作用。
+- 只替换发生变化的字段，未改动的旧集合引用保持身份；这解决无关编辑使既有调用者失去引用的问题，不代表公开可变 Map/List 或所有同步 setter 已有准入保护。保存失败可能已部分落盘，因此保留已应用内存并返回真实错误，不恢复旧全局快照。嵌套字段修改与批量 setter 最后统一通知，监听者不借用操作权限；同步请求仅在本次保存成功后发出。
+- `saveData` / `writeImplicitData` 先准入，执行到队首才序列化，避免排在草稿编辑之后的旧快照覆盖新值；两个 appdata 文件在任何 I/O 前完成内容准备，并等待两路真实完成。局部队列先登记队尾再执行回调，空闲后释放已完成 Future，保留错误归属且不通过旧调用者 Zone 调度下一次工作。显式初始化在准入后才创建 Init 尝试；导入、checkpoint 回滚与读取恢复也排队，保留现有格式与回退文件规则。
+- 公共设置控件持有不可变字段描述，在提交的草稿上使用已有类型化存储规则；删除失去生产调用的 PreferenceBinding 与两个 bind 转发。开关/选择器等待保存，滑块立即显示最新拖动值并按序保存；仅当前目标的最新成功触发回调，菜单结果检查字段及选项身份。每个控件向窗口登记保存，强制卸载交接实际 Future。页面排序改为编辑即保存，返回等待，失败可重试，不在 dispose 中才开始修改。
+- 搜索历史接口返回 Future，去重/删除/清空在准入后串行执行，页面等待或明确接收后台错误；菜单保存关键字而非迟到索引。搜索快捷项在当前草稿合并，避免并发添加丢失，成功提示等待保存。同步版本与完成时间改为草稿编辑，版本返回本次分配值；更新检查时间在准入后复核并保存，后台失败进入日志。
+- 新增 21 项回归：15 项真实文件/准入/草稿/初始化/Zone/通知回归，5 项控件等待、两种宽度菜单、窗口卸载交接与真实写入失败重试，1 项快捷项并发合并。新组合 21 项通过；此前数据/导入/启动组合 50 项、页面排序/阅读边距/偏好组合 23 项通过，集合与全量不相加。最初编译夹具错误、旧界面时钟假设及跨测试 Zone 调度问题分别在修复后重验，不能把初始失败日志当作通过。
+- 当前仍未完成自定义设置页、阅读器布局/亮度修改、同步配置/implicit 控制字段、收藏显示配置、源目录配置及其余公开可变入口的整体迁移；也未完成 appdata 核心最终关闭、持久 dirty/revision/内容基线、源保存与跨库写入。原 52 项保持 23 I / 28 P / 1 U、业务入口仍为 103；完整 P0–P8、CLI、五平台和固定设备性能范围不变，无依赖升级。最终冻结全量与构建结果另列。
+
+- 最终冻结源码全量 **2695 项通过、2 项既有宿主跳过**，LCOV **25,104/39,540（63.49%）**；严格分析零诊断，17 个 Dart 文件格式及 diff、Python 74 项/3 项既有跳过、结构/架构（103 入口）/Git 依赖/版本门禁通过。日志为仓库外 `logs/appdata-{full-final,analyze-final,format-final,python,structure,architecture,git-dependencies,version,coverage}.log`，覆盖率为 `coverage/appdata-lcov.info`。工具链 Flutter 3.41.6/Dart 3.11.4，不替代声明 Flutter 3.41.4、其他平台及固定设备性能验收。
+
+- Windows release 构建成功（`logs/appdata-windows-release.log`），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `4A264FD03E7651A8301066B249FEBF29AB629FD1616D8831453E6F66DDCCBBE3`；exe/rhttp/share DLL 与上一单元一致。打包 CHANGELOG 和 assets/init.js 均匹配源码，完整哈希为仓库外 `appdata-artifact-hashes.json`。
+
 ## P6/P4：普通收藏准入与调用方等待（2026-10-05）
 
 - 基线 `ae4deb0`。普通收藏修改先进入 AppDataOperations，再加入所有者队列；漫画、标签、目标文件夹和排序输入在排队前复制。异步读取与 hash 刷新也排入同一局部队列，真实只读 isolate 完成后才允许后续修改；独占导入/导出/关闭排空此前接纳的工作。初始化等待身份索引发布完毕，不再以 init 返回后补刷作为完成约定；同步 close 仍可使未完成工作失效。

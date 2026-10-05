@@ -84,11 +84,11 @@ class _ApplicationSyncParticipant implements DataSyncParticipant {
   String get cachePath => App.cachePath;
 
   @override
-  Future<int> prepareUploadVersion() async {
-    appdata.settings['dataVersion']++;
-    await appdata.saveData(false);
-    return appdata.settings['dataVersion'] as int;
-  }
+  Future<int> prepareUploadVersion() => appdata.updateSettings((settings) {
+    final version = (settings['dataVersion'] as int) + 1;
+    settings['dataVersion'] = version;
+    return version;
+  }, sync: false);
 
   @override
   Future<void> exportData(bool excludeFields, File destination) =>
@@ -115,8 +115,8 @@ class _ApplicationSyncParticipant implements DataSyncParticipant {
   }
 
   @override
-  Future<void> recordSyncTime(int milliseconds) async {
-    appdata.settings['lastSyncTime'] = milliseconds;
-    await appdata.saveData(false);
-  }
+  Future<void> recordSyncTime(int milliseconds) =>
+      appdata.updateSettings((settings) {
+        settings['lastSyncTime'] = milliseconds;
+      }, sync: false);
 }

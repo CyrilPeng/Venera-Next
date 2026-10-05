@@ -1,27 +1,34 @@
 import 'favorite_models.dart';
 import 'favorites_repository.dart';
 import 'package:venera_next/foundation/comic_type.dart';
+import 'package:venera_next/foundation/sqlite_transaction.dart';
+
+/// SQL outcome; the owner persists the selected folder and publishes caches
+/// after the transaction. Repeating a membership assignment does not move it.
+class ReadLaterCommit {
+  const ReadLaterCommit({
+    required this.folder,
+    this.created = false,
+    this.added = false,
+    this.removed = false,
+  });
+  final String? folder;
+  final bool created;
+  final bool added;
+  final bool removed;
+}
 
 /// Read-later policy without application globals or widget dependencies.
-/// Mutation callbacks retain the owner's cache and notification behavior.
 class ReadLaterService {
   ReadLaterService({
     required this.repository,
     required this.configuredFolder,
-    required this.selectFolder,
-    required this.createFolder,
-    required this.addFirst,
-    required this.remove,
-    required this.saveSettings,
+    required this.translateTags,
   });
 
   final FavoritesRepository Function() repository;
   final Object? Function() configuredFolder;
-  final void Function(String) selectFolder;
-  final void Function(String) createFolder;
-  final void Function(String, FavoriteItem) addFirst;
-  final void Function(String, String, ComicType) remove;
-  final Future<void> Function() saveSettings;
+  final String Function(List<String>) translateTags;
 
   String? get folder {
     final value = configuredFolder();
@@ -42,29 +49,50 @@ class ReadLaterService {
         : repository().getFolderComics(current, limit: limit);
   }
 
-  Future<void> set(
+  ReadLaterCommit set(
     FavoriteItem comic, {
     required bool included,
     required String folderName,
-  }) async {
-    var current = folder;
-    if (included) {
-      if (current == null) {
-        var candidate = folderName;
-        var suffix = 2;
-        final existing = repository().folderNames().toSet();
-        while (existing.contains(candidate)) {
-          candidate = '$folderName (${suffix++})';
+  }) {
+    final repo = repository();
+    final translated = included ? translateTags(comic.tags) : '';
+    return runSqliteTransaction(repo.db, () {
+      var current = folder;
+      var created = false;
+      if (included) {
+        if (current == null) {
+          if (folderName.isEmpty) {
+            throw ArgumentError.value(
+              folderName,
+              'folderName',
+              'Folder name must not be empty',
+            );
+          }
+          var candidate = folderName;
+          var suffix = 2;
+          final existing = repo.folderNames().toSet();
+          while (existing.contains(candidate)) {
+            candidate = '$folderName (${suffix++})';
+          }
+          repo.createFolder(candidate);
+          current = candidate;
+          created = true;
         }
-        createFolder(candidate);
-        selectFolder(candidate);
-        current = candidate;
+        final added = repo.addComic(
+          current,
+          comic,
+          translatedTags: translated,
+          append: false,
+        );
+        return ReadLaterCommit(folder: current, created: created, added: added);
       }
-      addFirst(current, comic);
-    } else if (current != null &&
-        repository().comicExists(current, comic.id, comic.type.value)) {
-      remove(current, comic.id, comic.type);
-    }
-    await saveSettings();
+      var removed = false;
+      if (current != null) {
+        removed = repo
+            .deleteComics([current], [(comic.id, comic.type.value)])
+            .isNotEmpty;
+      }
+      return ReadLaterCommit(folder: current, removed: removed);
+    });
   }
 }

@@ -58,6 +58,7 @@ Future<void> _dragPage(
   await gesture.moveTo(target);
   await tester.pump(const Duration(milliseconds: 300));
   await gesture.up();
+  await _flushSettings(tester);
   await tester.pumpAndSettle();
 }
 
@@ -157,6 +158,7 @@ void main() {
       }
       expect(controller.offset, greaterThan(0));
       await gesture.up();
+      await _flushSettings(tester);
       await tester.pumpAndSettle();
       final beforeResize = _pageOrder(tester);
       expect(beforeResize, hasLength(30));

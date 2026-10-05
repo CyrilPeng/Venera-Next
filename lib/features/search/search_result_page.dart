@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/message.dart';
@@ -8,6 +10,7 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/global_state.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -55,8 +58,17 @@ class _SearchResultPageState extends State<SearchResultPage> {
       setState(() {
         this.text = text!;
       });
-      appdata.addSearchHistory(text);
+      unawaited(_recordSearchHistory(text));
       controller.currentText = text;
+    }
+  }
+
+  Future<void> _recordSearchHistory(String text) async {
+    try {
+      await appdata.addSearchHistory(text);
+    } catch (error, stack) {
+      Log.error('Search history', error, stack);
+      if (mounted) context.showMessage(message: error.toString());
     }
   }
 
@@ -112,7 +124,7 @@ class _SearchResultPageState extends State<SearchResultPage> {
     controller = SearchBarController(currentText: text, onSearch: search);
     options = widget.options ?? const [];
     validateOptions();
-    appdata.addSearchHistory(text);
+    unawaited(_recordSearchHistory(text));
     suggestionsController = _SuggestionsController(controller, sourceKey);
     super.initState();
   }

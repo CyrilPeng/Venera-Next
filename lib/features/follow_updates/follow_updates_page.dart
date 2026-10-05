@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'follow_updates_folder_dialog.dart';
 import 'follow_updates_runtime.dart';
 import 'follow_updates_scope.dart';
 
@@ -6,12 +8,12 @@ import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/scroll.dart';
-import 'package:venera_next/components/select.dart';
+import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
-import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
@@ -26,7 +28,8 @@ class FollowUpdatesWidget extends StatefulWidget {
   State<FollowUpdatesWidget> createState() => _FollowUpdatesWidgetState();
 }
 
-class _FollowUpdatesWidgetState extends State<FollowUpdatesWidget> {
+class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
+  String? _repairing;
   FollowUpdatesRuntime? _runtime;
 
   @override
@@ -55,11 +58,25 @@ class _FollowUpdatesWidgetState extends State<FollowUpdatesWidget> {
     if (!LocalFavoritesManager().folderNames.contains(folder)) {
       _count = 0;
       previewComics = [];
-      appdata.settings["followUpdatesFolder"] = null;
-      LocalFavoritesManager().refreshUpdateIds();
-      Future.microtask(() {
-        appdata.saveData();
-      });
+      final expected = folder!;
+      if (_repairing != expected &&
+          !hasSettingsSaveError &&
+          acceptsSettingsChanges) {
+        _repairing = expected;
+        final manager = LocalFavoritesManager();
+        final generation = manager.connectionGeneration;
+        scheduleMicrotask(() async {
+          if (!mounted || !acceptsSettingsChanges) return;
+          await saveSetting(
+            'followUpdatesFolder',
+            () => manager.clearMissingFollowUpdatesFolder(
+              expected,
+              generation: generation,
+            ),
+          );
+          if (_repairing == expected) _repairing = null;
+        });
+      }
     } else {
       _count = LocalFavoritesManager().countUpdates(folder!);
       previewComics = getFollowUpdatesPreviewComics(folder!);
@@ -67,6 +84,7 @@ class _FollowUpdatesWidgetState extends State<FollowUpdatesWidget> {
   }
 
   void updateCount() {
+    if (!mounted) return;
     setState(() {
       updatePreviewData();
     });
@@ -121,6 +139,7 @@ class _FollowUpdatesWidgetState extends State<FollowUpdatesWidget> {
                         ),
                       ),
                     const Spacer(),
+                    settingsSaveStatus,
                     const Icon(Icons.arrow_right),
                   ],
                 ),
@@ -161,22 +180,32 @@ class _FollowUpdatesWidgetState extends State<FollowUpdatesWidget> {
 }
 
 class FollowUpdatesPage extends StatefulWidget {
-  const FollowUpdatesPage({super.key});
+  const FollowUpdatesPage({
+    super.key,
+    this.createCheck = createFollowUpdatesFolderCheck,
+  });
+  final FollowUpdateJob Function(String) createCheck;
 
   @override
   State<FollowUpdatesPage> createState() => _FollowUpdatesPageState();
 }
 
 class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
-  int _folderChange = 0;
-  FollowUpdateJob? _folderJob;
+  DialogRoute<void>? _folderSelector;
   FollowUpdatesRuntime? _runtime;
+
+  @override
+  void didUpdateWidget(FollowUpdatesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.createCheck != widget.createCheck) _retireSelector();
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final runtime = FollowUpdatesScope.of(context);
     if (identical(runtime, _runtime)) return;
+    _retireSelector();
     _runtime?.changes.removeListener(updateComics);
     _runtime = runtime;
     runtime.changes.addListener(updateComics);
@@ -216,8 +245,7 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
   @override
   void dispose() {
     _runtime?.changes.removeListener(updateComics);
-    _folderChange++;
-    _folderJob?.cancel();
+    _retireSelector();
     super.dispose();
   }
 
@@ -444,122 +472,38 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
     );
   }
 
+  void _retireSelector() {
+    final route = _folderSelector;
+    _folderSelector = null;
+    scheduleMicrotask(() {
+      final navigator = route?.navigator;
+      if (navigator?.mounted == true && route!.isActive) {
+        navigator!.removeRoute(route);
+      }
+    });
+  }
+
   void showSelector() {
-    var folders = LocalFavoritesManager().folderNames;
-    if (folders.isEmpty) {
-      context.showMessage(message: "No folders available".tl);
+    if (_folderSelector != null || !NavigationAdmission.allows(context)) return;
+    if (LocalFavoritesManager().folderNames.isEmpty) {
+      context.showMessage(message: 'No folders available'.tl);
       return;
     }
-    String? selectedFolder;
-    showDialog(
-      context: App.rootContext,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return ContentDialog(
-              title: "Choose Folder".tl,
-              content: Column(
-                children: [
-                  ListTile(
-                    title: Text("Folder".tl),
-                    trailing: Select(
-                      minWidth: 120,
-                      current: selectedFolder,
-                      values: folders,
-                      onTap: (i) {
-                        setState(() {
-                          selectedFolder = folders[i];
-                        });
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                if (appdata.settings["followUpdatesFolder"] != null)
-                  TextButton(
-                    onPressed: () {
-                      disable();
-                      context.pop();
-                    },
-                    child: Text("Disable".tl),
-                  ),
-                FilledButton(
-                  onPressed: selectedFolder == null
-                      ? null
-                      : () {
-                          context.pop();
-                          setFolder(selectedFolder!);
-                        },
-                  child: Text("Confirm".tl),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    final runtime = _runtime!;
+    final route = DialogRoute<void>(
+      context: context,
+      builder: (_) => FollowUpdatesFolderDialog(
+        runtime: runtime,
+        createCheck: widget.createCheck,
+        onSaved: () {
+          if (mounted && identical(_runtime, runtime)) updateComics();
+        },
+      ),
     );
-  }
-
-  Future<void> disable() async {
-    _folderChange++;
-    _folderJob?.cancel();
-    _runtime!.cancelChecking();
-    FollowUpdateJob.cancelActive();
-    final manager = LocalFavoritesManager();
-    try {
-      await manager.setFollowUpdatesFolder(
-        null,
-        generation: manager.connectionGeneration,
-      );
-      if (mounted) _runtime!.notifyChanged();
-    } catch (error, stack) {
-      Log.error('Follow updates folder', error, stack);
-      if (mounted) context.showMessage(message: error.toString());
-    }
-  }
-
-  Future<void> setFolder(String folder) async {
-    final revision = ++_folderChange;
-    _folderJob?.cancel();
-    final manager = LocalFavoritesManager();
-    final generation = manager.connectionGeneration;
-    _runtime!.cancelChecking();
-    bool active() => mounted && revision == _folderChange;
-    try {
-      await AppDataOperations.instance.access(() async {
-        if (!active()) return;
-        if (manager.connectionGeneration != generation) {
-          throw StateError('Favorites database changed. Try again.');
-        }
-        await manager.prepareTableForFollowUpdates(folder);
-      });
-      if (!mounted || !active()) return;
-      if (manager.count(folder) > 0) {
-        final job = _folderJob = FollowUpdateJob(folder, true);
-        final loading = showLoadingDialog(
-          context,
-          withProgress: true,
-          cancelButtonText: 'Cancel'.tl,
-          onCancel: job.cancel,
-          message: 'Updating comics...'.tl,
-        );
-        try {
-          await for (var progress in job.progress) {
-            loading.setProgress(progress.fraction);
-          }
-        } finally {
-          loading.close();
-        }
-        if (job.isCancelled || !active()) return;
-      }
-      if (!active()) return;
-      await manager.setFollowUpdatesFolder(folder, generation: generation);
-      if (active()) updateComics();
-    } catch (error, stack) {
-      Log.error('Follow updates folder', error, stack);
-      if (mounted && active()) context.showMessage(message: error.toString());
-    }
+    _folderSelector = route;
+    Navigator.of(context, rootNavigator: true).push(route).whenComplete(() {
+      if (identical(_folderSelector, route)) _folderSelector = null;
+    });
   }
 
   void checkNow() async {

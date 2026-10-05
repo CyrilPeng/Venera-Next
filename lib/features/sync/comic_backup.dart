@@ -51,19 +51,20 @@ class BackupConfig {
     );
   }
 
-  static Future<void> saveToSettings(BackupConfig config) async {
-    if (!config.isValid && config.user.isEmpty && config.pass.isEmpty) {
-      appdata.settings['backupWebdav'] = [];
-    } else {
-      appdata.settings['backupWebdav'] = [
-        config.url.trim(),
-        config.user.trim(),
-        config.pass.trim(),
-      ];
-    }
-    appdata.settings['backupWebdavPath'] = config.remotePath;
-    await appdata.saveData(false);
-  }
+  static bool get syncEnabled =>
+      appdata.settings['backupWebdavSyncEnabled'] == true;
+
+  static Future<void> saveToSettings(
+    BackupConfig config, {
+    required bool syncEnabled,
+  }) => appdata.updateSettings((draft) {
+    draft['backupWebdav'] =
+        !config.isValid && config.user.isEmpty && config.pass.isEmpty
+        ? <String>[]
+        : [config.url.trim(), config.user.trim(), config.pass.trim()];
+    draft['backupWebdavPath'] = config.remotePath;
+    draft['backupWebdavSyncEnabled'] = syncEnabled;
+  }, sync: false);
 
   String remoteFilePath(String fileName) {
     return joinWebDavFilePath(remotePath, fileName);

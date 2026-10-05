@@ -16,6 +16,7 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/global_state.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/routing/app_links.dart';
 import 'package:venera_next/routing/settings.dart';
 import 'package:venera_next/foundation/extensions.dart';
@@ -585,6 +586,23 @@ class _SearchHistory extends StatefulWidget {
 }
 
 class _SearchHistoryState extends State<_SearchHistory> {
+  bool _saving = false;
+
+  Future<bool> _editHistory(Future<void> Function() edit) async {
+    if (_saving || !mounted) return false;
+    setState(() => _saving = true);
+    try {
+      await edit();
+      return true;
+    } catch (error, stack) {
+      Log.error('Search history', error, stack);
+      if (mounted) context.showMessage(message: error.toString());
+      return false;
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SliverList(
@@ -599,18 +617,40 @@ class _SearchHistoryState extends State<_SearchHistory> {
             title: Text("Search History".tl),
             trailing: Flyout(
               flyoutBuilder: (context) {
-                return FlyoutContent(
-                  title: "Clear Search History".tl,
-                  actions: [
-                    FilledButton(
-                      child: Text("Clear".tl),
-                      onPressed: () {
-                        appdata.clearSearchHistory();
-                        context.pop();
-                        setState(() {});
-                      },
-                    ),
-                  ],
+                var saving = false;
+                return StatefulBuilder(
+                  builder: (context, update) => FlyoutContent(
+                    title: "Clear Search History".tl,
+                    actions: [
+                      FilledButton(
+                        onPressed: saving
+                            ? null
+                            : () async {
+                                final route = ModalRoute.of(context);
+                                update(() => saving = true);
+                                final saved = await _editHistory(
+                                  appdata.clearSearchHistory,
+                                );
+                                if (saved &&
+                                    context.mounted &&
+                                    route?.isCurrent != false) {
+                                  context.pop();
+                                }
+                                if (context.mounted) {
+                                  update(() => saving = false);
+                                }
+                              },
+                        child: saving
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text("Clear".tl),
+                      ),
+                    ],
+                  ),
                 );
               },
               child: Builder(
@@ -635,24 +675,21 @@ class _SearchHistoryState extends State<_SearchHistory> {
   }
 
   Widget buildItem(int index) {
+    final keyword = appdata.searchHistory[index];
     void showMenu(Offset offset) {
       showMenuX(context, offset, [
         MenuEntry(
           icon: Icons.copy,
           text: 'Copy'.tl,
           onClick: () {
-            Clipboard.setData(
-              ClipboardData(text: appdata.searchHistory[index]),
-            );
+            Clipboard.setData(ClipboardData(text: keyword));
           },
         ),
         MenuEntry(
           icon: Icons.delete,
           text: 'Delete'.tl,
-          onClick: () {
-            appdata.removeSearchHistory(appdata.searchHistory[index]);
-            appdata.saveData();
-            setState(() {});
+          onClick: () async {
+            await _editHistory(() => appdata.removeSearchHistory(keyword));
           },
         ),
       ]);
@@ -662,7 +699,7 @@ class _SearchHistoryState extends State<_SearchHistory> {
       builder: (context) {
         return ClickInkWell(
           onTap: () {
-            widget.search(appdata.searchHistory[index]);
+            widget.search(keyword);
           },
           onLongPress: () {
             var renderBox = context.findRenderObject() as RenderBox;
@@ -688,7 +725,7 @@ class _SearchHistoryState extends State<_SearchHistory> {
               ),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Text(appdata.searchHistory[index], style: ts.s14),
+            child: Text(keyword, style: ts.s14),
           ),
         ).paddingBottom(8).paddingHorizontal(4);
       },

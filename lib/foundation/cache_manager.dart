@@ -26,6 +26,7 @@ class CacheManager {
   Future<void>? _initialScanTask;
   Future<void>? _disposal;
   bool _closing = false;
+  bool get isClosing => _closing;
   int _currentSize = 0;
   int get currentSize => _currentSize;
   int _directoryIndex = 0;

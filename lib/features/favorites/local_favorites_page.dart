@@ -14,6 +14,7 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/components/select.dart';
+import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -28,6 +29,7 @@ import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/consts.dart';
@@ -47,6 +49,7 @@ class LocalFavoritesPage extends StatefulWidget {
     required this.showFolders,
     required this.onFolderSelected,
     required this.updateFolderList,
+    this.importFolder = importNetworkFolder,
     super.key,
   });
 
@@ -54,6 +57,13 @@ class LocalFavoritesPage extends StatefulWidget {
   final VoidCallback showFolders;
   final void Function(bool isNetwork, String? folder) onFolderSelected;
   final VoidCallback updateFolderList;
+  final Future<void> Function(
+    String source,
+    int pages,
+    String folder,
+    String remoteFolder,
+  )
+  importFolder;
 
   @override
   State<LocalFavoritesPage> createState() => _LocalFavoritesPageState();
@@ -86,6 +96,8 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   bool isLoading = false;
   int _queryGeneration = 0;
+  int _filterRequest = 0;
+  ModalRoute<dynamic>? _updateFlyoutRoute;
   Object? _loadError;
 
   late String readFilterSelect;
@@ -259,10 +271,40 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     super.initState();
   }
 
+  void _retireUpdateFlyout() {
+    final route = _updateFlyoutRoute;
+    _updateFlyoutRoute = null;
+    scheduleMicrotask(() {
+      final navigator = route?.navigator;
+      if (navigator?.mounted == true && route!.isActive) {
+        navigator!.removeRoute(route);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(LocalFavoritesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.folder != widget.folder) {
+      _filterRequest++;
+      final linked = isAllFolder
+          ? (null, null)
+          : manager.findLinked(widget.folder);
+      networkSource = linked.$1;
+      networkFolder = linked.$2;
+      updateComics();
+    }
+    if (oldWidget.folder != widget.folder ||
+        oldWidget.importFolder != widget.importFolder) {
+      _retireUpdateFlyout();
+    }
+  }
+
   @override
   void dispose() {
-    super.dispose();
+    _retireUpdateFlyout();
     LocalFavoritesManager().removeListener(updateComics);
+    super.dispose();
   }
 
   void selectAll() {
@@ -365,35 +407,44 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                   message: "Sync".tl,
                   child: Flyout(
                     flyoutBuilder: (context) {
-                      final GlobalKey<_SelectUpdatePageNumState>
-                      selectUpdatePageNumKey =
-                          GlobalKey<_SelectUpdatePageNumState>();
-                      var updatePageWidget = _SelectUpdatePageNum(
-                        networkSource: networkSource!,
-                        networkFolder: networkFolder,
-                        key: selectUpdatePageNumKey,
-                      );
-                      return FlyoutContent(
-                        title: "Sync".tl,
-                        content: updatePageWidget,
-                        actions: [
-                          Button.filled(
-                            child: Text("Update".tl),
-                            onPressed: () {
-                              context.pop();
-                              importNetworkFolder(
-                                networkSource!,
-                                selectUpdatePageNumKey
-                                    .currentState!
-                                    .updatePageNum,
-                                widget.folder,
-                                networkFolder!,
-                              ).then((value) {
-                                updateComics();
-                              });
-                            },
-                          ),
-                        ],
+                      final source = networkSource;
+                      final remoteFolder = networkFolder;
+                      if (source == null || remoteFolder == null) {
+                        return const SizedBox.shrink();
+                      }
+                      final folder = widget.folder;
+                      final importFolder = widget.importFolder;
+                      final generation = manager.connectionGeneration;
+                      final route = ModalRoute.of(context);
+                      if (!identical(_updateFlyoutRoute, route)) {
+                        _updateFlyoutRoute = route;
+                        route?.completed.then((_) {
+                          if (identical(_updateFlyoutRoute, route)) {
+                            _updateFlyoutRoute = null;
+                          }
+                        });
+                      }
+                      bool isCurrent() =>
+                          mounted &&
+                          widget.folder == folder &&
+                          widget.importFolder == importFolder &&
+                          manager.connectionGeneration == generation &&
+                          manager.findLinked(folder) ==
+                              (source, remoteFolder) &&
+                          NavigationAdmission.allows(this.context);
+                      return _FavoriteFolderSyncPanel(
+                        networkSource: source,
+                        networkFolder: remoteFolder,
+                        onUpdate: (pages) async {
+                          if (!isCurrent()) return;
+                          await importFolder(
+                            source,
+                            pages,
+                            folder,
+                            remoteFolder,
+                          );
+                          if (isCurrent()) updateComics();
+                        },
                       );
                     },
                     child: Builder(
@@ -401,7 +452,10 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                         return IconButton(
                           icon: const Icon(Icons.sync),
                           onPressed: () {
-                            Flyout.of(context).show();
+                            if (_updateFlyoutRoute == null &&
+                                NavigationAdmission.allows(context)) {
+                              Flyout.of(context).show();
+                            }
                           },
                         );
                       },
@@ -417,12 +471,19 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       ? context.colorScheme.primaryContainer
                       : null,
                   onPressed: () {
+                    final folder = widget.folder;
+                    final request = ++_filterRequest;
                     showDialog(
                       context: context,
                       builder: (context) {
                         return _LocalFavoritesFilterDialog(
                           initReadFilterSelect: readFilterSelect,
                           updateConfig: (readFilter) {
+                            if (!mounted ||
+                                widget.folder != folder ||
+                                request != _filterRequest) {
+                              return;
+                            }
                             setState(() {
                               readFilterSelect = readFilter;
                             });
@@ -1328,85 +1389,133 @@ class _ReorderComicsPageState extends State<_ReorderComicsPage> {
   }
 }
 
-class _SelectUpdatePageNum extends StatefulWidget {
-  const _SelectUpdatePageNum({
+class _FavoriteFolderSyncPanel extends StatefulWidget {
+  const _FavoriteFolderSyncPanel({
     required this.networkSource,
-    this.networkFolder,
-    super.key,
+    required this.networkFolder,
+    required this.onUpdate,
   });
 
-  final String? networkFolder;
+  final Future<void> Function(int pages) onUpdate;
+  final String networkFolder;
   final String networkSource;
 
   @override
-  State<_SelectUpdatePageNum> createState() => _SelectUpdatePageNumState();
+  State<_FavoriteFolderSyncPanel> createState() =>
+      _FavoriteFolderSyncPanelState();
 }
 
-class _SelectUpdatePageNumState extends State<_SelectUpdatePageNum> {
+class _FavoriteFolderSyncPanelState
+    extends SettingsSaveState<_FavoriteFolderSyncPanel> {
   int updatePageNum = 9999999;
+  bool startingUpdate = false;
+  late final Future<void> Function(int) _update;
+
+  Future<void> _submit() async {
+    if (startingUpdate || !acceptsSettingsChanges) return;
+    final pages = updatePageNum;
+    final update = _update;
+    final route = ModalRoute.of(context);
+    final navigator = Navigator.of(context);
+    setState(() => startingUpdate = true);
+    try {
+      await waitForSettingsSave();
+      if (!mounted ||
+          !acceptsSettingsChanges ||
+          route?.isCurrent != true ||
+          !NavigationAdmission.allows(context)) {
+        return;
+      }
+      if (!await navigator.maybePop() || route?.isCurrent == true) return;
+      await update(pages);
+    } catch (error, stack) {
+      Log.error('Favorite update settings', error, stack);
+      if (mounted) context.showMessage(message: error.toString());
+    } finally {
+      if (mounted) setState(() => startingUpdate = false);
+    }
+  }
 
   String get _allPageText => 'All'.tl;
 
-  List<String> get pageNumList => [
-    '1',
-    '2',
-    '3',
-    '5',
-    '10',
-    '20',
-    '50',
-    '100',
-    '200',
-    _allPageText,
-  ];
+  static const pageCounts = [1, 2, 3, 5, 10, 20, 50, 100, 200, 9999999];
 
   @override
   void initState() {
-    updatePageNum =
-        appdata.implicitData["local_favorites_update_page_num"] ?? 9999999;
+    _update = widget.onUpdate;
+    final stored = appdata.implicitData['local_favorites_update_page_num'];
+    updatePageNum = stored is int && stored > 0 ? stored : 9999999;
     super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
     var source = ComicSource.find(widget.networkSource);
-    var sourceName = source?.name ?? widget.networkSource;
+    final sourceName = source?.name ?? widget.networkSource;
     var text = "The folder is Linked to @source".tlParams({
       "source": sourceName,
     });
-    if (widget.networkFolder != null && widget.networkFolder!.isNotEmpty) {
+    if (widget.networkFolder.isNotEmpty) {
       text += "\n${"Source Folder".tl}: ${widget.networkFolder}";
     }
 
-    return Column(
-      children: [
-        Row(children: [Text(text)]),
-        Row(
+    final target = (widget.networkSource, widget.networkFolder);
+    return protectSettings(
+      FlyoutContent(
+        title: 'Sync'.tl,
+        actions: [
+          FilledButton(
+            onPressed: startingUpdate ? null : _submit,
+            child: Text('Update'.tl),
+          ),
+        ],
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Update the page number by the latest collection".tl),
-            Spacer(),
-            Select(
-              current: updatePageNum.toString() == '9999999'
-                  ? _allPageText
-                  : updatePageNum.toString(),
-              values: pageNumList,
-              minWidth: 48,
-              onTap: (index) {
-                setState(() {
-                  updatePageNum = int.parse(
-                    pageNumList[index] == _allPageText
-                        ? '9999999'
-                        : pageNumList[index],
-                  );
-                  appdata.implicitData["local_favorites_update_page_num"] =
-                      updatePageNum;
-                  appdata.writeImplicitData();
-                });
-              },
+            Text(text),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text("Update the page number by the latest collection".tl),
+                Select(
+                  current: updatePageNum.toString() == '9999999'
+                      ? _allPageText
+                      : updatePageNum.toString(),
+                  values: [
+                    for (final value in pageCounts)
+                      value == 9999999 ? _allPageText : '$value',
+                  ],
+                  minWidth: 48,
+                  onTap: (index) {
+                    if (!mounted ||
+                        !acceptsSettingsChanges ||
+                        startingUpdate ||
+                        target !=
+                            (widget.networkSource, widget.networkFolder) ||
+                        index < 0 ||
+                        index >= pageCounts.length) {
+                      return;
+                    }
+                    final value = pageCounts[index];
+                    setState(() {
+                      updatePageNum = value;
+                    });
+                    saveSetting(
+                      'local_favorites_update_page_num',
+                      () => appdata.updateImplicit((draft) {
+                        draft['local_favorites_update_page_num'] = value;
+                      }),
+                    );
+                  },
+                ),
+              ],
             ),
+            settingsSaveStatus,
           ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -1418,7 +1527,7 @@ class _LocalFavoritesFilterDialog extends StatefulWidget {
   });
 
   final String initReadFilterSelect;
-  final Function updateConfig;
+  final ValueChanged<String> updateConfig;
 
   @override
   State<_LocalFavoritesFilterDialog> createState() =>
@@ -1428,7 +1537,7 @@ class _LocalFavoritesFilterDialog extends StatefulWidget {
 const readFilterList = ['All', 'UnCompleted', 'Completed'];
 
 class _LocalFavoritesFilterDialogState
-    extends State<_LocalFavoritesFilterDialog> {
+    extends SettingsSaveState<_LocalFavoritesFilterDialog> {
   List<String> optionTypes = ['Filter'];
   late var readFilter = widget.initReadFilterSelect;
   @override
@@ -1440,50 +1549,70 @@ class _LocalFavoritesFilterDialogState
         tabs: optionTypes.map((e) => Tab(text: e.tl, key: Key(e))).toList(),
       ),
     ).paddingTop(context.padding.top);
-    return ContentDialog(
-      content: DefaultTabController(
-        length: 2,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            tabBar,
-            TabViewBody(
-              children: [
-                Column(
-                  children: [
-                    ListTile(
-                      title: Text("Filter reading status".tl),
-                      trailing: Select(
-                        current: readFilter.tl,
-                        values: readFilterList.map((e) => e.tl).toList(),
-                        minWidth: 64,
-                        onTap: (index) {
-                          setState(() {
-                            readFilter = readFilterList[index];
-                          });
-                        },
+    return protectSettings(
+      ContentDialog(
+        content: DefaultTabController(
+          length: optionTypes.length,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              tabBar,
+              TabViewBody(
+                children: [
+                  Column(
+                    children: [
+                      ListTile(
+                        title: Text("Filter reading status".tl),
+                        trailing: Select(
+                          current: readFilter.tl,
+                          values: readFilterList.map((e) => e.tl).toList(),
+                          minWidth: 64,
+                          onTap: (index) {
+                            if (!mounted ||
+                                !acceptsSettingsChanges ||
+                                savingSettings ||
+                                hasSettingsSaveError ||
+                                index < 0 ||
+                                index >= readFilterList.length) {
+                              return;
+                            }
+                            setState(() {
+                              readFilter = readFilterList[index];
+                            });
+                          },
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
+        actions: [
+          settingsSaveStatus,
+          FilledButton(
+            onPressed: savingSettings || hasSettingsSaveError
+                ? null
+                : () {
+                    final value = readFilter;
+                    saveSetting(
+                      'local_favorites_read_filter',
+                      () => appdata.updateImplicit((draft) {
+                        draft['local_favorites_read_filter'] = value;
+                      }),
+                      onSaved: () {
+                        widget.updateConfig(value);
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) leaveSettings();
+                        });
+                      },
+                    );
+                  },
+            child: Text("Confirm".tl),
+          ),
+        ],
       ),
-      actions: [
-        FilledButton(
-          onPressed: () {
-            appdata.implicitData["local_favorites_read_filter"] = readFilter;
-            appdata.writeImplicitData();
-            if (mounted) {
-              Navigator.pop(context);
-              widget.updateConfig(readFilter);
-            }
-          },
-          child: Text("Confirm".tl),
-        ),
-      ],
     );
   }
 }

@@ -84,9 +84,9 @@ void main() {
         directory.deleteSync(recursive: true);
       });
       final store = GlobalPreferenceStore(appdata.settings);
-      store.bind(NetworkPreferences.proxy).write('direct');
-      store.bind(NetworkPreferences.downloadThreads).write(8);
-      store.bind(AppearancePreferences.themeMode).write('dark');
+      store.write(NetworkPreferences.proxy, 'direct');
+      store.write(NetworkPreferences.downloadThreads, 8);
+      store.write(AppearancePreferences.themeMode, 'dark');
       expect(appdata.settings['proxy'], 'direct');
       expect(appdata.settings['downloadThreads'], 8);
       expect(store.appearance.themeMode, 'dark');

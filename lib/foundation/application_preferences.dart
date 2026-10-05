@@ -1,5 +1,31 @@
 import 'preferences.dart';
 
+abstract final class AppPreferences {
+  // Largest whole MiB value whose byte count fits a signed 64-bit integer.
+  static const maxCacheSizeMb = 8796093022207;
+  static const cacheSize = NumericPreference(
+    'cacheSize',
+    2048,
+    min: 0,
+    max: 8796093022207.0,
+    step: 1,
+    integer: true,
+  );
+  static const authorizationRequired = BoolPreference(
+    'authorizationRequired',
+    false,
+  );
+  static const reverseChapterOrder = BoolPreference(
+    'reverseChapterOrder',
+    false,
+  );
+  static const all = <Preference<Object>>[
+    cacheSize,
+    authorizationRequired,
+    reverseChapterOrder,
+  ];
+}
+
 abstract final class NetworkPreferences {
   static const proxy = StringPreference('proxy', 'system');
   static const enableDnsOverrides = BoolPreference('enableDnsOverrides', false);
@@ -51,6 +77,7 @@ abstract final class AppearancePreferences {
 
 Map<String, Object?> get applicationPreferenceDefaults => {
   for (final preference in [
+    ...AppPreferences.all,
     ...NetworkPreferences.all,
     ...AppearancePreferences.all,
   ])

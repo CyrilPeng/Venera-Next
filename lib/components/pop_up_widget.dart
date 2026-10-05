@@ -29,6 +29,7 @@ class PopUpWidget<T> extends PopupRoute<T> {
     var height = MediaQuery.of(context).size.height * 0.9;
     bool showPopUp = MediaQuery.of(context).size.width > 500;
     Widget body = PopupIndicatorWidget(
+      route: this,
       child: Container(
         decoration: showPopUp
             ? BoxDecoration(
@@ -57,7 +58,7 @@ class PopUpWidget<T> extends PopupRoute<T> {
     );
     if (App.isIOS) {
       body = IOSBackGestureDetector(
-        enabledCallback: () => true,
+        enabledCallback: () => popDisposition != RoutePopDisposition.doNotPop,
         gestureWidth: 20.0,
         onStartPopGesture: () =>
             IOSBackGestureController(controller!, navigator!),
@@ -94,10 +95,13 @@ class PopUpWidget<T> extends PopupRoute<T> {
 }
 
 class PopupIndicatorWidget extends InheritedWidget {
-  const PopupIndicatorWidget({super.key, required super.child});
+  const PopupIndicatorWidget({super.key, required super.child, this.route});
+
+  final ModalRoute<dynamic>? route;
 
   @override
-  bool updateShouldNotify(covariant InheritedWidget oldWidget) => false;
+  bool updateShouldNotify(covariant PopupIndicatorWidget oldWidget) =>
+      !identical(route, oldWidget.route);
 
   static PopupIndicatorWidget? maybeOf(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<PopupIndicatorWidget>();
@@ -116,12 +120,14 @@ class PopUpWidgetScaffold extends StatefulWidget {
     required this.title,
     required this.body,
     this.tailing,
+    this.onBack,
     super.key,
   });
 
   final Widget body;
   final List<Widget>? tailing;
   final String title;
+  final VoidCallback? onBack;
 
   @override
   State<PopUpWidgetScaffold> createState() => _PopUpWidgetScaffoldState();
@@ -151,19 +157,23 @@ class _PopUpWidgetScaffoldState extends State<PopUpWidgetScaffold> {
                   message: "Back".tl,
                   child: IconButton(
                     icon: const Icon(Icons.arrow_back_sharp),
-                    onPressed: () =>
-                        context.canPop() ? context.pop() : App.pop(),
+                    onPressed:
+                        widget.onBack ??
+                        () => context.canPop() ? context.pop() : App.pop(),
                   ),
                 ),
                 const SizedBox(width: 16),
-                Text(
-                  widget.title,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w500,
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-                const Spacer(),
                 if (widget.tailing != null) ...widget.tailing!,
                 const SizedBox(width: 8),
               ],

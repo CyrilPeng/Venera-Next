@@ -1,11 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -78,8 +77,10 @@ class SearchShortcutManager extends ChangeNotifier {
 
   static final instance = SearchShortcutManager._();
 
-  List<SearchShortcut> get all {
-    final raw = appdata.settings['searchShortcuts'];
+  List<SearchShortcut> get all => _read(appdata.settings);
+
+  List<SearchShortcut> _read(Settings settings) {
+    final raw = settings['searchShortcuts'];
     if (raw is! List) return const [];
     return raw
         .map(SearchShortcut.fromJson)
@@ -91,31 +92,23 @@ class SearchShortcutManager extends ChangeNotifier {
     return all.any((item) => item.identity == shortcut.identity);
   }
 
-  void add(SearchShortcut shortcut) {
-    if (contains(shortcut)) return;
-    final items = all.toList()..add(shortcut);
-    appdata.settings['searchShortcuts'] = items
-        .map((item) => item.toJson())
-        .toList();
-    unawaited(appdata.saveData());
-  }
+  Future<void> add(SearchShortcut shortcut) => appdata.updateSettings((
+    settings,
+  ) {
+    final items = _read(settings).toList();
+    if (items.any((item) => item.identity == shortcut.identity)) return;
+    items.add(shortcut);
+    settings['searchShortcuts'] = items.map((item) => item.toJson()).toList();
+  });
 
-  void remove(SearchShortcut shortcut) {
-    final items = all
-        .where((item) => item.identity != shortcut.identity)
-        .map((item) => item.toJson())
-        .toList();
-    appdata.settings['searchShortcuts'] = items;
-    unawaited(appdata.saveData());
-  }
-
-  void toggle(SearchShortcut shortcut) {
-    if (contains(shortcut)) {
-      remove(shortcut);
-    } else {
-      add(shortcut);
-    }
-  }
+  Future<void> remove(SearchShortcut shortcut) =>
+      appdata.updateSettings((settings) {
+        final items = _read(settings)
+            .where((item) => item.identity != shortcut.identity)
+            .map((item) => item.toJson())
+            .toList();
+        settings['searchShortcuts'] = items;
+      });
 
   void _onSettingsChanged() {
     notifyListeners();
@@ -166,13 +159,20 @@ void showSearchShortcutMenu({
             : (shortcut.isAuthor
                   ? 'Favorite author'.tl
                   : 'Save tag shortcut'.tl),
-        onClick: () {
-          manager.toggle(shortcut);
-          context.showMessage(
-            message: saved
-                ? 'Search shortcut removed'.tl
-                : 'Search shortcut saved'.tl,
-          );
+        onClick: () async {
+          try {
+            await (saved ? manager.remove(shortcut) : manager.add(shortcut));
+            if (context.mounted) {
+              context.showMessage(
+                message: saved
+                    ? 'Search shortcut removed'.tl
+                    : 'Search shortcut saved'.tl,
+              );
+            }
+          } catch (error, stack) {
+            Log.error('Search shortcut', error, stack);
+            if (context.mounted) context.showMessage(message: error.toString());
+          }
         },
       ),
     );

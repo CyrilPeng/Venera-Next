@@ -26,12 +26,6 @@ final class StringMapPreference extends Preference<Map<String, String>> {
   });
 }
 
-abstract interface class PreferenceBinding<T extends Object> {
-  Preference<T> get preference;
-  T read();
-  void write(T value);
-}
-
 final class BoolPreference extends Preference<bool> {
   const BoolPreference(super.key, super.defaultValue);
   @override

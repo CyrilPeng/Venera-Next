@@ -15,6 +15,53 @@ Future<void> _finishRead(ImageWorkTask task, Completer<int> source) async {
 
 void main() {
   test(
+    'failure acknowledgement removes only its own unconsumed report',
+    () async {
+      final work = ImageWork();
+      final task = work.start()!;
+      final error = StateError('shared cause');
+      final stack = StackTrace.current;
+      final repaired = task.recordFailure(error, stack);
+      task.recordFailure(error, stack);
+      repaired();
+      repaired();
+      task.finish();
+      await expectLater(
+        work.prepareForExit(),
+        throwsA(
+          isA<ImageWorkFailure>().having(
+            (failure) => failure.failures.length,
+            'remaining reports',
+            1,
+          ),
+        ),
+      );
+      repaired();
+      await work.dispose();
+    },
+  );
+
+  test(
+    'acknowledgement cannot erase a failure already received by a drain',
+    () async {
+      final work = ImageWork();
+      final task = work.start()!;
+      final error = StateError('delivered');
+      final repaired = task.recordFailure(error, StackTrace.current);
+      task.finish();
+      ImageWorkFailure? delivered;
+      try {
+        await work.prepareForExit();
+      } on ImageWorkFailure catch (failure) {
+        delivered = failure;
+      }
+      repaired();
+      expect(delivered?.failures.single.error, same(error));
+      await work.dispose();
+    },
+  );
+
+  test(
     'resume subscriptions wait for the final hold and can detach independently',
     () async {
       final work = ImageWork();

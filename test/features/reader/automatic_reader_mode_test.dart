@@ -16,6 +16,7 @@ import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -87,6 +88,51 @@ void main() {
     final reader = key.currentState!;
     readers.add(reader);
     return reader;
+  }
+
+  for (final cancelled in [false, true]) {
+    readerTest(
+      'real layout save waits for admission and checks cancellation=$cancelled',
+      (tester) async {
+        final reader = await mount(tester);
+        reader.useProductionSettings = true;
+        final release = Completer<void>();
+        final exclusive = AppDataOperations.instance.run(() => release.future);
+        final detection = reader.detectLayout();
+        reader.probes.single.finish(ComicLayout.longStrip);
+        await tester.pump();
+        expect(reader.settingsSaves, 1);
+        expect(settings.comicLayout('comic', 'local'), ComicLayout.unknown);
+        if (cancelled) reader.probes.single.cancel();
+        release.complete();
+        var finished = false;
+        final saves = Future.wait([
+          exclusive,
+          detection,
+          appdata.saveData(false),
+        ]).then((_) => finished = true);
+        for (var i = 0; i < 500 && !finished; i++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+          await tester.pump();
+        }
+        expect(finished, isTrue);
+        await saves;
+        expect(
+          settings.comicLayout('comic', 'local'),
+          cancelled ? ComicLayout.unknown : ComicLayout.longStrip,
+        );
+        final saved = jsonDecode(
+          File('${directory.path}/appdata.json').readAsStringSync(),
+        );
+        expect(
+          saved['settings']['comicLayoutDetections'].containsKey('comic@local'),
+          !cancelled,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   readerTest('reader teardown notifies its injected owner once', (
@@ -792,10 +838,14 @@ class _ReaderHarnessState extends ReaderState {
   }
 
   @override
-  Future<void> saveReadingSettings() {
+  Future<void> saveReadingSettings(void Function(Settings draft) edit) {
     settingsSaves++;
+    if (useProductionSettings) return super.saveReadingSettings(edit);
+    edit(appdata.settings);
     return onSaveSettings?.call() ?? Future.value();
   }
+
+  bool useProductionSettings = false;
 
   @override
   void setImageCacheSize() {}

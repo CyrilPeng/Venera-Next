@@ -7,7 +7,7 @@ class ImageWork {
   final _tasks = <ImageWorkTask>{};
   final _holds = <Object>{};
   final _resumeListeners = <({Object token, void Function() callback})>{};
-  final _failures = <({Object error, StackTrace stack})>[];
+  final _failures = <_ReportedWorkFailure>[];
   bool _disposed = false;
   bool _resuming = false;
   bool _resumePending = false;
@@ -112,7 +112,10 @@ class ImageWork {
       while (_tasks.isNotEmpty) {
         await Future.wait(_tasks.map((task) => task.done).toList());
       }
-      final failures = _failures.toList();
+      final failures = [
+        for (final failure in _failures)
+          (error: failure.error, stack: failure.stack),
+      ];
       _failures.clear();
       _draining = null;
       if (failures.isEmpty) {
@@ -178,9 +181,14 @@ class ImageWorkTask {
   }
 
   /// Retain errors that can no longer be delivered to their original UI.
-  void recordFailure(Object error, StackTrace stack) {
-    if (error is ImageWorkTaskCancelled) return;
-    _owner._failures.add((error: error, stack: stack));
+  /// The returned acknowledgement removes this failure only if a drain has
+  /// not already consumed it. An owner may use it after repairing the same
+  /// idempotent assignment; existing observers still retain their own result.
+  void Function() recordFailure(Object error, StackTrace stack) {
+    if (error is ImageWorkTaskCancelled) return () {};
+    final failure = _ReportedWorkFailure(error, stack);
+    _owner._failures.add(failure);
+    return () => _owner._failures.remove(failure);
   }
 
   void finish() {
@@ -188,6 +196,12 @@ class ImageWorkTask {
     _owner._tasks.remove(this);
     _done.complete();
   }
+}
+
+class _ReportedWorkFailure {
+  _ReportedWorkFailure(this.error, this.stack);
+  final Object error;
+  final StackTrace stack;
 }
 
 class ImageWorkTaskCancelled implements Exception {

@@ -11,6 +11,7 @@ import 'package:venera_next/app_runtime/background_sync.dart';
 import 'package:venera_next/app_runtime/interactive_bindings.dart';
 import 'package:venera_next/app_runtime/window_placement.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
 import 'package:venera_next/app_runtime/sync_window_binding.dart';
 import 'package:desktop_webview_window/desktop_webview_window.dart';
@@ -150,7 +151,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _dataSync.checkForAutomaticSync();
       _library.source.synchronizer.checkForAutomaticSync();
     }
-    if (!App.isMobile || !appdata.settings['authorizationRequired']) {
+    if (!App.isMobile ||
+        !GlobalPreferenceStore(
+          appdata.settings,
+        ).read(AppPreferences.authorizationRequired)) {
       return;
     }
     if (state == AppLifecycleState.inactive && hideContentOverlay == null) {
@@ -269,7 +273,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     Widget home;
-    if (appdata.settings['authorizationRequired']) {
+    if (GlobalPreferenceStore(
+      appdata.settings,
+    ).read(AppPreferences.authorizationRequired)) {
       home = AuthPage(
         onSuccessfulAuth: () {
           App.rootContext.toReplacement(() => const MainPage());

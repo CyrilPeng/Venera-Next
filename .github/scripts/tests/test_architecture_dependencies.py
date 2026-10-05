@@ -96,11 +96,32 @@ class ArchitectureDependenciesTest(unittest.TestCase):
     def test_sync_configuration_rejects_raw_implicit_keys(self):
         with tempfile.TemporaryDirectory() as directory:
             lib = Path(directory)
-            source = lib / 'features/sync/data_sync.dart'
+            source = lib / 'features/sync/data_sync_controller.dart'
             source.parent.mkdir(parents=True)
             source.write_text("final mode = appdata.implicitData['webdavSyncMode'];")
             self.assertEqual(len(MODULE.application_settings_violations(lib)), 1)
             source.write_text("final mode = preferences.configuration.mode;")
+            self.assertEqual(MODULE.application_settings_violations(lib), [])
+
+    def test_current_sync_composition_rejects_raw_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lib = Path(directory)
+            source = lib / 'app_runtime/data_sync.dart'
+            source.parent.mkdir(parents=True)
+            source.write_text("final value = appdata.settings['webdav'];")
+            self.assertEqual(MODULE.application_settings_violations(lib),
+                             ['Use typed application preferences: app_runtime/data_sync.dart (webdav)'])
+            source.write_text("final value = preferences.configuration;")
+            self.assertEqual(MODULE.application_settings_violations(lib), [])
+
+    def test_webdav_forms_reject_direct_configuration_reads(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lib = Path(directory)
+            source = lib / 'features/settings/webdav_settings.dart'
+            source.parent.mkdir(parents=True)
+            source.write_text("final value = appdata.settings['backupWebdavSyncEnabled'];")
+            self.assertEqual(len(MODULE.application_settings_violations(lib)), 1)
+            source.write_text("final value = BackupConfig.syncEnabled;")
             self.assertEqual(MODULE.application_settings_violations(lib), [])
 
     def test_headless_cannot_restore_interactive_initialization(self):

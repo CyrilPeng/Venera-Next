@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/menu.dart';
+import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 const favoriteDisplayModeKey = 'favoritesDisplayMode';
@@ -18,7 +20,7 @@ bool isFavoriteGalleryMode() {
   return appdata.settings[favoriteDisplayModeKey] == favoriteDisplayGallery;
 }
 
-int normalizeFavoriteGalleryColumns(dynamic value) {
+int normalizeFavoriteGalleryColumns(Object? value) {
   if (value is! num) {
     return favoriteGalleryAutoColumns;
   }
@@ -35,21 +37,6 @@ int favoriteGalleryColumns() {
   );
 }
 
-void setFavoriteDisplayMode(String mode) {
-  if (mode != favoriteDisplayList && mode != favoriteDisplayGallery) {
-    return;
-  }
-  appdata.settings[favoriteDisplayModeKey] = mode;
-  appdata.saveData();
-}
-
-void setFavoriteGalleryColumns(int columns) {
-  appdata.settings[favoriteGalleryColumnsKey] = normalizeFavoriteGalleryColumns(
-    columns,
-  );
-  appdata.saveData();
-}
-
 class FavoriteDisplayButton extends StatefulWidget {
   const FavoriteDisplayButton({super.key});
 
@@ -57,7 +44,9 @@ class FavoriteDisplayButton extends StatefulWidget {
   State<FavoriteDisplayButton> createState() => _FavoriteDisplayButtonState();
 }
 
-class _FavoriteDisplayButtonState extends State<FavoriteDisplayButton> {
+class _FavoriteDisplayButtonState
+    extends SettingsSaveState<FavoriteDisplayButton> {
+  int _menuGeneration = 0;
   @override
   void initState() {
     appdata.settings.addListener(_onSettingsChanged);
@@ -79,29 +68,67 @@ class _FavoriteDisplayButtonState extends State<FavoriteDisplayButton> {
   @override
   Widget build(BuildContext context) {
     final gallery = isFavoriteGalleryMode();
-    return Button.icon(
-      icon: Icon(gallery ? Icons.grid_view : Icons.view_list),
-      tooltip: 'Favorite display mode'.tl,
-      onPressed: () {
-        final renderBox = context.findRenderObject() as RenderBox;
-        final offset = renderBox.localToGlobal(Offset.zero);
-        showMenuX(context, offset, _buildEntries(gallery));
-      },
+    return protectSettings(
+      Button.icon(
+        icon: Icon(
+          hasSettingsSaveError
+              ? Icons.refresh
+              : gallery
+              ? Icons.grid_view
+              : Icons.view_list,
+        ),
+        isLoading: savingSettings,
+        tooltip: (hasSettingsSaveError ? 'Retry' : 'Favorite display mode').tl,
+        onPressed: () {
+          if (hasSettingsSaveError) {
+            retrySettingsSave();
+          } else {
+            _openMenu(gallery);
+          }
+        },
+      ),
     );
   }
 
-  List<MenuEntry> _buildEntries(bool gallery) {
+  void _openMenu(bool gallery) {
+    if (!acceptsSettingsChanges || !NavigationAdmission.allows(context)) return;
+    final route = ModalRoute.of(context);
+    final generation = ++_menuGeneration;
+    final renderBox = context.findRenderObject() as RenderBox;
+    final offset = renderBox.localToGlobal(Offset.zero);
+    void select(String key, Object value) {
+      if (!mounted ||
+          !acceptsSettingsChanges ||
+          generation != _menuGeneration ||
+          !identical(ModalRoute.of(context), route) ||
+          route?.isCurrent != true ||
+          !NavigationAdmission.allows(context)) {
+        return;
+      }
+      saveSetting(
+        key,
+        () => appdata.updateSettings((draft) => draft[key] = value),
+      );
+    }
+
+    showMenuX(context, offset, _buildEntries(gallery, select));
+  }
+
+  List<MenuEntry> _buildEntries(
+    bool gallery,
+    void Function(String, Object) select,
+  ) {
     final columns = favoriteGalleryColumns();
     return [
       MenuEntry(
         icon: gallery ? Icons.view_list : Icons.check,
         text: 'List'.tl,
-        onClick: () => setFavoriteDisplayMode(favoriteDisplayList),
+        onClick: () => select(favoriteDisplayModeKey, favoriteDisplayList),
       ),
       MenuEntry(
         icon: gallery ? Icons.check : Icons.grid_view,
         text: 'Gallery'.tl,
-        onClick: () => setFavoriteDisplayMode(favoriteDisplayGallery),
+        onClick: () => select(favoriteDisplayModeKey, favoriteDisplayGallery),
       ),
       if (gallery) ...[
         MenuEntry(
@@ -109,7 +136,8 @@ class _FavoriteDisplayButtonState extends State<FavoriteDisplayButton> {
               ? Icons.check
               : Icons.auto_awesome_mosaic_outlined,
           text: 'Auto'.tl,
-          onClick: () => setFavoriteGalleryColumns(favoriteGalleryAutoColumns),
+          onClick: () =>
+              select(favoriteGalleryColumnsKey, favoriteGalleryAutoColumns),
         ),
         for (
           var count = favoriteGalleryMinColumns;
@@ -119,7 +147,10 @@ class _FavoriteDisplayButtonState extends State<FavoriteDisplayButton> {
           MenuEntry(
             icon: columns == count ? Icons.check : Icons.grid_view_outlined,
             text: '@c columns'.tlParams({'c': count}),
-            onClick: () => setFavoriteGalleryColumns(count),
+            onClick: () => select(
+              favoriteGalleryColumnsKey,
+              normalizeFavoriteGalleryColumns(count),
+            ),
           ),
       ],
     ];

@@ -6,6 +6,9 @@ import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
 import 'package:venera_next/foundation/translations.dart';
+import 'package:venera_next/components/settings_save_state.dart';
+import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/log.dart';
 
 class ReaderModeSettings extends StatefulWidget {
   const ReaderModeSettings({
@@ -29,7 +32,7 @@ class ReaderModeSettings extends StatefulWidget {
   State<ReaderModeSettings> createState() => _ReaderModeSettingsState();
 }
 
-class _ReaderModeSettingsState extends State<ReaderModeSettings> {
+class _ReaderModeSettingsState extends SettingsSaveState<ReaderModeSettings> {
   bool _detecting = false;
 
   @override
@@ -51,19 +54,29 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
   ReaderPreferenceStore get _store =>
       ReaderPreferenceStore(settings: appdata.settings);
 
-  void _setPreference<T extends Object>(Preference<T> preference, T value) {
-    _store.write(preference, value);
-    appdata.saveData();
-    widget.onChanged?.call();
-    _refresh();
+  Future<bool> _setPreference<T extends Object>(
+    Preference<T> preference,
+    T value,
+  ) {
+    final target = (widget.comicId, widget.sourceKey);
+    return saveSetting(
+      preference.key,
+      () => appdata.updateSettings((draft) {
+        ReaderPreferenceStore(settings: draft).write(preference, value);
+      }),
+      onSaved: () => widget.onChanged?.call(),
+      isCurrent: () => target == (widget.comicId, widget.sourceKey),
+    );
   }
 
   Future<void> _chooseMode({
     required String title,
     required String value,
-    required ValueChanged<String> onSelected,
+    required Future<bool> Function(String) onSelected,
     bool allowDefault = false,
   }) async {
+    if (!acceptsSettingsChanges) return;
+    final target = (widget.comicId, widget.sourceKey);
     final options = {
       if (allowDefault) 'default': 'Follow default'.tl,
       ...readerModeLabels,
@@ -95,7 +108,13 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
         }).toList(),
       ),
     );
-    if (mounted && selected != null) onSelected(selected);
+    if (mounted &&
+        selected != null &&
+        target == (widget.comicId, widget.sourceKey) &&
+        acceptsSettingsChanges &&
+        options.containsKey(selected)) {
+      await onSelected(selected);
+    }
   }
 
   Widget _preference(
@@ -130,6 +149,7 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
     if (cid == null || source == null) {
       return Column(
         children: [
+          settingsSaveStatus,
           SwitchListTile(
             title: Text('Choose reading mode automatically'.tl),
             subtitle: Text(
@@ -171,6 +191,7 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        settingsSaveStatus,
         ListTile(
           title: Text('Reading mode for this comic'.tl),
           subtitle: Text(
@@ -188,16 +209,19 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
             title: 'Reading mode for this comic'.tl,
             value: override ?? 'default',
             allowDefault: true,
-            onSelected: (value) {
-              settings.setComicReaderModeOverride(
-                cid,
-                source,
-                value == 'default' ? null : value,
-              );
-              appdata.saveData();
-              widget.onChanged?.call();
-              _refresh();
-            },
+            onSelected: (value) => saveSetting(
+              (cid, source, 'readerMode'),
+              () => appdata.updateSettings((draft) {
+                draft.setComicReaderModeOverride(
+                  cid,
+                  source,
+                  value == 'default' ? null : value,
+                );
+              }),
+              onSaved: () => widget.onChanged?.call(),
+              isCurrent: () =>
+                  cid == widget.comicId && source == widget.sourceKey,
+            ),
           ),
         ),
         if (auto) ...[
@@ -231,6 +255,11 @@ class _ReaderModeSettingsState extends State<ReaderModeSettings> {
                           setState(() => _detecting = true);
                           try {
                             await widget.onDetect!();
+                          } catch (error, stack) {
+                            Log.error('Layout detection', error, stack);
+                            if (context.mounted) {
+                              context.showMessage(message: error.toString());
+                            }
                           } finally {
                             if (mounted) setState(() => _detecting = false);
                           }

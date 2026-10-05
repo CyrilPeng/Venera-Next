@@ -19,8 +19,7 @@ void main() {
     final values = legacy();
     final store = WebDavLibrarySettingsStore(
       readValue: (key) => values[key],
-      persist: (patch) async => values.addAll(patch),
-      onConnectionChanged: (_) => fail('Equivalent connection was invalidated'),
+      persist: (patch) async => values.addAll(patch.toSettings()),
     );
     final settings = store.read();
     expect(settings.connection.url, 'https://example.com/dav');
@@ -86,8 +85,7 @@ void main() {
     final values = legacy();
     final store = WebDavLibrarySettingsStore(
       readValue: (key) => values[key],
-      persist: (patch) async => values.addAll(patch),
-      onConnectionChanged: (_) => fail('Schedule invalidated content'),
+      persist: (patch) async => values.addAll(patch.toSettings()),
     );
     await store.save(
       WebDavLibrarySettings(
@@ -101,18 +99,16 @@ void main() {
   });
 
   test(
-    'password change invalidates only after persistence completes',
+    'password change waits for the composition persistence callback',
     () async {
       final values = legacy();
       final persisted = Completer<void>();
-      final previousConnections = <WebDavLibraryConfig>[];
       final store = WebDavLibrarySettingsStore(
         readValue: (key) => values[key],
         persist: (patch) async {
           await persisted.future;
-          values.addAll(patch);
+          values.addAll(patch.toSettings());
         },
-        onConnectionChanged: previousConnections.add,
       );
       final previous = store.read().connection;
       final updated = read(
@@ -122,10 +118,13 @@ void main() {
       expect(updated.connection.cacheKey, previous.cacheKey);
       expect(updated.connection.connectionKey, isNot(previous.connectionKey));
       final saving = store.save(updated);
-      expect(previousConnections, isEmpty);
+      expect(store.read().connection.connectionKey, previous.connectionKey);
       persisted.complete();
       await saving;
-      expect(previousConnections.single.connectionKey, previous.connectionKey);
+      expect(
+        store.read().connection.connectionKey,
+        updated.connection.connectionKey,
+      );
     },
   );
 
@@ -134,7 +133,6 @@ void main() {
     final store = WebDavLibrarySettingsStore(
       readValue: (key) => values[key],
       persist: (_) async => throw StateError('write failed'),
-      onConnectionChanged: (_) => fail('Failed save invalidated content'),
     );
     await expectLater(store.save(read({})), throwsStateError);
     expect(store.read().connection.isValid, isTrue);
@@ -148,13 +146,14 @@ void main() {
       var changed = 0;
       final firstStore = WebDavLibrarySettingsStore(
         readValue: (key) => first[key],
-        persist: (patch) async => first.addAll(patch),
-        onConnectionChanged: (_) => changed++,
+        persist: (patch) async {
+          first.addAll(patch.toSettings());
+          changed++;
+        },
       );
       final secondStore = WebDavLibrarySettingsStore(
         readValue: (key) => second[key],
-        persist: (patch) async => second.addAll(patch),
-        onConnectionChanged: (_) => fail('Other store was notified'),
+        persist: (patch) async => second.addAll(patch.toSettings()),
       );
       await firstStore.save(read({}));
       expect(firstStore.read().connection.isValid, isFalse);

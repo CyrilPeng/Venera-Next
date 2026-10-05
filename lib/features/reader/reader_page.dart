@@ -291,7 +291,8 @@ class ReaderState extends State<Reader>
   ComicLayoutProbe createLayoutProbe() => ComicLayoutProbe();
 
   @protected
-  Future<void> saveReadingSettings() => appdata.saveData(false);
+  Future<void> saveReadingSettings(void Function(Settings draft) edit) =>
+      appdata.updateSettings(edit, sync: false);
 
   bool get _usesAutomaticReadingMode =>
       preferences.autoReaderMode &&
@@ -422,14 +423,14 @@ class ReaderState extends State<Reader>
       if (!_canPublishLayout(attempt)) return;
       await cleanup;
       if (cleanupFailed || !_canPublishLayout(attempt)) return;
-      appdata.settings.setComicLayout(
-        attempt.comicId,
-        attempt.sourceKey,
-        detection,
-      );
       final saveRevision = ++_layoutSaveRevision;
+      var applied = false;
       try {
-        await saveReadingSettings();
+        await saveReadingSettings((draft) {
+          if (!_canPublishLayout(attempt)) return;
+          draft.setComicLayout(attempt.comicId, attempt.sourceKey, detection);
+          applied = true;
+        });
       } catch (_) {
         // Saving can fail after part of the global settings is persisted.
         // The layout belongs to this comic, even if a different chapter or
@@ -439,6 +440,7 @@ class ReaderState extends State<Reader>
         }
         rethrow;
       }
+      if (!applied) return;
       if (saveRevision > _successfulLayoutSaveRevision) {
         _successfulLayoutSaveRevision = saveRevision;
       }

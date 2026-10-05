@@ -61,6 +61,18 @@ void main() {
         matching: find.byType(Slider),
       );
       await tester.tapAt(tester.getCenter(slider));
+      var persistedChange = false;
+      final pendingChange = appdata
+          .saveData(false)
+          .whenComplete(() => persistedChange = true);
+      for (var i = 0; i < 500 && !persistedChange; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+      }
+      expect(persistedChange, isTrue);
+      await pendingChange;
       await tester.pumpAndSettle();
       expect(appdata.settings['readerSideMargin'], inInclusiveRange(1, 30));
       expect(changed, 'readerSideMargin');

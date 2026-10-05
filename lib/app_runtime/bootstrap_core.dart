@@ -21,6 +21,7 @@ import 'package:venera_next/network/cookie_jar.dart';
 import 'package:venera_next/features/sync/legacy_auto_sync_migration.dart';
 
 import 'core_bootstrap.dart';
+import 'cache_settings.dart';
 import 'core_infrastructure.dart';
 import 'webdav_library.dart';
 
@@ -134,7 +135,8 @@ CoreBootstrap createCoreBootstrap({
       await _checkOldConfigs();
       final cache = CacheManager();
       cleanup.add((name: 'cache', close: cache.dispose));
-      cache.setLimitSize(appdata.settings['cacheSize']);
+      final cacheSettings = CacheSettingsBinding(appdata.settings, cache);
+      cleanup.add((name: 'cache settings', close: cacheSettings.dispose));
       // The cache owns and drains this scan; UI startup need not await it.
       unawaited(cache.start());
     },

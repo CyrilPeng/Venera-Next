@@ -5,7 +5,7 @@ import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/js_engine.dart';
@@ -51,12 +51,20 @@ class _ProxySettingView extends StatefulWidget {
   State<_ProxySettingView> createState() => _ProxySettingViewState();
 }
 
-class _ProxySettingViewState extends State<_ProxySettingView> {
+class _ProxySettingViewState extends SettingsSaveState<_ProxySettingView> {
   String type = '';
   String host = '';
   String port = '';
   String username = '';
   String password = '';
+  int _selection = 0;
+
+  Future<bool> _saveProxy(String value) => saveSetting(
+    'proxy',
+    () => appdata.updateSettings((draft) {
+      GlobalPreferenceStore(draft).write(NetworkPreferences.proxy, value);
+    }),
+  );
 
   // USERNAME:PASSWORD@HOST:PORT
   String toProxyStr() {
@@ -119,27 +127,38 @@ class _ProxySettingViewState extends State<_ProxySettingView> {
 
   @override
   Widget build(BuildContext context) {
-    return PopUpWidgetScaffold(
-      title: "Proxy".tl,
-      body: SingleChildScrollView(
-        child: RadioGroup<String>(
-          groupValue: type,
-          onChanged: (v) {
-            setState(() {
-              type = v ?? type;
-            });
-            if (type != 'manual') {
-              _networkSettings.write(NetworkPreferences.proxy, toProxyStr());
-              appdata.saveData();
-            }
-          },
-          child: Column(
-            children: [
-              RadioListTile<String>(title: Text("Direct".tl), value: 'direct'),
-              RadioListTile<String>(title: Text("System".tl), value: 'system'),
-              RadioListTile(title: Text("Manual".tl), value: 'manual'),
-              if (type == 'manual') buildManualProxy(),
-            ],
+    return protectSettings(
+      PopUpWidgetScaffold(
+        title: "Proxy".tl,
+        onBack: leaveSettings,
+        tailing: [settingsSaveStatus],
+        body: SingleChildScrollView(
+          child: RadioGroup<String>(
+            groupValue: type,
+            onChanged: (v) {
+              if (!acceptsSettingsChanges) return;
+              _selection++;
+              setState(() {
+                type = v ?? type;
+              });
+              if (type != 'manual') {
+                _saveProxy(toProxyStr());
+              }
+            },
+            child: Column(
+              children: [
+                RadioListTile<String>(
+                  title: Text("Direct".tl),
+                  value: 'direct',
+                ),
+                RadioListTile<String>(
+                  title: Text("System".tl),
+                  value: 'system',
+                ),
+                RadioListTile(title: Text("Manual".tl), value: 'manual'),
+                if (type == 'manual') buildManualProxy(),
+              ],
+            ),
           ),
         ),
       ),
@@ -158,7 +177,7 @@ class _ProxySettingViewState extends State<_ProxySettingView> {
               border: const OutlineInputBorder(),
               labelText: "Host".tl,
             ),
-            controller: TextEditingController(text: host),
+            initialValue: host,
             onChanged: (v) {
               host = v;
             },
@@ -175,7 +194,7 @@ class _ProxySettingViewState extends State<_ProxySettingView> {
               border: const OutlineInputBorder(),
               labelText: "Port".tl,
             ),
-            controller: TextEditingController(text: port),
+            initialValue: port,
             onChanged: (v) {
               port = v;
             },
@@ -195,7 +214,7 @@ class _ProxySettingViewState extends State<_ProxySettingView> {
               border: const OutlineInputBorder(),
               labelText: "Username".tl,
             ),
-            controller: TextEditingController(text: username),
+            initialValue: username,
             onChanged: (v) {
               username = v;
             },
@@ -212,20 +231,31 @@ class _ProxySettingViewState extends State<_ProxySettingView> {
               border: const OutlineInputBorder(),
               labelText: "Password".tl,
             ),
-            controller: TextEditingController(text: password),
+            initialValue: password,
             onChanged: (v) {
               password = v;
             },
           ),
           const SizedBox(height: 16),
           FilledButton(
-            onPressed: () {
-              if (formKey.currentState?.validate() ?? false) {
-                _networkSettings.write(NetworkPreferences.proxy, toProxyStr());
-                appdata.saveData();
-                App.rootContext.pop();
-              }
-            },
+            onPressed: savingSettings || !acceptsSettingsChanges
+                ? null
+                : () async {
+                    if (formKey.currentState?.validate() ?? false) {
+                      final route =
+                          PopupIndicatorWidget.maybeOf(context)?.route ??
+                          ModalRoute.of(context);
+                      final selection = _selection;
+                      final value = toProxyStr();
+                      final saved = await _saveProxy(value);
+                      if (mounted &&
+                          saved &&
+                          selection == _selection &&
+                          value == toProxyStr()) {
+                        await leaveSettings(route);
+                      }
+                    }
+                  },
             child: Text("Save".tl),
           ),
         ],
@@ -241,8 +271,23 @@ class _DNSOverrides extends StatefulWidget {
   State<_DNSOverrides> createState() => __DNSOverridesState();
 }
 
-class __DNSOverridesState extends State<_DNSOverrides> {
+class __DNSOverridesState extends SettingsSaveState<_DNSOverrides> {
   var overrides = <(TextEditingController, TextEditingController)>[];
+
+  void _saveOverrides() {
+    final map = <String, String>{
+      for (final entry in overrides) entry.$1.text: entry.$2.text,
+    };
+    final engine = JsEngine();
+    saveSetting('dnsOverrides', () async {
+      await appdata.updateSettings((draft) {
+        GlobalPreferenceStore(
+          draft,
+        ).write(NetworkPreferences.dnsOverrides, map);
+      });
+      engine.resetDio();
+    });
+  }
 
   @override
   void initState() {
@@ -258,52 +303,55 @@ class __DNSOverridesState extends State<_DNSOverrides> {
 
   @override
   void dispose() {
-    var map = <String, String>{};
     for (var entry in overrides) {
-      map[entry.$1.text] = entry.$2.text;
+      entry.$1.dispose();
+      entry.$2.dispose();
     }
-    _networkSettings.write(NetworkPreferences.dnsOverrides, map);
-    appdata.saveData();
-    JsEngine().resetDio();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return PopUpWidgetScaffold(
-      title: "DNS Overrides".tl,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            SwitchSetting.preference(
-              title: "Enable DNS Overrides".tl,
-              preference: NetworkPreferences.enableDnsOverrides,
-            ),
-            SwitchSetting.preference(
-              title: "Server Name Indication",
-              preference: NetworkPreferences.sni,
-            ),
-            const SizedBox(height: 8),
-            Container(
-              height: 1,
-              margin: EdgeInsets.symmetric(horizontal: 8),
-              color: context.colorScheme.outlineVariant,
-            ),
-            for (var i = 0; i < overrides.length; i++) buildOverride(i),
-            const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: () {
-                setState(() {
-                  overrides.add((
-                    TextEditingController(),
-                    TextEditingController(),
-                  ));
-                });
-              },
-              icon: const Icon(Icons.add),
-              label: Text("Add".tl),
-            ),
-          ],
+    return protectSettings(
+      PopUpWidgetScaffold(
+        title: "DNS Overrides".tl,
+        onBack: leaveSettings,
+        tailing: [settingsSaveStatus],
+        body: SingleChildScrollView(
+          child: Column(
+            children: [
+              SwitchSetting.preference(
+                title: "Enable DNS Overrides".tl,
+                preference: NetworkPreferences.enableDnsOverrides,
+              ),
+              SwitchSetting.preference(
+                title: "Server Name Indication",
+                preference: NetworkPreferences.sni,
+              ),
+              const SizedBox(height: 8),
+              Container(
+                height: 1,
+                margin: EdgeInsets.symmetric(horizontal: 8),
+                color: context.colorScheme.outlineVariant,
+              ),
+              for (var i = 0; i < overrides.length; i++) buildOverride(i),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: () {
+                  if (!acceptsSettingsChanges) return;
+                  setState(() {
+                    overrides.add((
+                      TextEditingController(),
+                      TextEditingController(),
+                    ));
+                  });
+                  _saveOverrides();
+                },
+                icon: const Icon(Icons.add),
+                label: Text("Add".tl),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -312,7 +360,7 @@ class __DNSOverridesState extends State<_DNSOverrides> {
   Widget buildOverride(int index) {
     var entry = overrides[index];
     return Container(
-      key: ValueKey(index),
+      key: ObjectKey(entry.$1),
       height: 48,
       margin: EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
@@ -331,6 +379,7 @@ class __DNSOverridesState extends State<_DNSOverrides> {
                 hintText: "Domain".tl,
               ),
               controller: entry.$1,
+              onChanged: (_) => _saveOverrides(),
             ).paddingHorizontal(8),
           ),
           Container(width: 1, color: context.colorScheme.outlineVariant),
@@ -341,14 +390,22 @@ class __DNSOverridesState extends State<_DNSOverrides> {
                 hintText: "IP".tl,
               ),
               controller: entry.$2,
+              onChanged: (_) => _saveOverrides(),
             ).paddingHorizontal(8),
           ),
           Container(width: 1, color: context.colorScheme.outlineVariant),
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: () {
+              if (!acceptsSettingsChanges) return;
               setState(() {
-                overrides.removeAt(index);
+                overrides.remove(entry);
+              });
+              _saveOverrides();
+              // The fields can still be mounted until the next frame.
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                entry.$1.dispose();
+                entry.$2.dispose();
               });
             },
           ),

@@ -1,6 +1,5 @@
-import 'package:venera_next/foundation/reader_preferences.dart';
-import 'package:venera_next/foundation/reader_preference_store.dart';
 import 'dart:async';
+import 'package:venera_next/components/settings_save_state.dart';
 
 import 'package:venera_next/features/reader/status_info.dart';
 import 'package:flutter/material.dart';
@@ -53,11 +52,8 @@ class ReaderScaffold extends StatefulWidget {
 
 class ReaderScaffoldState extends State<ReaderScaffold>
     with ReaderOrientationState {
-  ReaderPreferenceStore get _settingsStore => ReaderPreferenceStore(
-    settings: appdata.settings,
-    comicId: context.reader.cid,
-    sourceKey: context.reader.type.sourceKey,
-  );
+  var _brightnessPreview = ReaderBrightnessPreview();
+  (String, String)? _brightnessTarget;
 
   bool _isOpen = false;
 
@@ -117,11 +113,13 @@ class ReaderScaffoldState extends State<ReaderScaffold>
   @override
   void initState() {
     super.initState();
+    _brightnessPreview.addListener(update);
     ImageFavoriteManager().addListener(_imageFavoritesChanged);
   }
 
   @override
   void dispose() {
+    _brightnessPreview.dispose();
     ImageFavoriteManager().removeListener(_imageFavoritesChanged);
     _collectTask?.cancel();
     _sidebarBinding.dispose();
@@ -138,10 +136,27 @@ class ReaderScaffoldState extends State<ReaderScaffold>
   void didUpdateWidget(ReaderScaffold oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.imageWork, widget.imageWork)) {
+      _replaceBrightnessPreview();
       _collectTask?.cancel();
       unawaited(_exporter?.dispose());
       _exporter = null;
     }
+  }
+
+  void _replaceBrightnessPreview() {
+    _sidebarBinding.close();
+    _brightnessPreview.dispose();
+    _brightnessPreview = ReaderBrightnessPreview()..addListener(update);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final target = (context.reader.cid, context.reader.type.sourceKey);
+    if (_brightnessTarget != null && _brightnessTarget != target) {
+      _replaceBrightnessPreview();
+    }
+    _brightnessTarget = target;
   }
 
   void _applySystemUiMode() {
@@ -203,8 +218,11 @@ class ReaderScaffoldState extends State<ReaderScaffold>
           Positioned.fill(
             child: ReaderBrightnessOverlay(
               enabled:
-                  context.reader.preferences.readerBrightnessEnabled == true,
-              brightness: context.reader.preferences.readerBrightness,
+                  _brightnessPreview.enabled ??
+                  context.reader.preferences.readerBrightnessEnabled,
+              brightness:
+                  _brightnessPreview.brightness ??
+                  context.reader.preferences.readerBrightness,
             ),
           ),
         if (context.reader.preferences.showPageNumberInReader == true &&
@@ -241,7 +259,7 @@ class ReaderScaffoldState extends State<ReaderScaffold>
           right: 16 + context.padding.right,
           bottom: brightnessPanelVisible
               ? ReaderBottomBar.height + context.padding.bottom + 12
-              : -220,
+              : -context.height,
           child: ExcludeFocus(
             excluding: !brightnessPanelVisible,
             child: ExcludeSemantics(
@@ -450,7 +468,8 @@ class ReaderScaffoldState extends State<ReaderScaffold>
       orientation: readerOrientation,
       onRotate: App.isAndroid ? cycleReaderOrientation : null,
       brightnessEnabled:
-          context.reader.preferences.readerBrightnessEnabled == true,
+          _brightnessPreview.enabled ??
+          context.reader.preferences.readerBrightnessEnabled,
       onBrightness: () =>
           setState(() => _brightnessPanelOpen = !_brightnessPanelOpen),
       automaticReading: ReaderAutomaticReadingAction(
@@ -500,19 +519,15 @@ class ReaderScaffoldState extends State<ReaderScaffold>
     );
   }
 
-  Widget buildBrightnessPanel() => ReaderBrightnessPanel(
-    enabled: context.reader.preferences.readerBrightnessEnabled == true,
-    brightness: context.reader.preferences.readerBrightness,
-    onEnabledChanged: (enabled) {
-      _settingsStore.write(ReaderPreferences.readerBrightnessEnabled, enabled);
-      setState(() {});
-      appdata.saveData();
-    },
-    onBrightnessChanged: (brightness) {
-      _settingsStore.write(ReaderPreferences.readerBrightness, brightness);
-      setState(() {});
-    },
-    onBrightnessChangeEnd: (_) => appdata.saveData(),
+  Widget buildBrightnessPanel() => SettingsSaveScope(
+    work: widget.imageWork,
+    child: ReaderBrightnessSetting(
+      comicId: context.reader.cid,
+      sourceKey: context.reader.type.sourceKey,
+      preview: _brightnessPreview,
+      panel: true,
+      onChanged: _onSettingChanged,
+    ),
   );
 
   Widget buildPageInfoText() {
@@ -609,17 +624,33 @@ class ReaderScaffoldState extends State<ReaderScaffold>
   }
 
   void openSetting() {
+    final reader = context.reader;
+    final work = widget.imageWork;
+    final comic = reader.cid, source = reader.type.sourceKey;
+    bool isCurrent() =>
+        mounted &&
+        identical(widget.imageWork, work) &&
+        identical(context.reader, reader) &&
+        reader.cid == comic &&
+        reader.type.sourceKey == source;
     setState(() {
       _brightnessPanelOpen = false;
     });
     _openSideBar(
-      ReaderSettings(
-        comicId: context.reader.cid,
-        comicSource: context.reader.type.sourceKey,
-        currentReaderMode: () => context.reader.mode.key,
-        isDetectingLayout: () => context.reader.isDetectingLayout,
-        onDetectLayout: () => context.reader.detectLayout(force: true),
-        onChanged: _onSettingChanged,
+      SettingsSaveScope(
+        work: work,
+        child: ReaderSettings(
+          comicId: comic,
+          comicSource: source,
+          currentReaderMode: () => reader.mode.key,
+          isDetectingLayout: () => isCurrent() && reader.isDetectingLayout,
+          onDetectLayout: () =>
+              isCurrent() ? reader.detectLayout(force: true) : Future.value(),
+          onChanged: (key) {
+            if (isCurrent()) _onSettingChanged(key);
+          },
+          brightnessPreview: _brightnessPreview,
+        ),
       ),
       width: 400,
     );

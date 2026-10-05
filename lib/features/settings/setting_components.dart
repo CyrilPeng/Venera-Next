@@ -1,9 +1,11 @@
-import 'package:venera_next/foundation/global_preference_store.dart';
+import 'dart:async';
+import 'dart:convert';
 import 'package:venera_next/foundation/preferences.dart';
 import 'package:venera_next/foundation/reader_preference_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_reorderable_grid_view/widgets/reorderable_builder.dart';
 import 'package:venera_next/components/button.dart';
+import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/select.dart';
@@ -13,27 +15,132 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
-PreferenceBinding<T> _readerBinding<T extends Object>(
-  Preference<T> preference,
-  String? comicId,
-  String? sourceKey,
-  bool device,
-) => ReaderPreferenceStore(
-  settings: appdata.settings,
-  comicId: comicId,
-  sourceKey: sourceKey,
-  scope: comicId != null
-      ? ReaderPreferenceScope.comic
-      : device
-      ? ReaderPreferenceScope.device
-      : ReaderPreferenceScope.global,
-).bind(preference);
+class _SettingField<T extends Object> {
+  const _SettingField(
+    this.key,
+    this.preference,
+    this.comicId,
+    this.sourceKey,
+    this.device,
+  );
+  final String key;
+  final Preference<T>? preference;
+  final String? comicId, sourceKey;
+  final bool device;
+
+  bool matches(_SettingField<T> other) =>
+      key == other.key &&
+      comicId == other.comicId &&
+      sourceKey == other.sourceKey &&
+      device == other.device &&
+      identical(preference, other.preference);
+
+  T? read() {
+    final raw = comicId != null
+        ? appdata.settings.getReaderSetting(comicId!, sourceKey!, key)
+        : device
+        ? appdata.settings.getDeviceReaderSetting(key)
+        : appdata.settings[key];
+    return preference?.normalize(raw) ?? raw as T?;
+  }
+
+  Future<void> save(T value) {
+    final snapshot = jsonEncode(preference?.normalize(value) ?? value);
+    return appdata.updateSettings((settings) {
+      final decoded = jsonDecode(snapshot);
+      final typed = preference;
+      if (typed != null) {
+        ReaderPreferenceStore(
+          settings: settings,
+          comicId: comicId,
+          sourceKey: sourceKey,
+          scope: comicId != null
+              ? ReaderPreferenceScope.comic
+              : device
+              ? ReaderPreferenceScope.device
+              : ReaderPreferenceScope.global,
+        ).write(typed, typed.normalize(decoded));
+        return;
+      }
+      final stored = decoded is num && decoded.toInt() == decoded
+          ? decoded.toInt()
+          : decoded;
+      if (comicId != null) {
+        settings.setReaderSetting(comicId!, sourceKey!, key, stored);
+      } else if (device) {
+        settings.setDeviceReaderSetting(key, stored);
+      } else {
+        settings[key] = stored;
+      }
+    });
+  }
+}
+
+const _savingIndicator = SizedBox.square(
+  dimension: 18,
+  child: CircularProgressIndicator(strokeWidth: 2),
+);
+
+/// Own the actual save until it finishes, including during forced unmount.
+/// Each edit joins appdata's queue immediately; a later successful snapshot
+/// includes earlier edits and can repair an earlier persistence failure.
+abstract class _SettingState<W extends StatefulWidget, T extends Object>
+    extends SettingsSaveState<W> {
+  _SettingField<T> get field;
+  VoidCallback? get onSaved;
+  int _revision = 0;
+  T? _preview;
+  _SettingField<T>? _previewField;
+  bool get saving => savingSettings;
+  T? get currentValue =>
+      _preview != null && _previewField?.matches(field) == true
+      ? _preview!
+      : field.read();
+  Future<void> change(T value) async {
+    if (!acceptsSettingsChanges) return;
+    final target = field;
+    final revision = ++_revision;
+    setState(() {
+      _preview = value;
+      _previewField = target;
+    });
+    await saveSetting(
+      (
+        target.key,
+        target.comicId,
+        target.sourceKey,
+        target.device,
+        target.preference,
+      ),
+      () => target.save(value),
+      onSaved: () => onSaved?.call(),
+      isCurrent: () => revision == _revision && target.matches(field),
+    );
+    if (revision == _revision) _preview = null;
+    if (mounted) setState(() {});
+  }
+
+  Widget withSaveStatus(Widget child) => protectSettings(
+    Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        child,
+        if (hasSettingsSaveError)
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: settingsSaveStatus,
+          ),
+      ],
+    ),
+  );
+}
 
 class SwitchSetting extends StatefulWidget {
   const SwitchSetting({
     super.key,
     required this.title,
-    this.binding,
+    this.preference,
     required this.settingKey,
     this.onChanged,
     this.subtitle,
@@ -52,7 +159,7 @@ class SwitchSetting extends StatefulWidget {
     key: key,
     title: title,
     settingKey: preference.key,
-    binding: GlobalPreferenceStore(appdata.settings).bind(preference),
+    preference: preference,
     onChanged: onChanged,
     subtitle: subtitle,
   );
@@ -70,12 +177,7 @@ class SwitchSetting extends StatefulWidget {
     key: key,
     title: title,
     settingKey: preference.key,
-    binding: _readerBinding(
-      preference,
-      comicId,
-      comicSource,
-      useDeviceSettings,
-    ),
+    preference: preference,
     onChanged: onChanged,
     comicId: comicId,
     comicSource: comicSource,
@@ -83,7 +185,7 @@ class SwitchSetting extends StatefulWidget {
     subtitle: subtitle,
   );
 
-  final PreferenceBinding<bool>? binding;
+  final Preference<bool>? preference;
 
   final String title;
 
@@ -103,49 +205,28 @@ class SwitchSetting extends StatefulWidget {
   State<SwitchSetting> createState() => _SwitchSettingState();
 }
 
-class _SwitchSettingState extends State<SwitchSetting> {
+class _SwitchSettingState extends _SettingState<SwitchSetting, bool> {
+  @override
+  _SettingField<bool> get field => _SettingField(
+    widget.settingKey,
+    widget.preference,
+    widget.comicId,
+    widget.comicSource,
+    widget.useDeviceSettings,
+  );
+  @override
+  VoidCallback? get onSaved => widget.onChanged;
+
   @override
   Widget build(BuildContext context) {
-    var value =
-        widget.binding?.read() ??
-        (widget.comicId != null
-            ? appdata.settings.getReaderSetting(
-                widget.comicId!,
-                widget.comicSource!,
-                widget.settingKey,
-              )
-            : widget.useDeviceSettings
-            ? appdata.settings.getDeviceReaderSetting(widget.settingKey)
-            : appdata.settings[widget.settingKey]);
-
-    assert(value is bool);
-
-    return ListTile(
-      title: Text(widget.title),
-      subtitle: widget.subtitle == null ? null : Text(widget.subtitle!),
-      trailing: Switch(
-        value: value,
-        onChanged: (value) {
-          setState(() {
-            if (widget.binding != null) {
-              widget.binding!.write(value);
-            } else if (widget.comicId != null) {
-              appdata.settings.setReaderSetting(
-                widget.comicId!,
-                widget.comicSource!,
-                widget.settingKey,
-                value,
-              );
-            } else if (widget.useDeviceSettings) {
-              appdata.settings.setDeviceReaderSetting(widget.settingKey, value);
-            } else {
-              appdata.settings[widget.settingKey] = value;
-            }
-          });
-          appdata.saveData().then((_) {
-            widget.onChanged?.call();
-          });
-        },
+    final value = currentValue;
+    return withSaveStatus(
+      ListTile(
+        title: Text(widget.title),
+        subtitle: widget.subtitle == null ? null : Text(widget.subtitle!),
+        trailing: saving
+            ? _savingIndicator
+            : Switch(value: value!, onChanged: change),
       ),
     );
   }
@@ -155,7 +236,7 @@ class SelectSetting extends StatelessWidget {
   const SelectSetting({
     super.key,
     required this.title,
-    this.binding,
+    this.preference,
     required this.settingKey,
     required this.optionTranslation,
     this.onChanged,
@@ -176,7 +257,7 @@ class SelectSetting extends StatelessWidget {
     key: key,
     title: title,
     settingKey: preference.key,
-    binding: GlobalPreferenceStore(appdata.settings).bind(preference),
+    preference: preference,
     onChanged: onChanged,
     optionTranslation: optionTranslation,
     help: help,
@@ -196,12 +277,7 @@ class SelectSetting extends StatelessWidget {
     key: key,
     title: title,
     settingKey: preference.key,
-    binding: _readerBinding(
-      preference,
-      comicId,
-      comicSource,
-      useDeviceSettings,
-    ),
+    preference: preference,
     onChanged: onChanged,
     comicId: comicId,
     comicSource: comicSource,
@@ -210,7 +286,7 @@ class SelectSetting extends StatelessWidget {
     help: help,
   );
 
-  final PreferenceBinding<String>? binding;
+  final Preference<String>? preference;
 
   final String title;
 
@@ -237,7 +313,7 @@ class SelectSetting extends StatelessWidget {
           if (constraints.maxWidth < 450) {
             return _DoubleLineSelectSettings(
               title: title,
-              binding: binding,
+              preference: preference,
               settingKey: settingKey,
               optionTranslation: optionTranslation,
               onChanged: onChanged,
@@ -249,7 +325,7 @@ class SelectSetting extends StatelessWidget {
           } else {
             return _EndSelectorSelectSetting(
               title: title,
-              binding: binding,
+              preference: preference,
               settingKey: settingKey,
               optionTranslation: optionTranslation,
               onChanged: onChanged,
@@ -268,7 +344,7 @@ class SelectSetting extends StatelessWidget {
 class _DoubleLineSelectSettings extends StatefulWidget {
   const _DoubleLineSelectSettings({
     required this.title,
-    this.binding,
+    this.preference,
     required this.settingKey,
     required this.optionTranslation,
     this.onChanged,
@@ -278,7 +354,7 @@ class _DoubleLineSelectSettings extends StatefulWidget {
     this.useDeviceSettings = false,
   });
 
-  final PreferenceBinding<String>? binding;
+  final Preference<String>? preference;
 
   final String title;
 
@@ -301,104 +377,93 @@ class _DoubleLineSelectSettings extends StatefulWidget {
       _DoubleLineSelectSettingsState();
 }
 
-class _DoubleLineSelectSettingsState extends State<_DoubleLineSelectSettings> {
+class _DoubleLineSelectSettingsState
+    extends _SettingState<_DoubleLineSelectSettings, String> {
+  @override
+  _SettingField<String> get field => _SettingField(
+    widget.settingKey,
+    widget.preference,
+    widget.comicId,
+    widget.comicSource,
+    widget.useDeviceSettings,
+  );
+  @override
+  VoidCallback? get onSaved => widget.onChanged;
+
   @override
   Widget build(BuildContext context) {
-    var value =
-        widget.binding?.read() ??
-        (widget.comicId != null
-            ? appdata.settings.getReaderSetting(
-                widget.comicId!,
-                widget.comicSource!,
-                widget.settingKey,
-              )
-            : widget.useDeviceSettings
-            ? appdata.settings.getDeviceReaderSetting(widget.settingKey)
-            : appdata.settings[widget.settingKey]);
-
-    return ListTile(
-      title: Row(
-        children: [
-          Text(widget.title),
-          const SizedBox(width: 4),
-          if (widget.help != null)
-            Button.icon(
-              size: 18,
-              icon: const Icon(Icons.help_outline),
-              onPressed: () {
-                showDialog(
+    final value = currentValue;
+    return withSaveStatus(
+      ListTile(
+        title: Row(
+          children: [
+            Expanded(child: Text(widget.title)),
+            const SizedBox(width: 4),
+            if (widget.help != null)
+              Button.icon(
+                size: 18,
+                icon: const Icon(Icons.help_outline),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) {
+                      return ContentDialog(
+                        title: "Help".tl,
+                        content: Text(
+                          widget.help!,
+                        ).paddingHorizontal(16).fixWidth(double.infinity),
+                        actions: [
+                          Button.filled(
+                            onPressed: context.pop,
+                            child: Text("OK".tl),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+              ),
+          ],
+        ),
+        subtitle: Text(widget.optionTranslation[value] ?? "None"),
+        trailing: saving ? _savingIndicator : const Icon(Icons.arrow_drop_down),
+        onTap: saving
+            ? null
+            : () {
+                var renderBox = context.findRenderObject() as RenderBox;
+                var offset = renderBox.localToGlobal(Offset.zero);
+                var size = renderBox.size;
+                var rect = offset & size;
+                final target = field;
+                showMenu(
+                  elevation: 3,
+                  color: context.brightness == Brightness.light
+                      ? const Color(0xFFF6F6F6)
+                      : const Color(0xFF1E1E1E),
                   context: context,
-                  builder: (context) {
-                    return ContentDialog(
-                      title: "Help".tl,
-                      content: Text(
-                        widget.help!,
-                      ).paddingHorizontal(16).fixWidth(double.infinity),
-                      actions: [
-                        Button.filled(
-                          onPressed: context.pop,
-                          child: Text("OK".tl),
+                  position: RelativeRect.fromRect(
+                    rect,
+                    Offset.zero & MediaQuery.of(context).size,
+                  ),
+                  items: widget.optionTranslation.keys
+                      .map(
+                        (key) => PopupMenuItem(
+                          value: key,
+                          height: App.isMobile ? 46 : 40,
+                          child: Text(widget.optionTranslation[key]!),
                         ),
-                      ],
-                    );
-                  },
-                );
+                      )
+                      .toList(),
+                ).then((value) async {
+                  if (value != null &&
+                      mounted &&
+                      target.matches(field) &&
+                      widget.optionTranslation.containsKey(value)) {
+                    await change(value);
+                  }
+                });
               },
-            ),
-        ],
       ),
-      subtitle: Text(widget.optionTranslation[value] ?? "None"),
-      trailing: const Icon(Icons.arrow_drop_down),
-      onTap: () {
-        var renderBox = context.findRenderObject() as RenderBox;
-        var offset = renderBox.localToGlobal(Offset.zero);
-        var size = renderBox.size;
-        var rect = offset & size;
-        showMenu(
-          elevation: 3,
-          color: context.brightness == Brightness.light
-              ? const Color(0xFFF6F6F6)
-              : const Color(0xFF1E1E1E),
-          context: context,
-          position: RelativeRect.fromRect(
-            rect,
-            Offset.zero & MediaQuery.of(context).size,
-          ),
-          items: widget.optionTranslation.keys
-              .map(
-                (key) => PopupMenuItem(
-                  value: key,
-                  height: App.isMobile ? 46 : 40,
-                  child: Text(widget.optionTranslation[key]!),
-                ),
-              )
-              .toList(),
-        ).then((value) {
-          if (value != null) {
-            setState(() {
-              if (widget.binding != null) {
-                widget.binding!.write(value);
-              } else if (widget.comicId != null) {
-                appdata.settings.setReaderSetting(
-                  widget.comicId!,
-                  widget.comicSource!,
-                  widget.settingKey,
-                  value,
-                );
-              } else if (widget.useDeviceSettings) {
-                appdata.settings.setDeviceReaderSetting(
-                  widget.settingKey,
-                  value,
-                );
-              } else {
-                appdata.settings[widget.settingKey] = value;
-              }
-            });
-            appdata.saveData();
-            widget.onChanged?.call();
-          }
-        });
-      },
     );
   }
 }
@@ -406,7 +471,7 @@ class _DoubleLineSelectSettingsState extends State<_DoubleLineSelectSettings> {
 class _EndSelectorSelectSetting extends StatefulWidget {
   const _EndSelectorSelectSetting({
     required this.title,
-    this.binding,
+    this.preference,
     required this.settingKey,
     required this.optionTranslation,
     this.onChanged,
@@ -416,7 +481,7 @@ class _EndSelectorSelectSetting extends StatefulWidget {
     this.useDeviceSettings = false,
   });
 
-  final PreferenceBinding<String>? binding;
+  final Preference<String>? preference;
 
   final String title;
 
@@ -439,77 +504,74 @@ class _EndSelectorSelectSetting extends StatefulWidget {
       _EndSelectorSelectSettingState();
 }
 
-class _EndSelectorSelectSettingState extends State<_EndSelectorSelectSetting> {
+class _EndSelectorSelectSettingState
+    extends _SettingState<_EndSelectorSelectSetting, String> {
+  @override
+  _SettingField<String> get field => _SettingField(
+    widget.settingKey,
+    widget.preference,
+    widget.comicId,
+    widget.comicSource,
+    widget.useDeviceSettings,
+  );
+  @override
+  VoidCallback? get onSaved => widget.onChanged;
+
   @override
   Widget build(BuildContext context) {
-    var options = widget.optionTranslation;
-    var value =
-        widget.binding?.read() ??
-        (widget.comicId != null
-            ? appdata.settings.getReaderSetting(
-                widget.comicId!,
-                widget.comicSource!,
-                widget.settingKey,
-              )
-            : widget.useDeviceSettings
-            ? appdata.settings.getDeviceReaderSetting(widget.settingKey)
-            : appdata.settings[widget.settingKey]);
-    return ListTile(
-      title: Row(
-        children: [
-          Text(widget.title),
-          const SizedBox(width: 4),
-          if (widget.help != null)
-            Button.icon(
-              size: 18,
-              icon: const Icon(Icons.help_outline),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) {
-                    return ContentDialog(
-                      title: "Help".tl,
-                      content: Text(
-                        widget.help!,
-                      ).paddingHorizontal(16).fixWidth(double.infinity),
-                      actions: [
-                        Button.filled(
-                          onPressed: context.pop,
-                          child: Text("OK".tl),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
-            ),
-        ],
-      ),
-      trailing: Select(
-        current: options[value],
-        values: options.values.toList(),
-        minWidth: 64,
-        onTap: (index) {
-          setState(() {
-            var value = options.keys.elementAt(index);
-            if (widget.binding != null) {
-              widget.binding!.write(value);
-            } else if (widget.comicId != null) {
-              appdata.settings.setReaderSetting(
-                widget.comicId!,
-                widget.comicSource!,
-                widget.settingKey,
-                value,
-              );
-            } else if (widget.useDeviceSettings) {
-              appdata.settings.setDeviceReaderSetting(widget.settingKey, value);
-            } else {
-              appdata.settings[widget.settingKey] = value;
-            }
-          });
-          appdata.saveData();
-          widget.onChanged?.call();
-        },
+    final options = Map<String, String>.of(widget.optionTranslation);
+    final target = field;
+    final value = currentValue;
+    return withSaveStatus(
+      ListTile(
+        title: Row(
+          children: [
+            Expanded(child: Text(widget.title)),
+            const SizedBox(width: 4),
+            if (widget.help != null)
+              Button.icon(
+                size: 18,
+                icon: const Icon(Icons.help_outline),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) {
+                      return ContentDialog(
+                        title: "Help".tl,
+                        content: Text(
+                          widget.help!,
+                        ).paddingHorizontal(16).fixWidth(double.infinity),
+                        actions: [
+                          Button.filled(
+                            onPressed: context.pop,
+                            child: Text("OK".tl),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+              ),
+          ],
+        ),
+        trailing: saving
+            ? _savingIndicator
+            : Select(
+                current: options[value],
+                values: options.values.toList(),
+                minWidth: 64,
+                onTap: (index) {
+                  if (mounted &&
+                      target.matches(field) &&
+                      index >= 0 &&
+                      index < options.length) {
+                    final selected = options.keys.elementAt(index);
+                    if (widget.optionTranslation.containsKey(selected)) {
+                      unawaited(change(selected));
+                    }
+                  }
+                },
+              ),
       ),
     );
   }
@@ -519,7 +581,7 @@ class SliderSetting extends StatefulWidget {
   const SliderSetting({
     super.key,
     required this.title,
-    this.binding,
+    this.preference,
     required this.settingsIndex,
     required this.interval,
     required this.min,
@@ -541,7 +603,7 @@ class SliderSetting extends StatefulWidget {
     key: key,
     title: title,
     settingsIndex: preference.key,
-    binding: GlobalPreferenceStore(appdata.settings).bind(preference),
+    preference: preference,
     onChanged: onChanged,
     valueFormatter: valueFormatter,
     interval: preference.step,
@@ -562,12 +624,7 @@ class SliderSetting extends StatefulWidget {
     key: key,
     title: title,
     settingsIndex: preference.key,
-    binding: _readerBinding(
-      preference,
-      comicId,
-      comicSource,
-      useDeviceSettings,
-    ),
+    preference: preference,
     onChanged: onChanged,
     comicId: comicId,
     comicSource: comicSource,
@@ -578,7 +635,7 @@ class SliderSetting extends StatefulWidget {
     max: preference.max,
   );
 
-  final PreferenceBinding<num>? binding;
+  final Preference<num>? preference;
 
   final String title;
 
@@ -604,58 +661,35 @@ class SliderSetting extends StatefulWidget {
   State<SliderSetting> createState() => _SliderSettingState();
 }
 
-class _SliderSettingState extends State<SliderSetting> {
+class _SliderSettingState extends _SettingState<SliderSetting, num> {
+  @override
+  _SettingField<num> get field => _SettingField(
+    widget.settingsIndex,
+    widget.preference,
+    widget.comicId,
+    widget.comicSource,
+    widget.useDeviceSettings,
+  );
+  @override
+  VoidCallback? get onSaved => widget.onChanged;
+
   @override
   Widget build(BuildContext context) {
-    var value =
-        (widget.binding?.read() ??
-                (widget.comicId != null
-                    ? appdata.settings.getReaderSetting(
-                        widget.comicId!,
-                        widget.comicSource!,
-                        widget.settingsIndex,
-                      )
-                    : widget.useDeviceSettings
-                    ? appdata.settings.getDeviceReaderSetting(
-                        widget.settingsIndex,
-                      )
-                    : appdata.settings[widget.settingsIndex]))
-            .toDouble();
-    return ListTile(
-      title: Text(widget.title, softWrap: true, maxLines: 2),
-      trailing: Text(
-        widget.valueFormatter?.call(value) ?? value.toString(),
-        style: ts.s12,
-      ),
-      subtitle: Slider(
-        value: value,
-        onChanged: (value) {
-          setState(() {
-            final num stored = value.toInt() == value ? value.toInt() : value;
-            if (widget.binding != null) {
-              widget.binding!.write(stored);
-            } else if (widget.comicId != null) {
-              appdata.settings.setReaderSetting(
-                widget.comicId!,
-                widget.comicSource!,
-                widget.settingsIndex,
-                stored,
-              );
-            } else if (widget.useDeviceSettings) {
-              appdata.settings.setDeviceReaderSetting(
-                widget.settingsIndex,
-                stored,
-              );
-            } else {
-              appdata.settings[widget.settingsIndex] = stored;
-            }
-          });
-          appdata.saveData();
-          widget.onChanged?.call();
-        },
-        divisions: ((widget.max - widget.min) / widget.interval).toInt(),
-        min: widget.min,
-        max: widget.max,
+    final value = currentValue!.toDouble();
+    return withSaveStatus(
+      ListTile(
+        title: Text(widget.title, softWrap: true, maxLines: 2),
+        trailing: Text(
+          widget.valueFormatter?.call(value) ?? value.toString(),
+          style: ts.s12,
+        ),
+        subtitle: Slider(
+          value: value,
+          onChanged: change,
+          divisions: ((widget.max - widget.min) / widget.interval).toInt(),
+          min: widget.min,
+          max: widget.max,
+        ),
       ),
     );
   }
@@ -703,7 +737,14 @@ class MultiPagesFilter extends StatefulWidget {
   State<MultiPagesFilter> createState() => _MultiPagesFilterState();
 }
 
-class _MultiPagesFilterState extends State<MultiPagesFilter> {
+class _MultiPagesFilterState
+    extends _SettingState<MultiPagesFilter, List<String>> {
+  @override
+  _SettingField<List<String>> get field =>
+      _SettingField(widget.settingsIndex, null, null, null, false);
+  @override
+  VoidCallback? get onSaved => null;
+
   late List<String> keys;
 
   @override
@@ -715,10 +756,8 @@ class _MultiPagesFilterState extends State<MultiPagesFilter> {
 
   @override
   void dispose() {
+    scrollController.dispose();
     super.dispose();
-    Future.microtask(() {
-      updateSetting();
-    });
   }
 
   var reorderWidgetKey = UniqueKey();
@@ -750,6 +789,7 @@ class _MultiPagesFilterState extends State<MultiPagesFilter> {
         setState(() {
           keys = List.from(reorderFunc(keys));
         });
+        updateSetting();
       },
       children: tiles,
       builder: (children) {
@@ -765,17 +805,21 @@ class _MultiPagesFilterState extends State<MultiPagesFilter> {
       },
     );
 
-    return PopUpWidgetScaffold(
-      title: widget.title,
-      tailing: [
-        if (keys.length < widget.pages.length)
-          TextButton.icon(
-            label: Text("Add".tl),
-            icon: const Icon(Icons.add),
-            onPressed: showAddDialog,
-          ),
-      ],
-      body: view,
+    return protectSettings(
+      PopUpWidgetScaffold(
+        title: widget.title,
+        onBack: leaveSettings,
+        tailing: [
+          settingsSaveStatus,
+          if (keys.length < widget.pages.length)
+            TextButton.icon(
+              label: Text("Add".tl),
+              icon: const Icon(Icons.add),
+              onPressed: showAddDialog,
+            ),
+        ],
+        body: view,
+      ),
     );
   }
 
@@ -787,6 +831,7 @@ class _MultiPagesFilterState extends State<MultiPagesFilter> {
           setState(() {
             keys.remove(key);
           });
+          updateSetting();
         },
         icon: const Icon(Icons.delete_outline),
       ),
@@ -861,9 +906,11 @@ class _MultiPagesFilterState extends State<MultiPagesFilter> {
                 FilledButton(
                   onPressed: selected.isNotEmpty
                       ? () {
+                          if (!mounted) return;
                           this.setState(() {
                             keys.addAll(selected);
                           });
+                          updateSetting();
                           Navigator.pop(context);
                         }
                       : null,
@@ -878,8 +925,7 @@ class _MultiPagesFilterState extends State<MultiPagesFilter> {
   }
 
   void updateSetting() {
-    appdata.settings[widget.settingsIndex] = keys;
-    appdata.saveData();
+    unawaited(change(List<String>.of(keys)));
   }
 }
 

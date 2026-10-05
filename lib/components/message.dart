@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/navigation_admission.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -499,7 +500,13 @@ class ContentDialog extends StatelessWidget {
               ? Appbar(
                   leading: IconButton(
                     icon: const Icon(Icons.close),
-                    onPressed: dismissible ? context.pop : null,
+                    onPressed: dismissible
+                        ? () {
+                            if (NavigationAdmission.allows(context)) {
+                              Navigator.of(context).maybePop();
+                            }
+                          }
+                        : null,
                   ),
                   title: Text(title!),
                   backgroundColor: Colors.transparent,

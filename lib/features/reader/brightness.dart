@@ -20,6 +20,52 @@ double readerBrightnessOverlayOpacity({
   return 1 - normalizeReaderBrightness(brightness) / readerBrightnessMax;
 }
 
+/// Presentation values live until their own save settles, independently of
+/// the form that initiated them. The reader owns a shared instance for its
+/// toolbar and settings sidebar; a later edit replaces only that field.
+class ReaderBrightnessPreview extends ChangeNotifier {
+  bool? _enabled;
+  int? _brightness;
+  bool? get enabled => _enabled;
+  int? get brightness => _brightness;
+  Object? _enabledToken, _brightnessToken;
+  bool _disposed = false;
+
+  VoidCallback previewEnabled(bool value) {
+    final token = Object();
+    if (_disposed) return () {};
+    _enabledToken = token;
+    _enabled = value;
+    notifyListeners();
+    return () {
+      if (_disposed || !identical(_enabledToken, token)) return;
+      _enabledToken = null;
+      _enabled = null;
+      notifyListeners();
+    };
+  }
+
+  VoidCallback previewBrightness(int value) {
+    final token = Object();
+    if (_disposed) return () {};
+    _brightnessToken = token;
+    _brightness = normalizeReaderBrightness(value);
+    notifyListeners();
+    return () {
+      if (_disposed || !identical(_brightnessToken, token)) return;
+      _brightnessToken = null;
+      _brightness = null;
+      notifyListeners();
+    };
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+}
+
 class ReaderBrightnessOverlay extends StatelessWidget {
   const ReaderBrightnessOverlay({
     super.key,
@@ -122,13 +168,15 @@ class ReaderBrightnessPanel extends StatelessWidget {
     required this.brightness,
     required this.onEnabledChanged,
     required this.onBrightnessChanged,
-    required this.onBrightnessChangeEnd,
+    this.onBrightnessChangeEnd,
+    this.status,
   });
   final bool enabled;
   final Object? brightness;
   final ValueChanged<bool> onEnabledChanged;
   final ValueChanged<int> onBrightnessChanged;
-  final ValueChanged<int> onBrightnessChangeEnd;
+  final ValueChanged<int>? onBrightnessChangeEnd;
+  final Widget? status;
   @override
   Widget build(BuildContext context) {
     final panelWidth =
@@ -146,13 +194,19 @@ class ReaderBrightnessPanel extends StatelessWidget {
         width: panelWidth,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: ReaderBrightnessControl(
-            compact: true,
-            enabled: enabled,
-            brightness: brightness,
-            onEnabledChanged: onEnabledChanged,
-            onBrightnessChanged: onBrightnessChanged,
-            onBrightnessChangeEnd: onBrightnessChangeEnd,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ReaderBrightnessControl(
+                compact: true,
+                enabled: enabled,
+                brightness: brightness,
+                onEnabledChanged: onEnabledChanged,
+                onBrightnessChanged: onBrightnessChanged,
+                onBrightnessChangeEnd: onBrightnessChangeEnd,
+              ),
+              ?status,
+            ],
           ),
         ),
       ),

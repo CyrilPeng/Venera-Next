@@ -1,5 +1,6 @@
 import 'package:venera_next/foundation/preferences.dart';
 import 'appdata.dart';
+import 'reader_preferences.dart';
 
 enum ReaderPreferenceScope { active, global, device, comic }
 
@@ -59,20 +60,9 @@ class ReaderPreferenceStore {
           stored,
         );
     }
+    if (preference.key == ReaderPreferences.showChapterComments.key &&
+        normalized == false) {
+      write(ReaderPreferences.showChapterCommentsAtEnd, false);
+    }
   }
-
-  ReaderPreferenceBinding<T> bind<T extends Object>(Preference<T> preference) =>
-      ReaderPreferenceBinding(this, preference);
-}
-
-class ReaderPreferenceBinding<T extends Object>
-    implements PreferenceBinding<T> {
-  const ReaderPreferenceBinding(this.store, this.preference);
-  final ReaderPreferenceStore store;
-  @override
-  final Preference<T> preference;
-  @override
-  T read() => store.read(preference);
-  @override
-  void write(T value) => store.write(preference, value);
 }

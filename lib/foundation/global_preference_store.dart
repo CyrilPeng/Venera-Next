@@ -23,19 +23,4 @@ class GlobalPreferenceStore {
         ? normalized.toInt()
         : normalized;
   }
-
-  PreferenceBinding<T> bind<T extends Object>(Preference<T> preference) =>
-      _GlobalPreferenceBinding(this, preference);
-}
-
-class _GlobalPreferenceBinding<T extends Object>
-    implements PreferenceBinding<T> {
-  const _GlobalPreferenceBinding(this.store, this.preference);
-  final GlobalPreferenceStore store;
-  @override
-  final Preference<T> preference;
-  @override
-  T read() => store.read(preference);
-  @override
-  void write(T value) => store.write(preference, value);
 }

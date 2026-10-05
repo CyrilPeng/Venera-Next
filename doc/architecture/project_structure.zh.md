@@ -1,5 +1,21 @@
 # 项目结构约定
 
+2026-10-05 收藏保存更新：ReadLaterService 只返回同一 SQL 事务的成员/文件夹提交结果，LocalFavoritesManager 在全局独占内协调设置草稿和缓存发布。初始化 SQL 准备在纯草稿外执行，草稿队首复核最新引用；清空恢复仅恢复拥有的设置字段，单独报告持久化和备份清理失败。未新增业务入口，数量仍为 105。
+
+2026-10-05 备份与书库更新：`features/settings/webdav_settings.dart` 拥有两类连接表单的检查、保存、重试、导航和原窗口交接。`app_runtime/webdav_library.dart` 捕获目录与管理器/源实例，统一排队配置和探索列表保存，再按真实发布状态协调缓存失效与注册；失败失效可重试，网络不占用普通数据访问。`WebDavLibrarySettingsStore` 只向装配层传递不可变配置；UI 不直接修改全局源注册。业务入口为 105。
+
+2026-10-05 章节与追更更新：ComicChaptersView 在父层拥有排序保存，普通/分组子列表只消费显示值。`features/follow_updates/follow_updates_folder_dialog.dart` 属 UI，捕获原管理器/连接/运行时并拥有准备和网络检查；最终赋值交给公共 SettingsSaveState，重试不包含前序网络任务。LocalFavoritesManager 负责设置队列中引用的条件更新和已提交 SQL 的错误状态；不把网络等待包入普通数据访问。
+
+2026-10-05 收藏与应用设置更新：`features/settings/app_controls.dart` 持有缓存输入与授权检查的 UI 保存任务；核心持有 `app_runtime/cache_settings.dart`，先解除监听再关闭缓存。收藏隐式视图状态复用 components 保存所有者；同步面板持有自己的选择与提交，等待保存后检查原目标派发。保留原键值语义与依赖边界，受控业务入口为 104。
+
+2026-10-05 共享设置保存更新：`components/settings_save_state.dart` 持有跨设置页、阅读器及收藏显示的 UI 保存任务、返回守卫和窗口交接；原 features/settings 文件与 Scope 转发已删除。过滤词 UI 在 `features/settings/keyword_blocking.dart`，按固定词值修改最新草稿；收藏显示按钮保留在 favorites，直接依赖公共 UI 保存所有者。输入弹窗自己持有控制器与保存，不回调已卸载父页。该移动不把 appdata 业务或 I/O 放入 components。
+
+2026-10-05 阅读设置更新：`features/settings/reader_brightness.dart` 负责草稿保存，`features/reader/brightness.dart` 的预览只持有显示值，不写 appdata。阅读器通过 `SettingsSaveScope` 将亮度及侧栏设置保存绑定到原 ImageWork；已接纳的赋值完成后再结束任务。ImageWork 的失败 acknowledgment 仅用于同字段幂等修复，不撤回已被观察者消费的错误。范围开关/重置和评论联动已迁移，其余配置/数据写入边界继续待办。
+
+2026-10-05 设置保存更新：`features/settings/settings_save_state.dart` 仅负责 UI 保存所有权、路由/窗口等待和固定赋值重试，业务草稿与持久化仍归 appdata。公共控件及自定义网络、模式和脚本页面复用该所有者；PopUpWidget 显式暴露外层路由用于跨嵌套导航器注册返回守卫。阅读布局保存通过现有 ImageWork 等待生产草稿编辑，其余亮度/范围等配置迁移仍待完成。
+
+2026-10-05 appdata 更新：设置编辑使用 `updateSettings` 的独立草稿，implicit 编辑使用 `updateImplicit`；两者先全局准入再局部排队，输入需在提交前捕获。公共设置控件保存字段描述而非可变 store 绑定，并持有保存 Future 至完成或交给窗口。仍有旧同步 setter/可变集合调用者，未改动字段保持引用身份只用于迁移兼容，不等于整体写入屏障已完成。详见最新 optimization_progress 记录。
+
 2026-10-05 普通收藏更新：LocalFavoritesManager 的异步修改、后台读取和身份索引刷新统一先全局准入、后局部排队；后台 SQLite 使用只读连接。局部存储 import/exclusive 同样先取得全局访问，再取得自身所有权。页面等待写入结果；排序保存和阅读器延迟收藏更新纳入现有退出所有权。详情见最新 optimization_progress 记录，不代表所有 appdata、源与跨库入口已完成。
 
 本文档记录 `lib/` 与 `test/` 的目录边界，用于后续新增功能、迁移旧代码和审查结构调整。
@@ -230,7 +246,7 @@ CI 同时运行 `check_architecture_dependencies.py`，按 `dependency_baseline.
 
 阅读器运行时通过 `foundation/reader_settings.dart` 的不可变 `ReaderSettings` 快照访问设置，`Settings.readerSettings` 负责对接原有存储，`globalReaderSettings` 保留全局选项的原有范围。阅读器不得调用动态 `getReaderSetting` / `getDeviceReaderSetting`；其他旧调用者及设置表单的兼容接口在 P3 后续任务中继续迁移。
 
-阅读设置字段由 `ReaderPreferences` 统一定义键、默认值、校验和滑块元数据。`ReaderPreferenceStore`/绑定负责有类型的作用域读写；阅读设置控件使用 `.reader` 构造入口，旧通用控件接口仅服务未迁移的其他设置域。运行时快照和 Appdata 初始默认值复用同一字段定义。
+阅读设置字段由 `ReaderPreferences` 统一定义键、默认值、校验和滑块元数据。`ReaderPreferenceStore` 负责有类型的作用域读写，公共控件在独立草稿上使用存储规则，不再保留可变绑定；阅读设置控件使用 `.reader` 构造入口，旧通用控件接口仅服务未迁移的其他设置域。运行时快照和 Appdata 初始默认值复用同一字段定义。
 
 通用字段与绑定协议位于 `foundation/preferences.dart`；全局网络/外观字段位于 `application_preferences.dart`，不可变读取模型位于 `application_configuration.dart`，存储通过 `GlobalPreferenceStore` 适配。已迁移页面使用 `.preference` 控件入口，网络/下载/主题消费端不再直接访问对应字符串键。阅读设置继续通过 `ReaderPreferenceStore` 保留范围继承。
 

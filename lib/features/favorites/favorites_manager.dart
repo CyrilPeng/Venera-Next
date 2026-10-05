@@ -4,6 +4,7 @@ import 'favorite_updates_service.dart';
 import 'read_later_service.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/persistence_failure.dart';
+import 'package:venera_next/foundation/sqlite_transaction.dart';
 import 'favorite_identity_index.dart';
 import 'package:venera_next/foundation/file_replacement.dart';
 import 'favorites_repository.dart';
@@ -288,10 +289,17 @@ class LocalFavoritesManager with ChangeNotifier {
 
   Future<void> fromJson(String json) => _mutate(() => _fromJson(json));
 
-  Future<void> prepareTableForFollowUpdates(
-    String table, [
+  Future<bool> prepareTableForFollowUpdates(
+    String table, {
     bool clearData = true,
-  ]) => _mutate(() => _prepareTableForFollowUpdates(table, clearData));
+    int? generation,
+    bool Function()? isCurrent,
+  }) => _mutate(() {
+    if (generation != null) _checkSourceGeneration(generation);
+    if (isCurrent?.call() == false) return false;
+    _prepareTableForFollowUpdates(table, clearData);
+    return true;
+  });
 
   Future<void> updateUpdateTime(
     String folder,
@@ -314,11 +322,37 @@ class LocalFavoritesManager with ChangeNotifier {
     if (folder != null && !existsFolder(folder)) {
       throw StateError('Favorite folder no longer exists');
     }
-    appdata.settings['followUpdatesFolder'] = folder;
-    refreshUpdateIds();
     await _finishFolderMutation(
-      true,
-      true,
+      () => appdata.updateSettings((draft) {
+        _checkSourceGeneration(generation);
+        if (folder != null && !existsFolder(folder)) {
+          throw StateError('Favorite folder no longer exists');
+        }
+        draft['followUpdatesFolder'] = folder;
+      }),
+      () => true,
+      commitState: PersistenceCommitState.unknown,
+    );
+  });
+
+  /// Recheck a stale preview at the settings queue head. A newer selection or
+  /// a folder restored while admission was blocked must remain untouched.
+  Future<void> clearMissingFollowUpdatesFolder(
+    String expected, {
+    required int generation,
+  }) => _mutate(() async {
+    _checkSourceGeneration(generation);
+    var changed = false;
+    await _finishFolderMutation(
+      () => appdata.updateSettings((draft) {
+        _checkSourceGeneration(generation);
+        if (draft['followUpdatesFolder'] == expected &&
+            !existsFolder(expected)) {
+          draft['followUpdatesFolder'] = null;
+          changed = true;
+        }
+      }),
+      () => changed,
       commitState: PersistenceCommitState.unknown,
     );
   });
@@ -380,6 +414,7 @@ class LocalFavoritesManager with ChangeNotifier {
   );
 
   Future<void>? _hashedIdsRefresh;
+  final _pendingSettingsRepairs = <String>{};
 
   bool _isClosed = true;
 
@@ -424,6 +459,7 @@ class LocalFavoritesManager with ChangeNotifier {
   Future<void> _startInitialization(
     String path, {
     void Function(void Function())? publishChange,
+    bool retryPendingSettings = true,
   }) {
     final existing = _initialization;
     if (existing != null) {
@@ -439,7 +475,12 @@ class LocalFavoritesManager with ChangeNotifier {
     _dbPath = path;
     final generation = ++_connectionGeneration;
     Future<void>.sync(
-      () => _initialize(path, generation, publishChange: publishChange),
+      () => _initialize(
+        path,
+        generation,
+        publishChange: publishChange,
+        retryPendingSettings: retryPendingSettings,
+      ),
     ).then(
       (_) {
         if (generation != _connectionGeneration) {
@@ -470,6 +511,7 @@ class LocalFavoritesManager with ChangeNotifier {
     String path,
     int generation, {
     void Function(void Function())? publishChange,
+    bool retryPendingSettings = true,
   }) async {
     Database? database;
     var published = false;
@@ -486,36 +528,67 @@ class LocalFavoritesManager with ChangeNotifier {
         repository.createFolder(trackingFolderName);
         folders.add(trackingFolderName);
       }
-      final configuredTrackingFolder = appdata.settings['followUpdatesFolder'];
-      final trackingFolder =
-          configuredTrackingFolder is String &&
-              folders.contains(configuredTrackingFolder)
-          ? configuredTrackingFolder
-          : !databaseExisted && folders.contains(trackingFolderName)
-          ? trackingFolderName
-          : null;
-      if (trackingFolder != null) {
-        repository.prepareForFollowUpdates(trackingFolder, clearData: false);
+      void prepareTracking(Object? folder) {
+        if (folder is String && repository.folderNames().contains(folder)) {
+          repository.prepareForFollowUpdates(folder, clearData: false);
+        }
       }
-      final quickFavorite = appdata.settings['quickFavorite'];
-      final nextQuickFavorite =
-          quickFavorite is String && folders.contains(quickFavorite)
-          ? quickFavorite
-          : !databaseExisted && folders.contains(trackingFolderName)
-          ? trackingFolderName
-          : null;
-      final settingsChanged =
-          configuredTrackingFolder != trackingFolder ||
-          quickFavorite != nextQuickFavorite;
+
+      prepareTracking(appdata.settings['followUpdatesFolder']);
+      if (!databaseExisted) prepareTracking(trackingFolderName);
       _checkInitialization(generation);
       _database = database;
       published = true;
       _isClosed = false;
       _identityIndex.clear();
       counts = {};
-      appdata.settings['followUpdatesFolder'] = trackingFolder;
-      appdata.settings['quickFavorite'] = nextQuickFavorite;
-      if (settingsChanged) await appdata.saveData(false);
+      final retryingWrite =
+          retryPendingSettings && _pendingSettingsRepairs.contains(path);
+      var changed = false;
+      try {
+        while (true) {
+          final unprepared = await appdata.updateSettings(
+            (draft) {
+              _checkInitialization(generation);
+              final available = repository.folderNames();
+              String? resolve(Object? value) =>
+                  value is String && available.contains(value)
+                  ? value
+                  : !databaseExisted && available.contains(trackingFolderName)
+                  ? trackingFolderName
+                  : null;
+              final tracking = resolve(draft['followUpdatesFolder']);
+              final quick = resolve(draft['quickFavorite']);
+              // A preceding queued edit may select another valid folder. Prepare
+              // its schema outside the draft before publishing any repaired value.
+              if (tracking != null &&
+                  !repository.isPreparedForFollowUpdates(tracking)) {
+                return tracking;
+              }
+              changed =
+                  draft['followUpdatesFolder'] != tracking ||
+                  draft['quickFavorite'] != quick;
+              if (draft['followUpdatesFolder'] != tracking) {
+                draft['followUpdatesFolder'] = tracking;
+              }
+              if (draft['quickFavorite'] != quick) {
+                draft['quickFavorite'] = quick;
+              }
+              return null;
+            },
+            sync: false,
+            persistIfUnchanged: false,
+          );
+          _checkInitialization(generation);
+          if (unprepared == null) break;
+          prepareTracking(unprepared);
+        }
+        if (retryingWrite && !changed) await appdata.saveData(false);
+        if (changed || retryingWrite) _pendingSettingsRepairs.remove(path);
+      } catch (_) {
+        _pendingSettingsRepairs.add(path);
+        rethrow;
+      }
       _checkInitialization(generation);
       await _initCounts(publishChange: publishChange);
     } catch (_) {
@@ -545,17 +618,7 @@ class LocalFavoritesManager with ChangeNotifier {
   late final _readLater = ReadLaterService(
     repository: () => _repository,
     configuredFolder: () => appdata.settings['readLaterFolder'],
-    selectFolder: (folder) => appdata.settings['readLaterFolder'] = folder,
-    createFolder: (folder) {
-      _createFolder(folder);
-    },
-    addFirst: (folder, comic) {
-      _addComic(folder, comic, minValue(folder) - 1);
-    },
-    remove: (folder, id, type) {
-      _deleteComicWithId(folder, id, type);
-    },
-    saveSettings: () => appdata.saveData(),
+    translateTags: _translateTags,
   );
 
   String? get readLaterFolder => _readLater.folder;
@@ -572,9 +635,67 @@ class LocalFavoritesManager with ChangeNotifier {
     required String folderName,
   }) {
     final captured = comic.detached();
-    return _mutate(
-      () =>
-          _readLater.set(captured, included: included, folderName: folderName),
+    // This short compound operation changes SQL and its settings reference.
+    // Acquire exclusion before the local queue; no network work occurs here.
+    return AppDataOperations.instance.run(
+      () => _mutate(() async {
+        final generation = _connectionGeneration;
+        late ReadLaterCommit commit;
+        try {
+          commit = _readLater.set(
+            captured,
+            included: included,
+            folderName: folderName,
+          );
+        } on SqliteTransactionRollbackError catch (error, stack) {
+          Error.throwWithStackTrace(
+            PersistenceFailure(
+              commitState: PersistenceCommitState.unknown,
+              cause: error.operationError,
+              stackTrace: error.operationStack,
+              cleanupFailures: [
+                (error: error.rollbackError, stackTrace: error.rollbackStack),
+              ],
+            ),
+            stack,
+          );
+        }
+        final failures = <({Object error, StackTrace stackTrace})>[];
+        try {
+          await appdata.updateSettings((draft) {
+            _checkSourceGeneration(generation);
+            if (commit.created) draft['readLaterFolder'] = commit.folder;
+          });
+        } catch (error, stack) {
+          failures.add((error: error, stackTrace: stack));
+        }
+        try {
+          final folder = commit.folder;
+          if (folder != null && (commit.created || commit.added)) {
+            counts[folder] = _repository.count(folder);
+            _refreshIdentityCounts([(captured.id, captured.type.value)]);
+            _syncFollowUpdatesIfAffected([folder]);
+            notifyListeners();
+          } else if (folder != null && commit.removed) {
+            _applyDeletedComics({
+              folder: [(captured.id, captured.type.value)],
+            });
+          }
+        } catch (error, stack) {
+          failures.add((error: error, stackTrace: stack));
+        }
+        if (failures.isNotEmpty) {
+          Error.throwWithStackTrace(
+            PersistenceFailure(
+              commitState: PersistenceCommitState.committed,
+              cause: failures.first.error,
+              stackTrace: failures.first.stackTrace,
+              cleanupFailures: failures.skip(1),
+            ),
+            failures.first.stackTrace,
+          );
+        }
+      }),
     );
   }
 
@@ -620,6 +741,9 @@ class LocalFavoritesManager with ChangeNotifier {
 
   @visibleForTesting
   Future<void> debugWaitForHashedIdsRefresh() async {
+    // Initialization may still be queued behind settings before starting its
+    // identity read. Do not accidentally await the previous connection's read.
+    await _initialization;
     await _hashedIdsRefresh;
   }
 
@@ -954,43 +1078,47 @@ class LocalFavoritesManager with ChangeNotifier {
 
   /// delete a folder
   Future<void> _deleteFolder(String name) async {
-    var wasFollowUpdatesFolder =
-        appdata.settings['followUpdatesFolder'] == name;
     final removedIdentities = _repository.identities(name);
     _repository.deleteFolder(name);
     counts.remove(name);
-    var settingsChanged = false;
-    for (final key in [
-      'readLaterFolder',
-      'quickFavorite',
-      'followUpdatesFolder',
-    ]) {
-      if (appdata.settings[key] == name) {
-        appdata.settings[key] = null;
-        settingsChanged = true;
-      }
-    }
     _refreshIdentityCounts(removedIdentities);
-    refreshUpdateIds();
-    await _finishFolderMutation(settingsChanged, wasFollowUpdatesFolder);
+    var followChanged = false;
+    await _finishFolderMutation(
+      () => appdata.updateSettings((draft) {
+        for (final key in [
+          'readLaterFolder',
+          'quickFavorite',
+          'followUpdatesFolder',
+        ]) {
+          if (draft[key] == name) {
+            draft[key] = null;
+            if (key == 'followUpdatesFolder') followChanged = true;
+          }
+        }
+      }),
+      () => followChanged,
+    );
   }
 
-  /// SQL is already committed. Publish the resulting state even when saving
-  /// its settings fails, and retain that outcome so callers cannot replay SQL.
+  /// SQL may already be committed. Publish the resulting state even if the
+  /// settings draft cannot persist, retaining the outcome and all failures.
   Future<void> _finishFolderMutation(
-    bool saveSettings,
-    bool followChanged, {
+    Future<void> Function() saveSettings,
+    bool Function() followChanged, {
     PersistenceCommitState commitState = PersistenceCommitState.committed,
   }) async {
     final failures = <({Object error, StackTrace stackTrace})>[];
-    if (saveSettings) {
-      try {
-        await appdata.saveData();
-      } catch (error, stack) {
-        failures.add((error: error, stackTrace: stack));
-      }
+    try {
+      await saveSettings();
+    } catch (error, stack) {
+      failures.add((error: error, stackTrace: stack));
     }
-    if (followChanged) {
+    try {
+      refreshUpdateIds();
+    } catch (error, stack) {
+      failures.add((error: error, stackTrace: stack));
+    }
+    if (followChanged()) {
       try {
         _notifyFollowUpdatesChanged();
       } catch (error, stack) {
@@ -1125,50 +1253,83 @@ class LocalFavoritesManager with ChangeNotifier {
       prepared = true;
       await _startInitialization(path);
     } catch (error, stack) {
-      try {
-        await _closeAndWait();
-        if (prepared) replacement!.restore();
-        appdata.settings['followUpdatesFolder'] = previousTracking;
-        appdata.settings['quickFavorite'] = previousQuick;
-        await _startInitialization(path);
-        await appdata.saveData(false);
-      } catch (recoveryError, recoveryStack) {
-        Log.error(
-          'Clear favorites',
-          'Recovery failed: $recoveryError. Original data is at $path or ${replacement?.backupFile.path}.',
-          recoveryStack,
+      final failures = <({Object error, StackTrace stackTrace})>[];
+      Future<bool> recover(FutureOr<void> Function() action) async {
+        try {
+          await action();
+          return true;
+        } catch (error, stack) {
+          failures.add((error: error, stackTrace: stack));
+          return false;
+        }
+      }
+
+      final closed = await recover(_closeAndWait);
+      final restored =
+          closed && (!prepared || await recover(() => replacement!.restore()));
+      await recover(
+        () => appdata.restoreSettingsFields({
+          'followUpdatesFolder': previousTracking,
+          'quickFavorite': previousQuick,
+        }, persist: false),
+      );
+      if (restored) {
+        // An unavailable settings file must not prevent reopening the restored
+        // database. The separate flush below still reports durability failure.
+        await recover(
+          () => _startInitialization(path, retryPendingSettings: false),
         );
+      }
+      if (await recover(() => appdata.saveData(false))) {
+        _pendingSettingsRepairs.remove(path);
+      } else {
+        _pendingSettingsRepairs.add(path);
       }
       // An unsuccessful restore must retain its backup for manual recovery.
       if (replacement == null || !replacement.backupFile.existsSync()) {
-        _removeClearBackupDirectory(backupDirectory);
+        await recover(() => _removeClearBackupDirectory(backupDirectory));
+      }
+      if (failures.isNotEmpty) {
+        Error.throwWithStackTrace(
+          PersistenceFailure(
+            commitState: PersistenceCommitState.unknown,
+            cause: error,
+            stackTrace: stack,
+            cleanupFailures: failures,
+          ),
+          stack,
+        );
       }
       Error.throwWithStackTrace(error, stack);
     }
+    final failures = <({Object error, StackTrace stackTrace})>[];
     try {
       replacement.commit();
+    } catch (error, stack) {
+      failures.add((error: error, stackTrace: stack));
+    }
+    try {
       _removeClearBackupDirectory(backupDirectory);
     } catch (error, stack) {
-      // Clearing succeeded; a cleanup failure must not roll back the new DB.
-      Log.error(
-        'Clear favorites',
-        'Backup cleanup failed at ${replacement.backupFile.path}: $error',
-        stack,
+      failures.add((error: error, stackTrace: stack));
+    }
+    if (failures.isNotEmpty) {
+      // Clearing succeeded; cleanup failures must not roll back the new DB.
+      Error.throwWithStackTrace(
+        PersistenceFailure(
+          commitState: PersistenceCommitState.committed,
+          cause: failures.first.error,
+          stackTrace: failures.first.stackTrace,
+          cleanupFailures: failures.skip(1),
+        ),
+        failures.first.stackTrace,
       );
     }
   }
 
   void _removeClearBackupDirectory(Directory? directory) {
     if (directory == null || !directory.existsSync()) return;
-    try {
-      directory.deleteSync();
-    } catch (error, stack) {
-      Log.error(
-        'Clear favorites',
-        'Could not remove backup directory ${directory.path}: $error',
-        stack,
-      );
-    }
+    directory.deleteSync();
   }
 
   void _reorder(List<FavoriteItem> newFolder, String folder) {
@@ -1194,24 +1355,25 @@ class LocalFavoritesManager with ChangeNotifier {
     if (after.contains('"')) {
       throw "Invalid name";
     }
-    var wasFollowUpdatesFolder =
-        appdata.settings['followUpdatesFolder'] == before;
     _repository.renameFolder(before, after);
     counts[after] = counts[before] ?? 0;
     counts.remove(before);
-    var settingsChanged = false;
-    for (final key in [
-      'readLaterFolder',
-      'quickFavorite',
-      'followUpdatesFolder',
-    ]) {
-      if (appdata.settings[key] == before) {
-        appdata.settings[key] = after;
-        settingsChanged = true;
-      }
-    }
-    refreshUpdateIds();
-    await _finishFolderMutation(settingsChanged, wasFollowUpdatesFolder);
+    var followChanged = false;
+    await _finishFolderMutation(
+      () => appdata.updateSettings((draft) {
+        for (final key in [
+          'readLaterFolder',
+          'quickFavorite',
+          'followUpdatesFolder',
+        ]) {
+          if (draft[key] == before) {
+            draft[key] = after;
+            if (key == 'followUpdatesFolder') followChanged = true;
+          }
+        }
+      }),
+      () => followChanged,
+    );
   }
 
   void _onRead(String id, ComicType type) {
