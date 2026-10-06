@@ -4,10 +4,13 @@ import 'package:flutter_saf/flutter_saf.dart';
 import 'package:path/path.dart' as path;
 import 'package:rhttp/rhttp.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
+import 'package:venera_next/features/comic_source/source_data_storage.dart';
+import 'package:venera_next/features/comic_source/source_transaction_journal.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/sync/app_data_import_journal.dart';
+import 'package:venera_next/features/sync/data_sync_ownership.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
@@ -38,13 +41,28 @@ CoreBootstrap createCoreBootstrap({
     settings: () async {
       // Import recovery precedes settings fallback and every database opener.
       // No live application resource may observe a partly replaced snapshot.
-      final imports = AppDataImportJournal.open(App.dataPath);
+      final ownership = SqliteDataSyncOwnership(() => App.dataPath);
+      AppDataImportJournal? imports;
+      final recoveryCleanup = (
+        name: 'startup sync recovery',
+        close: () {
+          imports?.close();
+          ownership.release();
+        },
+      );
+      cleanup.add(recoveryCleanup);
       try {
+        ownership.acquire();
+        imports = AppDataImportJournal.open(App.dataPath);
         await imports.recoverPending();
-      } finally {
         imports.close();
+        await SourceTransactionJournal.recover(App.dataPath);
+        await const SourceDataStorage().recover(App.dataPath);
+        await appdata.init();
+      } finally {
+        recoveryCleanup.close();
+        cleanup.remove(recoveryCleanup);
       }
-      await appdata.init();
     },
     infrastructure: () async {
       final previousCookies = SingleInstanceCookieJar.instance;

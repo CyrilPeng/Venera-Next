@@ -65,7 +65,7 @@ void main() {
       Future<ComicSource> parse(String capabilities) async {
         final source = await ComicSourceParser().parse(
           sourceScript(capabilities),
-          '${directory.path}/matrix.js',
+          '${directory.path}/comic_source/matrix.js',
         );
         manager.add(source);
         return source;
@@ -112,7 +112,9 @@ void main() {
           'favorites retries once after expired login; login fails=$failLogin',
           () async {
             final source = await parse(accountScript + favoritesScript);
-            source.data['account'] = ['user', 'password'];
+            await source.editData(
+              (draft) => draft['account'] = ['user', 'password'],
+            );
             JsEngine().runCode(
               'void (ComicSource.sources.transaction_a.failLogin = $failLogin)',
             );
@@ -226,7 +228,9 @@ void main() {
             accountScript +
                 favoritesScript.replaceFirst('this.attempts === 1', 'true'),
           );
-          source.data['account'] = ['user', 'password'];
+          await source.editData(
+            (draft) => draft['account'] = ['user', 'password'],
+          );
           final result = await source.favoriteData!.loadComic!(1);
           expect(result.errorMessage, contains('Login expired'));
           expect(

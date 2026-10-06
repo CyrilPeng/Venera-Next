@@ -366,8 +366,8 @@ class DataSyncUploadJournal {
 
   void close() {
     if (_closed) return;
-    _closed = true;
     _db.dispose();
+    _closed = true;
   }
 }
 

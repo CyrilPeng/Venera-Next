@@ -20,7 +20,8 @@ abstract mixin class Init {
 
   /// Concurrent calls share one execution, including its error and stack trace.
   Future<void> init() {
-    final result = ensureInit();
+    // Starting work must not invoke a subclass's waiting/admission guard.
+    final result = (_attempt ??= Completer<void>()).future;
     if (_initializationState != InitializationState.notStarted) return result;
     _initializationState = InitializationState.initializing;
     final attempt = _attempt!;

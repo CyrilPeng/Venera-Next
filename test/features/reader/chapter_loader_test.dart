@@ -326,13 +326,6 @@ void main() {
         final engine = JsEngine();
         await engine.init();
         final callbacks = JsCallbackScope();
-        final parser = SourceImagesParser(
-          SourceParserContext(
-            key: _key,
-            name: 'Chapter completion test',
-            callbacks: callbacks,
-          ),
-        );
         engine.runCode('''
         void (globalThis.nativeChapterCalls = 0);
         void (ComicSource.sources.$_key = {comic: {
@@ -345,6 +338,13 @@ void main() {
           }
         }});
       ''');
+        final parser = SourceImagesParser(
+          SourceParserContext(
+            key: _key,
+            name: 'Chapter completion test',
+            callbacks: callbacks,
+          ),
+        );
         ComicSourceManager().remove(_key);
         ComicSourceManager().add(source(parser.parseLoadComicPagesFunc()!));
         final work = ImageWork();

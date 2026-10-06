@@ -5,7 +5,6 @@ import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/foundation/appdata.dart';
-import 'package:venera_next/foundation/init.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 
 import 'bootstrap_core.dart';
@@ -103,10 +102,8 @@ Future<void> runHeadlessMode(List<String> args) async {
         configureComicSourceDataSavedHandler(null);
       },
       flushPersistence: () async {
-        // A failed settings load must not overwrite its file with defaults.
-        if (appdata.initializationState == InitializationState.ready) {
-          await sync.flushPersistence();
-        }
+        // Closing an unacquired service drains without persisting defaults.
+        await sync.closeAndWait();
       },
       emit: cliPrint,
       reportError: (error, stack) =>

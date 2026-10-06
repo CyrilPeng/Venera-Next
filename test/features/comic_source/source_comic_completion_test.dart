@@ -47,13 +47,6 @@ void main() {
         engine = JsEngine();
         await engine.init();
         callbacks = JsCallbackScope();
-        parser = SourceComicParser(
-          SourceParserContext(
-            key: _key,
-            name: 'Owned details',
-            callbacks: callbacks,
-          ),
-        );
       });
       tearDown(() {
         expect(engine.debugOwnedReferenceCount, 0);
@@ -68,6 +61,13 @@ void main() {
           loadInfo: () => { $body }
         }});
       ''');
+        parser = SourceComicParser(
+          SourceParserContext(
+            key: _key,
+            name: 'Owned details',
+            callbacks: callbacks,
+          ),
+        );
       }
 
       test(

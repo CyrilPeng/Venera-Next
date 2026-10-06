@@ -119,6 +119,28 @@ class AppDataImportJournal {
     ];
   }
 
+  /// Include unfinished intents: absence of a terminal receipt alone cannot
+  /// establish that a sync download never reached the replacement boundary.
+  bool containsSyncOperation(String syncOperationId) {
+    _checkOpen();
+    var found = false;
+    for (final row in _db.select('SELECT * FROM import_operations')) {
+      _id(row['id']);
+      _phase(row);
+      final syncId = row['sync_id'];
+      if (syncId != null && (syncId is! String || syncId.isEmpty)) {
+        throw const FormatException('Invalid import sync identity');
+      }
+      if (syncId == syncOperationId) {
+        if (found) {
+          throw const FormatException('Duplicate import sync identity');
+        }
+        found = true;
+      }
+    }
+    return found;
+  }
+
   /// Check before saving settings or closing application stores. Recovery may
   /// need the current files unchanged and must run before any store is opened.
   void checkReadyForImport() {
@@ -357,8 +379,8 @@ class AppDataImportJournal {
 
   void close() {
     if (_closed) return;
-    _closed = true;
     _db.dispose();
+    _closed = true;
   }
 
   Row? _operation(String id) {

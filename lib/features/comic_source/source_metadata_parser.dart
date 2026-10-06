@@ -1,8 +1,6 @@
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'dart:convert';
 
-import 'package:venera_next/foundation/js_engine.dart';
-
 import 'models.dart';
 import 'normalization.dart';
 import 'source.dart';
@@ -19,7 +17,7 @@ class SourceMetadataParser {
     try {
       return normalizeComicSourceSettings(
             value,
-            retainCallback: context.callbacks.retain,
+            retainCallback: context.retainCallback,
           ) ??
           {};
     } finally {
@@ -51,8 +49,8 @@ class SourceMetadataParser {
       return null;
     }
     return (namespace, tag) {
-      var res = JsEngine().runCode("""
-          ComicSource.sources.${context.key}.comic.onClickTag(${jsonEncode(namespace)}, ${jsonEncode(tag)})
+      var res = context.runCode("""
+          ${context.sourceExpression}.comic.onClickTag(${jsonEncode(namespace)}, ${jsonEncode(tag)})
         """);
       if (res is! Map) {
         return null;
@@ -69,8 +67,8 @@ class SourceMetadataParser {
     }
     List<String> domains = List.from(context.getValue("comic.link.domains"));
     linkToId(String link) {
-      var res = JsEngine().runCode("""
-          ComicSource.sources.${context.key}.comic.link.linkToId(${jsonEncode(link)})
+      var res = context.runCode("""
+          ${context.sourceExpression}.comic.link.linkToId(${jsonEncode(link)})
         """);
       return res as String?;
     }

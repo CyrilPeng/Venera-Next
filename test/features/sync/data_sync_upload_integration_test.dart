@@ -321,7 +321,11 @@ class _Participant implements DataSyncParticipant {
   }
 
   @override
-  Future<void> exportData(bool excludeFields, File destination) async {
+  Future<void> exportData(
+    bool excludeFields,
+    File destination, {
+    String? syncOperationId,
+  }) async {
     fixture.exports++;
     fixture.destinations.add(destination.path);
     expect(p.basename(destination.path), 'snapshot.venera');

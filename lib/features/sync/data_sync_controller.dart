@@ -11,6 +11,8 @@ import 'data_sync_commit.dart';
 import 'data_sync_operation.dart';
 import 'data_sync_transfer.dart';
 import 'data_sync_recovery.dart';
+import 'data_sync_content.dart';
+import 'data_sync_ownership.dart';
 
 enum _DataSyncTask { upload, download }
 
@@ -81,6 +83,8 @@ class DataSyncController with ChangeNotifier {
     required void Function() Function(void Function()) observeChanges,
     DataSyncImportRecovery? importRecovery,
     DataSyncUploadRecovery? uploadRecovery,
+    DataSyncContent? content,
+    DataSyncOwnership? ownership,
     DateTime Function()? now,
     Timer Function(Duration, void Function())? createTimer,
   }) : _syncPreferences = preferences,
@@ -90,6 +94,8 @@ class DataSyncController with ChangeNotifier {
        _observeChanges = observeChanges,
        _importRecovery = importRecovery,
        _uploadRecovery = uploadRecovery,
+       _content = content,
+       _ownership = ownership,
        _clock = now ?? DateTime.now,
        _createTimer = createTimer ?? Timer.new;
 
@@ -102,7 +108,41 @@ class DataSyncController with ChangeNotifier {
   final FutureOr<void> Function() _persistImplicit;
   final DataSyncImportRecovery? _importRecovery;
   final DataSyncUploadRecovery? _uploadRecovery;
-  bool get _hasRecovery => _importRecovery != null || _uploadRecovery != null;
+  final DataSyncContent? _content;
+  final DataSyncOwnership? _ownership;
+  bool _ownershipReady = false;
+  bool _ownershipReleased = false;
+  bool _disposalDrained = false;
+  Future<void>? _closing;
+  Object? _disposalFailure;
+  StackTrace? _disposalStack;
+
+  void _acquireOwnership() {
+    if (_ownershipReleased || _disposalDrained) {
+      throw StateError('Sync ownership is closing');
+    }
+    _ownership?.acquire();
+    _ownershipReady = true;
+  }
+
+  bool _tryOwnership() {
+    try {
+      _acquireOwnership();
+      return true;
+    } catch (error, stack) {
+      Log.error('Data Sync ownership', error, stack);
+      _lastError = error.toString();
+      if (!_disposed) notifyListeners();
+      return false;
+    }
+  }
+
+  bool _checkingContent = false;
+  bool get _hasRecovery =>
+      _importRecovery != null ||
+      _uploadRecovery != null ||
+      _content != null ||
+      _ownership != null;
   bool _recoveryInitialized = false;
   bool _automaticRecoveryWait = false;
   Future<bool>? _recoveryPreparation;
@@ -123,6 +163,7 @@ class DataSyncController with ChangeNotifier {
       throw StateError('Cannot start a disposed DataSyncController');
     }
     if (_started) return;
+    if (!_tryOwnership()) return;
     _started = true;
     try {
       _unsubscribe ??= _observeChanges(onDataChanged);
@@ -150,6 +191,7 @@ class DataSyncController with ChangeNotifier {
     if (_disposed || _publishingImported) return;
     _changeGeneration++;
     if (!hasConfiguration) return;
+    if (!_tryOwnership()) return;
     if (!hasPendingChanges) {
       _syncPreferences.pending = true;
       unawaited(
@@ -170,7 +212,11 @@ class DataSyncController with ChangeNotifier {
         currentMode == DataSyncMode.realtime &&
         !_exitHeld &&
         !_configuring) {
-      unawaited(uploadData());
+      if (_content == null) {
+        unawaited(uploadData());
+      } else {
+        checkForAutomaticSync(startup: true);
+      }
     }
   }
 
@@ -247,7 +293,78 @@ class DataSyncController with ChangeNotifier {
       }
     }
     // Do not download over local edits waiting for their next scheduled upload.
-    unawaited(hasPendingChanges ? uploadData() : downloadData());
+    final completion = _completion;
+    if (completion != null) {
+      // Resolve accepted work before consulting a baseline it may still own.
+      // A first interrupted upload has no baseline until recovery confirms it.
+      final upload = completion.operation.direction == DataSyncDirection.upload;
+      unawaited(
+        _startTask(
+          upload ? _DataSyncTask.upload : _DataSyncTask.download,
+          upload ? _uploadNow : _downloadNow,
+        ),
+      );
+    } else if (_content == null) {
+      unawaited(hasPendingChanges ? uploadData() : downloadData());
+    } else if (!_checkingContent) {
+      unawaited(_checkAutomaticContent());
+    }
+  }
+
+  Future<void> _checkAutomaticContent() async {
+    _checkingContent = true;
+    final config = _syncPreferences.configuration;
+    final connection = config.connection!;
+    final values = [connection.url, connection.user, connection.password];
+    try {
+      final state = await _trackRecoveryIo(
+        'compare synchronized content',
+        () => _content!.inspect(values, config.excludedFields),
+      );
+      if (_disposed ||
+          !_started ||
+          !isEnabled ||
+          _exitHeld ||
+          _configuring ||
+          _activeTask != null ||
+          _pendingTask != null) {
+        return;
+      }
+      final current = _syncPreferences.configuration;
+      final endpoint = current.connection;
+      if (endpoint == null ||
+          !listEquals(values, [
+            endpoint.url,
+            endpoint.user,
+            endpoint.password,
+          ]) ||
+          current.excludedFields != config.excludedFields ||
+          current.mode != config.mode) {
+        return;
+      }
+      if (state == DataSyncContentState.unknown) {
+        throw const DataSyncBaselineUnavailable();
+      }
+      _syncPreferences.pending = state == DataSyncContentState.changed;
+      // The synchronous _startTask call takes over admission immediately. Its
+      // completion may schedule another check for edits made during transfer.
+      _checkingContent = false;
+      unawaited(
+        _startTask(
+          hasPendingChanges ? _DataSyncTask.upload : _DataSyncTask.download,
+          hasPendingChanges ? _uploadNow : _downloadNow,
+          automatic: true,
+        ),
+      );
+    } catch (error, stack) {
+      Log.error('Data Sync content', error, stack);
+      if (!_disposed) {
+        _lastError = error.toString();
+        notifyListeners();
+      }
+    } finally {
+      _checkingContent = false;
+    }
   }
 
   /// Restore the old endpoint only when the initial transfer did not apply.
@@ -473,6 +590,57 @@ class DataSyncController with ChangeNotifier {
       unsubscribe?.call();
     } finally {
       super.dispose();
+      if (_ownership != null) {
+        unawaited(
+          _closeOwned().catchError((Object error, StackTrace stack) {
+            Log.error('Data Sync shutdown', error, stack);
+          }),
+        );
+      }
+    }
+  }
+
+  /// Detach immediately, then await accepted work, final persistence and native
+  /// ownership release. Failed release can be retried without replaying writes.
+  Future<void> closeAndWait() {
+    dispose();
+    return _ownership == null ? _flushPersistence() : _closeOwned();
+  }
+
+  Future<void> _closeOwned() {
+    final closing = _closing;
+    if (closing != null) return closing;
+    return _closing = _closeOwnedNow().catchError((
+      Object error,
+      StackTrace stack,
+    ) {
+      if (!_ownershipReleased) _closing = null;
+      Error.throwWithStackTrace(error, stack);
+    });
+  }
+
+  Future<void> _closeOwnedNow() async {
+    if (!_disposalDrained) {
+      try {
+        await _flushPersistence();
+      } catch (error, stack) {
+        if (!identical(error, _recoveryIoFailure)) rethrow;
+        // An already reported recovery error is not a running task. Retain it
+        // for the caller while still flushing and closing concrete resources.
+        _disposalFailure = error;
+        _disposalStack = stack;
+        await Future<void>.sync(_persistState);
+        while (_pendingPersistence.isNotEmpty) {
+          await Future.wait(List.of(_pendingPersistence));
+        }
+      }
+      _disposalDrained = true;
+    }
+    await _content?.close();
+    _ownership!.release();
+    _ownershipReleased = true;
+    if (_disposalFailure case final failure?) {
+      Error.throwWithStackTrace(failure, _disposalStack!);
     }
   }
 
@@ -606,6 +774,10 @@ class DataSyncController with ChangeNotifier {
   final _pendingPersistence = <Future<void>>{};
 
   FutureOr<void> _persistState() {
+    if (_ownership != null) {
+      if (_disposalDrained || (_disposed && !_ownershipReady)) return null;
+      _acquireOwnership();
+    }
     final result = _persistImplicit();
     if (result is! Future<void>) return null;
     late Future<void> tracked;
@@ -616,7 +788,10 @@ class DataSyncController with ChangeNotifier {
 
   /// Persist the latest state (also retrying an earlier failed background save)
   /// and drain writes accepted while flushing. This does not stop scheduling.
-  Future<void> flushPersistence() async {
+  Future<void> flushPersistence() =>
+      _disposed && _ownership != null ? _closeOwned() : _flushPersistence();
+
+  Future<void> _flushPersistence() async {
     if (_disposed) {
       // Accepted transfers can still own journal reads and committed follow-up
       // writes. Their implementation uses _persistState, never this flush.
@@ -658,9 +833,11 @@ class DataSyncController with ChangeNotifier {
   }
 
   Future<Res<bool>?> _prepareRecovery() async {
-    if (!_hasRecovery || _recoveryInitialized) return null;
-    final preparation = _recoveryPreparation ??= _loadImportRecovery();
+    Future<bool>? preparation;
     try {
+      _acquireOwnership();
+      if (!_hasRecovery || _recoveryInitialized) return null;
+      preparation = _recoveryPreparation ??= _loadImportRecovery();
       _recoveryInitialized = await preparation;
       _recoveryIoFailure = null;
       return null;
@@ -747,6 +924,15 @@ class DataSyncController with ChangeNotifier {
       } on FormatException {
         return true; // The synchronous guard retains the corrupt marker.
       }
+    }
+    final unstartedDownload = _content == null
+        ? false
+        : await _trackRecoveryIo(
+            'recover synchronized content',
+            () => _content.recover(operation),
+          );
+    if (_disposed || _exitHeld) return false;
+    if (operation != null) {
       if (operation.direction == DataSyncDirection.upload) {
         if (operation.version >= 3 && _uploadRecovery != null) {
           _installRecoveredUpload(operation);
@@ -791,24 +977,27 @@ class DataSyncController with ChangeNotifier {
     final matches = receipts
         .where((receipt) => receipt.syncOperationId == operation!.id)
         .toList();
-    if (matches.length != 1) return true;
-    final receipt = matches.single;
-    if (receipt.commitState == DataSyncCommitState.recoveryRequired ||
-        (receipt.commitState == DataSyncCommitState.applied &&
-            !receipt.hasValidCommitTime)) {
+    if (matches.length != 1 && !(matches.isEmpty && unstartedDownload)) {
       return true;
     }
-    final restored = operation.copyWith(commitState: receipt.commitState);
+    final receipt = matches.isEmpty ? null : matches.single;
+    final state = receipt?.commitState ?? DataSyncCommitState.notApplied;
+    if (state == DataSyncCommitState.recoveryRequired ||
+        (state == DataSyncCommitState.applied &&
+            !receipt!.hasValidCommitTime)) {
+      return true;
+    }
+    final restored = operation.copyWith(commitState: state);
     final completion =
         _SyncCompletion(
             operation: restored,
             result: const Res(true),
-            settingsPending: receipt.commitState == DataSyncCommitState.applied,
+            settingsPending: state == DataSyncCommitState.applied,
           )
           ..preservePending = true
           ..receiptResolved = true
-          ..receiptId = receipt.id;
-    if (receipt.commitState == DataSyncCommitState.applied) {
+          ..receiptId = receipt?.id;
+    if (state == DataSyncCommitState.applied) {
       _syncPreferences.applyDraft(
         operation.connection,
         operation.excludedFields,
@@ -825,7 +1014,7 @@ class DataSyncController with ChangeNotifier {
           notified = true;
         }
         if (!recorded) {
-          await recovery.recordSyncTime(receipt.committedAt!);
+          await recovery.recordSyncTime(receipt!.committedAt!);
           recorded = true;
         }
         return DataSyncCommitState.applied;
@@ -841,7 +1030,7 @@ class DataSyncController with ChangeNotifier {
       };
     }
     _syncPreferences.pending = true;
-    _lastCommitState = receipt.commitState;
+    _lastCommitState = state;
     _ownedOperation = restored;
     _completion = completion;
     _recoveryFailure = null;
@@ -970,6 +1159,7 @@ class DataSyncController with ChangeNotifier {
     Future<Res<bool>> Function() run, {
     bool saveConfiguration = false,
     SyncPreferenceCheckpoint? previousConfiguration,
+    bool automatic = false,
   }) {
     if (_disposed) {
       return Future.value(const Res.error('Sync service is disposed'));
@@ -984,6 +1174,7 @@ class DataSyncController with ChangeNotifier {
           run,
           saveConfiguration: saveConfiguration,
           previousConfiguration: previousConfiguration,
+          automatic: automatic,
         ).whenComplete(() {
           if (identical(_activeTask, activeTask)) {
             _activeTask = null;
@@ -1000,7 +1191,11 @@ class DataSyncController with ChangeNotifier {
                 hasPendingChanges) {
               // A queued local edit may have joined the old receipt's retry.
               // Its new generation still needs an upload of its own.
-              unawaited(uploadData());
+              if (_content == null) {
+                unawaited(uploadData());
+              } else {
+                checkForAutomaticSync(startup: true);
+              }
             }
           }
         });
@@ -1013,6 +1208,7 @@ class DataSyncController with ChangeNotifier {
     Future<Res<bool>> Function() run, {
     required bool saveConfiguration,
     SyncPreferenceCheckpoint? previousConfiguration,
+    required bool automatic,
   }) async {
     final pending = _completion;
     final effectiveTask = pending == null
@@ -1037,7 +1233,9 @@ class DataSyncController with ChangeNotifier {
       final config = _syncPreferences.configuration;
       final connection = config.connection!;
       final operation = DataSyncOperation(
-        version: task == _DataSyncTask.upload && _uploadRecovery != null
+        version: _content != null
+            ? 4
+            : task == _DataSyncTask.upload && _uploadRecovery != null
             ? 3
             : 2,
         id: const Uuid().v4(),
@@ -1055,6 +1253,12 @@ class DataSyncController with ChangeNotifier {
         configurationChange: saveConfiguration,
         previousConfiguration: previousConfiguration,
       );
+      if (_content != null) {
+        await _trackRecoveryIo(
+          'prepare synchronized content',
+          () => _content.prepare(operation, automatic: automatic),
+        );
+      }
       _ownedOperation = operation;
       _syncPreferences.pendingOperation = operation.toJson();
       _syncPreferences.lastAttempt = _now.millisecondsSinceEpoch;
@@ -1211,6 +1415,21 @@ class DataSyncController with ChangeNotifier {
       var resolved = false;
       try {
         await _resolveCompletionReceipt(completion);
+        if (completion.operation.version >= 4) {
+          final content =
+              _content ??
+              (throw StateError('Sync content recovery is unavailable'));
+          final generation = _changeGeneration;
+          final state = await _trackRecoveryIo(
+            'confirm synchronized content',
+            () => content.finish(completion.operation, _lastCommitState),
+          );
+          if (state != DataSyncContentState.unknown) {
+            _syncPreferences.pending =
+                state == DataSyncContentState.changed ||
+                _changeGeneration != generation;
+          }
+        }
         resolved = true;
       } catch (error, stack) {
         _retainRecoveryIoFailure('read import receipt', error, stack);
@@ -1319,6 +1538,15 @@ class DataSyncController with ChangeNotifier {
         } else {
           await _acknowledgeReceipt(receiptId);
         }
+      }
+      if (completion.operation.version >= 4) {
+        final content =
+            _content ??
+            (throw StateError('Sync content recovery is unavailable'));
+        await _trackRecoveryIo(
+          'acknowledge synchronized content',
+          () => content.acknowledge(completion.operation.id),
+        );
       }
       _recoveryIoFailure = null;
       _completion = null;

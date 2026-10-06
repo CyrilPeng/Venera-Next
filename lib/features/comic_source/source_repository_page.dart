@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'source_failure.dart';
+import 'package:venera_next/components/settings_save_state.dart';
 import 'source_failure_presentation.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart' show CancelToken;
@@ -137,30 +140,20 @@ class SourceRepositoriesPanel extends StatelessWidget {
     BuildContext context,
     SourceRepository repository,
   ) async {
-    final confirmed = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Remove repository'.tl),
-        content: Text(
-          'Remove "@name"? Its @count linked sources, their settings and your reading data will be kept. These sources will no longer be included in repository update checks.'
-              .tlParams({
-                'name': repository.name,
-                'count': _linkedCount(repository).toString(),
-              }),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'.tl),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('Remove repository'.tl),
-          ),
-        ],
+      barrierDismissible: false,
+      builder: (_) => _RepositoryActionDialog(
+        title: 'Remove repository'.tl,
+        content:
+            'Remove "@name"? Its @count linked sources, their settings and your reading data will be kept. These sources will no longer be included in repository update checks.'
+                .tlParams({
+                  'name': repository.name,
+                  'count': _linkedCount(repository).toString(),
+                }),
+        perform: () => SourceRepositories.instance.remove(repository),
       ),
     );
-    if (confirmed == true) await SourceRepositories.instance.remove(repository);
   }
 }
 
@@ -171,10 +164,11 @@ class _RepositoryEditor extends StatefulWidget {
   State<_RepositoryEditor> createState() => _RepositoryEditorState();
 }
 
-class _RepositoryEditorState extends State<_RepositoryEditor> {
+class _RepositoryEditorState extends SettingsSaveState<_RepositoryEditor> {
   late final name = TextEditingController(text: widget.repository?.name);
   late final url = TextEditingController(text: widget.repository?.url);
-  bool saving = false;
+  bool get saving => savingSettings;
+  bool get busy => savingSettings || hasSettingsSaveError;
   String? error;
 
   @override
@@ -185,102 +179,204 @@ class _RepositoryEditorState extends State<_RepositoryEditor> {
   }
 
   Future<void> save() async {
-    setState(() {
-      saving = true;
-      error = null;
-    });
-    try {
-      await SourceRepositories.instance.save(
-        id: widget.repository?.id,
-        name: name.text,
-        url: url.text,
-      );
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          error = sourceFailureMessage(e);
-          saving = false;
-        });
-      }
-    }
+    if (!acceptsSettingsChanges || busy) return;
+    final id = widget.repository?.id;
+    final capturedName = name.text;
+    final capturedUrl = url.text;
+    SourceRepositorySave? request;
+    error = null;
+    await saveSetting(
+      'repository',
+      () async {
+        error = null;
+        try {
+          request ??= SourceRepositories.instance.prepareSave(
+            id: id,
+            name: capturedName,
+            url: capturedUrl,
+          );
+          await request!.validate();
+        } catch (failure) {
+          // Validation has not published anything; keep the input editable.
+          error = sourceFailureMessage(failure);
+          return;
+        }
+        try {
+          await request!.save();
+        } on SourceFailure catch (failure) {
+          error = sourceFailureMessage(failure);
+        } catch (failure) {
+          error = sourceFailureMessage(failure);
+          rethrow;
+        }
+      },
+      onSaved: () {
+        if (error == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) unawaited(leaveSettings());
+          });
+        }
+      },
+    );
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: !saving,
-    child: AlertDialog(
+  Widget build(BuildContext context) => protectSettings(
+    AlertDialog(
+      scrollable: true,
       title: Text(
         (widget.repository == null ? 'Add repository' : 'Edit repository').tl,
       ),
       content: SizedBox(
         width: 440,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ExcludeSemantics(child: Text('Repository name'.tl)),
+            const SizedBox(height: 8),
+            Semantics(
+              label: 'Repository name'.tl,
+              child: TextField(
                 controller: name,
                 autofocus: true,
-                enabled: !saving,
+                enabled: !busy,
                 textInputAction: TextInputAction.next,
                 decoration: InputDecoration(
-                  labelText: 'Repository name'.tl,
                   hintText: 'A name you recognize'.tl,
                 ),
               ),
-              const SizedBox(height: 16),
-              TextField(
+            ),
+            const SizedBox(height: 16),
+            ExcludeSemantics(child: Text('Source list URL'.tl)),
+            const SizedBox(height: 8),
+            Semantics(
+              label: 'Source list URL'.tl,
+              child: TextField(
                 controller: url,
-                enabled: !saving,
+                enabled: !busy,
                 keyboardType: TextInputType.url,
                 autocorrect: false,
-                decoration: InputDecoration(
-                  labelText: 'Source list URL'.tl,
+                decoration: const InputDecoration(
                   hintText: 'https://example.com/index.json',
-                  helperText:
-                      'Use the JSON source list address, not a single script link.'
-                          .tl,
-                  helperMaxLines: 3,
                 ),
               ),
-              if (widget.repository != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    'Changing this address also changes where linked sources check for updates.'
-                        .tl,
-                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Use the JSON source list address, not a single script link.'.tl,
+            ),
+            if (widget.repository != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  'Changing this address also changes where linked sources check for updates.'
+                      .tl,
                 ),
-              if (saving)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: LinearProgressIndicator(
-                    semanticsLabel: 'Validating repository'.tl,
-                  ),
+              ),
+            settingsSaveStatus,
+            if (saving)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: LinearProgressIndicator(
+                  semanticsLabel: 'Validating repository'.tl,
                 ),
-              if (error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
+              ),
+            if (error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: saving ? null : () => Navigator.pop(context),
+          onPressed: acceptsSettingsChanges ? leaveSettings : null,
           child: Text('Cancel'.tl),
         ),
         FilledButton(
-          onPressed: saving ? null : save,
+          onPressed: busy ? null : save,
           child: Text((saving ? 'Validating repository' : 'Save').tl),
+        ),
+      ],
+    ),
+  );
+}
+
+class _RepositoryActionDialog extends StatefulWidget {
+  const _RepositoryActionDialog({
+    required this.title,
+    required this.content,
+    required this.perform,
+  });
+  final String title;
+  final String content;
+  final Future<void> Function() perform;
+  @override
+  State<_RepositoryActionDialog> createState() =>
+      _RepositoryActionDialogState();
+}
+
+class _RepositoryActionDialogState
+    extends SettingsSaveState<_RepositoryActionDialog> {
+  String? error;
+  Future<void> submit() async {
+    if (!acceptsSettingsChanges || savingSettings || hasSettingsSaveError) {
+      return;
+    }
+    final perform = widget.perform;
+    await saveSetting(
+      'repository-action',
+      () async {
+        error = null;
+        try {
+          await perform();
+        } on SourceFailure catch (failure) {
+          error = sourceFailureMessage(failure);
+        } catch (failure) {
+          error = sourceFailureMessage(failure);
+          rethrow;
+        }
+      },
+      onSaved: () {
+        if (error == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) unawaited(leaveSettings());
+          });
+        }
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => protectSettings(
+    AlertDialog(
+      scrollable: true,
+      title: Text(widget.title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(widget.content),
+          settingsSaveStatus,
+          if (error != null)
+            Text(
+              error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: acceptsSettingsChanges ? leaveSettings : null,
+          child: Text('Cancel'.tl),
+        ),
+        FilledButton(
+          onPressed: savingSettings || hasSettingsSaveError ? null : submit,
+          child: Text(widget.title),
         ),
       ],
     ),
@@ -307,7 +403,6 @@ class _SourceRepositoryCatalogPageState
   String? error;
   String query = '';
   bool loading = false;
-  final linkingUrls = <String>{};
   CancelToken? _loadToken;
 
   @override
@@ -360,33 +455,25 @@ class _SourceRepositoryCatalogPageState
   Future<void> act(SourceCatalogEntry entry) async {
     final source = ComicSource.find(entry.key);
     if (source != null) {
-      final confirmed = await showDialog<bool>(
+      final repository = widget.repository;
+      await showDialog<void>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Link repository'.tl),
-          content: Text(
-            'Use "@repository" for future updates of "@source"? The installed script and its settings will be kept until you update it.'
-                .tlParams({
-                  'repository': widget.repository.name,
-                  'source': source.name,
-                }),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('Cancel'.tl),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text('Link repository'.tl),
-            ),
-          ],
+        barrierDismissible: false,
+        builder: (_) => _RepositoryActionDialog(
+          title: 'Link repository'.tl,
+          content:
+              'Use "@repository" for future updates of "@source"? The installed script and its settings will be kept until you update it.'
+                  .tlParams({
+                    'repository': repository.name,
+                    'source': source.name,
+                  }),
+          perform: () =>
+              SourceRepositories.instance.link(source.key, repository, entry),
         ),
       );
-      if (confirmed != true || !mounted) return;
+      return;
     }
     setState(() {
-      if (source != null) linkingUrls.add(entry.url);
       error = null;
     });
     try {
@@ -394,28 +481,11 @@ class _SourceRepositoryCatalogPageState
           widget.repository.url) {
         throw 'Repository changed. Refresh the list and try again.'.tl;
       }
-      if (source != null) {
-        await SourceRepositories.instance.link(
-          source.key,
-          widget.repository,
-          entry,
-        );
-      } else {
-        SourceInstallations.instance.enqueueRepository(
-          widget.repository,
-          entry,
-        );
-      }
+      SourceInstallations.instance.enqueueRepository(widget.repository, entry);
     } catch (e) {
       if (mounted) {
         setState(() {
           error = sourceFailureMessage(e);
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          linkingUrls.remove(entry.url);
         });
       }
     }
@@ -614,24 +684,13 @@ class _SourceRepositoryCatalogPageState
                           (installed ? 'Use this repository' : 'Install source')
                               .tl,
                       child: FilledButton.tonal(
-                        onPressed: linkingUrls.contains(entry.url) || loading
-                            ? null
-                            : () => act(entry),
-                        child: linkingUrls.contains(entry.url)
-                            ? const SizedBox.square(
-                                dimension: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(
-                                (installed
-                                        ? 'Use this repository'
-                                        : 'Install source')
-                                    .tl,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                        onPressed: loading ? null : () => act(entry),
+                        child: Text(
+                          (installed ? 'Use this repository' : 'Install source')
+                              .tl,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
             ),
@@ -647,27 +706,82 @@ Future<void> showSourceOriginPicker(
   BuildContext context,
   ComicSource source,
 ) async {
-  final store = SourceRepositories.instance;
-  final canUnlink = store.originFor(source.key)?.kind == 'repository';
   final repository = await showDialog<SourceRepository>(
     context: context,
-    builder: (context) => SimpleDialog(
+    builder: (_) => _SourceOriginPicker(source: source),
+  );
+  if (repository == null || !context.mounted) return;
+  await showPopUpWidget(
+    context,
+    SourceRepositoryCatalogPage(repository: repository, sourceToLink: source),
+  );
+}
+
+class _SourceOriginPicker extends StatefulWidget {
+  const _SourceOriginPicker({required this.source});
+  final ComicSource source;
+  @override
+  State<_SourceOriginPicker> createState() => _SourceOriginPickerState();
+}
+
+class _SourceOriginPickerState extends SettingsSaveState<_SourceOriginPicker> {
+  final store = SourceRepositories.instance;
+  late final origin = store.originFor(widget.source.key);
+  String? error;
+  bool get busy => savingSettings || hasSettingsSaveError;
+  Future<void> unlink() async {
+    if (!acceptsSettingsChanges || busy || origin == null) return;
+    final key = widget.source.key;
+    final original = origin!;
+    await saveSetting(
+      'origin',
+      () async {
+        error = null;
+        try {
+          await store.unlink(key, original);
+        } on SourceFailure catch (failure) {
+          // A different link superseded this dialog; do not remove it.
+          error = sourceFailureMessage(failure);
+        } catch (failure) {
+          error = sourceFailureMessage(failure);
+          rethrow;
+        }
+      },
+      onSaved: () {
+        if (error == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) unawaited(leaveSettings());
+          });
+        }
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => protectSettings(
+    SimpleDialog(
       title: Text('Manage source origin'.tl),
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
           child: Text(
             'Current origin: @origin'.tlParams({
-              'origin': store.originLabel(source.key),
+              'origin': store.originLabel(widget.source.key),
             }),
           ),
         ),
-        if (canUnlink)
+        settingsSaveStatus,
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        if (origin?.kind == 'repository')
           SimpleDialogOption(
-            onPressed: () async {
-              Navigator.pop(context);
-              await store.setOrigin(source.key, null);
-            },
+            onPressed: busy ? null : unlink,
             child: Text('Remove repository link'.tl),
           ),
         if (store.all.isEmpty)
@@ -677,7 +791,7 @@ Future<void> showSourceOriginPicker(
           ),
         for (final repository in store.all)
           SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, repository),
+            onPressed: busy ? null : () => Navigator.pop(context, repository),
             child: ListTile(
               title: Text(repository.name),
               subtitle: Text(
@@ -688,16 +802,11 @@ Future<void> showSourceOriginPicker(
             ),
           ),
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: acceptsSettingsChanges ? leaveSettings : null,
           child: Text('Cancel'.tl),
         ),
       ],
     ),
-  );
-  if (repository == null || !context.mounted) return;
-  await showPopUpWidget(
-    context,
-    SourceRepositoryCatalogPage(repository: repository, sourceToLink: source),
   );
 }
 

@@ -91,8 +91,15 @@ class _ApplicationSyncParticipant implements DataSyncParticipant {
   }, sync: false);
 
   @override
-  Future<void> exportData(bool excludeFields, File destination) =>
-      exportSyncAppData(excludeFields: excludeFields, destination: destination);
+  Future<void> exportData(
+    bool excludeFields,
+    File destination, {
+    String? syncOperationId,
+  }) => exportSyncAppData(
+    excludeFields: excludeFields,
+    destination: destination,
+    syncOperationId: syncOperationId,
+  );
 
   @override
   Future<DataSyncCommitState> importData(

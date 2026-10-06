@@ -4,7 +4,6 @@ import 'dart:convert';
 
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:venera_next/foundation/extensions.dart';
-import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
@@ -67,7 +66,7 @@ class SourceCategoryParser {
             categoryParts.add(
               DynamicCategoryPart(
                 name,
-                context.callbacks.retain(loader),
+                context.retainCallback(loader),
                 context.key,
               ),
             );
@@ -157,8 +156,8 @@ class SourceCategoryParser {
     if (context.checkExists("categoryComics.optionLoader")) {
       optionLoader = (category, param) async {
         try {
-          dynamic res = await JsEngine().runReadCode("""
-          ComicSource.sources.${context.key}.categoryComics.optionLoader(
+          dynamic res = await context.runReadCode("""
+          ${context.sourceExpression}.categoryComics.optionLoader(
             ${jsonEncode(category)}, ${jsonEncode(param)})
         """);
           if (res is! List) {
@@ -220,8 +219,8 @@ class SourceCategoryParser {
       if (context.checkExists("categoryComics.ranking.load")) {
         load = (option, page) async {
           try {
-            var res = await JsEngine().runReadCode("""
-            ComicSource.sources.${context.key}.categoryComics.ranking.load(
+            var res = await context.runReadCode("""
+            ${context.sourceExpression}.categoryComics.ranking.load(
               ${jsonEncode(option)}, ${jsonEncode(page)})
           """);
             return context.parseComicListResult(res, "maxPage");
@@ -233,8 +232,8 @@ class SourceCategoryParser {
       } else {
         loadWithNext = (option, next) async {
           try {
-            var res = await JsEngine().runReadCode("""
-            ComicSource.sources.${context.key}.categoryComics.ranking.loadWithNext(
+            var res = await context.runReadCode("""
+            ${context.sourceExpression}.categoryComics.ranking.loadWithNext(
               ${jsonEncode(option)}, ${jsonEncode(next)})
           """);
             return context.parseComicListResult(res, "next");
@@ -256,8 +255,8 @@ class SourceCategoryParser {
       optionsLoader: optionLoader,
       load: (category, param, options, page) async {
         try {
-          var res = await JsEngine().runReadCode("""
-              ComicSource.sources.${context.key}.categoryComics.load(
+          var res = await context.runReadCode("""
+              ${context.sourceExpression}.categoryComics.load(
                 ${jsonEncode(category)},
                 ${jsonEncode(param)},
                 ${jsonEncode(options)},

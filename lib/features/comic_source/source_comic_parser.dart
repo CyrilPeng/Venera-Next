@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
@@ -18,9 +17,9 @@ class SourceComicParser {
   LoadComicFunc? parseLoadComicFunc() {
     return (id) async {
       try {
-        final details = await JsEngine().runReadCodeToCompletion<ComicDetails>(
+        final details = await context.runReadCodeToCompletion<ComicDetails>(
           """
-          ComicSource.sources.${context.key}.comic.loadInfo(${jsonEncode(id)})
+          ${context.sourceExpression}.comic.loadInfo(${jsonEncode(id)})
         """,
           consume: (raw) {
             final normalized = normalizeComicSourceComicDetails(
@@ -48,8 +47,8 @@ class SourceComicParser {
     }
     return (id, isLiking) async {
       try {
-        await JsEngine().runCode("""
-          ComicSource.sources.${context.key}.comic.likeComic(${jsonEncode(id)}, ${jsonEncode(isLiking)})
+        await context.runCode("""
+          ${context.sourceExpression}.comic.likeComic(${jsonEncode(id)}, ${jsonEncode(isLiking)})
         """);
         return const Res(true);
       } catch (e, s) {
@@ -65,8 +64,8 @@ class SourceComicParser {
     }
     return (id, rating) async {
       try {
-        await JsEngine().runCode("""
-          ComicSource.sources.${context.key}.comic.starRating(${jsonEncode(id)}, ${jsonEncode(rating)})
+        await context.runCode("""
+          ${context.sourceExpression}.comic.starRating(${jsonEncode(id)}, ${jsonEncode(rating)})
         """);
         return const Res(true);
       } catch (e, s) {
@@ -83,8 +82,8 @@ class SourceComicParser {
     return ArchiveDownloader(
       (cid) async {
         try {
-          var res = await JsEngine().runReadCode("""
-              ComicSource.sources.${context.key}.comic.archive.getArchives(${jsonEncode(cid)})
+          var res = await context.runReadCode("""
+              ${context.sourceExpression}.comic.archive.getArchives(${jsonEncode(cid)})
             """);
           final archives = normalizeComicSourceArchiveList(res);
           if (archives == null) throw "Invalid data";
@@ -96,8 +95,8 @@ class SourceComicParser {
       },
       (cid, aid) async {
         try {
-          var res = await JsEngine().runReadCode("""
-              ComicSource.sources.${context.key}.comic.archive.getDownloadUrl(${jsonEncode(cid)}, ${jsonEncode(aid)})
+          var res = await context.runReadCode("""
+              ${context.sourceExpression}.comic.archive.getDownloadUrl(${jsonEncode(cid)}, ${jsonEncode(aid)})
             """);
           final url = normalizeComicSourceArchiveDownloadUrl(res);
           if (url == null) throw "Invalid data";

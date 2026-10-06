@@ -247,6 +247,8 @@ Let the app download, cache, and preload images. Do not download an entire comic
 
 ### Accounts
 
+Unreleased main waits for the actual Promise returned by `login`, `logout`, and `loginWithWebview.onLoginSuccess`, discarding ordinary return values. Throw or reject to signal failure. Login UI waits for credential persistence; retrying a file save after authentication does not authenticate again. Web login captures cookies/localStorage, persists them and awaits its success callback; save retries reuse that capture. Retired instances cannot modify a replacement source.
+
 Optional members of `account`:
 
 | Member | Contract |

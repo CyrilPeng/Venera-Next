@@ -266,7 +266,6 @@ void main() {
     test(
       'concurrent failed saves share failure and can retry durably',
       () async {
-        final previous = appdata.settings['comicSourceRepositories'];
         appdata.settings['comicSourceListUrl'] =
             'https://legacy.example/index.json';
         final blocked = File('${dataDir.path}/blocked')
@@ -275,10 +274,12 @@ void main() {
         try {
           final first = SourceRepositories.instance.migrate();
           final second = SourceRepositories.instance.migrate();
-          expect(second, same(first));
-          await expectLater(first, throwsA(isA<FileSystemException>()));
-          expect(appdata.settings['comicSourceRepositoriesMigrated'], isFalse);
-          expect(appdata.settings['comicSourceRepositories'], same(previous));
+          await Future.wait([
+            expectLater(first, throwsA(isA<FileSystemException>())),
+            expectLater(second, throwsA(isA<FileSystemException>())),
+          ]);
+          expect(appdata.settings['comicSourceRepositoriesMigrated'], isTrue);
+          expect(SourceRepositories.instance.all, hasLength(1));
         } finally {
           App.dataPath = dataDir.path;
         }
@@ -314,7 +315,7 @@ void main() {
             throwsA(isA<FileSystemException>()),
           );
           expect(appdata.settings['comicSourceRepositories'], same(edited));
-          expect(appdata.settings['comicSourceRepositoriesMigrated'], isFalse);
+          expect(appdata.settings['comicSourceRepositoriesMigrated'], isTrue);
         } finally {
           appdata.settings.removeListener(edit);
           App.dataPath = dataDir.path;
@@ -345,7 +346,7 @@ void main() {
             throwsA(isA<FileSystemException>()),
           );
           expect(appdata.settings['comicSourceRepositories'], same(existing));
-          expect(appdata.settings['comicSourceRepositoriesMigrated'], isFalse);
+          expect(appdata.settings['comicSourceRepositoriesMigrated'], isTrue);
         } finally {
           App.dataPath = dataDir.path;
         }

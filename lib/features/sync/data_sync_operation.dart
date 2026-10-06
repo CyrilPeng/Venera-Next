@@ -74,7 +74,8 @@ class DataSyncOperation {
     final commitState = value['commitState'];
     final followUpComplete = value['followUpComplete'];
     final recoveryPath = value['recoveryPath'];
-    if (version is! int || (version != 1 && version != 2 && version != 3)) {
+    if (version is! int ||
+        (version != 1 && version != 2 && version != 3 && version != 4)) {
       throw const FormatException('Unsupported sync operation version');
     }
     final configurationChange = version == 1

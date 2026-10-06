@@ -1165,7 +1165,11 @@ class _Participant implements DataSyncParticipant {
   @override
   Future<int> prepareUploadVersion() async => ++version;
   @override
-  Future<void> exportData(bool excludeFields, File destination) async {
+  Future<void> exportData(
+    bool excludeFields,
+    File destination, {
+    String? syncOperationId,
+  }) async {
     exportCount++;
     this.excludeFields = excludeFields;
     await destination.writeAsBytes([1, 2, 3]);

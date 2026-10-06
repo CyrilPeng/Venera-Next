@@ -7,23 +7,44 @@ class AppDataOperations {
   static final instance = AppDataOperations();
 
   final _scopeKey = Object();
+  final _preparationKey = Object();
   final _queue = Queue<_AppDataOperation>();
   int _accesses = 0;
   bool _exclusive = false;
+  bool _preparing = false;
 
-  /// New accesses queue behind a waiting replacement; existing accesses can
-  /// finish concurrently. The action owns all database/file work it starts.
+  /// Identity for sharing a Future only within the same live admission. A
+  /// queued request outside an operation must not be reused by its owner.
+  Object? get sharingScope {
+    final data = Zone.current[_scopeKey] as _AppDataScope?;
+    if (data != null && data.active) return data;
+    final preparation = Zone.current[_preparationKey] as _AppDataScope?;
+    return preparation != null && preparation.active ? preparation : null;
+  }
+
+  /// New accesses queue behind a waiting replacement unless a preparation is
+  /// still active. The action owns all database/file work it starts.
   Future<T> access<T>(FutureOr<T> Function() action) =>
-      _submit(action, exclusive: false);
+      _submit(action, kind: _AppDataOperationKind.access);
+
+  /// Reserve a place before entering a resource's mutation queue. Preparations
+  /// serialize with each other and replacement, without owning ordinary data
+  /// access across network/init waits. While one is active, ordinary accesses
+  /// may pass queued replacements so native callbacks can finish preparation.
+  Future<T> prepare<T>(FutureOr<T> Function() action) =>
+      _submit(action, kind: _AppDataOperationKind.preparation);
 
   /// Synchronous bridges cannot wait behind a replacement. Reject before the
   /// action starts, preserving their return-value contract without bypassing
-  /// queued exclusive work. Asynchronous callers should use [access] instead.
+  /// active exclusive work. During preparation, queued replacement waits while
+  /// ordinary accesses remain allowed. Async callers should use [access].
   /// The action must finish synchronously; register descendants with [access].
   T accessSync<T>(T Function() action) {
     final current = Zone.current[_scopeKey] as _AppDataScope?;
     if (current != null && current.active) return action();
-    if (_exclusive || _queue.isNotEmpty) throw AppDataBusyException();
+    if (_exclusive || (!_preparing && _queue.isNotEmpty)) {
+      throw AppDataBusyException();
+    }
     final scope = _AppDataScope(false);
     _accesses++;
     try {
@@ -46,38 +67,51 @@ class AppDataOperations {
     }
   }
 
-  /// Freeze admission immediately, then wait for every earlier access. Nested
-  /// calls made by this operation reuse its live, operation-scoped capability.
+  /// Wait for earlier preparation, then freeze ordinary admission and drain
+  /// accepted accesses. Nested calls reuse the live exclusive capability.
   Future<T> run<T>(FutureOr<T> Function() action) =>
-      _submit(action, exclusive: true);
+      _submit(action, kind: _AppDataOperationKind.exclusive);
 
   /// Publish synchronous notifications without lending the operation's access
   /// to listeners or their asynchronous callbacks. Work started by a listener
   /// acquires its own place in the queue; the publisher must not await it.
   void publish(void Function() notify) =>
-      runZoned(notify, zoneValues: {_scopeKey: null});
+      runZoned(notify, zoneValues: {_scopeKey: null, _preparationKey: null});
 
   Future<T> _submit<T>(
     FutureOr<T> Function() action, {
-    required bool exclusive,
+    required _AppDataOperationKind kind,
   }) {
     final scope = Zone.current[_scopeKey] as _AppDataScope?;
     if (scope != null && scope.active) {
-      if (exclusive && !scope.exclusive) {
+      if (kind != _AppDataOperationKind.access && !scope.exclusive) {
         return Future.error(
-          StateError('Live data access cannot upgrade itself to replacement'),
+          StateError(
+            'Live data access cannot upgrade to preparation/replacement',
+          ),
         );
       }
       return scope.nest(action);
     }
+    final preparation = Zone.current[_preparationKey] as _AppDataScope?;
+    if (preparation != null && preparation.active) {
+      if (kind == _AppDataOperationKind.exclusive) {
+        return Future.error(
+          StateError('Preparation cannot upgrade itself to replacement'),
+        );
+      }
+      if (kind == _AppDataOperationKind.preparation) {
+        return preparation.nest(action);
+      }
+    }
     final result = Completer<T>();
     final caller = Zone.current;
     _queue.add(
-      _AppDataOperation(exclusive, () {
+      _AppDataOperation(kind, () {
         caller.run(() {
           _execute(
             action,
-            exclusive: exclusive,
+            kind: kind,
           ).then(result.complete, onError: result.completeError);
         });
       }),
@@ -88,13 +122,31 @@ class AppDataOperations {
 
   void _admit() {
     while (!_exclusive && _queue.isNotEmpty) {
-      final next = _queue.first;
-      if (next.exclusive && _accesses != 0) return;
-      _queue.removeFirst();
-      if (next.exclusive) {
-        _exclusive = true;
+      _AppDataOperation? next;
+      if (_preparing) {
+        // Native JS callbacks may arrive without the initiating Dart Zone.
+        // All ordinary accesses remain admissible until preparation settles.
+        for (final queued in _queue) {
+          if (queued.kind == _AppDataOperationKind.access) {
+            next = queued;
+            break;
+          }
+        }
+        if (next == null) return;
       } else {
-        _accesses++;
+        next = _queue.first;
+      }
+      if (next.kind == _AppDataOperationKind.exclusive && _accesses != 0) {
+        return;
+      }
+      _queue.remove(next);
+      switch (next.kind) {
+        case _AppDataOperationKind.exclusive:
+          _exclusive = true;
+        case _AppDataOperationKind.preparation:
+          _preparing = true;
+        case _AppDataOperationKind.access:
+          _accesses++;
       }
       next.start();
     }
@@ -102,22 +154,30 @@ class AppDataOperations {
 
   Future<T> _execute<T>(
     FutureOr<T> Function() action, {
-    required bool exclusive,
+    required _AppDataOperationKind kind,
   }) async {
-    final scope = _AppDataScope(exclusive);
+    final scope = _AppDataScope(kind == _AppDataOperationKind.exclusive);
     try {
       return await runZoned(
         () => Future<T>.sync(action),
-        zoneValues: {_scopeKey: scope},
+        zoneValues: {
+          if (kind == _AppDataOperationKind.preparation)
+            _preparationKey: scope
+          else
+            _scopeKey: scope,
+        },
       );
     } finally {
       // A nested accepted write can outlive the immediate action. Keep its
       // capability valid until all descendants finish, including failed work.
       await scope.drain();
-      if (exclusive) {
-        _exclusive = false;
-      } else {
-        _accesses--;
+      switch (kind) {
+        case _AppDataOperationKind.exclusive:
+          _exclusive = false;
+        case _AppDataOperationKind.preparation:
+          _preparing = false;
+        case _AppDataOperationKind.access:
+          _accesses--;
       }
       _admit();
     }
@@ -130,9 +190,11 @@ class AppDataBusyException implements Exception {
       'Application data is busy; retry after the current data operation completes';
 }
 
+enum _AppDataOperationKind { access, preparation, exclusive }
+
 class _AppDataOperation {
-  const _AppDataOperation(this.exclusive, this.start);
-  final bool exclusive;
+  const _AppDataOperation(this.kind, this.start);
+  final _AppDataOperationKind kind;
   final void Function() start;
 }
 

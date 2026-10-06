@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'source_failure.dart';
+import 'package:venera_next/components/settings_save_state.dart';
+import 'package:venera_next/foundation/navigation_admission.dart';
 import 'source_failure_presentation.dart';
 import 'dart:convert';
 
@@ -19,7 +23,7 @@ class SourceImportDialog extends StatefulWidget {
   State<SourceImportDialog> createState() => _SourceImportDialogState();
 }
 
-class _SourceImportDialogState extends State<SourceImportDialog> {
+class _SourceImportDialogState extends SettingsSaveState<SourceImportDialog> {
   final _input = TextEditingController();
   final _baseUrl = TextEditingController();
   final _repositoryName = TextEditingController();
@@ -27,11 +31,9 @@ class _SourceImportDialogState extends State<SourceImportDialog> {
   SourceImportPreview? _preview;
   String? _contents, _fileName, _error;
   Future<Uint8List> Function()? _readFile;
-  bool _needsBase = false,
-      _busy = false,
-      _installing = false,
-      _saveRepository = true;
+  bool _needsBase = false, _busy = false, _saveRepository = true;
   final _selected = <String>{};
+  bool get _installing => savingSettings || hasSettingsSaveError;
 
   @override
   void dispose() {
@@ -109,50 +111,81 @@ class _SourceImportDialogState extends State<SourceImportDialog> {
   }
 
   Future<void> _install() async {
+    if (!acceptsSettingsChanges || _installing) return;
     final preview = _preview!;
-    setState(() {
-      _installing = true;
-      _error = null;
-    });
-    try {
-      final queue = SourceInstallations.instance;
-      if (preview.catalog == null) {
-        queue.enqueuePreviewedScript(
-          name: preview.name,
-          contents: preview.contents,
-          url: preview.url,
-          readFile: _readFile,
-        );
-      } else {
-        SourceRepository? repository;
-        if (_saveRepository && preview.url != null) {
-          repository = SourceRepositories.instance.all
-              .where((r) => r.url == preview.url)
-              .firstOrNull;
-          repository ??= await SourceRepositories.instance.save(
-            name: _repositoryName.text,
-            url: preview.url!,
-            catalogContents: preview.contents,
-          );
+    final selected = Set<String>.of(_selected);
+    final readFile = _readFile;
+    final saveRepository = _saveRepository;
+    final repositoryName = _repositoryName.text;
+    final queue = SourceInstallations.instance;
+    final route = ModalRoute.of(context);
+    SourceRepositorySave? request;
+    SourceRepository? repository;
+    final dispatched = <String>{};
+    await saveSetting(
+      'import-repository',
+      () async {
+        _error = null;
+        if (preview.catalog == null || !saveRepository || preview.url == null) {
+          return;
         }
-        for (final entry in preview.catalog!.entries) {
-          if (!_selected.contains(entry.key) ||
-              ComicSource.find(entry.key) != null) {
-            continue;
+        try {
+          if (request == null) {
+            final existing = SourceRepositories.instance.all
+                .where((r) => r.url == preview.url)
+                .firstOrNull;
+            request = SourceRepositories.instance.prepareSave(
+              id: existing?.id,
+              name: existing?.name ?? repositoryName,
+              url: preview.url!,
+              catalogContents: preview.contents,
+            );
           }
-          if (repository == null) {
-            queue.enqueueCatalogEntry(entry);
-          } else {
-            queue.enqueueRepository(repository, entry);
+          repository = await request!.save();
+        } on SourceFailure catch (failure) {
+          _error = sourceFailureMessage(failure);
+        } catch (failure) {
+          _error = sourceFailureMessage(failure);
+          rethrow;
+        }
+      },
+      onSaved: () {
+        if (_error != null ||
+            !acceptsSettingsChanges ||
+            route?.isCurrent != true ||
+            !NavigationAdmission.allows(context)) {
+          return;
+        }
+        if (preview.catalog == null) {
+          if (!dispatched.contains('script')) {
+            queue.enqueuePreviewedScript(
+              name: preview.name,
+              contents: preview.contents,
+              url: preview.url,
+              readFile: readFile,
+            );
+            dispatched.add('script');
+          }
+        } else {
+          for (final entry in preview.catalog!.entries) {
+            if (!selected.contains(entry.key) ||
+                ComicSource.find(entry.key) != null ||
+                dispatched.contains(entry.key)) {
+              continue;
+            }
+            if (repository == null) {
+              queue.enqueueCatalogEntry(entry);
+            } else {
+              queue.enqueueRepository(repository!, entry);
+            }
+            dispatched.add(entry.key);
           }
         }
-      }
-      if (mounted) Navigator.pop(context);
-    } catch (error) {
-      if (mounted) setState(() => _error = sourceFailureMessage(error));
-    } finally {
-      if (mounted) setState(() => _installing = false);
-    }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(leaveSettings());
+        });
+      },
+    );
   }
 
   void _reset() => setState(() {
@@ -168,9 +201,9 @@ class _SourceImportDialogState extends State<SourceImportDialog> {
     final preview = _preview;
     final catalog = preview?.catalog;
     final canSaveRepository = catalog != null && preview?.url != null;
-    return PopScope(
-      canPop: !_installing,
-      child: AlertDialog(
+    return protectSettings(
+      AlertDialog(
+        scrollable: true,
         title: Text('Add source'.tl),
         content: SizedBox(
           width: 600,
@@ -318,6 +351,7 @@ class _SourceImportDialogState extends State<SourceImportDialog> {
                       child: Text('Choose another source'.tl),
                     ),
                   ],
+                  settingsSaveStatus,
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
@@ -328,7 +362,7 @@ class _SourceImportDialogState extends State<SourceImportDialog> {
                         ),
                       ),
                     ),
-                  if (_busy || _installing) const LinearProgressIndicator(),
+                  if (_busy || savingSettings) const LinearProgressIndicator(),
                 ],
               ),
             ),
@@ -336,7 +370,7 @@ class _SourceImportDialogState extends State<SourceImportDialog> {
         ),
         actions: [
           TextButton(
-            onPressed: _installing ? null : () => Navigator.pop(context),
+            onPressed: acceptsSettingsChanges ? leaveSettings : null,
             child: Text('Cancel'.tl),
           ),
           if (preview == null)

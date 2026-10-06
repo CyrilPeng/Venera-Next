@@ -506,11 +506,6 @@ void main() {
       final engine = JsEngine();
       await engine.init();
       final callbacks = JsCallbackScope();
-      final context = SourceParserContext(
-        key: _key,
-        name: 'Imported favorites',
-        callbacks: callbacks,
-      );
       engine.runCode('''
       void (globalThis.importCalls = []);
       void (ComicSource.sources.$_key = {comic: {
@@ -524,6 +519,11 @@ void main() {
         }
       }});
     ''');
+      final context = SourceParserContext(
+        key: _key,
+        name: 'Imported favorites',
+        callbacks: callbacks,
+      );
       source(
         SourceImagesParser(context).parseLoadComicPagesFunc()!,
         info: SourceComicParser(context).parseLoadComicFunc(),
@@ -571,17 +571,17 @@ void main() {
         final engine = JsEngine();
         await engine.init();
         final callbacks = JsCallbackScope();
-        final context = SourceParserContext(
-          key: _key,
-          name: 'Imported cancellation',
-          callbacks: callbacks,
-        );
         engine.runCode('''
         void (ComicSource.sources.$_key = {comic: {loadInfo: () => new Promise((resolve, reject) => {
           globalThis.finishFavoriteDetails = resolve;
           globalThis.failFavoriteDetails = reject;
         })}});
       ''');
+        final context = SourceParserContext(
+          key: _key,
+          name: 'Imported cancellation',
+          callbacks: callbacks,
+        );
         var pagesCalled = false;
         source((_, _) async {
           pagesCalled = true;
@@ -625,13 +625,6 @@ void main() {
         final engine = JsEngine();
         await engine.init();
         final callbacks = JsCallbackScope();
-        final parser = SourceImagesParser(
-          SourceParserContext(
-            key: _key,
-            name: 'Favorite completion',
-            callbacks: callbacks,
-          ),
-        );
         engine.runCode('''
         void (globalThis.favoritePageCalls = 0);
         void (ComicSource.sources.$_key = {comic: {loadEp: () => {
@@ -642,6 +635,13 @@ void main() {
           });
         }}});
       ''');
+        final parser = SourceImagesParser(
+          SourceParserContext(
+            key: _key,
+            name: 'Favorite completion',
+            callbacks: callbacks,
+          ),
+        );
         source(parser.parseLoadComicPagesFunc()!);
         final provider = _Provider(_image(imageKey: ''));
         final owner = RequestScope();

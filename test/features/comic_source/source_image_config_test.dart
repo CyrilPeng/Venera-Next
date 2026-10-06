@@ -43,6 +43,12 @@ void main() {
         JsEngine.cacheJsInit(await File('assets/init.js').readAsBytes());
         engine = JsEngine();
         await engine.init();
+        engine.runCode('''
+        void (ComicSource.sources.image_config_test = {
+          comic: {},
+          callback: (value) => value + 1
+        });
+      ''');
         parser = SourceImagesParser(
           SourceParserContext(
             key: 'image_config_test',
@@ -50,12 +56,6 @@ void main() {
             callbacks: JsCallbackScope(),
           ),
         );
-        engine.runCode('''
-        void (ComicSource.sources.image_config_test = {
-          comic: {},
-          callback: (value) => value + 1
-        });
-      ''');
       });
 
       tearDown(() {

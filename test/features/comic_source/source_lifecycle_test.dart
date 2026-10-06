@@ -3,6 +3,8 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:venera_next/features/comic_source/source_data_storage.dart';
+import '../../support/source_data_files.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/comic_source/source_repositories.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -40,7 +42,10 @@ void main() {
     () {
       late Directory directory;
       late Map<String, dynamic> settings;
-      final manager = ComicSourceManager();
+      final files = ControlledSourceDataFiles();
+      final manager = ComicSourceManager(
+        dataStorage: SourceDataStorage(files: files),
+      );
       setUp(() async {
         directory = Directory.systemTemp.createTempSync(
           'venera-source-transaction-',
@@ -55,6 +60,7 @@ void main() {
         await JsEngine().init();
       });
       tearDown(() async {
+        files.beforeReplace = null;
         for (final key in ['transaction_a', 'transaction_b']) {
           manager.remove(key);
         }
@@ -224,7 +230,9 @@ void main() {
           );
           manager.add(second);
           for (final source in [first, second]) {
-            source.data['account'] = ['user', 'password'];
+            await source.editData(
+              (draft) => draft['account'] = ['user', 'password'],
+            );
             expect(
               (await source.searchPageData!.loadPage!('query', 1, [])).subData,
               9,
@@ -347,8 +355,7 @@ void main() {
           final original = await install('transaction_a');
           final other = await install('transaction_b');
           final oldText = await File(original.filePath).readAsString();
-          original.data['token'] = 'keep';
-          await original.saveData();
+          await original.editData((draft) => draft['token'] = 'keep');
           JsEngine().runCode('ComicSource.sources.transaction_b.marker = 42');
           for (final replacement in [
             'broken JavaScript',
@@ -430,11 +437,9 @@ void main() {
         'failed staged data write rolls back script, runtime and origin',
         () async {
           final original = await install('transaction_a');
-          original.data['token'] = 'keep';
-          await original.saveData();
-          final blocker = Directory(
-            '${directory.path}/comic_source/${original.key}.data.update',
-          )..createSync();
+          await original.editData((draft) => draft['token'] = 'keep');
+          files.beforeReplace = (_, _) =>
+              throw const FileSystemException('replacement denied');
           await expectLater(
             manager.replaceScript(
               original,
@@ -472,7 +477,7 @@ void main() {
             )['token'],
             'keep',
           );
-          blocker.deleteSync();
+          files.beforeReplace = null;
           await manager.replaceScript(
             original,
             script(

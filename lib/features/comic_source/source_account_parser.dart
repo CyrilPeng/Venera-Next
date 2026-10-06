@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:venera_next/foundation/extensions.dart';
-import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
@@ -24,13 +23,22 @@ class SourceAccountParser {
     if (context.checkExists("account.login")) {
       login = (account, pwd) async {
         try {
-          await JsEngine().runCode("""
-          ComicSource.sources.${context.key}.account.login(${jsonEncode(account)},
+          final source = ComicSource.requireRuntime(
+            context.key,
+            context.identity,
+          );
+          await context.runReadCodeToCompletion<void>("""
+          ${context.sourceExpression}.account.login(${jsonEncode(account)},
           ${jsonEncode(pwd)})
-        """);
-          var source = ComicSource.find(context.key)!;
-          source.data["account"] = <String>[account, pwd];
-          source.saveData();
+        """, consume: (_) {});
+          final edit = source.prepareDataEdit(
+            (draft) => draft["account"] = <String>[account, pwd],
+          );
+          try {
+            await edit.save();
+          } catch (error, stack) {
+            throw SourceLoginPersistenceFailure(edit, error, stack);
+          }
           return const Res(true);
         } catch (e, s) {
           Log.error("Network", "$e\n$s");
@@ -39,27 +47,30 @@ class SourceAccountParser {
       };
     }
 
-    void logout() {
-      JsEngine().runCode("ComicSource.sources.${context.key}.account.logout()");
+    Future<void> logout() async {
+      await context.runReadCodeToCompletion<void>(
+        "${context.sourceExpression}.account.logout()",
+        consume: (_) {},
+      );
     }
 
     bool Function(String url, String title)? checkLoginStatus;
 
-    void Function()? onLoginSuccess;
+    Future<void> Function()? onLoginSuccess;
 
     if (context.checkExists('account.loginWithWebview')) {
       checkLoginStatus = (url, title) {
-        return JsEngine().runCode("""
-            ComicSource.sources.${context.key}.account.loginWithWebview.checkStatus(
+        return context.runCode("""
+            ${context.sourceExpression}.account.loginWithWebview.checkStatus(
               ${jsonEncode(url)}, ${jsonEncode(title)})
           """);
       };
 
       if (context.checkExists('account.loginWithWebview.onLoginSuccess')) {
-        onLoginSuccess = () {
-          JsEngine().runCode("""
-            ComicSource.sources.${context.key}.account.loginWithWebview.onLoginSuccess()
-          """);
+        onLoginSuccess = () async {
+          await context.runReadCodeToCompletion<void>("""
+            ${context.sourceExpression}.account.loginWithWebview.onLoginSuccess()
+          """, consume: (_) {});
         };
       }
     }
@@ -69,8 +80,8 @@ class SourceAccountParser {
     if (context.checkExists('account.loginWithCookies?.validate')) {
       validateCookies = (cookies) async {
         try {
-          var res = await JsEngine().runReadCode("""
-            ComicSource.sources.${context.key}.account.loginWithCookies.validate(${jsonEncode(cookies)})
+          var res = await context.runReadCode("""
+            ${context.sourceExpression}.account.loginWithCookies.validate(${jsonEncode(cookies)})
           """);
           return res;
         } catch (e, s) {

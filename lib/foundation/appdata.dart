@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
+import 'package:venera_next/foundation/app_data_sync_fields.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
 import 'package:venera_next/foundation/reader_settings.dart';
 import 'package:venera_next/foundation/reader_preferences.dart';
@@ -47,14 +48,25 @@ class Appdata with Init {
   Future<T> updateSettings<T>(
     T Function(Settings settings) change, {
     bool sync = true,
+    Object? Function(Map<String, String> contents)? beforePersist,
     // Initialization repairs can avoid rewriting an unchanged snapshot. Normal
     // saves keep this true so retrying an already-published value writes again.
     bool persistIfUnchanged = true,
   }) => _edit(
     (draft, _) => change(draft),
     sync: sync,
+    beforePersist: beforePersist,
     persistIfUnchanged: persistIfUnchanged,
   );
+
+  /// Serialize storage recovery with settings writers. The callback receives
+  /// the admitted directory and must not re-enter an Appdata writer.
+  Future<void> runPersistenceMaintenance(
+    Future<void> Function(String) action,
+  ) => AppDataOperations.instance.access(() {
+    final path = App.dataPath;
+    return _enqueueWrite(() => action(path));
+  });
 
   /// Restore only an operation's captured fields, preserving unrelated values.
   /// A recovery owner using persist:false must subsequently finish durability.
@@ -80,6 +92,7 @@ class Appdata with Init {
     required bool sync,
     bool persist = true,
     bool persistIfUnchanged = true,
+    Object? Function(Map<String, String> contents)? beforePersist,
   }) => AppDataOperations.instance.access(() {
     final path = App.dataPath;
     return _enqueueWrite(() async {
@@ -98,6 +111,9 @@ class Appdata with Init {
         'searchHistory': history,
       });
       final contents = _appDataContents(snapshot);
+      if (beforePersist != null) {
+        _requireSynchronousEdit(beforePersist(Map.unmodifiable(contents)));
+      }
       final published = jsonDecode(snapshot) as Map<String, dynamic>;
       final settingsChanged = _applyChangedFields(
         settings._data,
@@ -196,31 +212,12 @@ class Appdata with Init {
     return {'settings': settings._data, 'searchHistory': searchHistory};
   }
 
-  List<String> splitField(String merged) {
-    return merged
-        .split(',')
-        .map((field) => field.trim())
-        .where((field) => field.isNotEmpty)
-        .toList();
-  }
+  List<String> splitField(String merged) => splitAppDataFields(merged);
 
   /// Following fields are related to device-specific data and should not be synced.
-  static const _disableSync = [
-    "proxy",
-    "authorizationRequired",
-    "customImageProcessing",
-    "webdav",
-    "webdavProxyEnabled",
-    "backupWebdav",
-    "backupWebdavPath",
-    "webdavComicLibrary",
-    "webdavComicLibraryPath",
-    "disableSyncFields",
-    "deviceId",
-    "lastSyncTime",
-  ];
+  static const _disableSync = appDataLocalFields;
 
-  static const _archiveSyncFields = ["backupWebdav", "backupWebdavPath"];
+  static const _archiveSyncFields = appDataOptionalArchiveFields;
 
   /// Apply imported data and acknowledge its actual persistence. Importing a
   /// remote snapshot must not announce the same data as a new local edit.

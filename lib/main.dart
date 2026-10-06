@@ -53,7 +53,7 @@ void main(List<String> args) {
         try {
           await init(createCoreBootstrap(onDataChanged: sync.onDataChanged));
         } catch (_) {
-          sync.dispose();
+          await sync.closeAndWait();
           configureComicSourceDataSavedHandler(null);
           rethrow;
         }

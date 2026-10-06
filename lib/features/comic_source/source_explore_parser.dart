@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
@@ -19,9 +18,7 @@ class SourceExploreParser {
     if (!context.checkExists("explore")) {
       return const [];
     }
-    var length = JsEngine().runCode(
-      "ComicSource.sources.${context.key}.explore.length",
-    );
+    var length = context.runCode("${context.sourceExpression}.explore.length");
     var pages = <ExplorePageData>[];
     for (int i = 0; i < length; i++) {
       final String title = context.getValue("explore[$i].title");
@@ -33,8 +30,8 @@ class SourceExploreParser {
       if (type == "singlePageWithMultiPart") {
         loadMultiPart = () async {
           try {
-            var res = await JsEngine().runReadCode(
-              "ComicSource.sources.${context.key}.explore[$i].load()",
+            var res = await context.runReadCode(
+              "${context.sourceExpression}.explore[$i].load()",
             );
             return Res(
               List.from(
@@ -60,8 +57,8 @@ class SourceExploreParser {
         if (context.checkExists("explore[$i].load")) {
           loadPage = (int page) async {
             try {
-              var res = await JsEngine().runReadCode(
-                "ComicSource.sources.${context.key}.explore[$i].load(${jsonEncode(page)})",
+              var res = await context.runReadCode(
+                "${context.sourceExpression}.explore[$i].load(${jsonEncode(page)})",
               );
               return Res(
                 List.generate(
@@ -78,8 +75,8 @@ class SourceExploreParser {
         } else {
           loadNext = (next) async {
             try {
-              var res = await JsEngine().runReadCode(
-                "ComicSource.sources.${context.key}.explore[$i].loadNext(${jsonEncode(next)})",
+              var res = await context.runReadCode(
+                "${context.sourceExpression}.explore[$i].loadNext(${jsonEncode(next)})",
               );
               return Res(
                 List.generate(
@@ -97,8 +94,8 @@ class SourceExploreParser {
       } else if (type == "multiPartPage") {
         loadMultiPart = () async {
           try {
-            var res = await JsEngine().runReadCode(
-              "ComicSource.sources.${context.key}.explore[$i].load()",
+            var res = await context.runReadCode(
+              "${context.sourceExpression}.explore[$i].load()",
             );
             return Res(
               List.from(
@@ -121,8 +118,8 @@ class SourceExploreParser {
       } else if (type == 'mixed') {
         loadMixed = (index) async {
           try {
-            var res = await JsEngine().runReadCode(
-              "ComicSource.sources.${context.key}.explore[$i].load(${jsonEncode(index)})",
+            var res = await context.runReadCode(
+              "${context.sourceExpression}.explore[$i].load(${jsonEncode(index)})",
             );
             var list = <Object>[];
             for (var data in (res['data'] as List)) {

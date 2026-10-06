@@ -19,7 +19,7 @@ void main() {
       final controller = createApplicationDataSync();
       final other = createApplicationDataSync();
       expect(controller, isNot(same(other)));
-      other.dispose();
+      await other.closeAndWait();
       try {
         await appdata.saveData();
         expect(controller.hasPendingChanges, isFalse);
@@ -32,12 +32,12 @@ void main() {
         ComicSourceManager().notifyStateChange();
         expect(controller.hasPendingChanges, isTrue);
         appdata.implicitData['webdavSyncPending'] = false;
-        controller.dispose();
+        await controller.closeAndWait();
         ComicSourceManager().notifyStateChange();
         await appdata.saveData();
         expect(appdata.implicitData['webdavSyncPending'], isFalse);
       } finally {
-        controller.dispose();
+        await controller.closeAndWait();
         await appdata.saveData(false);
         appdata.settings['webdav'] = previousConnection;
         appdata.implicitData.clear();

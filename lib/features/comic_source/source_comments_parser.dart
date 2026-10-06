@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
@@ -15,12 +14,34 @@ class SourceCommentsParser {
   const SourceCommentsParser(this.context);
   final SourceParserContext context;
 
+  Future<Res<bool>> _retryAfterLogin(
+    Future<Res<bool>> Function() action,
+  ) async {
+    try {
+      context.checkCurrent();
+      final source = ComicSource.requireRuntime(context.key, context.identity);
+      final result = await action();
+      context.checkCurrent();
+      if (result.error && result.errorMessage!.contains('Login expired')) {
+        final loggedIn = await source.reLogin();
+        context.checkCurrent();
+        if (!loggedIn) {
+          return const Res.error('Login expired and re-login failed');
+        }
+        return action();
+      }
+      return result;
+    } catch (error, stack) {
+      return Res.fromException(error, stack);
+    }
+  }
+
   CommentsLoader? parseCommentsLoader() {
     if (!context.checkExists("comic.loadComments")) return null;
     return (id, subId, page, replyTo) async {
       try {
-        var res = await JsEngine().runReadCode("""
-          ComicSource.sources.${context.key}.comic.loadComments(
+        var res = await context.runReadCode("""
+          ${context.sourceExpression}.comic.loadComments(
             ${jsonEncode(id)}, ${jsonEncode(subId)}, ${jsonEncode(page)}, ${jsonEncode(replyTo)})
         """);
         final result = normalizeComicSourceCommentsResult(res);
@@ -38,8 +59,8 @@ class SourceCommentsParser {
     return (id, subId, content, replyTo) async {
       Future<Res<bool>> func() async {
         try {
-          await JsEngine().runCode("""
-            ComicSource.sources.${context.key}.comic.sendComment(
+          await context.runCode("""
+            ${context.sourceExpression}.comic.sendComment(
               ${jsonEncode(id)}, ${jsonEncode(subId)}, ${jsonEncode(content)}, ${jsonEncode(replyTo)})
           """);
           return const Res(true);
@@ -49,16 +70,7 @@ class SourceCommentsParser {
         }
       }
 
-      var res = await func();
-      if (res.error && res.errorMessage!.contains("Login expired")) {
-        var reLoginRes = await ComicSource.find(context.key)!.reLogin();
-        if (!reLoginRes) {
-          return const Res.error("Login expired and re-login failed");
-        } else {
-          return func();
-        }
-      }
-      return res;
+      return _retryAfterLogin(func);
     };
   }
 
@@ -66,8 +78,8 @@ class SourceCommentsParser {
     if (!context.checkExists("comic.loadChapterComments")) return null;
     return (comicId, epId, page, replyTo) async {
       try {
-        var res = await JsEngine().runReadCode("""
-          ComicSource.sources.${context.key}.comic.loadChapterComments(
+        var res = await context.runReadCode("""
+          ${context.sourceExpression}.comic.loadChapterComments(
             ${jsonEncode(comicId)}, ${jsonEncode(epId)}, ${jsonEncode(page)}, ${jsonEncode(replyTo)})
         """);
         final result = normalizeComicSourceCommentsResult(res);
@@ -85,8 +97,8 @@ class SourceCommentsParser {
     return (comicId, epId, content, replyTo) async {
       Future<Res<bool>> func() async {
         try {
-          await JsEngine().runCode("""
-            ComicSource.sources.${context.key}.comic.sendChapterComment(
+          await context.runCode("""
+            ${context.sourceExpression}.comic.sendChapterComment(
               ${jsonEncode(comicId)}, ${jsonEncode(epId)}, ${jsonEncode(content)}, ${jsonEncode(replyTo)})
           """);
           return const Res(true);
@@ -96,16 +108,7 @@ class SourceCommentsParser {
         }
       }
 
-      var res = await func();
-      if (res.error && res.errorMessage!.contains("Login expired")) {
-        var reLoginRes = await ComicSource.find(context.key)!.reLogin();
-        if (!reLoginRes) {
-          return const Res.error("Login expired and re-login failed");
-        } else {
-          return func();
-        }
-      }
-      return res;
+      return _retryAfterLogin(func);
     };
   }
 
@@ -115,8 +118,8 @@ class SourceCommentsParser {
     }
     return (id, subId, commentId, isUp, isCancel) async {
       try {
-        var res = await JsEngine().runCode("""
-          ComicSource.sources.${context.key}.comic.voteComment(${jsonEncode(id)}, ${jsonEncode(subId)}, ${jsonEncode(commentId)}, ${jsonEncode(isUp)}, ${jsonEncode(isCancel)})
+        var res = await context.runCode("""
+          ${context.sourceExpression}.comic.voteComment(${jsonEncode(id)}, ${jsonEncode(subId)}, ${jsonEncode(commentId)}, ${jsonEncode(isUp)}, ${jsonEncode(isCancel)})
         """);
         return Res(res is num ? res.toInt() : 0);
       } catch (e, s) {
@@ -132,8 +135,8 @@ class SourceCommentsParser {
     }
     return (id, subId, commentId, isLiking) async {
       try {
-        var res = await JsEngine().runCode("""
-          ComicSource.sources.${context.key}.comic.likeComment(${jsonEncode(id)}, ${jsonEncode(subId)}, ${jsonEncode(commentId)}, ${jsonEncode(isLiking)})
+        var res = await context.runCode("""
+          ${context.sourceExpression}.comic.likeComment(${jsonEncode(id)}, ${jsonEncode(subId)}, ${jsonEncode(commentId)}, ${jsonEncode(isLiking)})
         """);
         return Res(res is num ? res.toInt() : 0);
       } catch (e, s) {

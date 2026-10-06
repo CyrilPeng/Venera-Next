@@ -33,6 +33,73 @@ void main() {
       jsonDecode(File(p.join(App.dataPath, name)).readAsStringSync())
           as Map<String, dynamic>;
 
+  test('persistence intent runs at queue head before memory or disk', () async {
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    final maintenance = appdata.runPersistenceMaintenance((path) async {
+      expect(path, root.path);
+      entered.complete();
+      await release.future;
+    });
+    await entered.future;
+    var recorded = false;
+    final old = appdata.settings['cacheSize'];
+    final editing = appdata.updateSettings(
+      (draft) {
+        draft['cacheSize'] = 852;
+        draft['disableSyncFields'] = 'proxy';
+      },
+      sync: false,
+      beforePersist: (contents) {
+        recorded = true;
+        expect(appdata.settings['cacheSize'], old);
+        expect(File(p.join(root.path, 'appdata.json')).existsSync(), isFalse);
+        expect(
+          jsonDecode(contents['appdata.json']!)['settings']['cacheSize'],
+          852,
+        );
+        expect(
+          jsonDecode(
+            contents['syncdata.json']!,
+          )['settings'].containsKey('proxy'),
+          isFalse,
+        );
+        expect(() => contents.clear(), throwsUnsupportedError);
+        return null;
+      },
+    );
+    await pumpEventQueue();
+    expect(recorded, isFalse);
+    release.complete();
+    await Future.wait([maintenance, editing]);
+    expect(recorded, isTrue);
+    expect(read()['settings']['cacheSize'], 852);
+  });
+
+  test(
+    'failed or async persistence intent does not publish the draft',
+    () async {
+      final old = appdata.settings['cacheSize'];
+      final failure = StateError('journal unavailable');
+      for (final asynchronous in [false, true]) {
+        await expectLater(
+          appdata.updateSettings(
+            (draft) {
+              draft['cacheSize'] = 853;
+            },
+            beforePersist: (_) {
+              if (asynchronous) return Future<void>.value();
+              throw failure;
+            },
+          ),
+          asynchronous ? throwsArgumentError : throwsA(same(failure)),
+        );
+        expect(appdata.settings['cacheSize'], old);
+        expect(File(p.join(root.path, 'appdata.json')).existsSync(), isFalse);
+      }
+    },
+  );
+
   test(
     'exclusive startup can initialize ahead of a queued external caller',
     () async {

@@ -18,7 +18,11 @@ abstract interface class DataSyncParticipant {
   int? get version;
   String get cachePath;
   Future<int> prepareUploadVersion();
-  Future<void> exportData(bool excludeFields, File destination);
+  Future<void> exportData(
+    bool excludeFields,
+    File destination, {
+    String? syncOperationId,
+  });
 
   /// Apply the archive while identifying only its own synchronous change
   /// publications. Independent local edits during import remain observable.
@@ -141,8 +145,11 @@ class WebDavDataSyncTransfer
         endpointFingerprint: _fingerprint(connection),
         openRemote: () => _openRemote(connection),
         prepareVersion: _participant.prepareUploadVersion,
-        exportData: (destination) =>
-            _participant.exportData(excludeFields, destination),
+        exportData: (destination) => _participant.exportData(
+          excludeFields,
+          destination,
+          syncOperationId: id,
+        ),
         recordSyncTime: _participant.recordSyncTime,
         now: _now,
       );

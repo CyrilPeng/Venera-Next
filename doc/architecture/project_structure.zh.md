@@ -1,5 +1,31 @@
 # 项目结构约定
 
+2026-10-06 同步所有权更新：data_sync_ownership.dart 拥有独立 SQLite 排他事务和原生连接释放，data_sync_content_recovery.dart 拥有孤立候选与收据的保守恢复；受控入口增至 116。controller 在订阅/恢复/传输前取得所有权，closeAndWait 排空后释放；app_runtime 负责内容资源保留，bootstrap_core 在恢复与设置加载阶段参与同一锁，headless 等待关闭。候选完成决定先于 marker/收据清理持久化，未知证据保留；该锁不替代普通导入或所有业务写入的跨进程事务。
+
+2026-10-06 同步内容更新：data_sync_content.dart 定义持久比较端口，data_sync_content_fingerprint.dart 拥有稳定设置/SQLite/源文件摘要，data_sync_content_journal.dart 拥有候选与单调基线；三个入口使受控总数达到 114。app_runtime/data_sync_content.dart 在原数据独占范围捕获内容并验证真实收据。导出归档登记实际暂存与 ZIP SHA，导入在替换前复核 before、应用后记录 after；控制器拥有 v4 marker、自动方向选择与后续编辑调度。app_data_sync_fields.dart 与 Appdata 导入共用旧排除规则；内容日志不进入导出，不能替代跨库事务或原生释放所有权。
+
+2026-10-06 源事务更新：source_transaction_journal.dart 为第 111 个受控业务入口，拥有脚本/双配置及备份/逐次 data 意图、持久阶段与恢复；source_script_checkpoint.dart 是其运行时包装。SourceConfigurationChange 在 Appdata.beforePersist 保存队首登记；source.dart 在每次物理暂存提交前登记。管理器协调安装/替换/卸载的持久决定和运行时失败，finishSourceStorageRecovery 使用设置文件队列。bootstrap_core 在整库恢复后、普通暂存与 appdata 前恢复事务；app_data_transfer 拒绝未解决事务。旧暂存协议仍独立拥有实际数据写入，Cookie 与原生释放不在新事务内。
+
+2026-10-06 运行时清理更新：source_data_journal.dart 提供原操作清理凭据与定向恢复；source_data_storage.dart 的结构化写入失败携带该凭据。source.dart 协调显式重试、后续保存与关闭，按文件队列清理并保留未提交写入/发布失败；清理不重放编辑或覆盖正式数据。业务入口仍为 110。
+
+2026-10-06 源暂存恢复更新：source_data_journal.dart 拥有 SQLite 持久意图、原目录/内容校验、跨进程操作锁与安全确认；source_data_storage.dart 拥有普通/暂存写入与可重试非递归清理。bootstrap_core 在整库导入恢复之后、设置/数据库打开之前恢复源暂存，app_data_transfer 在替换前复用。该协议不协调源脚本与配置事务；业务入口增至 110。
+
+
+2026-10-06 源界面保存更新：source.dart 拥有深层只读 data、一次应用且可重试的 SourceDataEdit，以及固定认证的 SourceLoginAttempt；账户解析器拥有真实 Promise 等待和未使用结果释放。comic_source_page.dart 的设置/输入/登录/网页路由拥有保存、返回及原窗口交接；路由 WebView 拥有创建/关闭/轮询排空。Cookie 与源文件仍是顺序保存，完整跨库事务和持久恢复继续待办；受控入口仍为 109。
+
+
+2026-10-06 源身份更新：JsSourceIdentity 关联实际引擎与实例标识，assets/init.js 的实例方法/词法消息携带标识，js_bridge 仅向匹配注册实例提供数据。SourceConstructionReads 拥有解析期只读旧快照；SourceParserContext 拥有固定运行时的能力调用、异步结果与 retained callback 校验。登录草稿保存归源，收藏/评论重登录保持原实例；已交付图片函数仍归图片任务释放。公开数据与完整请求/持久恢复仍待完成，入口仍为 109。
+
+2026-10-06 源物理存储更新：`source_data_storage.dart` 是受控业务入口，拥有临时目录、flush/rename、非递归清理及提交状态；普通与暂存路径共用实例依赖，管理器/解析器注入。source.dart 按接纳序号排空暂存提交、登记关闭并保留已应用失败/重试快照；管理器替换时显式暂存旧内存。残留恢复、公开 data 和完整实例身份仍待完成，入口为 109。
+
+2026-10-06 源数据更新：source.dart 拥有按原目录/JSON 快照接纳的独立保存、读取代次检查、文件/通知分离及可恢复写入冻结。管理器在替换/卸载/重载时先排空已准入文件写入，恢复写入权限并归集清理错误；JS 同步编辑在改内存前验证。公开 data、旧 JS/Dart 身份、普通文件原子替换及完整持久恢复仍未完成，业务入口仍为 108。
+
+2026-10-06 源准入更新：AppDataOperations.prepare 与独占在同一队列排队，准备期间普通访问可继续；源变更先准备再进入本地队列。后台初始化独立准备、同批并发，启动不等待网络；导入的新源延后初始化，退休实例跳过。初始化按 live scope 共享，关闭跟踪所有已接纳准入，通知清除准备和数据权限。普通源数据写入、旧 JS 身份及跨进程恢复仍待完成；业务入口仍为 108。
+
+2026-10-05 源变更更新：`source_configuration.dart` 拥有页面/来源的统一草稿与条件恢复；`source_script_checkpoint.dart` 拥有原始脚本备份、内容核对和恢复文件清理；`source_mutation_failure.dart` 表示已应用/恢复不完整及阶段错误。ComicSourceManager 编排解析、初始化、配置、脚本、源数据提交与后续发布，UI 不再自行清理页面配置。暂存数据提交和通知分开；备份不代替完整跨进程事务日志。受控业务入口为 108。
+
+2026-10-05 源仓库更新：`features/comic_source/source_repositories.dart` 是受控业务入口，负责设置草稿中的仓库/来源规则，`SourceRepositorySave` 固定校验与重试身份。`source_repository_page.dart` 和 `source_import_dialog.dart` 属 UI，复用 SettingsSaveState 持有保存与窗口交接，导入配置保存后才派发安装。目录网络检查不占用普通数据访问；源文件/JS/页面整体事务仍归后续管理器协调。业务入口为 106。
+
 2026-10-05 收藏保存更新：ReadLaterService 只返回同一 SQL 事务的成员/文件夹提交结果，LocalFavoritesManager 在全局独占内协调设置草稿和缓存发布。初始化 SQL 准备在纯草稿外执行，草稿队首复核最新引用；清空恢复仅恢复拥有的设置字段，单独报告持久化和备份清理失败。未新增业务入口，数量仍为 105。
 
 2026-10-05 备份与书库更新：`features/settings/webdav_settings.dart` 拥有两类连接表单的检查、保存、重试、导航和原窗口交接。`app_runtime/webdav_library.dart` 捕获目录与管理器/源实例，统一排队配置和探索列表保存，再按真实发布状态协调缓存失效与注册；失败失效可重试，网络不占用普通数据访问。`WebDavLibrarySettingsStore` 只向装配层传递不可变配置；UI 不直接修改全局源注册。业务入口为 105。
@@ -572,7 +598,7 @@ JsEngine.create 允许显式注入其拥有的 HTTP 客户端工厂和初始化�
 
 CookieJarSql 在构造阶段拥有并初始化数据库，建表失败释放连接，关闭后访问明确失败；SingleInstanceCookieJar.dispose 仅清除自己的全局引用，导入装配不再手动写空/重复赋值。移除无外部调用的 init 入口，防止重复打开泄漏连接。
 
-Cookie 的全部 SQL（包括 loadForRequest 的过期删除）、打开和关闭现通过 AppDataOperations。同步 JS 桥使用 accessSync，遇到已排队或正在执行的替换就明确拒绝；异步 Dio 请求及网页登录保存等待 access。CookieManagerSql 按 RequestOptions 对象登记原连接，响应准入后核对连接身份，同路径重开也不能接收旧响应的 Cookie；SQL 异常返回原始原因/堆栈。captureInstance 只取得当前所有者，不隐式创建缺失数据库；saveFromResponseAsync 捕获可变 Cookie 内容并拒绝写入已关闭所有者。该接入不代表源账户/localStorage 与 Cookie 的跨资源事务或全写入者/持久 dirty 已完成。
+Cookie 的全部 SQL（包括 loadForRequest 的过期删除）、打开和关闭现通过 AppDataOperations。同步 JS 桥使用 accessSync，准备阶段允许普通访问继续，准备结束后拒绝已排队的替换，外部访问不能越过正在执行的独占替换；异步 Dio 请求及网页登录保存等待 access。CookieManagerSql 按 RequestOptions 对象登记原连接，响应准入后核对连接身份，同路径重开也不能接收旧响应的 Cookie；SQL 异常返回原始原因/堆栈。captureInstance 只取得当前所有者，不隐式创建缺失数据库；saveFromResponseAsync 捕获可变 Cookie 内容并拒绝写入已关闭所有者。该接入不代表源账户/localStorage 与 Cookie 的跨资源事务或全写入者/持久 dirty 已完成。
 
 foundation/opencc_table.dart 是不依赖 Flutter 的不可变单字转换表，按 Unicode 码点解析并处理 CRLF，保留重复键末项优先。OpenCC 仅负责资源加载/共享初始化与原有静态 API 适配，加载失败可重试；新增第 78 个业务入口门禁。
 

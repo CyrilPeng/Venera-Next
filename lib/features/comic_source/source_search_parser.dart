@@ -1,7 +1,6 @@
 import 'dart:collection';
 import 'dart:convert';
 
-import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
@@ -45,8 +44,8 @@ class SourceSearchParser {
     if (context.checkExists('search.load')) {
       loadPage = (keyword, page, searchOption) async {
         try {
-          var res = await JsEngine().runReadCode("""
-          ComicSource.sources.${context.key}.search.load(
+          var res = await context.runReadCode("""
+          ${context.sourceExpression}.search.load(
             ${jsonEncode(keyword)}, ${jsonEncode(searchOption)}, ${jsonEncode(page)})
         """);
           return context.parseComicListResult(res, "maxPage");
@@ -58,8 +57,8 @@ class SourceSearchParser {
     } else {
       loadNext = (keyword, next, searchOption) async {
         try {
-          var res = await JsEngine().runReadCode("""
-          ComicSource.sources.${context.key}.search.loadNext(
+          var res = await context.runReadCode("""
+          ${context.sourceExpression}.search.loadNext(
             ${jsonEncode(keyword)}, ${jsonEncode(searchOption)}, ${jsonEncode(next)})
         """);
           return context.parseComicListResult(res, "next");
@@ -78,8 +77,8 @@ class SourceSearchParser {
       return null;
     }
     return (namespace, tag) {
-      var res = JsEngine().runCode("""
-          ComicSource.sources.${context.key}.search.onTagSuggestionSelected(
+      var res = context.runCode("""
+          ${context.sourceExpression}.search.onTagSuggestionSelected(
             ${jsonEncode(namespace)}, ${jsonEncode(tag)})
         """);
       return res is String ? res : "$namespace:$tag";

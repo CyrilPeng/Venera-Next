@@ -10,14 +10,57 @@ import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/favorites/favorites_repository.dart';
 import 'package:venera_next/features/sync/app_data_import_journal.dart';
 import 'package:venera_next/features/sync/data_sync_commit.dart';
+import 'package:venera_next/features/sync/data_sync_ownership.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/init.dart';
 import 'package:venera_next/network/cookie_jar.dart';
+import 'package:venera_next/features/comic_source/source_data_storage.dart';
+import 'package:venera_next/features/comic_source/source_transaction_journal.dart';
+import 'package:venera_next/features/comic_source/source_mutation_failure.dart';
+import '../support/source_data_files.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'bootstrap cannot recover an import owned by an active sync service',
+    () async {
+      final root = Directory.systemTemp.createTempSync('bootstrap-sync-owner-');
+      final owner = SqliteDataSyncOwnership(() => root.path)..acquire();
+      final journal = AppDataImportJournal.open(root.path);
+      final original = File('${root.path}/appdata.json')
+        ..writeAsStringSync('original');
+      final transaction = await journal.prepare(
+        resources: {},
+        syncOperationId: 'active',
+      );
+      await transaction.markChanging('appdata.json');
+      original.writeAsStringSync('in-flight import');
+      final oldState = appdata.initializationState;
+      final core = createCoreBootstrap(
+        onDataChanged: () {},
+        environment: () async {
+          App.dataPath = root.path;
+        },
+      );
+      try {
+        await expectLater(core.start(), throwsA(isA<SqliteException>()));
+        expect(original.readAsStringSync(), 'in-flight import');
+        expect(appdata.initializationState, oldState);
+        expect(journal.receipts, isEmpty);
+        owner.release();
+        await journal.recoverPending();
+        expect(original.readAsStringSync(), 'original');
+      } finally {
+        await core.close();
+        journal.close();
+        owner.release();
+        root.deleteSync(recursive: true);
+      }
+    },
+  );
 
   test(
     'core recovers interrupted import before settings and databases open',
@@ -72,6 +115,27 @@ void main() {
       }
       Directory('${data.path}/comic_source').createSync();
       File('${data.path}/comic_source/.keep').writeAsStringSync('old source');
+      final sourceFiles = ControlledSourceDataFiles()
+        ..beforeRemoveDirectory = (_) =>
+            throw const FileSystemException('cleanup interrupted');
+      await expectLater(
+        SourceDataStorage(
+          files: sourceFiles,
+        ).write(data.path, 'fixture', '{"token":"original"}'),
+        throwsA(isA<SourceMutationFailure>()),
+      );
+      final sourceResidue = Directory(
+        '${data.path}/comic_source',
+      ).listSync().whereType<Directory>().single;
+      final incompleteScript = File('${data.path}/comic_source/incomplete.js');
+      final sourceTransaction = await SourceTransactionJournal.begin(
+        dataPath: data.path,
+        script: incompleteScript,
+        before: null,
+        after: utf8.encode('invalid source script'),
+      );
+      await sourceTransaction.writeScript();
+      await sourceTransaction.close();
       final journal = AppDataImportJournal.open(data.path);
       final transaction = await journal.prepare(
         resources: {
@@ -120,6 +184,12 @@ void main() {
       });
       configureHeadlessBindings();
       await core.start();
+      expect(incompleteScript.existsSync(), isFalse);
+      expect(sourceResidue.existsSync(), isFalse);
+      expect(
+        File('${data.path}/comic_source/fixture.data').readAsStringSync(),
+        '{"token":"original"}',
+      );
       expect(appdata.searchHistory, ['before-interruption']);
       expect(appdata.settings['dataVersion'], 7);
       expect(
@@ -156,13 +226,16 @@ void main() {
     skip: !Platform.isWindows,
   );
 
-  test(
-    'unreadable recovery journal stops startup before appdata init',
-    () async {
+  for (final relative in [
+    '.app-data-import.sqlite',
+    '.source-data-recovery/ownership.sqlite',
+    '.source-transactions/transactions.sqlite',
+  ]) {
+    test('unreadable $relative stops startup before appdata init', () async {
       final root = Directory.systemTemp.createTempSync('bootstrap-import-bad-');
-      File(
-        '${root.path}/.app-data-import.sqlite',
-      ).writeAsBytesSync(List.filled(4096, 42));
+      final corrupt = File('${root.path}/$relative');
+      corrupt.parent.createSync(recursive: true);
+      corrupt.writeAsBytesSync(List.filled(4096, 42));
       final oldState = appdata.initializationState;
       final oldCookies = SingleInstanceCookieJar.instance;
       final core = createCoreBootstrap(
@@ -181,6 +254,6 @@ void main() {
         await core.close();
         root.deleteSync(recursive: true);
       }
-    },
-  );
+    });
+  }
 }

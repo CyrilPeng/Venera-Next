@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
+import 'package:venera_next/features/comic_source/source_transaction_journal.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/sync/app_data_transfer.dart';
@@ -62,10 +63,35 @@ void main() {
         );
         appdata.settings['language'] = 'zh-CN';
         appdata.settings['disableSyncFields'] = 'language';
+        final pending = await SourceTransactionJournal.begin(
+          dataPath: App.dataPath,
+          script: File('${App.dataPath}/comic_source/example.js'),
+          before: utf8.encode('// source'),
+          after: utf8.encode('// changed'),
+        );
+        await pending.close();
+        await expectLater(exportAppData(false), throwsStateError);
+        await SourceTransactionJournal.recover(App.dataPath);
+        final committed = await SourceTransactionJournal.begin(
+          dataPath: App.dataPath,
+          script: File('${App.dataPath}/comic_source/example.js'),
+          before: utf8.encode('// source'),
+          after: utf8.encode('// source'),
+        );
+        committed.commit();
+        final residue = committed.directory;
+        await committed.close();
         final complete = ZipDecoder().decodeBytes(
           (await exportAppData(false)).readAsBytesSync(),
         );
         await write;
+        expect(residue.existsSync(), isFalse);
+        expect(
+          complete.files.any(
+            (entry) => entry.name.contains('.source-transactions'),
+          ),
+          isFalse,
+        );
         expect(_settings(complete)['language'], 'zh-CN');
         expect(
           utf8.decode(complete.findFile('comic_source/example.js')!.content),

@@ -6,6 +6,9 @@ import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/features/sync/data_sync_transfer.dart';
 import 'package:venera_next/features/sync/data_sync_recovery.dart';
 import 'data_sync_transfer.dart';
+import 'data_sync_content.dart';
+import 'package:venera_next/features/sync/data_sync_ownership.dart';
+import 'package:venera_next/foundation/app.dart';
 
 /// Construction is inert. The application owns start/stop/dispose.
 DataSyncController createApplicationDataSync({
@@ -22,6 +25,8 @@ DataSyncController createApplicationDataSync({
     transfer: transfer ?? () => defaultTransfer!,
     importRecovery: recovery,
     uploadRecovery: uploadRecovery ?? defaultTransfer,
+    content: ApplicationDataSyncContent(),
+    ownership: SqliteDataSyncOwnership(() => App.dataPath),
     saveSettings: () => appdata.saveData(false),
     persistImplicit: appdata.writeImplicitData,
     observeChanges: _observeApplicationChanges,

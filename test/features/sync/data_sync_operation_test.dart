@@ -156,7 +156,7 @@ void main() {
     'unsupported versions and malformed field types never become defaults',
     () {
       final invalid = <String, List<Object?>>{
-        'version': [null, 0, 4, 1.0, '1', true],
+        'version': [null, 0, 5, 1.0, '1', true],
         'configurationChange': [null, 0, 'false'],
         'id': [null, 4, '', '  '],
         'direction': [null, 0, 'both', 'UPLOAD'],
@@ -185,6 +185,21 @@ void main() {
             reason: '${field.key}=$value',
           );
         }
+      }
+    },
+  );
+
+  test(
+    'supported protocol versions retain their identity through serialization and follow-up',
+    () {
+      for (final version in [1, 2, 3, 4]) {
+        final decoded = DataSyncOperation.fromJson(
+          _operation().toJson()..['version'] = version,
+        );
+        expect(decoded.version, version);
+        final serialized = decoded.copyWith(followUpComplete: true).toJson();
+        expect(serialized['version'], version);
+        expect(DataSyncOperation.fromJson(serialized).toJson(), serialized);
       }
     },
   );

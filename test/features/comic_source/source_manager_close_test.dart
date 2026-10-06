@@ -6,9 +6,11 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/comic_source/source_repositories.dart';
+import 'package:venera_next/features/comic_source/source_data_storage.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/js_engine.dart';
+import '../../support/source_data_files.dart';
 
 const _script = '''class ClosingSource extends ComicSource {
   name = 'Closing'; key = 'closing'; version = '1.0.0'; minAppVersion = '1.0.0';
@@ -25,6 +27,7 @@ void main() {
     late Directory root;
     late JsEngine engine;
     late ComicSourceManager manager;
+    late ControlledSourceDataFiles files;
     setUp(() async {
       final native = Directory(
         'build/windows/x64/runner/Release',
@@ -41,7 +44,10 @@ void main() {
       JsEngine.cacheJsInit(await File('assets/init.js').readAsBytes());
       engine = JsEngine();
       await engine.init();
-      manager = ComicSourceManager();
+      files = ControlledSourceDataFiles();
+      manager = ComicSourceManager(
+        dataStorage: SourceDataStorage(files: files),
+      );
     });
     tearDown(() async {
       try {
@@ -182,8 +188,11 @@ void main() {
         notifying.complete();
         await releaseNotification.future;
       });
-      source.data = {'removed': true};
-      final saving = source.saveData();
+      final saving = source.editData((draft) {
+        draft
+          ..clear()
+          ..addAll({'removed': true});
+      });
       await notifying.future;
       manager.remove('closing');
       var closed = false;
@@ -221,6 +230,45 @@ void main() {
       expect(ComicSource.all(), isEmpty);
       expect(engine.runCode('Object.keys(ComicSource.sources).length'), 0);
     });
+
+    test(
+      'manager retains native callbacks until runtime cleanup finishes',
+      () async {
+        await File(
+          '${root.path}/comic_source/closing.js',
+        ).writeAsString(_script);
+        await manager.init();
+        final source = manager.find('closing')!;
+        files.beforeRemoveDirectory = (_) =>
+            throw const FileSystemException('cleanup denied');
+        await expectLater(
+          source.saveData(),
+          throwsA(isA<SourceDataWriteFailure>()),
+        );
+        final entered = Completer<void>();
+        final release = Completer<void>();
+        files.beforeRemoveDirectory = (_) async {
+          entered.complete();
+          await release.future;
+        };
+        final closing = manager.closeAndWait();
+        try {
+          await entered.future;
+          expect(ComicSource.find('closing'), same(source));
+          expect(
+            engine.runCode('ComicSource.sources.closing !== undefined'),
+            isTrue,
+          );
+          final scope = source.createSettingsCallbackScope();
+          scope.dispose();
+        } finally {
+          release.complete();
+          await closing;
+        }
+        expect(source.createSettingsCallbackScope, throwsStateError);
+        expect(ComicSource.all(), isEmpty);
+      },
+    );
 
     test(
       'close still waits for a Promise after the init wait times out',
@@ -272,6 +320,9 @@ void main() {
 }
 
 class _FailingDataCloseSource extends Fake implements ComicSource {
+  @override
+  void bindDataOwner() {}
+
   bool callbacksReleased = false;
 
   @override

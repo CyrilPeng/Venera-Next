@@ -4,6 +4,9 @@ import 'package:archive/archive_io.dart' as archive_io;
 import 'package:path/path.dart' as p;
 import 'package:zip_flutter/zip_flutter.dart';
 import 'app_data_snapshot.dart';
+import 'data_sync_content_journal.dart';
+import 'data_sync_content_fingerprint.dart';
+import 'package:crypto/crypto.dart';
 
 /// Archive filesystem work with explicit paths; no application settings or UI.
 abstract final class AppDataArchive {
@@ -13,6 +16,7 @@ abstract final class AppDataArchive {
     required String destinationPath,
     required String settingsJson,
     String? stagingDirectoryPath,
+    String? syncContentId,
   }) async {
     final destination = File(destinationPath);
     if (destination.existsSync()) {
@@ -43,6 +47,27 @@ abstract final class AppDataArchive {
           }
         } finally {
           zip.close();
+        }
+        if (syncContentId != null) {
+          final content = DataSyncContentJournal.open(dataPath);
+          try {
+            final operation =
+                content.lookup(syncContentId) ??
+                (throw StateError('Missing upload content intent'));
+            content.recordSnapshot(
+              syncContentId,
+              DataSyncContentFingerprint.capture(
+                stagingPath,
+                excludedFields: operation.scope.excludedFields,
+                archiveSyncEnabled: operation.scope.archiveSyncEnabled,
+              ),
+              archiveHash:
+                  (await sha256.bind(File(destinationPath).openRead()).first)
+                      .toString(),
+            );
+          } finally {
+            content.close();
+          }
         }
       });
     } catch (_) {

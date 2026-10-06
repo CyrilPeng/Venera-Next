@@ -103,6 +103,10 @@ Source instance APIs:
 
 `setting` is reserved and cannot be written with `saveData`. See [settings and translations](comic_source.en.md#6-settings-and-translations).
 
+Source data access belongs to a specific runtime instance. After replacement, removal or reload, retained instances and their async callbacks cannot access a new source with the same `key`. Capture the instance for an operation instead of looking up another instance after an await. Construction fields may read a snapshot of the previous runtime data; first loading with no previous runtime returns absent values, and persisted data loads afterwards. Construction cannot save/delete data: write in `init()` or callbacks after registration.
+
+The lexical `sendMessage` in a parsed source script is bound to that script instance, including legacy source-data messages. Unowned data messages from the global evaluator or `globalThis.sendMessage` are rejected; use instance methods such as `ComicSource.sources[key].loadData(...)` when debugging. HTTP/HTML and other protocols are unaffected. Native callbacks already delivered to an image task retain that task’s independent lifetime for pure image processing; old-instance data access still cannot read or change the replacement.
+
 | Global API | Result |
 |---|---|
 | `APP.version` | App version string |

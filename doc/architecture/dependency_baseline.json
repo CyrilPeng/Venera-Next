@@ -231,6 +231,12 @@
     ]
   ],
   "business_entrypoints": [
+    "features/comic_source/source_transaction_journal.dart",
+    "features/comic_source/source_data_journal.dart",
+    "features/comic_source/source_data_storage.dart",
+    "features/comic_source/source_configuration.dart",
+    "features/comic_source/source_script_checkpoint.dart",
+    "features/comic_source/source_repositories.dart",
     "app_runtime/webdav_library.dart",
     "app_runtime/cache_settings.dart",
     "features/local_comics/local_storage_migration.dart",
@@ -290,6 +296,11 @@
     "features/sync/data_sync_transfer.dart",
     "features/sync/data_sync_commit.dart",
     "features/sync/data_sync_operation.dart",
+    "features/sync/data_sync_content.dart",
+    "features/sync/data_sync_content_fingerprint.dart",
+    "features/sync/data_sync_content_journal.dart",
+    "features/sync/data_sync_content_recovery.dart",
+    "features/sync/data_sync_ownership.dart",
     "features/sync/app_data_import_journal.dart",
     "features/sync/data_sync_recovery.dart",
     "features/sync/data_sync_remote.dart",
@@ -338,6 +349,7 @@
     "foundation/window_placement_tracker.dart"
   ],
   "ui_files": [
+    "features/comic_source/source_import_dialog.dart",
     "features/settings/webdav_settings.dart",
     "features/follow_updates/follow_updates_folder_dialog.dart",
     "features/settings/app_controls.dart",

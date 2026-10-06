@@ -1,4 +1,6 @@
 import 'source_failure.dart';
+import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -105,11 +107,13 @@ class SourceRepositories extends ChangeNotifier {
   @override
   void notifyListeners() {
     revision++;
-    super.notifyListeners();
+    AppDataOperations.instance.publish(super.notifyListeners);
   }
 
-  List<SourceRepository> get all {
-    final records = appdata.settings['comicSourceRepositories'];
+  List<SourceRepository> get all => _repositories(appdata.settings);
+
+  List<SourceRepository> _repositories(Settings settings) {
+    final records = settings['comicSourceRepositories'];
     if (records is! List) return [];
     return records
         .whereType<Map>()
@@ -131,8 +135,10 @@ class SourceRepositories extends ChangeNotifier {
 
   SourceRepository? find(String? id) => all.firstWhereOrNull((r) => r.id == id);
 
-  SourceOrigin? originFor(String key) {
-    final origins = appdata.settings['comicSourceOrigins'];
+  SourceOrigin? originFor(String key) => _originFor(appdata.settings, key);
+
+  SourceOrigin? _originFor(Settings settings, String key) {
+    final origins = settings['comicSourceOrigins'];
     final record = origins is Map ? origins[key] : null;
     if (record is! Map || record['kind'] is! String) return null;
     return SourceOrigin(
@@ -160,49 +166,59 @@ class SourceRepositories extends ChangeNotifier {
   }
 
   Future<void>? _migration;
+  bool _migrationNeedsSave = false;
 
-  Future<void> migrate() => _migration ??= _migrate().whenComplete(() {
-    _migration = null;
-  });
+  Future<void> migrate() async {
+    // Do not hold access while waiting for startup to initialize settings.
+    await appdata.ensureInit();
+    await AppDataOperations.instance.access(
+      () => _migration ??= _migrate().whenComplete(() => _migration = null),
+    );
+  }
 
   Future<void> _migrate() async {
-    await appdata.ensureInit();
-    if (appdata.settings['comicSourceRepositoriesMigrated'] == true) return;
-    final legacy =
-        appdata.settings['comicSourceListUrl']?.toString().trim() ?? '';
-    final previousRepositories = appdata.settings['comicSourceRepositories'];
-    final previousMigrated =
-        appdata.settings['comicSourceRepositoriesMigrated'];
-    List<Map<String, String>>? migratedRepositories;
-    if (all.isEmpty && legacy.isNotEmpty) {
-      migratedRepositories = [
-        SourceRepository(
-          id: const Uuid().v4(),
-          name: Uri.tryParse(legacy)?.host.isNotEmpty == true
-              ? Uri.parse(legacy).host
-              : 'Migrated repository'.tl,
-          url: legacy,
-        ).toJson(),
-      ];
-      appdata.settings['comicSourceRepositories'] = migratedRepositories;
-    }
-    appdata.settings['comicSourceRepositoriesMigrated'] = true;
     try {
-      await appdata.saveData(false);
+      await appdata.updateSettings(
+        (draft) {
+          if (draft['comicSourceRepositoriesMigrated'] == true) return;
+          final legacy = draft['comicSourceListUrl']?.toString().trim() ?? '';
+          if (_repositories(draft).isEmpty && legacy.isNotEmpty) {
+            draft['comicSourceRepositories'] = [
+              SourceRepository(
+                id: const Uuid().v4(),
+                name: Uri.tryParse(legacy)?.host.isNotEmpty == true
+                    ? Uri.parse(legacy).host
+                    : 'Migrated repository'.tl,
+                url: legacy,
+              ).toJson(),
+            ];
+          }
+          draft['comicSourceRepositoriesMigrated'] = true;
+        },
+        sync: false,
+        persistIfUnchanged: _migrationNeedsSave,
+      );
+      _migrationNeedsSave = false;
     } catch (_) {
-      // Do not leave an unsaved completion flag that makes retry skip work.
-      // Preserve repository edits made while the settings write was pending.
-      if (migratedRepositories != null &&
-          identical(
-            appdata.settings['comicSourceRepositories'],
-            migratedRepositories,
-          )) {
-        appdata.settings['comicSourceRepositories'] = previousRepositories;
-      }
-      if (appdata.settings['comicSourceRepositoriesMigrated'] == true) {
-        appdata.settings['comicSourceRepositoriesMigrated'] = previousMigrated;
-      }
+      // Published state may already be durable in one of the settings files.
+      // Retain it and force the next attempt to finish persistence.
+      _migrationNeedsSave = true;
       rethrow;
+    }
+  }
+
+  Future<T> _edit<T>(T Function(Settings) change) async {
+    var edited = false;
+    try {
+      return await appdata.updateSettings((draft) {
+        final result = change(draft);
+        edited = true;
+        return result;
+      });
+    } finally {
+      // Also invalidate consumers after a partial write; they must not retain
+      // results derived from the old settings. Never lend admission to them.
+      if (edited) notifyListeners();
     }
   }
 
@@ -309,59 +325,40 @@ class SourceRepositories extends ChangeNotifier {
     return SourceCatalog(entries, skipped);
   }
 
+  SourceRepositorySave prepareSave({
+    String? id,
+    required String name,
+    required String url,
+    String? catalogContents,
+  }) => SourceRepositorySave._(
+    this,
+    id: id,
+    name: name,
+    url: url,
+    catalogContents: catalogContents,
+  );
+
   Future<SourceRepository> save({
     String? id,
     required String name,
     required String url,
     String? catalogContents,
-  }) async {
-    name = name.trim();
-    url = normalizeUrl(url);
-    if (name.isEmpty) throw const SourceFailure(SourceFailureCode.missingName);
-    void validateDuplicate() {
-      if (all.any(
-        (r) =>
-            r.id != id &&
-            Uri.tryParse(r.url)?.removeFragment().toString() == url,
-      )) {
-        throw const SourceFailure(SourceFailureCode.duplicateRepository);
-      }
-    }
+  }) async => prepareSave(
+    id: id,
+    name: name,
+    url: url,
+    catalogContents: catalogContents,
+  ).save();
 
-    validateDuplicate();
-    final repository = SourceRepository(
-      id: id ?? const Uuid().v4(),
-      name: name,
-      url: url,
-    );
-    if (catalogContents == null) {
-      await load(repository);
-    } else {
-      parseCatalog(catalogContents, baseUrl: url);
+  Future<void> remove(SourceRepository repository) => _edit((draft) {
+    final repositories = _repositories(draft);
+    final current = repositories.firstWhereOrNull((r) => r.id == repository.id);
+    if (current != null && !_sameRepository(current, repository)) {
+      throw const SourceFailure(SourceFailureCode.repositoryChanged);
     }
-    validateDuplicate();
-    final repositories = all;
-    final index = repositories.indexWhere((r) => r.id == id);
-    if (id != null && index < 0) {
-      throw const SourceFailure(SourceFailureCode.missingRepository);
-    }
-    if (index < 0) {
-      repositories.add(repository);
-    } else {
-      repositories[index] = repository;
-    }
-    appdata.settings['comicSourceRepositories'] = repositories
-        .map((r) => r.toJson())
-        .toList();
-    await appdata.saveData();
-    notifyListeners();
-    return repository;
-  }
-
-  Future<void> remove(SourceRepository repository) async {
-    final currentOrigins = appdata.settings['comicSourceOrigins'];
+    final currentOrigins = draft['comicSourceOrigins'];
     if (currentOrigins is Map) {
-      appdata.settings['comicSourceOrigins'] = {
+      draft['comicSourceOrigins'] = {
         for (final entry in currentOrigins.entries)
           entry.key:
               entry.value is Map && entry.value['repositoryId'] == repository.id
@@ -369,16 +366,14 @@ class SourceRepositories extends ChangeNotifier {
               : entry.value,
       };
     }
-    appdata.settings['comicSourceRepositories'] = all
+    draft['comicSourceRepositories'] = repositories
         .where((r) => r.id != repository.id)
         .map((r) => r.toJson())
         .toList();
-    await appdata.saveData();
-    notifyListeners();
-  }
+  });
 
-  Future<void> setOrigin(String key, SourceOrigin? origin) async {
-    final current = appdata.settings['comicSourceOrigins'];
+  void _setOrigin(Settings draft, String key, SourceOrigin? origin) {
+    final current = draft['comicSourceOrigins'];
     final origins = current is Map
         ? Map<String, dynamic>.from(current)
         : <String, dynamic>{};
@@ -387,29 +382,43 @@ class SourceRepositories extends ChangeNotifier {
     } else {
       origins[key] = origin.toJson();
     }
-    appdata.settings['comicSourceOrigins'] = origins;
-    await appdata.saveData();
-    notifyListeners();
+    draft['comicSourceOrigins'] = origins;
   }
+
+  Future<void> setOrigin(String key, SourceOrigin? origin) =>
+      _edit((draft) => _setOrigin(draft, key, origin));
+
+  Future<void> unlink(String key, SourceOrigin expected) => _edit((draft) {
+    final current = _originFor(draft, key);
+    if (current != null &&
+        jsonEncode(current.toJson()) != jsonEncode(expected.toJson())) {
+      throw const SourceFailure(SourceFailureCode.repositoryChanged);
+    }
+    _setOrigin(draft, key, null);
+  });
 
   Future<void> link(
     String key,
     SourceRepository repository,
     SourceCatalogEntry entry,
-  ) async {
-    if (entry.key != key || find(repository.id)?.url != repository.url) {
+  ) => _edit((draft) {
+    final current = _repositories(
+      draft,
+    ).firstWhereOrNull((r) => r.id == repository.id);
+    if (entry.key != key || current?.url != repository.url) {
       throw const SourceFailure(SourceFailureCode.repositoryChanged);
     }
-    await setOrigin(
+    _setOrigin(
+      draft,
       key,
       SourceOrigin(
         kind: 'repository',
         repositoryId: repository.id,
-        repositoryName: repository.name,
+        repositoryName: current!.name,
         url: entry.url,
       ),
     );
-  }
+  });
 
   SourceCatalogEntry entryFor(
     ComicSource source,
@@ -502,5 +511,110 @@ class SourceRepositories extends ChangeNotifier {
       checked: checked,
       skipped: skipped,
     );
+  }
+}
+
+bool _sameRepository(SourceRepository? a, SourceRepository? b) =>
+    a?.id == b?.id && a?.name == b?.name && a?.url == b?.url;
+
+/// A fixed assignment with one successful catalog validation. Retrying a
+/// partially saved creation reuses its ID and never overwrites later edits.
+class SourceRepositorySave {
+  SourceRepositorySave._(
+    this._store, {
+    String? id,
+    required String name,
+    required String url,
+    String? catalogContents,
+  }) : _editing = id != null,
+       _previous = id == null ? null : _store.find(id),
+       _path = App.dataPath,
+       _catalogContents = catalogContents,
+       repository = SourceRepository(
+         id: id ?? const Uuid().v4(),
+         name: name.trim(),
+         url: SourceRepositories.normalizeUrl(url),
+       ) {
+    if (repository.name.isEmpty) {
+      throw const SourceFailure(SourceFailureCode.missingName);
+    }
+  }
+
+  final SourceRepositories _store;
+  final bool _editing;
+  final SourceRepository? _previous;
+  final String _path;
+  final String? _catalogContents;
+  final SourceRepository repository;
+  Future<void>? _validation;
+  bool _published = false;
+
+  void _validateTarget(List<SourceRepository> repositories) {
+    if (App.dataPath != _path) {
+      throw const SourceFailure(SourceFailureCode.repositoryChanged);
+    }
+    final current = repositories.firstWhereOrNull((r) => r.id == repository.id);
+    if (_published) {
+      if (current == null) {
+        throw const SourceFailure(SourceFailureCode.missingRepository);
+      }
+      if (!_sameRepository(current, repository)) {
+        throw const SourceFailure(SourceFailureCode.repositoryChanged);
+      }
+    } else if (_editing) {
+      if (current == null) {
+        throw const SourceFailure(SourceFailureCode.missingRepository);
+      }
+      if (!_sameRepository(current, _previous)) {
+        throw const SourceFailure(SourceFailureCode.repositoryChanged);
+      }
+    }
+    if (repositories.any(
+      (r) =>
+          r.id != repository.id &&
+          Uri.tryParse(r.url)?.removeFragment().toString() == repository.url,
+    )) {
+      throw const SourceFailure(SourceFailureCode.duplicateRepository);
+    }
+  }
+
+  Future<void> validate() => _validation ??=
+      Future<void>.sync(() async {
+        _validateTarget(_store.all);
+        if (_catalogContents == null) {
+          await _store.load(repository);
+        } else {
+          SourceRepositories.parseCatalog(
+            _catalogContents,
+            baseUrl: repository.url,
+          );
+        }
+      }).catchError((Object error, StackTrace stack) {
+        _validation = null;
+        Error.throwWithStackTrace(error, stack);
+      });
+
+  Future<SourceRepository> save() async {
+    await validate();
+    try {
+      return await _store._edit((draft) {
+        final repositories = _store._repositories(draft);
+        _validateTarget(repositories);
+        final index = repositories.indexWhere((r) => r.id == repository.id);
+        if (index < 0) {
+          repositories.add(repository);
+        } else {
+          repositories[index] = repository;
+        }
+        draft['comicSourceRepositories'] = repositories
+            .map((r) => r.toJson())
+            .toList();
+        return repository;
+      });
+    } finally {
+      if (_sameRepository(_store.find(repository.id), repository)) {
+        _published = true;
+      }
+    }
   }
 }

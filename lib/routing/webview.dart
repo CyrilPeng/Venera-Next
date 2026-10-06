@@ -11,6 +11,7 @@ import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/proxy.dart';
 import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -254,6 +255,11 @@ class DesktopWebview {
   });
 
   Webview? _webview;
+  Future<void>? _opening;
+  Future<void>? _closing;
+  bool _closed = false;
+  Timer? _started;
+  final _polls = <Future<void>>{};
 
   String? _ua;
 
@@ -275,8 +281,15 @@ class DesktopWebview {
   Timer? timer;
 
   void _runTimer() {
-    timer ??= Timer.periodic(const Duration(seconds: 2), (t) async {
-      const js = '''
+    timer ??= Timer.periodic(const Duration(seconds: 2), (t) {
+      late final Future<void> task;
+      task = _poll().whenComplete(() => _polls.remove(task));
+      _polls.add(task);
+    });
+  }
+
+  Future<void> _poll() async {
+    const js = '''
         function collect() {
           if(document.readyState === 'loading') {
             return '';
@@ -293,13 +306,32 @@ class DesktopWebview {
         }
         collect();
       ''';
-      if (_webview != null) {
-        onMessage(await evaluateJavascript(js) ?? '');
+    final current = _webview;
+    if (current != null && !_closed) {
+      try {
+        final result = await current.evaluateJavaScript(js);
+        if (!_closed && identical(current, _webview)) onMessage(result ?? '');
+      } catch (error, stack) {
+        Log.error('Desktop webview', error, stack);
       }
-    });
+    }
   }
 
-  void open() async {
+  Future<void> open() => _opening ??= _observeLifecycle(_open());
+
+  // Existing fire-and-forget callers still report failures; owners may await
+  // the same original Future to include creation/close in their own lifetime.
+  Future<void> _observeLifecycle(Future<void> operation) {
+    unawaited(
+      operation.catchError((Object error, StackTrace stack) {
+        Log.error('Desktop webview', error, stack);
+      }),
+    );
+    return operation;
+  }
+
+  Future<void> _open() async {
+    if (_closed) throw StateError('Desktop webview is closed');
     _webview = await WebviewWindow.create(
       configuration: CreateConfiguration(
         useWindowPositionAndSize: true,
@@ -308,6 +340,13 @@ class DesktopWebview {
         proxy: await getProxy(),
       ),
     );
+    if (_closed) {
+      final created = _webview!;
+      created.close();
+      await created.onClose;
+      _webview = null;
+      return;
+    }
     _webview!.addOnWebMessageReceivedCallback(onMessage);
     _webview!.setOnNavigation((s) {
       s = s.substring(1, s.length - 1);
@@ -316,13 +355,15 @@ class DesktopWebview {
     _webview!.launch(initialUrl, triggerOnUrlRequestEvent: false);
     _runTimer();
     _webview!.onClose.then((value) {
+      _closed = true;
       _webview = null;
       timer?.cancel();
       timer = null;
+      _started?.cancel();
       onClose?.call();
     });
-    Future.delayed(const Duration(milliseconds: 200), () {
-      onStarted?.call(this);
+    _started = Timer(const Duration(milliseconds: 200), () {
+      if (!_closed) onStarted?.call(this);
     });
   }
 
@@ -363,8 +404,20 @@ class DesktopWebview {
     return acceptedDomains;
   }
 
-  void close() {
-    _webview?.close();
-    _webview = null;
+  Future<void> close() {
+    _closed = true;
+    timer?.cancel();
+    _started?.cancel();
+    return _closing ??= _observeLifecycle(_close());
+  }
+
+  Future<void> _close() async {
+    await _opening;
+    final current = _webview;
+    if (current != null) {
+      current.close();
+      await current.onClose;
+    }
+    await Future.wait(_polls.toList());
   }
 }

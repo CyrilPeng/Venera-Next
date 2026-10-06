@@ -1145,7 +1145,52 @@ function ImageLoadingConfig({url, method, data, headers, onResponse, modifyImage
     this.onLoadFailed = onLoadFailed;
 }
 
+// Runtime identities are instance-owned and survive registry rollback. A
+// script's lexical sendMessage keeps its owner across native/Promise callbacks.
+const __sourceRuntime = (() => {
+    const identities = new WeakMap();
+    const dataMethods = new Set(['load_data', 'save_data', 'delete_data', 'load_setting', 'isLogged']);
+    let sequence = 0;
+    let construction;
+    const identity = source => {
+        if (!source || (typeof source !== 'object' && typeof source !== 'function')) {
+            throw new Error('Source instance is unavailable');
+        }
+        if (!identities.has(source)) identities.set(source, `runtime:${++sequence}`);
+        return identities.get(source);
+    };
+    const message = (id, payload) => sendMessage(dataMethods.has(payload.method)
+        ? {...payload, source_id: id} : payload);
+    return Object.freeze({
+        identity,
+        register(source) {
+            if (construction && !construction.claimed) {
+                construction.claimed = true;
+                identities.set(source, construction.id);
+            } else {
+                identity(source);
+            }
+        },
+        construct(id, create) {
+            const previous = construction;
+            construction = {id, claimed: false};
+            try { return create(); } finally { construction = previous; }
+        },
+        bindMessage: id => payload => message(id, payload),
+        message: (source, payload) => message(identity(source), payload),
+        require(key, id) {
+            const source = ComicSource.sources[key];
+            if (!source || identity(source) !== id) {
+                throw new Error('Source instance has been replaced or removed');
+            }
+            return source;
+        },
+    });
+})();
+
 class ComicSource {
+    constructor() { __sourceRuntime.register(this); }
+
     name = ""
 
     key = ""
@@ -1162,7 +1207,7 @@ class ComicSource {
      * @returns {any}
      */
     loadData(dataKey) {
-        return sendMessage({
+        return __sourceRuntime.message(this, {
             method: 'load_data',
             key: this.key,
             data_key: dataKey
@@ -1175,7 +1220,7 @@ class ComicSource {
      * @returns {any}
      */
     loadSetting(key) {
-        return sendMessage({
+        return __sourceRuntime.message(this, {
             method: 'load_setting',
             key: this.key,
             setting_key: key
@@ -1188,7 +1233,7 @@ class ComicSource {
      * @param data
      */
     saveData(dataKey, data) {
-        return sendMessage({
+        return __sourceRuntime.message(this, {
             method: 'save_data',
             key: this.key,
             data_key: dataKey,
@@ -1201,7 +1246,7 @@ class ComicSource {
      * @param {string} dataKey
      */
     deleteData(dataKey) {
-        return sendMessage({
+        return __sourceRuntime.message(this, {
             method: 'delete_data',
             key: this.key,
             data_key: dataKey,
@@ -1213,7 +1258,7 @@ class ComicSource {
      * @returns {boolean}
      */
     get isLogged() {
-        return sendMessage({
+        return __sourceRuntime.message(this, {
             method: 'isLogged',
             key: this.key,
         });

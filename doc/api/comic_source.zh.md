@@ -246,6 +246,8 @@ onImageLoad: (imageKey, comicId, epId) => ({
 
 ### 账号
 
+未发布主分支会等待 `login`、`logout` 和 `loginWithWebview.onLoginSuccess` 返回的 Promise 真正完成，忽略并释放普通返回值；失败应抛错或拒绝 Promise。登录 UI 等待凭据保存，认证成功后的文件保存重试不会重新认证。网页登录捕获 Cookie/localStorage 后再保存并等待成功回调，保存重试复用该次捕获；替换或卸载后的旧实例不能继续修改新源。
+
 `account` 可按需包含：
 
 | 成员 | 契约 |

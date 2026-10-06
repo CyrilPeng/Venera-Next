@@ -49,16 +49,44 @@ class JavaScriptRuntimeException implements Exception {
   }
 }
 
+/// Identity belongs to one native runtime, never just the reusable source key.
+class JsSourceIdentity {
+  const JsSourceIdentity(this.engine, this.id);
+  final JsEngine engine;
+  final String id;
+
+  @override
+  bool operator ==(Object other) =>
+      other is JsSourceIdentity &&
+      identical(engine, other.engine) &&
+      id == other.id;
+  @override
+  int get hashCode => Object.hash(identityHashCode(engine), id);
+}
+
 class JsSourceDataBridge {
-  final Object? Function(String key, String dataKey) loadData;
+  final Object? Function(JsSourceIdentity identity, String key, String dataKey)
+  loadData;
 
-  final void Function(String key, String dataKey, Object? data) saveData;
+  final void Function(
+    JsSourceIdentity identity,
+    String key,
+    String dataKey,
+    Object? data,
+  )
+  saveData;
 
-  final void Function(String key, String dataKey) deleteData;
+  final void Function(JsSourceIdentity identity, String key, String dataKey)
+  deleteData;
 
-  final Object? Function(String key, String settingKey) loadSetting;
+  final Object? Function(
+    JsSourceIdentity identity,
+    String key,
+    String settingKey,
+  )
+  loadSetting;
 
-  final bool Function(String key) isLogged;
+  final bool Function(JsSourceIdentity identity, String key) isLogged;
 
   const JsSourceDataBridge({
     required this.loadData,
@@ -140,6 +168,10 @@ void _releaseJsResultReferences(Object? value) {
       (name: 'result reference', release: reference.free),
   ]);
 }
+
+/// Release a rejected result that no consumer will receive. Each distinct
+/// native wrapper is released once, including aliases in a result graph.
+void discardJsResult(Object? value) => _releaseJsResultReferences(value);
 
 class JsEngine with _JSEngineApi, Init {
   factory JsEngine() => _cache ?? (_cache = JsEngine._create());
@@ -287,6 +319,15 @@ class JsEngine with _JSEngineApi, Init {
     }
   }
 
+  JsSourceIdentity _sourceIdentity(Map<dynamic, dynamic> message) {
+    _checkActive();
+    final id = message['source_id'];
+    if (id is! String || id.isEmpty) {
+      throw StateError('Source data messages require an instance identity');
+    }
+    return JsSourceIdentity(this, id);
+  }
+
   Object? _messageReceiver(dynamic message) {
     try {
       if (message is Map<dynamic, dynamic>) {
@@ -308,7 +349,11 @@ class JsEngine with _JSEngineApi, Init {
           case 'load_data':
             String key = message["key"];
             String dataKey = message["data_key"];
-            return _sourceBridge.loadData(key, dataKey);
+            return _sourceBridge.loadData(
+              _sourceIdentity(message),
+              key,
+              dataKey,
+            );
           case 'save_data':
             String key = message["key"];
             String dataKey = message["data_key"];
@@ -316,11 +361,16 @@ class JsEngine with _JSEngineApi, Init {
               throw "setting is not allowed to be saved";
             }
             var data = message["data"];
-            _sourceBridge.saveData(key, dataKey, data);
+            _sourceBridge.saveData(
+              _sourceIdentity(message),
+              key,
+              dataKey,
+              data,
+            );
           case 'delete_data':
             String key = message["key"];
             String dataKey = message["data_key"];
-            _sourceBridge.deleteData(key, dataKey);
+            _sourceBridge.deleteData(_sourceIdentity(message), key, dataKey);
           case 'http':
             return _http(Map.from(message));
           case 'html':
@@ -340,9 +390,16 @@ class JsEngine with _JSEngineApi, Init {
           case "load_setting":
             String key = message["key"];
             String settingKey = message["setting_key"];
-            return _sourceBridge.loadSetting(key, settingKey);
+            return _sourceBridge.loadSetting(
+              _sourceIdentity(message),
+              key,
+              settingKey,
+            );
           case "isLogged":
-            return _sourceBridge.isLogged(message["key"]);
+            return _sourceBridge.isLogged(
+              _sourceIdentity(message),
+              message["key"],
+            );
           // temporary solution for [setTimeout] function
           // TODO: implement [setTimeout] in quickjs project
           case "delay":
@@ -1389,6 +1446,10 @@ class JsCallbackScope {
   final JsEngine _engine;
   final JsCallbackScope? _parent;
   final _children = <JsCallbackScope>{};
+
+  void checkActive() {
+    if (_disposed) throw JsDisposedError('JavaScript callback scope is closed');
+  }
 
   JsCallbackScope fork() {
     if (_disposed) throw StateError('JavaScript callback scope is closed');

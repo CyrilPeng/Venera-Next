@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
+import 'package:venera_next/features/comic_source/source_transaction_journal.dart';
 import 'package:zip_flutter/zip_flutter.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/favorites/favorites_repository.dart';
@@ -175,6 +176,29 @@ void main() {
     expect(appdata.settings['dataVersion'], 8);
     expect(appdata.searchHistory, ['remote']);
   });
+
+  test(
+    'pending source transaction blocks import before settings change',
+    () async {
+      final script = File('${App.dataPath}/comic_source/one.js');
+      script.parent.createSync();
+      final pending = await SourceTransactionJournal.begin(
+        dataPath: App.dataPath,
+        script: script,
+        before: null,
+        after: utf8.encode('new source'),
+      );
+      await pending.writeScript();
+      await pending.close();
+      await expectLater(importAppData(archive(8)), throwsStateError);
+      expect(appdata.settings['dataVersion'], 7);
+      expect(appdata.searchHistory, ['local']);
+      expect(script.readAsStringSync(), 'new source');
+      await SourceTransactionJournal.recover(App.dataPath);
+      expect(script.existsSync(), isFalse);
+      expect(await importAppData(archive(8)), DataSyncCommitState.applied);
+    },
+  );
 
   test('manual import can still apply an older archive', () async {
     expect(await importAppData(archive(6)), DataSyncCommitState.applied);
@@ -538,7 +562,7 @@ void main() {
       expect(sync.hasPendingChanges, isTrue);
       expect(appdata.searchHistory, ['local']);
     } finally {
-      sync.dispose();
+      await sync.closeAndWait();
     }
   });
 
@@ -549,7 +573,7 @@ void main() {
       expect(sync.hasPendingChanges, isFalse);
       expect(appdata.searchHistory, ['remote']);
     } finally {
-      sync.dispose();
+      await sync.closeAndWait();
     }
   });
 
@@ -568,7 +592,7 @@ void main() {
         },
       );
       final sync = _controller(transfer);
-      addTearDown(sync.dispose);
+      addTearDown(sync.closeAndWait);
       participant.onNotify = sync.onDataChanged;
       var releaseCleanup = false;
       final hooks = _ImportIOHooks()
@@ -630,7 +654,7 @@ void main() {
         openRemote: (_) => remote,
       );
       final sync = _controller(transfer);
-      addTearDown(sync.dispose);
+      addTearDown(sync.closeAndWait);
       participant.onNotify = sync.onDataChanged;
       var failSave = true;
       final saveError = StateError('applied implicit state unavailable');
@@ -687,7 +711,7 @@ void main() {
         openRemote: (_) => remote,
       );
       final sync = _controller(transfer);
-      addTearDown(sync.dispose);
+      addTearDown(sync.closeAndWait);
       participant.onNotify = sync.onDataChanged;
       final downloading = sync.downloadData();
       await remote.closeStarted.future;
@@ -763,7 +787,12 @@ void main() {
       } finally {
         journal.close();
       }
-      first.dispose();
+      await first.closeAndWait();
+      // Graceful close writes the current marker. Restore the exact pre-close
+      // crash snapshot so this test still exercises interrupted persistence.
+      File(
+        '${App.dataPath}/implicitData.json',
+      ).writeAsStringSync(jsonEncode(durable), flush: true);
       // Reload precisely what survived on disk, discarding the first controller's
       // in-memory continuation. Actual subprocess recovery is tested separately.
       appdata.implicitData
@@ -777,7 +806,9 @@ void main() {
         expect(remote.reads, 1);
         expect(appdata.searchHistory, ['remote']);
         expect(appdata.settings['lastSyncTime'], commitTime);
-        expect(second.hasPendingChanges, isTrue);
+        // The v4 candidate and applied receipt prove this exact imported
+        // content. A restart alone no longer creates a synthetic local edit.
+        expect(second.hasPendingChanges, isFalse);
         expect(
           appdata.implicitData.containsKey('webdavSyncOperation'),
           isFalse,
@@ -789,7 +820,7 @@ void main() {
           acknowledged.close();
         }
       } finally {
-        second.dispose();
+        await second.closeAndWait();
       }
     },
   );
@@ -837,7 +868,7 @@ void main() {
             transfer: () => createDataSyncTransfer(openRemote: (_) => remote),
           );
           sync.start();
-          addTearDown(sync.dispose);
+          addTearDown(sync.closeAndWait);
           final entered = Completer<void>();
           final release = Completer<void>();
           addTearDown(() {
@@ -866,12 +897,17 @@ void main() {
             // still in flight. An independent source change must remain local.
             final importPending = sync.hasPendingChanges;
             sources.updateAvailableUpdates({'local-change': '2'});
+            // Available-update notifications alone are transient UI state.
+            // Queue an actual synchronized write behind the held import.
+            final localEdit = appdata.addSearchHistory('local-after-import');
             release.complete();
+            await localEdit;
             final result = await downloading;
             await LocalFavoritesManager().debugWaitForHashedIdsRefresh();
             expect(result.success, isTrue, reason: result.errorMessage);
             expect(importPending, isFalse);
             expect(sync.hasPendingChanges, isTrue);
+            expect(appdata.searchHistory, contains('local-after-import'));
             expect(sourceNotifications, 2);
           } else {
             final result = await downloading;
@@ -955,8 +991,11 @@ class _RealParticipant implements DataSyncParticipant {
   }
 
   @override
-  Future<void> exportData(bool excludeFields, File destination) async =>
-      throw UnimplementedError();
+  Future<void> exportData(
+    bool excludeFields,
+    File destination, {
+    String? syncOperationId,
+  }) async => throw UnimplementedError();
   @override
   Future<DataSyncCommitState> importData(
     File file, {

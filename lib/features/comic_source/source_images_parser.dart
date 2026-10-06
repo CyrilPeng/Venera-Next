@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/network/image_loading_config.dart';
@@ -18,9 +17,9 @@ class SourceImagesParser {
   LoadComicPagesFunc? parseLoadComicPagesFunc() {
     return (id, ep) async {
       try {
-        final images = await JsEngine().runReadCodeToCompletion<List<String>>(
+        final images = await context.runReadCodeToCompletion<List<String>>(
           """
-          ComicSource.sources.${context.key}.comic.loadEp(${jsonEncode(id)}, ${jsonEncode(ep)})
+          ${context.sourceExpression}.comic.loadEp(${jsonEncode(id)}, ${jsonEncode(ep)})
         """,
           consume: (raw) {
             final result = normalizeComicSourceStringListResult(raw, 'images');
@@ -42,7 +41,7 @@ class SourceImagesParser {
     }
     return (imageKey, comicId, ep) async {
       return _resolveLoadingConfig("""
-          ComicSource.sources.${context.key}.comic.onImageLoad(
+          ${context.sourceExpression}.comic.onImageLoad(
             ${jsonEncode(imageKey)}, ${jsonEncode(comicId)}, ${jsonEncode(ep)})
         """, 'onImageLoad');
     };
@@ -54,7 +53,7 @@ class SourceImagesParser {
     }
     return (imageKey) {
       return _resolveLoadingConfig("""
-          ComicSource.sources.${context.key}.comic.onThumbnailLoad(${jsonEncode(imageKey)})
+          ${context.sourceExpression}.comic.onThumbnailLoad(${jsonEncode(imageKey)})
         """, 'onThumbnailLoad');
     };
   }
@@ -63,10 +62,9 @@ class SourceImagesParser {
     String code,
     String hook,
   ) {
-    final engine = JsEngine();
     final Object? result;
     try {
-      result = engine.runOwnedCode(code);
+      result = context.runOwnedCode(code);
     } catch (error, stack) {
       _throwInvocationFailure(error, stack);
     }
@@ -125,8 +123,8 @@ class SourceImagesParser {
     }
     return (id, next) async {
       try {
-        var res = await JsEngine().runReadCode("""
-          ComicSource.sources.${context.key}.comic.loadThumbnails(${jsonEncode(id)}, ${jsonEncode(next)})
+        var res = await context.runReadCode("""
+          ${context.sourceExpression}.comic.loadThumbnails(${jsonEncode(id)}, ${jsonEncode(next)})
         """);
         final result = normalizeComicSourceStringListResult(res, 'thumbnails');
         if (result == null) throw "Invalid data";

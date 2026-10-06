@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
@@ -25,19 +24,27 @@ class SourceFavoritesParser {
     );
 
     Future<Res<T>> retryZone<T>(Future<Res<T>> Function() func) async {
-      if (!ComicSource.find(context.key)!.isLogged) {
-        return const Res.error("Not login");
-      }
-      var res = await func();
-      if (res.error && res.errorMessage!.contains("Login expired")) {
-        var reLoginRes = await ComicSource.find(context.key)!.reLogin();
-        if (!reLoginRes) {
-          return const Res.error("Login expired and re-login failed");
-        } else {
+      try {
+        context.checkCurrent();
+        final source = ComicSource.requireRuntime(
+          context.key,
+          context.identity,
+        );
+        if (!source.isLogged) return const Res.error('Not login');
+        final res = await func();
+        context.checkCurrent();
+        if (res.error && res.errorMessage!.contains('Login expired')) {
+          final loggedIn = await source.reLogin();
+          context.checkCurrent();
+          if (!loggedIn) {
+            return const Res.error('Login expired and re-login failed');
+          }
           return func();
         }
+        return res;
+      } catch (error, stack) {
+        return Res.fromException(error, stack);
       }
-      return res;
     }
 
     Future<Res<bool>> addOrDelFavFunc(
@@ -48,8 +55,8 @@ class SourceFavoritesParser {
     ) async {
       func() async {
         try {
-          await JsEngine().runCode("""
-            ComicSource.sources.${context.key}.favorites.addOrDelFavorite(
+          await context.runCode("""
+            ${context.sourceExpression}.favorites.addOrDelFavorite(
               ${jsonEncode(comicId)}, ${jsonEncode(folderId)}, ${jsonEncode(isAdding)})
           """);
           return const Res(true);
@@ -70,8 +77,8 @@ class SourceFavoritesParser {
       loadComic = (int page, [String? folder]) async {
         Future<Res<List<Comic>>> func() async {
           try {
-            var res = await JsEngine().runReadCode("""
-            ComicSource.sources.${context.key}.favorites.loadComics(
+            var res = await context.runReadCode("""
+            ${context.sourceExpression}.favorites.loadComics(
               ${jsonEncode(page)}, ${jsonEncode(folder)})
           """);
             return context.parseComicListResult(res, "maxPage");
@@ -89,8 +96,8 @@ class SourceFavoritesParser {
       loadNext = (String? next, [String? folder]) async {
         Future<Res<List<Comic>>> func() async {
           try {
-            var res = await JsEngine().runReadCode("""
-            ComicSource.sources.${context.key}.favorites.loadNext(
+            var res = await context.runReadCode("""
+            ${context.sourceExpression}.favorites.loadNext(
               ${jsonEncode(next)}, ${jsonEncode(folder)})
           """);
             return context.parseComicListResult(res, "next");
@@ -114,8 +121,8 @@ class SourceFavoritesParser {
       loadFolders = ([String? comicId]) async {
         Future<Res<Map<String, String>>> func() async {
           try {
-            var res = await JsEngine().runReadCode("""
-            ComicSource.sources.${context.key}.favorites.loadFolders(${jsonEncode(comicId)})
+            var res = await context.runReadCode("""
+            ${context.sourceExpression}.favorites.loadFolders(${jsonEncode(comicId)})
           """);
             List<String>? subData;
             if (res["favorited"] != null) {
@@ -133,8 +140,8 @@ class SourceFavoritesParser {
       if (context.checkExists("favorites.addFolder")) {
         addFolder = (name) async {
           try {
-            await JsEngine().runCode("""
-            ComicSource.sources.${context.key}.favorites.addFolder(${jsonEncode(name)})
+            await context.runCode("""
+            ${context.sourceExpression}.favorites.addFolder(${jsonEncode(name)})
           """);
             return const Res(true);
           } catch (e, s) {
@@ -146,8 +153,8 @@ class SourceFavoritesParser {
       if (context.checkExists("favorites.deleteFolder")) {
         deleteFolder = (key) async {
           try {
-            await JsEngine().runCode("""
-            ComicSource.sources.${context.key}.favorites.deleteFolder(${jsonEncode(key)})
+            await context.runCode("""
+            ${context.sourceExpression}.favorites.deleteFolder(${jsonEncode(key)})
           """);
             return const Res(true);
           } catch (e, s) {

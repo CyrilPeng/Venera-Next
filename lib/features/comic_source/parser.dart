@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter_qjs/flutter_qjs.dart';
+import 'package:uuid/uuid.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/js_engine.dart';
@@ -11,8 +12,10 @@ import 'package:venera_next/foundation/translations.dart';
 import 'comic_type_bridge.dart';
 import 'js_bridge.dart';
 import 'source.dart';
+import 'source_data_storage.dart';
 import 'source_parser_context.dart';
 import 'source_parse_exception.dart';
+import 'source_mutation_failure.dart';
 import 'source_metadata_parser.dart';
 import 'source_comic_parser.dart';
 import 'source_images_parser.dart';
@@ -78,23 +81,49 @@ String sourceClassName(String script) {
 }
 
 class ComicSourceParser {
+  ComicSourceParser({this.dataStorage = const SourceDataStorage()});
+
+  final SourceDataStorage dataStorage;
   JSInvokable? _restore;
   JsCallbackScope? _callbacks;
 
   /// Restore the previous runtime object if a later disk commit fails.
   void rollback() {
+    final failures = <SourceMutationError>[];
     try {
       _restore?.invoke([]);
-    } finally {
+    } catch (error, stack) {
+      failures.add((stage: 'restore JS source', error: error, stack: stack));
+    }
+    try {
       _callbacks?.dispose();
+    } catch (error, stack) {
+      failures.add((
+        stage: 'release parsed callbacks',
+        error: error,
+        stack: stack,
+      ));
+    }
+    try {
       commit();
+    } catch (error, stack) {
+      failures.add((stage: 'release JS rollback', error: error, stack: stack));
+    }
+    if (failures.isNotEmpty) {
+      throw SourceMutationFailure(
+        state: SourceMutationState.recoveryRequired,
+        failures: failures,
+      );
     }
   }
 
   void commit() {
-    _restore?.free();
-    _restore = null;
-    _callbacks = null;
+    try {
+      _restore?.free();
+    } finally {
+      _restore = null;
+      _callbacks = null;
+    }
   }
 
   /// comic source key
@@ -107,6 +136,7 @@ class ComicSourceParser {
     String fileName, {
     String? expectedKey,
     bool retainRollback = false,
+    required Future<void> Function(File) createFile,
   }) async {
     if (!fileName.endsWith(".js")) {
       fileName = "$fileName.js";
@@ -125,18 +155,13 @@ class ComicSourceParser {
         i++;
       }
     }
-    try {
-      await file.writeAsString(js);
-      return await parse(
-        js,
-        file.path,
-        expectedKey: expectedKey,
-        retainRollback: retainRollback,
-      );
-    } catch (e) {
-      await file.deleteIfExists();
-      rethrow;
-    }
+    await createFile(file);
+    return await parse(
+      js,
+      file.path,
+      expectedKey: expectedKey,
+      retainRollback: retainRollback,
+    );
   }
 
   Future<ComicSource> parse(
@@ -146,21 +171,55 @@ class ComicSourceParser {
     bool replacing = false,
     bool retainRollback = false,
   }) async {
+    final identity = JsSourceIdentity(JsEngine(), const Uuid().v4());
+    final construction = SourceConstructionReads(
+      identity,
+      expectedKey: expectedKey,
+    );
+    ComicSource? source;
+    final failures = <SourceMutationError>[];
     try {
-      final source = await _parse(
+      source = await _parse(
         js,
         filePath,
         expectedKey: expectedKey,
         replacing: replacing,
+        identity: identity,
       );
-      if (!retainRollback) commit();
-      return source;
-    } catch (_) {
-      rollback();
-      rethrow;
+    } catch (error, stack) {
+      failures.add((stage: 'parse source', error: error, stack: stack));
     } finally {
-      JsEngine().runCode("delete this['temp'];");
+      construction.dispose();
     }
+    try {
+      JsEngine().runCode("delete this['temp'];");
+    } catch (error, stack) {
+      failures.add((
+        stage: 'release temporary JS source',
+        error: error,
+        stack: stack,
+      ));
+    }
+    if (failures.isNotEmpty) {
+      try {
+        rollback();
+      } catch (recovery, recoveryStack) {
+        failures.add((
+          stage: 'restore parsed source',
+          error: recovery,
+          stack: recoveryStack,
+        ));
+      }
+      if (failures.length == 1) {
+        Error.throwWithStackTrace(failures.single.error, failures.single.stack);
+      }
+      throw SourceMutationFailure(
+        state: SourceMutationState.recoveryRequired,
+        failures: failures,
+      );
+    }
+    if (!retainRollback) commit();
+    return source!;
   }
 
   Future<ComicSource> _parse(
@@ -168,14 +227,17 @@ class ComicSourceParser {
     String filePath, {
     String? expectedKey,
     bool replacing = false,
+    required JsSourceIdentity identity,
   }) async {
     configureComicTypeSourceKeyResolver();
     configureComicSourceJsDataBridge();
     js = js.replaceAll("\r\n", "\n");
     final className = sourceClassName(js);
-    JsEngine().runCode("""(() => { $js
-        this['temp'] = new $className()
-      }).call()
+    identity.engine.runCode("""(function(sendMessage) {
+      (function() { $js
+        this['temp'] = __sourceRuntime.construct(${jsonEncode(identity.id)}, () => new $className());
+      }).call();
+    })(__sourceRuntime.bindMessage(${jsonEncode(identity.id)}));
     """, filePath);
     _name =
         JsEngine().runCode("this['temp'].name") ??
@@ -214,6 +276,7 @@ class ComicSourceParser {
         JsEngine().runCode('''(() => {
       const previous = ComicSource.sources[${jsonEncode(key)}];
       return () => {
+        if (ComicSource.sources[${jsonEncode(key)}] === previous) return;
         if (previous === undefined) delete ComicSource.sources[${jsonEncode(key)}];
         else ComicSource.sources[${jsonEncode(key)}] = previous;
       };
@@ -229,6 +292,7 @@ class ComicSourceParser {
       key: key,
       name: _name!,
       callbacks: callbacks,
+      identity: identity,
     );
     final account = SourceAccountParser(context);
     final explore = SourceExploreParser(context);
@@ -275,6 +339,8 @@ class ComicSourceParser {
       comic.parseStarRatingFunc(),
       comic.parseArchiveDownloader(),
       runtimeCallbacks: callbacks,
+      runtimeContext: context,
+      dataStorage: dataStorage,
     );
 
     await source.loadData();

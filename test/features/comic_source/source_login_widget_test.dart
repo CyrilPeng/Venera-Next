@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:venera_next/foundation/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,47 +10,46 @@ import 'package:venera_next/features/comic_source/source.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/js_engine.dart';
+import '../../support/comic_source_fixture.dart';
+import 'package:venera_next/features/comic_source/source_data_storage.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/network/cookie_jar.dart';
 
-class _Source extends Fake implements ComicSource {
-  _Source(this.account);
+class _Storage extends SourceDataStorage {
+  int calls = 0;
+  Future<void> Function()? action;
   @override
-  Future<void> closeDataWrites() async {}
-
-  @override
-  final AccountConfig account;
-  @override
-  String get key => 'login_test';
-  @override
-  String get name => 'Login source';
-  @override
-  String get version => '1.0.0';
-  @override
-  String get filePath => '';
-  @override
-  Map<String, dynamic> data = {};
-  @override
-  bool get isLogged => data['account'] != null;
-  int saves = 0;
-  Future<void> Function()? save;
-  @override
-  Future<void> saveData() async {
-    saves++;
-    await save?.call();
+  Future<void> write(String path, String key, String contents) async {
+    calls++;
+    await action?.call();
   }
+}
 
-  @override
-  JsCallbackScope createSettingsCallbackScope() => JsCallbackScope();
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
+class _Source extends ComicSourceFixture {
+  _Source(AccountConfig config, {Map<String, dynamic> initialData = const {}})
+    : this._(config, _Storage(), initialData);
+  _Source._(
+    AccountConfig config,
+    this.storage,
+    Map<String, dynamic> initialData,
+  ) : super(
+        key: 'login_test',
+        account: config,
+        dataStorage: storage,
+        initialData: initialData,
+      );
+  final _Storage storage;
+  int get saves => storage.calls;
+  set save(Future<void> Function()? action) => storage.action = action;
 }
 
 void main() {
   final messages = <String>[];
   setUp(() {
+    final root = Directory.systemTemp.createTempSync('source-login-ui-');
+    App.dataPath = root.path;
+    addTearDown(() => root.deleteSync(recursive: true));
     rootBundle.clear();
     messages.clear();
     final language = appdata.settings['language'];
@@ -165,13 +166,15 @@ void main() {
         expect(messages.single, contains('login failed'));
         expect(find.text('Continue'), findsOneWidget);
         pending = Completer<Res<bool>>();
-        await tester.tap(find.text('Continue'));
+        await tester.tap(find.text('Retry'));
         expect(calls, 2);
         pending.complete(const Res(true));
         await tester.pumpAndSettle();
         expect(find.text('Continue'), findsNothing);
-        if (cookies) expect(source.data['account'], 'ok');
-        expect(source.saves, greaterThan(0));
+        if (cookies) {
+          expect(source.data['account'], 'ok');
+          expect(source.saves, greaterThan(0));
+        }
         expect(tester.takeException(), isNull);
       },
     );
@@ -191,7 +194,7 @@ void main() {
           }
           await tester.pump();
           expect(messages, isEmpty);
-          expect(source.data['account'], isNull);
+          expect(source.data['account'], cookies && !failed ? 'ok' : null);
           expect(tester.takeException(), isNull);
         },
       );
@@ -217,7 +220,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(messages.single, contains('save failed'));
       source.save = null;
-      await tester.tap(find.text('Continue'));
+      await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
       expect(find.text('Continue'), findsNothing);
     },
@@ -242,7 +245,10 @@ void main() {
         null,
         null,
       ),
-    )..data['account'] = ['user', 'password'];
+      initialData: {
+        'account': ['user', 'password'],
+      },
+    );
     await show(tester, source, login: false);
     await tester.tap(find.text('Re-login'));
     await tester.tap(find.text('Re-login'));
