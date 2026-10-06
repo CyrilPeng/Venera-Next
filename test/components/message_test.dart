@@ -3,6 +3,51 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/message.dart';
 
 void main() {
+  testWidgets(
+    'failed loading route removal keeps its original callback for retry',
+    (tester) async {
+      final navigator = GlobalKey<_FailingNavigatorState>();
+      late BuildContext context;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (_, _) => _FailingNavigator(
+            key: navigator,
+            onGenerateRoute: (_) => MaterialPageRoute<void>(
+              builder: (value) {
+                context = value;
+                return const Scaffold();
+              },
+            ),
+          ),
+        ),
+      );
+      var cancellations = 0;
+      var closures = 0;
+      final controller = showLoadingDialog(
+        context,
+        onCancel: () => cancellations++,
+        onClosed: () => closures++,
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(controller.close, throwsA(same(navigator.currentState!.failure)));
+      expect(controller.closed, isFalse);
+      expect(controller.isCurrent, isTrue);
+      expect(closures, 0);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      navigator.currentState!.fails = false;
+      controller.close();
+      await tester.pumpAndSettle();
+      controller.close();
+      expect(navigator.currentState!.removals, 2);
+      expect(controller.closed, isTrue);
+      expect(closures, 1);
+      expect(cancellations, 0);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final action in ['button', 'back', 'unmount', 'unbuilt']) {
     testWidgets('explicit-only loading cancellation: $action', (tester) async {
       late BuildContext context;
@@ -118,4 +163,22 @@ void main() {
     expect(find.text('First toast'), findsNothing);
     expect(find.text('Second toast'), findsNothing);
   });
+}
+
+class _FailingNavigator extends Navigator {
+  const _FailingNavigator({super.key, super.onGenerateRoute});
+  @override
+  NavigatorState createState() => _FailingNavigatorState();
+}
+
+class _FailingNavigatorState extends NavigatorState {
+  bool fails = true;
+  int removals = 0;
+  final failure = StateError('route removal failed');
+  @override
+  void removeRoute<T extends Object?>(Route<T> route, [T? result]) {
+    removals++;
+    if (fails) throw failure;
+    super.removeRoute(route, result);
+  }
 }

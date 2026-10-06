@@ -10,6 +10,7 @@ class CoreBootstrap {
     required this.sources,
     required this.stores,
     required this.finish,
+    this.shutdownPreparation,
     Iterable<CoreStartupCleanup> failureCleanup = const [],
   }) : _failureCleanup = failureCleanup;
   final Future<void> Function() environment;
@@ -18,12 +19,17 @@ class CoreBootstrap {
   final Future<void> Function() sources;
   final Future<void> Function() stores;
   final Future<void> Function() finish;
+  final Future<void> Function()? shutdownPreparation;
   final Iterable<CoreStartupCleanup> _failureCleanup;
   Future<void>? _startup;
   Future<void>? _shutdown;
+  Future<void>? _preparingShutdown;
+  bool _startedSuccessfully = false;
 
   Future<void> start() {
-    if (_shutdown != null) return Future.error(StateError('Core is closing'));
+    if (_shutdown != null || _preparingShutdown != null) {
+      return Future.error(StateError('Core is closing'));
+    }
     return _startup ??= _start();
   }
 
@@ -31,7 +37,11 @@ class CoreBootstrap {
   /// This closes acquired resources; it does not prepare downloads or UI routes.
   Future<void> close() => _shutdown ??= _close();
 
-  Future<void> _close() async {
+  /// Stop and join producers while their stores are still available. The host
+  /// may then seal data admission and persist final state before [close].
+  Future<void> prepareForClose() => _preparingShutdown ??= _prepareForClose();
+
+  Future<void> _prepareForClose() async {
     final startup = _startup;
     if (startup == null) return;
     try {
@@ -49,6 +59,12 @@ class CoreBootstrap {
     } catch (_) {
       return;
     }
+    await shutdownPreparation?.call();
+  }
+
+  Future<void> _close() async {
+    await prepareForClose();
+    if (!_startedSuccessfully) return;
     final failures = await _releaseCoreResources(_failureCleanup);
     if (failures.isNotEmpty) throw CoreShutdownFailure(failures);
   }
@@ -62,6 +78,7 @@ class CoreBootstrap {
       await sources();
       await stores();
       await finish();
+      _startedSuccessfully = true;
     } catch (error, stack) {
       await rollbackCoreStartup(_failureCleanup, error, stack);
       Error.throwWithStackTrace(error, stack);

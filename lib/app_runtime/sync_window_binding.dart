@@ -10,12 +10,15 @@ class SyncWindowBinding extends StatefulWidget {
   const SyncWindowBinding({
     required this.child,
     required this.controller,
+    this.isFinalizing,
     this.prepareInteractive,
     this.prepareFollowUpdates,
     this.prepareWebDavLibrary,
     this.prepareDownloads,
     this.prepareImages,
     this.prepareImports,
+    this.cancelStartupUpdates,
+    this.closeStartupUpdates,
     super.key,
   });
   final Future<VoidCallback> Function()? prepareInteractive;
@@ -24,8 +27,11 @@ class SyncWindowBinding extends StatefulWidget {
   final Future<VoidCallback> Function()? prepareDownloads;
   final Future<VoidCallback> Function()? prepareImages;
   final Future<VoidCallback> Function()? prepareImports;
+  final VoidCallback? cancelStartupUpdates;
+  final Future<void> Function()? closeStartupUpdates;
   final Widget child;
   final DataSyncController controller;
+  final bool Function()? isFinalizing;
 
   @override
   State<SyncWindowBinding> createState() => _SyncWindowBindingState();
@@ -49,15 +55,22 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
     if (identical(window, _window)) return;
     _window?.removeExitTask(_waitThenClose);
     _window?.removeCloseFailureListener(_releasePreparedWork);
+    _window?.removeCloseStartListener(_cancelStartupUpdates);
     _window = window;
     window.addExitTask(_waitThenClose);
     window.addCloseFailureListener(_releasePreparedWork);
+    window.addCloseStartListener(_cancelStartupUpdates);
+    if (window.isClosing) _cancelStartupUpdates();
   }
+
+  void _cancelStartupUpdates() => widget.cancelStartupUpdates?.call();
 
   Future<void> _waitThenClose() async {
     final controller = widget.controller;
     _preparing = true;
     try {
+      await widget.closeStartupUpdates?.call();
+      if (!mounted) return;
       final prepareInteractive = widget.prepareInteractive;
       if (prepareInteractive != null) {
         _releaseInteractive = await prepareInteractive();
@@ -97,6 +110,7 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
   }
 
   void _releasePreparedWork() {
+    if (widget.isFinalizing?.call() == true) return;
     final sync = _releaseSync;
     _releaseSync = null;
     final images = _releaseImages;
@@ -140,6 +154,7 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
 
   @override
   void dispose() {
+    _window?.removeCloseStartListener(_cancelStartupUpdates);
     _window?.removeExitTask(_waitThenClose);
     _window?.removeCloseFailureListener(_releasePreparedWork);
     try {

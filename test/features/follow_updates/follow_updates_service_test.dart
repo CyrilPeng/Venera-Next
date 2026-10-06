@@ -68,6 +68,77 @@ class _Fixture {
 
 void main() {
   test(
+    'final close drains retired tasks and cannot be reopened by a release',
+    () async {
+      final f = _Fixture();
+      addTearDown(f.finish);
+      f.service.start();
+      f.downloads.first.complete();
+      await pumpEventQueue();
+      final old = f.tasks.single;
+      f.service.stop();
+      f.service.start();
+      f.downloads.last.complete();
+      await pumpEventQueue();
+      final current = f.tasks.last;
+      var closed = false;
+      final closing = f.service.closeAndWait();
+      expect(identical(closing, f.service.closeAndWait()), isTrue);
+      final done = closing.then((_) => closed = true);
+      current.finished.complete();
+      await pumpEventQueue();
+      expect(closed, isFalse);
+      old.finished.complete();
+      await done;
+      expect(f.service.start, throwsStateError);
+      await expectLater(f.service.prepareForExit(), throwsStateError);
+      expect(f.notifications, 0);
+
+      final prepared = _Fixture()..foregroundBusy = true;
+      addTearDown(prepared.finish);
+      prepared.service.start();
+      final release = await prepared.service.prepareForExit();
+      await prepared.service.closeAndWait();
+      release();
+      expect(prepared.service.isRunning, isFalse);
+      expect(prepared.service.start, throwsStateError);
+    },
+  );
+
+  test(
+    'final close preserves cancellation, progress and completion errors',
+    () async {
+      final f = _Fixture();
+      addTearDown(f.finish);
+      f.service.start();
+      f.downloads.single.complete();
+      await pumpEventQueue();
+      final task = f.tasks.single;
+      final progressError = StateError('progress');
+      final cancelError = StateError('cancel');
+      final doneError = StateError('done');
+      task.controller.addError(progressError);
+      await pumpEventQueue();
+      task.cancelError = cancelError;
+      final closing = f.service.closeAndWait();
+      final checked = expectLater(
+        closing,
+        throwsA(
+          isA<FollowUpdatesCloseFailure>().having(
+            (error) => error.failures.map((failure) => failure.error),
+            'all errors',
+            unorderedEquals([progressError, cancelError, doneError]),
+          ),
+        ),
+      );
+      task.finished.completeError(doneError);
+      await checked;
+      expect(identical(closing, f.service.closeAndWait()), isTrue);
+      expect(f.service.start, throwsStateError);
+    },
+  );
+
+  test(
     'checks deduplicate and wait for downloads before creating an owned task',
     () async {
       final f = _Fixture();

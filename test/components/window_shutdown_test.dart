@@ -41,6 +41,200 @@ void main() {
           .onWindowClose();
 
   testWidgets(
+    'tasks registered during preparation and finalization join before exit',
+    (tester) async {
+      final preparation = Completer<void>();
+      final finalizing = Completer<void>();
+      final lateWrite = Completer<void>();
+      final events = <String>[];
+      late WindowFrameController frame;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (_, child) => WindowFrame(
+            child!,
+            finalize: (drain) async {
+              events.add('finalizing');
+              await finalizing.future;
+              await drain();
+              events.add('core');
+            },
+            onExit: () => events.add('exit'),
+          ),
+          home: Builder(
+            builder: (context) {
+              frame = WindowFrame.of(context);
+              return const Scaffold();
+            },
+          ),
+        ),
+      );
+      frame.addExitTask(() async {
+        events.add('prepare');
+        await preparation.future;
+      });
+      close(tester);
+      await tester.pump();
+      frame.addExitTask(() async => events.add('late prepare'));
+      preparation.complete();
+      await tester.pump();
+      expect(events, ['prepare', 'late prepare', 'finalizing']);
+      frame.addExitTask(() async {
+        await lateWrite.future;
+        events.add('late write');
+      });
+      finalizing.complete();
+      await tester.pump();
+      expect(events, isNot(contains('core')));
+      lateWrite.complete();
+      await tester.pumpAndSettle();
+      expect(events, [
+        'prepare',
+        'late prepare',
+        'finalizing',
+        'late write',
+        'core',
+        'exit',
+      ]);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'finalization failure stays frozen and retries without preparing again',
+    (tester) async {
+      final first = Completer<void>();
+      final retry = Completer<void>();
+      var finalizations = 0;
+      var preparations = 0;
+      var releases = 0;
+      var edits = 0;
+      var exits = 0;
+      late WindowFrameController frame;
+      late BuildContext retained;
+      final semantics = tester.ensureSemantics();
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            navigatorKey: App.rootNavigatorKey,
+            builder: (_, child) => WindowFrame(
+              child!,
+              finalize: (_) =>
+                  ++finalizations == 1 ? first.future : retry.future,
+              onExit: () => exits++,
+            ),
+            home: Builder(
+              builder: (context) {
+                retained = context;
+                frame = WindowFrame.of(context);
+                return Scaffold(
+                  body: Center(
+                    child: TextButton(
+                      onPressed: () => edits++,
+                      child: const Text('Edit library'),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+        frame.addExitTask(() async => preparations++);
+        frame.addCloseFailureListener(() => releases++);
+        close(tester);
+        await tester.pump();
+        first.completeError(StateError('core close failed'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isA<StateError>());
+        expect(frame.isClosing, isTrue);
+        expect(find.text('Retry'), findsOneWidget);
+        expect(
+          tester
+              .binding
+              .renderViews
+              .single
+              .owner!
+              .semanticsOwner!
+              .rootSemanticsNode!
+              .toStringDeep(),
+          isNot(contains('Edit library')),
+        );
+        expect(
+          tester
+              .getSemantics(find.text('Unable to close. Please try again.'))
+              .flagsCollection
+              .isLiveRegion,
+          isTrue,
+        );
+        await tester.tap(find.text('Edit library'), warnIfMissed: false);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        expect(edits, 0);
+        expect(
+          await retained.to<Object>(
+            () => const Scaffold(body: Text('Late route')),
+          ),
+          isNull,
+        );
+        expect(find.text('Late route'), findsNothing);
+        expect(releases, 0);
+        await tester.tap(find.text('Retry'));
+        await tester.pump();
+        close(tester);
+        expect(finalizations, 2);
+        expect(preparations, 1);
+        expect(exits, 0);
+        retry.complete();
+        await tester.pumpAndSettle();
+        expect(exits, 1);
+        expect(releases, 0);
+        await tester.pumpWidget(const SizedBox());
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
+
+  testWidgets(
+    'remounted finalizing window waits for its host and requires a finalizer',
+    (tester) async {
+      final done = Completer<void>();
+      var calls = 0;
+      var exits = 0;
+      Widget app(Key key, {bool missing = false}) => MaterialApp(
+        builder: (_, child) => WindowFrame(
+          child!,
+          key: key,
+          isFinalizing: () => true,
+          finalize: missing
+              ? null
+              : (_) {
+                  calls++;
+                  return done.future;
+                },
+          onExit: () => exits++,
+        ),
+        home: const Scaffold(),
+      );
+      await tester.pumpWidget(app(const ValueKey(1)));
+      await tester.pump();
+      expect(calls, 1);
+      await tester.pumpWidget(app(const ValueKey(2)));
+      await tester.pump();
+      expect(calls, 2);
+      done.complete();
+      await tester.pumpAndSettle();
+      expect(exits, 1);
+      await tester.pumpWidget(app(const ValueKey(3), missing: true));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isA<StateError>());
+      expect(exits, 1);
+      expect(find.text('Retry'), findsOneWidget);
+      await tester.tap(find.text('Force Quit'));
+      expect(exits, 2);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
     'shutdown blocks input and late navigation, then restores focus',
     (tester) async {
       final wait = Completer<void>();
@@ -529,9 +723,16 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  for (final dark in [false, true]) {
+  for (final variant in [
+    (dark: false, failed: false),
+    (dark: true, failed: false),
+    (dark: false, failed: true),
+    (dark: true, failed: true),
+  ]) {
+    final dark = variant.dark;
+    final failed = variant.failed;
     testWidgets(
-      'shutdown feedback fits a small window at large text; dark=$dark',
+      'shutdown feedback fits a small window at large text; dark=$dark failed=$failed',
       (tester) async {
         tester.view.physicalSize = const Size(500, 600);
         tester.view.devicePixelRatio = 1;
@@ -556,7 +757,15 @@ void main() {
               ),
               child: RepaintBoundary(
                 key: preview,
-                child: WindowFrame(child!, onExit: () {}),
+                child: WindowFrame(
+                  child!,
+                  onExit: () {},
+                  finalize: failed
+                      ? (_) async {
+                          throw StateError('final shutdown failed');
+                        }
+                      : null,
+                ),
               ),
             ),
             home: Builder(
@@ -571,6 +780,12 @@ void main() {
         close(tester);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
+        if (failed) {
+          wait.complete();
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isA<StateError>());
+          expect(find.text('Retry'), findsOneWidget);
+        }
         if (dark) {
           await tester.pump(const Duration(seconds: 1));
           expect(tester.binding.hasScheduledFrame, isFalse);
@@ -589,14 +804,14 @@ void main() {
                 format: ui.ImageByteFormat.png,
               );
               await File(
-                '$directory/shutdown-${dark ? 'dark' : 'light'}.png',
+                '$directory/shutdown-${failed ? 'failed-' : ''}${dark ? 'dark' : 'light'}.png',
               ).writeAsBytes(data!.buffer.asUint8List());
             } finally {
               image.dispose();
             }
           });
         }
-        wait.complete();
+        if (!wait.isCompleted) wait.complete();
         await tester.pumpAndSettle();
         await tester.pumpWidget(const SizedBox());
       },

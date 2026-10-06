@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/message.dart';
+import 'package:venera_next/components/window_selection_task.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -15,7 +18,7 @@ class CreateFavoriteFolderDialog extends StatefulWidget {
   });
   final String? Function(String) validate;
   final FutureOr<void> Function(String) create;
-  final Future<String?> Function() selectImport;
+  final Future<String?> Function(SelectionOperation) selectImport;
   final FutureOr<void> Function(String) importJson;
 
   @override
@@ -28,27 +31,40 @@ class _CreateFavoriteFolderDialogState
   final controller = TextEditingController();
   String? error;
   bool importing = false;
+  WindowSelectionTask? _task;
 
   @override
   void dispose() {
+    _task?.cancel();
     controller.dispose();
     super.dispose();
   }
 
   Future<void> import() async {
     if (importing) return;
-    final route = ModalRoute.of(context);
+    final task = WindowSelectionTask(context);
+    if (!task.canPresent) return;
+    _task = task;
+    final selectImport = widget.selectImport;
+    final importJson = widget.importJson;
     setState(() {
       importing = true;
       error = null;
     });
     try {
-      final json = await widget.selectImport();
-      if (!mounted || json == null) return;
-      await widget.importJson(json);
-      if (mounted && route?.isCurrent != false) context.pop();
-    } catch (_) {
-      if (mounted) setState(() => error = "Failed to import".tl);
+      final imported = await task.run((operation) async {
+        final json = await selectImport(operation);
+        if (json == null) return false;
+        operation.checkActive();
+        await importJson(json);
+        return true;
+      });
+      if (mounted && imported && task.canPresent) context.pop();
+    } on SelectionCancelled {
+      // A late picker/read may finish, but cannot start a new import.
+    } catch (failure, stack) {
+      Log.error('Import favorite folder', failure, stack);
+      if (task.canPresent) setState(() => error = "Failed to import".tl);
     } finally {
       if (mounted) setState(() => importing = false);
     }
@@ -56,7 +72,9 @@ class _CreateFavoriteFolderDialogState
 
   Future<void> create() async {
     if (importing) return;
-    final route = ModalRoute.of(context);
+    final task = WindowSelectionTask(context);
+    if (!task.canPresent) return;
+    _task = task;
     try {
       final failure = widget.validate(controller.text);
       if (failure != null) {
@@ -64,8 +82,12 @@ class _CreateFavoriteFolderDialogState
         return;
       }
       setState(() => importing = true);
-      await widget.create(controller.text);
-      if (mounted && route?.isCurrent != false) context.pop();
+      final create = widget.create;
+      final name = controller.text;
+      await task.run((_) async => await create(name));
+      if (mounted && task.canPresent) context.pop();
+    } on SelectionCancelled {
+      // An already accepted create is awaited; a new one cannot start on exit.
     } catch (failure) {
       if (mounted) setState(() => error = failure.toString());
     } finally {

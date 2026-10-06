@@ -12,6 +12,39 @@ class AppDataOperations {
   int _accesses = 0;
   bool _exclusive = false;
   bool _preparing = false;
+  bool _closing = false;
+  Future<void>? _closeAttempt;
+  FutureOr<void> Function()? _finalize;
+
+  bool get isClosing => _closing;
+
+  /// Irreversibly stop new owners, drain admitted work, then persist the final
+  /// state with exclusive access. The finalizer may be retried after failure;
+  /// ordinary admission never reopens. Stop native producers before calling.
+  Future<void> closeAndWait({FutureOr<void> Function()? finalize}) {
+    if (sharingScope != null) {
+      return Future.error(
+        StateError('Close data admission outside an operation'),
+      );
+    }
+    final pending = _closeAttempt;
+    if (pending != null) return pending;
+    if (!_closing) _finalize = finalize;
+    _closing = true;
+    final completion = Completer<void>();
+    _closeAttempt = completion.future;
+    _enqueue<void>(
+      () => _finalize?.call(),
+      kind: _AppDataOperationKind.exclusive,
+    ).then(
+      completion.complete,
+      onError: (Object error, StackTrace stack) {
+        _closeAttempt = null;
+        completion.completeError(error, stack);
+      },
+    );
+    return completion.future;
+  }
 
   /// Identity for sharing a Future only within the same live admission. A
   /// queued request outside an operation must not be reused by its owner.
@@ -42,6 +75,7 @@ class AppDataOperations {
   T accessSync<T>(T Function() action) {
     final current = Zone.current[_scopeKey] as _AppDataScope?;
     if (current != null && current.active) return action();
+    if (_closing && !_preparing) throw AppDataClosedException();
     if (_exclusive || (!_preparing && _queue.isNotEmpty)) {
       throw AppDataBusyException();
     }
@@ -104,6 +138,19 @@ class AppDataOperations {
         return preparation.nest(action);
       }
     }
+    // A native callback from an already admitted preparation can lose its
+    // Dart zone. Let ordinary accesses finish that preparation, but admit no
+    // new preparation/replacement. Once it settles, all new owners are sealed.
+    if (_closing && !(kind == _AppDataOperationKind.access && _preparing)) {
+      return Future.error(AppDataClosedException());
+    }
+    return _enqueue(action, kind: kind);
+  }
+
+  Future<T> _enqueue<T>(
+    FutureOr<T> Function() action, {
+    required _AppDataOperationKind kind,
+  }) {
     final result = Completer<T>();
     final caller = Zone.current;
     _queue.add(
@@ -188,6 +235,11 @@ class AppDataBusyException implements Exception {
   @override
   String toString() =>
       'Application data is busy; retry after the current data operation completes';
+}
+
+class AppDataClosedException implements Exception {
+  @override
+  String toString() => 'Application data is closing';
 }
 
 enum _AppDataOperationKind { access, preparation, exclusive }

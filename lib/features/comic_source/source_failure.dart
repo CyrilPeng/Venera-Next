@@ -5,6 +5,7 @@ enum SourceFailureCode {
   invalidUrl('Enter a complete HTTP or HTTPS URL.'),
   unavailableRepository('Unable to load repository.'),
   invalidCatalog('The address must return a source list in JSON format.'),
+  invalidImport('Expected a source script (JS) or a source list (JSON).'),
   emptyCatalog('The repository contains no usable source entries.'),
   missingName('Enter a repository name.'),
   duplicateRepository('This repository address has already been added.'),

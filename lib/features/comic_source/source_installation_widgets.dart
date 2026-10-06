@@ -3,8 +3,8 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/foundation/translations.dart';
 
-import 'comic_source_manager.dart';
 import 'source_installation.dart';
+import 'source_installations_scope.dart';
 
 /// A persistent entry point, shared by the manager page and every catalog.
 class SourceInstallationSummary extends StatelessWidget {
@@ -14,7 +14,7 @@ class SourceInstallationSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final queue = SourceInstallations.instance;
+    final queue = SourceInstallationsScope.of(context);
     return ListenableBuilder(
       listenable: queue,
       builder: (context, _) {
@@ -74,11 +74,11 @@ class SourceInstallationPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final queue = SourceInstallations.instance;
+    final queue = SourceInstallationsScope.of(context);
     return PopUpWidgetScaffold(
       title: 'Installation tasks'.tl,
       body: ListenableBuilder(
-        listenable: Listenable.merge([queue, ComicSourceManager()]),
+        listenable: Listenable.merge([queue, queue.manager]),
         builder: (context, _) {
           final tasks = queue.tasks;
           // Keep stable insertion order while tasks change state.
@@ -259,7 +259,7 @@ class _SourceInstallationAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final queue = SourceInstallations.instance;
+    final queue = SourceInstallationsScope.of(context);
     final colors = Theme.of(context).colorScheme;
     if (task.active) {
       return Row(

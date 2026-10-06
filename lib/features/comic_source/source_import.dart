@@ -6,6 +6,7 @@ import 'package:venera_next/network/app_dio.dart';
 
 import 'parser.dart' show sourceClassName;
 import 'source_repositories.dart';
+import 'source_text_request.dart';
 
 class SourceImportNeedsBaseUrl implements Exception {
   @override
@@ -77,33 +78,31 @@ class SourceImportPreview {
         name: fileName ?? className,
         url: url,
       );
-    } catch (_) {
-      throw 'Expected a source script (JS) or a source list (JSON).'.tl;
+    } catch (error, stack) {
+      throw SourceFailure(
+        SourceFailureCode.invalidImport,
+        cause: error,
+        stackTrace: stack,
+      );
     }
   }
 
   static Future<SourceImportPreview> fromUrl(
     String url, {
     Dio? client,
+    Dio Function()? createClient,
     CancelToken? cancelToken,
   }) async {
     url = SourceRepositories.normalizeUrl(url);
-    final dio = client ?? AppDio();
-    try {
-      final response = await dio.get<String>(
-        url,
-        cancelToken: cancelToken,
-        options: Options(
-          responseType: ResponseType.plain,
-          headers: {'cache-time': 'no'},
-        ),
-      );
-      if (response.statusCode != 200 || response.data == null) {
-        throw 'Failed to load source'.tl;
-      }
-      return parse(response.data!, url: response.realUri.toString());
-    } finally {
-      if (client == null) dio.close();
+    final response = await readSourceText(
+      url,
+      client: client,
+      createClient: createClient,
+      cancelToken: cancelToken,
+    );
+    if (response.statusCode != 200 || response.data == null) {
+      throw 'Failed to load source'.tl;
     }
+    return parse(response.data!, url: response.realUri.toString());
   }
 }

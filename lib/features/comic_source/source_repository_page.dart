@@ -3,14 +3,16 @@ import 'source_failure.dart';
 import 'package:venera_next/components/settings_save_state.dart';
 import 'source_failure_presentation.dart';
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart' show CancelToken;
+import 'package:dio/dio.dart' show Dio;
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 import 'comic_source_manager.dart';
 import 'source.dart';
 import 'source_repositories.dart';
-import 'source_installation.dart';
+import 'source_installations_scope.dart';
+import 'source_inspection_task.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'source_installation_widgets.dart';
 
 class SourceRepositoriesPanel extends StatelessWidget {
@@ -388,9 +390,11 @@ class SourceRepositoryCatalogPage extends StatefulWidget {
     super.key,
     required this.repository,
     this.sourceToLink,
+    this.createClient,
   });
   final SourceRepository repository;
   final ComicSource? sourceToLink;
+  final Dio Function()? createClient;
   @override
   State<SourceRepositoryCatalogPage> createState() =>
       _SourceRepositoryCatalogPageState();
@@ -403,26 +407,36 @@ class _SourceRepositoryCatalogPageState
   String? error;
   String query = '';
   bool loading = false;
-  CancelToken? _loadToken;
+  SourceInspectionTask<SourceCatalog>? _inspection;
 
   @override
-  void initState() {
-    super.initState();
-    load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_inspection == null || !_inspection!.sameWindow) load();
+  }
+
+  @override
+  void didUpdateWidget(covariant SourceRepositoryCatalogPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.repository != widget.repository ||
+        oldWidget.createClient != widget.createClient) {
+      load();
+    }
   }
 
   @override
   void dispose() {
-    _loadToken?.cancel();
+    _inspection?.cancel();
     super.dispose();
   }
 
   Future<void> load() async {
-    _loadToken?.cancel();
-    final token = CancelToken();
-    _loadToken = token;
-    bool isCurrent() =>
-        mounted && identical(_loadToken, token) && !token.isCancelled;
+    _inspection?.cancel();
+    final task = SourceInspectionTask<SourceCatalog>(context);
+    _inspection = task;
+    final repository = widget.repository;
+    final createClient = widget.createClient;
+    bool isCurrent() => mounted && identical(_inspection, task) && task.active;
     setState(() {
       loading = true;
       error = null;
@@ -430,9 +444,12 @@ class _SourceRepositoryCatalogPageState
       skipped = const [];
     });
     try {
-      final result = await SourceRepositories.instance.load(
-        widget.repository,
-        cancelToken: token,
+      final result = await task.run(
+        (scope) => SourceRepositories.instance.load(
+          repository,
+          createClient: createClient,
+          cancelToken: scope.cancelToken,
+        ),
       );
       if (isCurrent()) {
         setState(() {
@@ -440,20 +457,20 @@ class _SourceRepositoryCatalogPageState
           skipped = result.skipped;
         });
       }
-    } catch (e) {
+    } catch (e, stack) {
+      if (!isCurrent()) Log.info('Retired source catalog', '$e\n$stack');
       if (isCurrent()) {
         setState(() => error = sourceFailureMessage(e));
       }
     } finally {
-      if (isCurrent()) {
-        _loadToken = null;
+      if (mounted && identical(_inspection, task)) {
         setState(() => loading = false);
       }
     }
   }
 
   Future<void> act(SourceCatalogEntry entry) async {
-    final source = ComicSource.find(entry.key);
+    final source = SourceInstallationsScope.of(context).manager.find(entry.key);
     if (source != null) {
       final repository = widget.repository;
       await showDialog<void>(
@@ -481,7 +498,9 @@ class _SourceRepositoryCatalogPageState
           widget.repository.url) {
         throw 'Repository changed. Refresh the list and try again.'.tl;
       }
-      SourceInstallations.instance.enqueueRepository(widget.repository, entry);
+      SourceInstallationsScope.of(
+        context,
+      ).enqueueRepository(widget.repository, entry);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -509,8 +528,8 @@ class _SourceRepositoryCatalogPageState
       body: ListenableBuilder(
         listenable: Listenable.merge([
           SourceRepositories.instance,
-          ComicSourceManager(),
-          SourceInstallations.instance,
+          SourceInstallationsScope.of(context).manager,
+          SourceInstallationsScope.of(context),
         ]),
         builder: (context, _) => Column(
           children: [
@@ -599,11 +618,11 @@ class _SourceRepositoryCatalogPageState
   }
 
   Widget _entry(BuildContext context, SourceCatalogEntry entry) {
-    final installed = ComicSource.find(entry.key) != null;
-    final matchingTask = SourceInstallations.instance.taskFor(
-      sourceKey: entry.key,
-      url: entry.url,
-    );
+    final installed =
+        SourceInstallationsScope.of(context).manager.find(entry.key) != null;
+    final matchingTask = SourceInstallationsScope.of(
+      context,
+    ).taskFor(sourceKey: entry.key, url: entry.url);
     // Share active work across repositories. A past failure belongs only to
     // its original entry, so another repository can start a fresh attempt.
     final task =

@@ -35,8 +35,33 @@ CoreBootstrap createCoreBootstrap({
   required void Function() onDataChanged,
 }) {
   final cleanup = <CoreStartupCleanup>[];
+  final producers = <CoreStartupCleanup>[];
+  var storeCleanupIndex = 0;
+  void registerProducer(String name, FutureOr<void> Function() close) {
+    Future<void>? closing;
+    final resource = (
+      name: name,
+      close: () => closing ??= Future<void>.sync(close),
+    );
+    cleanup.add(resource);
+    producers.add(resource);
+  }
+
   return CoreBootstrap(
     failureCleanup: cleanup,
+    shutdownPreparation: () async {
+      // A failed producer can still retain native resources. Keep its stores
+      // and the remaining runtime dependencies available for diagnostics.
+      for (final producer in producers.reversed) {
+        try {
+          await producer.close();
+        } catch (error, stack) {
+          throw CoreShutdownFailure([
+            (store: producer.name, error: error, stack: stack),
+          ]);
+        }
+      }
+    },
     environment: environment ?? App.init,
     settings: () async {
       // Import recovery precedes settings fallback and every database opener.
@@ -94,6 +119,7 @@ CoreBootstrap createCoreBootstrap({
       }
     },
     sources: () async {
+      storeCleanupIndex = cleanup.length;
       cleanup.add((
         name: 'source bindings',
         close: () {
@@ -104,7 +130,7 @@ CoreBootstrap createCoreBootstrap({
       configureComicTypeSourceKeyResolver();
       configureComicSourceDataSavedHandler(() async => onDataChanged());
       final library = webDavLibrary;
-      cleanup.add((name: 'WebDAV library', close: library.source.closeAndWait));
+      registerProducer('WebDAV library', library.source.closeAndWait);
       configureRuntimeComicSourcesProvider(
         () => library.settings.read().connection.isValid
             ? [library.source.create()]
@@ -112,11 +138,11 @@ CoreBootstrap createCoreBootstrap({
       );
       final pool = JSPool();
       final engine = JsEngine();
-      cleanup.add((name: 'JS compute pool', close: pool.close));
-      cleanup.add((name: 'JS engine', close: engine.dispose));
+      registerProducer('JS engine', engine.closeAndWait);
+      registerProducer('JS compute pool', pool.close);
       await engine.init();
       final sources = ComicSourceManager();
-      cleanup.add((name: 'comic sources', close: sources.closeAndWait));
+      registerProducer('comic sources', sources.closeAndWait);
       await sources.init();
     },
     stores: () async {
@@ -145,16 +171,17 @@ CoreBootstrap createCoreBootstrap({
       await initializeCoreStores(stores);
       // The group handles its own failed attempt; retain only successful stores
       // for a failure in a later startup phase.
-      cleanup.addAll(
+      cleanup.insertAll(
+        storeCleanupIndex,
         stores.map((store) => (name: store.name, close: store.close)),
       );
     },
     finish: () async {
       await _checkOldConfigs();
       final cache = CacheManager();
-      cleanup.add((name: 'cache', close: cache.dispose));
+      registerProducer('cache', cache.dispose);
       final cacheSettings = CacheSettingsBinding(appdata.settings, cache);
-      cleanup.add((name: 'cache settings', close: cacheSettings.dispose));
+      registerProducer('cache settings', cacheSettings.dispose);
       // The cache owns and drains this scan; UI startup need not await it.
       unawaited(cache.start());
     },

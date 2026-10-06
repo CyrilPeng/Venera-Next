@@ -1,3 +1,6 @@
+import 'package:venera_next/features/comic_source/source_installations_scope.dart';
+import 'package:venera_next/features/comic_source/comic_source_manager.dart';
+import 'package:venera_next/features/comic_source/source_repositories.dart';
 import 'package:venera_next/features/comic_source/source_failure.dart';
 import 'dart:convert';
 
@@ -14,6 +17,15 @@ String catalog(String target) => jsonEncode([
 ]);
 
 void main() {
+  late SourceInstallations queue;
+  setUp(() {
+    queue = SourceInstallations(
+      manager: ComicSourceManager(),
+      repositories: SourceRepositories.instance,
+      createClient: Dio.new,
+    );
+  });
+  tearDown(() => queue.closeAndWait());
   test(
     'URL detection uses the redirected address for relative catalog scripts',
     () async {
@@ -113,7 +125,16 @@ void main() {
                   SourceFailureCode.invalidCatalog,
                 ),
               )
-            : throwsA(isA<String>()),
+            : throwsA(
+                isA<SourceFailure>()
+                    .having(
+                      (e) => e.code,
+                      'code',
+                      SourceFailureCode.invalidImport,
+                    )
+                    .having((e) => e.cause, 'parser cause', isNotNull)
+                    .having((e) => e.stackTrace, 'parser stack', isNotNull),
+              ),
       );
     });
   }
@@ -125,7 +146,11 @@ void main() {
       appdata.settings['language'] = 'en-US';
       addTearDown(() => appdata.settings['language'] = previousLanguage);
       await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: SourceImportDialog())),
+        MaterialApp(
+          builder: (_, child) =>
+              SourceInstallationsScope(queue: queue, child: child!),
+          home: const Scaffold(body: SourceImportDialog()),
+        ),
       );
       await tester.enterText(find.byType(TextField).first, catalog('one.js'));
       await tester.tap(find.text('Detect and preview'));
@@ -151,9 +176,13 @@ void main() {
       final previousLanguage = appdata.settings['language'];
       appdata.settings['language'] = 'en-US';
       addTearDown(() => appdata.settings['language'] = previousLanguage);
-      final taskCount = SourceInstallations.instance.tasks.length;
+      final taskCount = queue.tasks.length;
       await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: SourceImportDialog())),
+        MaterialApp(
+          builder: (_, child) =>
+              SourceInstallationsScope(queue: queue, child: child!),
+          home: const Scaffold(body: SourceImportDialog()),
+        ),
       );
       await tester.enterText(
         find.byType(TextField).first,
@@ -164,7 +193,7 @@ void main() {
       expect(find.text('Source list detected: 1 sources'), findsOneWidget);
       expect(find.text('Source One'), findsOneWidget);
       expect(find.text('Install selected (1)'), findsOneWidget);
-      expect(SourceInstallations.instance.tasks.length, taskCount);
+      expect(queue.tasks.length, taskCount);
       await tester.tap(find.text('Deselect all'));
       await tester.pump();
       expect(
@@ -181,7 +210,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Source script detected'), findsOneWidget);
       expect(find.text('Install source'), findsOneWidget);
-      expect(SourceInstallations.instance.tasks.length, taskCount);
+      expect(queue.tasks.length, taskCount);
     },
   );
 }

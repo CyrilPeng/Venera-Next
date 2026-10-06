@@ -114,8 +114,9 @@ void main() {
           } finally {
             await tester.pumpWidget(const SizedBox());
             JsEngine.configureUiMessageHandler(null);
-            engine
-                .dispose(); // QuickJS reports any leaked native reference here.
+            final closing = engine.closeAndWait();
+            await tester.pumpAndSettle();
+            await closing; // QuickJS reports leaked native references here.
             appdata.settings['language'] = language;
             directory.deleteSync(recursive: true);
           }

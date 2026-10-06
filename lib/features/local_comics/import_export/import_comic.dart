@@ -9,6 +9,7 @@ import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:sqlite3/sqlite3.dart' as sql;
 import 'package:venera_next/foundation/translations.dart';
 import 'cbz.dart';
@@ -32,31 +33,45 @@ class ImportComic {
     this.presentation = const ImportComicPresentation(),
   });
 
-  Future<bool> cbz() async {
-    final file = await selectFile(ext: ['cbz', 'zip', '7z', 'cb7']);
+  Future<bool> cbz(SelectionOperation operation) async {
+    final file = await operation.pickFile(
+      () => selectFile(
+        ext: ['cbz', 'zip', '7z', 'cb7'],
+        checkStop: operation.checkActive,
+      ),
+    );
     if (file == null) return false;
     final controller = presentation.showLoading(allowCancel: false);
     try {
-      await CBZ.import(
-        File(file.path),
-        registerComic: (comic) => registerComic(comic, folder: selectedFolder),
+      await operation.useFile(
+        file,
+        (source) => CBZ.import(
+          source,
+          registerComic: (comic) =>
+              registerComic(comic, folder: selectedFolder),
+        ),
       );
       presentation.showMessage(
         message: 'Imported @a comics'.tlParams({'a': 1}),
       );
       return true;
-    } catch (e, s) {
-      Log.error('Import Comic', e.toString(), s);
-      presentation.showMessage(message: e.toString());
-      return false;
     } finally {
       controller?.close();
     }
   }
 
-  Future<bool> multipleCbz() async {
-    final dir = await DirectoryPicker().pickDirectory(directAccess: true);
-    if (dir == null) return false;
+  Future<bool> multipleCbz(SelectionOperation operation) async {
+    final selection = await operation.pickDirectory(
+      () => DirectoryPicker().pickDirectory(
+        directAccess: true,
+        checkStop: operation.checkActive,
+      ),
+    );
+    if (selection == null) return false;
+    return operation.useDirectory(selection, _multipleCbz);
+  }
+
+  Future<bool> _multipleCbz(Directory dir) async {
     final files = (await dir.list().toList()).whereType<File>().where(
       (file) => isComicArchiveFileName(file.name),
     );
@@ -87,16 +102,18 @@ class ImportComic {
     }
   }
 
-  Future<bool> pdf() async {
-    var selected = <FileSelection>[];
-    var accepted = false;
-    try {
-      selected = await selectFiles(
+  Future<bool> pdf(SelectionOperation operation) async {
+    final selected = await operation.pickFiles(
+      () => selectFiles(
         ext: ['pdf'],
         uniformTypeIdentifiers: ['com.adobe.pdf'],
-      );
-      if (selected.isEmpty) return false;
-      final task = PdfImportTasks.instance.add(
+        checkStop: operation.checkActive,
+      ),
+    );
+    if (selected.isEmpty) return false;
+    final task = operation.transferFiles(
+      selected,
+      () => PdfImportTasks.instance.add(
         files: selected,
         batch: PdfImportBatch(
           containsTitle: (title) => LocalManager().findByName(title) != null,
@@ -111,84 +128,72 @@ class ImportComic {
             );
           },
         ),
-      );
-      accepted = true;
-      await presentation.showPdfTask(task);
-      // Closing the view accepts the task. Its eventual completion must not
-      // navigate away from whatever the user is reading in the meantime.
-      return true;
-    } catch (e, s) {
-      Log.error('Import PDF', e.toString(), s);
-      presentation.showMessage(message: _documentImportError(e));
-      return false;
-    } finally {
-      // A picker can return while exit preparation is rejecting new batches.
-      // Until add succeeds, the caller still owns the selected file handles.
-      if (!accepted) {
-        for (final file in selected) {
-          try {
-            await file.dispose();
-          } catch (error, stack) {
-            Log.error('Import PDF cleanup', error.toString(), stack);
-          }
-        }
-      }
-    }
+      ),
+    );
+    await presentation.showPdfTask(task);
+    // Closing the view accepts the task. Its eventual completion must not
+    // navigate away from whatever the user is reading in the meantime.
+    return true;
   }
 
-  Future<bool> epub() async {
-    final selected = await selectFile(ext: ['epub']);
+  Future<bool> epub(SelectionOperation operation) async {
+    final selected = await operation.pickFile(
+      () => selectFile(ext: ['epub'], checkStop: operation.checkActive),
+    );
     if (selected == null) return false;
     final controller = presentation.showLoading(
       allowCancel: false,
       withProgress: true,
       message: 'Importing EPUB'.tl,
     );
-    LocalComic? comic;
     try {
-      comic = await EpubComicImporter.import(
-        File(selected.path),
-        registerComic: (comic) => registerComic(comic, folder: selectedFolder),
-        onProgress: (current, total) {
-          controller
-            ?..setProgress(current / total)
-            ..setMessage(
-              'Importing EPUB (@a/@b)'.tlParams({'a': current, 'b': total}),
-            );
-        },
+      await operation.useFile(
+        selected,
+        (file) => EpubComicImporter.import(
+          file,
+          registerComic: (comic) =>
+              registerComic(comic, folder: selectedFolder),
+          onProgress: (current, total) {
+            controller
+              ?..setProgress(current / total)
+              ..setMessage(
+                'Importing EPUB (@a/@b)'.tlParams({'a': current, 'b': total}),
+              );
+          },
+        ),
       );
-    } catch (e, s) {
-      Log.error('Import EPUB', e.toString(), s);
-      presentation.showMessage(message: _documentImportError(e));
     } finally {
       controller?.close();
     }
-    if (comic == null) return false;
     presentation.showMessage(message: 'Imported @a comics'.tlParams({'a': 1}));
     return true;
   }
 
-  static String _documentImportError(Object error) {
-    final message = error is FormatException
-        ? error.message.toString()
-        : error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
-    return message.tl;
-  }
-
-  Future<bool> ehViewer() async {
-    var dbFile = await selectFile(ext: ['db']);
-    final picker = DirectoryPicker();
-    final comicSrc = await picker.pickDirectory();
-    Map<String?, List<LocalComic>> imported = {};
-    if (dbFile == null || comicSrc == null) {
-      return false;
-    }
-
-    return _runImport(() => _importEhViewer(dbFile, comicSrc, imported));
+  Future<bool> ehViewer(SelectionOperation operation) async {
+    final dbFile = await operation.pickFile(
+      () => selectFile(ext: ['db'], checkStop: operation.checkActive),
+    );
+    if (dbFile == null) return false;
+    final directory = await operation.pickDirectory(
+      () => DirectoryPicker().pickDirectory(checkStop: operation.checkActive),
+    );
+    if (directory == null) return false;
+    return _runImport(() async {
+      if (!copyToLocal) await directory.retainAccessForSession();
+      operation.checkActive();
+      final imported = <String?, List<LocalComic>>{};
+      return operation.useDirectory(
+        directory,
+        (comicSrc) => operation.useFile(
+          dbFile,
+          (file) => _importEhViewer(file, comicSrc, imported),
+        ),
+      );
+    });
   }
 
   Future<bool> _importEhViewer(
-    FileSelectResult dbFile,
+    File dbFile,
     Directory comicSrc,
     Map<String?, List<LocalComic>> imported,
   ) async {
@@ -297,13 +302,19 @@ class ImportComic {
     return _registerComics(imported, copyToLocal);
   }
 
-  Future<bool> directory(bool single) async {
-    final picker = DirectoryPicker();
-    final path = await picker.pickDirectory();
-    if (path == null) {
-      return false;
-    }
-    return _runImport(() => _importDirectory(path, single));
+  Future<bool> directory(bool single, SelectionOperation operation) async {
+    final selection = await operation.pickDirectory(
+      () => DirectoryPicker().pickDirectory(checkStop: operation.checkActive),
+    );
+    if (selection == null) return false;
+    return _runImport(() async {
+      if (!copyToLocal) await selection.retainAccessForSession();
+      operation.checkActive();
+      return operation.useDirectory(
+        selection,
+        (path) => _importDirectory(path, single),
+      );
+    });
   }
 
   Future<bool> _importDirectory(Directory path, bool single) async {

@@ -10,6 +10,7 @@ class _Selection extends FileSelection {
 
   int prepared = 0;
   int disposed = 0;
+  Object? releaseError;
   Future<void>? disposeGate;
 
   @override
@@ -22,6 +23,7 @@ class _Selection extends FileSelection {
   Future<void> dispose() async {
     if (disposeGate != null) await disposeGate;
     disposed++;
+    if (releaseError != null) throw releaseError!;
   }
 }
 
@@ -36,6 +38,40 @@ void main() {
       Log.isMuted = muted;
     });
   });
+
+  test(
+    'failed cleanup survives clear and exit retries without importing twice',
+    () async {
+      final file = _Selection('Saved.pdf')
+        ..releaseError = StateError('release');
+      var imports = 0;
+      final task = tasks.add(
+        files: [file],
+        batch: PdfImportBatch(
+          containsTitle: (_) => false,
+          importFile: (_, title, progress, cancellation) async {
+            imports++;
+          },
+        ),
+      );
+      final result = await task.done;
+      expect(result.count(PdfImportStatus.imported), 1);
+      expect(result.cleanupFailures.single.selection, same(file));
+      tasks.clearFinished();
+      expect(tasks.tasks, [task]);
+      await expectLater(
+        tasks.prepareForExit(),
+        throwsA(isA<PdfImportCleanupFailure>()),
+      );
+      file.releaseError = null;
+      (await tasks.prepareForExit())();
+      expect(imports, 1);
+      expect(file.prepared, 1);
+      expect(file.disposed, 3);
+      tasks.clearFinished();
+      expect(tasks.tasks, isEmpty);
+    },
+  );
 
   test(
     'exit cancels queued work and drains active conversion and cleanup',

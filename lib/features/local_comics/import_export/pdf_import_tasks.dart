@@ -75,7 +75,10 @@ class PdfImportTasks extends ChangeNotifier {
   }
 
   void clearFinished() {
-    for (final task in _tasks.where((task) => task.isFinished).toList()) {
+    for (final task
+        in _tasks
+            .where((task) => task.isFinished && task._files.isEmpty)
+            .toList()) {
       task.removeListener(notifyListeners);
       _tasks.remove(task);
     }
@@ -105,7 +108,32 @@ class PdfImportTasks extends ChangeNotifier {
     for (final task in pending) {
       cancel(task);
     }
-    Future.wait(pending.map((task) => task.done)).then(
+    Future<void>.sync(() async {
+      await Future.wait(pending.map((task) => task.done));
+      final failures = <FileSelectionCleanupFailure>[];
+      for (final task in _tasks) {
+        for (final selection in task._files.toList()) {
+          try {
+            await selection.dispose();
+            task._files.remove(selection);
+          } catch (error, stack) {
+            final original = task.result?.cleanupFailures
+                .where((failure) => identical(failure.selection, selection))
+                .firstOrNull;
+            failures.add(
+              FileSelectionCleanupFailure(
+                selection: selection,
+                cleanupError: error,
+                cleanupStack: stack,
+                operationError: original?.operationError,
+                operationStack: original?.operationStack,
+              ),
+            );
+          }
+        }
+      }
+      if (failures.isNotEmpty) throw PdfImportCleanupFailure(failures);
+    }).then(
       (_) => ready.complete(() {
         if (identical(_exitPreparation, preparation)) _exitPreparation = null;
       }),
@@ -126,9 +154,11 @@ class PdfImportTasks extends ChangeNotifier {
         task._changed();
       },
     );
-    // FileSelection.dispose is handled by the batch, including cancellation.
-    // Retain only the summary, not file handles or the import closure.
-    task._files = const [];
+    // Retain failed releases for exit retries; never repeat completed imports.
+    task._files = result.cleanupFailures
+        .map((failure) => failure.selection)
+        .toSet()
+        .toList();
     task._batch = null;
     task._result = result;
     task._done.complete(result);
@@ -146,4 +176,13 @@ class PdfImportTasks extends ChangeNotifier {
     }
     super.dispose();
   }
+}
+
+class PdfImportCleanupFailure implements Exception {
+  PdfImportCleanupFailure(Iterable<FileSelectionCleanupFailure> failures)
+    : failures = List.unmodifiable(failures);
+  final List<FileSelectionCleanupFailure> failures;
+  @override
+  String toString() =>
+      'PDF selected file cleanup failed: ${failures.join('; ')}';
 }

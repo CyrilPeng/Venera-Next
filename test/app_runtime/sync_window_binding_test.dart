@@ -35,6 +35,59 @@ void main() {
         .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
   });
 
+  testWidgets('detaching during final close does not reopen prepared owners', (
+    tester,
+  ) async {
+    final visible = ValueNotifier(true);
+    addTearDown(visible.dispose);
+    final finalizing = Completer<void>();
+    var isFinalizing = false;
+    var releases = 0;
+    var exits = 0;
+    HistoryManager.cache = _PendingHistory(() async {});
+    Future<VoidCallback> prepare() async =>
+        () => releases++;
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (_, child) => WindowFrame(
+          child!,
+          finalize: (_) {
+            isFinalizing = true;
+            return finalizing.future;
+          },
+          onExit: () => exits++,
+        ),
+        home: ValueListenableBuilder<bool>(
+          valueListenable: visible,
+          builder: (_, show, _) => show
+              ? SyncWindowBinding(
+                  controller: fixture.controller,
+                  isFinalizing: () => isFinalizing,
+                  prepareInteractive: prepare,
+                  prepareFollowUpdates: prepare,
+                  prepareWebDavLibrary: prepare,
+                  prepareDownloads: prepare,
+                  prepareImages: prepare,
+                  prepareImports: prepare,
+                  child: const Scaffold(),
+                )
+              : const Scaffold(),
+        ),
+      ),
+    );
+    (tester.state(find.byType(WindowFrame)) as WindowListener).onWindowClose();
+    await tester.pump();
+    expect(isFinalizing, isTrue);
+    visible.value = false;
+    await tester.pump();
+    expect(releases, 0);
+    finalizing.complete();
+    await tester.pumpAndSettle();
+    expect(exits, 1);
+    expect(releases, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
     'window drains placement reads and saves, resumes after failure and retries',
     (tester) async {

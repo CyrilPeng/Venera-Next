@@ -27,9 +27,16 @@ Future<void> newFolder() => showDialog<void>(
   builder: (_) => CreateFavoriteFolderDialog(
     validate: validateFolderName,
     create: (name) async => await LocalFavoritesManager().createFolder(name),
-    selectImport: () async {
-      final file = await selectFile(ext: ['json']);
-      return file == null ? null : utf8.decode(await file.readAsBytes());
+    selectImport: (operation) async {
+      final file = await operation.pickFile(
+        () => selectFile(ext: ['json'], checkStop: operation.checkActive),
+      );
+      return file == null
+          ? null
+          : operation.useFile(
+              file,
+              (selected) async => utf8.decode(await selected.readAsBytes()),
+            );
     },
     importJson: (json) async => await LocalFavoritesManager().fromJson(json),
   ),

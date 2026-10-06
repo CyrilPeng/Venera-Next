@@ -171,7 +171,7 @@ void main() {
   );
 
   testWidgets(
-    'cover provider converts real image and window joins actual saveFile delivery',
+    'cover provider converts real image and window drains a late picker without writing',
     (tester) async {
       final reply = Completer<String?>();
       final destination = File(p.join(root.path, 'cover.png'));
@@ -200,7 +200,7 @@ void main() {
       await _until(tester, () => suggestedName != null);
       expect(suggestedName, 'cover_Sample.png');
       final staged = cache.listSync().whereType<Directory>().single;
-      final source = File(p.join(staged.path, 'cover_Sample.png'));
+      final source = File(p.join(staged.path, 'contents', 'cover_Sample.png'));
       final encoded = image.decodePng(source.readAsBytesSync())!;
       expect([encoded.width, encoded.height], [3, 2]);
       final pixel = encoded.getPixel(1, 1);
@@ -213,9 +213,9 @@ void main() {
       expect(interaction.IO.isSelectingFiles, isTrue);
       reply.complete(destination.path);
       await _until(tester, () => exits == 1);
-      expect(destination.existsSync(), isTrue);
+      expect(destination.existsSync(), isFalse);
       expect(source.existsSync(), isFalse);
-      expect(destination.readAsBytesSync(), isNotEmpty);
+      expect(cache.listSync(), isEmpty);
       await _disposeImages(tester);
       expect(tester.takeException(), isNull);
     },
@@ -252,12 +252,21 @@ Future<void> _disposeImages(WidgetTester tester) async {
 
 final class _SaveReadOverrides extends IOOverrides {
   _SaveReadOverrides(this.directory);
+  final _nativeZone = Zone.current;
   final String directory;
   final listEntered = Completer<void>();
   final listRelease = Completer<void>();
   final readEntered = Completer<void>();
   final readRelease = Completer<void>();
   String? readPath;
+
+  // Preserve native type queries while delaying only reads. The default
+  // IOOverrides adapter misreports existing Windows paths on Dart 3.11.
+  @override
+  Future<FileSystemEntityType> fseGetType(String path, bool followLinks) =>
+      _nativeZone.run(
+        () => FileSystemEntity.type(path, followLinks: followLinks),
+      );
 
   @override
   Directory createDirectory(String path) {

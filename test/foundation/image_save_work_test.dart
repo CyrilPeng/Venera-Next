@@ -4,11 +4,106 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/image_save_work.dart';
 import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/network/request_scope.dart';
 
 final _png = Uint8List.fromList([137, 80, 78, 71, 13, 10, 26, 10]);
 
 void main() {
+  test(
+    'host registration precedes reentrant listeners and read admission',
+    () async {
+      final registry = SelectionTaskRegistry();
+      var reads = 0;
+      final work = ImageSaveWork(
+        deliver: (_, _, _) async => true,
+        onError: (_, _) => fail('Unexpected error'),
+      );
+      work.bindTasks(
+        canStart: () => !registry.isClosing,
+        retain: (task) =>
+            registry.retain(cancel: task.cancel, close: task.closeAndWait),
+      );
+      Future<void>? closing;
+      work.addListener(() => closing ??= registry.closeAndWait());
+      final result = await work.save(
+        name: 'image',
+        read: (_) async {
+          reads++;
+          return _png;
+        },
+      );
+      await closing;
+      expect(result, isFalse);
+      expect(reads, 0);
+      expect(
+        await work.save(
+          name: 'late',
+          read: (_) async {
+            reads++;
+            return _png;
+          },
+        ),
+        isFalse,
+      );
+      expect(reads, 0);
+      await work.dispose();
+    },
+  );
+
+  test(
+    'binding adopts previously accepted read before open host closes',
+    () async {
+      final registry = SelectionTaskRegistry();
+      final reading = Completer<Uint8List>();
+      final work = ImageSaveWork(
+        deliver: (_, _, _) async => true,
+        onError: (_, _) => fail('Unexpected error'),
+      );
+      final saving = work.save(name: 'image', read: (_) => reading.future);
+      final unbind = work.bindTasks(
+        canStart: () => !registry.isClosing,
+        retain: (task) =>
+            registry.retain(cancel: task.cancel, close: task.closeAndWait),
+      );
+      var closed = false;
+      final closing = registry.closeAndWait().then((_) => closed = true);
+      unbind();
+      await pumpEventQueue();
+      expect(closed, isFalse);
+      reading.complete(_png);
+      expect(await saving, isFalse);
+      await closing;
+      await work.dispose();
+    },
+  );
+
+  test(
+    'an ordinary reported error releases host registration and allows retry',
+    () async {
+      final registry = SelectionTaskRegistry();
+      final error = StateError('read');
+      final seen = <Object>[];
+      final work = ImageSaveWork(
+        deliver: (_, _, _) async => true,
+        onError: (error, _) => seen.add(error),
+      );
+      work.bindTasks(
+        canStart: () => !registry.isClosing,
+        retain: (task) =>
+            registry.retain(cancel: task.cancel, close: task.closeAndWait),
+      );
+      expect(
+        await work.save(name: 'bad', read: (_) async => throw error),
+        isFalse,
+      );
+      expect(seen, [error]);
+      expect(await work.save(name: 'good', read: (_) async => _png), isTrue);
+      await registry.closeAndWait();
+      await work.dispose();
+    },
+  );
+
   test('captures save name and exposes the owned request scope', () async {
     final source = Completer<Uint8List>();
     final deliveries = <String>[];

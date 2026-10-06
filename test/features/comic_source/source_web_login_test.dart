@@ -1,3 +1,7 @@
+import 'package:venera_next/features/comic_source/source_installation.dart';
+import 'package:venera_next/features/comic_source/source_installations_scope.dart';
+import 'package:venera_next/features/comic_source/source_repositories.dart';
+import 'package:dio/dio.dart';
 import 'dart:async';
 import 'dart:io' as io;
 
@@ -165,6 +169,13 @@ void main() {
       ),
     );
     manager = ComicSourceManager()..add(source);
+    final queue = SourceInstallations(
+      manager: ComicSourceManager(),
+      repositories: SourceRepositories.instance,
+      createClient: Dio.new,
+    );
+    addTearDown(queue.closeAndWait);
+
     navigator = GlobalKey<NavigatorState>();
     messages.clear();
     registerShowMessageHandler((_, message) => messages.add(message));
@@ -183,7 +194,12 @@ void main() {
       root.deleteSync(recursive: true);
     });
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: navigator, home: const ComicSourcePage()),
+      MaterialApp(
+        builder: (_, child) =>
+            SourceInstallationsScope(queue: queue, child: child!),
+        navigatorKey: navigator,
+        home: const ComicSourcePage(),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Show source settings'));

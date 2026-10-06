@@ -18,6 +18,26 @@ void main() {
     });
   });
 
+  test('borrowed cache files and prefix siblings are never deleted', () async {
+    final directory = Directory.systemTemp.createTempSync('selected-borrowed-');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final cache = Directory(FilePath.join(directory.path, 'cache'))
+      ..createSync();
+    final sibling = Directory(FilePath.join(directory.path, 'cache-extra'))
+      ..createSync();
+    final oldCache = App.cachePath;
+    App.cachePath = cache.path;
+    addTearDown(() => App.cachePath = oldCache);
+    for (final folder in [cache, sibling]) {
+      final file = File(FilePath.join(folder.path, 'borrowed.pdf'))
+        ..writeAsStringSync('keep');
+      final selection = FileSelection(file.path);
+      await selection.readAsBytes();
+      await selection.dispose();
+      expect(file.readAsStringSync(), 'keep');
+    }
+  });
+
   test(
     'releasing a desktop selection leaves the original file intact',
     () async {
@@ -48,7 +68,11 @@ void main() {
           .setMockMethodCallHandler(channel, (call) async {
             calls.add(call);
             if (call.method == 'prepareFile') {
-              return {'path': selectedPath, 'temporary': true};
+              return {
+                'path': selectedPath,
+                'temporary': true,
+                'token': 'owner',
+              };
             }
             return null;
           });
@@ -67,7 +91,7 @@ void main() {
       await selection.dispose();
       await selection.dispose();
       expect(calls.map((call) => call.method), ['prepareFile', 'releaseFile']);
-      expect(calls.last.arguments, selectedPath);
+      expect(calls.last.arguments, {'path': selectedPath, 'token': 'owner'});
       await expectLater(selection.prepare(), throwsStateError);
     },
   );

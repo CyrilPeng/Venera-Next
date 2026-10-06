@@ -4,6 +4,159 @@
 
 English: [Execution Record](optimization_progress.en.md)
 
+## P2/P4/P7：图片读取任务的原宿主归属（2026-10-06）
+
+- 基线 `7f2ecae`。ImageSaveBinding 为每次 ImageSaveWork 任务登记原窗口和 SelectionTasksScope 宿主，登记先于监听器及读取。页面移除后应用关闭仍排空真实读取/交付；替换登记表或窗口取消旧绑定接受的任务，原登记保留到实际结束，后续任务采用新宿主。关闭中的宿主拒绝新读取；开放宿主可接纳绑定前已经开始的任务。
+- ImageWorkTask 增加独立的关闭结果和原错误/堆栈记录，页面可恢复排空消费过的报告不清除宿主证据；明确的修复确认仍只移除对应错误。ImageSaveWork 成功或已由当前 UI 处理的失败会解除登记，迟到/报告失败则继续由原宿主持有。回调重入关闭发生在读取前时不再启动读取，已开始的平台交付仍完整排空。
+- 既有返回、LocalHistoryEntry、窗口关闭失败恢复、控件替换和内容快照行为保留。新增 12 项回归，覆盖有/无桌面窗口的原归属、真实 ApplicationHost 核心关闭顺序、两种排空顺序保留错误、替换宿主、新任务拒绝、监听器重入，以及真实图片保存结束后不能解除独立副本清理失败。106 项扩展回归通过；初次扩展命令中的两个不存在旧路径已改用实际文件，原日志保留；严格分析无诊断。
+- 受控业务入口仍为 127，无依赖升级；原 52 项保持 23 I / 28 P / 1 U。此批覆盖 ImageSaveBinding 的页面图片保存读取/交付；阅读器共享 ImageWork、设置持久化的完整宿主归属、其他原生资源及原优化方案其余矩阵继续待办，不能据此宣称全部图片生命周期完成。最终冻结全量、门禁与 Windows release 结果另列。
+
+- 最终冻结全量 **3281 项通过、2 项既有宿主跳过**（concurrency=4），新增 12 项，LCOV **31,574/44,917（70.29%）**；106 项扩展回归通过，8 个 Dart 文件格式零变更、严格分析零诊断与冻结哈希一致。Python **80 项/3 项既有跳过**，结构/架构（127 入口）/Git 依赖/版本/发布元数据门禁通过。日志 `logs/image-host-*-final.log`，覆盖率 `coverage/image-host-lcov.info`。实际 Flutter 3.41.6/Dart 3.11.4；不替代声明 SDK、完整 CLI、原生/系统终止、五平台和固定设备性能验收。
+
+- Windows release 构建成功（100.2 秒），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `6DDB750892A4A807E984F4956887112656C472B0E0F68ED76765B7662C34FE3C`；打包 CHANGELOG 与 assets/init.js 匹配源码，8 个冻结 Dart 文件构建后仍一致。仓库外 `image-host-artifact-hashes.json` 绑定源码、日志、产物与最终提交；`image-host-next-audit.md` 保留下一批完整阅读会话/设置宿主归属及原方案剩余边界。
+
+## P2/P4/P6/P7：保存任务与导出暂存所有权（2026-10-06）
+
+- 基线 `52c227b`。saveFile 显式接收 SelectionOperation，UI 普通保存通过 file_save_task.dart 登记原窗口/宿主。生成与移动端交付副本复用 DirectorySelection 的真实路径、所有权凭据和独立清理重试；借用文件不删除。取消在生成前、移动端队列执行前和桌面选框返回后检查，已经开始的复制/交付完整排空，重试不再次选择或写入目标。图片任务的普通取消不显示错误，清理失败仍保留在宿主。
+- 设置数据导出把 destination 放在同一任务的私有目录，归档及 export-staging 都有外层所有者；漫画导出持有整个生成/压缩/保存动作，清理不再吞错，关闭后不开始下一个漫画。失败保留原操作错误/堆栈及清理句柄，未知兄弟和凭据冲突保护沿用既有协议。全部图片读取/原生资源生命周期仍单独待办。
+- 初轮 8 个失败经独立 Dart 探针证实：当前 Windows Dart 3.11.4 默认 IOOverrides.fseGetType 把已有目录报为 notFound。测试故障适配与生产启动 overrideIO 均修正类型查询，转交父执行区保留真实语义；新增真实启动适配、嵌套适配和符号链接回归。控件夹具异步信号跨 fake/real 执行区导致等待，已停止该轮、确认进程退出并修复；初轮日志保留。CBZ 回调 async、过期 import 与单处空断言诊断已修复。
+- 新增 10 项测试，覆盖有/无窗口宿主移除后的清理保留、成功保存后重试不覆盖目标、迟到选框结果、关闭排空导出与原始失败诊断。扩展已有真实 AppDataArchive destination、XFile.copy 与移动端 channel 等待回归；189 项扩展回归通过。受控业务入口仍为 127，无依赖升级，原 52 项保持 23 I / 28 P / 1 U。最终冻结全量、门禁和 Windows release 结果另列。
+- Apple 跨重启授权/编译、SAF/图片和其他原生资源、全部源能力及不合作 Promise、配置/阅读器/跨库与恢复矩阵、兼容最终复扫、完整 CLI/声明 SDK/五平台/固定设备性能及八条总体验收继续待办。
+
+- 首轮冻结全量在两项旧图片保存回归失败后主动停止，确认无遗留测试进程并保存 before-image-fixtures 日志/哈希。图片读取故障夹具同样需要父执行区类型查询；封面回归已改用 contents 路径，并验证窗口关闭后的迟到选框不写目标。修复后重新冻结 23 个 Dart 文件。
+
+- 第二轮全量遇到一项未改动源数据准入测试的 5 秒超时，已停止并保存 before-admission-timeout 日志。相同冻结源码下该文件 13 项独立复核在 2 秒内通过；未放宽断言或超时，最终全量以 concurrency=4 重新执行，降低并发负载。图片保存/绑定专项另有 13 项通过。
+
+- 最终冻结全量 **3269 项通过、2 项既有宿主跳过**，新增 10 项，LCOV **31,512/44,854（70.25%）**；189 项扩展回归通过，23 个 Dart 文件格式零变更、严格分析零诊断及冻结哈希一致。Python **80 项/3 项既有跳过**，结构/架构（127 入口）/Git 依赖/版本/发布元数据门禁通过。日志 `logs/save-owner-*-final.log`，覆盖率 `coverage/save-owner-lcov.info`；初轮失败/停止日志与独立 IO 探针保留。实际 Flutter 3.41.6/Dart 3.11.4；不替代声明 SDK、完整 CLI、原生/系统终止、五平台及固定设备性能验收。
+
+- Windows release 构建成功（93.9 秒），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `A8342169BCB5FF7291ACF16032317309698F22E7796CFF5E9E4DB17262028CF3`；打包 CHANGELOG 与 assets/init.js 匹配源码，23 个冻结 Dart 文件构建后仍一致。仓库外 `save-owner-artifact-hashes.json` 绑定源码、日志、产物与最终提交；`save-owner-next-audit.md` 保留下一批图片读取阶段宿主归属及原优化方案剩余边界。
+
+## P2/P4/P6/P7：源预览宿主归属与安装清理异常链（2026-10-06）
+
+- 基线 `3b50a8c`。SourceInspectionTask 固定原 SelectionTasksScope 登记表，窗口和应用宿主同时保留实际检查 Future；替换宿主不迁移任务，无窗口页面移除也能排空。首次排空报告原文件释放失败，后续关闭只重试释放，仍保留操作与清理错误/堆栈。HTTP 清理失败持续保留原失败 Future，文件释放成功不能解除底层 HTTP 失败。
+- SourceSelectionOwner 在关闭中的宿主拒绝新接纳，让原检查任务保留迟到选择；空闲预览在原窗口/宿主登记。同步接纳成功后才转交，关闭通过微任务等接纳决定；接纳失败或抛错仍保留同一登记，不依赖已关闭登记表重新接纳。解析失败释放时传入原 cause/stack；无效脚本预览改用 SourceFailureCode.invalidImport，保留原解析器错误及既有提示。
+- SourceInstallations 为选中文件保留完整尝试 Future 和按尝试顺序记录的错误/堆栈，早于取消/旧代次的 UI 忽略判断。清除完成行不丢失迟到读取/安装失败；释放等待所有原尝试，不等待自身释放任务，避免循环。单次失败保留原对象，多次失败生成不可变 SourceInstallationAttemptFailure；后续成功重试不抹除先前诊断。释放成功才移除所有权，失败关闭仍只重试可重试文件释放，保留 HTTP/源事务原契约。
+- 新增无窗口/替换宿主、真实页面解析失败、真实 ApplicationHost 核心关闭、同步转交接纳/拒绝/抛错、首次排空与重复释放、文件与 HTTP 双重失败、清除记录后的迟到读取、多次尝试及成功重试后保留原因等回归。初轮新夹具级联赋值优先级和旧字符串异常断言已修正，两处花括号诊断已修复；原失败日志保留。
+- 受控业务入口仍为 127，无依赖升级，原 52 项保持 23 I / 28 P / 1 U。保存临时副本、Apple 跨重启授权/编译、SAF/其他原生资源、所有源能力及不合作 Promise、配置/阅读器/跨库与恢复矩阵、兼容最终复扫、完整 CLI/声明 SDK/五平台/固定设备性能和八条总体验收继续待办。
+
+- 首轮冻结全量尚未结束时，复核发现空闲预览转交缺少原上下文/宿主身份检查。已主动终止该轮并确认无遗留测试进程，保留 before-host-guard 日志/哈希；补充替换宿主拒绝转交回归后重新冻结验证。
+
+- 最终冻结全量 **3259 项通过、2 项既有宿主跳过**，新增 16 项，LCOV **31,475/44,810（70.24%）**；118 项扩展回归通过，10 个 Dart 文件格式零变更、严格分析零诊断及冻结哈希一致。Python **80 项/3 项既有跳过**，结构/架构（127 入口）/Git 依赖/版本/发布元数据门禁通过。日志 `logs/source-selection-*-final.log`，覆盖率 `coverage/source-selection-lcov.info`；初轮夹具和诊断日志保留。实际 Flutter 3.41.6/Dart 3.11.4，不替代声明 SDK、完整 CLI、原生/系统终止、五平台和固定设备性能验收。
+
+- Windows release 构建成功（94.0 秒），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `1528C5F6BCEB6AF8070C334C9E71B9C4F28C9FAB8A44CD34443444F20E67730E`；打包 CHANGELOG 与 assets/init.js 匹配源码，10 个冻结 Dart 文件构建后仍一致。仓库外 `source-selection-artifact-hashes.json` 绑定源码、日志、产物与最终提交；`source-selection-next-audit.md` 保留下一批保存副本/调用方完整任务归属及原优化方案剩余边界。
+
+## P2/P4/P6/P7：导入工作副本与视图关闭重试（2026-10-06）
+
+- 基线 `2303940`。SelectionOperation.useFileCopy 在准备前登记独立 DirectorySelection.copy，沿用真实路径与所有权凭据清理；文件名去除两类路径分隔前缀，消费者获得私有文件。设置数据导入不再吞掉额外缓存副本的删除失败，已开始的复制/导入完整排空，取消后的未开始导入拒绝执行。清理重试不重放复制、导入或 App.forceRebuild，原选择文件仍为借用资源。
+- WindowSelectionTask 逐个尝试所有自有视图的关闭，保留每项原错误/堆栈及原操作错误/堆栈。取消与任务结束共用同次关闭结果，失败仅在显式关闭时重试；成功关闭的视图不重放，原宿主/窗口继续持有失败回调。SettingsTaskPresenter 移除任务外重复关闭；LoadingDialogController 在路由移除失败且尚未完成释放时恢复可重试状态。
+- 新增真实文件复制、同名隔离、路径名称、复制中取消、消费中关闭、部分复制/导入与清理双重失败、多个视图独立失败、取消/结束共享结果、文件与视图双重失败以及真实进度路由移除重试回归。首轮新夹具 Future<Never> 的 catchError 返回类型及无限进度动画的 pumpAndSettle 用法已修正，初轮单处花括号诊断已修复；失败日志保留。
+- 受控业务入口仍为 127，无依赖升级。原 52 项保持 23 I / 28 P / 1 U。源预览宿主登记、源检查/安装清理异常链、保存临时副本、Apple 跨重启授权/编译、SAF/其余原生资源、全源能力、配置/阅读器/数据矩阵、兼容最终复扫及 CLI/声明 SDK/五平台/固定设备性能继续待办。此批只覆盖已接入的单次任务与导入工作副本，不宣称全部原范围完成。
+
+- 最终冻结全量 **3243 项通过、2 项既有宿主跳过**，新增 10 项，LCOV **31,364/44,701（70.16%）**；163 项扩展回归通过，8 个 Dart 文件格式零变更、严格分析零诊断及冻结哈希一致。Python **80 项/3 项既有跳过**，结构/架构（127 入口）/Git 依赖/版本/发布元数据门禁通过。日志 `logs/selection-copy-*-final.log`，覆盖率 `coverage/selection-copy-lcov.info`；初轮夹具和诊断日志保留。实际 Flutter 3.41.6/Dart 3.11.4，不替代声明 SDK、完整 CLI、原生/系统终止、五平台和固定设备性能验收。
+
+- Windows release 构建成功（93.5 秒），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `FAB50F4C1448CEF9437D3F07531F7F97F2A68F9FD00D65A4977D15ED464E0938`；打包 CHANGELOG 与 assets/init.js 匹配源码，8 个冻结 Dart 文件构建后仍一致。仓库外 `selection-copy-artifact-hashes.json` 绑定源码、日志、产物与最终提交；`selection-copy-next-audit.md` 保留下一批源预览宿主登记/安装异常链、保存副本及原优化方案全部剩余边界。
+
+## P2/P4/P6/P7：单次选择的窗口与宿主任务归属（2026-10-06）
+
+- 基线 `fe906ed`。foundation/selection_operation.dart 拥有整个选择/消费/释放 Future，返回迟到选择后先接收所有权再拒绝消费，关闭等待真实准备/读取/导入与清理。已开始的消费排空；未开始的消费、第二个选择器及取消的排队选择不再启动。文件和目录分别释放，失败保留句柄、原操作错误/堆栈及各项清理错误/堆栈；重试只释放剩余资源。PDF 在队列同步接纳后转交文件，拒绝接纳仍归原任务。
+- WindowSelectionTask 固定原上下文、路由、导航器、窗口与宿主登记表；页面覆盖/移除或宿主替换后不开始新消费、不向新页面发布结果。进度和 PDF 视图按自身路由关闭，移除原页面时通过微任务避开 Navigator 锁；完整关闭等待路由清理。ApplicationHost 持有 SelectionTaskRegistry，所有平台装配同一 Scope，旧窗口或无桌面窗口页面移除后也保留任务；失败阻止核心生产者/存储关闭，宿主重试不重放导入。
+- SettingsTaskPresenter、收藏 JSON/创建与本地普通漫画入口接入完整任务；Importer 的选择方法显式接收 SelectionOperation。无界面 ImportComicPresentation 不再查询全局根导航器，交互入口显式绑定本任务。源预览的原生选择传递既有 scope 检查；单选/多选共用文件队列，目录保留独立队列。空闲 PlatformDialogQueue 清除完成 Future，避免保留先前任务执行区；无效扩展名抛出 FormatException，由原调用方显示。
+- 首轮 43 项专项通过；窗口夹具最初在异步回调调用受保护测试 API，并误用原生选择返回值，现已修正。跨控件测试揭示空闲队列保留旧执行区 Future，已清空尾项；导航路由回归改为等待真实挂载。窗口专项 9 项通过，加入无窗口宿主登记和核心关闭后，扩展 152 项通过。初轮重复 dispose、异步上下文和风格/空断言诊断均保留日志并修复；最终冻结结果另列。
+- 业务入口 126 → 127，不升级依赖。原 52 项保持 23 I / 28 P / 1 U。此批不证明原生选框可强制关闭、系统终止/后台、Apple 跨重启 bookmark、SAF descriptor/持久权限或真实平台效果已验收。设置导入中另建缓存文件的失败清理、旧源检查/安装的异常链与全部原范围仍需后续审查。
+
+- 最终冻结全量 **3233 项通过、2 项既有宿主跳过**，新增 20 项，LCOV **31,329/44,682（70.12%）**；168 项扩展回归通过，23 个 Dart 文件格式零变更、严格分析零诊断及源码哈希一致。Python **80 项/3 项既有跳过**，结构/架构（127 入口）/Git 依赖/版本/完整发布元数据门禁通过。日志 `logs/selection-window-*-final.log`，覆盖率 `coverage/selection-window-lcov.info`；原夹具失败和空断言/格式诊断日志保留。实际 Flutter 3.41.6/Dart 3.11.4；不替代声明 SDK、完整 CLI、真实原生选框/系统终止、五平台和固定设备性能验收。
+
+- Windows release 构建成功（93.0 秒），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `26699B5536CC98BCCFF4C57684A2E46AEBFECB8BD2F8FDADE5A8ED6720704440`；打包 CHANGELOG 与 assets/init.js 匹配源码，23 个冻结 Dart 文件构建后哈希一致。仓库外 `selection-window-artifact-hashes.json` 绑定产物、源码、日志与最终提交；`selection-window-next-audit.md` 保留独立缓存文件清理、源预览/安装异常链、原生/平台及原优化方案全部剩余范围。
+
+## P2/P4/P6/P7：目录选择与会话访问所有权（2026-10-06）
+
+- 基线 `fb5c4a0`。foundation/directory_selection.dart 拥有借用目录、共享准备、实际消费者 Future 与可重试释放；只允许清理本实例新建的独立副本。Android directAccess 使用延迟复制的唯一目录，所有权凭据、原真实路径、未知兄弟及链接校验保护清理；只在本实例确实删除凭据后，才允许重试删除剩余空根目录。不按缓存前缀推断所有权，也不把副本保留为长期引用。
+- DirectoryPicker 删除 finalizer，选框以独立 PlatformDialogQueue 串行化。删除 selectDirectory/selectDirectoryIOS/IOSDirectoryPicker 冗余入口与异常转字符串路径；借用目录包括位于缓存路径的用户文件。批量归档、目录/EhViewer 和路径设置通过 withSelectedDirectory/withDirectory 保留实际消费；原生访问失败与清理失败可保留原异常及堆栈。
+- Apple 共享 ScopedDirectoryAccess 按选择令牌平衡安全访问。iOS 每次选择器拥有唯一完成回调，macOS 回调捕获自己的面板/结果；没有可用宿主或重复原生选择明确报错，取消返回空值。会话保留在发布直接目录引用前转交原生管理器，后续选择与临时释放不会关闭原引用；应用终止释放仍活跃的临时和会话访问。两个工程引用同一 Foundation 管理器和四个 XCTest 用例，替换原占位测试。
+- 本机仅核对 Apple 工程引用与共享源路径，**没有 Apple SDK/Swift 工具链，Apple 编译和 XCTest 尚未执行**。会话访问不等于跨重启书签恢复；现有外部目录在重启后的授权、迁移/导入持久结果与授权提交、目录引用撤销仍待接入。SAF 插件自身描述符 finalizer/持久根权限仍归锁定插件，未声称已显式关闭全部原生资源。
+- 首轮文件/目录及整个本地导入专项 134 项通过；再补末步删除失败和丢失凭据测试，修正夹具返回类型后目录专项 13 项通过。原型阶段三处风格诊断及新增测试的冗余导入已修正，日志保留。两个旧选择别名的重复计数用例随入口删除，剩余计数回归保留；最终冻结验证另列。
+- 业务入口 125 → 126，无依赖升级。原 52 项仍为 23 I / 28 P / 1 U。目录/其他单次选择的完整窗口退出与失败重试持有者、所有源能力、图片/原生资源、配置/业务边界、阅读壳、数据/跨库与写入者矩阵、完整 CLI/声明 SDK/五平台/固定设备性能及最终复扫继续待办。
+
+- 最终冻结全量 **3213 项通过、2 项既有宿主跳过**，相对上批净增 11 项（新增 13 项目录用例、移除 2 项退役别名重复用例），LCOV **31,104/44,420（70.02%）**。6 个 Dart 文件格式零变更、严格分析零诊断，15 个冻结路径一致（13 个源码/工程文件、2 个已删除占位测试）；Python **80 项/3 项既有跳过**，结构/架构（126 入口）/Git 依赖/版本/完整发布元数据门禁通过。日志 `logs/directory-selection-*-final.log`，覆盖率 `coverage/directory-selection-lcov.info`。实际 Flutter 3.41.6/Dart 3.11.4；Apple 编译与 XCTest 未执行，不替代声明 SDK、完整 CLI、五平台和固定设备性能验收。
+
+- Windows release 构建成功（94.3 秒），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `459B8DA571F5CDEFD05ED2557B72A8731027C946FBB53BB8583735B048406525`；打包 CHANGELOG 与 assets/init.js 匹配源码，15 个冻结路径构建后仍一致。仓库外 `directory-selection-artifact-hashes.json` 绑定源码、日志、产物与最终提交，并显式记录 Apple 编译/XCTest 未验证；`directory-selection-next-audit.md` 列出单次选择完整窗口任务、清理失败归属、跨重启授权及原范围剩余项。
+
+## P2/P4/P6/P7：选择文件的显式所有权（2026-10-06）
+
+- 基线 `4edae39`。foundation/file_selection.dart 从平台选择 UI 拆出：本地路径始终借用，Android 临时副本必须持有 path/token 凭据。删除 FileSelectResult 及按 App.cachePath 前缀删除的 finalizer。prepare 合并并发请求，withFile 登记完整消费者 Future；dispose 拒绝新工作、等待准备和读取/导入，失败保留同一凭据供重试，withSelectedFile 保留操作与清理双重异常及堆栈。
+- Android 单选只返回文档 URI/名称，读取时才准备。SelectedFileStorage 为同名选择建立不同 UUID 目录，校验原目录、真实路径与二进制凭据后非递归释放；未知内容、错误凭据及链接越界不删除。复制/凭据创建和清理同时失败时返回保留凭据；当前进程记录不完整凭据以定向重试，不宣称进程终止后的孤立副本恢复。
+- 导入预览在原检查 Future 内采用或释放资源，补原地址时保留相对目录字节；空闲预览将释放登记到原窗口，移除/退出后清理失败仍可重试。脚本安装在队列接纳时转移句柄，去重未接纳的选择仍归页面。队列清除和关闭等待文件实际使用，清理失败保留并只重试释放；PDF 成功/失败/取消结果与清理错误分开，未释放句柄不能随完成记录清除，退出不重复导入。
+- 收藏 JSON、应用数据、CBZ/EPUB/EhViewer 单文件消费均显式释放；单文件导入通过 withFile 保留使用期间资源。业务入口 124 → 125，无依赖升级。目录选择器的 finalizer/SAF 权限、其他一次性消费端的窗口级清理失败重试、原生选择器强制关闭和进程终止仍单独待办。
+- 首轮专项 72 项通过；随后扩展发现新 UI 失败夹具漏接预期错误，另一个安装夹具错误调用真实未初始化管理器并等待，已改用显式失败适配器。最初 bundled Kotlin 编译器缺失自动标准库定位，改用已有 Kotlin 2.1.0 缓存及显式 classpath。7 组真实临时目录/符号链接测试通过，原失败日志保留。最终冻结结果另列。
+- 原 52 项保持 23 I / 28 P / 1 U。配置/业务边界、完整源能力与不合作 Promise、图片/其余原生资源、阅读壳/真实七模式、跨库与未登记写入者矩阵、错误分类与兼容/reset/debug 复扫、完整 CLI/声明 SDK/五平台/固定设备性能继续待办。
+
+- 初次全量在 8 项退出回归失败后主动终止，保留 before-exit-fixes 日志和源码哈希；原因是 PDF 空队列准备引入事件延迟、安装队列错误地重新创建不可重试的 HTTP 关闭失败。已分别恢复微任务推进和持久失败 Future，文件释放失败仍可重试；72 项扩展退出回归通过。架构清单新增路径最初误带 lib/ 前缀，已修正且未扩大例外。
+
+- 第二次全量发现无界面 PDF 完成顺序受 withFile 事件队列延迟影响，停止该轮并保留 before-consumer-microtask 证据；消费者改为先登记再通过微任务启动，立即关闭仍拒绝未开始的使用。整个本地导入目录、源预览/安装、文件句柄和窗口退出组合重新验证。
+
+- 最终冻结全量 **3202 项通过、2 项既有宿主跳过**，新增 14 项，LCOV **30,991/44,293（69.97%）**。188 项扩展回归通过，15 个 Dart 文件格式/严格分析零诊断，18 个 Dart/Kotlin 文件哈希一致；Python 80 项/3 项既有跳过、结构/架构（125 入口）/Git 依赖/版本/完整发布元数据门禁通过。Android 应用 Kotlin 编译经 7897 代理补齐缓存后通过，7 组 JVM 真实目录测试通过；不是 Android 安装启动或 SAF 真机验证。Flutter 3.41.6/Dart 3.11.4；声明 SDK、完整 CLI、五平台和固定设备性能仍待验收。日志 `logs/selected-file-*.log`，覆盖率 `coverage/selected-file-lcov.info`。
+
+- Windows release 构建成功（95.6 秒），仅既有 inappwebview CMP0175 开发警告；`data/app.so` SHA-256 为 `B28E3F0E4724BC25594BF49143BFBCD30435F73947FD53454AE4AA4786499931`。打包 CHANGELOG 与 assets/init.js 匹配源码，18 个冻结 Dart/Kotlin 文件哈希一致。仓库外 `selected-file-artifact-hashes.json` 绑定产物、日志与最终提交，`selected-file-next-audit.md` 保留目录/SAF、其他单次消费端窗口清理及原方案剩余范围。
+
+## P2/P4/P7：目录与导入预览的实际任务归属（2026-10-06）
+
+- 基线 `f178cf7`。source_text_request.dart 统一目录/预览的 GET、纯文本和禁用缓存参数。自建客户端复用 OwnedDioClient 等待 fetch 与 RHttp 清理，成功响应清理期间取消也不能交付；借用客户端仍由提供者负责关闭，不等待其无关工作。原始操作及多项清理异常/堆栈保留，继续按真实重定向地址解析相对脚本路径；预览不执行 JS。
+- source_inspection_task.dart 为每次只读检查固定原页面、路由、窗口和 RequestScope，在注入回调前登记完整 Future。覆盖、卸载及窗口退出取消后仍等实际返回；清理失败保留在原窗口退出回调，即使普通跟踪项或页面已经移除也不能静默退出。普通读取错误由 UI 处理，不伪装为空目录，也不把检查当作可重放设置保存。
+- 目录页面从依赖就绪后加载，替换仓库/客户端或迁移窗口时退休旧尝试；旧结果不覆盖新列表。导入输入与文件选择捕获参数、先进入 busy 再打开选择器；退出等待选择器和已开始读取，迟到选择不再读取，迟到读取不发布预览。相对路径文件的字节和原读回调保留，用户可补原目录 URL，无需重复读取。导入后安装继续使用固定队列、原保存请求及防重集合。
+- 专项含借用客户端所有权、清理期间取消、多项异常、原窗口与目录替换、卸载、工厂重入退出、退出前发生的清理错误、选择/读取门控与相对文件修正；真实 RHttp 分别验证目录和预览的延迟上传订阅释放。初轮两处风格/导入诊断、一个冗余测试导入及重复初始化原生桥的夹具错误已修复，日志保留。业务入口 123 → 124，无依赖升级；最终冻结结果另列。
+- 原 52 项仍为 23 I / 28 P / 1 U。本批不证明原生文件选择器可强制关闭，也未迁移 FileSelectResult 的缓存 finalizer/平台文件句柄所有权。其他源能力、不合作 Promise、图片/SAF/原生工作、跨库和未登记写入者、阅读壳、配置/兼容层、完整 CLI/声明 SDK/五平台/固定设备性能与最终复扫继续待办。
+
+- 最终冻结全量 **3188 项通过、2 项既有宿主跳过**，新增 15 项，LCOV **30,829/44,116（69.88%）**；10 个 Dart 文件格式/冻结哈希一致，严格分析零诊断。Python **80 项/3 项既有跳过**，结构/架构（124 入口）/Git 依赖/版本/完整发布元数据门禁通过。日志 `logs/source-inspection-*-final.log`，覆盖率 `coverage/source-inspection-lcov.info`，初轮诊断和原生桥夹具失败日志保留。实际 Flutter 3.41.6/Dart 3.11.4；不替代声明 Flutter 3.41.4、完整 Flutter 进程终止、五平台和固定设备性能验收。
+
+- Windows release 构建成功（96.0 秒，`logs/source-inspection-windows-release.log`），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `A2C1F2DD9EF4FCAADDAFBF45DDCBF2A0662797A23943ECC595DC84E1C05435E6`；打包 CHANGELOG 与 assets/init.js 匹配源码，10 个冻结 Dart 文件构建后哈希一致。仓库外 `source-inspection-artifact-hashes.json` 绑定产物、日志与最终提交；文件选择资源及原范围后续见 `source-inspection-next-audit.md`。
+
+## P2/P4/P6/P7：源安装队列的宿主所有权（2026-10-06）
+
+- 基线 `6ca9818`。SourceInstallations 改为普通显式实例，固定注入管理器、仓库和每请求客户端工厂；移除 singleton/forTesting 构造。ApplicationHost 在最终关闭开始即拒绝新安装，排空队列后才关闭核心源管理器与存储；SourceInstallationsScope 向目录、导入与任务列表提供同一实例，页面退场不丢失队列。
+- 保留完整下载/文件读取/安装 Future，取消和重试按尝试身份隔离。逻辑下载槽释放后旧尝试仍登记；清除终态行不移除未完成资源。关闭取消排队、下载和等待安装，已进入管理器提交的安装/替换继续完成；同步监听器重入关闭不会提前释放通知器，通知不继承源事务准入。
+- OwnedDioClient 持有固定 adapter，登记实际 fetch，force-close 后等待取消交付背后的 fetch 与 RHttp 原生清理；迟到且未消费的响应执行 body close 与异步订阅取消。保留操作异常/堆栈及多项清理异常。普通安装错误由任务展示；HTTP 清理和 SourceMutationFailure 保留在队列关闭结果中，清除记录不会隐藏，宿主失败时保留核心依赖。
+- 专项覆盖取消后立即重试与清除旧记录、未完成文件读取、等待管理器准入与已开始提交、监听器/客户端工厂重入关闭、原始异常与多项清理失败、宿主关闭顺序，以及真实 RHttp 延迟上传订阅释放。初轮分析诊断和一次页面查询迁移遗漏已修复，日志保留。source_installation 与 owned_dio_client 纳入架构门禁，受控入口 121 → 123；不升级依赖。
+- 原 52 项保持 23 I / 28 P / 1 U。独立目录/预览（含文件选择）任务与窗口排空尚未接入；原生提示、全部源能力、跨库/写入者矩阵、阅读壳、兼容清理、完整 CLI/声明 SDK/五平台/固定设备性能与最终复扫继续待办。本批只是源安装所有权增量，不代表这些范围完成。最终冻结验证结果另列。
+
+- 首次全量 3142 项通过、2 项既有跳过、31 项失败：四组既有源设置/登录页面夹具缺少新队列 Scope。已补齐并通过这 31 项扩展回归，另修正风格及测试空断言诊断；原全量/源码哈希/覆盖率保留为 before-ui-fixtures，最终重新冻结验证另列。
+
+- 最终重新冻结全量 **3173 项通过、2 项既有宿主跳过**，新增 16 项，LCOV **30,723/44,027（69.78%）**；21 个 Dart 文件格式/冻结哈希一致，严格分析零诊断。Python **80 项/3 项既有跳过**，结构/架构（123 入口）/Git 依赖/版本/完整发布元数据门禁通过。日志 `logs/source-install-*-final.log`，覆盖率 `coverage/source-install-lcov.info`，失败轮证据保留。实际 Flutter 3.41.6/Dart 3.11.4；不替代声明 Flutter 3.41.4、完整 Flutter 进程终止、五平台及固定设备性能验收。
+
+- Windows release 构建成功（96.5 秒，`logs/source-install-windows-release.log`），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `05CB7C2902DD22894455FC6E75A12F0D4D81E2667761DF74A1B341A16AB3B08D`；打包 CHANGELOG 与 assets/init.js 匹配源码，21 个冻结 Dart 文件构建后哈希一致。仓库外 `source-install-artifact-hashes.json` 绑定产物、日志与最终提交；目录/预览和原范围后续见 `source-install-next-audit.md`。
+
+## P2/P4/P7/P8：应用版本检查的请求与界面所有权（2026-10-06）
+
+- 基线 `ea6a9bc`。版本筛选迁入 foundation/release_version.dart，保留稳定/预发布、草稿、前缀及版本比较语义；删除关于页的网络实现，四个 ForTesting 命名入口退场；其中无调用的候选选择辅助函数直接删除。foundation/application_update_service.dart 以注入的版本与客户端查询公开发布信息，调用方各有子 RequestScope；HTTP 结束后仍等待 RHttp 实际清理，保留原错误/堆栈及 force-close/native-idle 双重错误。关闭拒绝新查询，不把取消或失败当作“没有更新”。
+- 应用宿主持有版本服务。foundation/startup_update_check.dart 拥有时间记录 → 共享源检查 → 版本提示的启动链；已接纳保存等待真实落盘，关闭后不启动后续步骤。共享源请求仍归 SourceUpdateService，退休挂载只取消自己的等待；窗口开始关闭即取消启动链，宿主等待挂载和版本服务后才排空核心生产者与存储。app_runtime/application_updates.dart 负责 Appdata、源服务和公开 HTTP 客户端装配。
+- 关于页及启动提示使用 components/application_update_prompt.dart，固定原上下文、Navigator、路由、窗口及取消范围。页面卸载/窗口关闭取消网络和延时，等待实际清理；迟到结果不覆盖新页面，关闭只移除自有弹窗。网络加载状态与弹窗寿命分离，弹窗显示后停止后台 spinner；检查/弹窗动作使用原生 Material 按钮，支持键盘和字号增长，检查按钮不再固定 32 像素高度。
+- 专项含真实 Appdata 排队保存、宿主存储顺序、独立消费者/重入关闭、真实 RHttp 上传资源延迟释放、原页面退场/覆盖、弹窗下方原路由移除、错误提示及取消显示延时。初轮夹具生命周期、void await/未初始化路径与分析诊断均修复并保留日志；视觉捕获改在真实异步区执行，避免假时钟阻塞。最终冻结证据另列。
+- 新增三个受控业务入口，118 → 121，不扩大依赖例外，不升级依赖。原 52 项仍为 23 I / 28 P / 1 U；本批不完成独立目录/预览请求、其他源能力取消、图片/SAF/原生资源、跨库失败矩阵、阅读壳、完整 CLI/声明 SDK/五平台/固定设备性能及最终复扫。
+
+- 500×600、两倍字号的深浅色版本提示及 Escape 关闭已检查，按钮和正文无溢出；外部图像 `app-update-visuals/update-{dark,light}.png`，日志 `logs/app-update-visual-second.log`。此渲染不替代真实平台启动或外部浏览器打开验收。
+
+- 最终冻结全量 **3157 项通过、2 项既有宿主跳过**，LCOV **30,605/43,897（69.72%）**；17 个 Dart 文件格式/冻结哈希一致，严格分析零诊断。Python **80 项/3 项既有跳过**，结构/架构（121 入口）/Git 依赖/版本/完整发布元数据门禁通过。外部日志 `logs/app-update-*-final.log`，覆盖率 `coverage/app-update-lcov.info`；初轮失败与诊断日志保留。实际 Flutter 3.41.6/Dart 3.11.4；不替代完整 Flutter 进程终止、声明 Flutter 3.41.4、五平台、外部浏览器或固定设备性能验收。
+
+- Windows release 构建成功（95.4 秒，`logs/app-update-windows-release.log`），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `7A9ED769F13FCB15593EDF28E732F93F7D6E03E3E77E67E3BFC8210C0CD4D986`；打包 CHANGELOG 与 assets/init.js 匹配源码，17 个冻结 Dart 文件构建后哈希一致。仓库外 `app-update-artifact-hashes.json` 绑定产物、日志与最终提交；后续源安装队列/目录/预览及原范围缺口见 `app-update-next-audit.md`。
+
+
+## P4/P6：桌面宿主与核心分阶段关闭（2026-10-06）
+
+- 基线 `039d594`。ApplicationHost 跨控件挂载持有核心、同步与窗口位置，保留未完成/失败的旧挂载，成功退休后释放旧闭包。普通卸载只关闭自身绑定与追更，WebDAV 源由核心拥有；关闭中的 MyApp 重挂载仅显示冻结的退出界面，不重新启动业务。
+- 窗口先执行可恢复准备，追踪等待期间新注册的退出任务，再进入不可逆关闭。最终阶段的迟到任务参加宿主排空，失败不调用恢复监听器；Retry 继续同一宿主，不重跑准备或已完成资源释放。Force Quit 仍是用户显式绕过等待的入口。失败提示包含 liveRegion、焦点约束、导航/指针/语义冻结；500×600、两倍字号的浅色/深色等待及错误状态均已截图检查。
+- 核心先关闭缓存及源、JS 计算池/运行时、WebDAV 等生产者，再关闭存储；初始化失败回滚同样让成功打开的存储晚于源释放。生产者关闭失败保留其余依赖。AppDataOperations.closeAndWait 排空已接纳操作，保留活跃准备所需的普通原生回调，拒绝新准备/替换；最终同步保存及存储释放复用最后一个独占许可。保存失败可重试，普通业务准入不重新开放；源关闭在独占范围外完成。
+- 源更新/检查拥有完整 Dio 生命周期，取消后仍等待旧请求与 RHttp 实际清理，检查不访问下一仓库或发布迟到结果；业务、force-close、native-drain 错误保留。追更关闭等待退休任务的实际完成，保留取消/进度/完成错误。
+- JS HTTP 使用独立子 RequestScope，不取消父级的其他拥有者；网络配置重置保留旧客户端直到清理结束。closeAndWait 等待初始化、真实 HTTP 和原生清理。真实 QuickJS 回归曾复现取消后 JSValue released：现按具体运行时登记 Dart→JS Future，等待锁定 flutter_qjs 的 then/whenComplete 微任务结束再释放原生运行时；旧运行时消息拒绝借用新实例。对外 JS 结果及引用仍立即失效，释放失败保持可检查。
+- 专项包括真实 RHttp 上传资源延迟释放、真实 QuickJS 与核心/SQLite/Cookie/缓存/同步锁关闭、最终保存重试、旧挂载、窗口迟到任务与重挂载。初轮新增测试夹具错误、严格分析风格/无用导入诊断以及真实 JS 桥接失败均保留日志；最终冻结验证另列。
+- core_bootstrap.dart 与 app_data_operations.dart 纳入边界门禁，受控入口 116 → 118；ApplicationHost 是交互装配入口，不冒充纯业务入口。原 52 项仍为 23 I / 28 P / 1 U，无依赖升级。
+- 本批不是所有生产者的最终验收：启动应用版本检查、独立目录/预览请求、未登记普通写入者、全部源能力取消与不合作 Promise、其他图片/原生平台任务继续审查。不可逆准备失败可能只能显式强制退出，不重放可能已释放的原生句柄。跨库/跨进程全写入者一致性、P5/P7/P8、完整 CLI、声明 Flutter 3.41.4、五平台及固定设备性能仍待完成。
+
+- 首次冻结全量为 3125 项通过、2 项既有跳过、2 项失败：JS UI 仍用同步 dispose 导致等待中的桥接清理定时器未结束；章节测试仍要求与父级共享同一个 CancelToken。结构门禁另发现宿主越过业务 API 直接导入实现。现改用业务入口，测试验证子 token 传播取消并等待 closeAndWait。桥接交付与原操作分开：关闭取消未完成的 UI 交付及 JS delay 定时器，迟到成功/失败不会再访问已释放运行时；HTTP/原生任务仍实际排空。修正专项 20 项通过，原日志、源码哈希和覆盖率保留为 before-bridge-cancel，最终重新冻结验证另列。
+
+- 最终重新冻结全量 **3130 项通过、2 项既有宿主跳过**，LCOV **30,363/43,713（69.46%）**；23 个 Dart 文件格式/冻结哈希一致，严格分析零诊断。Python **80 项/3 项既有跳过**，结构/架构（118 入口）/Git 依赖/版本/完整发布元数据门禁通过。外部日志 `logs/application-core-*-final.log`，覆盖率 `coverage/application-core-lcov.info`；原失败轮证据继续保留。实际 Flutter 3.41.6/Dart 3.11.4；完整 Flutter 进程终止、声明版本、五平台和固定设备性能仍未验收。
+
+- Windows release 构建成功（93.7 秒，`logs/application-core-windows-release.log`），仅既有 inappwebview CMP0175 开发警告。`data/app.so` SHA-256 为 `60705DFCCE43B48CA5711B22DB69E76AC5418D5436C2CFC781D3EB83F6442778`；打包 CHANGELOG 与 assets/init.js 匹配源码，23 个冻结 Dart 文件构建后哈希一致。仓库外 `application-core-artifact-hashes.json` 绑定产物、日志与最终提交；后续具体请求所有权及原范围缺口见 `application-core-next-audit.md`。
+
+
 ## P4/P6：同步目录所有权与孤立内容恢复（2026-10-06）
 
 - 基线 `8f7438d`。`.data-sync-owner.sqlite` 的持续 EXCLUSIVE 事务在订阅、marker、恢复和传输之前取得目录所有权，协调独立连接、isolate 和进程；规范化物理目录并拒绝未知库/非文件路径，不用 PID、年龄或删除锁文件推测所有者。启动整库/源事务恢复及设置加载短暂取得同一锁，避免恢复仍在同步的导入。

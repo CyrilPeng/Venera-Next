@@ -1,10 +1,10 @@
+import 'package:venera_next/components/file_save_task.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 
@@ -175,7 +175,11 @@ class _LogsPageState extends State<LogsPage> {
     );
   }
 
-  void saveLog(String log) async {
-    saveFile(data: utf8.encode(log), filename: 'log.txt');
+  Future<void> saveLog(String log) async {
+    await saveFileForWindow(
+      context,
+      data: utf8.encode(log),
+      filename: 'log.txt',
+    );
   }
 }

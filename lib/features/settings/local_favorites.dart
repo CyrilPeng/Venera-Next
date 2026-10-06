@@ -60,7 +60,7 @@ class _LocalFavoritesSettingsState extends State<LocalFavoritesSettings> {
             var count = 0;
             await _tasks.run(
               context,
-              task: () async {
+              task: (_) async {
                 count = await LocalFavoritesManager().removeInvalid();
                 return null;
               },

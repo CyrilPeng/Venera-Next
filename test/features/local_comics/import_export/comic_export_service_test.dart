@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/selection_operation.dart';
+import 'package:venera_next/foundation/directory_selection.dart';
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/local_comics/import_export/comic_export_service.dart';
@@ -34,14 +36,110 @@ void main() {
     Future<void> Function(String, String)? zipper,
     Future<void> Function(File, String)? save,
     bool Function()? cancelled,
-  }) => exportLocalComics(
-    comics,
-    cachePath: root.path,
-    extension: '.cbz',
-    export: exporter ?? export,
-    compress: zipper ?? compress,
-    save: save ?? (file, name) async {},
-    isCancelled: cancelled ?? () => false,
+    SelectionOperation? owner,
+  }) => (owner ?? SelectionOperation()).run(
+    (operation) => exportLocalComics(
+      comics,
+      operation: operation,
+      cachePath: root.path,
+      extension: '.cbz',
+      export: exporter ?? export,
+      compress: zipper ?? compress,
+      save: save ?? (file, name) async {},
+      isCancelled: cancelled ?? () => false,
+    ),
+  );
+  for (final stage in ['export', 'compress', 'save']) {
+    test('retains $stage cause and staging for release-only retry', () async {
+      final owner = SelectionOperation();
+      final cause = StateError('$stage original');
+      final stack = StackTrace.fromString('$stage stack');
+      late File unknown;
+      var exports = 0;
+      var compressions = 0;
+      var saves = 0;
+      final operation = run(
+        multiple,
+        owner: owner,
+        exporter: (comic, path) async {
+          exports++;
+          final file = await export(comic, path);
+          final workspace = file.parent.parent.parent;
+          unknown = File('${workspace.path}/unknown')
+            ..writeAsStringSync('keep');
+          if (stage == 'export') Error.throwWithStackTrace(cause, stack);
+          return file;
+        },
+        zipper: (directory, output) async {
+          compressions++;
+          await compress(directory, output);
+          if (stage == 'compress') Error.throwWithStackTrace(cause, stack);
+        },
+        save: (file, name) async {
+          saves++;
+          Error.throwWithStackTrace(cause, stack);
+        },
+      );
+      SelectionCleanupFailure? initial;
+      try {
+        await operation;
+        fail('Expected retained cleanup failure');
+      } on SelectionCleanupFailure catch (error) {
+        initial = error;
+      }
+      expect(initial.operationError, same(cause));
+      expect(initial.operationStack, same(stack));
+      expect(initial.failures.single, isA<DirectorySelectionCleanupFailure>());
+      await expectLater(
+        owner.closeAndWait(),
+        throwsA(
+          isA<SelectionCleanupFailure>()
+              .having((e) => e.operationError, 'cause', same(cause))
+              .having((e) => e.operationStack, 'stack', same(stack)),
+        ),
+      );
+      expect(unknown.readAsStringSync(), 'keep');
+      final counts = [exports, compressions, saves];
+      unknown.deleteSync();
+      await owner.closeAndWait();
+      expect([exports, compressions, saves], counts);
+      expect(owner.hasPendingCleanup, isFalse);
+      expect(root.listSync(), isEmpty);
+    });
+  }
+
+  test(
+    'owner close joins active exporter and rejects remaining comics',
+    () async {
+      final owner = SelectionOperation();
+      final entered = Completer<void>();
+      final finish = Completer<void>();
+      var exports = 0;
+      final pending = run(
+        multiple,
+        owner: owner,
+        exporter: (comic, path) async {
+          exports++;
+          final file = await export(comic, path);
+          entered.complete();
+          await finish.future;
+          expect(file.existsSync(), isTrue);
+          return file;
+        },
+        save: (_, _) async => fail('Cancelled export cannot save'),
+      );
+      final checked = expectLater(pending, throwsA(isA<SelectionCancelled>()));
+      await entered.future;
+      var closed = false;
+      final closing = owner.closeAndWait().then((_) => closed = true);
+      await pumpEventQueue();
+      expect(closed, isFalse);
+      finish.complete();
+      await checked;
+      await closing;
+      expect(exports, 1);
+      expect(root.listSync(), isEmpty);
+    },
   );
   test(
     'single export owns file until save finishes and cleans afterwards',

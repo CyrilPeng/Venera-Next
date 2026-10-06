@@ -8,7 +8,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/file_interaction.dart' as interaction;
-import 'package:venera_next/foundation/file_save_operation.dart';
+import 'package:venera_next/foundation/file_save_operation.dart' as saves;
+import 'package:venera_next/foundation/selection_operation.dart';
+import 'package:venera_next/foundation/directory_selection.dart';
 
 const _selector = MethodChannel('plugins.flutter.io/file_selector');
 const _mobile = MethodChannel('flutter_file_dialog');
@@ -35,6 +37,75 @@ void main() {
     root.deleteSync(recursive: true);
   });
 
+  test('startup IO override preserves entity types and save cleanup', () async {
+    final caller = File(p.join(root.path, 'caller.bin'))..writeAsBytesSync([9]);
+    messenger.setMockMethodCallHandler(
+      _selector,
+      (_) async => p.join(root.path, 'saved.bin'),
+    );
+    await interaction.overrideIO(() async {
+      expect(
+        await FileSystemEntity.type(root.path),
+        FileSystemEntityType.directory,
+      );
+      expect(FileSystemEntity.typeSync(caller.path), FileSystemEntityType.file);
+      final link = Link(p.join(root.path, 'borrowed-link'))
+        ..createSync(caller.path);
+      expect(
+        await FileSystemEntity.type(link.path, followLinks: false),
+        FileSystemEntityType.link,
+      );
+      expect(await FileSystemEntity.type(link.path), FileSystemEntityType.file);
+      expect(
+        await FileSystemEntity.type('${root.path}/missing'),
+        FileSystemEntityType.notFound,
+      );
+      await interaction.overrideIO(() async {
+        expect(
+          await _saveFile(
+            data: Uint8List.fromList([1, 2]),
+            filename: 'saved.bin',
+          ),
+          isTrue,
+        );
+      });
+    });
+    expect(cache.listSync(), isEmpty);
+    expect(File(p.join(root.path, 'saved.bin')).readAsBytesSync(), [1, 2]);
+    expect(caller.readAsBytesSync(), [9]);
+  });
+
+  test(
+    'late desktop picker reply after close cannot write destination',
+    () async {
+      final reply = Completer<String?>();
+      final entered = Completer<void>();
+      final owner = SelectionOperation();
+      messenger.setMockMethodCallHandler(_selector, (_) {
+        entered.complete();
+        return reply.future;
+      });
+      final saving = _saveFile(
+        owner: owner,
+        data: Uint8List.fromList([1]),
+        filename: 'a.bin',
+      );
+      final checked = expectLater(saving, throwsA(isA<SelectionCancelled>()));
+      await entered.future;
+      var closed = false;
+      final closing = owner.closeAndWait().then((_) => closed = true);
+      await pumpEventQueue();
+      expect(closed, isFalse);
+      expect(cache.listSync(), hasLength(1));
+      final destination = File(p.join(root.path, 'late.bin'));
+      reply.complete(destination.path);
+      await checked;
+      await closing;
+      expect(destination.existsSync(), isFalse);
+      expect(cache.listSync(), isEmpty);
+    },
+  );
+
   test(
     'same-name saves retain separate bytes through real desktop copies',
     () async {
@@ -50,11 +121,11 @@ void main() {
       });
       final original = File(p.join(cache.path, '漫画 01.png'))
         ..writeAsBytesSync([9]);
-      final first = interaction.saveFile(
+      final first = _saveFile(
         data: Uint8List.fromList([1, 2]),
         filename: '漫画 01.png',
       );
-      final second = interaction.saveFile(
+      final second = _saveFile(
         data: Uint8List.fromList([3, 4]),
         filename: '漫画 01.png',
       );
@@ -63,7 +134,8 @@ void main() {
       expect(staging, hasLength(2));
       expect(
         staging.map(
-          (dir) => File(p.join(dir.path, '漫画 01.png')).readAsBytesSync(),
+          (dir) =>
+              File(p.join(dir.path, 'contents', '漫画 01.png')).readAsBytesSync(),
         ),
         unorderedEquals([
           [1, 2],
@@ -116,7 +188,7 @@ void main() {
         },
       );
       final saving = IOOverrides.runWithIOOverrides(
-        () => interaction.saveFile(
+        () => _saveFile(
           data: Uint8List.fromList([1, 2, 3]),
           filename: 'cancelled.png',
           checkStop: () {
@@ -160,10 +232,12 @@ void main() {
           return file.copy(destination);
         },
       );
+      final owner = SelectionOperation();
       var done = false;
       final saving =
           IOOverrides.runWithIOOverrides(
-            () => interaction.saveFile(
+            () => _saveFile(
+              owner: owner,
               data: Uint8List.fromList([1]),
               filename: 'a.png',
             ),
@@ -176,8 +250,13 @@ void main() {
       expect(done, isFalse);
       expect(source!.existsSync(), isTrue);
       expect(interaction.IO.isSelectingFiles, isTrue);
+      var closed = false;
+      final closing = owner.closeAndWait().then((_) => closed = true);
+      await pumpEventQueue();
+      expect(closed, isFalse);
       release.complete();
       expect(await saving, isTrue);
+      await closing;
       expect(source!.existsSync(), isFalse);
       expect(File(p.join(root.path, 'destination.png')).readAsBytesSync(), [1]);
     },
@@ -191,10 +270,7 @@ void main() {
         expect(call.arguments['suggestedName'], 'renamed.dat');
         return cancel ? null : p.join(root.path, 'renamed.dat');
       });
-      expect(
-        await interaction.saveFile(file: caller, filename: 'renamed.dat'),
-        !cancel,
-      );
+      expect(await _saveFile(file: caller, filename: 'renamed.dat'), !cancel);
       expect(caller.readAsBytesSync(), [5, 6]);
       expect(cache.listSync(), hasLength(1));
     });
@@ -206,7 +282,7 @@ void main() {
       final caller = File(p.join(cache.path, 'a.png'))..writeAsBytesSync([8]);
       messenger.setMockMethodCallHandler(_selector, (_) async => null);
       expect(
-        await interaction.saveFile(
+        await _saveFile(
           data: Uint8List.fromList([1]),
           file: caller,
           filename: 'a.png',
@@ -225,7 +301,7 @@ void main() {
         throw PlatformException(code: 'save-failed', message: 'dialog failed');
       });
       await expectLater(
-        interaction.saveFile(data: Uint8List.fromList([1]), filename: 'a.png'),
+        _saveFile(data: Uint8List.fromList([1]), filename: 'a.png'),
         throwsA(
           isA<PlatformException>().having((e) => e.code, 'code', 'save-failed'),
         ),
@@ -244,7 +320,7 @@ void main() {
         selecting.complete();
         return selected.future;
       });
-      await interaction.saveFile(data: Uint8List(0), filename: 'empty.dat');
+      await _saveFile(data: Uint8List(0), filename: 'empty.dat');
       expect(interaction.IO.isSelectingFiles, isTrue);
       final picking = interaction.selectFile(ext: ['png']);
       await selecting.future;
@@ -258,7 +334,7 @@ void main() {
     },
   );
 
-  for (final kind in ['multiple', 'directory', 'picker', 'ios']) {
+  for (final kind in ['multiple', 'picker']) {
     test(
       'save keeps selection ownership after $kind selection completes',
       () async {
@@ -272,20 +348,13 @@ void main() {
           return Future.value(null);
         });
         messenger.setMockMethodCallHandler(_iosDirectory, (_) async => null);
-        final saving = interaction.saveFile(
-          data: Uint8List(0),
-          filename: 'a.dat',
-        );
+        final saving = _saveFile(data: Uint8List(0), filename: 'a.dat');
         await savingStarted.future;
         switch (kind) {
           case 'multiple':
             await interaction.selectFiles(ext: ['png']);
-          case 'directory':
-            await interaction.selectDirectory();
           case 'picker':
             await interaction.DirectoryPicker().pickDirectory();
-          case 'ios':
-            await interaction.selectDirectoryIOS();
         }
         await Future<void>.delayed(const Duration(milliseconds: 130));
         expect(interaction.IO.isSelectingFiles, isTrue);
@@ -378,19 +447,18 @@ void main() {
             caughtStack = failureStack;
           }
           expect(platformEntered, stage == 'platform');
-          expect(caughtStack.toString(), stack.toString());
           if (cleanupFails) {
-            expect(caught, isA<FileSaveCleanupFailure>());
-            final combined = caught as FileSaveCleanupFailure;
+            expect(caught, isA<SelectionCleanupFailure>());
+            final combined = caught as SelectionCleanupFailure;
+            final cleanup =
+                combined.failures.single as DirectorySelectionCleanupFailure;
             expect(combined.operationError, same(error));
-            expect(combined.operationStackTrace.toString(), stack.toString());
-            expect(combined.cleanupError, same(cleanupError));
-            expect(
-              combined.cleanupStackTrace.toString(),
-              cleanupStack.toString(),
-            );
+            expect(combined.operationStack.toString(), stack.toString());
+            expect(cleanup.cleanupError, same(cleanupError));
+            expect(cleanup.cleanupStack.toString(), cleanupStack.toString());
           } else {
             expect(caught, same(error));
+            expect(caughtStack.toString(), stack.toString());
             expect(cache.listSync(), isEmpty);
           }
           expect(caller.readAsBytesSync(), [4]);
@@ -411,9 +479,14 @@ void main() {
         save: (_) async => true,
       );
       fail('Expected cleanup failure');
-    } catch (actual, actualStack) {
-      expect(actual, same(error));
-      expect(actualStack.toString(), stack.toString());
+    } catch (actual) {
+      expect(actual, isA<SelectionCleanupFailure>());
+      final failure = actual as SelectionCleanupFailure;
+      expect(failure.operationError, isNull);
+      final cleanup =
+          failure.failures.single as DirectorySelectionCleanupFailure;
+      expect(cleanup.cleanupError, same(error));
+      expect(cleanup.cleanupStack.toString(), stack.toString());
     }
   });
 
@@ -453,7 +526,8 @@ void main() {
         replies.add(reply);
         return reply.future;
       });
-      Future<bool> save() => withSaveFileSource(
+      Future<bool> save([SelectionOperation? owner]) => withSaveFileSource(
+        owner: owner,
         file: caller,
         filename: 'export.venera',
         copySource: true,
@@ -465,7 +539,8 @@ void main() {
           return result != null;
         }),
       );
-      final first = save();
+      final owner = SelectionOperation();
+      final first = save(owner);
       await _until(() => replies.length == 1);
       var secondDone = false;
       final second = save().then((result) {
@@ -476,8 +551,13 @@ void main() {
       expect(secondDone, isFalse);
       expect(File(invoked.single).existsSync(), isTrue);
       expect(caller.existsSync(), isTrue);
+      var closed = false;
+      final closing = owner.closeAndWait().then((_) => closed = true);
+      await pumpEventQueue();
+      expect(closed, isFalse);
       replies[0].complete(null);
       expect(await first, isFalse);
+      await closing;
       await _until(() => replies.length == 2);
       expect(invoked[0], isNot(invoked[1]));
       expect(File(invoked[0]).existsSync(), isFalse);
@@ -524,14 +604,24 @@ Future<void> _until(bool Function() complete) async {
 
 final class _FileOverrides extends IOOverrides {
   _FileOverrides(this.directory, {this.copy, this.write});
+  final _nativeZone = Zone.current;
   final String directory;
   final Future<File> Function(File, String)? copy;
   final Future<File> Function(File, List<int>, FileMode, bool)? write;
 
+  // Dart 3.11 on Windows reports notFound from the default IOOverrides type
+  // adapter even for an existing directory. Only intercept the intended file
+  // operations; query real entity types in the original zone.
+  @override
+  Future<FileSystemEntityType> fseGetType(String path, bool followLinks) =>
+      _nativeZone.run(
+        () => FileSystemEntity.type(path, followLinks: followLinks),
+      );
+
   @override
   File createFile(String path) {
     final file = super.createFile(path);
-    return p.isWithin(directory, path)
+    return p.isWithin(directory, path) && p.basename(path) != '.selection-owner'
         ? _InterceptedFile(file, copy: copy, write: write)
         : file;
   }
@@ -582,8 +672,15 @@ class _OwnedDirectory implements Directory {
   @override
   String get path => raw.path;
   @override
+  Future<String> resolveSymbolicLinks() => raw.resolveSymbolicLinks();
+  @override
+  Stream<FileSystemEntity> list({
+    bool recursive = false,
+    bool followLinks = true,
+  }) => raw.list(recursive: recursive, followLinks: followLinks);
+  @override
   Future<Directory> delete({bool recursive = false}) async {
-    expect(recursive, isTrue);
+    expect(recursive, isFalse);
     await remove(raw);
     return this;
   }
@@ -591,3 +688,41 @@ class _OwnedDirectory implements Directory {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+Future<bool> _saveFile({
+  Uint8List? data,
+  File? file,
+  required String filename,
+  void Function()? checkStop,
+  SelectionOperation? owner,
+}) => (owner ?? SelectionOperation()).run(
+  (operation) => interaction.saveFile(
+    operation: operation,
+    data: data,
+    file: file,
+    filename: filename,
+    checkStop: checkStop,
+  ),
+);
+
+Future<bool> withSaveFileSource({
+  Uint8List? data,
+  File? file,
+  required String filename,
+  required Directory cacheDirectory,
+  required Future<bool> Function(File) save,
+  bool copySource = false,
+  void Function()? checkStop,
+  SelectionOperation? owner,
+}) => (owner ?? SelectionOperation()).run(
+  (operation) => saves.withSaveFileSource(
+    operation: operation,
+    data: data,
+    file: file,
+    filename: filename,
+    cacheDirectory: cacheDirectory,
+    save: save,
+    copySource: copySource,
+    checkStop: checkStop,
+  ),
+);

@@ -1,5 +1,29 @@
 # 项目结构约定
 
+2026-10-06 图片读取宿主更新：ImageSaveBinding 逐项登记原窗口和应用宿主，ImageSaveWork 在读取前固定登记并在绑定迁移时取消旧任务；ImageWorkTask 的独立关闭结果保留原诊断，不随页面排空消失。页面图片保存与副本清理分别持有自己的结果；业务入口仍为 127。阅读器/设置的其他 ImageWork 和原生资源继续待办。
+
+2026-10-06 保存/导出更新：components/file_save_task.dart 将普通保存绑定原窗口/宿主；foundation/selection_operation.dart 通过 DirectorySelection 凭据协议拥有生成文件/目录和清理重试。设置数据及漫画导出把完整暂存纳入同一动作，file_interaction.dart 的启动适配保留父执行区原生类型查询，避免 Windows IOOverrides 跳过清理。受控业务入口仍为 127；完整图片/原生生命周期和原方案其余验收继续待办。
+
+2026-10-06 源预览/安装清理更新：source_inspection_task.dart 绑定原宿主登记表与窗口，SourceSelectionOwner 在同步接纳成功后才转交，失败保留原登记。source_installation.dart 按文件持有完整尝试和有序诊断，释放等待这些尝试，清除行和成功重试不清除尚未释放资源的原失败原因。source_import.dart 用稳定 invalidImport 原因保留解析器异常。没有新增业务入口，总数仍为 127；其余保存/原生资源、业务边界与原方案验收继续待办。
+
+2026-10-06 工作副本与视图清理更新：SelectionOperation.useFileCopy 复用 DirectorySelection.copy 的凭据清理协议，在准备前拥有设置导入的私有文件。WindowSelectionTask 保存独立视图错误/堆栈及原操作原因，显式关闭只重试失败项；SettingsTaskPresenter 统一交给任务关闭，LoadingDialogController 保留失败路由回调。没有新增业务入口，总数仍为 127；源预览/安装与其他原范围继续待办。
+
+2026-10-06 单次选择任务增量：foundation/selection_operation.dart 是第 127 个受控业务入口，拥有文件/目录选择的整个 Future、失败释放重试和 SelectionTaskRegistry。components/window_selection_task.dart 绑定原页面/导航器/窗口与宿主 Scope；app_runtime/application_host.dart 排空登记表后才关闭核心。设置、收藏和普通漫画导入显式传入任务；PDF 同步接纳后转交句柄。ImportComicPresentation 的默认实现为无界面，交互实现只使用捕获的原任务。
+
+2026-10-06 目录选择更新：foundation/directory_selection.dart 是第 126 个业务入口，拥有目录借用/复制、使用 Future、凭据清理及会话访问移交；file_interaction.dart 只负责选框与平台装配。apple/ScopedDirectoryAccess.swift 由 iOS/macOS 应用和 XCTest 目标共同编译，ScopedDirectoryAccessTests.swift 替换两个占位测试。两个平台不再共享最后一个目录/结果字段；会话访问与跨重启书签恢复明确分离，后者及完整窗口/SAF 生命周期仍待办。
+
+2026-10-06 选择文件更新：foundation/file_selection.dart 是第 125 个业务入口，拥有凭据、并发准备、完整消费者和可重试释放；file_interaction.dart 仅装配平台选择。SourceSelectionOwner 将空闲预览清理登记到原窗口，SourceInstallations 与 PdfImportTasks 分别拥有重试和批量任务的句柄。Android SelectedFileStorage 验证独立副本的原路径/凭据，测试入口为 test/native/selected_file_storage_test.kt。目录/SAF 与其他消费端窗口生命周期继续待办。
+
+2026-10-06 源检查更新：source_text_request.dart 是第 124 个受控业务入口，拥有目录与预览的 HTTP 传输规则和自建/借用客户端边界。source_inspection_task.dart 是 UI 生命周期适配器，固定页面/路由/窗口并追踪实际只读工作及清理失败。目录和导入页面只管理输入、结果与交互；文件选择与读取不混入 SettingsSaveState 的保存重放协议。原平台文件句柄/finalizer、其他原生及原方案验收继续跟踪。
+
+2026-10-06 源安装所有权更新：SourceInstallations 固定注入 ComicSourceManager、SourceRepositories 与独占客户端工厂，拥有完整尝试和关闭；SourceInstallationsScope 仅提供 UI 注入。ApplicationHost 在核心关闭前排空队列，main 在核心初始化后组装。network/owned_dio_client.dart 拥有实际 adapter fetch、迟到响应清理及 RHttp 原生排空。业务入口增至 123；singleton/forTesting 队列构造退场，独立目录/预览所有权及其余平台验收继续待办。
+
+2026-10-06 版本检查更新：foundation/application_update_service.dart 拥有独立请求、最终关闭与真实 HTTP/RHttp 清理；release_version.dart 拥有版本选择规则；startup_update_check.dart 拥有启动顺序、取消及时间保存等待。app_runtime/application_updates.dart 装配数据/源/客户端，ApplicationHost 持有版本服务和挂载收尾。components/application_update_prompt.dart 是原页面/窗口的提示及路由拥有者，About 仅提供按钮/加载反馈；旧全局 checkUpdates/checkUpdateUi 与 ForTesting 版本转发已删除。三个入口纳入业务门禁，总数 121；其余生命周期和平台缺口仍按验收清单推进。
+
+2026-10-06 宿主关闭更新：app_runtime/application_host.dart 拥有跨挂载交接和最终关闭；WindowFrame 只管理准备、冻结、迟到任务与退出反馈。CoreBootstrap 分开生产者排空和存储释放，bootstrap_core 维护关闭依赖顺序及一次性资源回调。foundation/app_data_operations.dart 提供永久准入关闭与最终独占保存；JS 引擎按原生运行时保留桥接 Future/旧客户端，closeAndWait 等待实际清理。core_bootstrap 与 app_data_operations 加入门禁，业务入口为 118。交互装配不是纯业务入口；未登记生产者及原平台/性能验收继续追踪。
+
+JS 桥接拥有可取消的交付 Future，与底层 HTTP 完成分开；UI 交付及 JS delay 在关闭时结束，原生运行时等待交付微任务释放。
+
 2026-10-06 同步所有权更新：data_sync_ownership.dart 拥有独立 SQLite 排他事务和原生连接释放，data_sync_content_recovery.dart 拥有孤立候选与收据的保守恢复；受控入口增至 116。controller 在订阅/恢复/传输前取得所有权，closeAndWait 排空后释放；app_runtime 负责内容资源保留，bootstrap_core 在恢复与设置加载阶段参与同一锁，headless 等待关闭。候选完成决定先于 marker/收据清理持久化，未知证据保留；该锁不替代普通导入或所有业务写入的跨进程事务。
 
 2026-10-06 同步内容更新：data_sync_content.dart 定义持久比较端口，data_sync_content_fingerprint.dart 拥有稳定设置/SQLite/源文件摘要，data_sync_content_journal.dart 拥有候选与单调基线；三个入口使受控总数达到 114。app_runtime/data_sync_content.dart 在原数据独占范围捕获内容并验证真实收据。导出归档登记实际暂存与 ZIP SHA，导入在替换前复核 before、应用后记录 after；控制器拥有 v4 marker、自动方向选择与后续编辑调度。app_data_sync_fields.dart 与 Appdata 导入共用旧排除规则；内容日志不进入导出，不能替代跨库事务或原生释放所有权。

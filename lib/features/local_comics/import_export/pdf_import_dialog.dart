@@ -114,9 +114,12 @@ Future<PdfImportBatchResult?> showPdfImportDialog({
   required BuildContext context,
   required PdfImportTask task,
   PdfImportTasks? tasks,
+  VoidCallback Function(VoidCallback close, bool Function() isCurrent)?
+  retainPresentation,
 }) async {
   final disposed = Completer<void>();
-  final closed = showDialog<void>(
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final route = DialogRoute<void>(
     context: context,
     builder: (context) => DialogResourceScope(
       onDispose: () {
@@ -128,7 +131,15 @@ Future<PdfImportBatchResult?> showPdfImportDialog({
       ),
     ),
   );
-  await Future.any<void>([closed, disposed.future]);
+  final closed = navigator.push(route);
+  final detach = retainPresentation?.call(() {
+    if (navigator.mounted && route.isActive) navigator.removeRoute(route);
+  }, () => route.isCurrent);
+  try {
+    await Future.any<void>([closed, disposed.future]);
+  } finally {
+    detach?.call();
+  }
   return task.result;
 }
 

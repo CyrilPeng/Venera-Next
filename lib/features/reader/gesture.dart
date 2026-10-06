@@ -1,3 +1,4 @@
+import 'package:venera_next/components/file_save_task.dart';
 import 'dart:async';
 
 import 'gesture_port.dart';
@@ -10,7 +11,6 @@ import 'package:venera_next/features/reader/clipboard_image.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/file_type.dart';
 import 'package:venera_next/features/reader/reader_tap_scope.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -424,6 +424,10 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
 
   Future<void> saveImage(Offset location) => _useImage(location, (image) async {
     final filetype = detectFileType(image);
-    await saveFile(filename: "image${filetype.ext}", data: image);
+    await saveFileForWindow(
+      context,
+      filename: "image${filetype.ext}",
+      data: image,
+    );
   });
 }

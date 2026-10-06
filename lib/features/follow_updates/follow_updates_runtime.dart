@@ -27,6 +27,7 @@ class FollowUpdatesRuntime {
   final _changes = ValueNotifier<int>(0);
   VoidCallback? _unsubscribe;
   bool _disposed = false;
+  Future<void>? _closing;
 
   ValueListenable<int> get changes => _changes;
   bool get isRunning => _service.isRunning;
@@ -79,5 +80,33 @@ class FollowUpdatesRuntime {
     } finally {
       _changes.dispose();
     }
+  }
+
+  Future<void> closeAndWait() {
+    final closing = _closing;
+    if (closing != null) return closing;
+    Object? disposalError;
+    StackTrace? disposalStack;
+    try {
+      dispose();
+    } catch (error, stack) {
+      disposalError = error;
+      disposalStack = stack;
+    }
+    return _closing = _finishClose(disposalError, disposalStack);
+  }
+
+  Future<void> _finishClose(Object? error, StackTrace? stack) async {
+    final failures = <({Object error, StackTrace stack})>[
+      if (error != null) (error: error, stack: stack!),
+    ];
+    try {
+      await _service.closeAndWait();
+    } on FollowUpdatesCloseFailure catch (error) {
+      failures.addAll(error.failures);
+    } catch (error, stack) {
+      failures.add((error: error, stack: stack));
+    }
+    if (failures.isNotEmpty) throw FollowUpdatesCloseFailure(failures);
   }
 }

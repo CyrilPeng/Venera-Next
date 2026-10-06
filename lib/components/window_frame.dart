@@ -69,12 +69,25 @@ class WindowFrameController extends InheritedWidget {
 }
 
 class WindowFrame extends StatefulWidget {
-  const WindowFrame(this.child, {this.debugAction, this.onExit, super.key});
+  const WindowFrame(
+    this.child, {
+    this.debugAction,
+    this.onExit,
+    this.finalize,
+    this.isFinalizing,
+    super.key,
+  });
 
   final Widget child;
 
   final VoidCallback? debugAction;
   final VoidCallback? onExit;
+
+  /// Runs only after every reversible preparation and its writes settle.
+  final WindowFinalizer? finalize;
+
+  /// A remounted window must preserve its host's irreversible close state.
+  final bool Function()? isFinalizing;
 
   @override
   State<WindowFrame> createState() => _WindowFrameState();
@@ -85,6 +98,7 @@ class WindowFrame extends StatefulWidget {
 }
 
 typedef WindowCloseListener = bool Function();
+typedef WindowFinalizer = Future<void> Function(Future<void> Function() drain);
 
 class _WindowFrameState extends State<WindowFrame> with WindowListener {
   bool isWindowFrameHidden = false;
@@ -103,11 +117,24 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
   FocusNode? _previousFocus;
   bool _closing = false;
   bool _exited = false;
+  bool _finalizing = false;
+  bool _finalizationRunning = false;
+  bool _finalizationFailed = false;
+  WindowFinalizer? _finalize;
 
   @override
   void initState() {
     super.initState();
     if (App.isDesktop) windowManager.addListener(this);
+    if (widget.isFinalizing?.call() == true) {
+      _finalizing = true;
+      _closing = true;
+      _contentFocus.descendantsAreFocusable = false;
+      _finalize = widget.finalize;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_finishFinalClose());
+      });
+    }
   }
 
   @override
@@ -154,7 +181,7 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
       onError: (Object error, StackTrace stack) {
         // Keep a failed write visible to the next drain during shutdown. It
         // may fail while another owner's callback is still being awaited.
-        if (!_closing || !mounted) _pendingExitTasks.remove(pending);
+        if (!_closing) _pendingExitTasks.remove(pending);
         Error.throwWithStackTrace(error, stack);
       },
     );
@@ -162,9 +189,17 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
     // Report failures even if no close attempt is currently waiting.
     unawaited(
       pending.catchError((Object error, StackTrace stack) {
-        if (!_closing || !mounted) _reportExitError(error, stack);
+        if (!_closing) _reportExitError(error, stack);
       }),
     );
+  }
+
+  void _addExitTask(Future<void> Function() task) {
+    if (_finalizing) {
+      _trackExitTask(Future<void>.sync(task));
+    } else {
+      _exitTasks.add(task);
+    }
   }
 
   void _reportExitError(Object error, StackTrace stack) {
@@ -178,6 +213,11 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
   }
 
   void _onClose() async {
+    if (_exited) return;
+    if (_finalizing) {
+      await _finishFinalClose();
+      return;
+    }
     if (_closing || _exited) return;
     for (var listener in List.of(closeListeners)) {
       if (!closeListeners.contains(listener)) continue;
@@ -213,15 +253,30 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
       // A disposed reader may already have detached its callback but still be
       // saving. Drain it before application-level sync inspects pending uploads.
       await _drainPendingExitTasks();
-      for (final task in _exitTasks.reversed.toList()) {
-        if (!mounted || _exited) return;
-        if (_exitTasks.contains(task)) await task();
-        // A callback may dispose an owner and register its final writes.
-        // Join those writes before the next owner prepares or the host exits.
-        await _drainPendingExitTasks();
+      final prepared = <Future<void> Function()>{};
+      while (_exitTasks.any((task) => !prepared.contains(task))) {
+        for (final task in _exitTasks.reversed.toList()) {
+          if (!mounted || _exited) return;
+          if (_exitTasks.contains(task) && prepared.add(task)) await task();
+          // A callback may dispose or mount an owner while awaiting its writes.
+          // Join new tasks as well before entering irreversible finalization.
+          await _drainPendingExitTasks();
+        }
       }
-      _forceExit();
+      if (!mounted || _exited) return;
+      if (widget.finalize != null) {
+        _finalizing = true;
+        _finalize = widget.finalize;
+        await _finishFinalClose();
+      } else {
+        _forceExit();
+      }
     } catch (error, stack) {
+      if (_finalizing) {
+        if (mounted && !_exited) setState(() => _finalizationFailed = true);
+        _reportExitError(error, stack);
+        return;
+      }
       // A callback can fail after registering writes. Keep admission closed
       // until those writes have settled before releasing other services.
       try {
@@ -249,18 +304,43 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _closing = false);
-        if (!_exited) {
-          _contentFocus.descendantsAreFocusable = true;
-          final previous = _previousFocus;
-          if (previous?.context != null && previous!.canRequestFocus) {
-            previous.requestFocus();
+      if (!_finalizing) {
+        if (mounted) {
+          setState(() => _closing = false);
+          if (!_exited) {
+            _contentFocus.descendantsAreFocusable = true;
+            final previous = _previousFocus;
+            if (previous?.context != null && previous!.canRequestFocus) {
+              previous.requestFocus();
+            }
           }
         }
+        _closing = false;
+        _previousFocus = null;
       }
-      _closing = false;
-      _previousFocus = null;
+    }
+  }
+
+  Future<void> _finishFinalClose() async {
+    if (!mounted || _exited || _finalizationRunning) return;
+    setState(() {
+      _closing = true;
+      _finalizationRunning = true;
+      _finalizationFailed = false;
+    });
+    try {
+      final finalize = _finalize;
+      if (finalize == null) throw StateError('Missing application finalizer');
+      await finalize(_drainPendingExitTasks);
+      await _drainPendingExitTasks();
+      if (mounted && !_exited) _forceExit();
+    } catch (error, stack) {
+      // Core resources may already be closed. Keep all admissions frozen and
+      // retry the same host, never the reversible preparation callbacks.
+      if (mounted && !_exited) setState(() => _finalizationFailed = true);
+      _reportExitError(error, stack);
+    } finally {
+      _finalizationRunning = false;
     }
   }
 
@@ -369,7 +449,7 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
       removeCloseListener: removeCloseListener,
       addCloseStartListener: _closeStartListeners.add,
       removeCloseStartListener: _closeStartListeners.remove,
-      addExitTask: _exitTasks.add,
+      addExitTask: _addExitTask,
       removeExitTask: _exitTasks.remove,
       trackExitTask: _trackExitTask,
       addCloseFailureListener: _closeFailureListeners.add,
@@ -412,15 +492,32 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
                             child: AlertDialog(
                               title: Semantics(
                                 liveRegion: true,
-                                child: Text('Closing...'.tl),
-                              ),
-                              content: TickerMode(
-                                enabled: !MediaQuery.disableAnimationsOf(
-                                  context,
+                                child: Text(
+                                  (_finalizationFailed
+                                          ? 'Unable to close. Please try again.'
+                                          : 'Closing...')
+                                      .tl,
                                 ),
-                                child: const LinearProgressIndicator(),
                               ),
+                              content: _finalizationFailed
+                                  ? Text(
+                                      'The app is shutting down. Retry or force quit.'
+                                          .tl,
+                                    )
+                                  : TickerMode(
+                                      enabled: !MediaQuery.disableAnimationsOf(
+                                        context,
+                                      ),
+                                      child: const LinearProgressIndicator(),
+                                    ),
                               actions: [
+                                if (_finalizationFailed)
+                                  TextButton(
+                                    autofocus: true,
+                                    onPressed: () =>
+                                        unawaited(_finishFinalClose()),
+                                    child: Text('Retry'.tl),
+                                  ),
                                 TextButton(
                                   onPressed: _forceExit,
                                   child: Text('Force Quit'.tl),

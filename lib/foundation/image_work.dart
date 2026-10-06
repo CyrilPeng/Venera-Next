@@ -142,11 +142,26 @@ class ImageWorkTask {
   final void Function()? _cancelSelection;
   final void Function()? _onCancel;
   final _done = Completer<void>();
+  final _failures = <_ReportedWorkFailure>[];
   bool _cancelled = false;
   bool _selecting = false;
 
   bool get isCancelled => _cancelled;
   Future<void> get done => _done.future;
+  bool get hasFailures => _failures.isNotEmpty;
+
+  /// A host observes this task independently of a page's reversible drain.
+  /// Reporting a failure to one waiter never clears another owner's evidence.
+  Future<void> closeAndWait() async {
+    cancel();
+    await done;
+    if (_failures.isNotEmpty) {
+      throw ImageWorkFailure([
+        for (final failure in _failures)
+          (error: failure.error, stack: failure.stack),
+      ]);
+    }
+  }
 
   void check() {
     if (_cancelled) throw const ImageWorkTaskCancelled();
@@ -188,7 +203,11 @@ class ImageWorkTask {
     if (error is ImageWorkTaskCancelled) return () {};
     final failure = _ReportedWorkFailure(error, stack);
     _owner._failures.add(failure);
-    return () => _owner._failures.remove(failure);
+    _failures.add(failure);
+    return () {
+      _owner._failures.remove(failure);
+      _failures.remove(failure);
+    };
   }
 
   void finish() {

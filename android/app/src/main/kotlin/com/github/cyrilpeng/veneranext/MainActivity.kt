@@ -172,7 +172,7 @@ class MainActivity : FlutterFragmentActivity() {
                 "selectFile" -> openFile(res, req.arguments<String>() ?: "*/*")
                 "selectFiles" -> openFiles(res, req.arguments<String>() ?: "*/*")
                 "prepareFile" -> prepareSelectedFile(res, req.arguments<String>()!!)
-                "releaseFile" -> releaseSelectedFile(res, req.arguments<String>()!!)
+                "releaseFile" -> releaseSelectedFile(res, req.arguments<Map<String, String>>()!!)
                 else -> res.notImplemented()
             }
         }
@@ -380,9 +380,11 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    private val selectedFileStorage by lazy { SelectedFileStorage(File(cacheDir, "selected_files")) }
+
     private fun prepareSelectedFile(result: MethodChannel.Result, source: String) {
         Thread {
-            var temporaryDirectory: File? = null
+            var copy: SelectedFileStorage.Copy? = null
             try {
                 val uri = Uri.parse(source)
                 if (hasStoragePermission()) {
@@ -394,35 +396,38 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 val document = DocumentFile.fromSingleUri(this, uri)
                     ?: throw IllegalArgumentException("Cannot open selected document")
-                val name = File(document.name ?: "document.pdf").name
-                val directory = File(cacheDir, "selected_files/${UUID.randomUUID()}")
-                temporaryDirectory = directory
-                check(directory.mkdirs()) { "Cannot create temporary directory" }
-                val file = File(directory, name)
-                require(file.canonicalFile.parentFile == directory.canonicalFile) { "Invalid document name" }
+                val owned = selectedFileStorage.create(document.name ?: "document.pdf")
+                copy = owned
                 val input = contentResolver.openInputStream(uri)
                     ?: throw IllegalArgumentException("Cannot read selected document")
                 input.use { sourceStream ->
-                    FileOutputStream(file).use { output -> sourceStream.copyTo(output) }
+                    FileOutputStream(owned.file).use { output -> sourceStream.copyTo(output) }
                 }
-                runOnUiThread { result.success(mapOf("path" to file.absolutePath, "temporary" to true)) }
-            } catch (e: Exception) {
-                temporaryDirectory?.deleteRecursively()
-                runOnUiThread { result.error("prepare_error", e.message, null) }
+                runOnUiThread { result.success(mapOf("path" to owned.file.absolutePath, "temporary" to true, "token" to owned.token)) }
+            } catch (error: Exception) {
+                var retained: Map<String, String>? = null
+                if (error is SelectedFileStorage.CreationFailure) copy = error.copy
+                copy?.let { owned ->
+                    try {
+                        selectedFileStorage.release(owned.file.absolutePath, owned.token)
+                    } catch (cleanup: Exception) {
+                        error.addSuppressed(cleanup)
+                        retained = mapOf("path" to owned.file.absolutePath, "token" to owned.token, "cleanupError" to cleanup.toString())
+                    }
+                }
+                val details = retained
+                runOnUiThread { result.error("prepare_error", error.toString(), details) }
             }
         }.start()
     }
 
-    private fun releaseSelectedFile(result: MethodChannel.Result, path: String) {
+    private fun releaseSelectedFile(result: MethodChannel.Result, receipt: Map<String, String>) {
         Thread {
             try {
-                val root = File(cacheDir, "selected_files").canonicalFile
-                val directory = File(path).canonicalFile.parentFile
-                require(directory != null && directory.parentFile == root) { "Invalid temporary file path" }
-                directory.deleteRecursively()
+                selectedFileStorage.release(receipt.getValue("path"), receipt.getValue("token"))
                 runOnUiThread { result.success(null) }
-            } catch (e: Exception) {
-                runOnUiThread { result.error("release_error", e.message, null) }
+            } catch (error: Exception) {
+                runOnUiThread { result.error("release_error", error.toString(), receipt) }
             }
         }.start()
     }
@@ -441,47 +446,13 @@ class MainActivity : FlutterFragmentActivity() {
                 result.success(null)
                 return@startContractForResult
             }
-            val contentResolver = contentResolver
-            val file = DocumentFile.fromSingleUri(this, uri)
-            if (file == null) {
-                result.success(null)
-                return@startContractForResult
+            try {
+                val document = DocumentFile.fromSingleUri(this, uri)
+                    ?: throw IllegalArgumentException("Cannot open selected document")
+                result.success(mapOf("uri" to uri.toString(), "name" to (document.name ?: "document")))
+            } catch (error: Exception) {
+                result.error("selection_error", error.message, null)
             }
-            val fileName = file.name
-            if (fileName == null) {
-                result.success(null)
-                return@startContractForResult
-            }
-            if(hasStoragePermission()) {
-                try {
-                    val filePath = FileUtils.getPathFromUri(this, uri)
-                    result.success(filePath)
-                    return@startContractForResult
-                }
-                catch (e: Exception) {
-                    // ignore
-                }
-            }
-            // use copy method
-            val tmp = File(cacheDir, fileName)
-            if(tmp.exists()) {
-                tmp.delete()
-            }
-            Log.i("VeneraNext", "copy file (${fileName}) to ${tmp.absolutePath}")
-            Thread {
-                try {
-                    contentResolver.openInputStream(uri)?.use { input ->
-                        FileOutputStream(tmp).use { output ->
-                            input.copyTo(output, bufferSize = DEFAULT_BUFFER_SIZE)
-                            output.flush()
-                        }
-                    }
-                    result.success(tmp.absolutePath)
-                }
-                catch (e: Exception) {
-                    result.error("copy error", e.message, null)
-                }
-            }.start()
         }
     }
 }

@@ -14,6 +14,32 @@ Future<void> _finishRead(ImageWorkTask task, Completer<int> source) async {
 }
 
 void main() {
+  for (final taskFirst in [false, true]) {
+    test(
+      'task failure survives independent owner drain; task first=$taskFirst',
+      () async {
+        final work = ImageWork();
+        final task = work.start()!;
+        final error = StateError('native cleanup');
+        final stack = StackTrace.fromString('cleanup origin');
+        task.recordFailure(error, stack);
+        task.finish();
+        final matcher = throwsA(
+          isA<ImageWorkFailure>().having(
+            (failure) => failure.failures,
+            'diagnostics',
+            [(error: error, stack: stack)],
+          ),
+        );
+        if (taskFirst) await expectLater(task.closeAndWait(), matcher);
+        await expectLater(work.prepareForExit(), matcher);
+        await expectLater(task.closeAndWait(), matcher);
+        await expectLater(task.closeAndWait(), matcher);
+        await work.dispose();
+      },
+    );
+  }
+
   test(
     'failure acknowledgement removes only its own unconsumed report',
     () async {

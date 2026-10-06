@@ -188,9 +188,11 @@ void main() {
           ).then((_) => settled = true);
           final options = await adapter.started.future;
           expect(adapter.scope, same(scope));
-          expect(options.cancelToken, same(scope.cancelToken));
+          expect(options.cancelToken, isNot(same(scope.cancelToken)));
+          expect(options.cancelToken!.isCancelled, isFalse);
           expect(adapter.cancelled, isNotNull);
           scope.cancel();
+          expect(options.cancelToken!.isCancelled, isTrue);
           await adapter.cancelled;
           adapter.response.complete(ResponseBody.fromString('late', 200));
           await pumpEventQueue();

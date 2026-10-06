@@ -1,3 +1,7 @@
+import 'package:venera_next/features/comic_source/source_installation.dart';
+import 'package:venera_next/features/comic_source/source_installations_scope.dart';
+import 'package:venera_next/features/comic_source/source_repositories.dart';
+import 'package:dio/dio.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -108,6 +112,13 @@ void main() {
       dataStorage: storage,
     );
     manager = ComicSourceManager()..add(source);
+    final queue = SourceInstallations(
+      manager: ComicSourceManager(),
+      repositories: SourceRepositories.instance,
+      createClient: Dio.new,
+    );
+    addTearDown(queue.closeAndWait);
+
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       const MethodChannel('window_manager'),
       (_) async => false,
@@ -132,6 +143,7 @@ void main() {
               : 'SourceDataQA',
         ),
         builder: (context, child) {
+          child = SourceInstallationsScope(queue: queue, child: child!);
           final content = RepaintBoundary(
             key: image,
             child: MediaQuery(
@@ -139,7 +151,7 @@ void main() {
                 textScaler: TextScaler.linear(scale),
                 disableAnimations: true,
               ),
-              child: child!,
+              child: child,
             ),
           );
           return window

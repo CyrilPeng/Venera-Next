@@ -22,8 +22,13 @@ class PdfImportResult {
 }
 
 class PdfImportBatchResult {
-  PdfImportBatchResult(List<PdfImportResult> items)
-    : items = List.unmodifiable(items);
+  PdfImportBatchResult(
+    List<PdfImportResult> items, {
+    List<FileSelectionCleanupFailure> cleanupFailures = const [],
+  }) : items = List.unmodifiable(items),
+       cleanupFailures = List.unmodifiable(cleanupFailures);
+
+  final List<FileSelectionCleanupFailure> cleanupFailures;
 
   final List<PdfImportResult> items;
 
@@ -67,10 +72,13 @@ class PdfImportBatch {
     void Function(PdfImportBatchProgress progress)? onProgress,
   }) async {
     final results = <PdfImportResult>[];
+    final cleanupFailures = <FileSelectionCleanupFailure>[];
     final seenFiles = <String>{};
     final importedTitles = <String>{};
     for (var index = 0; index < files.length; index++) {
       final selection = files[index];
+      Object? cause;
+      StackTrace? causeStack;
       try {
         cancellation.throwIfCancelled();
         onProgress?.call(
@@ -101,19 +109,20 @@ class PdfImportBatch {
           );
           continue;
         }
-        final file = await selection.prepare();
-        cancellation.throwIfCancelled();
-        await importFile(file, title, (current, total) {
-          onProgress?.call(
-            PdfImportBatchProgress(
-              fileIndex: index,
-              fileCount: files.length,
-              fileName: selection.name,
-              currentPage: current,
-              pageCount: total,
-            ),
-          );
-        }, cancellation);
+        await selection.withFile((file) async {
+          cancellation.throwIfCancelled();
+          await importFile(file, title, (current, total) {
+            onProgress?.call(
+              PdfImportBatchProgress(
+                fileIndex: index,
+                fileCount: files.length,
+                fileName: selection.name,
+                currentPage: current,
+                pageCount: total,
+              ),
+            );
+          }, cancellation);
+        });
         // Registration is part of importFile; a late cancellation must not
         // relabel a comic that has already been saved.
         importedTitles.add(title);
@@ -123,7 +132,9 @@ class PdfImportBatch {
             status: PdfImportStatus.imported,
           ),
         );
-      } on DocumentImportCancelled {
+      } on DocumentImportCancelled catch (error, stack) {
+        cause = error;
+        causeStack = stack;
         cancellation.cancel();
         results.add(
           PdfImportResult(
@@ -132,6 +143,8 @@ class PdfImportBatch {
           ),
         );
       } catch (error, stack) {
+        cause = error;
+        causeStack = stack;
         Log.error('Import PDF', '${selection.name}: $error', stack);
         results.add(
           PdfImportResult(
@@ -144,10 +157,19 @@ class PdfImportBatch {
         try {
           await selection.dispose();
         } catch (error, stack) {
+          cleanupFailures.add(
+            FileSelectionCleanupFailure(
+              selection: selection,
+              cleanupError: error,
+              cleanupStack: stack,
+              operationError: cause,
+              operationStack: causeStack,
+            ),
+          );
           Log.error('Import PDF cleanup', error.toString(), stack);
         }
       }
     }
-    return PdfImportBatchResult(results);
+    return PdfImportBatchResult(results, cleanupFailures: cleanupFailures);
   }
 }

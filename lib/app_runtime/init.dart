@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:display_mode/display_mode.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
@@ -12,7 +10,6 @@ import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
-import 'package:venera_next/features/settings/settings.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -115,33 +112,6 @@ Future<Uint8List?> _loadLocalCoverFallback(String sourceKey, String id) async {
   if (!await file.exists()) return null;
   final data = await file.readAsBytes();
   return data.isEmpty ? null : data;
-}
-
-Future<void> _checkAppUpdates() async {
-  var lastCheck = appdata.implicitData['lastCheckUpdate'] ?? 0;
-  var now = DateTime.now().millisecondsSinceEpoch;
-  if (now - lastCheck < 24 * 60 * 60 * 1000) {
-    return;
-  }
-  final admitted = await appdata.updateImplicit((data) {
-    final latest = data['lastCheckUpdate'] ?? 0;
-    if (now - latest < 24 * 60 * 60 * 1000) return false;
-    data['lastCheckUpdate'] = now;
-    return true;
-  });
-  if (!admitted) return;
-  await SourceUpdateService.instance.checkUpdates();
-  if (appdata.settings['checkUpdateOnStart']) {
-    await checkUpdateUi(false, true);
-  }
-}
-
-void checkUpdates() {
-  unawaited(
-    _checkAppUpdates().catchError((Object error, StackTrace stack) {
-      Log.error('Check updates', error, stack);
-    }),
-  );
 }
 
 void reloadComicSourcesForDebug() async {

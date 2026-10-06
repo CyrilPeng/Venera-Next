@@ -346,7 +346,18 @@
     "network/shared_image_requests.dart",
     "network/shared_request_stream.dart",
     "foundation/window_placement.dart",
-    "foundation/window_placement_tracker.dart"
+    "foundation/window_placement_tracker.dart",
+    "app_runtime/core_bootstrap.dart",
+    "foundation/app_data_operations.dart",
+    "foundation/application_update_service.dart",
+    "foundation/release_version.dart",
+    "foundation/startup_update_check.dart",
+    "features/comic_source/source_installation.dart",
+    "network/owned_dio_client.dart",
+    "features/comic_source/source_text_request.dart",
+    "foundation/file_selection.dart",
+    "foundation/directory_selection.dart",
+    "foundation/selection_operation.dart"
   ],
   "ui_files": [
     "features/comic_source/source_import_dialog.dart",

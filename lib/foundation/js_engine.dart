@@ -191,6 +191,18 @@ class JsEngine with _JSEngineApi, Init {
   final Future<Uint8List> Function() _loadInitScript;
   bool _disposed = false;
   final _temporaryClients = <Dio>{};
+  final _retiredClients = <Dio>{};
+  final _httpScopes = <RequestScope>{};
+  final _delays = <Timer, Completer<void>>{};
+  final _pendingHttp = <Future<void>>{};
+  final _bridgeDrains = <FlutterQjs, Set<Future<void>>>{};
+  final _bridgeResults = <FlutterQjs, Set<Completer<dynamic>>>{};
+  final _nativeReleases = <Future<void>>{};
+  final _adapterDrains = <RHttpAdapter, Future<void>>{};
+  final _failedAdapterDrains = <RHttpAdapter>{};
+  final _shutdownFailures =
+      <({String resource, Object error, StackTrace stack})>[];
+  Future<void>? _closeFuture;
   final _pendingResults = <Completer<dynamic>>{};
   final _ownedReferences = Set<_OwnedJsReference>.identity();
   final _ownedByRawReference = Expando<_OwnedJsReference>();
@@ -267,7 +279,28 @@ class JsEngine with _JSEngineApi, Init {
     final previous = _dio;
     _dio = replacement;
     // Let already accepted requests finish against the previous settings.
-    previous?.close();
+    if (previous != null) {
+      _retiredClients.add(previous);
+      try {
+        previous.close();
+      } catch (error, stack) {
+        _shutdownFailures.add((
+          resource: 'retired HTTP client',
+          error: error,
+          stack: stack,
+        ));
+        rethrow;
+      } finally {
+        final adapter = previous.httpClientAdapter;
+        if (adapter is RHttpAdapter) {
+          _drainAdapter(adapter).then((_) {
+            if (!_failedAdapterDrains.contains(adapter)) {
+              _retiredClients.remove(previous);
+            }
+          });
+        }
+      }
+    }
   }
 
   static Uint8List? _jsInitCache;
@@ -292,12 +325,16 @@ class JsEngine with _JSEngineApi, Init {
       _engine = FlutterQjs(
         hostPromiseRejectionHandler: _handleUnhandledPromiseRejection,
       );
+      final nativeEngine = _engine!;
       _engine!.dispatch();
       var setGlobalFunc = _engine!.evaluate(
         "(key, value) => { this[key] = value; }",
       );
       try {
-        (setGlobalFunc as JSInvokable)(["sendMessage", _messageReceiver]);
+        (setGlobalFunc as JSInvokable)([
+          "sendMessage",
+          (dynamic message) => _messageReceiver(nativeEngine, message),
+        ]);
         setGlobalFunc(["appVersion", App.version]);
       } finally {
         (setGlobalFunc as JSInvokable).free();
@@ -328,7 +365,53 @@ class JsEngine with _JSEngineApi, Init {
     return JsSourceIdentity(this, id);
   }
 
-  Object? _messageReceiver(dynamic message) {
+  Object? _messageReceiver(FlutterQjs nativeEngine, dynamic message) {
+    if (_disposed || _closed || !identical(nativeEngine, _engine)) {
+      throw JsDisposedError('JavaScript message owner is closed');
+    }
+    final result = _handleMessage(message);
+    if (result is Future) {
+      // The bridge owns a cancellable delivery, separately from the operation
+      // itself. A UI dialog may never finish after the window has frozen, while
+      // HTTP and native resource completion are joined by their own owners.
+      final delivery = Completer<dynamic>();
+      final deliveries = _bridgeResults.putIfAbsent(nativeEngine, () => {});
+      deliveries.add(delivery);
+      result.then<void>(
+        (value) {
+          if (!delivery.isCompleted) {
+            delivery.complete(value);
+          } else {
+            try {
+              _releaseJsResultReferences(value);
+            } catch (error, stack) {
+              _reportBridgeDiagnostic(error, stack, 'retired bridge result');
+            }
+          }
+        },
+        onError: (Object error, StackTrace stack) {
+          if (!delivery.isCompleted) delivery.completeError(error, stack);
+        },
+      );
+      final pending = _bridgeDrains.putIfAbsent(nativeEngine, () => {});
+      late final Future<void> settled;
+      settled = delivery.future
+          .then<void>((_) {}, onError: (Object _, StackTrace _) {})
+          .then((_) async {
+            // flutter_qjs converts a Dart Future using then/whenComplete to
+            // invoke and free native promise resolvers. Keep this runtime live
+            // through that microtask phase, including rejected Futures.
+            await Future<void>.delayed(Duration.zero);
+            deliveries.remove(delivery);
+            pending.remove(settled);
+          });
+      pending.add(settled);
+      return delivery.future;
+    }
+    return result;
+  }
+
+  Object? _handleMessage(dynamic message) {
     try {
       if (message is Map<dynamic, dynamic>) {
         if (message["method"] == null) return null;
@@ -403,7 +486,7 @@ class JsEngine with _JSEngineApi, Init {
           // temporary solution for [setTimeout] function
           // TODO: implement [setTimeout] in quickjs project
           case "delay":
-            return Future.delayed(Duration(milliseconds: message["time"]));
+            return _delay(Duration(milliseconds: message["time"]));
           case "UI":
             return _uiMessageBridge.handleUIMessage(Map.from(message));
           case "getLocale":
@@ -440,15 +523,48 @@ class JsEngine with _JSEngineApi, Init {
     }
   }
 
-  Future<Map<String, dynamic>> _http(Map<String, dynamic> req) async {
+  Future<void> _delay(Duration duration) {
+    final completion = Completer<void>();
+    late final Timer timer;
+    timer = Timer(duration, () {
+      _delays.remove(timer);
+      completion.complete();
+    });
+    _delays[timer] = completion;
+    return completion.future;
+  }
+
+  Future<Map<String, dynamic>> _http(Map<String, dynamic> req) {
+    final scope = RequestScope(parent: RequestScope.current);
+    _httpScopes.add(scope);
+    final completion = Completer<Map<String, dynamic>>();
+    late final Future<void> settled;
+    settled = completion.future
+        .then<void>((_) {}, onError: (Object _, StackTrace _) {})
+        .whenComplete(() {
+          scope.dispose();
+          _httpScopes.remove(scope);
+          _pendingHttp.remove(settled);
+        });
+    _pendingHttp.add(settled);
+    _performHttp(
+      req,
+      scope,
+    ).then(completion.complete, onError: completion.completeError);
+    return completion.future;
+  }
+
+  Future<Map<String, dynamic>> _performHttp(
+    Map<String, dynamic> req,
+    RequestScope scope,
+  ) async {
     Response? response;
     String? error;
     Dio? temporaryClient;
 
     try {
       _checkActive();
-      final scope = RequestScope.current;
-      scope?.check();
+      scope.check();
       var headers = Map<String, dynamic>.from(req["headers"] ?? {});
       var extra = Map<String, dynamic>.from(req["extra"] ?? {});
       if (headers["user-agent"] == null && headers["User-Agent"] == null) {
@@ -466,7 +582,7 @@ class JsEngine with _JSEngineApi, Init {
         _temporaryClients.add(dio);
         var proxy = await getProxy();
         _checkActive();
-        scope?.check();
+        scope.check();
         dio.httpClientAdapter = IOHttpClientAdapter(
           createHttpClient: () {
             return HttpClient()
@@ -480,7 +596,7 @@ class JsEngine with _JSEngineApi, Init {
       }
       response = await dio!.request(
         req["url"],
-        cancelToken: scope?.cancelToken,
+        cancelToken: scope.cancelToken,
         data: req["data"],
         options: Options(
           method: req['http_method'],
@@ -496,7 +612,16 @@ class JsEngine with _JSEngineApi, Init {
     } finally {
       if (temporaryClient != null &&
           _temporaryClients.remove(temporaryClient)) {
-        temporaryClient.close(force: true);
+        try {
+          temporaryClient.close(force: true);
+        } catch (error, stack) {
+          _shutdownFailures.add((
+            resource: 'temporary HTTP client',
+            error: error,
+            stack: stack,
+          ));
+          rethrow;
+        }
       }
     }
 
@@ -874,37 +999,152 @@ class JsEngine with _JSEngineApi, Init {
   }
 
   void _releaseResources() {
+    for (final entry in _delays.entries) {
+      entry.key.cancel();
+      entry.value.completeError(JsDisposedError('JavaScript timer is closed'));
+    }
+    _delays.clear();
+    for (final scope in _httpScopes.toList()) {
+      scope.cancel();
+    }
     _failPendingResults(_pendingResults, 'JS engine is disposed');
     final scopes = _callbackScopes.toList();
     final ownedReferences = _ownedReferences.toList();
     _closed = true;
     final engine = _engine;
+    if (engine != null) {
+      for (final delivery in _bridgeResults[engine] ?? <Completer<dynamic>>{}) {
+        if (!delivery.isCompleted) {
+          delivery.completeError(
+            JsDisposedError('JavaScript bridge is closed'),
+          );
+        }
+      }
+    }
     final client = _dio;
     final temporaryClients = _temporaryClients.toList();
+    final retiredClients = _retiredClients.toList();
     _engine = null;
     _dio = null;
     _temporaryClients.clear();
-    _releaseJsResources([
-      for (final reference in ownedReferences)
-        (name: 'owned result reference', release: reference.destroy),
-      for (final scope in scopes)
-        (name: 'callback scope', release: scope.dispose),
-      if (engine != null)
-        (
-          name: 'runtime',
-          release: () {
-            engine.close();
-          },
-        ),
-      if (engine != null) (name: 'runtime port', release: engine.port.close),
-      if (client != null)
-        (name: 'HTTP client', release: () => client.close(force: true)),
-      for (final temporary in temporaryClients)
-        (
-          name: 'temporary HTTP client',
-          release: () => temporary.close(force: true),
-        ),
-    ]);
+    _retiredClients.clear();
+    final clients = [?client, ...temporaryClients, ...retiredClients];
+    final adapters = [
+      for (final client in clients)
+        if (client.httpClientAdapter case final RHttpAdapter adapter) adapter,
+    ];
+    try {
+      _releaseJsResources([
+        for (final reference in ownedReferences)
+          (name: 'owned result reference', release: reference.destroy),
+        for (final scope in scopes)
+          (name: 'callback scope', release: scope.dispose),
+        if (engine != null)
+          (name: 'runtime', release: () => _releaseNative(engine)),
+        if (client != null)
+          (name: 'HTTP client', release: () => client.close(force: true)),
+        for (final temporary in temporaryClients)
+          (
+            name: 'temporary HTTP client',
+            release: () => temporary.close(force: true),
+          ),
+        for (final retired in retiredClients)
+          (
+            name: 'retired HTTP client',
+            release: () => retired.close(force: true),
+          ),
+      ]);
+    } on JsResourceReleaseFailure catch (error) {
+      _shutdownFailures.addAll(error.failures);
+      rethrow;
+    } finally {
+      for (final adapter in adapters) {
+        unawaited(_drainAdapter(adapter));
+      }
+    }
+  }
+
+  void _releaseNative(FlutterQjs engine) {
+    void release() {
+      _bridgeDrains.remove(engine);
+      _bridgeResults.remove(engine);
+      _releaseJsResources([
+        (name: 'runtime', release: engine.close),
+        (name: 'runtime port', release: engine.port.close),
+      ]);
+    }
+
+    final bridges = _bridgeDrains[engine];
+    if (bridges == null || bridges.isEmpty) {
+      release();
+      return;
+    }
+    late final Future<void> settled;
+    settled = Future<void>(() async {
+      while (bridges.isNotEmpty) {
+        await Future.wait(bridges.toList());
+      }
+      try {
+        release();
+      } on JsResourceReleaseFailure catch (error) {
+        _shutdownFailures.addAll(error.failures);
+      } finally {
+        _nativeReleases.remove(settled);
+      }
+    });
+    _nativeReleases.add(settled);
+  }
+
+  Future<void> _drainAdapter(RHttpAdapter adapter) =>
+      _adapterDrains.putIfAbsent(adapter, () async {
+        try {
+          await adapter.waitForIdle();
+        } catch (error, stack) {
+          _failedAdapterDrains.add(adapter);
+          _shutdownFailures.add((
+            resource: 'native HTTP requests',
+            error: error,
+            stack: stack,
+          ));
+        }
+      });
+
+  /// Join actual bridge HTTP operations and native cleanup after invalidating
+  /// JS callbacks. A logical disposed/cancelled result does not prove idle.
+  Future<void> closeAndWait() {
+    final closing = _closeFuture;
+    if (closing != null) return closing;
+    final completion = Completer<void>();
+    _closeFuture = completion.future;
+    try {
+      dispose();
+    } on JsResourceReleaseFailure {
+      // Synchronous disposal recorded each failure; drain the other resources.
+    } catch (error, stack) {
+      _shutdownFailures.add((resource: 'dispose', error: error, stack: stack));
+    }
+    _finishClose().then(completion.complete, onError: completion.completeError);
+    return completion.future;
+  }
+
+  Future<void> _finishClose() async {
+    if (initializationState == InitializationState.initializing) {
+      try {
+        await ensureInit();
+      } catch (_) {
+        // Initialization has its own result; cleanup errors are retained below.
+      }
+    }
+    while (_pendingHttp.isNotEmpty) {
+      await Future.wait(_pendingHttp.toList());
+    }
+    while (_nativeReleases.isNotEmpty) {
+      await Future.wait(_nativeReleases.toList());
+    }
+    await Future.wait(_adapterDrains.values.toList());
+    if (_shutdownFailures.isNotEmpty) {
+      throw JsResourceReleaseFailure(_shutdownFailures);
+    }
   }
 
   void dispose() {

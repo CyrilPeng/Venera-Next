@@ -1,3 +1,4 @@
+import 'package:venera_next/components/file_save_task.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -5,7 +6,6 @@ import 'package:photo_view/photo_view.dart';
 import 'package:venera_next/components/effects.dart';
 import 'package:venera_next/components/image_save_binding.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/image_provider/read_image.dart';
 import 'package:venera_next/foundation/image_save_work.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -32,8 +32,12 @@ class _ComicCoverViewerState extends State<ComicCoverViewer> {
   bool isAppBarShow = true;
 
   late final _saves = ImageSaveWork(
-    deliver: (bytes, filename, checkStop) =>
-        saveFile(data: bytes, filename: filename, checkStop: checkStop),
+    deliver: (bytes, filename, checkStop) => saveFileForWindow(
+      context,
+      data: bytes,
+      filename: filename,
+      checkStop: checkStop,
+    ),
     onError: (error, stack) {
       Log.error('Image save', error, stack);
       if (mounted) context.showMessage(message: 'Error'.tl);

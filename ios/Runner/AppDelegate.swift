@@ -4,9 +4,9 @@ import UniformTypeIdentifiers
 import Foundation // 添加此行
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, UIDocumentPickerDelegate {
-  var flutterResult: FlutterResult?
-  var directoryPath: URL!
+@objc class AppDelegate: FlutterAppDelegate {
+  private let directoryAccess = ScopedDirectoryAccess()
+  private var directoryTerminationObserver: NSObjectProtocol?
 
   // 定义插件通道名称
   private var directoryPicker: DirectoryPicker?
@@ -16,6 +16,9 @@ import Foundation // 添加此行
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
+    directoryTerminationObserver = NotificationCenter.default.addObserver(
+      forName: UIApplication.willTerminateNotification, object: nil, queue: .main
+    ) { [weak self] _ in self?.directoryAccess.close() }
 
     guard let controller = window?.rootViewController as? FlutterViewController else {
           fatalError("rootViewController is not of type FlutterViewController")
@@ -40,15 +43,22 @@ import Foundation // 添加此行
         }
         result(nil)
       } else if call.method == "getDirectoryPath" {
-        self.flutterResult = result
-        self.getDirectoryPath()
-      } else if call.method == "stopAccessingSecurityScopedResource" {
-        self.directoryPath?.stopAccessingSecurityScopedResource()
-        self.directoryPath = nil
-        result(nil)
-      } else if call.method == "selectDirectory" {
-        self.directoryPicker = DirectoryPicker()
-        self.directoryPicker?.selectDirectory(result: result)
+        self.getDirectoryPath(result: result)
+      } else if call.method == "releaseDirectoryAccess" || call.method == "retainDirectoryAccessForSession" {
+        guard let token = call.arguments as? String else {
+          result(FlutterError(code: "invalid_arguments", message: "Missing directory token", details: nil))
+          return
+        }
+        do {
+          if call.method == "releaseDirectoryAccess" {
+            self.directoryAccess.release(token)
+          } else {
+            try self.directoryAccess.retainForSession(token)
+          }
+          result(nil)
+        } catch {
+          result(FlutterError(code: "directory_access", message: String(describing: error), details: nil))
+        }
       } else {
         result(FlutterMethodNotImplemented)
       }
@@ -57,35 +67,27 @@ import Foundation // 添加此行
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  func getDirectoryPath() {
-    let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.folder], asCopy: false)
-    documentPicker.delegate = self
-    documentPicker.allowsMultipleSelection = false
-    documentPicker.directoryURL = nil
-    documentPicker.modalPresentationStyle = .formSheet
-
-    if let rootViewController = window?.rootViewController {
-      rootViewController.present(documentPicker, animated: true, completion: nil)
-    }
-  }
-
-  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-    self.directoryPath = urls.first
-    if self.directoryPath == nil {
-      flutterResult?(nil)
+  private func getDirectoryPath(result: @escaping FlutterResult) {
+    guard directoryPicker == nil else {
+      result(FlutterError(code: "picker_busy", message: "Directory picker is already open", details: nil))
       return
     }
-
-    let success = self.directoryPath.startAccessingSecurityScopedResource()
-
-    if success {
-      flutterResult?(self.directoryPath.path)
-    } else {
-      flutterResult?(nil)
+    guard let presenter = window?.rootViewController, presenter.presentedViewController == nil else {
+      result(FlutterError(code: "picker_unavailable", message: "No available directory picker presenter", details: nil))
+      return
+    }
+    let picker = DirectoryPicker()
+    directoryPicker = picker
+    picker.selectDirectory(from: presenter) { [weak self] url in
+      guard let self = self else {
+        result(FlutterError(code: "picker_closed", message: "Directory picker owner closed", details: nil))
+        return
+      }
+      self.directoryPicker = nil
+      guard let url = url else { result(nil); return }
+      do { result(try self.directoryAccess.acquire(url)) }
+      catch { result(FlutterError(code: "directory_access", message: String(describing: error), details: nil)) }
     }
   }
 
-  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-    flutterResult?(nil)
-  }
 }

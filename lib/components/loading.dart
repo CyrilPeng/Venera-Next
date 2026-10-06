@@ -1,10 +1,10 @@
+import 'package:venera_next/components/file_save_task.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -67,7 +67,8 @@ class NetworkError extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              saveFile(
+              saveFileForWindow(
+                context,
                 data: utf8.encode(Log().toString()),
                 filename: 'log.txt',
               );

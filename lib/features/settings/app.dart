@@ -1,4 +1,3 @@
-import 'package:uuid/uuid.dart';
 import 'package:venera_next/foundation/app_sync_preferences.dart';
 import 'dart:async';
 
@@ -56,19 +55,24 @@ class _AppSettingsState extends State<AppSettings> {
           title: "Set New Storage Path".tl,
           actionTitle: "Set".tl,
           callback: () async {
-            String? result;
-            if (App.isAndroid) {
-              var picker = DirectoryPicker();
-              result = (await picker.pickDirectory())?.path;
-            } else if (App.isIOS) {
-              result = await selectDirectoryIOS();
-            } else {
-              result = await selectDirectory();
-            }
-            if (result == null || !context.mounted) return;
             await _tasks.run(
               context,
-              task: () => LocalManager().setNewPath(result!),
+              task: (operation) async {
+                final selection = await operation.pickDirectory(
+                  () => DirectoryPicker().pickDirectory(
+                    checkStop: operation.checkActive,
+                  ),
+                );
+                if (selection == null) {
+                  operation.cancel();
+                  return null;
+                }
+                return operation.useDirectory(selection, (directory) async {
+                  await selection.retainAccessForSession();
+                  operation.checkActive();
+                  return LocalManager().setNewPath(directory.path);
+                });
+              },
               errorMessage: "Error".tl,
               successMessage: "Path set successfully".tl,
               onSuccess: () => setState(() {}),
@@ -85,7 +89,7 @@ class _AppSettingsState extends State<AppSettings> {
           callback: () async {
             await _tasks.run(
               context,
-              task: () async {
+              task: (_) async {
                 await CacheManager().clear();
                 return null;
               },
@@ -113,9 +117,20 @@ class _AppSettingsState extends State<AppSettings> {
           callback: () async {
             await _tasks.run(
               context,
-              task: () async {
-                var file = await exportAppData(false);
-                await saveFile(filename: "data.venera", file: file);
+              task: (operation) async {
+                await operation.useTemporaryFile(
+                  cacheDirectory: Directory(App.cachePath),
+                  filename: 'data.venera',
+                  prepare: (file) async {
+                    await exportAppData(sync: false, destination: file);
+                  },
+                  consume: (file) => saveFile(
+                    operation: operation,
+                    filename: 'data.venera',
+                    file: file,
+                    checkStop: operation.checkActive,
+                  ),
+                );
                 return null;
               },
               errorMessage: "Error".tl,
@@ -128,27 +143,30 @@ class _AppSettingsState extends State<AppSettings> {
           callback: () async {
             await _tasks.run(
               context,
-              task: () async {
-                final file = await selectFile(ext: ['venera', 'picadata']);
-                if (file == null) return null;
-                final cacheFile = File(
-                  FilePath.join(
-                    App.cachePath,
-                    "import_data_${const Uuid().v4()}",
+              task: (operation) async {
+                final file = await operation.pickFile(
+                  () => selectFile(
+                    ext: ['venera', 'picadata'],
+                    checkStop: operation.checkActive,
                   ),
                 );
-                try {
-                  await file.saveTo(cacheFile.path);
-                  if (file.name.endsWith('picadata')) {
-                    await importPicaData(cacheFile);
-                  } else {
-                    await importAppData(cacheFile);
-                  }
-                } finally {
-                  cacheFile.deleteIgnoreError();
-                  App.forceRebuild();
-                }
-                return null;
+                if (file == null) return null;
+                return operation.useFileCopy(
+                  file,
+                  cacheDirectory: Directory(App.cachePath),
+                  consume: (cacheFile) async {
+                    try {
+                      if (file.name.endsWith('picadata')) {
+                        await importPicaData(cacheFile);
+                      } else {
+                        await importAppData(cacheFile);
+                      }
+                    } finally {
+                      App.forceRebuild();
+                    }
+                    return null;
+                  },
+                );
               },
               errorMessage: "Failed to import data".tl,
             );

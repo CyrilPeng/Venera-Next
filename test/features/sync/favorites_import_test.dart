@@ -69,9 +69,9 @@ void main() {
         });
         await entered.future;
         final imported = importAppData(source);
-        final exportBefore = exportAppData(false);
+        final exportBefore = exportAppData(sync: false);
         final cleared = manager.clearAll();
-        final exportAfter = exportAppData(false);
+        final exportAfter = exportAppData(sync: false);
         final beforeRelease = manager.getFolderComics('original').single.id;
         release.complete();
         await held;
@@ -118,7 +118,7 @@ void main() {
         }
         Directory('${App.dataPath}/comic_source').deleteSync();
         await expectLater(
-          exportAppData(false),
+          exportAppData(sync: false),
           throwsA(isA<FileSystemException>()),
         );
         expect(
@@ -128,7 +128,7 @@ void main() {
           hasLength(2),
         );
         Directory('${App.dataPath}/comic_source').createSync();
-        expect((await exportAppData(false)).existsSync(), isTrue);
+        expect((await exportAppData(sync: false)).existsSync(), isTrue);
         final invalid = File('${root.path}/invalid.venera');
         final invalidArchive = archive.Archive()
           ..addFile(archive.ArchiveFile.string('../escaped', 'invalid'));

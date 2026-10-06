@@ -5,6 +5,9 @@ import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/select.dart';
+import 'package:venera_next/components/window_selection_task.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
@@ -16,6 +19,7 @@ import 'package:venera_next/foundation/widget_utils.dart';
 
 import 'downloading_page.dart';
 import 'import_export/import_export.dart';
+import 'import_export/import_presentation.dart';
 import 'local.dart';
 import 'local_comics_page.dart';
 
@@ -180,6 +184,8 @@ class _ImportComicsWidget extends StatefulWidget {
 }
 
 class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
+  WindowSelectionTask? _task;
+
   int type = 0;
 
   bool loading = false;
@@ -194,10 +200,9 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
 
   bool copyToLocalFolder = true;
 
-  bool cancelled = false;
-
   @override
   void dispose() {
+    _task?.cancel();
     loading = false;
     super.dispose();
   }
@@ -317,6 +322,10 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
   }
 
   void selectAndImport() async {
+    if (loading) return;
+    final task = WindowSelectionTask(context);
+    if (!task.canPresent) return;
+    _task = task;
     height = key.currentContext!.size!.height;
 
     setState(() {
@@ -325,25 +334,33 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
     var importer = ImportComic(
       selectedFolder: selectedFolder,
       copyToLocal: copyToLocalFolder,
+      presentation: ImportComicPresentation.forTask(task),
     );
-    var result = switch (type) {
-      0 => await importer.directory(true),
-      1 => await importer.directory(false),
-      2 => await importer.cbz(),
-      3 => await importer.multipleCbz(),
-      4 => await importer.pdf(),
-      5 => await importer.epub(),
-      6 => await importer.ehViewer(),
-      7 => await importer.localDownloads(),
-      int() => true,
-    };
-    if (!mounted) return;
-    if (result) {
-      context.pop();
-    } else {
-      setState(() {
-        loading = false;
-      });
+    final selectedType = type;
+    try {
+      final result = await task.run(
+        (operation) async => switch (selectedType) {
+          0 => await importer.directory(true, operation),
+          1 => await importer.directory(false, operation),
+          2 => await importer.cbz(operation),
+          3 => await importer.multipleCbz(operation),
+          4 => await importer.pdf(operation),
+          5 => await importer.epub(operation),
+          6 => await importer.ehViewer(operation),
+          7 => await importer.localDownloads(),
+          int() => false,
+        },
+      );
+      if (mounted && result && task.canPresent) context.pop();
+    } on SelectionCancelled {
+      // Closing discards unstarted work, while accepted work still drains.
+    } catch (error, stack) {
+      Log.error('Import Comic', error, stack);
+      if (mounted && task.canPresent) {
+        context.showMessage(message: error.toString());
+      }
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
   }
 }

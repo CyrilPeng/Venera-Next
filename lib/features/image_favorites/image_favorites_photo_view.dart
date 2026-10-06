@@ -1,3 +1,4 @@
+import 'package:venera_next/components/file_save_task.dart';
 import 'dart:async';
 
 import 'package:flutter/gestures.dart';
@@ -12,7 +13,6 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/image_save_work.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -44,8 +44,12 @@ class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView> {
   bool isAppBarShow = false;
 
   late final _saves = ImageSaveWork(
-    deliver: (bytes, filename, checkStop) =>
-        saveFile(data: bytes, filename: filename, checkStop: checkStop),
+    deliver: (bytes, filename, checkStop) => saveFileForWindow(
+      context,
+      data: bytes,
+      filename: filename,
+      checkStop: checkStop,
+    ),
     onError: (error, stack) {
       Log.error('Image save', error, stack);
       if (mounted) context.showMessage(message: 'Error'.tl);

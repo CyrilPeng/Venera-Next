@@ -1,6 +1,9 @@
-import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/app_runtime/data_sync.dart';
 import 'package:venera_next/app_runtime/bootstrap_core.dart';
+import 'package:venera_next/app_runtime/core_bootstrap.dart';
+import 'package:venera_next/app_runtime/application_host.dart';
+import 'package:venera_next/app_runtime/application_updates.dart';
+import 'package:venera_next/components/application_update_prompt.dart';
 import 'package:venera_next/app_runtime/image_loading.dart';
 import 'package:venera_next/app_runtime/follow_updates.dart';
 import 'package:venera_next/app_runtime/webdav_library.dart';
@@ -28,12 +31,17 @@ import 'components/gesture.dart';
 import 'components/js_ui.dart';
 import 'components/message.dart';
 import 'components/window_frame.dart';
+import 'components/window_selection_task.dart';
 import 'foundation/app.dart';
 import 'foundation/appdata.dart';
 import 'foundation/context.dart';
 import 'foundation/js_engine.dart';
 import 'features/webdav_library/webdav_library.dart';
 import 'features/sync/sync.dart';
+import 'features/comic_source/comic_source_api.dart';
+import 'features/comic_source/comic_source_ui.dart';
+import 'features/comic_source/source_repositories.dart';
+import 'network/app_dio.dart';
 
 void main(List<String> args) {
   if (args.contains('--headless')) {
@@ -50,12 +58,19 @@ void main(List<String> args) {
         });
         JsEngine.configureUiMessageHandler(JsUiApi());
         final sync = createApplicationDataSync();
+        final core = createCoreBootstrap(onDataChanged: sync.onDataChanged);
         try {
-          await init(createCoreBootstrap(onDataChanged: sync.onDataChanged));
-        } catch (_) {
-          await sync.closeAndWait();
-          configureComicSourceDataSavedHandler(null);
-          rethrow;
+          await init(core);
+        } catch (error, stack) {
+          await rollbackCoreStartup(
+            [
+              (name: 'sync', close: sync.closeAndWait),
+              (name: 'core', close: core.close),
+            ],
+            error,
+            stack,
+          );
+          Error.throwWithStackTrace(error, stack);
         }
         final placement = App.isDesktop
             ? WindowPlacementHost.platform(
@@ -64,7 +79,17 @@ void main(List<String> args) {
                 macos: App.isMacOS,
               )
             : null;
-        runApp(MyApp(dataSync: sync, windowPlacement: placement));
+        final host = ApplicationHost(
+          core: core,
+          sync: sync,
+          placement: placement,
+          sourceInstallations: SourceInstallations(
+            manager: ComicSourceManager(),
+            repositories: SourceRepositories.instance,
+            createClient: AppDio.new,
+          ),
+        );
+        runApp(MyApp(host: host));
         await placement?.initialize();
       },
       (error, stack) {
@@ -75,59 +100,85 @@ void main(List<String> args) {
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, required this.dataSync, this.windowPlacement});
+  const MyApp({super.key, required this.host});
 
   /// The host owns this controller beyond an individual widget mount.
-  final DataSyncController dataSync;
-
-  /// Native initialization and writer handoff survive individual widget mounts.
-  final WindowPlacementHost? windowPlacement;
+  final ApplicationHost host;
 
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  final _library = webDavLibrary;
+  late final _library = webDavLibrary;
   late final _interactiveBindings = InteractiveBindings.platform(
-    placement: widget.windowPlacement?.attach(),
+    placement: widget.host.placement?.attach(),
   );
-  late final _dataSync = widget.dataSync;
+  late final _dataSync = widget.host.sync;
+  ApplicationMount? _mount;
   late final _followUpdates = createFollowUpdatesRuntime(_dataSync);
   late final _backgroundSync = BackgroundSync.platform(_dataSync);
+  late final _startupUpdates = createStartupUpdateCheck(
+    sources: widget.host.sourceUpdates,
+    checkApplication: (scope) async {
+      if (!mounted || widget.host.isClosing) return;
+      final navigator = App.rootNavigatorKey.currentState;
+      final context = navigator?.overlay?.context;
+      if (context == null || !context.mounted) return;
+      await ApplicationUpdatePrompt(
+        context: context,
+        service: widget.host.applicationUpdates,
+        parent: scope,
+        isActive: () => mounted && !widget.host.isClosing,
+      ).check(silent: true, delay: const Duration(seconds: 2));
+    },
+  );
 
   @override
   void initState() {
+    super.initState();
+    if (widget.host.isClosing) return;
+    _mount = widget.host.attach(
+      stop: () {
+        _backgroundSync.stop();
+        _startupUpdates.cancel();
+      },
+      close: () => closeApplicationMountBindings(
+        followUpdates: _followUpdates,
+        interactive: _interactiveBindings,
+        closeStartupUpdates: _startupUpdates.closeAndWait,
+      ),
+    );
     mountWebDavLibrary(_library);
     App.registerForceRebuild(forceRebuild);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
+      if (mounted && !widget.host.isClosing) {
         _interactiveBindings.start();
         _backgroundSync.start();
         _followUpdates.start();
+        unawaited(
+          _startupUpdates.start().catchError((Object error, StackTrace stack) {
+            Log.error('Startup update check', error, stack);
+          }),
+        );
       }
     });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     WidgetsBinding.instance.addObserver(this);
-    checkUpdates();
-    super.initState();
   }
 
   @override
   void dispose() {
+    if (_mount == null) {
+      super.dispose();
+      return;
+    }
     WidgetsBinding.instance.removeObserver(this);
     App.registerForceRebuild(null);
     hideContentOverlay?.remove();
     hideContentOverlay = null;
-    _followUpdates.dispose();
-    // Stop timers while retaining observation for late reader writes/remounts.
-    _backgroundSync.stop();
-    _library.source.dispose();
     unawaited(
-      _interactiveBindings.dispose().catchError((
-        Object error,
-        StackTrace stack,
-      ) {
+      _mount!.closeAndWait().catchError((Object error, StackTrace stack) {
         Log.error('Interactive bindings', error, stack);
       }),
     );
@@ -147,6 +198,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (widget.host.isClosing) return;
     if (state == AppLifecycleState.resumed) {
       _dataSync.checkForAutomaticSync();
       _library.source.synchronizer.checkForAutomaticSync();
@@ -192,6 +244,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void forceRebuild() {
+    if (!mounted || widget.host.isClosing) return;
     void rebuild(Element el) {
       el.markNeedsBuild();
       el.visitChildren(rebuild);
@@ -272,6 +325,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (_mount == null) {
+      return MaterialApp(
+        builder: (_, child) => WindowFrame(
+          child!,
+          isFinalizing: () => widget.host.isClosing,
+          finalize: (drain) => widget.host.close(drain: drain),
+        ),
+        home: const SizedBox.expand(),
+      );
+    }
     Widget home;
     if (GlobalPreferenceStore(
       appdata.settings,
@@ -361,6 +424,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                       onTapDown: App.pop,
                       child: SyncWindowBinding(
                         controller: _dataSync,
+                        isFinalizing: () => this.widget.host.isClosing,
                         prepareInteractive: _interactiveBindings.prepareForExit,
                         prepareFollowUpdates: () =>
                             prepareApplicationFollowUpdatesForExit(
@@ -368,15 +432,23 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                             ),
                         prepareWebDavLibrary: _library.source.prepareForExit,
                         prepareImages: prepareImageLoadingForExit,
+                        cancelStartupUpdates: _startupUpdates.cancel,
+                        closeStartupUpdates: _startupUpdates.closeAndWait,
                         child: widget,
                       ),
                     ),
                   ),
                   debugAction: reloadComicSourcesForDebug,
+                  finalize: (drain) => this.widget.host.close(drain: drain),
+                  isFinalizing: () => this.widget.host.isClosing,
                 );
               }
               widget = FollowUpdatesScope(
                 runtime: _followUpdates,
+                child: widget,
+              );
+              widget = SelectionTasksScope(
+                registry: this.widget.host.selections,
                 child: widget,
               );
               widget = ReaderSessionScope(
@@ -384,7 +456,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 child: widget,
               );
               widget = DataSyncScope(controller: _dataSync, child: widget);
+              widget = ApplicationUpdateScope(
+                service: this.widget.host.applicationUpdates,
+                child: widget,
+              );
               widget = WebDavLibraryScope(services: _library, child: widget);
+              final installations = this.widget.host.sourceInstallations;
+              if (installations != null) {
+                widget = SourceInstallationsScope(
+                  queue: installations,
+                  child: widget,
+                );
+              }
               return _SystemUiProvider(
                 Material(
                   color: App.isLinux ? Colors.transparent : null,

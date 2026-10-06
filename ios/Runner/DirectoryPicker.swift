@@ -1,36 +1,30 @@
 import UIKit
 import Flutter
 
-class DirectoryPicker: NSObject, UIDocumentPickerDelegate {
-    private var result: FlutterResult?
+final class DirectoryPicker: NSObject, UIDocumentPickerDelegate {
+    private var completion: ((URL?) -> Void)?
 
-    // 初始化选择目录方法
-    func selectDirectory(result: @escaping FlutterResult) {
-        self.result = result
-
-        // 配置 UIDocumentPicker 为目录选择模式
-        let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
-        documentPicker.delegate = self
-        documentPicker.allowsMultipleSelection = false
-
-        // 获取根视图控制器并显示选择器
-        if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
-            rootViewController.present(documentPicker, animated: true, completion: nil)
-        }
+    func selectDirectory(from presenter: UIViewController,
+                         completion: @escaping (URL?) -> Void) {
+        self.completion = completion
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
+        picker.delegate = self
+        picker.allowsMultipleSelection = false
+        picker.modalPresentationStyle = .formSheet
+        presenter.present(picker, animated: true)
     }
 
-    // 处理选择完成后的结果
+    private func finish(_ url: URL?) {
+        let callback = completion
+        completion = nil
+        callback?(url)
+    }
+
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-        // 获取选中的路径
-        if let url = urls.first {
-            result?(url.path)
-        } else {
-            result?(nil)
-        }
+        finish(urls.first)
     }
 
-    // 处理取消选择情况
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-        result?(nil)
+        finish(nil)
     }
 }

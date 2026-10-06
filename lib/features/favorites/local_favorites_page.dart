@@ -1,3 +1,4 @@
+import 'package:venera_next/components/file_save_task.dart';
 import 'favorite_models.dart';
 import 'dart:convert';
 import 'dart:async';
@@ -34,7 +35,6 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/opencc.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -572,7 +572,8 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                         var json = LocalFavoritesManager().folderToJson(
                           widget.folder,
                         );
-                        saveFile(
+                        saveFileForWindow(
+                          context,
                           data: utf8.encode(json),
                           filename: "${widget.folder}.json",
                         );

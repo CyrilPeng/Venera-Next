@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/features/local_comics/import_export/import_comic.dart';
 import 'package:venera_next/features/local_comics/import_export/import_presentation.dart';
 import 'package:venera_next/features/local_comics/import_export/pdf_import_batch.dart';
@@ -21,9 +22,21 @@ class _Selection extends FileSelection {
 
 void main() {
   const presentation = ImportComicPresentation();
-  Future<void> host(WidgetTester tester) => tester.pumpWidget(
-    MaterialApp(navigatorKey: App.rootNavigatorKey, home: const Scaffold()),
-  );
+  Future<WindowSelectionTask> host(WidgetTester tester) async {
+    late BuildContext context;
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: App.rootNavigatorKey,
+        home: Builder(
+          builder: (owner) {
+            context = owner;
+            return const Scaffold();
+          },
+        ),
+      ),
+    );
+    return WindowSelectionTask(context);
+  }
 
   testWidgets('import completion and presentation tolerate absent root', (
     tester,
@@ -35,12 +48,12 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('loading cleanup survives unmount and uses the new root later', (
+  testWidgets('loading cleanup survives unmount and never adopts a new root', (
     tester,
   ) async {
-    await host(tester);
+    final original = ImportComicPresentation.forTask(await host(tester));
     var cancelled = 0;
-    final controller = presentation.showLoading(onCancel: () => cancelled++);
+    final controller = original.showLoading(onCancel: () => cancelled++);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpWidget(const SizedBox());
@@ -49,9 +62,10 @@ void main() {
     controller.setMessage('Late progress');
     controller.setProgress(1);
     controller.close();
-    presentation.showMessage(message: 'Late completion');
-    await host(tester);
-    final next = presentation.showLoading(
+    final replacement = ImportComicPresentation.forTask(await host(tester));
+    original.showMessage(message: 'Late completion');
+    expect(original.showLoading(message: 'Stale'), isNull);
+    final next = replacement.showLoading(
       message: 'New import',
       allowCancel: false,
     );
@@ -80,13 +94,16 @@ void main() {
           ),
         );
         addTearDown(tasks.dispose);
+        var selectedPresentation = presentation;
         if (visible) {
-          await host(tester);
+          selectedPresentation = ImportComicPresentation.forTask(
+            await host(tester),
+          );
         } else {
           await tester.pumpWidget(const SizedBox());
         }
         var viewClosed = false;
-        final view = presentation
+        final view = selectedPresentation
             .showPdfTask(task)
             .then((_) => viewClosed = true);
         await tester.pump();

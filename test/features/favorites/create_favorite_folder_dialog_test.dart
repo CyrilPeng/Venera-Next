@@ -20,7 +20,7 @@ void main() {
             builder: (_) => CreateFavoriteFolderDialog(
               validate: (_) => null,
               create: (_) {},
-              selectImport: () {
+              selectImport: (_) {
                 reads++;
                 return pending.future;
               },
@@ -70,7 +70,7 @@ void main() {
           builder: (_) => CreateFavoriteFolderDialog(
             validate: (_) => null,
             create: (_) {},
-            selectImport: () async {
+            selectImport: (_) async {
               if (++reads == 1) throw StateError('read');
               return '{}';
             },
@@ -101,7 +101,7 @@ void main() {
           home: CreateFavoriteFolderDialog(
             validate: (name) => name.isEmpty ? 'Required' : null,
             create: created.add,
-            selectImport: () async => null,
+            selectImport: (_) async => null,
             importJson: (_) => fail('unexpected import'),
           ),
         ),

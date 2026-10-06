@@ -3,10 +3,14 @@ import FlutterMacOS
 
 @main
 class AppDelegate: FlutterAppDelegate {
-  var flutterResult: FlutterResult?
-  var directoryPath: URL!
+  private let directoryAccess = ScopedDirectoryAccess()
+  private var directoryTerminationObserver: NSObjectProtocol?
+  private var directoryPanel: NSOpenPanel?
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
+      directoryTerminationObserver = NotificationCenter.default.addObserver(
+        forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+      ) { [weak self] _ in self?.directoryAccess.close() }
       let controller: FlutterViewController = mainFlutterWindow?.contentViewController as! FlutterViewController
       let methodChannel = FlutterMethodChannel(name: "venera/method_channel", binaryMessenger: controller.engine.binaryMessenger)
 
@@ -29,11 +33,19 @@ class AppDelegate: FlutterAppDelegate {
                 result("")
             }
         case "getDirectoryPath":
-          self.flutterResult = result
-          self.getDirectoryPath()
-        case "stopAccessingSecurityScopedResource":
-          self.directoryPath?.stopAccessingSecurityScopedResource()
-          result(nil)
+          self.getDirectoryPath(result: result)
+        case "releaseDirectoryAccess", "retainDirectoryAccessForSession":
+          guard let token = call.arguments as? String else {
+            result(FlutterError(code: "invalid_arguments", message: "Missing directory token", details: nil))
+            return
+          }
+          do {
+            if call.method == "releaseDirectoryAccess" { self.directoryAccess.release(token) }
+            else { try self.directoryAccess.retainForSession(token) }
+            result(nil)
+          } catch {
+            result(FlutterError(code: "directory_access", message: String(describing: error), details: nil))
+          }
         default:
           result(FlutterMethodNotImplemented)
         }
@@ -65,23 +77,25 @@ class AppDelegate: FlutterAppDelegate {
       }
     }
 
-  func getDirectoryPath() {
-      let openPanel = NSOpenPanel()
-      openPanel.canChooseDirectories = true
-      openPanel.canChooseFiles = false
-      openPanel.allowsMultipleSelection = false
-
-      openPanel.begin { (result) in
-          if result == .OK {
-              self.directoryPath = openPanel.urls.first
-              if let directoryPath = self.directoryPath, !directoryPath.startAccessingSecurityScopedResource() {
-                  self.flutterResult?(nil)
-                  return
-              }
-              self.flutterResult?(self.directoryPath?.path)
-          } else {
-              self.flutterResult?(nil)
+  private func getDirectoryPath(result: @escaping FlutterResult) {
+      guard directoryPanel == nil else {
+          result(FlutterError(code: "picker_busy", message: "Directory picker is already open", details: nil))
+          return
+      }
+      let panel = NSOpenPanel()
+      directoryPanel = panel
+      panel.canChooseDirectories = true
+      panel.canChooseFiles = false
+      panel.allowsMultipleSelection = false
+      panel.begin { [weak self] response in
+          guard let self = self else {
+              result(FlutterError(code: "picker_closed", message: "Directory picker owner closed", details: nil))
+              return
           }
+          self.directoryPanel = nil
+          guard response == .OK, let url = panel.urls.first else { result(nil); return }
+          do { result(try self.directoryAccess.acquire(url)) }
+          catch { result(FlutterError(code: "directory_access", message: String(describing: error), details: nil)) }
       }
   }
 

@@ -352,13 +352,23 @@ class LoadingDialogController {
   void Function(String message)? _setMessage;
 
   bool closed = false;
+  bool Function()? _isCurrent;
+  bool get isCurrent => !closed && (_isCurrent?.call() ?? false);
 
   void close() {
     if (closed) {
       return;
     }
     closed = true;
-    _closeDialog?.call();
+    final closeDialog = _closeDialog;
+    try {
+      closeDialog?.call();
+    } catch (_) {
+      // Keep the original route callback retryable if removal failed before
+      // finish disposed it. Reentrant close still observes the closed flag.
+      if (identical(_closeDialog, closeDialog)) closed = false;
+      rethrow;
+    }
   }
 
   void setProgress(double? value) {
@@ -405,6 +415,7 @@ LoadingDialogController showLoadingDialog(
     controller._closeDialog = null;
     controller._serProgress = null;
     controller._setMessage = null;
+    controller._isCurrent = null;
     try {
       if (!wasClosed && cancelOnDismiss) onCancel?.call();
     } finally {
@@ -458,6 +469,7 @@ LoadingDialogController showLoadingDialog(
   );
 
   var navigator = Navigator.of(context, rootNavigator: true);
+  controller._isCurrent = () => loadingDialogRoute.isCurrent;
 
   navigator.push(loadingDialogRoute).then((_) => finish());
 

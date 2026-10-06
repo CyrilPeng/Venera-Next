@@ -1,3 +1,4 @@
+import 'package:venera_next/components/file_save_task.dart';
 import 'dart:async';
 import 'package:venera_next/components/settings_save_state.dart';
 
@@ -578,7 +579,8 @@ class ReaderScaffoldState extends State<ReaderScaffold>
       return file.readAsBytes();
     },
     save: (image) async {
-      await saveFile(
+      await saveFileForWindow(
+        context,
         data: image.bytes,
         filename: image.filename,
         checkStop: image.checkStop,

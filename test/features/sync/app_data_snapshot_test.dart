@@ -10,6 +10,7 @@ import 'package:venera_next/features/sync/app_data_transfer.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 
 Map<String, dynamic> _settings(Archive archive) =>
     (jsonDecode(utf8.decode(archive.findFile('appdata.json')!.content))
@@ -70,7 +71,7 @@ void main() {
           after: utf8.encode('// changed'),
         );
         await pending.close();
-        await expectLater(exportAppData(false), throwsStateError);
+        await expectLater(exportAppData(sync: false), throwsStateError);
         await SourceTransactionJournal.recover(App.dataPath);
         final committed = await SourceTransactionJournal.begin(
           dataPath: App.dataPath,
@@ -82,7 +83,7 @@ void main() {
         final residue = committed.directory;
         await committed.close();
         final complete = ZipDecoder().decodeBytes(
-          (await exportAppData(false)).readAsBytesSync(),
+          (await exportAppData(sync: false)).readAsBytesSync(),
         );
         await write;
         expect(residue.existsSync(), isFalse);
@@ -127,6 +128,44 @@ void main() {
           (await exportAppData()).readAsBytesSync(),
         );
         expect(_settings(unfiltered)['language'], 'en-US');
+        final saveOwner = SelectionOperation();
+        var generations = 0;
+        var saves = 0;
+        late File unknown;
+        late File generated;
+        final saving = saveOwner.run(
+          (operation) => operation.useTemporaryFile(
+            cacheDirectory: Directory(App.cachePath),
+            filename: 'data.venera',
+            prepare: (file) async {
+              generations++;
+              generated = await exportAppData(sync: false, destination: file);
+              expect(generated.path, file.path);
+              expect(
+                Directory('${file.parent.path}/export-staging').existsSync(),
+                isFalse,
+              );
+            },
+            consume: (file) async {
+              saves++;
+              final archive = ZipDecoder().decodeBytes(file.readAsBytesSync());
+              expect(_settings(archive)['language'], 'en-US');
+              expect(archive.findFile('history.db'), isNotNull);
+              unknown = File('${file.parent.parent.path}/unknown')
+                ..writeAsStringSync('keep');
+            },
+          ),
+        );
+        await expectLater(saving, throwsA(isA<SelectionCleanupFailure>()));
+        expect(generated.existsSync(), isTrue);
+        await expectLater(
+          saveOwner.closeAndWait(),
+          throwsA(isA<SelectionCleanupFailure>()),
+        );
+        unknown.deleteSync();
+        await saveOwner.closeAndWait();
+        expect(generated.existsSync(), isFalse);
+        expect([generations, saves], [1, 1]);
         final owned = Directory('${App.dataPath}/owned-upload')..createSync();
         final destination = File('${owned.path}/snapshot.venera');
         appdata.settings['disableSyncFields'] = 'language';

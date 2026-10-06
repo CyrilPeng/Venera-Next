@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_save_work.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 import 'window_frame.dart';
+import 'window_selection_task.dart';
 
 /// Binds one page's save owner to back navigation and the containing window.
 /// Unmount retires that owner and hands its remaining work to the window.
@@ -23,6 +25,8 @@ class ImageSaveBinding extends StatefulWidget {
 
 class _ImageSaveBindingState extends State<ImageSaveBinding> {
   WindowFrameController? _window;
+  SelectionTaskRegistry? _registry;
+  void Function()? _unbindTasks;
   void Function()? _removeListener;
   void Function()? _windowHold;
   void Function()? _preparedWindow;
@@ -49,9 +53,12 @@ class _ImageSaveBindingState extends State<ImageSaveBinding> {
     _generation++;
     _windowGeneration++;
     _removeListener?.call();
+    _unbindTasks?.call();
+    _unbindTasks = null;
     _retire(oldWidget.work);
     _leaving = false;
     _removeListener = widget.work.addListener(_changed);
+    _bindTasks();
     _joinClosingWindow();
   }
 
@@ -64,11 +71,17 @@ class _ImageSaveBindingState extends State<ImageSaveBinding> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final registry = context
+        .dependOnInheritedWidgetOfExactType<SelectionTasksScope>()
+        ?.registry;
     final window = context
         .dependOnInheritedWidgetOfExactType<WindowFrameController>();
     // Inherited controller widgets can be rebuilt for the same host. Its bound
     // tracking callback identifies that host without invalidating preparation.
-    if (window?.trackExitTask == _window?.trackExitTask) return;
+    if (window?.trackExitTask == _window?.trackExitTask) {
+      if (_unbindTasks == null || registry != _registry) _bindTasks();
+      return;
+    }
     if (_windowHold != null) {
       _window?.trackExitTask(_prepareWindow());
     }
@@ -76,10 +89,36 @@ class _ImageSaveBindingState extends State<ImageSaveBinding> {
     _unregisterWindow();
     _resumeWindow();
     _window = window;
+    _bindTasks();
     window?.addCloseStartListener(_holdWindow);
     window?.addCloseFailureListener(_resumeWindow);
     window?.addExitTask(_prepareWindow);
     _joinClosingWindow();
+  }
+
+  void _bindTasks() {
+    _unbindTasks?.call();
+    final registry = context
+        .getInheritedWidgetOfExactType<SelectionTasksScope>()
+        ?.registry;
+    _registry = registry;
+    final window = _window;
+    _unbindTasks = widget.work.bindTasks(
+      canStart: () => registry?.isClosing != true && window?.isClosing != true,
+      retain: (task) {
+        final releaseHost = registry?.retain(
+          cancel: task.cancel,
+          close: task.closeAndWait,
+        );
+        window?.addCloseStartListener(task.cancel);
+        window?.addExitTask(task.closeAndWait);
+        return () {
+          window?.removeCloseStartListener(task.cancel);
+          window?.removeExitTask(task.closeAndWait);
+          releaseHost?.call();
+        };
+      },
+    );
   }
 
   void _joinClosingWindow() {
@@ -183,6 +222,7 @@ class _ImageSaveBindingState extends State<ImageSaveBinding> {
     _generation++;
     _windowGeneration++;
     _removeListener?.call();
+    _unbindTasks?.call();
     _unregisterWindow();
     _retire(widget.work);
     super.dispose();

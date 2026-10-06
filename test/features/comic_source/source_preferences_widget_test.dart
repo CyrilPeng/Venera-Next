@@ -12,7 +12,7 @@ import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/comic_source/source_import_dialog.dart';
-import 'package:venera_next/features/comic_source/source_installation.dart';
+import 'package:venera_next/features/comic_source/source_installations_scope.dart';
 import 'package:venera_next/features/comic_source/source_repositories.dart';
 import 'package:venera_next/features/comic_source/source_repository_page.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -49,7 +49,8 @@ SettingsSaveState _owner(WidgetTester tester) =>
     tester.allStates.whereType<SettingsSaveState>().single;
 
 class _Fixture {
-  _Fixture(this.root, this.adapter);
+  _Fixture(this.root, this.adapter, this.queue);
+  final SourceInstallations queue;
   final Directory root;
   final _Catalog adapter;
   final navigator = GlobalKey<NavigatorState>();
@@ -83,7 +84,7 @@ class _Fixture {
               onExit: () => exits++,
             );
           }
-          return content;
+          return SourceInstallationsScope(queue: queue, child: content);
         },
         home: Scaffold(body: child ?? const SourceRepositoriesPanel()),
       );
@@ -103,6 +104,11 @@ Future<_Fixture> _prepare(WidgetTester tester) async {
   appdata.settings['comicSourceOrigins'] = <String, dynamic>{};
   final manager = ComicSourceManager();
   final adapter = _Catalog();
+  final queue = SourceInstallations(
+    manager: manager,
+    repositories: SourceRepositories.instance,
+    createClient: Dio.new,
+  );
   SourceRepositories.debugCreateDio = () => Dio()..httpClientAdapter = adapter;
   registerShowMessageHandler((_, _) {});
   tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -113,6 +119,7 @@ Future<_Fixture> _prepare(WidgetTester tester) async {
     if (adapter.release?.isCompleted == false) adapter.release!.complete();
     await tester.pumpWidget(const SizedBox());
     await _flush(tester, appdata.saveData(false));
+    await _flush(tester, queue.closeAndWait());
     await _flush(tester, manager.closeAndWait());
     await _flush(
       tester,
@@ -125,7 +132,7 @@ Future<_Fixture> _prepare(WidgetTester tester) async {
       null,
     );
   });
-  return _Fixture(root, adapter);
+  return _Fixture(root, adapter, queue);
 }
 
 Future<void> _editor(WidgetTester tester) async {
@@ -295,7 +302,7 @@ void main() {
     'imported repository retry flushes the original request without duplicate install',
     (tester) async {
       final fixture = await _prepare(tester);
-      final tasks = SourceInstallations.instance.tasks.length;
+      final tasks = fixture.queue.tasks.length;
       final client = Dio()..httpClientAdapter = fixture.adapter;
       addTearDown(client.close);
       await tester.pumpWidget(
@@ -304,7 +311,7 @@ void main() {
             builder: (context) => TextButton(
               onPressed: () => showDialog<void>(
                 context: context,
-                builder: (_) => SourceImportDialog(client: client),
+                builder: (_) => SourceImportDialog(createClient: () => client),
               ),
               child: const Text('Import'),
             ),
@@ -331,7 +338,7 @@ void main() {
       await _flush(tester, _owner(tester).retrySettingsSave());
       await tester.pumpAndSettle();
       expect(fixture.saved['comicSourceRepositories'].single['id'], id);
-      expect(SourceInstallations.instance.tasks.length, tasks);
+      expect(fixture.queue.tasks.length, tasks);
       expect(fixture.adapter.requests, 1);
     },
   );
@@ -363,7 +370,7 @@ void main() {
           '[{"key":"newsource","name":"New source","version":"1.0.0","url":"https://example.test/source.js"}]';
       final client = Dio()..httpClientAdapter = fixture.adapter;
       addTearDown(client.close);
-      final tasks = SourceInstallations.instance.tasks.length;
+      final tasks = fixture.queue.tasks.length;
       await tester.pumpWidget(
         fixture.host(
           window: true,
@@ -371,7 +378,7 @@ void main() {
             builder: (context) => TextButton(
               onPressed: () => showDialog<void>(
                 context: context,
-                builder: (_) => SourceImportDialog(client: client),
+                builder: (_) => SourceImportDialog(createClient: () => client),
               ),
               child: const Text('Import'),
             ),
@@ -408,7 +415,7 @@ void main() {
       );
       await _until(tester, () => fixture.exits == 1);
       expect(fixture.saved['comicSourceRepositories'], hasLength(1));
-      expect(SourceInstallations.instance.tasks.length, tasks);
+      expect(fixture.queue.tasks.length, tasks);
     },
   );
 

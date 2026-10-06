@@ -1,3 +1,7 @@
+import 'package:venera_next/features/comic_source/source_installation.dart';
+import 'package:venera_next/features/comic_source/source_installations_scope.dart';
+import 'package:venera_next/features/comic_source/source_repositories.dart';
+import 'package:dio/dio.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -66,6 +70,7 @@ class _Source extends Fake implements ComicSource {
 
 void main() {
   late _Source source;
+  late SourceInstallations queue;
   final messages = <String>[];
   setUp(() {
     rootBundle.clear();
@@ -80,6 +85,12 @@ void main() {
     final language = appdata.settings['language'];
     appdata.settings['language'] = 'en-US';
     addTearDown(() => appdata.settings['language'] = language);
+    queue = SourceInstallations(
+      manager: ComicSourceManager(),
+      repositories: SourceRepositories.instance,
+      createClient: Dio.new,
+    );
+    addTearDown(queue.closeAndWait);
     source = _Source();
     ComicSourceManager().add(source);
   });
@@ -88,6 +99,8 @@ void main() {
   Future<void> show(WidgetTester tester, {bool dark = false}) async {
     await tester.pumpWidget(
       MaterialApp(
+        builder: (_, child) =>
+            SourceInstallationsScope(queue: queue, child: child!),
         theme: dark ? ThemeData.dark() : ThemeData.light(),
         home: const ComicSourcePage(),
       ),

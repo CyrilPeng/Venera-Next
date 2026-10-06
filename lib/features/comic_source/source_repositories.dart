@@ -12,6 +12,7 @@ import 'package:venera_next/network/app_dio.dart';
 
 import 'parser.dart';
 import 'source.dart';
+import 'source_text_request.dart';
 
 class SourceRepository {
   const SourceRepository({
@@ -235,24 +236,16 @@ class SourceRepositories extends ChangeNotifier {
   Future<SourceCatalog> load(
     SourceRepository repository, {
     Dio? client,
+    Dio Function()? createClient,
     CancelToken? cancelToken,
   }) async {
     final base = Uri.parse(normalizeUrl(repository.url));
-    final dio = client ?? _client ?? debugCreateDio?.call() ?? AppDio();
-    final ownsClient = client == null && _client == null;
-    late Response<String> response;
-    try {
-      response = await dio.get<String>(
-        base.toString(),
-        cancelToken: cancelToken,
-        options: Options(
-          responseType: ResponseType.plain,
-          headers: {'cache-time': 'no'},
-        ),
-      );
-    } finally {
-      if (ownsClient) dio.close();
-    }
+    final response = await readSourceText(
+      base.toString(),
+      client: client ?? _client,
+      createClient: createClient ?? debugCreateDio,
+      cancelToken: cancelToken,
+    );
     if (response.statusCode != 200) {
       throw const SourceFailure(SourceFailureCode.unavailableRepository);
     }
@@ -451,7 +444,11 @@ class SourceRepositories extends ChangeNotifier {
     return entryFor(source, catalog.entries).url;
   }
 
-  Future<SourceUpdateCheck> checkUpdates(List<ComicSource> sources) async {
+  Future<SourceUpdateCheck> checkUpdates(
+    List<ComicSource> sources, {
+    Dio? client,
+    CancelToken? cancelToken,
+  }) async {
     final repositories = all;
     final updates = <String, String>{};
     final failures = <SourceCheckFailure>[];
@@ -461,12 +458,22 @@ class SourceRepositories extends ChangeNotifier {
         .length;
     // A failed repository does not prevent checking other repositories.
     for (final repository in repositories) {
+      if (cancelToken?.isCancelled == true) {
+        throw const SourceFailure(SourceFailureCode.cancelled);
+      }
       final linked = sources
           .where((s) => originFor(s.key)?.repositoryId == repository.id)
           .toList();
       if (linked.isEmpty) continue;
       try {
-        final catalog = await load(repository);
+        final catalog = await load(
+          repository,
+          client: client,
+          cancelToken: cancelToken,
+        );
+        if (cancelToken?.isCancelled == true) {
+          throw const SourceFailure(SourceFailureCode.cancelled);
+        }
         final entries = catalog.entries;
         if (find(repository.id)?.url != repository.url) {
           failures.add(
@@ -501,6 +508,9 @@ class SourceRepositories extends ChangeNotifier {
           }
         }
       } catch (error) {
+        if (cancelToken?.isCancelled == true) {
+          throw const SourceFailure(SourceFailureCode.cancelled);
+        }
         skipped += linked.length;
         failures.add(SourceCheckFailure(error, repository: repository.name));
       }

@@ -330,103 +330,112 @@ void main() {
     },
   );
 
-  testWidgets(
-    'reparenting a preparing binding releases only its old window holds',
-    (tester) async {
-      final attachment = ValueNotifier<int>(-1);
-      addTearDown(attachment.dispose);
-      final bindingKey = GlobalKey();
-      const firstFrameKey = Key('first frame');
-      const secondFrameKey = Key('second frame');
-      final frames = <int, WindowFrameController>{};
-      final originalRead = Completer<Uint8List>();
-      final laterFailure = Completer<void>();
-      final platform = Completer<bool>();
-      var firstExits = 0;
-      var secondExits = 0;
-      var platformEntered = false;
-      final work = ImageSaveWork(
-        deliver: (_, _, _) {
-          platformEntered = true;
-          return platform.future;
-        },
-        onError: (error, _) => fail('$error'),
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ValueListenableBuilder<int>(
-            valueListenable: attachment,
-            builder: (_, position, _) => Row(
-              children: [
-                for (var index = 0; index < 2; index++)
-                  Expanded(
-                    child: WindowFrame(
-                      Builder(
-                        builder: (context) {
-                          frames[index] = WindowFrame.of(context);
-                          return Scaffold(
-                            body: position == index
-                                ? ImageSaveBinding(
-                                    key: bindingKey,
-                                    work: work,
-                                    child: const Text('Moving owner'),
-                                  )
-                                : Text('Empty frame $index'),
-                          );
-                        },
+  for (final closeBeforeMove in [false, true]) {
+    testWidgets(
+      'reparenting retains old tasks and releases only old holds; close before move=$closeBeforeMove',
+      (tester) async {
+        final attachment = ValueNotifier<int>(-1);
+        addTearDown(attachment.dispose);
+        final bindingKey = GlobalKey();
+        const firstFrameKey = Key('first frame');
+        const secondFrameKey = Key('second frame');
+        final frames = <int, WindowFrameController>{};
+        final originalRead = Completer<Uint8List>();
+        final laterFailure = Completer<void>();
+        final platform = Completer<bool>();
+        var firstExits = 0;
+        var secondExits = 0;
+        var platformEntered = false;
+        final work = ImageSaveWork(
+          deliver: (_, _, _) {
+            platformEntered = true;
+            return platform.future;
+          },
+          onError: (error, _) => fail('$error'),
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ValueListenableBuilder<int>(
+              valueListenable: attachment,
+              builder: (_, position, _) => Row(
+                children: [
+                  for (var index = 0; index < 2; index++)
+                    Expanded(
+                      child: WindowFrame(
+                        Builder(
+                          builder: (context) {
+                            frames[index] = WindowFrame.of(context);
+                            return Scaffold(
+                              body: position == index
+                                  ? ImageSaveBinding(
+                                      key: bindingKey,
+                                      work: work,
+                                      child: const Text('Moving owner'),
+                                    )
+                                  : Text('Empty frame $index'),
+                            );
+                          },
+                        ),
+                        key: index == 0 ? firstFrameKey : secondFrameKey,
+                        onExit: () => index == 0 ? firstExits++ : secondExits++,
                       ),
-                      key: index == 0 ? firstFrameKey : secondFrameKey,
-                      onExit: () => index == 0 ? firstExits++ : secondExits++,
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-      );
-      frames[0]!.addExitTask(() async {
-        await laterFailure.future;
-        throw StateError('old frame later exit failed');
-      });
-      attachment.value = 0;
-      await tester.pump();
-      final oldState = bindingKey.currentState;
-      final original = work.save(
-        read: (_) => originalRead.future,
-        name: 'original',
-      );
-      (tester.state(find.byKey(firstFrameKey)) as WindowListener)
-          .onWindowClose();
-      await tester.pump();
-      attachment.value = 1;
-      await tester.pump();
-      expect(bindingKey.currentState, same(oldState));
-      originalRead.complete(bytes);
-      await tester.pump();
-      laterFailure.complete();
-      await tester.pump();
-      expect(tester.takeException(), isA<StateError>());
-      expect(await original, isFalse);
-      // The old preparation finishing and failing must not retain or install
-      // holds in the new frame, nor let it reuse the old preparation Future.
-      final saving = work.save(read: (_) async => bytes, name: 'new frame');
-      await tester.pump();
-      final resumed = platformEntered;
-      (tester.state(find.byKey(secondFrameKey)) as WindowListener)
-          .onWindowClose();
-      await tester.pump();
-      final exitedBeforePlatform = secondExits;
-      platform.complete(true);
-      await tester.pumpAndSettle();
-      final saved = await saving;
-      await tester.pumpWidget(const SizedBox());
-      expect(resumed, isTrue);
-      expect(exitedBeforePlatform, 0);
-      expect(saved, isTrue);
-      expect(firstExits, 0);
-      expect(secondExits, 1);
-    },
-  );
+        );
+        frames[0]!.addExitTask(() async {
+          await laterFailure.future;
+          throw StateError('old frame later exit failed');
+        });
+        attachment.value = 0;
+        await tester.pump();
+        final oldState = bindingKey.currentState;
+        final original = work.save(
+          read: (_) => originalRead.future,
+          name: 'original',
+        );
+        if (closeBeforeMove) {
+          (tester.state(find.byKey(firstFrameKey)) as WindowListener)
+              .onWindowClose();
+          await tester.pump();
+        }
+        attachment.value = 1;
+        await tester.pump();
+        if (!closeBeforeMove) {
+          (tester.state(find.byKey(firstFrameKey)) as WindowListener)
+              .onWindowClose();
+          await tester.pump();
+        }
+        expect(bindingKey.currentState, same(oldState));
+        originalRead.complete(bytes);
+        await tester.pump();
+        laterFailure.complete();
+        await tester.pump();
+        expect(tester.takeException(), isA<StateError>());
+        expect(await original, isFalse);
+        // The old preparation finishing and failing must not retain or install
+        // holds in the new frame, nor let it reuse the old preparation Future.
+        final saving = work.save(read: (_) async => bytes, name: 'new frame');
+        await tester.pump();
+        final resumed = platformEntered;
+        (tester.state(find.byKey(secondFrameKey)) as WindowListener)
+            .onWindowClose();
+        await tester.pump();
+        final exitedBeforePlatform = secondExits;
+        platform.complete(true);
+        await tester.pumpAndSettle();
+        final saved = await saving;
+        await tester.pumpWidget(const SizedBox());
+        expect(resumed, isTrue);
+        expect(exitedBeforePlatform, 0);
+        expect(saved, isTrue);
+        expect(firstExits, 0);
+        expect(secondExits, 1);
+      },
+    );
+  }
 
   testWidgets(
     'page return cannot pop through window freeze and recovers after close failure',

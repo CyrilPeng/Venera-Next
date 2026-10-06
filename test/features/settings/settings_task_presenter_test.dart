@@ -32,7 +32,7 @@ void main() {
         );
         final first = presenter.run(
           owner,
-          task: () {
+          task: (_) {
             calls++;
             return pending.future;
           },
@@ -42,7 +42,7 @@ void main() {
         await tester.pump();
         await presenter.run(
           owner,
-          task: () async {
+          task: (_) async {
             calls++;
             return null;
           },
@@ -61,7 +61,7 @@ void main() {
         expect(updates, fails ? 0 : 1);
         await presenter.run(
           owner,
-          task: () async {
+          task: (_) async {
             calls++;
             return null;
           },
@@ -95,7 +95,7 @@ void main() {
         );
         final work = presenter.run(
           owner,
-          task: () async {
+          task: (_) async {
             try {
               return await pending.future;
             } finally {
@@ -143,7 +143,7 @@ void main() {
     );
     await presenter.run(
       owner,
-      task: () async => 'Cannot move storage',
+      task: (_) async => 'Cannot move storage',
       errorMessage: 'Failed',
       onSuccess: () => updates++,
     );

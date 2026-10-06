@@ -17,6 +17,7 @@ import 'package:venera_next/network/app_dio.dart';
 
 void main() {
   late Directory dataDir;
+  late SourceInstallations queue;
   late _SourceRequests requests;
   late List<String> messages;
   late Map<String, dynamic> previousSettings;
@@ -44,11 +45,17 @@ void main() {
     messages = [];
     Dio createDio() => Dio()..httpClientAdapter = requests;
     ComicSourcePage.updateService = SourceUpdateService(createDio: createDio);
+    queue = SourceInstallations(
+      manager: ComicSourceManager(),
+      repositories: SourceRepositories.instance,
+      createClient: createDio,
+    );
     SourceRepositories.debugCreateDio = createDio;
     registerShowMessageHandler((context, message) => messages.add(message));
   }
 
-  void tearDownScenario() {
+  Future<void> tearDownScenario() async {
+    await queue.closeAndWait();
     ComicSourceManager().remove('installed_source');
     previousSettings.forEach((key, value) => appdata.settings[key] = value);
     ComicSourcePage.updateService = SourceUpdateService.instance;
@@ -62,6 +69,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         navigatorKey: App.rootNavigatorKey,
+        builder: (_, child) =>
+            SourceInstallationsScope(queue: queue, child: child!),
         home: child ?? const Scaffold(),
       ),
     );
@@ -373,7 +382,7 @@ void main() {
           }
           await tester.pump();
           await _flushSettings(tester);
-          tearDownScenario();
+          await tearDownScenario();
         }
       }
     },

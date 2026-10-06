@@ -70,6 +70,26 @@ class _Task implements FollowUpdateTask {
 }
 
 void main() {
+  test('final close after dispose still joins the retired task', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.finish);
+    fixture.runtime.start();
+    fixture.downloads.single.complete();
+    await pumpEventQueue();
+    fixture.runtime.dispose();
+    var closed = false;
+    final closing = fixture.runtime.closeAndWait();
+    expect(identical(closing, fixture.runtime.closeAndWait()), isTrue);
+    final done = closing.then((_) => closed = true);
+    await pumpEventQueue();
+    expect(closed, isFalse);
+    expect(fixture.observers, isEmpty);
+    await fixture.tasks.single.finish();
+    await done;
+    expect(fixture.runtime.start, throwsStateError);
+    expect(fixture.releases, 1);
+  });
+
   test(
     'owners isolate notifications, download waits and subscriptions',
     () async {

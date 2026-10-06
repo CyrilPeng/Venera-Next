@@ -21,8 +21,10 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/network/cookie_jar.dart';
 import 'package:venera_next/foundation/file_system.dart';
 
-Future<File> exportAppData([bool sync = true]) =>
-    AppDataOperations.instance.run(() => _exportAppData(sync));
+Future<File> exportAppData({bool sync = true, File? destination}) =>
+    AppDataOperations.instance.run(
+      () => _exportAppData(sync, destination: destination),
+    );
 
 /// The upload journal owns this destination and its staging directory before
 /// export starts, so interrupted work can be cleaned without scanning caches.

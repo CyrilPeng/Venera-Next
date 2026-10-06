@@ -1,3 +1,4 @@
+import 'package:venera_next/components/file_save_task.dart';
 import 'package:venera_next/network/request_scope.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -34,7 +35,6 @@ import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/foundation/image_provider/read_image.dart';
 import 'package:venera_next/foundation/image_save_work.dart';
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
@@ -93,8 +93,12 @@ class ComicPage extends StatefulWidget {
 class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
     with ComicPageActions {
   late final _saves = ImageSaveWork(
-    deliver: (bytes, filename, checkStop) =>
-        saveFile(data: bytes, filename: filename, checkStop: checkStop),
+    deliver: (bytes, filename, checkStop) => saveFileForWindow(
+      context,
+      data: bytes,
+      filename: filename,
+      checkStop: checkStop,
+    ),
     onError: (error, stack) {
       Log.error('Image save', error, stack);
       if (mounted) context.showMessage(message: 'Error'.tl);

@@ -1,4 +1,6 @@
 import 'import_export/comic_export_service.dart';
+import 'package:venera_next/components/window_selection_task.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/routing/local_reading.dart';
 import 'package:venera_next/components/appbar.dart';
@@ -578,67 +580,81 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
       MenuEntry(
         icon: Icons.outbox_outlined,
         text: "Export as cbz".tl,
-        onClick: () {
-          exportComics(comics, CBZ.export, ".cbz");
+        onClick: () async {
+          await exportComics(comics, CBZ.export, ".cbz");
         },
       ),
       MenuEntry(
         icon: Icons.picture_as_pdf_outlined,
         text: "Export as pdf".tl,
         onClick: () async {
-          exportComics(comics, createPdfFromComicIsolate, ".pdf");
+          await exportComics(comics, createPdfFromComicIsolate, ".pdf");
         },
       ),
       MenuEntry(
         icon: Icons.import_contacts_outlined,
         text: "Export as epub".tl,
         onClick: () async {
-          exportComics(comics, createEpubWithLocalComic, ".epub");
+          await exportComics(comics, createEpubWithLocalComic, ".epub");
         },
       ),
     ];
   }
 
   /// Export given comics to a file
-  void exportComics(
+  Future<void> exportComics(
     List<LocalComic> comics,
     ExportComicFunc export,
     String ext,
   ) async {
     if (comics.isEmpty) return;
+    final task = WindowSelectionTask(context);
     var canceled = false;
     final loadingController = showLoadingDialog(
       context,
       allowCancel: true,
       message: "${"Exporting".tl} 0/${comics.length}",
       withProgress: comics.length > 1,
-      onCancel: () => canceled = true,
+      onCancel: () {
+        canceled = true;
+        task.cancel();
+      },
+    );
+    task.retainPresentation(
+      loadingController.close,
+      isCurrent: () => loadingController.isCurrent,
     );
     try {
-      await exportLocalComics(
-        comics,
-        cachePath: App.cachePath,
-        extension: ext,
-        export: export,
-        compress: ZipFile.compressFolderAsync,
-        save: (file, name) => saveFile(file: file, filename: name),
-        isCancelled: () => canceled || !mounted,
-        onProgress: (current, total) {
-          if (total > 1) {
-            loadingController.setMessage("${"Exporting".tl} $current/$total");
-            loadingController.setProgress(current / total);
-          }
-        },
-        onCompress: () {
-          loadingController.setProgress(null);
-          loadingController.setMessage('Compressing'.tl);
-        },
+      await task.run(
+        (operation) => exportLocalComics(
+          comics,
+          operation: operation,
+          cachePath: App.cachePath,
+          extension: ext,
+          export: export,
+          compress: ZipFile.compressFolderAsync,
+          save: (file, name) =>
+              saveFile(operation: operation, file: file, filename: name),
+          isCancelled: () => canceled || !task.active,
+          onProgress: (current, total) {
+            if (total > 1) {
+              loadingController.setMessage("${"Exporting".tl} $current/$total");
+              loadingController.setProgress(current / total);
+            }
+          },
+          onCompress: () {
+            loadingController.setProgress(null);
+            loadingController.setMessage('Compressing'.tl);
+          },
+        ),
       );
+    } on SelectionCancelled {
+      return;
     } catch (error, stack) {
       Log.error('Export Comics', error, stack);
-      if (mounted) context.showMessage(message: error.toString());
-    } finally {
-      loadingController.close();
+      if (mounted && task.canPresent) {
+        context.showMessage(message: error.toString());
+      }
     }
   }
 }

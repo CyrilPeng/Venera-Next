@@ -3,29 +3,21 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/settings/settings.dart';
 import 'package:venera_next/foundation/translations.dart';
+import 'package:venera_next/foundation/release_version.dart';
 
 void main() {
   test('stable users are not notified about prerelease versions', () {
-    expect(shouldNotifyUpdateForTesting('1.10.0-rc.2', '1.9.3'), isFalse);
-    expect(selectUpdateVersionForTesting(['1.10.0-rc.2'], '1.9.3'), isNull);
-    expect(allowsPrereleaseUpdatesForTesting('1.9.3'), isFalse);
+    expect(shouldNotifyRelease('1.10.0-rc.2', '1.9.3'), isFalse);
+    expect(allowsPrereleaseUpdates('1.9.3'), isFalse);
   });
 
   test('prerelease users are notified about newer prereleases', () {
-    expect(shouldNotifyUpdateForTesting('1.10.0-rc.2', '1.10.0-rc.1'), isTrue);
-    expect(
-      selectUpdateVersionForTesting(['1.10.0-rc.2'], '1.10.0-rc.1'),
-      '1.10.0-rc.2',
-    );
-    expect(allowsPrereleaseUpdatesForTesting('1.10.0-rc.1'), isTrue);
+    expect(shouldNotifyRelease('1.10.0-rc.2', '1.10.0-rc.1'), isTrue);
+    expect(allowsPrereleaseUpdates('1.10.0-rc.1'), isTrue);
   });
 
   test('stable releases still notify stable users', () {
-    expect(shouldNotifyUpdateForTesting('1.10.0', '1.9.3'), isTrue);
-    expect(
-      selectUpdateVersionForTesting(['1.10.0-rc.2', '1.9.4'], '1.9.3'),
-      '1.9.4',
-    );
+    expect(shouldNotifyRelease('1.10.0', '1.9.3'), isTrue);
   });
 
   test('stable channel selects only published stable releases', () {
@@ -36,17 +28,11 @@ void main() {
     ];
 
     expect(
-      selectPublishedReleaseVersionForTesting(
-        releases,
-        includePrerelease: false,
-      ),
+      selectPublishedReleaseVersion(releases, includePrerelease: false),
       '1.10.0',
     );
     expect(
-      selectPublishedReleaseVersionForTesting(
-        releases,
-        includePrerelease: true,
-      ),
+      selectPublishedReleaseVersion(releases, includePrerelease: true),
       '1.11.0-rc.2',
     );
   });

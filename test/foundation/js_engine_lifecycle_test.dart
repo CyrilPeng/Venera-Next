@@ -4,7 +4,9 @@ import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
+import 'package:venera_next/network/app_dio.dart';
+import 'package:venera_next/network/request_scope.dart';
+import 'package:rhttp/rhttp.dart' as rhttp;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -12,6 +14,12 @@ import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 
 class _RealHttpOverrides extends HttpOverrides {}
+
+class _PendingUi implements JsUiMessageHandler {
+  final result = Completer<dynamic>();
+  @override
+  Object? handleUIMessage(Map<String, dynamic> message) => result.future;
+}
 
 class _Adapter implements HttpClientAdapter {
   _Adapter({this.failClose = false});
@@ -29,6 +37,37 @@ class _Adapter implements HttpClientAdapter {
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) => throw UnimplementedError();
+}
+
+class _DrainAdapter extends RHttpAdapter {
+  final entered = Completer<void>();
+  final draining = Completer<void>();
+  final release = Completer<void>();
+  final closes = <bool>[];
+  CancelToken? token;
+  Object? closeFailure;
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) {
+    token = options.cancelToken;
+    entered.complete();
+    return cancelFuture!.then((_) => throw token!.cancelError!);
+  }
+
+  @override
+  void close({bool force = false}) {
+    closes.add(force);
+    if (closeFailure != null) throw closeFailure!;
+  }
+
+  @override
+  Future<void> waitForIdle() {
+    if (!draining.isCompleted) draining.complete();
+    return release.future;
+  }
 }
 
 void main() {
@@ -71,6 +110,233 @@ void main() {
   group(
     'native JS resource ownership',
     () {
+      for (final lateFailure in [false, true]) {
+        test(
+          'shutdown ends a pending UI bridge before its late result; failure=$lateFailure',
+          () async {
+            final ui = _PendingUi();
+            JsEngine.configureUiMessageHandler(ui);
+            addTearDown(() => JsEngine.configureUiMessageHandler(null));
+            final engine = JsEngine.create(
+              createHttpClient: () => Dio()..httpClientAdapter = _Adapter(),
+              loadInitScript: () async => Uint8List(0),
+            );
+            await engine.init();
+            final failed = expectLater(
+              Future<dynamic>.value(
+                engine.runCode(
+                  'sendMessage({method:"UI", function:"showInputDialog"})',
+                ),
+              ),
+              throwsA(isA<JsDisposedError>()),
+            );
+            await engine.closeAndWait();
+            await failed;
+            expect(ui.result.isCompleted, isFalse);
+            if (lateFailure) {
+              ui.result.completeError(StateError('late UI failure'));
+            } else {
+              ui.result.complete('late input');
+            }
+            await pumpEventQueue();
+          },
+        );
+      }
+
+      testWidgets(
+        'closing JS cancels its delay timers before disposing the native bridge',
+        (tester) async {
+          final engine = JsEngine.create(
+            createHttpClient: () => Dio()..httpClientAdapter = _Adapter(),
+            loadInitScript: () async => Uint8List(0),
+          );
+          await tester.runAsync(engine.init);
+          final failed = expectLater(
+            Future<dynamic>.value(
+              engine.runCode('sendMessage({method:"delay", time:1000000})'),
+            ),
+            throwsA(isA<JsDisposedError>()),
+          );
+          final closing = engine.closeAndWait();
+          await tester.pumpAndSettle();
+          await closing;
+          await failed;
+        },
+      );
+      test(
+        'final close joins retired native clients without cancelling the parent scope',
+        () async {
+          final adapters = <_DrainAdapter>[];
+          final engine = JsEngine.create(
+            createHttpClient: () {
+              final adapter = _DrainAdapter();
+              adapters.add(adapter);
+              return Dio()..httpClientAdapter = adapter;
+            },
+            loadInitScript: () async => Uint8List(0),
+          );
+          final parent = RequestScope();
+          addTearDown(parent.dispose);
+          await engine.init();
+          Future<dynamic> request() => parent.run(
+            () => engine.runCode(
+              'sendMessage({method:"http", http_method:"GET", url:"https://example.test"})',
+            ),
+          );
+          final first = expectLater(request(), throwsA(isA<JsDisposedError>()));
+          await adapters.first.entered.future;
+          engine.resetDio();
+          await adapters.first.draining.future;
+          expect(adapters.first.token!.isCancelled, isFalse);
+          final second = expectLater(
+            request(),
+            throwsA(isA<JsDisposedError>()),
+          );
+          await adapters.last.entered.future;
+          var closed = false;
+          final closing = engine.closeAndWait();
+          final done = closing.then((_) => closed = true);
+          expect(identical(closing, engine.closeAndWait()), isTrue);
+          await adapters.last.draining.future;
+          expect(parent.isCancelled, isFalse);
+          expect(
+            adapters.every((adapter) => adapter.token!.isCancelled),
+            isTrue,
+          );
+          adapters.last.release.complete();
+          await pumpEventQueue();
+          expect(closed, isFalse);
+          adapters.first.release.complete();
+          await Future.wait([first, second, done]);
+          expect(adapters.first.closes, [false, true]);
+          expect(adapters.last.closes, [true]);
+        },
+      );
+
+      test(
+        'close after synchronous disposal preserves both close and native drain errors',
+        () async {
+          final closeError = StateError('client close');
+          final drainError = StateError('native drain');
+          final adapter = _DrainAdapter()..closeFailure = closeError;
+          final engine = JsEngine.create(
+            createHttpClient: () => Dio()..httpClientAdapter = adapter,
+            loadInitScript: () async => Uint8List(0),
+          );
+          await engine.init();
+          expect(engine.dispose, throwsA(isA<JsResourceReleaseFailure>()));
+          final closing = engine.closeAndWait();
+          final checked = expectLater(
+            closing,
+            throwsA(
+              isA<JsResourceReleaseFailure>().having(
+                (error) => error.failures.map((failure) => failure.error),
+                'both cleanup errors',
+                [closeError, drainError],
+              ),
+            ),
+          );
+          await adapter.draining.future;
+          adapter.release.completeError(drainError);
+          await checked;
+          expect(identical(closing, engine.closeAndWait()), isTrue);
+          expect(adapter.closes, [true]);
+        },
+      );
+
+      test(
+        'final close waits for a pending initialization to relinquish its resources',
+        () async {
+          final script = Completer<Uint8List>();
+          final adapter = _Adapter();
+          final engine = JsEngine.create(
+            createHttpClient: () => Dio()..httpClientAdapter = adapter,
+            loadInitScript: () => script.future,
+          );
+          final starting = expectLater(engine.init(), throwsStateError);
+          var closed = false;
+          final closing = engine.closeAndWait().then((_) => closed = true);
+          await pumpEventQueue();
+          expect(closed, isFalse);
+          script.complete(Uint8List(0));
+          await Future.wait([starting, closing]);
+          expect(adapter.closes, [true]);
+        },
+      );
+
+      test(
+        'real RHttp cleanup outlives the disposed JS result',
+        () async {
+          await rhttp.Rhttp.init();
+          final previousProxy = appdata.settings['proxy'];
+          appdata.settings['proxy'] = 'direct';
+          final cancelling = Completer<void>();
+          final released = Completer<void>();
+          final upload = StreamController<Uint8List>(
+            onCancel: () {
+              cancelling.complete();
+              return released.future;
+            },
+          );
+          final server = await ServerSocket.bind(
+            InternetAddress.loopbackIPv4,
+            0,
+          );
+          final received = Completer<void>();
+          final sockets = <Socket>[];
+          server.listen((socket) {
+            sockets.add(socket);
+            socket.listen((_) {
+              if (!received.isCompleted) received.complete();
+            }, onError: (Object _) {});
+          });
+          final engine = JsEngine.create(
+            createHttpClient: () {
+              final dio = Dio()..httpClientAdapter = RHttpAdapter();
+              dio.interceptors.add(
+                InterceptorsWrapper(
+                  onRequest: (options, handler) {
+                    options.data = upload.stream;
+                    handler.next(options);
+                  },
+                ),
+              );
+              return dio;
+            },
+            loadInitScript: () async => Uint8List(0),
+          );
+          addTearDown(() async {
+            if (!released.isCompleted) released.complete();
+            await engine.closeAndWait();
+            unawaited(upload.close());
+            for (final socket in sockets) {
+              socket.destroy();
+            }
+            await server.close();
+            appdata.settings['proxy'] = previousProxy;
+          });
+          await engine.init();
+          final failed = expectLater(
+            Future<dynamic>.value(
+              engine.runCode(
+                'sendMessage({method:"http", http_method:"GET", url:"http://127.0.0.1:${server.port}/"})',
+              ),
+            ),
+            throwsA(isA<JsDisposedError>()),
+          );
+          await received.future.timeout(const Duration(seconds: 10));
+          var closed = false;
+          final closing = engine.closeAndWait().then((_) => closed = true);
+          await failed;
+          await cancelling.future.timeout(const Duration(seconds: 10));
+          await pumpEventQueue();
+          expect(closed, isFalse);
+          released.complete();
+          await closing.timeout(const Duration(seconds: 10));
+        },
+        skip: !Platform.isWindows,
+      );
+
       test('startup and cleanup failures are both retained', () async {
         final adapter = _Adapter(failClose: true);
         final engine = JsEngine.create(

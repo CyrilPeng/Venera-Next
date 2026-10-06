@@ -12,3 +12,4 @@ export 'source_translation.dart';
 export 'tags_translation.dart';
 export 'types.dart';
 export 'source_update_service.dart';
+export 'source_installation.dart';

@@ -1,3 +1,7 @@
+import 'package:venera_next/features/comic_source/source_installation.dart';
+import 'package:venera_next/features/comic_source/source_installations_scope.dart';
+import 'package:venera_next/features/comic_source/source_repositories.dart';
+import 'package:dio/dio.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:venera_next/foundation/app.dart';
@@ -70,7 +74,19 @@ void main() {
   }) async {
     ComicSourceManager().add(source);
     addTearDown(() => ComicSourceManager().remove(source.key));
-    await tester.pumpWidget(const MaterialApp(home: ComicSourcePage()));
+    final queue = SourceInstallations(
+      manager: ComicSourceManager(),
+      repositories: SourceRepositories.instance,
+      createClient: Dio.new,
+    );
+    addTearDown(queue.closeAndWait);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (_, child) =>
+            SourceInstallationsScope(queue: queue, child: child!),
+        home: const ComicSourcePage(),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Show source settings'));
     await tester.pumpAndSettle();

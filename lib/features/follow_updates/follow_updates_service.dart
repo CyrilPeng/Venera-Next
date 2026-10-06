@@ -21,6 +21,8 @@ class FollowUpdatesService {
   _Check? _active;
   final _ownedChecks = <_Check>{};
   bool _running = false;
+  bool _closed = false;
+  Future<void>? _closeFuture;
   int _generation = 0;
   bool _exitHeld = false;
   int _exitGeneration = 0;
@@ -29,6 +31,7 @@ class FollowUpdatesService {
   bool get isPreparingForExit => _exitHeld;
 
   void start() {
+    if (_closed) throw StateError('Follow updates service is closed');
     if (_running || _exitHeld) return;
     _running = true;
     _scheduleChecks();
@@ -146,6 +149,9 @@ class FollowUpdatesService {
   /// Freeze new checks and join every check this owner accepted, including
   /// cancelled checks that a later start has already replaced.
   Future<void Function()> prepareForExit() {
+    if (_closed) {
+      return Future.error(StateError('Follow updates service is closed'));
+    }
     final existing = _exitPreparation;
     if (existing != null) return existing;
     final prepared = Completer<void Function()>();
@@ -187,6 +193,48 @@ class FollowUpdatesService {
     return prepared.future;
   }
 
+  Future<void> closeAndWait() {
+    final closing = _closeFuture;
+    if (closing != null) return closing;
+    _closed = true;
+    _running = false;
+    _exitHeld = true;
+    _exitGeneration++;
+    _stopScheduling();
+    final checks = List.of(_ownedChecks);
+    _active = null;
+    final failures = <({Object error, StackTrace stack})>[];
+    for (final check in checks) {
+      try {
+        _cancelCheck(check);
+      } catch (error, stack) {
+        failures.add((error: error, stack: stack));
+      }
+    }
+    return _closeFuture = _finishClose(checks, failures);
+  }
+
+  Future<void> _finishClose(
+    List<_Check> checks,
+    List<({Object error, StackTrace stack})> failures,
+  ) async {
+    await Future.wait(
+      checks.map((check) async {
+        try {
+          await check.future;
+        } catch (error, stack) {
+          failures.add((error: error, stack: stack));
+        }
+        for (final failure in check.failures) {
+          if (!failures.any((entry) => identical(entry.error, failure.error))) {
+            failures.add(failure);
+          }
+        }
+      }),
+    );
+    if (failures.isNotEmpty) throw FollowUpdatesCloseFailure(failures);
+  }
+
   Future<void Function()> _prepareForExit(
     List<_Check> checks,
     void Function() release,
@@ -218,6 +266,16 @@ class FollowUpdatesService {
   }
 }
 
+class FollowUpdatesCloseFailure implements Exception {
+  FollowUpdatesCloseFailure(
+    Iterable<({Object error, StackTrace stack})> failures,
+  ) : failures = List.unmodifiable(failures);
+  final List<({Object error, StackTrace stack})> failures;
+  @override
+  String toString() =>
+      'Follow updates shutdown failed: ${failures.map((failure) => failure.error).join('; ')}';
+}
+
 class _Check {
   _Check() {
     // Timer-started checks may have no caller. Explicit waiters still receive
@@ -232,10 +290,14 @@ class _Check {
   Future<void>? _progressCancellation;
   final completion = Completer<void>();
   Future<void> get future => completion.future;
-  ({Object error, StackTrace stack})? failure;
+  final failures = <({Object error, StackTrace stack})>[];
+  ({Object error, StackTrace stack})? get failure =>
+      failures.isEmpty ? null : failures.first;
 
   void recordError(Object error, StackTrace stack) {
-    failure ??= (error: error, stack: stack);
+    if (!failures.any((failure) => identical(failure.error, error))) {
+      failures.add((error: error, stack: stack));
+    }
   }
 
   Future<void> cancelProgress() {

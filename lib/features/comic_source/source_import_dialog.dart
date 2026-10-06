@@ -10,14 +10,17 @@ import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/network/app_dio.dart';
 
-import 'source.dart';
 import 'source_import.dart';
-import 'source_installation.dart';
+import 'source_inspection_task.dart';
+import 'package:venera_next/network/request_scope.dart';
+import 'package:venera_next/foundation/log.dart';
+import 'source_installations_scope.dart';
 import 'source_repositories.dart';
 
 class SourceImportDialog extends StatefulWidget {
-  const SourceImportDialog({super.key, this.client});
-  final Dio? client;
+  const SourceImportDialog({super.key, this.createClient, this.pickFile});
+  final Dio Function()? createClient;
+  final Future<FileSelection?> Function()? pickFile;
 
   @override
   State<SourceImportDialog> createState() => _SourceImportDialogState();
@@ -27,7 +30,8 @@ class _SourceImportDialogState extends SettingsSaveState<SourceImportDialog> {
   final _input = TextEditingController();
   final _baseUrl = TextEditingController();
   final _repositoryName = TextEditingController();
-  final _cancel = CancelToken();
+  SourceInspectionTask<void>? _inspection;
+  SourceSelectionOwner? _selectionOwner;
   SourceImportPreview? _preview;
   String? _contents, _fileName, _error;
   Future<Uint8List> Function()? _readFile;
@@ -37,7 +41,8 @@ class _SourceImportDialogState extends SettingsSaveState<SourceImportDialog> {
 
   @override
   void dispose() {
-    _cancel.cancel();
+    _inspection?.cancel();
+    _selectionOwner?.release();
     _input.dispose();
     _baseUrl.dispose();
     _repositoryName.dispose();
@@ -49,65 +54,157 @@ class _SourceImportDialogState extends SettingsSaveState<SourceImportDialog> {
     _repositoryName.text = preview.name;
     _selected.clear();
     for (final entry in preview.catalog?.entries ?? <SourceCatalogEntry>[]) {
-      if (ComicSource.find(entry.key) == null) _selected.add(entry.key);
+      if (SourceInstallationsScope.of(context).manager.find(entry.key) ==
+          null) {
+        _selected.add(entry.key);
+      }
     }
   }
 
-  Future<void> _identify() async {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_inspection?.sameWindow == false) _inspection?.cancel();
+  }
+
+  @override
+  void didUpdateWidget(covariant SourceImportDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.createClient != widget.createClient ||
+        oldWidget.pickFile != widget.pickFile) {
+      _inspection?.cancel();
+    }
+  }
+
+  Future<void> _inspect(
+    Future<_ImportInspection?> Function(RequestScope scope) action,
+  ) async {
+    if (_busy || !acceptsSettingsChanges || _installing) return;
+    _inspection?.cancel();
+    final task = SourceInspectionTask<void>(context);
+    _inspection = task;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final input = _input.text.trim();
-      final SourceImportPreview preview;
-      if (_contents == null &&
-          RegExp(r'^https?://', caseSensitive: false).hasMatch(input)) {
-        preview = await SourceImportPreview.fromUrl(
-          input,
-          client: widget.client,
-          cancelToken: _cancel,
-        );
-      } else {
-        _contents ??= input;
-        preview = SourceImportPreview.parse(
-          _contents!,
-          fileName: _fileName,
-          baseUrl: _baseUrl.text.trim().isEmpty ? null : _baseUrl.text.trim(),
-        );
+      await task.run((scope) async {
+        final result = await action(scope);
+        if (result == null) return;
+        final selection = result.selection;
+        var adopted = identical(selection, _selectionOwner?.selection);
+        Object? cause;
+        StackTrace? causeStack;
+        try {
+          if (!mounted || !identical(_inspection, task) || !task.active) return;
+          setState(() {
+            if (!adopted) {
+              _selectionOwner?.release();
+              _selectionOwner = selection == null
+                  ? null
+                  : SourceSelectionOwner(context, selection);
+              adopted = true;
+            }
+            _contents = result.contents;
+            _fileName = result.fileName;
+            _readFile = result.readFile;
+            _showPreview(
+              result.preview ??
+                  SourceImportPreview.parse(
+                    result.contents!,
+                    fileName: result.fileName,
+                    baseUrl: result.baseUrl,
+                  ),
+            );
+          });
+        } catch (error, stack) {
+          cause = error;
+          causeStack = stack;
+          // Relative catalogs keep their selected bytes for base URL correction.
+          if (error is! SourceImportNeedsBaseUrl &&
+              identical(selection, _selectionOwner?.selection)) {
+            _selectionOwner?.release(cause: error, stackTrace: stack);
+            _selectionOwner = null;
+            _readFile = null;
+          }
+          rethrow;
+        } finally {
+          if (!adopted && selection != null) {
+            await withSelectedFile<void>(selection, (_) async {
+              if (cause != null) Error.throwWithStackTrace(cause, causeStack!);
+            });
+          }
+        }
+      });
+    } catch (error, stack) {
+      if (!mounted || !identical(_inspection, task) || !task.active) {
+        Log.info('Retired source preview', '$error\n$stack');
+        return;
       }
-      if (!mounted) return;
-      setState(() => _showPreview(preview));
-    } catch (error) {
-      if (!mounted) return;
       setState(() {
         _needsBase = _needsBase || error is SourceImportNeedsBaseUrl;
         _error = sourceFailureMessage(error);
       });
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted && identical(_inspection, task)) {
+        setState(() => _busy = false);
+      }
     }
   }
 
-  Future<void> _chooseFile() async {
-    final file = await selectFile(ext: ['js', 'json']);
-    if (file == null || !mounted) return;
-    setState(() {
-      _busy = true;
-      _error = null;
+  Future<void> _identify() {
+    final input = _input.text.trim();
+    final contents = _contents;
+    final fileName = _fileName;
+    final readFile = _readFile;
+    final selection = _selectionOwner?.selection;
+    final baseUrl = _baseUrl.text.trim();
+    final createClient = widget.createClient;
+    return _inspect((scope) async {
+      if (contents == null &&
+          RegExp(r'^https?://', caseSensitive: false).hasMatch(input)) {
+        return _ImportInspection(
+          preview: await SourceImportPreview.fromUrl(
+            input,
+            createClient: createClient,
+            cancelToken: scope.cancelToken,
+          ),
+        );
+      }
+      return _ImportInspection(
+        contents: contents ?? input,
+        fileName: fileName,
+        readFile: readFile,
+        selection: selection,
+        baseUrl: baseUrl.isEmpty ? null : baseUrl,
+      );
     });
-    try {
-      final contents = utf8.decode(await file.readAsBytes());
-      if (!mounted) return;
-      _contents = contents;
-      _fileName = file.name;
-      _readFile = file.readAsBytes;
-      await _identify();
-    } catch (error) {
-      if (mounted) setState(() => _error = sourceFailureMessage(error));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+  }
+
+  Future<void> _chooseFile() {
+    final pickFile = widget.pickFile;
+    final baseUrl = _baseUrl.text.trim();
+    return _inspect((scope) async {
+      final file = await (pickFile == null
+          ? selectFile(ext: ['js', 'json'], checkStop: scope.check)
+          : pickFile());
+      if (file == null) return null;
+      try {
+        scope.check();
+        final contents = utf8.decode(await file.readAsBytes());
+        return _ImportInspection(
+          contents: contents,
+          fileName: file.name,
+          readFile: file.readAsBytes,
+          selection: file,
+          baseUrl: baseUrl.isEmpty ? null : baseUrl,
+        );
+      } catch (error, stack) {
+        return withSelectedFile<_ImportInspection?>(file, (_) async {
+          Error.throwWithStackTrace(error, stack);
+        });
+      }
+    });
   }
 
   Future<void> _install() async {
@@ -117,7 +214,7 @@ class _SourceImportDialogState extends SettingsSaveState<SourceImportDialog> {
     final readFile = _readFile;
     final saveRepository = _saveRepository;
     final repositoryName = _repositoryName.text;
-    final queue = SourceInstallations.instance;
+    final queue = SourceInstallationsScope.of(context);
     final route = ModalRoute.of(context);
     SourceRepositorySave? request;
     SourceRepository? repository;
@@ -158,18 +255,31 @@ class _SourceImportDialogState extends SettingsSaveState<SourceImportDialog> {
         }
         if (preview.catalog == null) {
           if (!dispatched.contains('script')) {
-            queue.enqueuePreviewedScript(
-              name: preview.name,
-              contents: preview.contents,
-              url: preview.url,
-              readFile: readFile,
-            );
+            final owner = _selectionOwner;
+            if (owner == null) {
+              queue.enqueuePreviewedScript(
+                name: preview.name,
+                contents: preview.contents,
+                url: preview.url,
+                readFile: readFile,
+              );
+            } else {
+              owner.transfer((selection) {
+                final task = queue.enqueuePreviewedScript(
+                  name: preview.name,
+                  contents: preview.contents,
+                  url: preview.url,
+                  selection: selection,
+                );
+                return identical(task.selection, selection);
+              });
+            }
             dispatched.add('script');
           }
         } else {
           for (final entry in preview.catalog!.entries) {
             if (!selected.contains(entry.key) ||
-                ComicSource.find(entry.key) != null ||
+                queue.manager.find(entry.key) != null ||
                 dispatched.contains(entry.key)) {
               continue;
             }
@@ -189,6 +299,11 @@ class _SourceImportDialogState extends SettingsSaveState<SourceImportDialog> {
   }
 
   void _reset() => setState(() {
+    _inspection?.cancel();
+    _inspection = null;
+    _selectionOwner?.release();
+    _selectionOwner = null;
+    _busy = false;
     _preview = null;
     _contents = _fileName = _error = null;
     _readFile = null;
@@ -314,7 +429,10 @@ class _SourceImportDialogState extends SettingsSaveState<SourceImportDialog> {
                                     catalog.entries
                                         .where(
                                           (e) =>
-                                              ComicSource.find(e.key) == null,
+                                              SourceInstallationsScope.of(
+                                                context,
+                                              ).manager.find(e.key) ==
+                                              null,
                                         )
                                         .map((e) => e.key),
                                   );
@@ -331,13 +449,20 @@ class _SourceImportDialogState extends SettingsSaveState<SourceImportDialog> {
                           contentPadding: EdgeInsets.zero,
                           title: Text(entry.name),
                           subtitle: Text(
-                            ComicSource.find(entry.key) != null
+                            SourceInstallationsScope.of(
+                                      context,
+                                    ).manager.find(entry.key) !=
+                                    null
                                 ? 'Installed'.tl
                                 : '${entry.key} · ${entry.version}',
                           ),
                           value: _selected.contains(entry.key),
                           onChanged:
-                              _installing || ComicSource.find(entry.key) != null
+                              _installing ||
+                                  SourceInstallationsScope.of(
+                                        context,
+                                      ).manager.find(entry.key) !=
+                                      null
                               ? null
                               : (value) => setState(() {
                                   value!
@@ -401,4 +526,19 @@ class _SourceImportDialogState extends SettingsSaveState<SourceImportDialog> {
       ),
     );
   }
+}
+
+class _ImportInspection {
+  const _ImportInspection({
+    this.preview,
+    this.contents,
+    this.fileName,
+    this.baseUrl,
+    this.readFile,
+    this.selection,
+  });
+  final FileSelection? selection;
+  final SourceImportPreview? preview;
+  final String? contents, fileName, baseUrl;
+  final Future<Uint8List> Function()? readFile;
 }
