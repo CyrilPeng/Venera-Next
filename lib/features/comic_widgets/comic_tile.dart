@@ -231,7 +231,7 @@ class ComicTile extends StatelessWidget {
   }
 
   void showMenu(Offset location, BuildContext context) {
-    showMenuX(App.rootContext, location, [
+    ContextMenuRegion.of(context).show(context, location, [
       MenuEntry(
         icon: Icons.chrome_reader_mode_outlined,
         text: 'Details'.tl,
@@ -269,7 +269,12 @@ class ComicTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ContextMenuRegion(
+    identity: comic,
+    builder: (context, _) => _build(context),
+  );
+
+  Widget _build(BuildContext context) {
     final type = switch (displayMode) {
       ComicTileDisplayMode.detailed => 'detailed',
       ComicTileDisplayMode.gallery => 'gallery',

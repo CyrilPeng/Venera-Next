@@ -11,7 +11,6 @@ import 'package:venera_next/components/image_save_binding.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/reader/reader.dart';
-import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_save_work.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -33,7 +32,10 @@ class ImageFavoritesPhotoView extends StatefulWidget {
       _ImageFavoritesPhotoViewState();
 }
 
-class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView> {
+class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView>
+    with ContextMenuOwner {
+  @override
+  Object get contextMenuIdentity => (widget.comic, currentPage);
   late PageController controller;
   Map<ImageFavorite, bool> cancelImageFavorites = {};
 
@@ -125,6 +127,7 @@ class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView> {
 
   @override
   Widget build(BuildContext context) {
+    contextMenus.revalidate();
     return ImageSaveBinding(
       work: _saves,
       child: PopScope(
@@ -268,42 +271,55 @@ class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView> {
   }
 
   void showMenu() {
-    showMenuX(context, Offset(context.width, context.padding.top), [
-      MenuEntry(
-        icon: Icons.image_outlined,
-        text: "Save Image".tl,
-        onClick: () {
-          final page = currentPage;
-          final image = images[page].copyWith();
-          final provider = ImageFavoritesProvider(image);
-          unawaited(
-            _saves.save(
-              name: '${page + 1}',
-              read: (scope) => provider.readBytes(
-                checkStop: scope.check,
-                cancelSignal: scope.whenCancelled,
+    final originalPage = currentPage;
+    if (originalPage < 0 || originalPage >= images.length) return;
+    final originalImage = images[originalPage];
+    final originalComic = widget.comic;
+    contextMenus.show(
+      context,
+      Offset(context.width, context.padding.top),
+      [
+        MenuEntry(
+          icon: Icons.image_outlined,
+          text: "Save Image".tl,
+          onClick: () {
+            final page = originalPage;
+            final image = originalImage.copyWith();
+            final provider = ImageFavoritesProvider(image);
+            unawaited(
+              _saves.save(
+                name: '${page + 1}',
+                read: (scope) => provider.readBytes(
+                  checkStop: scope.check,
+                  cancelSignal: scope.whenCancelled,
+                ),
               ),
-            ),
-          );
-        },
-      ),
-      MenuEntry(
-        icon: Icons.menu_book_outlined,
-        text: "Read".tl,
-        onClick: () async {
-          var comic = widget.comic;
-          var ep = images[currentPage].ep;
-          var page = images[currentPage].page;
-          App.rootContext.to(
-            () => ReaderWithLoading(
-              id: comic.id,
-              sourceKey: comic.sourceKey,
-              initialEp: ep,
-              initialPage: page,
-            ),
-          );
-        },
-      ),
-    ]);
+            );
+          },
+        ),
+        MenuEntry(
+          icon: Icons.menu_book_outlined,
+          text: "Read".tl,
+          onClick: () async {
+            var comic = originalComic;
+            var ep = originalImage.ep;
+            var page = originalImage.page;
+            context.to(
+              () => ReaderWithLoading(
+                id: comic.id,
+                sourceKey: comic.sourceKey,
+                initialEp: ep,
+                initialPage: page,
+              ),
+            );
+          },
+        ),
+      ],
+      isValid: () =>
+          mounted &&
+          currentPage == originalPage &&
+          originalPage < images.length &&
+          identical(images[currentPage], originalImage),
+    );
   }
 }

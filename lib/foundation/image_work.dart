@@ -8,12 +8,22 @@ class ImageWork {
   final _holds = <Object>{};
   final _resumeListeners = <({Object token, void Function() callback})>{};
   final _failures = <_ReportedWorkFailure>[];
+  final _taskOwners = <void Function() Function(ImageWorkTask)>{};
   bool _disposed = false;
   bool _resuming = false;
   bool _resumePending = false;
   int _holdRevision = 0;
   Future<void>? _draining;
   Future<void>? _closing;
+
+  /// Attach an outer lifetime before starting work. Its registration survives
+  /// page drains until the task finishes and every reported failure is repaired.
+  /// Detaching stops future registrations, without releasing accepted tasks.
+  void Function() retainTasks(void Function() Function(ImageWorkTask) retain) {
+    if (_disposed) return () {};
+    _taskOwners.add(retain);
+    return () => _taskOwners.remove(retain);
+  }
 
   /// Observe renewed admission after the last hold is released. Registration
   /// does not start work; callers should attempt [start] when first binding.
@@ -32,6 +42,19 @@ class ImageWork {
     if (_disposed || _holds.isNotEmpty) return null;
     final task = ImageWorkTask._(this, cancelSelection, onCancel);
     _tasks.add(task);
+    for (final retain in _taskOwners.toList()) {
+      try {
+        task._releases.add(retain(task));
+      } catch (error, stack) {
+        task.recordFailure(error, stack);
+        task.cancel();
+      }
+    }
+    task._releaseIfSettled();
+    if (task.isCancelled) {
+      task.finish();
+      return null;
+    }
     return task;
   }
 
@@ -130,6 +153,7 @@ class ImageWork {
   Future<void> dispose() {
     if (_closing != null) return _closing!;
     _disposed = true;
+    _taskOwners.clear();
     _resumeListeners.clear();
     holdForExit();
     return _closing = _drain();
@@ -143,6 +167,7 @@ class ImageWorkTask {
   final void Function()? _onCancel;
   final _done = Completer<void>();
   final _failures = <_ReportedWorkFailure>[];
+  final _releases = <void Function()>[];
   bool _cancelled = false;
   bool _selecting = false;
 
@@ -207,6 +232,7 @@ class ImageWorkTask {
     return () {
       _owner._failures.remove(failure);
       _failures.remove(failure);
+      _releaseIfSettled();
     };
   }
 
@@ -214,6 +240,20 @@ class ImageWorkTask {
     if (_done.isCompleted) return;
     _owner._tasks.remove(this);
     _done.complete();
+    _releaseIfSettled();
+  }
+
+  void _releaseIfSettled() {
+    if (!_done.isCompleted || hasFailures) return;
+    final releases = List.of(_releases);
+    _releases.clear();
+    for (final release in releases) {
+      try {
+        release();
+      } catch (error, stack) {
+        recordFailure(error, stack);
+      }
+    }
   }
 }
 

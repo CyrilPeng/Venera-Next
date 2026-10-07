@@ -202,6 +202,8 @@ class ReaderController {
   int _generation = 0;
   bool _disposed = false;
 
+  bool get isDisposed => _disposed;
+
   ReaderNavigationState? _snapshot;
 
   ReaderNavigationState get state => _snapshot ??= ReaderNavigationState(

@@ -13,6 +13,59 @@ enum ReaderSettingEffect {
   rebuildReader,
 }
 
+/// Settings callbacks bound to the original comic and reader session.
+/// Persistence remains owned by SettingsSaveState and the reader's ImageWork.
+class ReaderSettingsRequest {
+  ReaderSettingsRequest({
+    required this.comicId,
+    required this.sourceKey,
+    required this.isCurrent,
+    required String Function() currentMode,
+    required bool Function() isDetectingLayout,
+    required Future<void> Function() detectLayout,
+    required void Function(ReaderSettingEffect) applyReaderEffect,
+  }) : _currentMode = currentMode,
+       _initialMode = currentMode(),
+       _isDetectingLayout = isDetectingLayout,
+       _detectLayout = detectLayout,
+       _applyReaderEffect = applyReaderEffect;
+
+  final String comicId;
+  final String sourceKey;
+  final bool Function() isCurrent;
+  final String _initialMode;
+  final String Function() _currentMode;
+  final bool Function() _isDetectingLayout;
+  final Future<void> Function() _detectLayout;
+  final void Function(ReaderSettingEffect) _applyReaderEffect;
+
+  String get currentMode => isCurrent() ? _currentMode() : _initialMode;
+  bool get isDetectingLayout => isCurrent() && _isDetectingLayout();
+  Future<void> detectLayout() => isCurrent() ? _detectLayout() : Future.value();
+
+  void apply(
+    String key, {
+    required void Function(ReaderSettingEffect) applyShellEffect,
+  }) {
+    for (final effect in readerSettingEffects(key)) {
+      // Either adapter may synchronously close or replace the original reader.
+      if (!isCurrent()) return;
+      switch (effect) {
+        case ReaderSettingEffect.applyMode:
+        case ReaderSettingEffect.detectLayout:
+        case ReaderSettingEffect.updateVolumeListener:
+        case ReaderSettingEffect.rebuildReader:
+          _applyReaderEffect(effect);
+        case ReaderSettingEffect.rebindImageGesture:
+        case ReaderSettingEffect.resetEInk:
+        case ReaderSettingEffect.updateSystemUi:
+        case ReaderSettingEffect.rebuildShell:
+          applyShellEffect(effect);
+      }
+    }
+  }
+}
+
 Iterable<ReaderSettingEffect> readerSettingEffects(String key) sync* {
   if (key == ReaderPreferences.readerMode.key) {
     yield ReaderSettingEffect.applyMode;

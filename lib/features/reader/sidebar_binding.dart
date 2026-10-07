@@ -16,22 +16,49 @@ class ReaderSidebarBinding {
   final VoidCallback Function() acquireInteraction;
   final void Function(Object, StackTrace) onError;
   _SidebarOperation? _active;
+  final _retiring = <_SidebarOperation>{};
   bool _disposed = false;
 
-  void show(BuildContext context, Widget child, {double width = 400}) {
+  ReaderSidebarHandle? show(
+    BuildContext context,
+    Widget child, {
+    double width = 400,
+    bool showBarrier = true,
+    bool Function()? isRequestCurrent,
+  }) {
+    bool canShow() => canOpen() && (isRequestCurrent?.call() ?? true);
     if (_disposed ||
         _active != null ||
         !NavigationAdmission.allows(context) ||
-        !canOpen()) {
-      return;
+        !canShow()) {
+      return null;
+    }
+    final parentRoute = ModalRoute.of(context);
+    // Replacing our own route can be queued before its deferred removal, but
+    // a genuinely unrelated covering route must not receive this navigation.
+    if (parentRoute?.isCurrent == false &&
+        !_retiring.any((operation) => operation.isCurrent?.call() == true)) {
+      return null;
     }
     final operation = _active = _SidebarOperation();
+    final handle = ReaderSidebarHandle._(
+      () =>
+          identical(_active, operation) &&
+          operation.isCurrent?.call() == true &&
+          parentRoute?.isActive != false &&
+          NavigationAdmission.allows(context) &&
+          canShow(),
+      () => _close(operation),
+    );
     try {
       operation.release = acquireInteraction();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!identical(_active, operation)) return;
         try {
-          if (_disposed || !NavigationAdmission.allows(context) || !canOpen()) {
+          if (_disposed ||
+              parentRoute?.isCurrent == false ||
+              !NavigationAdmission.allows(context) ||
+              !canShow()) {
             _finish(operation);
             return;
           }
@@ -39,13 +66,18 @@ class ReaderSidebarBinding {
           final route = SideBarRoute<void>(
             child,
             width: width,
+            showBarrier: showBarrier,
             addTopPadding: false,
+            transitionDuration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 300),
           );
           operation.dismiss = () {
             if (navigator.mounted && route.isActive) {
               navigator.removeRoute(route);
             }
           };
+          operation.isCurrent = () => route.isCurrent;
           navigator
               .push(route)
               .then(
@@ -65,6 +97,7 @@ class ReaderSidebarBinding {
       _finish(operation);
       onError(error, stack);
     }
+    return handle;
   }
 
   void _finish(_SidebarOperation operation) {
@@ -88,15 +121,22 @@ class ReaderSidebarBinding {
   void close() {
     final operation = _active;
     if (operation == null) return;
+    _close(operation);
+  }
+
+  void _close(_SidebarOperation operation) {
+    if (!identical(_active, operation)) return;
     // Navigator and reader listeners may still be in tree finalization.
     // Invalidate pending callbacks now; release/remove after the tree unlocks.
     _active = null;
+    _retiring.add(operation);
     scheduleMicrotask(() {
       try {
         operation.dismiss?.call();
       } catch (error, stack) {
         onError(error, stack);
       } finally {
+        _retiring.remove(operation);
         _release(operation);
       }
     });
@@ -112,4 +152,14 @@ class ReaderSidebarBinding {
 class _SidebarOperation {
   VoidCallback? release;
   VoidCallback? dismiss;
+  bool Function()? isCurrent;
+}
+
+/// A callback from an old sidebar cannot act on or dismiss a newer operation.
+class ReaderSidebarHandle {
+  const ReaderSidebarHandle._(this._isCurrent, this._close);
+  final bool Function() _isCurrent;
+  final VoidCallback _close;
+  bool get isCurrent => _isCurrent();
+  void close() => _close();
 }

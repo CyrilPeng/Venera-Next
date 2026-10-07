@@ -44,9 +44,44 @@ Three deprecated API calls are replaced without disabling diagnostics:
   `a62f543b691e919b3ecd14688084da769d630b7f9c737b66fee8aedee4efdcae`.
 
 All retained Dart sources are normalized by the repository's Dart formatter.
-Apart from the three files above, normalized copies match the source commit.
+At initial vendoring, apart from the three files above, normalized copies
+matched the source commit. The lifecycle patch below adds further changes.
 The package manifest, license and original analysis rules remain unchanged.
 The analysis options' extra blank line at EOF is removed for diff validation.
+
+## Controller and gesture lifetime
+
+The 2026-10-07 patch changes four retained files:
+
+- `lib/photo_view.dart` cancels and replaces the scale-state subscription,
+  distinguishes owned and borrowed controllers, and releases retired owned
+  controllers after their actual child subtree unmounts. Replacing one
+  controller preserves the other; adopting an internal controller transfers
+  ownership to the caller. An offstage layout is not treated as proof that its
+  previous child has unmounted.
+- `lib/photo_view_gallery.dart` releases its fallback PageController and
+  responds to supplied controller changes without disposing borrowed objects.
+- `lib/src/controller/photo_view_controller_delegate.dart` detaches both
+  original listeners on replacement or disposal and observes new controllers.
+- `lib/src/core/photo_view_core.dart` binds external callbacks to the original
+  controller and generation, clears only callbacks still owned by that view,
+  and rejects delayed gesture completion after replacement, unmount or a new
+  gesture. Controller replacement stops the original animations.
+
+The existing public PhotoViewGestureDetectorScope export is unchanged. There
+is no dependency, SDK constraint or package version change. The application
+gallery now owns each page controller in the State of that page's PhotoView
+subtree; retained neighbours stay valid until unmount and re-entry creates a
+fresh zoom session.
+
+`test/controller_lifecycle_test.dart` adds ten package-local widget regressions
+for subscriptions, borrowed/owned replacement, offstage disposal, callback
+identity, overlapping gestures and gallery fallback ownership. The root
+`test/foundation/photo_view_controller_lifecycle_test.dart` imports this suite
+so the application's full test run includes it. Expanded application tests
+also cover the seven reading modes, mid-scroll removal, image rendering and
+image-favorite previews. Generated image fixtures verify layout and bounded
+live controllers; they do not replace physical-device acceptance.
 
 ## Validation and dependency resolution
 

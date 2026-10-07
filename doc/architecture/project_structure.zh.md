@@ -1,5 +1,51 @@
 # 项目结构约定
 
+阅读信息由scaffold统一安排安全区与自适应行布局，progress_bar中的ReaderPageInfo分别保留章节与实际页码，status_info继续持有原轮询生命周期；两者复用information_text的有界描边显示和单次语义。状态开关及评论页仍控制挂载，受控业务入口138、依赖/例外不变。P5.6实现证据与平台验收边界见最新验收记录。
+
+P5逐项复核已将位置、策略、控制器、章节读取、视口、阅读壳和会话对应到实际实现与回归，见[验收清单](optimization_acceptance.zh.md)。新增真实本地图片自动选择全部七模式的14项测试；信息浮层仍需补齐安全区、窄屏大字号与语义核查，P5.6保持部分完成。生产代码、依赖和138个业务入口未变。
+
+`reader/chapter_request.dart` 提供原章节、存储/源目标的不可变加载请求，保留分组与重复ID；ReaderImagesHost按内容身份替换加载尝试并绑定原壳/原视口回调。标题或本地评论源变化不重载图片。WaterfallController在读取前固定章节ID，连续视图退休原依赖和加载通知。受控业务入口138；原方案联合验收继续待办。
+
+下列增量说明按新到旧保留；各段的入口数量和待办反映当时状态。当前逐项结论以[验收清单](optimization_acceptance.zh.md)为准。
+
+`reader/image_position.dart` 的 ReaderImageAddress 表示固定图片存储地址，`image_read.dart` 共用本地/缓存读取；图库按实际图片状态维护源索引，连续视口按命中图片的章节与源页号选择，ReaderImagePicker 不再按重复键反查。处理脚本的显示页码协议不变。受控业务入口137；其他阅读壳装配及整体矩阵验收仍待完成。
+
+`components/menu.dart` 统一原菜单路由所有权、精确退休与安全视口布局。State 用 ContextMenuOwner、卡片/搜索行用 ContextMenuRegion 绑定实际目标；所有11处调用已迁移。阅读手势的目标通知绑定原阅读器/源管理器，菜单动作仍要求原路由当前；网页URL等待固定原controller。受控业务入口仍136，其他装配边界及整体平台/矩阵验收继续待办。
+
+阅读壳在 `reader/scaffold.dart` 统一隐藏菜单的焦点、语义与指针准入；`progress_bar.dart` 使用Flutter Slider并保留原目标/可见性身份，`components/custom_slider.dart` 已退役。阅读器主焦点控制视口按键，失焦通过明确接口结束图库连翻和连续CTRL状态。业务入口仍136；通用菜单路由、其余装配及完整计划验收继续待办。
+
+手势装配位于 `reader/gesture_host.dart`，`gesture_request.dart` 提供原目标与明确动作；`gesture.dart` 不再持有 ReaderState，负责可取消定时器、指针集合、原视口缩放和拖动取消。进度与手势共用精确目标身份，自动阅读暂停按独立原因释放，构建中的界面刷新延至帧后。受控业务入口136；隐藏菜单/滑块无障碍、菜单路由归属及完整计划验收继续待办。
+
+本轮阅读壳装配位于 `reader/shell_host.dart`，`shell_data.dart` 提供不可变展示快照，`progress_navigation.dart` 持有原目标进度命令。`scaffold.dart` 不再查找 ReaderState 或读取 appdata；独立壳通知保留图片子树，侧栏暂停回调固定原自动阅读控制器。受控业务入口135；完整计划仍待最终验收。
+
+2026-10-07 滚动条/回复更新：components/scroll.dart 按原视口管理拖动与借用控制器替换；章节评论视图通过 sidebar_binding.dart 拥有嵌套回复路由。comments_controller.dart 仅增加可注入的有效性订阅契约，ReaderState 绑定原阅读器和已组装源管理器，失效时精确关闭旧路由并保留原任务等待。12 个 Dart 路径、133 个业务入口，无依赖变化；其余阅读壳和整体矩阵继续验收。
+
+2026-10-07 图库/连续阅读更新：gallery_view.dart 的页面 State 拥有各自缩放控制器，PageView 保留既有手势作用域和裁剪；continuous_view.dart 释放自建 PhotoViewController 并解绑借用滚动控制器。本地 photo_view 按实际子树生命周期释放退休自建控制器、解绑监听和原回调，根测试桥纳入包内 10 项回归。133 个业务入口与依赖不变；AppScrollBar、回复路由和整体矩阵继续待办。
+
+本次共享滚动资源边界：`components/scroll.dart` 的 SmoothScrollProvider 拥有自建控制器，显式借用外部控制器，滚轮完成绑定原视口与输入代次；嵌套父级登记随挂载和迁移更新。新增 `test/components/smooth_scroll_lifecycle_test.dart` 验证释放、替换及真实滚轮/悬停。业务入口仍为 133；图库/连续控制器和 AppScrollBar 等剩余生命周期继续审查。
+
+2026-10-07 浮动导航更新：chapter_navigation.dart 持有原内容/源/章节请求与动作代次，ReaderState 装配并在保存/关闭时限制准入；图片宿主传递原请求，chapter_navigation_button.dart 只展示按钮、正反方向、安全区和隐藏动画。受控入口 133；控制器资源释放、回复路由及整体矩阵继续待办。
+
+2026-10-07 章节评论更新：comments_controller.dart 通过窄能力请求共享首屏/分页/写入状态与原 ImageWork 任务；ReaderState 捕获漫画/章节/源快照，chapter_comments.dart 仅拥有展示控制器和原请求。普通/章节评论解析复用 JS 完整等待与结果释放；章末返回使用原阅读器退出。132 个受控入口，完整路由/阅读壳与平台矩阵继续验收。
+
+2026-10-07 导出/设置更新：image_export.dart 的 ReaderImageExportRequest 固定选择前内容，image_export_binding.dart 装配文件/平台适配；settings_effects.dart 的 ReaderSettingsRequest 使用既有规则向原 ReaderState 与阅读壳分发生效操作，settings_panel.dart 装配现有设置页面。原 ImageWork/SettingsSaveState 保持任务所有权；131 个业务入口受控，章节评论/浮动导航及整体平台验收继续待办。
+
+2026-10-06 图片收藏更新：image_favorite_controller.dart 持有查询/收藏任务与状态；ReaderState 捕获元数据和 ImageFavoriteAccess，ReaderScaffold 只装配视图与选择。访问句柄固定原 HistoryManager/连接，任务经原 ImageWork 等待；多图页先选择，单图按原图片编号查询。130 个业务入口受控，阅读壳其余职责和整体平台验收继续待办。
+
+2026-10-06 章节菜单更新：chapter_menu.dart 提供不可变章节快照及原会话选择请求；ReaderState 装配下载数据，ReaderScaffold 请求菜单，ReaderChaptersView 仅展示值与回调。ReaderSidebarHandle 固定原路由；惰性列表按条目定位并释放控制器，长标题和大字号已验证。受控业务入口 129，阅读壳其余职责与总体验收继续进行。
+
+2026-10-06 状态轮询更新：status_polling.dart 提供纯 Dart 时钟/电池采样生命周期；status_info.dart 在采样前登记原应用/窗口，退休请求继续排空，后台及可恢复窗口准备暂停新工作。电池错误保持可选语义，显示布局不变。受控业务入口 128，阅读壳和总体验收仍在进行。
+
+2026-10-06 平台效果更新：platform_effects_controller.dart 统一方向/系统栏策略与独立确认；platform_effects.dart 将每个阅读器和应用默认策略登记原宿主/窗口，替代旧 orientation.dart 与 State mixin。ReaderScaffold 仅接收方向值及菜单/旋转回调，ReaderState 的原句柄参与退出；127 个受控入口不变，实际平台限制与整体矩阵仍待验收。
+
+2026-10-06 窗口生命周期更新：ReaderWindowCoordinator 跨页面与框架共享原生操作队列，ReaderWindowController 分别持有偏好/监听器/可重试释放；ReaderState 登记原宿主/窗口，最终关闭不重放阅读保存。WindowFrame 忽略退休界面更新，ReaderScaffold 顶部栏高度随安全区与字号同步变化。127 个入口不变；实际桌面效果、系统栏/方向及完整平台验收继续待办。
+
+2026-10-06 音量生命周期更新：volume.dart 以独立令牌的原生确认协议管理句柄，volume_controller.dart 串行处理启停并保留失败释放句柄；ReaderState 将其登记原应用/窗口，路由覆盖、后台与退出 hold 决定准入。Android VolumeKeySubscriptions 隔离旧取消，Activity/引擎销毁清理回调。127 个入口不变；其他原生效果与平台验收继续待办。
+
+2026-10-06 独立设置宿主更新：SettingsSaveState 每次保存登记原应用/窗口完整 Future，替换宿主不迁移旧重试链；迟到失败保留，显式修复使用同目标最新赋值。初始化即保存与无窗口页面移除也由原宿主持有。127 个入口不变；全部目标/业务矩阵和原生效果释放继续待办。
+
+2026-10-06 阅读会话宿主更新：ReaderState 在初始化前固定原应用宿主、窗口与历史管理器；ImageWork.retainTasks 逐项持有共享任务，成功或明确修复后才解除登记。最终关闭冻结仍挂载页面并等待原会话，替换宿主不转移旧写入；原有可恢复窗口准备保持。127 个入口不变；独立设置页面及原生资源完整关闭仍待办。
+
 2026-10-06 图片读取宿主更新：ImageSaveBinding 逐项登记原窗口和应用宿主，ImageSaveWork 在读取前固定登记并在绑定迁移时取消旧任务；ImageWorkTask 的独立关闭结果保留原诊断，不随页面排空消失。页面图片保存与副本清理分别持有自己的结果；业务入口仍为 127。阅读器/设置的其他 ImageWork 和原生资源继续待办。
 
 2026-10-06 保存/导出更新：components/file_save_task.dart 将普通保存绑定原窗口/宿主；foundation/selection_operation.dart 通过 DirectorySelection 凭据协议拥有生成文件/目录和清理重试。设置数据及漫画导出把完整暂存纳入同一动作，file_interaction.dart 的启动适配保留父执行区原生类型查询，避免 Windows IOOverrides 跳过清理。受控业务入口仍为 127；完整图片/原生生命周期和原方案其余验收继续待办。

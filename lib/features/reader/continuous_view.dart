@@ -71,7 +71,7 @@ class ReaderContinuousView extends StatefulWidget {
   final void Function(Object, StackTrace) onPreviousError;
   final void Function(int, Object, StackTrace) onNavigationError;
   final Size Function() readerSize;
-  final Future<Uint8List?> Function(String) readImage;
+  final Future<Uint8List?> Function(ReaderImageAddress) readImage;
 
   @override
   State<ReaderContinuousView> createState() => ContinuousModeState();
@@ -95,6 +95,11 @@ class ContinuousModeState extends State<ReaderContinuousView>
   var itemPositionsListener = ItemPositionsListener.create();
   var photoViewController = PhotoViewController();
   ScrollController? _scrollController;
+  bool _disposed = false;
+  Timer? _initialCacheTimer;
+  Timer? _scrollActivityTimer;
+  ScrollPosition? _smoothPosition;
+  int _smoothGeneration = 0;
 
   ScrollController get scrollController => _scrollController!;
 
@@ -110,12 +115,12 @@ class ContinuousModeState extends State<ReaderContinuousView>
   WaterfallController _createWaterfall() => WaterfallController(
     imageWork: widget.imageWork,
     maxChapter: data.maxChapter,
-    load: (chapter, scope) => widget.loadChapter(chapter, scope),
-    chapterId: (chapter) => widget.chapterId(chapter),
+    load: widget.loadChapter,
+    chapterId: widget.chapterId,
     onChanged: () {
       if (mounted) setState(() {});
     },
-    onPreviousError: (error, stack) => widget.onPreviousError(error, stack),
+    onPreviousError: widget.onPreviousError,
   );
   WaterfallFlowView get _waterfallFlow => _waterfall.flow;
 
@@ -154,10 +159,10 @@ class ContinuousModeState extends State<ReaderContinuousView>
   var imageStates = <State<ComicImage>>{};
 
   void delayedSetIsScrolling(bool value) {
-    Future.delayed(
-      const Duration(milliseconds: 300),
-      () => delayedIsScrolling = value,
-    );
+    _scrollActivityTimer?.cancel();
+    _scrollActivityTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted && !_disposed) delayedIsScrolling = value;
+    });
   }
 
   bool prepareToPrevChapter = false;
@@ -350,7 +355,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
     _initSegments();
     itemPositionsListener.itemPositions.addListener(onPositionChanged);
     cached = List.filled(maxPage + 2, false);
-    Future.delayed(
+    _initialCacheTimer = Timer(
       const Duration(milliseconds: 100),
       () => cacheImages(currentPage),
     );
@@ -360,7 +365,12 @@ class ContinuousModeState extends State<ReaderContinuousView>
   @override
   void didUpdateWidget(covariant ReaderContinuousView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.imageWork, widget.imageWork)) {
+    if (!identical(oldWidget.imageWork, widget.imageWork) ||
+        !identical(oldWidget.navigation, widget.navigation) ||
+        oldWidget.data.comicId != data.comicId ||
+        oldWidget.data.sourceKey != data.sourceKey ||
+        oldWidget.data.maxChapter != data.maxChapter ||
+        oldWidget.data.crossChapter != data.crossChapter) {
       unawaited(_imageDownloads.dispose());
       _imageDownloads = ReaderImageDownloads(work: widget.imageWork);
       unawaited(_waterfall.dispose());
@@ -378,6 +388,13 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   void dispose() {
+    _disposed = true;
+    _smoothGeneration++;
+    _smoothPosition = null;
+    _initialCacheTimer?.cancel();
+    _scrollActivityTimer?.cancel();
+    _scrollController?.removeListener(onScroll);
+    _scrollController = null;
     widget.onViewportChanged(this, false);
     // A parent content reload may already have marked its replacement loading.
     // Retire this view's notification without publishing readiness on disposal.
@@ -385,11 +402,14 @@ class ContinuousModeState extends State<ReaderContinuousView>
     unawaited(_waterfall.dispose());
     unawaited(_imageDownloads.dispose());
     itemPositionsListener.itemPositions.removeListener(onPositionChanged);
+    photoViewController.dispose();
     super.dispose();
   }
 
   void onPositionChanged() {
-    if (itemPositionsListener.itemPositions.value.isEmpty) {
+    if (_disposed ||
+        !mounted ||
+        itemPositionsListener.itemPositions.value.isEmpty) {
       return;
     }
     var page = resolveFlowCurrentImageIndex(
@@ -489,10 +509,21 @@ class ContinuousModeState extends State<ReaderContinuousView>
   double? _futurePosition;
 
   void smoothTo(double offset) {
-    if (HardwareKeyboard.instance.isShiftPressed) {
+    final original = _scrollController;
+    if (_disposed ||
+        !mounted ||
+        original == null ||
+        original.positions.length != 1 ||
+        HardwareKeyboard.instance.isShiftPressed) {
       return;
     }
-    var currentLocation = scrollController.position.pixels;
+    final position = original.position;
+    if (!position.hasPixels || !position.hasContentDimensions) return;
+    if (!identical(_smoothPosition, position)) {
+      _smoothPosition = position;
+      _futurePosition = null;
+    }
+    var currentLocation = position.pixels;
     var old = _futurePosition;
     _futurePosition ??= currentLocation;
     double k = (_futurePosition! - currentLocation).abs() / 1600 + 1;
@@ -501,8 +532,8 @@ class ContinuousModeState extends State<ReaderContinuousView>
     _futurePosition = _futurePosition! + offset * k;
     var beforeOffset = (_futurePosition! - currentLocation).abs();
     _futurePosition = _futurePosition!.clamp(
-      scrollController.position.minScrollExtent,
-      scrollController.position.maxScrollExtent,
+      position.minScrollExtent,
+      position.maxScrollExtent,
     );
     var afterOffset = (_futurePosition! - currentLocation).abs();
     if (_futurePosition == old) return;
@@ -514,10 +545,19 @@ class ContinuousModeState extends State<ReaderContinuousView>
         duration = Duration(milliseconds: 10);
       }
     }
-    scrollController
+    final generation = ++_smoothGeneration;
+    original
         .animateTo(_futurePosition!, duration: duration, curve: Curves.linear)
         .then((_) {
-          var current = scrollController.position.pixels;
+          if (_disposed ||
+              !mounted ||
+              generation != _smoothGeneration ||
+              !identical(_scrollController, original) ||
+              original.positions.length != 1 ||
+              !identical(original.position, position)) {
+            return;
+          }
+          var current = position.pixels;
           if (current == target && current == _futurePosition) {
             _futurePosition = null;
           }
@@ -525,6 +565,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
   }
 
   void onPointerSignal(PointerSignalEvent event) {
+    if (_disposed || !mounted) return;
     if (event is PointerScrollEvent) {
       if (!_isMouseScrolling) {
         setState(() {
@@ -660,6 +701,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
   }
 
   void onScroll() {
+    if (_disposed || !mounted || _scrollController?.hasClients != true) return;
     if (prepareToPrevChapter) {
       jumpToNextChapter = false;
       jumpToPrevChapter =
@@ -674,6 +716,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
   }
 
   bool onScaleUpdate([double? scale]) {
+    if (_disposed || !mounted) return true;
     if (prepareToNextChapter || prepareToPrevChapter) {
       setState(() {
         prepareToPrevChapter = false;
@@ -697,10 +740,15 @@ class ContinuousModeState extends State<ReaderContinuousView>
       itemScrollController: itemScrollController,
       itemPositionsListener: itemPositionsListener,
       scrollControllerCallback: (scrollController) {
+        if (_disposed || !mounted) return;
+        if (identical(_scrollController, scrollController)) return;
         if (_scrollController != null) {
           _scrollController!.removeListener(onScroll);
         }
         _scrollController = scrollController;
+        _smoothPosition = null;
+        _smoothGeneration++;
+        _futurePosition = null;
         _scrollController!.addListener(onScroll);
       },
       itemCount: _flowItemCount,
@@ -945,6 +993,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   Future<void> animateToPage(int page) {
+    if (_disposed || !mounted) return Future.value();
     var index = _waterfallIndexOfChapterPage(currentChapter, page) ?? page;
     return itemScrollController.scrollTo(
       index: index,
@@ -955,16 +1004,18 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   void handleDoubleTap(Offset location) {
+    if (_disposed || !mounted) return;
     if (data.doubleTapCollect) {
       widget.onCollectImage();
       return;
     }
+    final initial = photoViewController.getInitialScale?.call();
+    if (initial == null) return;
     double target;
-    if (photoViewController.scale !=
-        photoViewController.getInitialScale?.call()) {
-      target = photoViewController.getInitialScale!.call()!;
+    if (photoViewController.scale != initial) {
+      target = initial;
     } else {
-      target = photoViewController.getInitialScale!.call()! * 1.75;
+      target = initial * 1.75;
     }
     var size = MediaQuery.of(context).size;
     photoViewController.animateScale?.call(
@@ -976,10 +1027,13 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   void handleLongPressDown(Offset location) {
+    if (_disposed || !mounted) return;
     if (delayedIsScrolling) {
       return;
     }
-    double target = photoViewController.getInitialScale!.call()! * 1.75;
+    final initial = photoViewController.getInitialScale?.call();
+    if (initial == null) return;
+    final target = initial * 1.75;
     var size = widget.readerSize();
     Offset zoomPosition;
     if (!data.centerLongPressZoom) {
@@ -997,17 +1051,20 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   void handleLongPressUp(Offset location) {
+    if (_disposed || !mounted) return;
     if (!isLongPressing) {
       return;
     }
-    double target = photoViewController.getInitialScale!.call()!;
+    final target = photoViewController.getInitialScale?.call();
+    isLongPressing = false;
+    if (target == null) return;
     photoViewController.animateScale?.call(target);
     onScaleUpdate(target);
-    isLongPressing = false;
   }
 
   @override
   void toPage(int page) {
+    if (_disposed || !mounted) return;
     var index = _waterfallIndexOfChapterPage(currentChapter, page) ?? page;
     itemScrollController.jumpTo(index: index);
     _futurePosition = null;
@@ -1015,13 +1072,22 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   bool toChapter(int chapter, {bool toLastPage = false}) {
+    if (_disposed || !mounted) return false;
     if (!crossChapter) return false;
     _navigateToWaterfallChapter(chapter, toLastPage: toLastPage);
     return true;
   }
 
   @override
+  void cancelKeyboardInput() {
+    if (!_disposed && mounted && isCTRLPressed) {
+      setState(() => isCTRLPressed = false);
+    }
+  }
+
+  @override
   void handleKeyEvent(KeyEvent event) {
+    if (_disposed || !mounted) return;
     if (event.logicalKey == LogicalKeyboardKey.controlLeft ||
         event.logicalKey == LogicalKeyboardKey.controlRight) {
       setState(() {
@@ -1080,20 +1146,43 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   Future<Uint8List?> getImageByOffset(Offset offset) async {
-    var imageKey = getImageKeyByOffset(offset);
-    if (imageKey == null) return null;
-    return widget.readImage(imageKey);
+    final image = _imageAt(offset);
+    if (image == null) return null;
+    return widget.readImage(
+      ReaderImageAddress(
+        imageKey: image.imageKey,
+        sourceKey: image.sourceKey,
+        comicId: image.cid,
+        chapterId: image.eid,
+      ),
+    );
   }
 
   @override
-  String? getImageKeyByOffset(Offset offset) {
-    String? imageKey;
+  int? getImageIndexByOffset(Offset offset) {
+    final image = _imageAt(offset);
+    if (image == null || image.eid != widget.chapterId(currentChapter)) {
+      return null;
+    }
+    final index = image.page - 1;
+    return index >= 0 &&
+            index < images.length &&
+            images[index] == image.imageKey
+        ? index
+        : null;
+  }
+
+  ReaderImageProvider? _imageAt(Offset offset) {
+    if (_disposed || !mounted) return null;
     for (var imageState in imageStates) {
       if ((imageState as ComicImageState).containsPoint(offset)) {
-        imageKey =
-            (imageState.widget.image as ReaderDisplayImageProvider).imageKey;
+        final image =
+            (imageState.widget.image as ReaderDisplayImageProvider).image;
+        if (image.cid == data.comicId && image.sourceKey == data.sourceKey) {
+          return image;
+        }
       }
     }
-    return imageKey;
+    return null;
   }
 }

@@ -20,11 +20,13 @@ class _Viewport implements ReaderImageViewController {
   @override
   void handleKeyEvent(KeyEvent event) {}
   @override
+  void cancelKeyboardInput() {}
+  @override
   bool handleOnTap(Offset location) => false;
   @override
   Future<Uint8List?> getImageByOffset(Offset offset) async => null;
   @override
-  String? getImageKeyByOffset(Offset offset) => null;
+  int? getImageIndexByOffset(Offset offset) => null;
 }
 
 void main() {

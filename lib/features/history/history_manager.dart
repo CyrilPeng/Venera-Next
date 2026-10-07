@@ -88,6 +88,7 @@ class HistoryManager with ChangeNotifier {
 
   bool isInitialized = false;
   int _generation = 0;
+  int get connectionGeneration => _generation;
 
   _HistoryInitialization? _initialization;
 

@@ -21,6 +21,34 @@ void main() {
   setUp(() => work = ImageWork());
   tearDown(() => work.dispose());
 
+  test('export request resolves only original valid indices and snapshots', () {
+    final images = ['first', 'second'];
+    var current = true;
+    final request = ReaderImageExportRequest(
+      images: images,
+      sourceKey: 'source',
+      comicId: 'book',
+      chapterId: 'chapter-id',
+      title: 'Original title',
+      chapter: 3,
+      isCurrent: () => current,
+    );
+    images[1] = 'replacement';
+    final selected = request.resolve(1)!;
+    expect(selected.imageKey, 'second');
+    expect(selected.cacheKey, 'second@source@book@chapter-id');
+    expect(selected.imageNumber, 2);
+    expect(request.resolve(null), isNull);
+    expect(request.resolve(-1), isNull);
+    expect(request.resolve(2), isNull);
+    current = false;
+    expect(request.resolve(1), isNull);
+    expect(
+      ReaderImageExport(selected, png).filename,
+      'Original title_EP3_P2.png',
+    );
+  });
+
   test(
     'save and share use captured image identity and detected type',
     () async {

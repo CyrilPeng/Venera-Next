@@ -21,6 +21,7 @@ class ImageFavoriteSwipeBinding {
       _distance = 0;
       if (shouldCollect) collect();
     },
+    onCancel: () => _distance = 0,
   );
 
   void attach(ReaderGesturePort? port) {

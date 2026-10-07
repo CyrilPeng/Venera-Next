@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/translations.dart';
-import 'orientation_controller.dart';
+import 'platform_effects_controller.dart';
+import 'image_favorite_controller.dart';
 
 /// Snapshot of the automatic-reading action, independent of its controller.
 class ReaderAutomaticReadingAction {
@@ -19,8 +20,9 @@ class ReaderAutomaticReadingAction {
 /// Presentation only. Optional callbacks express host/platform capabilities.
 List<Widget> buildReaderBottomActions(
   BuildContext context, {
-  required bool imageCollected,
+  required ReaderImageFavoriteStatus imageFavoriteStatus,
   required VoidCallback? onCollect,
+  VoidCallback? onRetryImageStatus,
   bool imageCollecting = false,
   VoidCallback? onFullscreen,
   required ReaderOrientation orientation,
@@ -33,16 +35,55 @@ List<Widget> buildReaderBottomActions(
   required VoidCallback onShare,
 }) {
   return [
-    Tooltip(
-      message: "Collect the image".tl,
-      child: IconButton(
-        icon: imageCollecting
-            ? const SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Icon(imageCollected ? Icons.favorite : Icons.favorite_border),
-        onPressed: onCollect,
+    Semantics(
+      toggled: switch (imageFavoriteStatus) {
+        ReaderImageFavoriteStatus.collected => true,
+        ReaderImageFavoriteStatus.uncollected => false,
+        _ => null,
+      },
+      child: Tooltip(
+        message: imageCollecting
+            ? 'Saving image collection'.tl
+            : switch (imageFavoriteStatus) {
+                ReaderImageFavoriteStatus.loading =>
+                  'Loading image collection'.tl,
+                ReaderImageFavoriteStatus.failed =>
+                  'Unable to load image collection. Retry'.tl,
+                ReaderImageFavoriteStatus.collected => 'Uncollect the image'.tl,
+                ReaderImageFavoriteStatus.selectImage =>
+                  'Select an image to collect'.tl,
+                _ => 'Collect the image'.tl,
+              },
+        child: IconButton(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          icon:
+              imageCollecting ||
+                  imageFavoriteStatus == ReaderImageFavoriteStatus.loading
+              ? SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    value: MediaQuery.disableAnimationsOf(context) ? 0.5 : null,
+                  ),
+                )
+              : Icon(switch (imageFavoriteStatus) {
+                  ReaderImageFavoriteStatus.collected => Icons.favorite,
+                  ReaderImageFavoriteStatus.failed => Icons.error_outline,
+                  ReaderImageFavoriteStatus.selectImage =>
+                    Icons.add_photo_alternate_outlined,
+                  _ => Icons.favorite_border,
+                }),
+          onPressed: imageCollecting
+              ? null
+              : imageFavoriteStatus == ReaderImageFavoriteStatus.failed
+              ? onRetryImageStatus
+              : imageFavoriteStatus == ReaderImageFavoriteStatus.collected ||
+                    imageFavoriteStatus ==
+                        ReaderImageFavoriteStatus.uncollected ||
+                    imageFavoriteStatus == ReaderImageFavoriteStatus.selectImage
+              ? onCollect
+              : null,
+        ),
       ),
     ),
     if (onFullscreen != null)

@@ -206,8 +206,28 @@ class PhotoViewGallery extends StatefulWidget {
 }
 
 class _PhotoViewGalleryState extends State<PhotoViewGallery> {
-  late final PageController _controller =
-      widget.pageController ?? PageController();
+  late PageController _controller = widget.pageController ?? PageController();
+
+  @override
+  void didUpdateWidget(covariant PhotoViewGallery oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pageController != widget.pageController) {
+      final previous = _controller;
+      _controller = widget.pageController ?? PageController();
+      if (oldWidget.pageController == null &&
+          !identical(previous, _controller)) {
+        previous.dispose();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.pageController == null) {
+      _controller.dispose();
+    }
+    super.dispose();
+  }
 
   void scaleStateChangedCallback(PhotoViewScaleState scaleState) {
     if (widget.scaleStateChangedCallback != null) {

@@ -1,12 +1,11 @@
-import 'package:venera_next/features/reader/orientation.dart'
-    show ReaderOrientationScope;
+import 'package:venera_next/features/reader/platform_effects.dart'
+    show ReaderPlatformEffectsScope;
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
-import 'package:venera_next/components/custom_slider.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/features/comic_source/models.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
@@ -84,7 +83,8 @@ void main() {
         });
         await tester.pumpWidget(
           MaterialApp(
-            builder: (context, child) => ReaderOrientationScope(child: child!),
+            builder: (context, child) =>
+                ReaderPlatformEffectsScope(child: child!),
             navigatorKey: App.rootNavigatorKey,
             home: Scaffold(body: OverlayWidget(_Reader(key: key))),
           ),
@@ -111,11 +111,11 @@ void main() {
         );
         scaffold.openOrClose();
         await frames(15);
-        final slider = tester.widget<CustomSlider>(find.byType(CustomSlider));
+        final slider = tester.widget<Slider>(find.byType(Slider).first);
         // A slider can emit multiple destination changes before the next frame,
         // while the positioned list has not mounted its transition list yet.
-        if (rapid) slider.onChanged(150);
-        slider.onChanged(200);
+        if (rapid) slider.onChanged!(150);
+        slider.onChanged!(200);
         await frames(50);
         expect(reader.isPageAnimating, isFalse);
         expect(reader.page, 200);

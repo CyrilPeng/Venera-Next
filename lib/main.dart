@@ -8,7 +8,7 @@ import 'package:venera_next/app_runtime/image_loading.dart';
 import 'package:venera_next/app_runtime/follow_updates.dart';
 import 'package:venera_next/app_runtime/webdav_library.dart';
 import 'package:venera_next/features/reader/reader.dart'
-    show ReaderOrientationScope, ReaderSessionScope;
+    show ReaderPlatformEffectsScope, ReaderSessionScope;
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/app_runtime/background_sync.dart';
 import 'package:venera_next/app_runtime/interactive_bindings.dart';
@@ -163,7 +163,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         );
       }
     });
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -412,7 +411,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 );
               }
 
-              widget = ReaderOrientationScope(child: OverlayWidget(widget));
+              widget = ReaderPlatformEffectsScope(child: OverlayWidget(widget));
               if (App.isDesktop) {
                 widget = WindowFrame(
                   Shortcuts(

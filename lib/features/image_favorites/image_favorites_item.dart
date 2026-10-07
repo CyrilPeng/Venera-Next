@@ -34,7 +34,10 @@ class ImageFavoritesItem extends StatefulWidget {
   State<ImageFavoritesItem> createState() => _ImageFavoritesItemState();
 }
 
-class _ImageFavoritesItemState extends State<ImageFavoritesItem> {
+class _ImageFavoritesItemState extends State<ImageFavoritesItem>
+    with ContextMenuOwner {
+  @override
+  Object get contextMenuIdentity => widget.imageFavoritesComic;
   late final imageFavorites = widget.imageFavoritesComic.images.toList();
 
   void goComicInfo(ImageFavoritesComic comic) {
@@ -84,7 +87,7 @@ class _ImageFavoritesItemState extends State<ImageFavoritesItem> {
   }
 
   void showMenu(Offset location, BuildContext context) {
-    showMenuX(App.rootContext, location, [
+    contextMenus.show(context, location, [
       MenuEntry(
         icon: Icons.chrome_reader_mode_outlined,
         text: 'Details'.tl,

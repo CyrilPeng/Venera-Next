@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/window_frame.dart';
+import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/translations.dart';
 
@@ -32,33 +34,56 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
   final _guards = <ModalRoute<dynamic>, _SettingsPopEntry>{};
   WindowFrameController? _window;
   ImageWork? _work;
+  SelectionTaskRegistry? _registry;
+  Object _owner = Object();
   bool _leaving = false;
   bool _disposed = false;
 
   bool get savingSettings => _pending.isNotEmpty;
   bool get acceptsSettingsChanges =>
-      !_disposed && !_leaving && _window?.isClosing != true;
+      !_disposed &&
+      !_leaving &&
+      _window?.isClosing != true &&
+      _registry?.isClosing != true;
   bool get hasSettingsSaveError =>
-      _latest.values.any((save) => save.error != null);
+      _latest.values.any((save) => save.hasFailures);
+
+  bool get _canRetry => _latest.values.any(
+    (save) => save.hasFailures && (save.isCurrent?.call() ?? true),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _work = context.getInheritedWidgetOfExactType<SettingsSaveScope>()?.work;
+    _window = context.getInheritedWidgetOfExactType<WindowFrameController>();
+    _registry = context
+        .getInheritedWidgetOfExactType<SelectionTasksScope>()
+        ?.registry;
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _work = context
+    final work = context
         .dependOnInheritedWidgetOfExactType<SettingsSaveScope>()
         ?.work;
     final window = context
         .dependOnInheritedWidgetOfExactType<WindowFrameController>();
-    if (window?.addExitTask != _window?.addExitTask) {
-      _window?.removeExitTask(_waitForWindowSettingsSave);
-      if (savingSettings || hasSettingsSaveError) {
-        _window?.trackExitTask(
-          _waitForSnapshot(List.of(_pending), List.of(_latest.values)),
-        );
-      }
-      _window = window;
-      _window?.addExitTask(_waitForWindowSettingsSave);
+    final registry = context
+        .dependOnInheritedWidgetOfExactType<SelectionTasksScope>()
+        ?.registry;
+    if (window?.addExitTask != _window?.addExitTask ||
+        registry != _registry ||
+        work != _work) {
+      // Accepted saves keep their original registrations and repair chains.
+      // A new host cannot repair or retry an old host's operation by UI key.
+      _owner = Object();
+      _latest.clear();
     }
+    _window = window;
+    _work = work;
+    _registry = registry;
     final routes = <ModalRoute<dynamic>>{
       ?ModalRoute.of(context),
       ?PopupIndicatorWidget.maybeOf(context)?.route,
@@ -85,44 +110,82 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
   }
 
   Future<bool> saveSetting(
+    // Keys identify the persisted target and field, not just the UI control.
     Object key,
     Future<void> Function() persist, {
     VoidCallback? onSaved,
     bool Function()? isCurrent,
   }) async {
     if (!acceptsSettingsChanges) return false;
+    final owner = _owner;
+    final registry = _registry;
+    final window = _window;
     final work = _work;
     final task = work?.start();
     if (work != null && task == null) return false;
+    if (!identical(owner, _owner) || !acceptsSettingsChanges) {
+      task?.finish();
+      return false;
+    }
     final save = _SettingsSave(persist, onSaved, isCurrent, _latest[key]);
     _latest[key] = save;
     _pending.add(save);
-    _updateGuards();
-    setState(() {});
     // Register ownership before invoking even a synchronously reentrant save.
+    var started = false;
     try {
+      save.retain(registry, window);
+      if (save.cancelled ||
+          registry?.isClosing == true ||
+          window?.isClosing == true ||
+          !identical(owner, _owner)) {
+        return false;
+      }
+      _updateGuards();
+      setState(() {});
+      started = true;
       await Future<void>.sync(persist);
       if (identical(_latest[key], save)) {
         if (!_disposed &&
+            identical(owner, _owner) &&
+            registry?.isClosing != true &&
             identical(work, _work) &&
             (isCurrent?.call() ?? true)) {
           onSaved?.call();
         }
-        save.acknowledgeRepairedFailures();
-        if (identical(_latest[key], save)) _latest.remove(key);
       }
+      // A successful accepted assignment can repair its own older attempts,
+      // even if its page has detached. It never repairs a later attempt.
+      save.acknowledgeRepairedFailures();
       return true;
     } catch (error, stack) {
       save.error = error;
       save.stack = stack;
       save.acknowledgeWorkFailure = task?.recordFailure(error, stack);
       Log.error('Setting save', error, stack);
-      if (mounted && !_disposed) context.showMessage(message: error.toString());
+      if (mounted &&
+          !_disposed &&
+          identical(owner, _owner) &&
+          registry?.isClosing != true &&
+          (isCurrent?.call() ?? true)) {
+        context.showMessage(message: error.toString());
+      }
       return false;
     } finally {
       _pending.remove(save);
       task?.finish();
       save.done.complete();
+      save.releaseIfSettled();
+      if (!started && save.error == null && identical(_latest[key], save)) {
+        if (save.previous case final previous?) {
+          _latest[key] = previous;
+        } else {
+          _latest.remove(key);
+        }
+      }
+      final latest = _latest[key];
+      if (latest != null && !latest.hasPending && !latest.hasFailures) {
+        _latest.remove(key);
+      }
       if (!_disposed) {
         _updateGuards();
         setState(() {});
@@ -139,23 +202,12 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
     _reportFailures(_latest.values);
   }
 
-  // Window close has already stopped admission. Capture this host's work now,
-  // including when the callback is already awaited as the element migrates.
-  Future<void> _waitForWindowSettingsSave() =>
-      _waitForSnapshot(List.of(_pending), List.of(_latest.values));
-
-  static Future<void> _waitForSnapshot(
-    List<_SettingsSave> pending,
-    List<_SettingsSave> latest,
-  ) async {
-    await Future.wait(pending.map((save) => save.done.future));
-    _reportFailures(latest);
-  }
-
   static void _reportFailures(Iterable<_SettingsSave> saves) {
     final failures = [
       for (final save in saves)
-        if (save.error != null) (error: save.error!, stackTrace: save.stack!),
+        for (final attempt in save.attempts)
+          if (attempt.error != null && !attempt.repaired)
+            (error: attempt.error!, stackTrace: attempt.stack!),
     ];
     if (failures.length == 1) {
       Error.throwWithStackTrace(
@@ -169,11 +221,12 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
 
   Future<void> retrySettingsSave() async {
     final failed = _latest.entries
-        .where((entry) => entry.value.error != null)
+        .where((entry) => entry.value.hasFailures)
         .toList();
     await Future.wait([
       for (final entry in failed)
-        if (identical(_latest[entry.key], entry.value))
+        if (identical(_latest[entry.key], entry.value) &&
+            (entry.value.isCurrent?.call() ?? true))
           saveSetting(
             entry.key,
             entry.value.persist,
@@ -184,7 +237,7 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
   }
 
   Future<void> leaveSettings([ModalRoute<dynamic>? destination]) async {
-    if (_disposed || _leaving || _window?.isClosing == true) return;
+    if (!acceptsSettingsChanges) return;
     final route =
         destination ??
         (Navigator.of(context).canPop()
@@ -229,7 +282,9 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
         ),
       if (hasSettingsSaveError)
         TextButton(
-          onPressed: acceptsSettingsChanges ? retrySettingsSave : null,
+          onPressed: acceptsSettingsChanges && _canRetry
+              ? retrySettingsSave
+              : null,
           child: Text('Retry'.tl),
         ),
     ],
@@ -248,10 +303,8 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
       entry.value.canPopNotifier.dispose();
     }
     _guards.clear();
-    _window?.removeExitTask(_waitForWindowSettingsSave);
     if (savingSettings || hasSettingsSaveError) {
       final pending = waitForSettingsSave();
-      _window?.trackExitTask(pending);
       unawaited(
         pending.catchError((Object error, StackTrace stack) {
           Log.error('Detached setting save', error, stack);
@@ -281,11 +334,58 @@ class _SettingsSave {
   StackTrace? stack;
   final _SettingsSave? previous;
   void Function()? acknowledgeWorkFailure;
+  bool repaired = false;
+  bool cancelled = false;
+  final _releases = <VoidCallback>[];
+
+  Iterable<_SettingsSave> get attempts sync* {
+    for (_SettingsSave? save = this; save != null; save = save.previous) {
+      yield save;
+    }
+  }
+
+  bool get hasFailures =>
+      attempts.any((save) => save.error != null && !save.repaired);
+  bool get hasPending => attempts.any((save) => !save.done.isCompleted);
+
+  void cancel() => cancelled = true;
+
+  void retain(SelectionTaskRegistry? registry, WindowFrameController? window) {
+    final releaseHost = registry?.retain(cancel: cancel, close: closeAndWait);
+    if (releaseHost != null) _releases.add(releaseHost);
+    if (window != null) {
+      window.addCloseStartListener(cancel);
+      window.addExitTask(closeAndWait);
+      _releases.add(() {
+        window.removeCloseStartListener(cancel);
+        window.removeExitTask(closeAndWait);
+      });
+    }
+  }
+
+  Future<void> closeAndWait() async {
+    await done.future;
+    if (error != null && !repaired) {
+      Error.throwWithStackTrace(error!, stack!);
+    }
+  }
+
+  void releaseIfSettled() {
+    if (!done.isCompleted || (error != null && !repaired)) return;
+    final releases = List.of(_releases);
+    _releases.clear();
+    for (final release in releases) {
+      release();
+    }
+  }
 
   void acknowledgeRepairedFailures() {
-    for (_SettingsSave? save = this; save != null; save = save.previous) {
+    for (final save in attempts) {
+      if (save.error == null) continue;
+      save.repaired = true;
       save.acknowledgeWorkFailure?.call();
       save.acknowledgeWorkFailure = null;
+      save.releaseIfSettled();
     }
   }
 }

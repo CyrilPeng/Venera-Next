@@ -150,6 +150,9 @@ class _WindowFrameState extends State<WindowFrame> with WindowListener {
 
   /// Sets the visibility of the window frame.
   void setWindowFrame(bool show) {
+    // A native transition can finish after this Flutter frame was replaced.
+    // Its native owner still drains; the retired frame has nothing to render.
+    if (!mounted || isWindowFrameHidden == !show) return;
     setState(() {
       isWindowFrameHidden = !show;
     });

@@ -1,7 +1,7 @@
 import 'package:venera_next/features/history/history_api.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
-import 'package:venera_next/features/reader/orientation.dart'
-    show ReaderOrientationScope;
+import 'package:venera_next/features/reader/platform_effects.dart'
+    show ReaderPlatformEffectsScope;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -80,7 +80,7 @@ void main() {
     final key = GlobalKey<_ReaderHarnessState>();
     await tester.pumpWidget(
       MaterialApp(
-        builder: (context, child) => ReaderOrientationScope(child: child!),
+        builder: (context, child) => ReaderPlatformEffectsScope(child: child!),
         navigatorKey: App.rootNavigatorKey,
         home: OverlayWidget(_ReaderHarness(key: key, onClosed: onClosed)),
       ),

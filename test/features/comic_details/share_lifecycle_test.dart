@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:venera_next/components/menu.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 // The real serializer is an existing transitive share_plus dependency.
@@ -19,6 +20,8 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:window_manager/window_manager.dart';
 
 class _Actions with ComicPageActions {
+  @override
+  final contextMenus = MenuRouteController();
   _Actions(this.context);
   @override
   final BuildContext context;

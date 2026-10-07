@@ -37,6 +37,9 @@ abstract interface class ReaderImageViewController
 
   void handleKeyEvent(KeyEvent event);
 
+  /// End held keys and repeat work when keyboard ownership leaves this view.
+  void cancelKeyboardInput();
+
   /// Returns true if the event is handled.
   bool handleOnTap(Offset location);
 

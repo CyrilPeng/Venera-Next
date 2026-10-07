@@ -45,7 +45,11 @@ class FavoriteDisplayButton extends StatefulWidget {
 }
 
 class _FavoriteDisplayButtonState
-    extends SettingsSaveState<FavoriteDisplayButton> {
+    extends SettingsSaveState<FavoriteDisplayButton>
+    with ContextMenuOwner {
+  @override
+  Object get contextMenuIdentity =>
+      (isFavoriteGalleryMode(), favoriteGalleryColumns());
   int _menuGeneration = 0;
   @override
   void initState() {
@@ -67,6 +71,7 @@ class _FavoriteDisplayButtonState
 
   @override
   Widget build(BuildContext context) {
+    contextMenus.revalidate();
     final gallery = isFavoriteGalleryMode();
     return protectSettings(
       Button.icon(
@@ -111,7 +116,7 @@ class _FavoriteDisplayButtonState
       );
     }
 
-    showMenuX(context, offset, _buildEntries(gallery, select));
+    contextMenus.show(context, offset, _buildEntries(gallery, select));
   }
 
   List<MenuEntry> _buildEntries(

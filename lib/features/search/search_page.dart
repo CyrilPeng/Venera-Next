@@ -676,8 +676,12 @@ class _SearchHistoryState extends State<_SearchHistory> {
 
   Widget buildItem(int index) {
     final keyword = appdata.searchHistory[index];
-    void showMenu(Offset offset) {
-      showMenuX(context, offset, [
+    void showMenu(
+      BuildContext context,
+      MenuRouteController menus,
+      Offset offset,
+    ) {
+      menus.show(context, offset, [
         MenuEntry(
           icon: Icons.copy,
           text: 'Copy'.tl,
@@ -695,8 +699,9 @@ class _SearchHistoryState extends State<_SearchHistory> {
       ]);
     }
 
-    return Builder(
-      builder: (context) {
+    return ContextMenuRegion(
+      identity: keyword,
+      builder: (context, menus) {
         return ClickInkWell(
           onTap: () {
             widget.search(keyword);
@@ -705,6 +710,8 @@ class _SearchHistoryState extends State<_SearchHistory> {
             var renderBox = context.findRenderObject() as RenderBox;
             var offset = renderBox.localToGlobal(Offset.zero);
             showMenu(
+              context,
+              menus,
               Offset(
                 offset.dx + renderBox.size.width / 2 - 121,
                 offset.dy + renderBox.size.height - 8,
@@ -712,7 +719,7 @@ class _SearchHistoryState extends State<_SearchHistory> {
             );
           },
           onSecondaryTapUp: (details) {
-            showMenu(details.globalPosition);
+            showMenu(context, menus, details.globalPosition);
           },
           child: Container(
             decoration: BoxDecoration(

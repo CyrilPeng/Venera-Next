@@ -15,6 +15,7 @@ class SideBarRoute<T> extends PopupRoute<T> {
     required this.width,
     this.addBottomPadding = true,
     this.addTopPadding = true,
+    this.transitionDuration = const Duration(milliseconds: 300),
   });
 
   final Widget widget;
@@ -157,7 +158,7 @@ class SideBarRoute<T> extends PopupRoute<T> {
   }
 
   @override
-  Duration get transitionDuration => const Duration(milliseconds: 300);
+  final Duration transitionDuration;
 
   @override
   Widget buildTransitions(

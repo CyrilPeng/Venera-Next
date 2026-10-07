@@ -1,5 +1,7 @@
 library photo_view;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:photo_view/src/controller/photo_view_controller.dart';
@@ -449,6 +451,22 @@ class _PhotoViewState extends State<PhotoView>
   late PhotoViewControllerBase _controller;
   late bool _controlledScaleStateController;
   late PhotoViewScaleStateController _scaleStateController;
+  StreamSubscription<PhotoViewScaleState>? _scaleSubscription;
+  final Map<Object, VoidCallback> _retiredControllers = {};
+
+  void _listenToScaleState() {
+    final source = _scaleStateController;
+    _scaleSubscription = source.outputScaleStateStream.listen((state) {
+      if (mounted && identical(source, _scaleStateController)) {
+        widget.scaleStateChangedCallback?.call(state);
+      }
+    });
+  }
+
+  void _releaseRetired(Object controller, Object scaleController) {
+    _retiredControllers.remove(controller)?.call();
+    _retiredControllers.remove(scaleController)?.call();
+  }
 
   @override
   void initState() {
@@ -470,11 +488,15 @@ class _PhotoViewState extends State<PhotoView>
       _scaleStateController = widget.scaleStateController!;
     }
 
-    _scaleStateController.outputScaleStateStream.listen(scaleStateListener);
+    _listenToScaleState();
   }
 
   @override
   void didUpdateWidget(PhotoView oldWidget) {
+    final oldController = _controller;
+    final oldScaleController = _scaleStateController;
+    final ownedController = _controlledController;
+    final ownedScaleController = _controlledScaleStateController;
     if (widget.controller == null) {
       if (!_controlledController) {
         _controlledController = true;
@@ -494,11 +516,30 @@ class _PhotoViewState extends State<PhotoView>
       _controlledScaleStateController = false;
       _scaleStateController = widget.scaleStateController!;
     }
+    if (!identical(oldController, _controller) && ownedController) {
+      _retiredControllers[oldController] = oldController.dispose;
+    }
+    if (!identical(oldScaleController, _scaleStateController)) {
+      unawaited(_scaleSubscription?.cancel());
+      if (ownedScaleController) {
+        _retiredControllers[oldScaleController] = oldScaleController.dispose;
+      }
+      _listenToScaleState();
+    }
+    // A caller can explicitly adopt a previously internal controller. The
+    // live subtree still uses it, so a retired subtree must not release it.
+    _retiredControllers.remove(_controller);
+    _retiredControllers.remove(_scaleStateController);
     super.didUpdateWidget(oldWidget);
   }
 
   @override
   void dispose() {
+    unawaited(_scaleSubscription?.cancel());
+    for (final release in _retiredControllers.values) {
+      release();
+    }
+    _retiredControllers.clear();
     if (_controlledController) {
       _controller.dispose();
     }
@@ -508,87 +549,116 @@ class _PhotoViewState extends State<PhotoView>
     super.dispose();
   }
 
-  void scaleStateListener(PhotoViewScaleState scaleState) {
-    if (widget.scaleStateChangedCallback != null) {
-      widget.scaleStateChangedCallback!(_scaleStateController.scaleState);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return LayoutBuilder(
-      builder: (
-        BuildContext context,
-        BoxConstraints constraints,
-      ) {
-        final computedOuterSize = widget.customSize ?? constraints.biggest;
-        final backgroundDecoration = widget.backgroundDecoration ??
-            const BoxDecoration(color: Colors.black);
+    final controller = _controller;
+    final scaleController = _scaleStateController;
+    return _PhotoViewControllerLifetime(
+      key: ValueKey((controller, scaleController)),
+      release: () => _releaseRetired(controller, scaleController),
+      child: LayoutBuilder(
+        builder: (
+          BuildContext context,
+          BoxConstraints constraints,
+        ) {
+          final computedOuterSize = widget.customSize ?? constraints.biggest;
+          final backgroundDecoration = widget.backgroundDecoration ??
+              const BoxDecoration(color: Colors.black);
 
-        return widget._isCustomChild
-            ? CustomChildWrapper(
-                child: widget.child,
-                childSize: widget.childSize,
-                backgroundDecoration: backgroundDecoration,
-                heroAttributes: widget.heroAttributes,
-                scaleStateChangedCallback: widget.scaleStateChangedCallback,
-                enableRotation: widget.enableRotation,
-                controller: _controller,
-                scaleStateController: _scaleStateController,
-                maxScale: widget.maxScale,
-                minScale: widget.minScale,
-                initialScale: widget.initialScale,
-                basePosition: widget.basePosition,
-                scaleStateCycle: widget.scaleStateCycle,
-                onTapUp: widget.onTapUp,
-                onTapDown: widget.onTapDown,
-                onScaleEnd: widget.onScaleEnd,
-                outerSize: computedOuterSize,
-                gestureDetectorBehavior: widget.gestureDetectorBehavior,
-                tightMode: widget.tightMode,
-                filterQuality: widget.filterQuality,
-                disableGestures: widget.disableGestures,
-                enablePanAlways: widget.enablePanAlways,
-                strictScale: widget.strictScale,
-                onScaleUpdate: widget.onScaleUpdate,
-              )
-            : ImageWrapper(
-                imageProvider: widget.imageProvider!,
-                loadingBuilder: widget.loadingBuilder,
-                backgroundDecoration: backgroundDecoration,
-                semanticLabel: widget.semanticLabel,
-                gaplessPlayback: widget.gaplessPlayback,
-                heroAttributes: widget.heroAttributes,
-                scaleStateChangedCallback: widget.scaleStateChangedCallback,
-                enableRotation: widget.enableRotation,
-                controller: _controller,
-                scaleStateController: _scaleStateController,
-                maxScale: widget.maxScale,
-                minScale: widget.minScale,
-                initialScale: widget.initialScale,
-                basePosition: widget.basePosition,
-                scaleStateCycle: widget.scaleStateCycle,
-                onTapUp: widget.onTapUp,
-                onTapDown: widget.onTapDown,
-                onScaleEnd: widget.onScaleEnd,
-                outerSize: computedOuterSize,
-                gestureDetectorBehavior: widget.gestureDetectorBehavior,
-                tightMode: widget.tightMode,
-                filterQuality: widget.filterQuality,
-                disableGestures: widget.disableGestures,
-                errorBuilder: widget.errorBuilder,
-                enablePanAlways: widget.enablePanAlways,
-                strictScale: widget.strictScale,
-                onScaleUpdate: widget.onScaleUpdate,
-                fit: widget.fit,
-              );
-      },
+          return widget._isCustomChild
+              ? CustomChildWrapper(
+                  child: widget.child,
+                  childSize: widget.childSize,
+                  backgroundDecoration: backgroundDecoration,
+                  heroAttributes: widget.heroAttributes,
+                  scaleStateChangedCallback: widget.scaleStateChangedCallback,
+                  enableRotation: widget.enableRotation,
+                  controller: controller,
+                  scaleStateController: scaleController,
+                  maxScale: widget.maxScale,
+                  minScale: widget.minScale,
+                  initialScale: widget.initialScale,
+                  basePosition: widget.basePosition,
+                  scaleStateCycle: widget.scaleStateCycle,
+                  onTapUp: widget.onTapUp,
+                  onTapDown: widget.onTapDown,
+                  onScaleEnd: widget.onScaleEnd,
+                  outerSize: computedOuterSize,
+                  gestureDetectorBehavior: widget.gestureDetectorBehavior,
+                  tightMode: widget.tightMode,
+                  filterQuality: widget.filterQuality,
+                  disableGestures: widget.disableGestures,
+                  enablePanAlways: widget.enablePanAlways,
+                  strictScale: widget.strictScale,
+                  onScaleUpdate: widget.onScaleUpdate,
+                )
+              : ImageWrapper(
+                  imageProvider: widget.imageProvider!,
+                  loadingBuilder: widget.loadingBuilder,
+                  backgroundDecoration: backgroundDecoration,
+                  semanticLabel: widget.semanticLabel,
+                  gaplessPlayback: widget.gaplessPlayback,
+                  heroAttributes: widget.heroAttributes,
+                  scaleStateChangedCallback: widget.scaleStateChangedCallback,
+                  enableRotation: widget.enableRotation,
+                  controller: controller,
+                  scaleStateController: scaleController,
+                  maxScale: widget.maxScale,
+                  minScale: widget.minScale,
+                  initialScale: widget.initialScale,
+                  basePosition: widget.basePosition,
+                  scaleStateCycle: widget.scaleStateCycle,
+                  onTapUp: widget.onTapUp,
+                  onTapDown: widget.onTapDown,
+                  onScaleEnd: widget.onScaleEnd,
+                  outerSize: computedOuterSize,
+                  gestureDetectorBehavior: widget.gestureDetectorBehavior,
+                  tightMode: widget.tightMode,
+                  filterQuality: widget.filterQuality,
+                  disableGestures: widget.disableGestures,
+                  errorBuilder: widget.errorBuilder,
+                  enablePanAlways: widget.enablePanAlways,
+                  strictScale: widget.strictScale,
+                  onScaleUpdate: widget.onScaleUpdate,
+                  fit: widget.fit,
+                );
+        },
+      ),
     );
   }
 
   @override
   bool get wantKeepAlive => widget.wantKeepAlive;
+}
+
+/// The old controller is released after its actual descendants unmount, even
+/// when an offstage LayoutBuilder has not laid out its replacement yet.
+class _PhotoViewControllerLifetime extends StatefulWidget {
+  const _PhotoViewControllerLifetime({
+    required super.key,
+    required this.release,
+    required this.child,
+  });
+
+  final VoidCallback release;
+  final Widget child;
+
+  @override
+  State<_PhotoViewControllerLifetime> createState() =>
+      _PhotoViewControllerLifetimeState();
+}
+
+class _PhotoViewControllerLifetimeState
+    extends State<_PhotoViewControllerLifetime> {
+  @override
+  Widget build(BuildContext context) => widget.child;
+
+  @override
+  void dispose() {
+    widget.release();
+    super.dispose();
+  }
 }
 
 /// The default [ScaleStateCycle]

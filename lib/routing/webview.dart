@@ -12,6 +12,7 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/network/proxy.dart';
 import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -86,8 +87,17 @@ class AppWebview extends StatefulWidget {
   State<AppWebview> createState() => _AppWebviewState();
 }
 
-class _AppWebviewState extends State<AppWebview> {
+class _AppWebviewState extends State<AppWebview> with ContextMenuOwner {
+  @override
+  Object? get contextMenuIdentity => controller;
   InAppWebViewController? controller;
+  int _menuActionGeneration = 0;
+
+  @override
+  void deactivate() {
+    _menuActionGeneration++;
+    super.deactivate();
+  }
 
   String title = "Webview";
 
@@ -131,26 +141,45 @@ class _AppWebviewState extends State<AppWebview> {
         child: IconButton(
           icon: const Icon(Icons.more_horiz),
           onPressed: () {
-            showMenuX(context, Offset(context.width, context.padding.top), [
-              MenuEntry(
-                icon: Icons.open_in_browser,
-                text: "Open in Browser".tl,
-                onClick: () async =>
-                    launchUrlString((await controller?.getUrl())!.toString()),
-              ),
-              MenuEntry(
-                icon: Icons.copy,
-                text: "Copy link".tl,
-                onClick: () async => Clipboard.setData(
-                  ClipboardData(text: (await controller?.getUrl())!.toString()),
-                ),
-              ),
-              MenuEntry(
-                icon: Icons.refresh,
-                text: "Reload".tl,
-                onClick: () => controller?.reload(),
-              ),
-            ]);
+            final target = controller;
+            if (target == null) return;
+            final generation = _menuActionGeneration;
+            bool current() =>
+                mounted &&
+                generation == _menuActionGeneration &&
+                identical(controller, target) &&
+                NavigationAdmission.allows(context) &&
+                (ModalRoute.of(context)?.isCurrent ?? false);
+            Future<void> useUrl(Future<void> Function(String) action) async {
+              if (!current()) return;
+              final url = await target.getUrl();
+              if (current() && url != null && url.toString().isNotEmpty) {
+                await action(url.toString());
+              }
+            }
+
+            contextMenus
+                .show(context, Offset(context.width, context.padding.top), [
+                  MenuEntry(
+                    icon: Icons.open_in_browser,
+                    text: "Open in Browser".tl,
+                    onClick: () => useUrl((url) async {
+                      await launchUrlString(url);
+                    }),
+                  ),
+                  MenuEntry(
+                    icon: Icons.copy,
+                    text: "Copy link".tl,
+                    onClick: () => useUrl(
+                      (url) => Clipboard.setData(ClipboardData(text: url)),
+                    ),
+                  ),
+                  MenuEntry(
+                    icon: Icons.refresh,
+                    text: "Reload".tl,
+                    onClick: () => target.reload(),
+                  ),
+                ]);
           },
         ),
       ),
@@ -216,7 +245,9 @@ class _AppWebviewState extends State<AppWebview> {
         }
       },
       onWebViewCreated: (c) {
+        if (!mounted) return;
         controller = c;
+        contextMenus.revalidate();
         widget.onStarted?.call(c);
       },
       onLoadStop: (c, r) {

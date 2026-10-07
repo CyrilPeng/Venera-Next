@@ -121,6 +121,10 @@ class PhotoViewCoreState extends State<PhotoViewCore>
   Offset? _normalizedPosition;
   double? _scaleBefore;
   double? _rotationBefore;
+  int _gestureGeneration = 0;
+  int _callbackGeneration = 0;
+  bool _disposed = false;
+  VoidCallback? _removeControllerCallbacks;
 
   late final AnimationController _scaleAnimationController;
   Animation<double>? _scaleAnimation;
@@ -152,6 +156,7 @@ class PhotoViewCoreState extends State<PhotoViewCore>
   }
 
   void onScaleStart(ScaleStartDetails details) {
+    _gestureGeneration++;
     _rotationBefore = controller.rotation;
     _scaleBefore = scale;
     _normalizedPosition = details.focalPoint - controller.position;
@@ -204,14 +209,29 @@ class PhotoViewCoreState extends State<PhotoViewCore>
   }
 
   void onScaleEnd(ScaleEndDetails details) async {
+    final generation = _gestureGeneration;
+    final original = controller;
+    final originalScale = scaleStateController;
+    bool isCurrent() =>
+        mounted &&
+        !_disposed &&
+        generation == _gestureGeneration &&
+        identical(controller, original) &&
+        identical(scaleStateController, originalScale);
     if (stateChanged) {
       await Future.delayed(const Duration(milliseconds: 200));
+    }
+    if (!isCurrent()) {
+      return;
     }
     final double _scale = scale;
     final double maxScale = scaleBoundaries.maxScale;
     final double minScale = scaleBoundaries.minScale;
 
     if (widget.onScaleEnd?.call(context, details, controller.value) == true) {
+      return;
+    }
+    if (!isCurrent()) {
       return;
     }
     final Offset _position = controller.position;
@@ -297,7 +317,7 @@ class PhotoViewCoreState extends State<PhotoViewCore>
     }
   }
 
-  late final double? initialScale;
+  double? initialScale;
 
   @override
   void initState() {
@@ -312,7 +332,31 @@ class PhotoViewCoreState extends State<PhotoViewCore>
       ..addStatusListener(onAnimationStatus);
     _positionAnimationController = AnimationController(vsync: this)
       ..addListener(handlePositionAnimate);
-    Future.microtask(() => initialScale = controller.scale);
+    Future.microtask(() {
+      if (mounted && !_disposed) {
+        initialScale = controller.scale;
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant PhotoViewCore oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, controller) ||
+        !identical(oldWidget.scaleStateController, scaleStateController) ||
+        oldWidget.scaleBoundaries != widget.scaleBoundaries ||
+        oldWidget.imageProvider != widget.imageProvider) {
+      _gestureGeneration++;
+    }
+    if (!identical(oldWidget.controller, controller) ||
+        !identical(oldWidget.scaleStateController, scaleStateController)) {
+      _scaleAnimationController.stop();
+      _positionAnimationController.stop();
+      _rotationAnimationController.stop();
+      initialScale = controller.scale;
+      _removeControllerCallbacks?.call();
+      _callbackGeneration++;
+    }
   }
 
   void animateOnScaleStateUpdate(double prevScale, double nextScale) {
@@ -323,6 +367,11 @@ class PhotoViewCoreState extends State<PhotoViewCore>
 
   @override
   void dispose() {
+    _disposed = true;
+    _gestureGeneration++;
+    _callbackGeneration++;
+    _removeControllerCallbacks?.call();
+    _removeControllerCallbacks = null;
     _scaleAnimationController.removeStatusListener(onAnimationStatus);
     _scaleAnimationController.dispose();
     _positionAnimationController.dispose();
@@ -340,6 +389,84 @@ class PhotoViewCoreState extends State<PhotoViewCore>
 
   bool stateChanged = false;
 
+  void _bindControllerCallbacks() {
+    _removeControllerCallbacks?.call();
+    final original = controller;
+    final generation = ++_callbackGeneration;
+    bool isCurrent() =>
+        mounted &&
+        !_disposed &&
+        generation == _callbackGeneration &&
+        identical(controller, original);
+    void doubleClick() {
+      if (!isCurrent()) {
+        return;
+      }
+      _gestureGeneration++;
+      nextScaleState();
+    }
+
+    void move(Offset from, Offset to) {
+      if (isCurrent()) {
+        animatePosition(from, to);
+      }
+    }
+
+    void update(PhotoViewScaleState? state) {
+      if (!isCurrent()) {
+        return;
+      }
+      _gestureGeneration++;
+      if (state != null) {
+        scaleStateController.scaleState = state;
+      }
+      stateChanged = true;
+    }
+
+    void zoom(double value, [Offset? newPosition]) {
+      if (!isCurrent()) {
+        return;
+      }
+      _gestureGeneration++;
+      if (position != clampPosition(scale: value, position: newPosition)) {
+        animatePosition(
+            position, clampPosition(scale: value, position: newPosition));
+      }
+      animateScale(scale, value);
+    }
+
+    double? initial() => isCurrent() ? initialScale : null;
+    double? fit(BoxFit value) => isCurrent() ? getScaleWithFit(value) : null;
+    original.onDoubleClick = doubleClick;
+    original.animatePosition = move;
+    original.updateState = update;
+    original.animateScale = zoom;
+    original.getInitialScale = initial;
+    if (original is PhotoViewController) {
+      original.getScaleWithFit = fit;
+    }
+    _removeControllerCallbacks = () {
+      if (original.onDoubleClick == doubleClick) {
+        original.onDoubleClick = null;
+      }
+      if (original.animatePosition == move) {
+        original.animatePosition = null;
+      }
+      if (original.updateState == update) {
+        original.updateState = null;
+      }
+      if (original.animateScale == zoom) {
+        original.animateScale = null;
+      }
+      if (original.getInitialScale == initial) {
+        original.getInitialScale = null;
+      }
+      if (original is PhotoViewController && original.getScaleWithFit == fit) {
+        original.getScaleWithFit = null;
+      }
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     // Check if we need a recalc on the scale
@@ -348,25 +475,7 @@ class PhotoViewCoreState extends State<PhotoViewCore>
       cachedScaleBoundaries = widget.scaleBoundaries;
     }
 
-    controller.onDoubleClick = nextScaleState;
-    controller.animatePosition = animatePosition;
-    controller.updateState = (state) {
-      if (state != null) {
-        scaleStateController.scaleState = state;
-      }
-      stateChanged = true;
-    };
-    controller.animateScale = (value, [newPosition]) {
-      if (position != clampPosition(scale: value, position: newPosition)) {
-        animatePosition(
-            position, clampPosition(scale: value, position: newPosition));
-      }
-      animateScale(scale, value);
-    };
-    controller.getInitialScale = () => initialScale;
-    if (controller is PhotoViewController) {
-      (controller as PhotoViewController).getScaleWithFit = getScaleWithFit;
-    }
+    _bindControllerCallbacks();
 
     return StreamBuilder(
         stream: controller.outputStateStream,

@@ -6,13 +6,13 @@ import 'package:venera_next/features/reader/image_picker.dart';
 class _Viewport implements ReaderImagePickingViewport {
   @override
   (int, int)? currentImageRange;
-  String? key;
+  int? index;
   Offset? lastPosition;
 
   @override
-  String? getImageKeyByOffset(Offset position) {
+  int? getImageIndexByOffset(Offset position) {
     lastPosition = position;
-    return key;
+    return index;
   }
 }
 
@@ -65,20 +65,23 @@ void main() {
     expect(positions, isEmpty);
   });
 
-  test('multiple images use the viewport key at the global position', () async {
-    viewport.currentImageRange = (0, 2);
-    viewport.key = 'b';
-    final result = picker.pick();
-    positions.single.complete(const Offset(10, 20));
-    expect((await result)?.index, 1);
-    expect(viewport.lastPosition, const Offset(10, 20));
-  });
+  test(
+    'multiple images use the viewport source index at the global position',
+    () async {
+      viewport.currentImageRange = (0, 2);
+      viewport.index = 1;
+      final result = picker.pick();
+      positions.single.complete(const Offset(10, 20));
+      expect((await result)?.index, 1);
+      expect(viewport.lastPosition, const Offset(10, 20));
+    },
+  );
 
   test(
-    'unknown key, absent hit and dismissed overlay produce no selection',
+    'out-of-range index, absent hit and dismissed overlay produce no selection',
     () async {
-      for (final key in ['missing', null]) {
-        viewport.key = key;
+      for (final index in [-1, 3, null]) {
+        viewport.index = index;
         final result = picker.pick();
         positions.last.complete(Offset.zero);
         expect(await result, isNull);
@@ -93,7 +96,7 @@ void main() {
     test(
       '$change invalidates a pending selection before hit testing',
       () async {
-        viewport.key = 'a';
+        viewport.index = 0;
         final result = picker.pick();
         final original = current!;
         current = change == 'unmount'
@@ -115,7 +118,7 @@ void main() {
   test(
     'new attempt owns the result even when the old overlay completes later',
     () async {
-      viewport.key = 'c';
+      viewport.index = 2;
       final old = picker.pick();
       final next = picker.pick();
       positions.last.complete(Offset.zero);

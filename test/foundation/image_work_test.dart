@@ -14,6 +14,80 @@ Future<void> _finishRead(ImageWorkTask task, Completer<int> source) async {
 }
 
 void main() {
+  test(
+    'outer owners retain failures through drains until explicit repair',
+    () async {
+      final work = ImageWork();
+      final retained = <ImageWorkTask>{};
+      final detach = work.retainTasks((task) {
+        retained.add(task);
+        return () => retained.remove(task);
+      });
+      final successful = work.start()!;
+      expect(retained, contains(successful));
+      successful.finish();
+      expect(retained, isEmpty);
+      final failed = work.start()!;
+      final repair = failed.recordFailure(
+        StateError('setting'),
+        StackTrace.current,
+      );
+      failed.finish();
+      detach();
+      await expectLater(
+        work.prepareForExit(),
+        throwsA(isA<ImageWorkFailure>()),
+      );
+      expect(retained, [failed]);
+      final later = work.start()!;
+      later.finish();
+      expect(retained, [failed]);
+      await expectLater(
+        failed.closeAndWait(),
+        throwsA(isA<ImageWorkFailure>()),
+      );
+      repair();
+      expect(retained, isEmpty);
+      await work.dispose();
+    },
+  );
+
+  test(
+    'reentrant owner cancellation refuses work and releases registration',
+    () async {
+      final work = ImageWork();
+      var released = 0;
+      work.retainTasks((task) {
+        task.cancel();
+        return () => released++;
+      });
+      expect(work.start(), isNull);
+      expect(released, 1);
+      await work.dispose();
+    },
+  );
+
+  test(
+    'failed registration refuses work and retains original diagnostic',
+    () async {
+      final work = ImageWork();
+      final error = StateError('host registration');
+      final stack = StackTrace.fromString('registration stack');
+      work.retainTasks((_) => Error.throwWithStackTrace(error, stack));
+      expect(work.start(), isNull);
+      await expectLater(
+        work.dispose(),
+        throwsA(
+          isA<ImageWorkFailure>().having(
+            (failure) => failure.failures,
+            'original failure',
+            [(error: error, stack: stack)],
+          ),
+        ),
+      );
+    },
+  );
+
   for (final taskFirst in [false, true]) {
     test(
       'task failure survives independent owner drain; task first=$taskFirst',

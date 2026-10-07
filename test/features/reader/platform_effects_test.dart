@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera_next/features/reader/reader.dart';
+import 'package:venera_next/features/reader/platform_effects.dart';
+import 'package:venera_next/components/window_selection_task.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 
 const _portrait = [
   'DeviceOrientation.portraitUp',
@@ -35,6 +37,96 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, null);
   });
+
+  testWidgets(
+    'application default policy is owned before any reader exists',
+    (tester) async {
+      final registry = SelectionTaskRegistry();
+      final acknowledgement = Completer<void>();
+      final calls = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            calls.add(call.method);
+            await acknowledgement.future;
+            return null;
+          });
+      try {
+        await tester.pumpWidget(
+          SelectionTasksScope(
+            registry: registry,
+            child: const ReaderPlatformEffectsScope(child: SizedBox()),
+          ),
+        );
+        expect(
+          calls,
+          containsAll([
+            'SystemChrome.setPreferredOrientations',
+            'SystemChrome.setEnabledSystemUIMode',
+          ]),
+        );
+        await tester.pumpWidget(const SizedBox());
+        var closed = false;
+        final closing = registry.closeAndWait().then((_) => closed = true);
+        await tester.pump();
+        expect(closed, isFalse);
+        acknowledgement.complete();
+        await tester.pump();
+        expect(closed, isTrue);
+        await closing;
+        expect(calls, hasLength(2));
+      } finally {
+        if (!acknowledgement.isCompleted) acknowledgement.complete();
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+      }
+    },
+    variant: android,
+  );
+
+  testWidgets(
+    'scope replacement waits for old native restore without overwriting new reader',
+    (tester) async {
+      final restoration = Completer<void>();
+      var holdRestore = false;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'SystemChrome.setPreferredOrientations') {
+              final value = List<String>.from(call.arguments as List);
+              orientationRequests.add(value);
+              if (holdRestore && value.isEmpty) await restoration.future;
+            }
+            return null;
+          });
+      try {
+        await _openReader(tester);
+        await tester.tap(find.text('Rotate'));
+        await tester.pump();
+        holdRestore = true;
+        await tester.pumpWidget(const SizedBox());
+        final nextKey = GlobalKey<_TestReaderState>();
+        await tester.pumpWidget(
+          MaterialApp(
+            builder: (_, child) => ReaderPlatformEffectsScope(child: child!),
+            home: _TestReader(key: nextKey),
+          ),
+        );
+        nextKey.currentState!.cycleReaderOrientation();
+        nextKey.currentState!.cycleReaderOrientation();
+        await tester.pump();
+        expect(orientationRequests.last, isEmpty);
+        restoration.complete();
+        await tester.pump();
+        expect(orientationRequests.last, _landscape);
+        expect(find.text('landscape'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      } finally {
+        if (!restoration.isCompleted) restoration.complete();
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+      }
+    },
+    variant: android,
+  );
 
   testWidgets(
     'automatic reader orientation defers to the operating system',
@@ -152,41 +244,44 @@ void main() {
     expect(orientationRequests.last, isEmpty);
   }, variant: android);
 
-  testWidgets('exit releases the lock while rotation requests are pending', (
-    tester,
-  ) async {
-    final pending = <Completer<void>>[];
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-          if (call.method == 'SystemChrome.setPreferredOrientations') {
-            orientationRequests.add(List<String>.from(call.arguments as List));
-            final completer = Completer<void>();
-            pending.add(completer);
-            await completer.future;
-          }
-          return null;
-        });
+  testWidgets(
+    'exit drains pending rotation before restoring system policy',
+    (tester) async {
+      final pending = Completer<void>();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'SystemChrome.setPreferredOrientations') {
+              orientationRequests.add(
+                List<String>.from(call.arguments as List),
+              );
+              if (orientationRequests.last.toString() == _portrait.toString()) {
+                await pending.future;
+              }
+            }
+            return null;
+          });
 
-    await _openReader(tester);
-    await tester.tap(find.text('Rotate'));
-    await tester.pump();
-    await tester.tap(find.text('Rotate'));
-    await tester.pump();
-    await tester.pumpWidget(const SizedBox());
-    expect(orientationRequests, [
-      <String>[],
-      _portrait,
-      _landscape,
-      <String>[],
-    ]);
-
-    for (final completer in pending.reversed) {
-      completer.complete();
-      await tester.pump();
-    }
-    expect(orientationRequests.last, isEmpty);
-    expect(tester.takeException(), isNull);
-  }, variant: android);
+      try {
+        await _openReader(tester);
+        await tester.tap(find.text('Rotate'));
+        await tester.pump();
+        await tester.tap(find.text('Rotate'));
+        await tester.pump();
+        await tester.pumpWidget(const SizedBox());
+        expect(orientationRequests, [<String>[], _portrait]);
+        pending.complete();
+        await tester.pump();
+        expect(orientationRequests, [<String>[], _portrait, <String>[]]);
+        expect(orientationRequests.last, isEmpty);
+        expect(tester.takeException(), isNull);
+      } finally {
+        if (!pending.isCompleted) pending.complete();
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+      }
+    },
+    variant: android,
+  );
 
   testWidgets(
     'returning to an existing reader restores its temporary lock',
@@ -243,7 +338,7 @@ void main() {
 Future<void> _openReader(WidgetTester tester) async {
   await tester.pumpWidget(
     MaterialApp(
-      builder: (context, child) => ReaderOrientationScope(child: child!),
+      builder: (context, child) => ReaderPlatformEffectsScope(child: child!),
       home: Builder(
         builder: (context) => Scaffold(
           body: TextButton(
@@ -267,7 +362,25 @@ class _TestReader extends StatefulWidget {
   State<_TestReader> createState() => _TestReaderState();
 }
 
-class _TestReaderState extends State<_TestReader> with ReaderOrientationState {
+class _TestReaderState extends State<_TestReader> {
+  ReaderPlatformEffectsBinding? effects;
+  ReaderOrientation get readerOrientation => effects!.handle.orientation;
+  void cycleReaderOrientation() {
+    if (effects!.cycleOrientation()) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    effects ??= ReaderPlatformEffectsBinding(context);
+  }
+
+  @override
+  void dispose() {
+    effects?.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

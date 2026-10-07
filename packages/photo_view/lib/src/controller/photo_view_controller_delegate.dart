@@ -28,9 +28,32 @@ mixin PhotoViewControllerDelegate on State<PhotoViewCore> {
   /// Mark if scale need recalculation, useful for scale boundaries changes.
   bool markNeedsScaleRecalc = true;
 
+  PhotoViewControllerBase? _listenedController;
+  PhotoViewScaleStateController? _listenedScaleController;
+
   void initDelegate() {
+    _listenedController = controller;
+    _listenedScaleController = scaleStateController;
     controller.addIgnorableListener(_blindScaleListener);
     scaleStateController.addIgnorableListener(_blindScaleStateListener);
+  }
+
+  void _detachDelegate() {
+    _listenedController?.removeIgnorableListener(_blindScaleListener);
+    _listenedScaleController?.removeIgnorableListener(_blindScaleStateListener);
+    _listenedController = null;
+    _listenedScaleController = null;
+  }
+
+  @override
+  void didUpdateWidget(covariant PhotoViewCore oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(_listenedController, controller) ||
+        !identical(_listenedScaleController, scaleStateController)) {
+      _detachDelegate();
+      initDelegate();
+      markNeedsScaleRecalc = true;
+    }
   }
 
   void _blindScaleStateListener() {
@@ -208,7 +231,7 @@ mixin PhotoViewControllerDelegate on State<PhotoViewCore> {
   @override
   void dispose() {
     _animateScale = null;
-    scaleStateController.removeIgnorableListener(_blindScaleStateListener);
+    _detachDelegate();
     super.dispose();
   }
 }

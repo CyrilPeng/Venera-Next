@@ -9,8 +9,9 @@ abstract interface class ReaderGesturePort {
 }
 
 class ReaderDragListener {
-  ReaderDragListener({this.onMove, this.onEnd, this.onStart});
+  ReaderDragListener({this.onMove, this.onEnd, this.onStart, this.onCancel});
   final void Function(Offset point)? onStart;
   final void Function(Offset offset)? onMove;
   final VoidCallback? onEnd;
+  final VoidCallback? onCancel;
 }

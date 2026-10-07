@@ -8,8 +8,22 @@ import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
+import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/features/reader/comments_controller.dart';
 
 class _Source extends Fake implements ComicSource {
+  final work = ImageWork();
+  ReaderChapterCommentsRequest request() => ReaderChapterCommentsRequest(
+    identity: this,
+    sourceKey: key,
+    comicTitle: 'Book',
+    chapterTitle: 'Chapter',
+    isCurrent: () => true,
+    load: (page, reply) => chapterCommentsLoader('book', 'ep', page, reply),
+    send: (text, reply) => sendChapterCommentFunc('book', 'ep', text, reply),
+    like: (id, liked) => likeCommentFunc('book', 'ep', id, liked),
+    vote: (id, up, cancel) => voteCommentFunc('book', 'ep', id, up, cancel),
+  );
   @override
   Future<void> closeDataWrites() async {}
 
@@ -70,22 +84,133 @@ void main() {
         }),
       ),
       'chapter' => ChapterCommentsPage(
-        comicId: 'book',
-        epId: 'ep',
-        source: source,
-        comicTitle: 'Book',
-        chapterTitle: 'Chapter',
+        request: source.request(),
+        work: source.work,
       ),
       _ => EmbeddedChapterCommentsPage(
-        comicId: 'book',
-        epId: 'ep',
-        source: source,
-        comicTitle: 'Book',
-        chapterTitle: 'Chapter',
+        request: source.request(),
+        work: source.work,
+        onExit: () async {},
       ),
     };
     Future<void> show(WidgetTester tester, _Source source) =>
         tester.pumpWidget(MaterialApp(home: Scaffold(body: page(source))));
+
+    if (kind != 'comic') {
+      testWidgets('$kind loads beyond a fully blocked first page', (
+        tester,
+      ) async {
+        appdata.settings['blockedCommentWords'] = ['blocked'];
+        final pages = <int>[];
+        final source = _Source()
+          ..load = (page) async {
+            pages.add(page);
+            return Res([
+              comment(page == 1 ? 'Blocked' : 'Visible'),
+            ], subData: 2);
+          };
+        await show(tester, source);
+        await tester.pumpAndSettle();
+        expect(pages, [1, 2]);
+        expect(find.text('Visible'), findsOneWidget);
+        expect(find.text('Blocked'), findsNothing);
+      });
+
+      testWidgets('$kind keeps an ABA draft after send completion', (
+        tester,
+      ) async {
+        final pending = Completer<Res<bool>>();
+        final source = _Source()..send = () => pending.future;
+        await show(tester, source);
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Same draft');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.enterText(find.byType(TextField), 'Edited');
+        await tester.enterText(find.byType(TextField), 'Same draft');
+        pending.complete(const Res(true));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          'Same draft',
+        );
+      });
+
+      testWidgets('$kind old send cannot clear replacement source draft', (
+        tester,
+      ) async {
+        final pending = Completer<Res<bool>>();
+        final source = _Source()..send = () => pending.future;
+        await show(tester, source);
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Old');
+        await tester.tap(find.byIcon(Icons.send));
+        await show(tester, _Source());
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'New');
+        pending.complete(const Res(true));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          'New',
+        );
+      });
+
+      testWidgets('$kind retired reaction cannot update replacement row', (
+        tester,
+      ) async {
+        final pending = Completer<Res<int?>>();
+        final source = _Source();
+        source.load = (_) async => Res([comment('Original')], subData: 1);
+        source.react = () => pending.future;
+        await show(tester, source);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byIcon(Icons.favorite_border));
+        source.load = (_) async => Res([comment('Replacement')], subData: 1);
+        await tester.enterText(find.byType(TextField), 'Refresh after send');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.pumpAndSettle();
+        pending.complete(const Res(2));
+        await tester.pumpAndSettle();
+        expect(find.text('Replacement'), findsOneWidget);
+        expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+        expect(find.byIcon(Icons.favorite), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('$kind keeps a newer draft when an earlier send completes', (
+        tester,
+      ) async {
+        final source = _Source();
+        final pending = Completer<Res<bool>>();
+        source.send = () => pending.future;
+        await show(tester, source);
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Submitted');
+        await tester.tap(find.byIcon(Icons.send));
+        await tester.enterText(find.byType(TextField), 'New draft');
+        pending.complete(const Res(true));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          'New draft',
+        );
+      });
+
+      testWidgets('$kind replaces pending source reads with the new target', (
+        tester,
+      ) async {
+        final old = Completer<Res<List<Comment>>>();
+        final source = _Source()..load = (_) => old.future;
+        await show(tester, source);
+        final replacement = _Source()
+          ..load = (_) async => Res([comment('Replacement')], subData: 1);
+        await show(tester, replacement);
+        old.complete(Res([comment('Old source')], subData: 1));
+        await tester.pumpAndSettle();
+        expect(find.text('Replacement'), findsOneWidget);
+        expect(find.text('Old source'), findsNothing);
+      });
+    }
 
     testWidgets(
       '$kind first-load deduplication and late failure after unmount',

@@ -33,6 +33,8 @@ abstract mixin class ComicPageActions {
 
   BuildContext get context;
 
+  MenuRouteController get contextMenus;
+
   bool isComicActive(ComicDetails value);
 
   ComicDetails get comic;
@@ -362,6 +364,7 @@ abstract mixin class ComicPageActions {
   }
 
   void onLongPressTag(String tag, String namespace, BuildContext tagContext) {
+    final target = comic;
     final renderBox = tagContext.findRenderObject() as RenderBox;
     final offset = renderBox.localToGlobal(Offset.zero);
     final shortcut = searchTargetForTag(tag, namespace) == null
@@ -375,6 +378,8 @@ abstract mixin class ComicPageActions {
             value: tag,
           );
     showSearchShortcutMenu(
+      menus: contextMenus,
+      isValid: () => isComicActive(target),
       context: tagContext,
       location: Offset(
         offset.dx + renderBox.size.width / 2 - 121,
@@ -386,42 +391,47 @@ abstract mixin class ComicPageActions {
   }
 
   void showMoreActions() {
-    var context = App.rootContext;
-    showMenuX(context, Offset(context.width - 16, context.padding.top), [
-      MenuEntry(
-        icon: Icons.copy,
-        text: "Copy Title".tl,
-        onClick: () {
-          Clipboard.setData(ClipboardData(text: comic.title));
-          context.showMessage(message: "Copied".tl);
-        },
-      ),
-      MenuEntry(
-        icon: Icons.copy_rounded,
-        text: "Copy ID".tl,
-        onClick: () {
-          Clipboard.setData(ClipboardData(text: comic.id));
-          context.showMessage(message: "Copied".tl);
-        },
-      ),
-      if (comic.url != null)
+    final target = comic;
+    contextMenus.show(
+      context,
+      Offset(context.width - 16, context.padding.top),
+      [
         MenuEntry(
-          icon: Icons.link,
-          text: "Copy URL".tl,
+          icon: Icons.copy,
+          text: "Copy Title".tl,
           onClick: () {
-            Clipboard.setData(ClipboardData(text: comic.url!));
+            Clipboard.setData(ClipboardData(text: target.title));
             context.showMessage(message: "Copied".tl);
           },
         ),
-      if (comic.url != null)
         MenuEntry(
-          icon: Icons.open_in_browser,
-          text: "Open in Browser".tl,
+          icon: Icons.copy_rounded,
+          text: "Copy ID".tl,
           onClick: () {
-            launchUrlString(comic.url!);
+            Clipboard.setData(ClipboardData(text: target.id));
+            context.showMessage(message: "Copied".tl);
           },
         ),
-    ]);
+        if (target.url != null)
+          MenuEntry(
+            icon: Icons.link,
+            text: "Copy URL".tl,
+            onClick: () {
+              Clipboard.setData(ClipboardData(text: target.url!));
+              context.showMessage(message: "Copied".tl);
+            },
+          ),
+        if (target.url != null)
+          MenuEntry(
+            icon: Icons.open_in_browser,
+            text: "Open in Browser".tl,
+            onClick: () {
+              launchUrlString(target.url!);
+            },
+          ),
+      ],
+      isValid: () => isComicActive(target),
+    );
   }
 
   void showComments() {

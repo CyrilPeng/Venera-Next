@@ -131,6 +131,8 @@ void openSearchShortcut(BuildContext context, SearchShortcut shortcut) {
 }
 
 void showSearchShortcutMenu({
+  required MenuRouteController menus,
+  bool Function()? isValid,
   required BuildContext context,
   required Offset location,
   required String copyText,
@@ -177,7 +179,7 @@ void showSearchShortcutMenu({
       ),
     );
   }
-  showMenuX(context, location, entries);
+  menus.show(context, location, entries, isValid: isValid);
 }
 
 class SearchShortcutsSliver extends StatefulWidget {
@@ -255,8 +257,9 @@ class _SearchShortcutsSliverState extends State<SearchShortcutsSliver> {
     final sourceName = source?.name ?? shortcut.sourceKey;
     final subtitle = '$sourceName · ${shortcut.namespace}';
 
-    return Builder(
-      builder: (itemContext) {
+    return ContextMenuRegion(
+      identity: shortcut.identity,
+      builder: (itemContext, menus) {
         void showShortcutMenu([Offset? position]) {
           final renderBox = itemContext.findRenderObject() as RenderBox;
           final offset = renderBox.localToGlobal(Offset.zero);
@@ -267,6 +270,7 @@ class _SearchShortcutsSliverState extends State<SearchShortcutsSliver> {
                 offset.dy + renderBox.size.height - 8,
               );
           showSearchShortcutMenu(
+            menus: menus,
             context: itemContext,
             location: location,
             copyText: shortcut.value,

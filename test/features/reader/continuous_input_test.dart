@@ -101,6 +101,14 @@ void main() {
           margin = 10;
           await tester.pumpWidget(build());
           final photo = tester.widget<PhotoView>(find.byType(PhotoView));
+          final state = tester.state<ContinuousModeState>(
+            find.byType(ReaderContinuousView),
+          );
+          var photoClosed = false;
+          state.photoViewController.outputStateStream.listen(
+            (_) {},
+            onDone: () => photoClosed = true,
+          );
           expect(
             photo.childSize!.width,
             mode == 'ltr' || mode == 'rtl' ? 800 : 640,
@@ -118,9 +126,27 @@ void main() {
             expect(binding.current!.toChapter(2), false);
             expect(loads, isEmpty);
           }
+          for (var i = 0; i < 80; i++) {
+            await tester.pump(const Duration(milliseconds: 10));
+            await tester.runAsync(() => pumpEventQueue());
+            if (state.scrollController.hasClients &&
+                state.scrollController.position.maxScrollExtent > 0) {
+              break;
+            }
+          }
+          expect(
+            state.scrollController.position.maxScrollExtent,
+            greaterThan(0),
+          );
+          state.smoothTo(200);
+          await tester.pump(const Duration(milliseconds: 20));
           await tester.pumpWidget(const SizedBox());
           await tester.pump(const Duration(seconds: 1));
           expect(binding.current, isNull);
+          expect(photoClosed, true);
+          state.handleDoubleTap(Offset.zero);
+          state.smoothTo(100);
+          expect(collected, 1);
         } finally {
           await tester.pumpWidget(const SizedBox());
           final closingImages = imageWork.dispose();

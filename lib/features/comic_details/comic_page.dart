@@ -91,7 +91,9 @@ class ComicPage extends StatefulWidget {
 }
 
 class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
-    with ComicPageActions {
+    with ComicPageActions, ContextMenuOwner {
+  @override
+  Object? get contextMenuIdentity => data;
   late final _saves = ImageSaveWork(
     deliver: (bytes, filename, checkStop) => saveFileForWindow(
       context,
@@ -106,8 +108,10 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
   );
 
   @override
-  Widget build(BuildContext context) =>
-      ImageSaveBinding(work: _saves, child: super.build(context));
+  Widget build(BuildContext context) {
+    contextMenus.revalidate();
+    return ImageSaveBinding(work: _saves, child: super.build(context));
+  }
 
   @override
   History? history;
@@ -655,7 +659,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
                   }
                 },
                 onSecondaryTapDown: (details) {
-                  showMenuX(context, details.globalPosition, [
+                  contextMenus.show(tagContext, details.globalPosition, [
                     MenuEntry(
                       icon: Icons.remove_red_eye,
                       text: "View".tl,

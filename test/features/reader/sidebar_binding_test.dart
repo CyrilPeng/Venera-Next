@@ -14,7 +14,8 @@ class _Host extends StatefulWidget {
 }
 
 class _HostState extends State<_Host> {
-  void open(String text) => widget.binding.show(context, Text(text));
+  ReaderSidebarHandle? open(String text) =>
+      widget.binding.show(context, Text(text));
 
   @override
   void dispose() {
@@ -94,6 +95,98 @@ void main() {
     expect(events, ['pause', 'release', 'pause', 'release']);
     expect(errors, isEmpty);
   });
+
+  testWidgets('unrelated covering route rejects a new sidebar before pause', (
+    tester,
+  ) async {
+    await mount(tester);
+    navigator.currentState!.push(
+      MaterialPageRoute<void>(builder: (_) => const Text('cover')),
+    );
+    await tester.pumpAndSettle();
+    expect(host.currentState!.open('hidden request'), isNull);
+    expect(events, isEmpty);
+    expect(find.text('cover'), findsOneWidget);
+    expect(errors, isEmpty);
+  });
+
+  testWidgets(
+    'original request is rechecked before the queued route is pushed',
+    (tester) async {
+      await mount(tester);
+      var current = true;
+      binding.show(
+        host.currentContext!,
+        const Text('old target'),
+        isRequestCurrent: () => current,
+      );
+      current = false;
+      await tester.pumpAndSettle();
+      expect(find.text('old target'), findsNothing);
+      expect(events, ['pause', 'release']);
+      expect(navigator.currentState!.canPop(), false);
+      expect(errors, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'covering the parent before the frame retires queued navigation',
+    (tester) async {
+      await mount(tester);
+      final pending = host.currentState!.open('queued')!;
+      navigator.currentState!.push(
+        MaterialPageRoute<void>(builder: (_) => const Text('cover')),
+      );
+      await tester.pumpAndSettle();
+      expect(pending.isCurrent, false);
+      expect(find.text('queued'), findsNothing);
+      expect(find.text('cover'), findsOneWidget);
+      expect(events, ['pause', 'release']);
+      expect(errors, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'retired handles neither authorize actions nor close a new sidebar',
+    (tester) async {
+      await mount(tester);
+      final old = host.currentState!.open('old')!;
+      expect(old.isCurrent, isFalse);
+      await tester.pumpAndSettle();
+      expect(old.isCurrent, isTrue);
+      old.close();
+      final next = host.currentState!.open('new')!;
+      old.close();
+      await tester.pumpAndSettle();
+      expect(old.isCurrent, isFalse);
+      expect(next.isCurrent, isTrue);
+      expect(find.text('new'), findsOneWidget);
+      expect(events, ['pause', 'pause', 'release']);
+      next.close();
+      await tester.pumpAndSettle();
+      expect(events, ['pause', 'pause', 'release', 'release']);
+    },
+  );
+
+  testWidgets(
+    'covered handle rejects interaction and removes only its own route',
+    (tester) async {
+      await mount(tester);
+      final handle = host.currentState!.open('menu')!;
+      await tester.pumpAndSettle();
+      navigator.currentState!.push(
+        MaterialPageRoute<void>(builder: (_) => const Text('cover')),
+      );
+      expect(handle.isCurrent, isFalse);
+      await tester.pumpAndSettle();
+      handle.close();
+      await tester.pumpAndSettle();
+      expect(find.text('cover'), findsOneWidget);
+      expect(find.text('menu'), findsNothing);
+      expect(events, ['pause', 'release']);
+      expect(errors, isEmpty);
+    },
+  );
 
   testWidgets(
     'replacement closes the old route without retiring a new request',

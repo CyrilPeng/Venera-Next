@@ -4,7 +4,9 @@ import 'dart:ui';
 abstract interface class ReaderImagePickingViewport {
   /// Zero-based, end-exclusive source images represented by the current page.
   (int start, int end)? get currentImageRange;
-  String? getImageKeyByOffset(Offset offset);
+
+  /// Zero-based source index in the current chapter, preserving duplicate keys.
+  int? getImageIndexByOffset(Offset offset);
 }
 
 class ReaderImagePickContext {
@@ -61,9 +63,10 @@ class ReaderImagePicker {
         !context.matches(current())) {
       return null;
     }
-    final key = context.viewport.getImageKeyByOffset(position);
-    final index = key == null ? -1 : context.images.indexOf(key);
-    return index < 0 ? null : ReaderImagePick._(context, index);
+    final index = context.viewport.getImageIndexByOffset(position);
+    return index == null || index < 0 || index >= context.images.length
+        ? null
+        : ReaderImagePick._(context, index);
   }
 
   void dispose() {

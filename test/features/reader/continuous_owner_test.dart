@@ -8,6 +8,8 @@ import 'package:image/image.dart' as img;
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/continuous_data.dart';
 import 'package:venera_next/features/reader/continuous_view.dart';
+import 'package:venera_next/features/reader/display_image_provider.dart';
+import 'package:venera_next/features/reader/image_position.dart';
 import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
@@ -15,6 +17,50 @@ import 'package:venera_next/network/request_scope.dart';
 
 void main() {
   final binding = _FrameGateBinding();
+
+  testWidgets(
+    'waterfall hit preserves the displayed chapter and duplicate source index',
+    (tester) async {
+      final fixture = _Fixture(shortPages: true);
+      try {
+        await fixture.mount(tester);
+        for (var i = 0; i < 20 && !fixture.loads.contains(2); i++) {
+          fixture.state.onPositionChanged();
+          await tester.pump();
+        }
+        await fixture.waitForImages(tester);
+        final state = fixture.state;
+        expect(state.currentChapter, 1);
+        final visible = state.imageStates
+            .whereType<ComicImageState>()
+            .where((image) => image.visibleInReader)
+            .toList();
+        ComicImageState at(String chapter, int page) =>
+            visible.singleWhere((state) {
+              final image =
+                  (state.widget.image as ReaderDisplayImageProvider).image;
+              return image.eid == chapter && image.page == page;
+            });
+        final next = at('id-2', 1);
+        final nextPoint = tester.getCenter(find.byWidget(next.widget));
+        await tester.runAsync(() => state.getImageByOffset(nextPoint));
+        expect(fixture.reads.single.chapterId, 'id-2');
+        expect(fixture.reads.single.imageKey, fixture.imageKey);
+        expect(state.getImageIndexByOffset(nextPoint), isNull);
+        final current = at('id-1', 3);
+        final point = tester.getCenter(find.byWidget(current.widget));
+        expect(state.getImageIndexByOffset(point), 2);
+        await tester.runAsync(() => state.getImageByOffset(point));
+        expect(fixture.reads.last.chapterId, 'id-1');
+        await tester.pumpWidget(const SizedBox());
+        expect(await state.getImageByOffset(point), isNull);
+        expect(state.getImageIndexByOffset(point), isNull);
+        expect(fixture.reads, hasLength(2));
+      } finally {
+        await fixture.dispose(tester);
+      }
+    },
+  );
 
   testWidgets('owner replacement releases the old navigation frame hold', (
     tester,
@@ -39,6 +85,38 @@ void main() {
       await fixture.dispose(tester);
     }
   });
+
+  testWidgets(
+    'comic replacement within the same work retires the old chapter load',
+    (tester) async {
+      final fixture = _Fixture();
+      final pending = Completer<List<String>>();
+      RequestScope? originalScope;
+      try {
+        await fixture.mount(tester);
+        fixture.load = (_, scope) {
+          originalScope = scope;
+          return pending.future;
+        };
+        final retained = fixture.state;
+        expect(retained.toChapter(2), isTrue);
+        await tester.idle();
+        expect(originalScope, isNotNull);
+        fixture.comicId = 'replacement-book';
+        await tester.pumpWidget(fixture.build());
+        expect(fixture.state, same(retained));
+        expect(originalScope!.isCancelled, isTrue);
+        pending.complete([fixture.imageKey]);
+        await fixture.waitForImages(tester);
+        expect(fixture.navigation.state.chapter, 1);
+        expect(fixture.loading[0], [true, false]);
+        expect(tester.takeException(), isNull);
+      } finally {
+        if (!pending.isCompleted) pending.complete([fixture.imageKey]);
+        await fixture.dispose(tester);
+      }
+    },
+  );
 
   testWidgets('old prepend frame cannot move the replacement owner', (
     tester,
@@ -224,7 +302,7 @@ class _FrameGateBinding extends AutomatedTestWidgetsFlutterBinding {
 }
 
 class _Fixture {
-  _Fixture({int chapter = 1}) {
+  _Fixture({int chapter = 1, this.shortPages = false}) {
     navigation =
         ReaderController(
             pageCount: () => 3,
@@ -240,8 +318,13 @@ class _Fixture {
   }
 
   final directory = Directory.systemTemp.createTempSync('continuous-owner-');
+  final bool shortPages;
+  var comicId = 'book';
+  final reads = <ReaderImageAddress>[];
   late final File file = File('${directory.path}/page.png')
-    ..writeAsBytesSync(img.encodePng(img.Image(width: 40, height: 80)));
+    ..writeAsBytesSync(
+      img.encodePng(img.Image(width: 40, height: shortPages ? 4 : 80)),
+    );
   late final imageKey = 'file://${file.path}';
   final viewport = ReaderViewportBinding();
   final owners = [ImageWork()];
@@ -262,7 +345,7 @@ class _Fixture {
   Widget build() => MaterialApp(
     home: ReaderContinuousView(
       imageWork: imageWork,
-      data: const ReaderContinuousData(
+      data: ReaderContinuousData(
         vertical: true,
         reverse: false,
         crossChapter: true,
@@ -278,7 +361,7 @@ class _Fixture {
         doubleTapCollect: false,
         centerLongPressZoom: true,
         sourceKey: null,
-        comicId: 'book',
+        comicId: comicId,
       ),
       navigation: navigation,
       loadChapter: (chapter, scope) {
@@ -296,7 +379,10 @@ class _Fixture {
       onPreviousError: (error, _) => fail('$error'),
       onNavigationError: (_, error, _) => fail('$error'),
       readerSize: () => const Size(800, 600),
-      readImage: (_) => file.readAsBytes(),
+      readImage: (image) {
+        reads.add(image);
+        return file.readAsBytes();
+      },
     ),
   );
 

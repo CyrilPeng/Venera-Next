@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_view/photo_view.dart';
-import 'package:photo_view/photo_view_gallery.dart';
 import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/features/reader/image_downloads.dart';
 import 'package:venera_next/features/reader/image_precache.dart';
@@ -15,6 +14,7 @@ import 'package:venera_next/foundation/image_provider/reader_image.dart';
 
 import 'gallery_data.dart';
 import 'display_image_provider.dart';
+import 'image_position.dart';
 import 'reader_controller.dart';
 import 'reader_viewport.dart';
 
@@ -44,7 +44,7 @@ class ReaderGalleryView extends StatefulWidget {
   final VoidCallback onChapterChanged;
   final VoidCallback onCollectImage;
   final Size Function() readerSize;
-  final Future<Uint8List?> Function(String imageKey) readImage;
+  final Future<Uint8List?> Function(ReaderImageAddress image) readImage;
   final WidgetBuilder? commentsBuilder;
 
   @override
@@ -79,9 +79,11 @@ class GalleryModeState extends State<ReaderGalleryView>
   ReaderDisplayImageProvider _displayImage(String key) =>
       ReaderDisplayImageProvider(_imageProvider(key), widget.imageWork);
 
-  var imageStates = <State<ComicImage>>{};
+  final imageStates = <State<ComicImage>, int>{};
 
   bool isLongPressing = false;
+  bool _disposed = false;
+  PhotoViewController? _longPressController;
 
   int fingers = 0;
 
@@ -112,8 +114,11 @@ class GalleryModeState extends State<ReaderGalleryView>
 
   @override
   void dispose() {
+    _disposed = true;
+    _longPressController = null;
     widget.onViewportChanged(this, false);
     keyRepeatTimer?.cancel();
+    controller.dispose();
     unawaited(_imagePrecache.dispose());
     unawaited(_imageDownloads.dispose());
     super.dispose();
@@ -121,7 +126,9 @@ class GalleryModeState extends State<ReaderGalleryView>
 
   @override
   bool get autoReadingReady {
-    if (!controller.hasClients ||
+    if (_disposed ||
+        !mounted ||
+        !controller.hasClients ||
         fingers > 0 ||
         isLongPressing ||
         controller.position.isScrollingNotifier.value) {
@@ -137,7 +144,7 @@ class GalleryModeState extends State<ReaderGalleryView>
     }
     final (start, end) = getPageImagesRange(page);
     if (end - start == 1) return true;
-    final visible = imageStates
+    final visible = imageStates.keys
         .whereType<ComicImageState>()
         .where((image) => image.visibleInReader)
         .toList();
@@ -199,6 +206,8 @@ class GalleryModeState extends State<ReaderGalleryView>
 
   @override
   Widget build(BuildContext context) {
+    final originalContent = data.content;
+    final originalNavigation = navigation;
     return Listener(
       onPointerDown: (event) {
         fingers++;
@@ -211,123 +220,164 @@ class GalleryModeState extends State<ReaderGalleryView>
       },
       onPointerMove: (event) {
         if (isLongPressing) {
-          var controller = photoViewControllers[page]!;
+          final controller = _longPressController;
+          if (controller == null ||
+              !identical(photoViewControllers[page], controller)) {
+            return;
+          }
           Offset value = event.delta;
           if (isLongPressing) {
             controller.updateMultiple(position: controller.position + value);
           }
         }
       },
-      child: PhotoViewGallery.builder(
-        backgroundDecoration: BoxDecoration(color: context.colorScheme.surface),
-        reverse: data.reverse,
-        scrollDirection: data.vertical ? Axis.vertical : Axis.horizontal,
-        itemCount: totalPages + 2,
-        builder: (BuildContext context, int index) {
-          if (index == 0 || index == totalPages + 1) {
-            return PhotoViewGalleryPageOptions.customChild(
-              child: const SizedBox(),
-            );
-          } else if (isChapterCommentsPage(index)) {
-            return PhotoViewGalleryPageOptions.customChild(
-              child: widget.commentsBuilder?.call(context) ?? const SizedBox(),
-            );
-          } else {
-            var (startIndex, endIndex) = getPageImagesRange(index);
-            List<String> pageImages = data.images.sublist(startIndex, endIndex);
-
-            cache(index);
-
-            photoViewControllers[index] ??= PhotoViewController();
-
-            if (data.layout.imagesPerPage == 1 || pageImages.length == 1) {
-              return PhotoViewGalleryPageOptions(
-                filterQuality: FilterQuality.medium,
-                controller: photoViewControllers[index],
-                imageProvider: _displayImage(pageImages[0]),
-                fit: BoxFit.contain,
-                errorBuilder: (_, error, s, retry) {
-                  return NetworkError(message: error.toString(), retry: retry);
-                },
+      child: PhotoViewGestureDetectorScope(
+        axis: data.vertical ? Axis.vertical : Axis.horizontal,
+        child: PageView.builder(
+          reverse: data.reverse,
+          scrollDirection: data.vertical ? Axis.vertical : Axis.horizontal,
+          itemCount: totalPages + 2,
+          controller: controller,
+          itemBuilder: (context, index) => _buildPhotoPage(context, index),
+          onPageChanged: (i) {
+            if (_disposed ||
+                !mounted ||
+                !identical(data.content, originalContent) ||
+                !identical(navigation, originalNavigation)) {
+              return;
+            }
+            var shouldRefreshEInk = false;
+            if (i == 0) {
+              if (data.firstChapter ||
+                  !navigation.toChapter(
+                    navigation.state.chapter - 1,
+                    toLastPage: true,
+                  )) {
+                controller.jumpToPage(1);
+              } else {
+                shouldRefreshEInk = true;
+              }
+            } else if (i == totalPages + 1) {
+              if (data.lastChapter ||
+                  !navigation.toChapter(navigation.state.chapter + 1)) {
+                controller.jumpToPage(totalPages);
+              } else {
+                shouldRefreshEInk = true;
+              }
+            } else {
+              final previousPage = page;
+              navigation.reportPage(i);
+              shouldRefreshEInk =
+                  page != previousPage && !isChapterCommentsPage(i);
+              widget.onPageReported(
+                isChapterCommentsPage(i),
+                shouldRefreshEInk,
               );
             }
-
-            final viewportSize = MediaQuery.of(context).size;
-            return PhotoViewGalleryPageOptions.customChild(
-              childSize: viewportSize,
-              controller: photoViewControllers[index],
-              minScale: PhotoViewComputedScale.contained * 1.0,
-              maxScale: PhotoViewComputedScale.covered * 10.0,
-              child: buildPageImages(pageImages),
-            );
-          }
-        },
-        pageController: controller,
-        loadingBuilder: (context, event) {
-          return PhotoView.customChild(
-            childSize: MediaQuery.of(context).size,
-            initialScale: PhotoViewComputedScale.contained,
-            minScale: PhotoViewComputedScale.contained * 1.0,
-            maxScale: PhotoViewComputedScale.covered * 10.0,
-            backgroundDecoration: BoxDecoration(
-              color: context.colorScheme.surface,
-            ),
-            child: Center(
-              child: SizedBox(
-                width: 20.0,
-                height: 20.0,
-                child: CircularProgressIndicator(
-                  backgroundColor: context.colorScheme.surfaceContainerHigh,
-                  value: event == null || event.expectedTotalBytes == null
-                      ? null
-                      : event.cumulativeBytesLoaded / event.expectedTotalBytes!,
-                ),
-              ),
-            ),
-          );
-        },
-        onPageChanged: (i) {
-          var shouldRefreshEInk = false;
-          if (i == 0) {
-            if (data.firstChapter ||
-                !navigation.toChapter(
-                  navigation.state.chapter - 1,
-                  toLastPage: true,
-                )) {
-              controller.jumpToPage(1);
-            } else {
-              shouldRefreshEInk = true;
+            if (shouldRefreshEInk && (i == 0 || i == totalPages + 1)) {
+              widget.onChapterChanged();
             }
-          } else if (i == totalPages + 1) {
-            if (data.lastChapter ||
-                !navigation.toChapter(navigation.state.chapter + 1)) {
-              controller.jumpToPage(totalPages);
-            } else {
-              shouldRefreshEInk = true;
-            }
-          } else {
-            final previousPage = page;
-            navigation.reportPage(i);
-            shouldRefreshEInk =
-                page != previousPage && !isChapterCommentsPage(i);
-            widget.onPageReported(isChapterCommentsPage(i), shouldRefreshEInk);
-          }
-          if (shouldRefreshEInk && (i == 0 || i == totalPages + 1)) {
-            widget.onChapterChanged();
-          }
-          // Remove other pages' controllers to reset their state.
-          var keys = photoViewControllers.keys.toList();
-          for (var key in keys) {
-            if (key != i) {
-              photoViewControllers.remove(key);
-            }
-          }
-        },
+            // Kept-alive neighbours reset when entered again, after their old
+            // PhotoView subtree has actually unmounted.
+            _longPressController = null;
+            isLongPressing = false;
+            if (mounted && !_disposed) setState(() {});
+          },
+        ),
       ),
     );
   }
 
-  Widget buildPageImages(List<String> images) {
+  Widget _buildPhotoPage(BuildContext context, int index) {
+    final decoration = BoxDecoration(color: context.colorScheme.surface);
+    if (index == 0 || index == totalPages + 1) {
+      return ClipRect(
+        child: PhotoView.customChild(
+          backgroundDecoration: decoration,
+          child: const SizedBox(),
+        ),
+      );
+    }
+    if (isChapterCommentsPage(index)) {
+      return ClipRect(
+        child: PhotoView.customChild(
+          backgroundDecoration: decoration,
+          child: widget.commentsBuilder?.call(context) ?? const SizedBox(),
+        ),
+      );
+    }
+    final (start, end) = getPageImagesRange(index);
+    final images = List.generate(end - start, (i) => start + i);
+    cache(index);
+    return _GalleryPhotoPage(
+      key: ValueKey((
+        data.content,
+        widget.imageWork,
+        data.sourceKey,
+        data.comicId,
+        data.chapterId,
+        data.layout.imagesPerPage,
+        data.layout.singleImageOnFirstPage,
+        data.vertical,
+        data.reverse,
+        index,
+      )),
+      active: page == index,
+      onController: (controller, attached) {
+        if (attached) {
+          photoViewControllers[index] = controller;
+        } else if (identical(photoViewControllers[index], controller)) {
+          photoViewControllers.remove(index);
+        }
+      },
+      builder: (context, controller) {
+        if (data.layout.imagesPerPage == 1 || images.length == 1) {
+          return PhotoView(
+            backgroundDecoration: decoration,
+            filterQuality: FilterQuality.medium,
+            controller: controller,
+            imageProvider: _displayImage(data.images[images[0]]),
+            fit: BoxFit.contain,
+            loadingBuilder: _buildLoading,
+            errorBuilder: (_, error, stack, retry) =>
+                NetworkError(message: error.toString(), retry: retry),
+          );
+        }
+        return PhotoView.customChild(
+          backgroundDecoration: decoration,
+          childSize: MediaQuery.sizeOf(context),
+          controller: controller,
+          minScale: PhotoViewComputedScale.contained * 1.0,
+          maxScale: PhotoViewComputedScale.covered * 10.0,
+          child: buildPageImages(images),
+        );
+      },
+    );
+  }
+
+  Widget _buildLoading(BuildContext context, ImageChunkEvent? event) {
+    return PhotoView.customChild(
+      childSize: MediaQuery.of(context).size,
+      initialScale: PhotoViewComputedScale.contained,
+      minScale: PhotoViewComputedScale.contained * 1.0,
+      maxScale: PhotoViewComputedScale.covered * 10.0,
+      backgroundDecoration: BoxDecoration(color: context.colorScheme.surface),
+      child: Center(
+        child: SizedBox(
+          width: 20.0,
+          height: 20.0,
+          child: CircularProgressIndicator(
+            backgroundColor: context.colorScheme.surfaceContainerHigh,
+            value: event == null || event.expectedTotalBytes == null
+                ? null
+                : event.cumulativeBytesLoaded / event.expectedTotalBytes!,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget buildPageImages(List<int> images) {
     Axis axis = (data.vertical) ? Axis.vertical : Axis.horizontal;
 
     bool reverse = data.reverse;
@@ -343,12 +393,12 @@ class GalleryModeState extends State<ReaderGalleryView>
           child: ComicImage(
             width: double.infinity,
             height: double.infinity,
-            image: _displayImage(images[0]),
+            image: _displayImage(data.images[images[0]]),
             fit: BoxFit.contain,
             alignment: axis == Axis.vertical
                 ? Alignment.bottomCenter
                 : Alignment.centerRight,
-            onInit: (state) => imageStates.add(state),
+            onInit: (state) => imageStates[state] = images[0],
             onDispose: (state) => imageStates.remove(state),
           ),
         ),
@@ -356,24 +406,24 @@ class GalleryModeState extends State<ReaderGalleryView>
           child: ComicImage(
             width: double.infinity,
             height: double.infinity,
-            image: _displayImage(images[1]),
+            image: _displayImage(data.images[images[1]]),
             fit: BoxFit.contain,
             alignment: axis == Axis.vertical
                 ? Alignment.topCenter
                 : Alignment.centerLeft,
-            onInit: (state) => imageStates.add(state),
+            onInit: (state) => imageStates[state] = images[1],
             onDispose: (state) => imageStates.remove(state),
           ),
         ),
       ];
     } else {
-      imageWidgets = images.map((imageKey) {
-        ImageProvider imageProvider = _displayImage(imageKey);
+      imageWidgets = images.map((imageIndex) {
+        ImageProvider imageProvider = _displayImage(data.images[imageIndex]);
         return Expanded(
           child: ComicImage(
             image: imageProvider,
             fit: BoxFit.contain,
-            onInit: (state) => imageStates.add(state),
+            onInit: (state) => imageStates[state] = imageIndex,
             onDispose: (state) => imageStates.remove(state),
           ),
         );
@@ -387,6 +437,7 @@ class GalleryModeState extends State<ReaderGalleryView>
 
   @override
   Future<void> animateToPage(int page) {
+    if (_disposed || !mounted || !controller.hasClients) return Future.value();
     if ((page - controller.page!.round()).abs() > 1) {
       controller.jumpToPage(page > controller.page! ? page - 1 : page + 1);
     }
@@ -399,6 +450,7 @@ class GalleryModeState extends State<ReaderGalleryView>
 
   @override
   void toPage(int page) {
+    if (_disposed || !mounted || !controller.hasClients) return;
     controller.jumpToPage(page);
   }
 
@@ -409,21 +461,24 @@ class GalleryModeState extends State<ReaderGalleryView>
 
   @override
   void handleDoubleTap(Offset location) {
+    if (_disposed || !mounted) return;
     if (data.doubleTapCollect) {
       widget.onCollectImage();
       return;
     }
-    var controller = photoViewControllers[page]!;
-    controller.onDoubleClick?.call();
+    photoViewControllers[page]?.onDoubleClick?.call();
   }
 
   @override
   void handleLongPressDown(Offset location) {
-    if (fingers != 1) {
+    if (_disposed || !mounted || fingers != 1) {
       return;
     }
-    var photoViewController = photoViewControllers[page]!;
-    double target = photoViewController.getInitialScale!.call()! * 1.75;
+    final photoViewController = photoViewControllers[page];
+    final initial = photoViewController?.getInitialScale?.call();
+    if (photoViewController == null || initial == null) return;
+    _longPressController = photoViewController;
+    final target = initial * 1.75;
     var size = widget.readerSize();
     Offset zoomPosition;
     if (!data.centerLongPressZoom) {
@@ -440,19 +495,30 @@ class GalleryModeState extends State<ReaderGalleryView>
 
   @override
   void handleLongPressUp(Offset location) {
-    if (!isLongPressing) {
+    if (_disposed || !mounted || !isLongPressing) {
       return;
     }
-    var photoViewController = photoViewControllers[page]!;
-    double target = photoViewController.getInitialScale!.call()!;
-    photoViewController.animateScale?.call(target);
+    final original = _longPressController;
+    _longPressController = null;
     isLongPressing = false;
+    if (original == null || !identical(photoViewControllers[page], original)) {
+      return;
+    }
+    final target = original.getInitialScale?.call();
+    if (target != null) original.animateScale?.call(target);
   }
 
   Timer? keyRepeatTimer;
 
   @override
+  void cancelKeyboardInput() {
+    keyRepeatTimer?.cancel();
+    keyRepeatTimer = null;
+  }
+
+  @override
   void handleKeyEvent(KeyEvent event) {
+    if (_disposed || !mounted) return;
     bool? forward;
     if ((!data.vertical && !data.reverse) &&
         event.logicalKey == LogicalKeyboardKey.arrowRight) {
@@ -484,7 +550,7 @@ class GalleryModeState extends State<ReaderGalleryView>
         navigation.toPage(page - 1);
       }
     }
-    if (event is KeyRepeatEvent && keyRepeatTimer == null) {
+    if (event is KeyRepeatEvent && forward != null && keyRepeatTimer == null) {
       keyRepeatTimer = Timer.periodic(
         data.pageAnimation
             ? const Duration(milliseconds: 200)
@@ -514,13 +580,21 @@ class GalleryModeState extends State<ReaderGalleryView>
 
   @override
   Future<Uint8List?> getImageByOffset(Offset offset) async {
-    var imageKey = getImageKeyByOffset(offset);
-    if (imageKey == null) return null;
-    return widget.readImage(imageKey);
+    final index = getImageIndexByOffset(offset);
+    if (index == null) return null;
+    return widget.readImage(
+      ReaderImageAddress(
+        imageKey: data.images[index],
+        sourceKey: data.sourceKey,
+        comicId: data.comicId,
+        chapterId: data.chapterId,
+      ),
+    );
   }
 
   @override
-  String? getImageKeyByOffset(Offset offset) {
+  int? getImageIndexByOffset(Offset offset) {
+    if (_disposed || !mounted) return null;
     var range = currentImageRange;
     if (range == null) return null;
 
@@ -528,20 +602,82 @@ class GalleryModeState extends State<ReaderGalleryView>
     int actualImageCount = endIndex - startIndex;
 
     if (actualImageCount == 1) {
-      return data.images[startIndex];
+      return startIndex;
     }
 
-    for (var imageState in imageStates) {
-      if ((imageState as ComicImageState).containsPoint(offset)) {
-        var imageKey =
-            (imageState.widget.image as ReaderDisplayImageProvider).imageKey;
-        int index = data.images.indexOf(imageKey);
+    for (final entry in imageStates.entries) {
+      if ((entry.key as ComicImageState).containsPoint(offset)) {
+        final index = entry.value;
         if (index >= startIndex && index < endIndex) {
-          return imageKey;
+          return index;
         }
       }
     }
 
-    return data.images[startIndex];
+    return startIndex < endIndex ? startIndex : null;
+  }
+}
+
+/// One page can remain mounted while a neighbouring page is selected. On
+/// re-entry a new zoom session replaces the old subtree and releases it in
+/// actual unmount order, without a time-based disposal heuristic.
+class _GalleryPhotoPage extends StatefulWidget {
+  const _GalleryPhotoPage({
+    super.key,
+    required this.active,
+    required this.onController,
+    required this.builder,
+  });
+  final bool active;
+  final void Function(PhotoViewController, bool) onController;
+  final Widget Function(BuildContext, PhotoViewController) builder;
+  @override
+  State<_GalleryPhotoPage> createState() => _GalleryPhotoPageState();
+}
+
+class _GalleryPhotoPageState extends State<_GalleryPhotoPage> {
+  int _visit = 0;
+  @override
+  void didUpdateWidget(covariant _GalleryPhotoPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.active && widget.active) _visit++;
+  }
+
+  @override
+  Widget build(BuildContext context) => _GalleryPhotoOwner(
+    key: ValueKey(_visit),
+    onController: widget.onController,
+    builder: widget.builder,
+  );
+}
+
+class _GalleryPhotoOwner extends StatefulWidget {
+  const _GalleryPhotoOwner({
+    super.key,
+    required this.onController,
+    required this.builder,
+  });
+  final void Function(PhotoViewController, bool) onController;
+  final Widget Function(BuildContext, PhotoViewController) builder;
+  @override
+  State<_GalleryPhotoOwner> createState() => _GalleryPhotoOwnerState();
+}
+
+class _GalleryPhotoOwnerState extends State<_GalleryPhotoOwner> {
+  final controller = PhotoViewController();
+  @override
+  void initState() {
+    super.initState();
+    widget.onController(controller, true);
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      ClipRect(child: widget.builder(context, controller));
+  @override
+  void dispose() {
+    widget.onController(controller, false);
+    controller.dispose();
+    super.dispose();
   }
 }

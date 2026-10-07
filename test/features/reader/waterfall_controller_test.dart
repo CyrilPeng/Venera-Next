@@ -45,6 +45,46 @@ void main() {
   });
   tearDown(() => controller.dispose());
 
+  for (final direction in ['after', 'before', 'navigation']) {
+    test('pending $direction retains its original chapter ID', () async {
+      await controller.dispose();
+      var prefix = 'original';
+      final pending = Completer<List<String>>();
+      controller =
+          WaterfallController(
+            maxChapter: 8,
+            imageWork: work,
+            load: (_, _) => pending.future,
+            chapterId: (chapter) => '$prefix-$chapter',
+            onChanged: () {},
+            onPreviousError: (error, _) => fail('$error'),
+          )..initialize(
+            WaterfallChapterSegment(
+              chapter: 3,
+              eid: 'original-3',
+              images: ['initial'],
+            ),
+          );
+      final Future<Object?> loading = switch (direction) {
+        'after' => controller.ensureAfter(current: 1, threshold: 1),
+        'before' => controller.ensureBefore(current: 1, threshold: 1),
+        _ => controller.navigate(7),
+      };
+      prefix = 'replacement';
+      pending.complete(['original-image']);
+      await loading;
+      final chapter = direction == 'after'
+          ? 4
+          : direction == 'before'
+          ? 2
+          : 7;
+      expect(
+        controller.flow.segmentOfChapter(chapter)!.eid,
+        'original-$chapter',
+      );
+    });
+  }
+
   test(
     'prefetch deduplicates and fills threshold across empty chapters',
     () async {

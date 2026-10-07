@@ -39,6 +39,10 @@ class ComicSourceManager with ChangeNotifier, Init {
   final List<ComicSource> _sources = [];
 
   static ComicSourceManager? _instance;
+
+  /// Observe an already assembled runtime without creating or replacing it.
+  static ComicSourceManager? get current =>
+      _instance?._closing == true ? null : _instance;
   bool _closing = false;
   Future<void>? _closeFuture;
   JsEngine? _sourceEngine;

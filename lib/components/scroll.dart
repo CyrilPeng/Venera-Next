@@ -56,9 +56,12 @@ class SmoothScrollProvider extends StatefulWidget {
 }
 
 class _SmoothScrollProviderState extends State<SmoothScrollProvider> {
-  late final ScrollController _controller;
+  late ScrollController _controller;
+  late bool _ownsController;
 
   double? _futurePosition;
+  ScrollPosition? _wheelPosition;
+  int _wheelGeneration = 0;
 
   static bool _isMouseScroll = App.isDesktop;
 
@@ -69,10 +72,12 @@ class _SmoothScrollProviderState extends State<SmoothScrollProvider> {
   var activeChildren = <int>{};
 
   ScrollState? parent;
+  bool _hovered = false;
 
   @override
   void initState() {
     _controller = widget.controller ?? ScrollController();
+    _ownsController = widget.controller == null;
     super.initState();
     id = _id;
     _id++;
@@ -80,14 +85,107 @@ class _SmoothScrollProviderState extends State<SmoothScrollProvider> {
 
   @override
   void didChangeDependencies() {
-    parent = ScrollState.maybeOf(context);
     super.didChangeDependencies();
+    final next = ScrollState.maybeOf(context);
+    if (!identical(parent, next)) {
+      parent?.onChildInactive(id);
+      parent = next;
+      if (_hovered) parent?.onChildActive(id);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant SmoothScrollProvider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      final previous = _controller;
+      final owned = _ownsController;
+      _controller = widget.controller ?? ScrollController();
+      _ownsController = widget.controller == null;
+      _resetWheel();
+      if (owned && !identical(previous, _controller)) previous.dispose();
+    }
+  }
+
+  @override
+  void deactivate() {
+    parent?.onChildInactive(id);
+    parent = null;
+    _resetWheel();
+    super.deactivate();
   }
 
   @override
   void dispose() {
     parent?.onChildInactive(id);
+    _resetWheel();
+    if (_ownsController) _controller.dispose();
     super.dispose();
+  }
+
+  void _resetWheel() {
+    _wheelGeneration++;
+    _futurePosition = null;
+    _wheelPosition = null;
+  }
+
+  void _onChildActive(int child) => activeChildren.add(child);
+  void _onChildInactive(int child) => activeChildren.remove(child);
+
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (activeChildren.isNotEmpty ||
+        event is! PointerScrollEvent ||
+        HardwareKeyboard.instance.isShiftPressed) {
+      return;
+    }
+    if (event.kind == PointerDeviceKind.mouse && !_isMouseScroll) {
+      setState(() => _isMouseScroll = true);
+    }
+    if (!_isMouseScroll || _controller.positions.length != 1) return;
+    final controller = _controller;
+    final position = controller.position;
+    if (!position.hasPixels || !position.hasContentDimensions) return;
+    if (!identical(_wheelPosition, position)) {
+      _resetWheel();
+      _wheelPosition = position;
+    }
+    final current = position.pixels;
+    final old = _futurePosition;
+    _futurePosition ??= current;
+    final acceleration = (_futurePosition! - current).abs() / 1600 + 1;
+    _futurePosition = _futurePosition! + event.scrollDelta.dy * acceleration;
+    final before = (_futurePosition! - current).abs();
+    _futurePosition = _futurePosition!.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    final after = (_futurePosition! - current).abs();
+    if (_futurePosition == old) return;
+    final target = _futurePosition!;
+    var duration = fastAnimationDuration;
+    if (after < before) {
+      duration = duration * (after / before);
+      if (duration < const Duration(milliseconds: 10)) {
+        duration = const Duration(milliseconds: 10);
+      }
+    }
+    final generation = ++_wheelGeneration;
+    controller.animateTo(target, duration: duration, curve: Curves.linear).then(
+      (_) {
+        // The controller may survive while its original ScrollPosition does
+        // not. A completion belongs to both the original viewport and input.
+        if (!mounted ||
+            generation != _wheelGeneration ||
+            !identical(_controller, controller) ||
+            controller.positions.length != 1 ||
+            !identical(controller.position, position)) {
+          return;
+        }
+        if (position.pixels == target && target == _futurePosition) {
+          _resetWheel();
+        }
+      },
+    );
   }
 
   @override
@@ -101,70 +199,18 @@ class _SmoothScrollProviderState extends State<SmoothScrollProvider> {
     }
     var child = Listener(
       onPointerDown: (event) {
-        _futurePosition = null;
+        _resetWheel();
         if (_isMouseScroll) {
           setState(() {
             _isMouseScroll = false;
           });
         }
       },
-      onPointerSignal: (pointerSignal) {
-        if (activeChildren.isNotEmpty) {
-          return;
-        }
-        if (pointerSignal is PointerScrollEvent) {
-          if (HardwareKeyboard.instance.isShiftPressed) {
-            return;
-          }
-          if (pointerSignal.kind == PointerDeviceKind.mouse &&
-              !_isMouseScroll) {
-            setState(() {
-              _isMouseScroll = true;
-            });
-          }
-          if (!_isMouseScroll) return;
-          var currentLocation = _controller.position.pixels;
-          var old = _futurePosition;
-          _futurePosition ??= currentLocation;
-          double k = (_futurePosition! - currentLocation).abs() / 1600 + 1;
-          _futurePosition = _futurePosition! + pointerSignal.scrollDelta.dy * k;
-          var beforeOffset = (_futurePosition! - currentLocation).abs();
-          _futurePosition = _futurePosition!.clamp(
-            _controller.position.minScrollExtent,
-            _controller.position.maxScrollExtent,
-          );
-          var afterOffset = (_futurePosition! - currentLocation).abs();
-          if (_futurePosition == old) return;
-          var target = _futurePosition!;
-          var duration = fastAnimationDuration;
-          if (afterOffset < beforeOffset) {
-            duration = duration * (afterOffset / beforeOffset);
-            if (duration < Duration(milliseconds: 10)) {
-              duration = Duration(milliseconds: 10);
-            }
-          }
-          _controller
-              .animateTo(
-                _futurePosition!,
-                duration: duration,
-                curve: Curves.linear,
-              )
-              .then((_) {
-                var current = _controller.position.pixels;
-                if (current == target && current == _futurePosition) {
-                  _futurePosition = null;
-                }
-              });
-        }
-      },
+      onPointerSignal: _onPointerSignal,
       child: ScrollState._(
         controller: _controller,
-        onChildActive: (id) {
-          activeChildren.add(id);
-        },
-        onChildInactive: (id) {
-          activeChildren.remove(id);
-        },
+        onChildActive: _onChildActive,
+        onChildInactive: _onChildInactive,
         child: widget.builder(
           context,
           _controller,
@@ -175,19 +221,17 @@ class _SmoothScrollProviderState extends State<SmoothScrollProvider> {
       ),
     );
 
-    if (parent != null) {
-      return MouseRegion(
-        onEnter: (_) {
-          parent!.onChildActive(id);
-        },
-        onExit: (_) {
-          parent!.onChildInactive(id);
-        },
-        child: child,
-      );
-    }
-
-    return child;
+    return MouseRegion(
+      onEnter: (_) {
+        _hovered = true;
+        parent?.onChildActive(id);
+      },
+      onExit: (_) {
+        _hovered = false;
+        parent?.onChildInactive(id);
+      },
+      child: child,
+    );
   }
 }
 
@@ -217,7 +261,9 @@ class ScrollState extends InheritedWidget {
 
   @override
   bool updateShouldNotify(ScrollState oldWidget) {
-    return oldWidget.controller != controller;
+    return oldWidget.controller != controller ||
+        oldWidget.onChildActive != onChildActive ||
+        oldWidget.onChildInactive != onChildInactive;
   }
 }
 
@@ -240,7 +286,11 @@ class AppScrollBar extends StatefulWidget {
 }
 
 class _AppScrollBarState extends State<AppScrollBar> {
-  late final ScrollController _scrollController;
+  ScrollController get _scrollController => widget.controller;
+  ScrollPosition? _observedPosition;
+  ScrollPosition? _dragPosition;
+  bool _disposed = false;
+  bool _syncScheduled = false;
 
   double minExtent = 0;
   double maxExtent = 0;
@@ -259,21 +309,45 @@ class _AppScrollBarState extends State<AppScrollBar> {
   @override
   void initState() {
     super.initState();
-    _scrollController = widget.controller;
     _scrollController.addListener(onChanged);
-    Future.microtask(onChanged);
     _dragGestureRecognizer = VerticalDragGestureRecognizer()
       ..onUpdate = onUpdate
       ..onStart = (_) {
+        _dragPosition = _position;
         _showScrollbar();
       }
       ..onEnd = (_) {
+        _dragPosition = null;
         _scheduleHide();
-      };
+      }
+      ..onCancel = () => _dragPosition = null;
+  }
+
+  @override
+  void didUpdateWidget(covariant AppScrollBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, widget.controller)) {
+      oldWidget.controller.removeListener(onChanged);
+      _scrollController.addListener(onChanged);
+      _dragPosition = null;
+      _observedPosition = null;
+      minExtent = maxExtent = position = 0;
+      _hideTimer?.cancel();
+      _isVisible = false;
+    }
+  }
+
+  @override
+  void deactivate() {
+    _dragPosition = null;
+    _hideTimer?.cancel();
+    super.deactivate();
   }
 
   @override
   void dispose() {
+    _disposed = true;
+    _dragPosition = null;
     _hideTimer?.cancel();
     _scrollController.removeListener(onChanged);
     _dragGestureRecognizer.dispose();
@@ -281,6 +355,7 @@ class _AppScrollBarState extends State<AppScrollBar> {
   }
 
   void _showScrollbar() {
+    if (_disposed || !mounted || _position == null) return;
     if (!_isVisible && mounted) {
       setState(() {
         _isVisible = true;
@@ -290,9 +365,10 @@ class _AppScrollBarState extends State<AppScrollBar> {
   }
 
   void _scheduleHide() {
+    if (_disposed || !mounted) return;
     _hideTimer?.cancel();
     _hideTimer = Timer(_hideDuration, () {
-      if (mounted && _isVisible) {
+      if (!_disposed && mounted && _isVisible) {
         setState(() {
           _isVisible = false;
         });
@@ -301,95 +377,144 @@ class _AppScrollBarState extends State<AppScrollBar> {
   }
 
   void onUpdate(DragUpdateDetails details) {
-    if (maxExtent - minExtent <= 0 ||
-        viewHeight == 0 ||
+    final current = _position;
+    final track = viewHeight - _scrollIndicatorSize;
+    if (current == null ||
+        !identical(current, _dragPosition) ||
+        current.maxScrollExtent <= current.minScrollExtent ||
+        !track.isFinite ||
+        track <= 0 ||
         details.primaryDelta == null) {
+      _dragPosition = null;
       return;
     }
-    var offset = details.primaryDelta!;
-    var positionOffset =
-        offset / (viewHeight - _scrollIndicatorSize) * (maxExtent - minExtent);
-    _scrollController.jumpTo(
-      (position + positionOffset).clamp(minExtent, maxExtent),
+    final positionOffset =
+        details.primaryDelta! /
+        track *
+        (current.maxScrollExtent - current.minScrollExtent);
+    current.jumpTo(
+      (current.pixels + positionOffset).clamp(
+        current.minScrollExtent,
+        current.maxScrollExtent,
+      ),
     );
   }
 
-  void onChanged() {
-    if (_scrollController.positions.isEmpty) return;
-    var position = _scrollController.position;
-
-    bool hasChanged = false;
-    if (position.minScrollExtent != minExtent ||
-        position.maxScrollExtent != maxExtent ||
-        position.pixels != this.position) {
-      hasChanged = true;
-      minExtent = position.minScrollExtent;
-      maxExtent = position.maxScrollExtent;
-      this.position = position.pixels;
+  ScrollPosition? get _position {
+    if (_disposed || !mounted || _scrollController.positions.length != 1) {
+      return null;
     }
+    final current = _scrollController.position;
+    if (!current.hasPixels || !current.hasContentDimensions) return null;
+    if (!current.pixels.isFinite ||
+        !current.minScrollExtent.isFinite ||
+        !current.maxScrollExtent.isFinite) {
+      return null;
+    }
+    return current;
+  }
 
-    if (hasChanged) {
+  void _scheduleSync() {
+    if (_syncScheduled || _disposed) return;
+    _syncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncScheduled = false;
+      if (mounted && !_disposed) onChanged();
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  void onChanged() {
+    if (_disposed || !mounted) return;
+    final current = _position;
+    final min = current?.minScrollExtent ?? 0;
+    final max = current?.maxScrollExtent ?? 0;
+    final pixels = current?.pixels ?? 0;
+    final changed =
+        !identical(current, _observedPosition) ||
+        min != minExtent ||
+        max != maxExtent ||
+        pixels != position;
+    if (!identical(current, _observedPosition)) _dragPosition = null;
+    _observedPosition = current;
+    minExtent = min;
+    maxExtent = max;
+    position = pixels;
+    if (current == null) {
+      _hideTimer?.cancel();
+      _isVisible = false;
+    } else if (changed) {
       _showScrollbar();
       _scheduleHide();
     }
-
-    if (hasChanged && mounted) {
-      setState(() {});
-    }
+    if (changed) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constrains) {
+        // Controller listeners do not report attachment or layout-only metric
+        // changes. Read the actual current position once this layout finishes.
+        _scheduleSync();
         var scrollHeight = (maxExtent - minExtent);
         var height = constrains.maxHeight - widget.topPadding;
         viewHeight = height;
         var top = scrollHeight == 0
             ? 0.0
-            : (position - minExtent) /
-                  scrollHeight *
+            : ((position - minExtent) / scrollHeight).clamp(0.0, 1.0) *
                   (height - _scrollIndicatorSize);
         return Stack(
           children: [
-            Positioned.fill(child: widget.child),
-            Positioned(
-              top: top + widget.topPadding,
-              right: 0,
-              child: AnimatedOpacity(
-                opacity: _isVisible ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 200),
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  onEnter: (_) => _showScrollbar(),
-                  onExit: (_) => _scheduleHide(),
-                  child: Listener(
-                    behavior: HitTestBehavior.translucent,
-                    onPointerDown: (event) {
-                      _dragGestureRecognizer.addPointer(event);
-                    },
-                    child: SizedBox(
-                      width: _scrollIndicatorSize / 2,
-                      height: _scrollIndicatorSize,
-                      child: CustomPaint(
-                        painter: _ScrollIndicatorPainter(
-                          backgroundColor: context.colorScheme.surface,
-                          shadowColor: context.colorScheme.shadow,
+            Positioned.fill(
+              child: NotificationListener<ScrollMetricsNotification>(
+                onNotification: (notification) {
+                  if (notification.depth == 0) _scheduleSync();
+                  return false;
+                },
+                child: widget.child,
+              ),
+            ),
+            if (scrollHeight > 0 &&
+                height.isFinite &&
+                height > _scrollIndicatorSize)
+              Positioned(
+                top: top + widget.topPadding,
+                right: 0,
+                child: AnimatedOpacity(
+                  opacity: _isVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    onEnter: (_) => _showScrollbar(),
+                    onExit: (_) => _scheduleHide(),
+                    child: Listener(
+                      behavior: HitTestBehavior.translucent,
+                      onPointerDown: (event) {
+                        _dragGestureRecognizer.addPointer(event);
+                      },
+                      child: SizedBox(
+                        width: _scrollIndicatorSize / 2,
+                        height: _scrollIndicatorSize,
+                        child: CustomPaint(
+                          painter: _ScrollIndicatorPainter(
+                            backgroundColor: context.colorScheme.surface,
+                            shadowColor: context.colorScheme.shadow,
+                          ),
+                          child: Column(
+                            children: [
+                              const Spacer(),
+                              Icon(Icons.arrow_drop_up, size: 18),
+                              Icon(Icons.arrow_drop_down, size: 18),
+                              const Spacer(),
+                            ],
+                          ).paddingLeft(4),
                         ),
-                        child: Column(
-                          children: [
-                            const Spacer(),
-                            Icon(Icons.arrow_drop_up, size: 18),
-                            Icon(Icons.arrow_drop_down, size: 18),
-                            const Spacer(),
-                          ],
-                        ).paddingLeft(4),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         );
       },

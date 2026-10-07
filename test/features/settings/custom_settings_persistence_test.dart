@@ -281,12 +281,22 @@ void main() {
       final oldSave = state.saveSetting('mode', () => old.future);
       await state.saveSetting('mode', () async {});
       var drained = false;
-      final drain = state.waitForSettingsSave().then((_) => drained = true);
+      Object? lateFailure;
+      final drain = state
+          .waitForSettingsSave()
+          .catchError((Object error) {
+            lateFailure = error;
+          })
+          .whenComplete(() => drained = true);
       await tester.pump();
       expect(drained, isFalse);
-      old.completeError(StateError('superseded failure'));
+      final superseded = StateError('superseded failure');
+      old.completeError(superseded);
       await oldSave;
       await drain;
+      expect(lateFailure, same(superseded));
+      expect(state.hasSettingsSaveError, isTrue);
+      await state.retrySettingsSave();
       expect(state.hasSettingsSaveError, isFalse);
 
       final failure = StateError('mode failure');

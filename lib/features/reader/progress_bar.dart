@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:venera_next/components/custom_slider.dart';
+import 'package:flutter/services.dart';
 import 'package:venera_next/components/effects.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
+import 'information_text.dart';
 
-/// Presentation for progress and actions. The shell supplies navigation policy.
+/// Presentation for progress and actions. The content owner supplies commands.
 class ReaderBottomBar extends StatelessWidget {
   const ReaderBottomBar({
     super.key,
@@ -17,6 +19,9 @@ class ReaderBottomBar extends StatelessWidget {
     required this.onPageChanged,
     required this.onPrevious,
     required this.onNext,
+    this.progressIdentity,
+    this.previousTooltip,
+    this.nextTooltip,
   });
   static const height = 105.0;
   final String label;
@@ -28,6 +33,8 @@ class ReaderBottomBar extends StatelessWidget {
   final ValueChanged<int> onPageChanged;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
+  final Object? progressIdentity;
+  final String? previousTooltip, nextTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -40,18 +47,26 @@ class ReaderBottomBar extends StatelessWidget {
             children: [
               const SizedBox(width: 8),
               IconButton.filledTonal(
+                tooltip:
+                    previousTooltip ??
+                    MaterialLocalizations.of(context).previousPageTooltip,
                 onPressed: onPrevious,
                 icon: const Icon(Icons.first_page),
               ),
               Expanded(
                 child: ReaderProgressSlider(
+                  key: ValueKey((progressIdentity, isOpen)),
                   page: page,
                   maxPage: maxPage,
                   reversed: reversed,
+                  enabled: isOpen,
                   onChanged: onPageChanged,
                 ),
               ),
               IconButton.filledTonal(
+                tooltip:
+                    nextTooltip ??
+                    MaterialLocalizations.of(context).nextPageTooltip,
                 onPressed: onNext,
                 icon: const Icon(Icons.last_page),
               ),
@@ -128,70 +143,105 @@ class ReaderBottomBar extends StatelessWidget {
   }
 }
 
-class ReaderProgressSlider extends StatefulWidget {
+class ReaderProgressSlider extends StatelessWidget {
   const ReaderProgressSlider({
     super.key,
     required this.page,
     required this.maxPage,
     required this.reversed,
     required this.onChanged,
+    this.enabled = true,
   });
   final int page;
   final int maxPage;
   final bool reversed;
   final ValueChanged<int> onChanged;
-  @override
-  State<ReaderProgressSlider> createState() => _ReaderProgressSliderState();
-}
-
-class _ReaderProgressSliderState extends State<ReaderProgressSlider> {
-  final _focus = FocusNode(canRequestFocus: false);
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() {
-      if (_focus.hasFocus) _focus.nextFocus();
-    });
-  }
-
-  @override
-  void dispose() {
-    _focus.dispose();
-    super.dispose();
-  }
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final displayPage = widget.page.clamp(1, widget.maxPage);
-    return CustomSlider(
-      focusNode: _focus,
-      value: displayPage.toDouble(),
-      min: 1,
-      max: widget.maxPage.clamp(displayPage, 1 << 16).toDouble(),
-      reversed: widget.reversed,
-      divisions: (widget.maxPage - 1).clamp(2, 1 << 16),
-      onChanged: (value) => widget.onChanged(value.toInt()),
+    final count = maxPage < 1 ? 1 : maxPage;
+    final displayPage = page.clamp(1, count);
+    final interactive = enabled && count > 1;
+    return MergeSemantics(
+      child: Semantics(
+        label: 'Page'.tl,
+        child: Directionality(
+          // Reading direction is independent of the interface language.
+          textDirection: reversed ? TextDirection.rtl : TextDirection.ltr,
+          child: CallbackShortcuts(
+            bindings: interactive
+                ? {
+                    const SingleActivator(LogicalKeyboardKey.home): () =>
+                        onChanged(1),
+                    const SingleActivator(LogicalKeyboardKey.end): () =>
+                        onChanged(count),
+                  }
+                : const {},
+            child: SizedBox(
+              height: 48,
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 6,
+                  trackShape: const RoundedRectSliderTrackShape(),
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 11,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 22,
+                  ),
+                ),
+                child: Slider(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  value: displayPage.toDouble(),
+                  min: 1,
+                  max: count.toDouble(),
+                  divisions: count > 1 ? count - 1 : null,
+                  onChanged: interactive
+                      ? (value) => onChanged(value.round())
+                      : null,
+                  semanticFormatterCallback: (value) => 'Page @page'.tlParams({
+                    'page': '${value.round()} / $count',
+                  }),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
 class ReaderPageInfo extends StatelessWidget {
-  const ReaderPageInfo({super.key, required this.text});
-  final String text;
+  const ReaderPageInfo({
+    super.key,
+    required this.page,
+    required this.maxPage,
+    this.chapterTitle,
+  });
+  final int page, maxPage;
+  final String? chapterTitle;
   @override
-  Widget build(BuildContext context) => Stack(
-    children: [
-      Text(
-        text,
-        style: TextStyle(
-          fontSize: 14,
-          foreground: Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.4
-            ..color = context.colorScheme.onInverseSurface,
-        ),
+  Widget build(BuildContext context) {
+    final chapter = chapterTitle;
+    final pages = '$page/$maxPage';
+    final shortTitle = chapter != null && chapter.characters.length > 8
+        ? '${chapter.characters.take(8)}...'
+        : chapter;
+    return Semantics(
+      label: chapter == null ? pages : '$chapter : $pages',
+      excludeSemantics: true,
+      child: Wrap(
+        spacing: 4,
+        alignment: WrapAlignment.end,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (shortTitle != null) ReaderInformationText(text: '$shortTitle :'),
+          // A chapter title must never ellipsize the actual page numbers.
+          ReaderInformationText(text: pages, maxLines: null),
+        ],
       ),
-      Text(text),
-    ],
-  );
+    );
+  }
 }

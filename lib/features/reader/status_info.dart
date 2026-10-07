@@ -3,15 +3,15 @@ import 'dart:async';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:venera_next/components/window_frame.dart';
+import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 
-class ReaderBatterySnapshot {
-  const ReaderBatterySnapshot(this.level, {required this.charging});
-  final int level;
-  final bool charging;
-}
+import 'status_polling.dart';
+import 'information_text.dart';
 
-typedef ReaderBatteryRead = Future<ReaderBatterySnapshot?> Function();
+export 'status_polling.dart' show ReaderBatteryRead, ReaderBatterySnapshot;
 
 ReaderBatteryRead _platformBatteryReader() {
   final battery = Battery();
@@ -30,9 +30,7 @@ ReaderBatteryRead _platformBatteryReader() {
   };
 }
 
-/// Owns one clock timer and at most one battery query per dependency generation.
-/// A null battery snapshot means unsupported; errors retain the previous value
-/// and retry on the next tick. Platform Futures cannot be aborted on disposal.
+/// Displays optional telemetry retained by its original application and window.
 class ReaderStatusInfo extends StatefulWidget {
   const ReaderStatusInfo({super.key, this.readBattery, this.now});
   final ReaderBatteryRead? readBattery;
@@ -42,93 +40,56 @@ class ReaderStatusInfo extends StatefulWidget {
 }
 
 class _ReaderStatusInfoState extends State<ReaderStatusInfo> {
-  late ReaderBatteryRead _read;
-  late Timer _timer;
-  late String _time;
-  ReaderBatterySnapshot? _battery;
-  bool _reading = false;
-  bool _supported = true;
-  int _generation = 0;
-
-  String _clockText() {
-    final now = (widget.now ?? DateTime.now)();
-    return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-  }
+  _StatusOwner? _owner;
+  ReaderBatterySnapshot? get _battery => _owner?.polling.battery;
 
   @override
-  void initState() {
-    super.initState();
-    _read = widget.readBattery ?? _platformBatteryReader();
-    _time = _clockText();
-    _sample();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      final time = _clockText();
-      if (_time != time) setState(() => _time = time);
-      _sample();
-    });
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    context.dependOnInheritedWidgetOfExactType<SelectionTasksScope>();
+    context.dependOnInheritedWidgetOfExactType<WindowFrameController>();
+    if (_owner?.belongsTo(context) != true) _replaceOwner();
+  }
+
+  void _replaceOwner() {
+    _owner?.dispose();
+    final owner = _owner = _StatusOwner(
+      context,
+      ReaderStatusPolling(
+        readBattery: widget.readBattery ?? _platformBatteryReader(),
+        now: widget.now ?? DateTime.now,
+        onChanged: () {
+          if (mounted) setState(() {});
+        },
+      ),
+    );
+    owner.start();
   }
 
   @override
   void didUpdateWidget(covariant ReaderStatusInfo oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.readBattery != widget.readBattery) {
-      _generation++;
-      _read = widget.readBattery ?? _platformBatteryReader();
-      _reading = false;
-      _supported = true;
-      _battery = null;
-      _sample();
-    }
-    _time = _clockText();
-  }
-
-  Future<void> _sample() async {
-    if (_reading || !_supported) return;
-    _reading = true;
-    final generation = _generation;
-    try {
-      final next = await _read();
-      if (!mounted || generation != _generation) return;
-      _supported = next != null;
-      if (_battery?.level != next?.level ||
-          _battery?.charging != next?.charging) {
-        setState(() => _battery = next);
-      }
-    } catch (_) {
-      // Battery information is optional; retry transient platform failures.
-    } finally {
-      if (mounted && generation == _generation) _reading = false;
+      _replaceOwner();
+    } else {
+      _owner?.polling.setClock(widget.now ?? DateTime.now);
     }
   }
 
   @override
   void dispose() {
-    _generation++;
-    _timer.cancel();
+    _owner?.dispose();
     super.dispose();
   }
 
-  Widget _text(String text) => Stack(
-    children: [
-      Text(
-        text,
-        style: TextStyle(
-          fontSize: 14,
-          foreground: Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.4
-            ..color = context.colorScheme.onInverseSurface,
-        ),
-      ),
-      Text(text),
-    ],
-  );
-
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context) => Wrap(
+    spacing: 10,
+    runSpacing: 2,
+    alignment: WrapAlignment.end,
+    crossAxisAlignment: WrapCrossAlignment.center,
     children: [
-      _text(_time),
-      const SizedBox(width: 10),
+      ReaderInformationText(text: _owner!.polling.time),
       if (_battery != null) _batteryInfo(_battery!.level),
     ],
   );
@@ -161,6 +122,7 @@ class _ReaderStatusInfoState extends State<ReaderStatusInfo> {
     }
 
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           batteryIcon,
@@ -179,8 +141,96 @@ class _ReaderStatusInfoState extends State<ReaderStatusInfo> {
             );
           }).whereType<Shadow>().toList(),
         ),
-        _text('$batteryLevel%'),
+        Flexible(child: ReaderInformationText(text: '$batteryLevel%')),
       ],
     );
+  }
+}
+
+/// Register before sampling. Retirement stops scheduling immediately, while
+/// outstanding reads stay attached to their original host until they settle.
+class _StatusOwner with WidgetsBindingObserver {
+  _StatusOwner(BuildContext context, this.polling)
+    : _registry = context
+          .getInheritedWidgetOfExactType<SelectionTasksScope>()
+          ?.registry,
+      _frame = context.getInheritedWidgetOfExactType<WindowFrameController>();
+
+  final ReaderStatusPolling polling;
+  final SelectionTaskRegistry? _registry;
+  final WindowFrameController? _frame;
+  void Function()? _releaseHost;
+  Future<void>? _closing;
+  bool _windowPaused = false;
+
+  bool belongsTo(BuildContext context) =>
+      identical(
+        _registry,
+        context.getInheritedWidgetOfExactType<SelectionTasksScope>()?.registry,
+      ) &&
+      _frame?.addExitTask ==
+          context
+              .getInheritedWidgetOfExactType<WindowFrameController>()
+              ?.addExitTask;
+
+  void start() {
+    if (_registry?.isClosing == true) {
+      dispose();
+      return;
+    }
+    _windowPaused = _frame?.isClosing == true;
+    WidgetsBinding.instance.addObserver(this);
+    _frame?.addCloseStartListener(_pauseWindow);
+    _frame?.addCloseFailureListener(_resumeWindow);
+    _frame?.addExitTask(_prepareWindow);
+    _releaseHost = _registry?.retain(cancel: dispose, close: closeAndWait);
+    _updateActivity();
+  }
+
+  void _updateActivity() {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    polling.setActive(
+      !_windowPaused &&
+          _registry?.isClosing != true &&
+          _frame?.isClosing != true &&
+          (lifecycle == null || lifecycle == AppLifecycleState.resumed),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) => _updateActivity();
+
+  void _pauseWindow() {
+    _windowPaused = true;
+    polling.setActive(false);
+  }
+
+  void _resumeWindow() {
+    _windowPaused = false;
+    // WindowFrame clears its closing flag after recovery listeners return.
+    scheduleMicrotask(_updateActivity);
+  }
+
+  Future<void> _prepareWindow() {
+    _pauseWindow();
+    return polling.drain();
+  }
+
+  void dispose() => unawaited(closeAndWait());
+
+  Future<void> closeAndWait() {
+    if (_closing case final closing?) return closing;
+    WidgetsBinding.instance.removeObserver(this);
+    final closing = _closing = polling.closeAndWait();
+    unawaited(
+      closing.then((_) {
+        _releaseHost?.call();
+        _releaseHost = null;
+        _frame?.removeCloseStartListener(_pauseWindow);
+        _frame?.removeCloseFailureListener(_resumeWindow);
+        _frame?.removeExitTask(_prepareWindow);
+      }),
+    );
+    return closing;
   }
 }

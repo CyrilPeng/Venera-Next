@@ -89,10 +89,11 @@ class WaterfallController {
     }
 
     try {
+      final id = chapterId(chapter);
       final images = await request.run(runOriginal);
       return WaterfallChapterSegment(
         chapter: chapter,
-        eid: chapterId(chapter),
+        eid: id,
         images: List.unmodifiable(images),
       );
     } finally {

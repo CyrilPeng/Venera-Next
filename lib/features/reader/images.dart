@@ -38,7 +38,7 @@ class ReaderImages extends StatefulWidget {
 }
 
 class _ReaderImagesState extends State<ReaderImages> {
-  late ReaderContentLoad _attempt;
+  ReaderContentLoad? _attempt;
   VoidCallback? _unsubscribeResume;
 
   void _listenForResume() {
@@ -46,7 +46,7 @@ class _ReaderImagesState extends State<ReaderImages> {
     _unsubscribeResume = owner?.addResumeListener(() {
       if (!mounted ||
           !identical(widget.imageWork, owner) ||
-          !_attempt.waitingForImageWork) {
+          _attempt?.waitingForImageWork != true) {
         return;
       }
       setState(_begin);
@@ -54,6 +54,7 @@ class _ReaderImagesState extends State<ReaderImages> {
   }
 
   void _begin() {
+    if (widget.controller.isDisposed) return;
     widget.onLoading();
     _attempt = widget.controller.beginContentLoad();
   }
@@ -71,7 +72,9 @@ class _ReaderImagesState extends State<ReaderImages> {
     if (!identical(oldWidget.controller, widget.controller) ||
         !identical(oldWidget.imageWork, widget.imageWork)) {
       _unsubscribeResume?.call();
-      oldWidget.controller.cancelContentLoad(_attempt);
+      if (_attempt case final attempt?) {
+        oldWidget.controller.cancelContentLoad(attempt);
+      }
       _begin();
       _listenForResume();
     }
@@ -80,12 +83,15 @@ class _ReaderImagesState extends State<ReaderImages> {
   @override
   void dispose() {
     _unsubscribeResume?.call();
-    widget.controller.cancelContentLoad(_attempt);
+    if (_attempt case final attempt?) {
+      widget.controller.cancelContentLoad(attempt);
+    }
     super.dispose();
   }
 
   Future<void> _load() async {
     final attempt = _attempt;
+    if (attempt == null || widget.controller.isDisposed) return;
     final inputs = widget;
     bool isCurrent() =>
         mounted &&
@@ -112,8 +118,9 @@ class _ReaderImagesState extends State<ReaderImages> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.controller.isDisposed) return const SizedBox.expand();
     final content = widget.controller.content;
-    if (_attempt.waitingForImageWork) {
+    if (_attempt?.waitingForImageWork == true) {
       return const Center(child: CircularProgressIndicator());
     }
     if (content.isLoading) {

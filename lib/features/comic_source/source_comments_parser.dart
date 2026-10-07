@@ -5,6 +5,7 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
 import 'normalization.dart';
+import 'models.dart';
 import 'source.dart';
 import 'types.dart';
 
@@ -38,20 +39,29 @@ class SourceCommentsParser {
 
   CommentsLoader? parseCommentsLoader() {
     if (!context.checkExists("comic.loadComments")) return null;
-    return (id, subId, page, replyTo) async {
-      try {
-        var res = await context.runReadCode("""
+    return (id, subId, page, replyTo) => _readComments(
+      () =>
+          """
           ${context.sourceExpression}.comic.loadComments(
             ${jsonEncode(id)}, ${jsonEncode(subId)}, ${jsonEncode(page)}, ${jsonEncode(replyTo)})
-        """);
-        final result = normalizeComicSourceCommentsResult(res);
-        if (result == null) throw "Invalid data";
-        return Res(result.comments, subData: result.data["maxPage"]);
-      } catch (e, s) {
-        Log.error("Network", "$e\n$s");
-        return Res.fromException(e, s);
-      }
-    };
+        """,
+    );
+  }
+
+  Future<Res<List<Comment>>> _readComments(String Function() code) async {
+    try {
+      return await context.runReadCodeToCompletion<Res<List<Comment>>>(
+        code(),
+        consume: (raw) {
+          final result = normalizeComicSourceCommentsResult(raw);
+          if (result == null) throw 'Invalid data';
+          return Res(result.comments, subData: result.data['maxPage'] as int?);
+        },
+      );
+    } catch (error, stack) {
+      Log.error('Network', error, stack);
+      return Res.fromException(error, stack);
+    }
   }
 
   SendCommentFunc? parseSendCommentFunc() {
@@ -76,20 +86,13 @@ class SourceCommentsParser {
 
   ChapterCommentsLoader? parseChapterCommentsLoader() {
     if (!context.checkExists("comic.loadChapterComments")) return null;
-    return (comicId, epId, page, replyTo) async {
-      try {
-        var res = await context.runReadCode("""
+    return (comicId, epId, page, replyTo) => _readComments(
+      () =>
+          """
           ${context.sourceExpression}.comic.loadChapterComments(
             ${jsonEncode(comicId)}, ${jsonEncode(epId)}, ${jsonEncode(page)}, ${jsonEncode(replyTo)})
-        """);
-        final result = normalizeComicSourceCommentsResult(res);
-        if (result == null) throw "Invalid data";
-        return Res(result.comments, subData: result.data["maxPage"]);
-      } catch (e, s) {
-        Log.error("Network", "$e\n$s");
-        return Res.fromException(e, s);
-      }
-    };
+        """,
+    );
   }
 
   SendChapterCommentFunc? parseSendChapterCommentFunc() {

@@ -74,6 +74,75 @@ void main() {
   });
 
   test(
+    'captured access rejects replacement database before queued mutation',
+    () async {
+      final access = manager.capture();
+      final closed = Completer<void>();
+      final release = Completer<void>();
+      final replacing = operations.run(() async {
+        history.close();
+        closed.complete();
+        await release.future;
+        App.dataPath = (Directory(
+          '${root.path}/replacement',
+        )..createSync()).path;
+        await history.init();
+      });
+      await closed.future;
+      final rejected = expectLater(
+        access.toggle(selection(), checkActive: () {}),
+        throwsStateError,
+      );
+      release.complete();
+      await replacing;
+      await rejected;
+      expect(access.isCurrent, isFalse);
+      expect(await manager.getAll(), isEmpty);
+      final fresh = manager.capture();
+      expect(fresh.identity, isNot(access.identity));
+      expect(
+        await fresh.toggle(selection(), checkActive: () {}),
+        ImageFavoriteResult.collected,
+      );
+      expect(await fresh.isCollected('comic', 'source', 'chapter', 2), isTrue);
+    },
+  );
+
+  test(
+    'captured default manager cannot follow a different application history',
+    () async {
+      final previous = HistoryManager.cache;
+      final replacement = HistoryManager.create(
+        operations: AppDataOperations(),
+      );
+      try {
+        HistoryManager.cache = history;
+        final access = ImageFavoriteManager().capture();
+        App.dataPath = (Directory(
+          '${root.path}/second-host',
+        )..createSync()).path;
+        await replacement.init();
+        HistoryManager.cache = replacement;
+        expect(access.isCurrent, isFalse);
+        await expectLater(
+          access.isCollected('comic', 'source', 'chapter', 2),
+          throwsStateError,
+        );
+        await expectLater(
+          access.toggle(selection(), checkActive: () {}),
+          throwsStateError,
+        );
+        expect(await manager.getAll(), isEmpty);
+        expect(await ImageFavoriteManager().getAll(), isEmpty);
+      } finally {
+        await replacement.waitForAsyncWrites();
+        replacement.close();
+        HistoryManager.cache = previous;
+      }
+    },
+  );
+
+  test(
     'queued creation snapshots caller lists and concurrent toggles compose',
     () async {
       final release = Completer<void>();

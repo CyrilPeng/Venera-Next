@@ -480,7 +480,10 @@ class ComicChapters {
   /// Get total number of chapters
   int get length {
     return isGrouped
-        ? _groupedChapters!.values.map((e) => e.length).reduce((a, b) => a + b)
+        ? _groupedChapters!.values.fold(
+            0,
+            (total, group) => total + group.length,
+          )
         : _chapters!.length;
   }
 

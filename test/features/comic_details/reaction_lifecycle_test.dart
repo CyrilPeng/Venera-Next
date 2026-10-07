@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:venera_next/components/menu.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/comic_details/actions.dart';
 import 'package:venera_next/features/comic_details/rating_dialog.dart';
@@ -17,6 +18,8 @@ class _Source extends Fake implements ComicSource {
 }
 
 class _Actions with ComicPageActions {
+  @override
+  final contextMenus = MenuRouteController();
   _Actions(this.context, this.comicSource);
   @override
   final BuildContext context;

@@ -368,7 +368,9 @@ class MenuButton extends StatefulWidget {
   State<MenuButton> createState() => _MenuButtonState();
 }
 
-class _MenuButtonState extends State<MenuButton> {
+class _MenuButtonState extends State<MenuButton> with ContextMenuOwner {
+  @override
+  Object get contextMenuIdentity => widget.entries;
   @override
   Widget build(BuildContext context) {
     return Tooltip(
@@ -378,7 +380,7 @@ class _MenuButtonState extends State<MenuButton> {
         onPressed: () {
           var renderBox = context.findRenderObject() as RenderBox;
           var offset = renderBox.localToGlobal(Offset.zero);
-          showMenuX(context, offset, widget.entries);
+          contextMenus.show(context, offset, widget.entries);
         },
       ),
     );

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:venera_next/foundation/file_type.dart';
 import 'package:venera_next/foundation/image_work.dart';
+import 'image_position.dart';
 
 class ReaderImageSelection {
   const ReaderImageSelection({
@@ -21,7 +22,50 @@ class ReaderImageSelection {
   final String title;
   final int chapter;
   final int imageNumber;
-  String get cacheKey => '$imageKey@$sourceKey@$comicId@$chapterId';
+  ReaderImageAddress get address => ReaderImageAddress(
+    imageKey: imageKey,
+    sourceKey: sourceKey,
+    comicId: comicId,
+    chapterId: chapterId,
+  );
+  String get cacheKey => address.cacheKey;
+}
+
+/// Original content and export metadata, captured before opening a picker.
+/// Once resolved, a selection stays independent of subsequent navigation.
+class ReaderImageExportRequest {
+  ReaderImageExportRequest({
+    required List<String> images,
+    required this.sourceKey,
+    required this.comicId,
+    required this.chapterId,
+    required this.title,
+    required this.chapter,
+    required this.isCurrent,
+  }) : _images = List.unmodifiable(images);
+
+  final List<String> _images;
+  final String sourceKey;
+  final String comicId;
+  final String chapterId;
+  final String title;
+  final int chapter;
+  final bool Function() isCurrent;
+
+  ReaderImageSelection? resolve(int? index) {
+    if (index == null || index < 0 || index >= _images.length || !isCurrent()) {
+      return null;
+    }
+    return ReaderImageSelection(
+      imageKey: _images[index],
+      sourceKey: sourceKey,
+      comicId: comicId,
+      chapterId: chapterId,
+      title: title,
+      chapter: chapter,
+      imageNumber: index + 1,
+    );
+  }
 }
 
 class ReaderImageExport {

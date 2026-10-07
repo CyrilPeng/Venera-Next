@@ -34,8 +34,8 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 class MainActivity : FlutterFragmentActivity() {
-    var volumeListen = VolumeListen()
-    var listening = false
+    private val volumeSubscriptions = VolumeKeySubscriptions()
+    private var volumeChannel: MethodChannel? = null
 
     private val storageRequestCode = 0x10
     private var storagePermissionRequest: ((Boolean) -> Unit)? = null
@@ -141,23 +141,23 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
 
-        val channel = EventChannel(flutterEngine.dartExecutor.binaryMessenger, "venera/volume")
-        channel.setStreamHandler(
-            object : EventChannel.StreamHandler {
-                override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
-                    listening = true
-                    volumeListen.onUp = {
-                        events.success(1)
-                    }
-                    volumeListen.onDown = {
-                        events.success(2)
+        clearVolumeChannel()
+        volumeChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "venera/volume").also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                if (call.method != "listen" && call.method != "cancel") {
+                    result.notImplemented()
+                } else {
+                    val token = call.argument<String>("token")
+                    if (token.isNullOrBlank()) {
+                        result.error("invalid_token", "A volume subscription token is required", null)
+                    } else {
+                        if (call.method == "listen") volumeSubscriptions.listen(token)
+                        else volumeSubscriptions.cancel(token)
+                        result.success(null)
                     }
                 }
-
-                override fun onCancel(arguments: Any?) {
-                    listening = false
-                }
-            })
+            }
+        }
 
         val storageChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "venera/storage")
         storageChannel.setMethodCallHandler { _, res ->
@@ -208,19 +208,33 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (listening) {
-            when (keyCode) {
-                KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                    volumeListen.down()
-                    return true
-                }
+    private fun clearVolumeChannel() {
+        volumeSubscriptions.clear()
+        volumeChannel?.setMethodCallHandler(null)
+        volumeChannel = null
+    }
 
-                KeyEvent.KEYCODE_VOLUME_UP -> {
-                    volumeListen.up()
-                    return true
-                }
-            }
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        clearVolumeChannel()
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
+    override fun onDestroy() {
+        clearVolumeChannel()
+        super.onDestroy()
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        val value = when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> 1
+            KeyEvent.KEYCODE_VOLUME_DOWN -> 2
+            else -> null
+        }
+        val channel = volumeChannel
+        if (value != null && channel != null && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            if (volumeSubscriptions.dispatch(value) { token, key ->
+                channel.invokeMethod("event", mapOf("token" to token, "value" to key))
+            }) return true
         }
         return super.onKeyDown(keyCode, event)
     }
@@ -456,16 +470,3 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 }
-
-class VolumeListen {
-    var onUp = fun() {}
-    var onDown = fun() {}
-    fun up() {
-        onUp()
-    }
-
-    fun down() {
-        onDown()
-    }
-}
-
