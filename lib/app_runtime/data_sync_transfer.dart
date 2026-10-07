@@ -5,10 +5,11 @@ import 'package:venera_next/features/sync/data_sync_commit.dart';
 import 'package:venera_next/features/sync/data_sync_recovery.dart';
 import 'package:venera_next/features/sync/app_data_import_journal.dart';
 import 'package:venera_next/features/sync/data_sync_remote.dart';
-import 'package:venera_next/features/sync/sync.dart'
+import 'package:venera_next/features/sync/app_data_transfer.dart'
     show exportSyncAppData, importSyncAppData;
-import 'package:venera_next/features/history/history.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
+import 'package:venera_next/features/history/history_manager.dart';
+import 'package:venera_next/features/history/image_favorites.dart';
+import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/network/webdav.dart';

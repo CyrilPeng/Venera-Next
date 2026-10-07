@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/persistence_failure.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:archive/archive_io.dart' as archive;
@@ -87,7 +88,11 @@ void main() {
   );
 
   test('EPUB registration failure removes output and permits retry', () async {
-    final error = StateError('registration failed');
+    final error = PersistenceFailure(
+      commitState: PersistenceCommitState.notCommitted,
+      cause: StateError('registration failed'),
+      stackTrace: StackTrace.current,
+    );
     await expectLater(
       EpubComicImporter.import(epub, registerComic: (_) async => throw error),
       throwsA(same(error)),

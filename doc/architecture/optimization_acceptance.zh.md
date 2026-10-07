@@ -1,10 +1,145 @@
 # 架构优化逐项验收清单
 
+## P6/P7：迁移结果不确定时的实例隔离与恢复入口（2026-10-07）
+
+- 最终交付：Windows release构建成功（94.9秒）；打包CHANGELOG/init.js/translation.json与源码一致，app.so SHA-256 `5A38AED3362A9AF16067FE4B17E0D6A9F8952C3376B8C7E21D7131850362D9B7`。12条冻结路径与最终全量/12点进程中断一致；Flutter3.41.6 / Dart3.11.4不替代声明SDK及五平台验收。library-authority-artifact-hashes.json绑定源码、日志、截图、产物与提交。
+
+- 基线 `c960282`。COMMIT 已实际成功，但确认及随后读取日志同时失败时，原实例仍能新增登记、暴露旧路径、分配旧库下载目录和读取旧缓存封面；修复前四项回归均失败。后续另复现未结束的下载目录创建与搬迁交叉，一项回归明确失败。现在原实例的数据库访问、路径与缓存模型位置、新导入/下载准入受隔离检查约束；目录分配持有本地文件操作保留直到实际 Future 完成，期间搬迁返回忙提示，排队后再次检查原实例。
+- **本批不改 schema、既有 key 或持久布局**，沿用版本1的 local_storage_relocation。每个管理器保存本次源/目标与是否已开始提交；准备前进入隔离。确认 autocommit 后才读持久记录，prepared 恢复原库、committed 恢复目标；提交返回已确认完整状态，发布路径和缓存映射不重复读取日志。事务仍未结束时，显式恢复在原连接重试 ROLLBACK；失败保留隔离与原始/二次错误。
+- 无日志只在本次尝试尚未开始 commit 且原库存在时允许恢复原路径；已经开始 commit 后缺失日志、源/目标证据变化或权威目录缺失均继续隔离。prepared 先发布已确认原库再忘记日志，避免删除确认失败导致无依据隔离；已确认 committed 后镜像或控制文件清理再次失败仍保留已知目录访问及重试日志。仅恢复不会再次搬迁，也不清理旧副本。隔离绑定原 manager/connection，其他管理器或重开连接不会解除旧模型的未知状态。
+- 应用设置提取 LocalStorageSettings，未知状态显示“本地存储需要恢复”、禁用复制并提供“恢复本地存储 / 重试”，直接恢复原连接，不要求重新选目录。沿用 SettingsTaskPresenter 等待实际任务，成功或失败后刷新，窗口卸载后不更新旧页面；加入简繁文案和 live region。真实微软雅黑及 Material Icons 的三张最终截图核对375×667@1、667×375@3.2深色、1024×768@2，六项UI回归通过；控件截图不替代完整应用或平台验收。
+- 净增 **26项回归**（实例/存储20、设置6）；最终全量 **3883项通过、2项既有跳过**，LCOV **35,298/47,863（73.75%）**。目录分配补强后的63项定向回归、严格分析零诊断、10个Dart文件格式、Python83项含3项既有跳过、版本和Git依赖检查通过。早期Fake字段/一次性故障钩子、toast定位、Semantics释放和图标字体夹具已修正，失败日志保留；未将中间结果当作最终通过。
+- 最终 **12个独立测试VM中断场景**：新增未知提交、准备/提交回滚失败和恢复读取失败四点，另复跑prepared、目录UPDATE、COMMIT、镜像rename、completion/intent/receipt删除和journal删除八点。退出前四个新场景确认实例隔离及迟到add被拒；exit(86)后的独立重启核对完整行、页面、封面/getImages及清空日志，旧副本保留。Flutter父进程79；这是Windows测试VM证据。目录分配补强后的library-authority-frozen-sources-v2.json与library-authority-crash-v2-audit.json取代v1作为本批最终证据，旧证据不覆盖。
+- 受控业务入口仍 **174**；管理器/迁移/日志/导入服务可达140/96/94/144个项目文件，无登记UI、无新增或扩大文件SCC。仅新增设置组件UI登记，允许边/成环约束/业务入口不变，基础/JS/网络三组业务环仍在。12条源码/测试/翻译/基线路径冻结。原52项保持 **24 I / 27 P / 1 U**，46.2%仅为实现证据占比，P6/P4和总体验收未完成。
+- 仍需处理历史无日志搬坏目录、未完成复制续作/显式清理、旧意图/损坏确认/登记冲突、多库未知COMMIT/failed DETACH及旧半登记。已取得的File对象和活动读取不会撤销或重定位；跨进程所有写入者、外部路径竞态、SAF真机、断电/fsync、其余P2–P8、完整CLI、声明SDK、五平台及固定设备性能继续待办。
+
+## P6：漫画库搬迁的目录提交与启动恢复（2026-10-07）
+
+- 最终交付：Windows release构建成功（97.8秒）；打包CHANGELOG/init.js/translation.json与源码一致，app.so SHA-256 `842F80B6C720E3724FF8BB2627D93545F4DA334C78BACD5E4EEB341368318691`。7条冻结路径与全量/八点进程中断时一致；Flutter3.41.6 / Dart3.11.4不替代声明SDK及五平台验收。library-relocation-artifact-hashes.json绑定源码、日志、产物与提交。
+
+- 基线`8d34839`。真实复制导入后setNewPath只搬走文件、未更新绝对directory，导致旧路径读图失败；修复前外部探针为1通过/1失败，原始copy-migration-absolute/relative-before.json保留；最终同一探针两项通过，结果另存migration-final目录。现将库内绝对/嵌套目录和实际指向库内的外部别名映射到新库；旧单名称相对目录保持原语义，真正库外目录和相同前缀目录不改。
+- **新增SQLite表local_storage_relocation，版本1**：复制成功后才写入prepared记录；一个独立事务同时更新目录引用并标记committed，随后发布内存库路径，再原子替换local_path镜像。准备与提交核对目录快照，拒绝嵌套外层事务、重叠路径、重复身份、损坏/未知日志及越界清理计划。复制失败不提交，保留源与部分目标。提交确认失败时核对持久记录；核对再次失败保留原错误与二次错误及两份文件，不据此声称未知提交的完整运行时对账/写入封锁已完成。
+- 启动恢复未提交记录时确认原库和路径镜像，继续原库并保留目标；已提交记录以目标为权威，即使镜像或清理再次失败也保留日志供重试。权威源/目标缺失直接失败，不能创建空目录或回退默认库掩盖错误。启动恢复**不清理旧库内容**；仅本次搬迁全部完成后，复用保留记录/原生别名检查尽力清理原库，失败保留副本。
+- 清理计划绑定复制意图摘要、新旧完整登记快照及目标目录；搬迁后按当前行和独占归属核对，以原登记快照退役复制确认，只删控制文件。清理中断可再次启动续作；登记或意图变更、共享归属均保留证据。旧单名称相对登记的快照本身不变，继续由既有恢复扫描清理。
+- LocalManager返回的模型和注册输入共享当前登记的位置对象，连续/往返搬迁时封面仍跟随新库；查询列表、搜索和详情均绑定此位置。删除后重用ID、切换管理器/数据目录不会让旧模型跟随新登记；没有按ID查询新库替换旧模型。已取得的File对象/进行中的读取不在此重定位保证内。
+- 新增37项回归；最终全量 **3857项通过、2项既有跳过**，LCOV **35,180/47,757（73.66%）**。严格分析零诊断，6个Dart文件格式零变更；Python83项含3项既有跳过、结构/架构、版本与Git依赖检查通过。最初18项花括号规范诊断已修正；此前38项和23项专项仅为中间证据，最终37项新增测试包含库根联接和SAF路径替身。
+- 八个独立测试VM在prepared提交后、首条目录UPDATE后但COMMIT前、COMMIT后、路径镜像rename后、completion/intent/receipt各自实际删除后、journal删除后直接exit(86)。重启后两条完整数据库记录、4页内容、封面及getImages均符合预期；事务中断回滚到原引用，提交后统一读取新库，旧副本始终保留。证据library-relocation-crash-v1-audit.json与最终源码哈希一致；Flutter父进程显示79，非完整应用/断电/真实SAF证明。
+- 受控业务入口 **173→174**；管理器/仓储/迁移服务/日志入口可达140/87/96/94个项目文件，无登记UI、无新增或扩大文件SCC，允许边和成环限制未放宽；基础/JS/网络三组业务环仍在。7条源码/测试/基线路径已冻结。原52项仍 **24 I /27 P /1 U**，46.2%只是实现证据占比。
+- 尚未处理过去已经搬坏且没有日志的绝对引用，不能凭basename猜映射；复制中断目标的续作/显式清理、旧库跨启动自动清理、旧复制记录冲突修复、未知提交完整对账/failed detach、跨进程所有写入者、SAF真机/外部竞态/断电fsync，以及其余P2–P8、完整CLI、声明SDK、五平台和固定设备性能继续待办。
+
 审计基点：`99e607d`，2026-10-02。工作区包含原有用户修改；检查结果针对该工作区，不能当作仅 HEAD 的验证。原方案范围完整保留。本文件是执行索引，不是完成声明。
 
 状态：I = 当前已核对到实现证据（仍受总体验收约束）；P = 部分实现；O = 代码明确显示未完成；U = 缺少足够验证。I 不代表整个阶段完成。证据列的短文件名位于本目录或 `.github/scripts/`，其余为仓库相对路径。
 
 进度口径（2026-10-07）：下表共 52 个原方案子项，24 项 I、27 项 P、1 项 U；已有实现证据占 46.2%，不是整体工作量或最终验收完成率。部分项已包含多次独立提交，不能视为尚未开始，也不能主观折算为完成百分比。当前主要缺口为残余业务/UI 与配置边界、桌面核心及图片/原生任务完整关闭、阅读器真实平台行为、数据/源失败矩阵、兼容层退出，以及完整 CLI、五平台和固定设备性能验收。原方案的 8 条总体验收尚未全部通过。
+
+## P6/P7：已登记副本的清理确认与重试（2026-10-07）
+
+- 基线 `349424a`。旧恢复扫描在核对控制文件前跳过所有已登记目录；登记后中断会永久留下两个文件，删除完成记录后再删意图失败则只剩意图，无法证明可清理。三个修复前回归明确失败，分别覆盖完整已登记副本清理、登记元数据冲突提示和旧意图缺少完成证据提示；五点进程中断审计针对本批新增协议，修复前证据限定为上述三项。
+- 新增版本1的 .venera-copy-registered.json，只用于清理，包含原意图文本和实际本地记录快照。清理前写入、flush并读回确认，然后依次删除完成、意图和清理确认文件。每次重试核对剩余文件归属；删除异常保留原始对象与堆栈，漫画载荷从不进入此清理路径。正常登记后确认实际记录再清理；后续显式下载目录恢复扫描会自动续作清理，没有新增启动时后台清理任务。数据库schema/key不变，但控制文件布局增加了第三个保留名称。
+- LocalRepository按存储目录参数化查询；LocalManager解析既有相对/绝对路径并返回全部匹配记录，避免最近20本限制、同标题误匹配或多记录共用目录被当成唯一归属。元数据按数据库实际精度比较时间毫秒，保留标签/章节顺序；清理快照绑定ID、目录及元数据。旧完整副本先在compute中验证全部输出，再检查当前记录和原生实际父目录，才可取得清理确认。清理还复用本地删除的保留记录/实际路径保护，拒绝祖先重叠和Windows目录联接产生的共享归属；两个新增回归与既有共享目录测试核对了这一点。已有确认文件的重试不再读取完整漫画，不登记漫画或重放收藏意图。
+- 清理确认不能用来新增登记：即使原意图和完成文件都还在，原本地记录删除后也不会自动重建。重复归属、登记身份或元数据变化、损坏/未知版本确认、原意图变化均保留证据并报告；旧版本仅剩意图而无完成/清理确认的目录仍不能凭路径或标题确认清理。原收藏夹在本批清理中不查询、不重放；正常登记的协调事务保持不变。
+- 新增 **20项回归**，包括绝对/相对目录且超过最近列表、四种写入/删除失败重试、原错误栈、身份替换、重复目录、载荷变化、同名异目录、仅确认或确认连同原记录的误重放阻止，以及损坏/未知/不匹配确认。最初测试替身字段delete与File接口冲突，修正后通过；故障注入还需将原生类型查询委托到父zone，以匹配现有生产overrideIO的Dart3.11适配，相关失败日志均保留。首轮全量启动后复核发现路径别名缺口并补强，因此首轮结果仅留档，最终全量及五点中断均使用补强后的冻结源码。扩展 **270项通过**；最终全量 **3820项通过、2项既有跳过**，LCOV **34,906/47,471（73.53%）**。严格分析、7文件格式、Python83项含3项既有跳过、结构/架构、版本和Git依赖检查均通过。
+- 五个真实测试VM中断点位于登记后、确认写入后、完成文件删除后、意图删除后、确认删除后。实际执行flush/删除后直接exit(86)，重启恢复均保持原两库记录及三页内容完全一致、零新增登记、无剩余控制文件；中断时控制文件分别为2/3/2/1/0个。证据为copy-cleanup-crash-v2-audit.json；这验证Windows测试VM中的生产服务/SQLite协议，不替代完整应用、SAF、断电或目录fsync验收。
+- 受控业务入口仍 **173**；元数据/记录/工作器/服务/管理器/仓储分别可达84/6/33/143/137/87个项目文件，无登记UI或新增/扩大SCC，依赖基线未放宽，基础/JS/网络三组环保留。七条源码/测试路径冻结，见copy-cleanup-final-frozen-sources.json和copy-cleanup-final-dependency-audit.json。原52项仍 **24 I / 27 P / 1 U**。未完成副本续复制/显式清理、旧无充分证据目录的修复、记录已变更的冲突处理、跨进程所有权、SAF/外部竞态、未知提交/failed detach、旧半提交和孤立同ID，以及其余P2–P8/CLI/声明SDK/五平台/固定设备性能继续待办。
+
+- 后续迁移审计已复现独立缺陷：现有setNewPath复制文件并更新库路径，但复制导入保存的绝对directory仍指向旧位置；相对路径对照通过，绝对路径检查失败，图片仍完整保存在新目录。仓库外copy_migration_probe.dart调用实际导入和管理器迁移，copy-migration-before.log为1通过/1失败，两个JSON保留路径与图片证据。这是待修复的P6.3缺口，不计入本批通过项，下一批优先处理。
+
+- 最终交付：Windows release 构建成功（97.7秒），打包CHANGELOG/init.js/translation.json与源码一致，app.so SHA-256 `0EB74F51BB44724B8B916A4AC851C585BD8173365AF008996715BA3C666FE86D`；七个源码/测试文件与最终全量前冻结值一致。Flutter3.41.6 / Dart3.11.4不替代声明SDK及五平台验收。copy-cleanup-artifact-hashes.json关联日志、最终五点中断、源码及产物，后续见copy-cleanup-next-audit.md。
+
+## P6/P7：复制完成记录与显式恢复（2026-10-07）
+
+- 基线 `b59bcc1`。修复前的两个独立 Windows 测试 VM 复现：首张图片实际写入后退出会把仅有1/3页的目录登记为漫画；复制完成、登记前退出则丢失原标题和收藏意图。日志 copy-interruption-before.json 保留原行为。现在每个独立输出在首个载荷写入前保存并 flush 版本1的 .venera-copy-intent.json，全部复制后保存 .venera-copy-complete.json，后者绑定原意图 SHA-256 和实际输出目录树（文件内容摘要及空目录）。这是新增的持久文件布局/协议，数据库 schema 和既有 key 不变。
+- comic_copy_metadata.dart 在等待复制前捕获标题、副标题、标签、章节、封面、类型、已下载章节、创建时间和原收藏夹；解码拒绝绝对或穿越的封面/章节路径。ComicCopyRecord 的完成和验证均等待实际文件读取，图片必须非空，不跟随输出链接；摘要计算前后检查原意图。清单路径只用于比较，不用于执行文件 I/O。来源和章节中的旧控制文件不能绕过恢复再次导入，Windows 保留文件名大小写变化也会进入保守检查。
+- localDownloads 在原数据/独占存储保留内、实际 compute 隔离线程中重新核对完整输出和当前库的直接子目录归属。完整无收藏副本恢复原元数据；有旧收藏意图的副本先返回 pendingCopies，由原窗口逐本选择仅恢复本地或当前收藏夹，初始不预选。选择绑定意图摘要、当前收藏实例和连接代次，恢复前重新校验；普通扫描不会重放旧收藏夹。登记成功后只删除两个控制文件，载荷保留；既有绝对/相对登记目录仍先跳过以防重复。
+- 新恢复对话框沿用 Material 和 WindowSelectionTask，支持滚动、键盘、Escape、卸载释放、减少动态效果和恢复期间加载提示；增加简繁翻译。真实微软雅黑六张截图核对375×667、667×375、1024×768，深浅色与1/3.2/2倍字号；超长内容滚动，操作按钮保持可见。七项对话框测试通过。默认测试字体中长文本高于视口的点击曾误触“稍后处理”，现先使真实单选控件可见并验证命中后点击；此失败是测试定位问题，未通过缩小系统字号规避。
+- 最终四个独立 VM 中断点全部通过：首张写入后0本登记且保留1/3页；复制完成后恢复原标题及3页；含收藏意图时首次扫描0本且pending1，明确选择后两库各1；登记后再次扫描0本新增。证据 copy-record-crash-v2-audit.json 使用最终冻结源码。此前版本的四点结果另存，不能代替最终结果。这是生产工作器/服务与真实 SQLite 的测试 VM 进程终止证据，不是完整应用、断电或真机 SAF 验收。
+- 净增 **34项回归**（记录17、服务8、对话框7、真实展示入口2）；扩展 **250项通过**，全量 **3800项通过、2项既有跳过**，LCOV **34,802/47,364（73.48%）**。严格分析零诊断、12个Dart文件格式零变更；Python83项含3项既有跳过，结构/架构、版本与Git依赖检查通过。早期直接导入内部文件的门禁失败、格式差异、夹具异步/阴影不变量及一次错误Python发现目录的0测试结果均保留日志，不计作通过证据。
+- 受控业务入口 **171 → 173**；元数据/记录/工作器/服务分别可达84/6/33/143个项目文件，无登记UI、无新增或扩大SCC；仅新增恢复对话框为UI，特性允许边和七文件成环限制不变，基础/JS/网络三组业务环仍在。14个源码/测试/翻译/基线路径冻结于 copy-record-frozen-sources.json，依赖审计为 copy-record-dependency-audit.json。原52项仍 **24 I / 27 P / 1 U**，46.2%只是实现证据占比。
+- 未完成副本仍保留并报错，续复制/清理修复入口未实现；登记后终止或控制文件删除失败的残留记录尚无自动清理重试。历史无记录目录继续按旧规则扫描，不能证明其完整性；摘要也不是来源目录的一致性快照。SAF真实提供者、外部路径竞态、跨进程导入恢复锁、断电/目录fsync、未知COMMIT对账、failed detach重试、旧半提交修复、其他收藏夹孤立同ID与无收藏导入ID复用仍未验收。同步替换收藏库但不替换本地库，本批依赖新用户选择与当前实例/代次，不是持久数据库epoch方案。其余P2–P8、完整CLI、声明SDK、五平台和固定设备性能继续待办。
+
+- 最终交付检查：Windows release 构建成功（95.2 秒）；打包 CHANGELOG/init.js/translation.json 与源码一致，app.so SHA-256 `E8D8C619E0ABC7D3BC096DE2CD5B48FA87BB613B43E5AFB5723196809A0566E3`。14个源码/测试/翻译/基线路径与全量前冻结值一致。Flutter 3.41.6 / Dart 3.11.4，不替代声明 SDK 或五平台验收。copy-record-artifact-hashes.json 关联日志、四点中断、六张截图、冻结源码、产物与提交；后续见 copy-record-next-audit.md。
+
+## P6/P7：复制目录归属与恢复去重（2026-10-07）
+
+- 基线 `da23617`。旧工作器遇到同名目标先将旧目录移动到 *_old，再向原路径复制新漫画；实际管理器读取回归复现已登记漫画读到新图片，同批相同目录名也指向同一输出。复制改为每个不同来源分配独立目录，不移动或复用已有文件、空目录或漫画目录；重复来源只复制一次。原标题继续存于 LocalComic，独立目录名只承担存储身份，旧记录与旧目录不迁移。
+- 原生文件系统使用 createTempSync 独占创建输出，并解析源和目标根的符号链接后拒绝目标等于源或位于源内；两个真实 compute 隔离线程验证同源并发复制获得不同目录。SAF 插件没有独占创建和 createTemp API，使用 UUID、已观察碰撞检查及创建后存在性检查；真实提供者与外部竞态仍待验证，不能将该分支视为原生独占创建的等价保证。
+- ComicDirectoryCopyResult 逐项返回成功路径与 ComicDirectoryCopyFailure。失败只清理本次已取得的输出，保留原始异常/堆栈及清理异常/堆栈；单项失败或清理失败不丢弃其他成功项。ComicImportService 将结构化错误传至原展示边界，真实 isolate 回归验证类型、源路径、清理结果和部分成功数量；保持原批次 succeeded 与 importedCount/issues 的语义。
+- 原恢复查询已有标题或相对目录名匹配，但遗漏绝对登记路径且目录名不同于标题的情况。localDownloads 在原库独占恢复内读取仓储 directoryReferences，解析相对目录并按绝对词法路径过滤已登记目录；保留旧查询及排序。绝对/相对记录和复制成功后的再次扫描均不重复登记。该过滤不宣称覆盖所有路径别名或父子重叠。
+- 净增 **16项回归**：工作器新增12项、服务新增4项；包括旧目录/文件保护、同名与重复来源、真实隔离线程、源内目标拒绝、分配/清理失败及SAF分支替身。SAF替身使用真实临时文件但不代表真机提供者。旧目录替换与绝对路径恢复有真实修复前失败；早期夹具的 file://、查询含义、排序预期和替身字段冲突分别修正，日志保留。最终扩展 **216项通过**；全量 **3766项通过、2项既有跳过**，LCOV **34,517/47,041（73.38%）**。严格分析零诊断，5个 Dart 文件格式零变更；Python83项含3项既有跳过，结构/架构、版本和 Git 依赖检查通过。
+- 受控业务入口仍 **171**；复制工作器/导入服务分别可达32/141个项目文件，无登记 UI、无新增或扩大 SCC，特性允许边与七文件成环限制不变；基础/JS/网络三组业务环仍在。5条源码/测试路径冻结，证据为 directory-copy-dependency-audit.json 和 directory-copy-frozen-sources.json。原52项仍 **24 I / 27 P / 1 U**。
+- 复制中进程终止及清理失败后的持久归属日志/恢复入口尚未完成，未完成目录仍可能被手动扫描识别，未登记漫画的原标题/收藏意图不能跨重启还原。未知 COMMIT 确认对账、分离失败重试、旧半提交修复、其他收藏夹孤立同ID及无收藏导入的ID复用继续待查；同步替换收藏库但不替换本地库，后续持久意图必须识别库替换。其余 P2–P8、完整 CLI、声明 SDK、五平台、系统终止与固定设备性能仍待验收。
+
+- 最终交付检查：Windows release 构建成功（94.9 秒），打包 CHANGELOG/init.js/translation.json 与源码一致；app.so SHA-256 `9EA7A50CCAAFAE7A874FC10E47632AC1212765F4F4A2FED18854F0186DAFFE3D`。5条源码/测试路径与全量前冻结哈希完全一致。Flutter 3.41.6 / Dart 3.11.4，不替代声明 SDK 或五平台验收。directory-copy-artifact-hashes.json 关联日志、冻结记录、产物与提交；后续见 directory-copy-next-audit.md。
+
+## P4/P6/P7：本地与收藏登记的协调提交（2026-10-07）
+
+- 基线 `27c1312`。旧路径的四个独立测试进程在收藏前/后、本地补偿后、收藏补偿后中断并重开，证实仅保留输出不能恢复登记意图：本地已写入而收藏缺失时，目录恢复因同名跳过；补偿后也可能只剩收藏或留下无记录目录。证据为 import-registration-crash-audit.json。该发现促使登记改用已有 SQLite 协调事务条件，而非继续重放逐库写入与删除补偿。
+- local_registration_storage.dart 在原本地连接附加原收藏库，使用一次 BEGIN IMMEDIATE / COMMIT 写入本地记录、页序迁移标记及选定收藏夹；复用两仓储的 SQL。只接受磁盘回滚日志模式，拒绝 WAL/memory/off，也不进入调用方已有事务；不改变 schema、持久化 key 或文件布局。原始本地 ID 及选定收藏夹中的同身份记录会阻止覆盖或误报成功。其他收藏夹的孤立身份及外部写入冲突仍需审查。
+- 实际 ComicImportService 通过收藏管理器队列执行协调写入，排队前复制元数据，实际执行时分配 ID；沿用原库、存储准入、标签翻译、排序和时间格式。LocalManager 在提交后通知，收藏管理器再按真实记录更新数量、身份索引和追更通知。删除旧的两步登记/逐库补偿路径；不带收藏的登记保留原单库错误判断。
+- 写入失败先回滚，确认未提交才允许转换器删除输出；COMMIT 确认异常仍报告 unknown，回滚或连接分离失败保留原错误和清理诊断。已确认提交后即使分离、通知或 PDF 释放失败，也保留记录与图片。未知确认的运行时对账和失败释放重试仍需补齐，不能把保留文件说成已恢复。
+- 新路径四个进程检查点位于真实本地 INSERT 后、收藏 INSERT 后、COMMIT 前和 COMMIT 后；代理只在真实 SQLite 调用边界执行 exit(86)，不运行 Dart 收尾，Flutter 父进程记录异常退出。重开前三个点均为两库零记录，提交后为两库各一条，所有输出均保留；之后显式目录恢复仅为未提交输出新增本地记录，没有恢复原收藏意图。证据为 atomic-registration-crash-audit.json。这是本机 Windows 测试 VM 的中断证据，不是断电、完整应用或五平台验收。
+- 回归净增 **17项**：新增事务存储17项及等待队列1项；将已删除补偿路径的4组测试替换为三格式提交后失败3项，三格式原双失败与 PDF 释放测试改为检查两库回滚。保留通用回调的 committed/unknown 输出保护。扩展 **335项通过**；最终全量 **3750项通过、2项既有跳过**，LCOV **34,476/47,003（73.35%）**。严格分析零诊断，7个 Dart 文件格式零变更；Python83项含3项既有跳过，结构/架构、版本和 Git 依赖检查通过。
+- 受控业务入口 **170 → 171**；新存储入口可达93个项目文件、无登记 UI，完整 SCC 无新增或扩大循环。基础/JS/网络三组既有业务环及原52项 **24 I / 27 P / 1 U** 不变。八条源码/测试/基线路径已冻结。旧版本遗留半提交状态、未提交目录的持久意图/冲突修复、复制失败、完整生命周期、其余边界/设置/源/兼容与 CLI/声明 SDK/五平台/固定设备性能继续待办。
+
+- 最终交付检查：Windows release 构建成功（94.6 秒），打包 CHANGELOG/init.js/translation.json 与源码一致；app.so SHA-256 `BADE695A8AF6A709F69E59BC50E23C6B1F08A091861B4A8B7A1AEB229BA4CB36`。8 条源码/测试/基线路径与全量前冻结哈希完全一致。Flutter 3.41.6 / Dart 3.11.4，不替代声明 SDK 或五平台验收。日志、冻结记录和产物由 atomic-registration-artifact-hashes.json 关联提交，后续见 atomic-registration-next-audit.md。
+
+## P4/P6/P7：导入注册失败的提交状态与输出保留（2026-10-07）
+
+- 基线 `c6335e2`。真实 SQLite 收藏 INSERT 与本地 DELETE 拒绝触发器在 PDF、EPUB、CBZ 三条实际转换链上均复现：本地记录保留而图片/封面被删除，补偿异常遮蔽原始收藏异常。三项回归在修复前全部失败；失败日志为 import-compensation-before.log。
+- ComicImportService 的注册失败使用既有 PersistenceFailure：准入后的验证失败及已核对记录不存在的普通本地写入失败报告 notCommitted；写入后异常、核对失败及 SQLite 回滚不确定保留 unknown。收藏失败时独立尝试本地与收藏补偿，一边失败不阻止另一边；保留原始异常/堆栈以及全部补偿或核对错误。没有改变已成功注册的 ID、收藏身份、通知和数据准入机制，也没有新增跨库事务。
+- 新增 ComicImportOutput，由 DocumentImportSession 与 CBZ 实际使用，统一输出目录的注册状态。转换尚未注册或明确 notCommitted 时才清理；committed、unknown 和未分类回调异常保留输出。注册回调必须明确声明未提交才能在失败时丢弃文件；原拒绝夹具已改用该合同，仍验证清理与重试。单靠 Future 抛错不再认定数据库没有写入。
+- 输出删除失败保留原始原因与清理诊断。PDF 文档释放在正常完成、转换失败和进入转换前的拒绝路径都等待一次；释放异常不会覆盖原注册/补偿错误，成功注册后的释放失败报告 committed。PDF 渲染使用测试页，异常释放由替身注入；不作为所有原生插件/设备故障已经验收的证明。缓存工作区沿用既有清理策略。
+- 新增 **24项回归**：三格式的真实双失败、确认回滚后清理/重试、已写入后的普通/已分类失败；四组独立补偿组合；本地写后失败/核对失败/回滚不确定；PDF 释放及输出删除；真实备份恢复经过 CBZ 后保留页面并报告失败、不计成功。扩展 **183项通过**。修正了删除替身返回类型、原错误断言与一个多余 import，日志保留。最终全量 **3733项通过、2项既有跳过**，LCOV **34,411/46,929（73.33%）**；严格分析零诊断，11个 Dart 文件格式零变更，Python83项含3项既有跳过及结构/架构门禁通过。
+- 业务入口 **169 → 170**。输出所有者可达85个项目文件，无已登记 UI；完整 SCC 未新增或扩大循环，基础/JS/网络三组既有可达业务环仍在，特性允许边与七文件成环限制保持。12条源码/测试/基线路径在全量前冻结，证据为 import-compensation-dependency-audit.json 和 import-compensation-frozen-sources.json。
+- 原52项仍 **24 I / 27 P / 1 U**。本次避免错误删除并保留可判断的失败信息，不宣称未知注册的跨重启协调/自动修复已经完成；其持久记录、冲突处理与恢复入口，复制工作器失败/目标冲突，以及其余 P2/P3/P4/P5/P6/P7/P8、完整 CLI、声明 SDK、五平台和固定设备性能继续验收。
+
+- 最终交付检查：Windows release 构建成功（94.1 秒），打包 CHANGELOG/init.js/translation.json 与源码一致；app.so SHA-256 `99BD8809089EEA2487DF2F23F0BA29064EA34CA4F9A2363AA1A1408E73556D85`。12 条源码/测试/基线路径与全量前冻结哈希完全一致。Flutter 3.41.6 / Dart 3.11.4，不替代声明 SDK 或五平台验收。日志、冻结记录和产物由 import-compensation-artifact-hashes.json 关联提交，后续见 import-compensation-next-audit.md。
+
+## P2/P6：本地漫画导入业务与展示分离（2026-10-07）
+
+- 基线 `8a64f62`。ComicImportService/ComicImportOperation承接目录及EhViewer扫描、下载目录恢复、批量归档、复制与注册/补偿；ImportComic保留文件选择、原窗口/任务展示和适配装配。注册旧门面及debugCopyDirectories转发已删除，PDF与复制回归直接调用真实业务入口。
+- 导入在原存储准入后取得并固定本地管理器，选中文件的准备/消费仍位于同一保留内；下载目录恢复继续使用LocalManager独占保护，普通导入句柄不能调用恢复扫描，结束后句柄拒绝新操作。单漫画注册保留AppDataOperations、收藏存在性检查、原ID分配、写入顺序和失败补偿。PDF/EPUB/CBZ的输出清理协议没有被替换；补偿自身失败和不确定提交仍需单独验证，不能由本次抽取宣称跨库原子性。
+- 复制按完整路径关系判断归属，修复同前缀外部目录被误判为库内目录；分组时不修改传入列表，支持不可变选择。两项回归在旧实现明确失败。EhViewer标签使用SQL参数以支持单引号；删除按数据库文件名猜测缓存路径的旧清理，选择句柄继续负责实际临时文件，业务服务只借用输入。真实SQLite回归核对默认/带引号标签、日文标题、分类、时间及同名缓存文件保留。
+- 返回实际注册数量和扫描/复制/注册/归档问题；扫描、注册和归档异常保留原对象与堆栈，界面在边界翻译。保留原批量部分成功和零本完成语义，succeeded不代表所有成员成功；复制工作器仍沿用既有逐本失败日志与目录恢复行为。
+- 新增 **12项回归**，覆盖扫描/章节顺序与重复、原库与等待准入、退出及数据替换排空、过期句柄/恢复权限、取消、部分注册、EhViewer、归档批次及真实选择门面接线。扩展 **155项通过**；初轮测试import位置和缺少消息处理器的夹具问题已修正，日志保留。本批全量 **3709项通过、2项既有跳过**，LCOV **34,347/46,856（73.30%）**；严格分析零诊断，Python83项含3项既有跳过，结构/架构及版本/Git依赖检查通过。
+- 业务入口 **167 → 169**，新复制工作器与导入服务分别可达31/139个项目文件，均不触及登记UI。完整文件SCC未新增环；旧UI组件缩小49→47，ImportComic和import_export退出该环。App/AppData/Log、JS引擎/池、Dio/cache三组既有可达业务环仍在，特性允许边和七文件成环限制未放宽。证据：p2-import-service-dependency-audit.json与9路径冻结记录。
+- 原52项仍 **24 I / 27 P / 1 U**。剩余P2边界/业务环、P3配置、P4完整启动关闭、P5原生行为、P6全写入者/失败恢复、P7能力与错误、P8兼容和最终复扫继续执行；完整CLI、声明SDK、五平台及固定设备性能尚未验收。
+
+- 最终交付检查：Windows release构建成功（103.7秒），打包CHANGELOG/init.js/translation.json与源码一致；app.so SHA-256 `DF28E8B6458ED104117E67D02F8F7CFE0D7883676EB52673BC187161AB43EFB3`。全量后仅统一复制工作器第一行的换行符，逐行内容与全量冻结版本完全一致，最终12项导入/复制专项通过，8个Dart文件格式零变更；其他8个冻结路径保持原哈希。Flutter3.41.6/Dart3.11.4，仍不替代声明SDK或五平台验收。日志、冻结记录和产物由p2-import-service-artifact-hashes.json关联提交，后续见p2-import-service-next-audit.md。
+
+## P2：章节读取、备份与文档服务入口（2026-10-07）
+
+- 基线 `43efb79`。chapter_loader、CBZ、DocumentImportSession、ComicBackupManager、BackgroundSync及追更运行时装配改用明确的业务入口。对六个Dart文件逐一去除import声明后与基线比较，业务代码完全一致；本批没有改变章节ID/本地回退、文档转换/取消、导入提交、备份传输或关闭时序。
+- 业务入口 **154 → 167**：新增章节读取、备份、两项后台装配、本地导入退出，以及CBZ/文档/EPUB/PDF导入导出的13个根。完整传递图均不再到达登记UI；其中EPUB/PDF导出在基线已经无UI，本批新增防回退约束。其余11个根在基线可达3–36个当前登记UI文件。证据：仓库外p2-imports-dependency-audit.json。
+- ImportComic、ImportComicPresentation与PDF任务对话框登记为UI边界；移除四项强制将CBZ/EPUB/PDF/备份导入绕回混合聚合文件的旧结构映射。特性允许边和七文件成环约束没有放宽。保留窗口适配器的交互职责，不把Widget装配误归为业务服务。
+- **579项相关回归通过，无跳过**，覆盖本地库/导入导出、章节读取、备份传输、追更及运行时/CLI协议子进程；严格分析零诊断，结构与架构检查通过。没有新增测试或重复全量覆盖率；上一提交3697项/2跳过、73.13%仍为上一提交的全量证据。
+- 原52项保持 **24 I / 27 P / 1 U**。ImportComic门面还把目录扫描、导入注册/回滚和展示放在同一实现，不能凭默认空展示对象认定其业务解耦。其生产调用来自local_comics_summary的交互导入流程；相关注册测试也直接依赖该门面，需继续提取真实业务操作。ComicBackupManager的静态依赖/reset、DocumentImportSession跨异步的库归属及其他P2/P3/P4/P6/P7/P8缺口继续核对；完整CLI、声明SDK、五平台和固定设备性能尚未验收。
+
+- 最终检查：Python83项含3项既有跳过、6个Dart文件格式零变更，版本和Git依赖检查通过；7个源码/检查文件冻结哈希一致。Windows release构建成功（93.9秒），打包CHANGELOG/init.js/translation.json与源码一致，app.so SHA-256 `EE544AA54EC4894848307423D69A366F2AA4EE75EFE41AB29E186ED5551FBEA9`。日志和产物与提交由p2-imports-artifact-hashes.json绑定，后续见p2-imports-next-audit.md。
+
+## P2/P4：下载库归属与跨域业务环（2026-10-07）
+
+- 基线 `af01c03`。DownloadTaskStorage只暴露下载实际使用的库路径、漫画查询、目录分配、快照保存、完成及移除能力。LocalManager实现接口，图片/归档下载及恢复编解码必须接收原库；详情与收藏下载把同一个库交给任务和队列。任务在分配、下载、解压、保存、完成与取消后续步骤中不再重新获取LocalManager，去除两套可变的输出管理器引用。持久化任务字段与支持恢复的类型保持，归档任务没有因此加入自动恢复。
+- 收藏清理通过必需的localComicExists回调查询本地记录，设置操作捕获原本地管理器；查询仍在原收藏写入队列及全局准入之后执行，网络源判断、删除和通知流程保持。收藏管理器不再导入本地管理器；本地删除的三库事务、历史屏障及提交后通知不变。
+- 初始化时固定下载快照路径，恢复和保存使用同一路径，防止全局数据目录改变后覆盖原队列或写入另一个库。新双库回归在修复前因读取第二个库的空快照而失败；初轮修复还改变了未初始化队列的失败重试测试，已保留未初始化路径回退，仅在初始化时固定路径。
+- 新增5项Flutter回归：不创建本地单例的图片/归档任务分别等待目录分配或原解压完成、完成后取消保留文件；两独立本地管理器的恢复/取消/快照归属；收藏查询准入及错误后的重试。最终下载/收藏专项 **71项通过**，严格分析零诊断。Python **83项（含3项既有跳过）**、结构与架构门禁通过；全量与构建结果见本节最终验证。
+- 受控业务入口 **153 → 154**。新增七文件的成环禁入检查及3项Python回归，覆盖间接回环、无关的可达环、自环与文件缺失；不禁止UI导航环，也不把可达基础环误判为调用者成环。对比基线确认原五文件本地/下载/收藏/历史环已经消失；完整无头图仍有App/AppData/Log、JS引擎/池、Dio/cache三组环，已如实保留。证据为仓库外p2-owners-dependency-audit.json。
+- 原52项保持 **24 I / 27 P / 1 U**。P2.5仍需收束本地三库参与者、历史/收藏和源等实际接口；P4的完整生命周期、P6其他数据路径/写入者与全平台恢复仍未验收。下一轮已定位chapter_loader.dart、comic_backup.dart及文档导入链仍经混合聚合导入UI；需分别核对业务和交互适配职责，不能把全部运行时装配一概判为业务层。其余P3/P5/P7/P8与完整CLI、声明SDK、五平台、系统终止和固定设备性能继续待验。
+
+- 最终冻结全量 **3697项通过、2项既有跳过**，新增5项；LCOV **34,224/46,799（73.13%）**。71项专项、严格分析、11个Dart文件格式、结构/架构、版本与Git依赖检查通过；13个源码/检查文件冻结哈希一致。Python83项含3项既有跳过。Flutter3.41.6/Dart3.11.4；总测试数不替代完整CLI、声明SDK、五平台或设备性能验收。
+
+- Windows release构建成功（94.7秒），打包CHANGELOG/init.js/translation.json与源码一致；app.so SHA-256 `D05B91A18A2EAD0E4CE3D6489D1DF8B4616B28202CD7150DA3694CDE8AE1A2C9`。p2-owners-artifact-hashes.json绑定源码、验证日志、覆盖率、产物和提交，后续执行说明见p2-owners-next-audit.md。
+
+## P2：核心服务与无头入口移除页面依赖（2026-10-07）
+
+- 基线 `7d4a3fc`。本地库、收藏、历史、追更、图片/归档下载、应用数据导入及核心/同步/无头装配改用已有业务 API 或明确的管理器与传输声明。local.dart 停止转导出图片展示类；业务 API 的模型导出范围不扩张，CLI 参数、JSON 输出、退出及原事务/关闭逻辑保持。
+- image_favorites_cache.dart 统一既有 v2 缓存身份、文件定位和删除，图片收藏管理器不再依赖 ImageFavoritesProvider。展示读写复用同一缓存身份；保留空章节 ID 的 ordinal 区分及原 MD5 文件名。删除原展示类静态删除入口，测试转用实际缓存函数，并以两种已发布 v2 键直接生成缓存文件，验证读取与删除兼容。
+- 受控业务入口 **138 → 153**，新增三个图片展示类到 UI 禁入清单。结构规则删除六项强制绕回混合 UI 聚合入口的映射，改由已登记业务入口的完整传递图约束；特性依赖允许边未增加。基线源码图中，无头入口可达33个已登记 UI 文件，其他13个既有新增受控根各可达31个；本批15个根（含新缓存文件）均为0。证据：仓库外 p2-boundaries-dependency-audit.json。
+- 扩展回归 **1254项通过，无跳过**，覆盖运行时、CLI协议子进程、本地库、收藏、历史、追更、同步及原图片提供器取消。补充固定旧缓存键断言后的最终专项 **44项通过**。严格分析零诊断、结构/架构门禁通过；本批未重复全量覆盖率，上一提交3692项/2跳过和73.11%仍是上一提交的证据，不与专项数相加。
+- P2.1/P2.3/P2.5仍为P，原52项保持 **24 I / 27 P / 1 U**。本地库/下载/收藏/历史之间仍有五文件业务环，另有 App/AppData/Log、JS引擎/池、Dio/cache环；没有把移除UI等同消除业务耦合。其余未迁移聚合入口、跨域窄接口、完整Flutter无头程序、声明SDK、五平台与固定设备性能继续待验。
+
+- 最终检查：Python 80项/3项既有跳过，18个Dart文件格式零变更，版本与Git依赖检查通过；Windows release构建成功（94.8秒），打包CHANGELOG/init.js/translation.json与源码一致。app.so SHA-256 `3EF0B421FE2B3D74740830E1A42D908882B7CC6B1FF995803016C6BC4C37B4F9`。20个源码/检查文件的冻结哈希一致；日志和产物由p2-boundaries-artifact-hashes.json绑定，后续见p2-boundaries-next-audit.md。
 
 ## P5/P8：阅读信息浮层安全区与单次语义（2026-10-07）
 
@@ -590,18 +725,18 @@ Cookie SQL、过期清理和连接生命周期均接入准入，同步 JS API �
 | P0.1 | I | 起点与工作区隔离 | `optimization_progress.zh.md` | 保留起点 550fcff 与用户改动清单；后续提交继续选择性暂存。 |
 | P0.2 | I | 分析范围 | `analysis_options.yaml` | 仅排除 build；检查正式源码仍启用。 |
 | P0.3 | P | 测试与覆盖率 | `optimization_progress.zh.md` 最新执行记录 | 最新冻结全量、覆盖率、严格分析、格式、Python、静态门禁及构建结果以本文本轮增量和执行记录为准；其他平台及完整验收矩阵仍未完成，单次 Windows 通过不完成本项。 |
-| P0.4 | P | 依赖报告与例外 | `dependency_baseline.json; check_architecture_dependencies.py` | 当前登记 138 个业务入口，未扩大依赖例外。继续扩展到未迁移服务并核查业务环；最终门禁见执行记录。 |
+| P0.4 | P | 依赖报告与例外 | `dependency_baseline.json; check_architecture_dependencies.py` | 当前登记 171 个业务入口，未扩大依赖例外。继续扩展到未迁移服务并核查业务环；最终门禁见执行记录。 |
 | P0.5 | U | 设备性能基线 | `optimization_progress.zh.md: 性能基线与平台补验` | 固定设备、样本和构建模式测量六类场景，记录至少三次波动。 |
 | P1.1 | I | Channel 清理 | `git ls-files lib/foundation/channel.dart` | 文件已不再跟踪；历史判定见执行记录。 |
 | P1.2 | I | 组件聚合入口 | `git ls-files lib/components/components.dart` | 文件已不再跟踪；保留使用中的组件。 |
 | P1.3 | I | 完整候选分类 | `public_symbol_audit.zh.md; public_symbol_candidates.json; tool/code_audit` | 原 36 项调查现已全部处理；最终复扫 379 个生产文件、6036 个声明、304 个候选，无新增未分类项。详见 investigation_resolution.zh.md；历史数量不代表当前扫描。 |
 | P1.4 | I | 仓库临时产物审查 | `dependency_artifact_audit.zh.md` | 已核对 881 个跟踪路径、27 个工具与 14 组相同内容；无跟踪临时输出，平台资源保留。ARM64 手工入口已复用 Windows 共用打包流程，保留命令适配；6 项脚本回归通过，真实 ARM64 构建仍需平台补验。 |
 | P1.5 | I | 依赖用途核对 | `dependency_artifact_audit.zh.md; pubspec.yaml; pubspec.lock` | 51 项原声明逐项核对 Dart、配置、原生插件与 JS 桥；删除无调用的 flutter_to_arch 及独占 io，保留 Python 消费的配置。其余版本/来源不变；不替代 fork 许可、平台构建及公开符号审查。 |
-| P2.1 | P | 业务/UI 入口 | `dependency_baseline.json; lib/features/comic_source/comic_source_api.dart` | 补齐本地/同步/WebDAV 等遗留聚合依赖。 |
+| P2.1 | P | 业务/UI 入口 | `dependency_baseline.json; lib/features/local_comics/import_export/comic_import_service.dart` | 171个业务入口受完整UI依赖图约束。ImportComic的目录/EhViewer/恢复/复制/注册与归档批量策略已移入服务，门面保留选择和展示；继续全库入口与其余业务环审查，不以入口数替代全域验收。 |
 | P2.2 | I | 源更新服务 | `lib/features/comic_source/source_update_service.dart` | 服务已存在并被调用；后续 P4/P7 收束全局依赖与错误翻译。 |
-| P2.3 | P | 页面与 CLI 适配 | `lib/app_runtime/headless.dart; lib/app_runtime/headless_sync_command.dart` | 同步/源/订阅输出适配、参数预检及受控 Dart 子进程协议已有验证；真实服务装配、间接 UI 依赖及完整 Flutter 无头程序仍需验收。 |
+| P2.3 | P | 页面与 CLI 适配 | `lib/app_runtime/headless.dart; lib/app_runtime/headless_sync_command.dart` | 同步/源/订阅输出、参数预检及受控Dart子进程协议已有验证；真实装配依赖图现无已登记UI文件，完整Flutter无头程序及平台行为仍需验收。 |
 | P2.4 | I | 本地阅读目标与路由 | `lib/features/local_comics/local_reading.dart; lib/routing/local_reading.dart` | 模型导航已迁出，保留章节/历史回归。 |
-| P2.5 | P | 跨域接口所有者 | `lib/features/reader/chapter_image_loader.dart; lib/features/sync/data_sync_controller.dart` | 同步参与者和部分源/本地管理器仍直接耦合。 |
+| P2.5 | P | 跨域接口所有者 | `lib/features/reader/chapter_image_loader.dart; lib/features/sync/data_sync_controller.dart` | 下载以DownloadTaskStorage持有原库，收藏存在性查询显式注入，原本地/下载/收藏/历史五文件环已消除并受门禁约束；本地三库参与者、历史/收藏与部分源接口仍需收束。 |
 | P3.1 | I | 阅读设置规则 | `lib/foundation/reader_preferences.dart` | 默认值与范围集中；后续修改保持旧值语义。 |
 | P3.2 | I | 不可变设置解析 | `lib/foundation/reader_settings.dart; test/foundation/reader_settings_snapshot_test.dart` | 已存在快照与覆盖测试；不得用这项替代所有设置验收。 |
 | P3.3 | P | 存储与消费端类型化 | `lib/foundation/reader_preference_store.dart; lib/features/settings/reader.dart` | 阅读消费端已有迁移，仍需全消费端盘点与用户改动合并验收。 |
@@ -623,16 +758,16 @@ Cookie SQL、过期清理和连接生命周期均接入准入，同步 JS API �
 | P5.7 | P | 阅读会话与平台效果 | `lib/features/reader/reader_session.dart; lib/features/reader/platform_effects_controller.dart; lib/features/reader/volume_controller.dart` | 已有会话、方向与音量控制器。音量已采用独立令牌的原生启停确认，原应用/窗口等待实际释放并保留失败重试；当前路由、前台与退出 hold 控制准入，旧页面取消不影响新页面，重试不重放阅读保存。阅读会话和共享图片/设置任务、独立设置保存均固定原宿主。窗口全屏已接入共享协调器及原宿主关闭，失败恢复保留独立步骤。系统栏及方向已纳入同一协调器并登记原宿主，独立恢复失败可重试；实际平台效果与插件错误面仍待验收；亮度当前为 Flutter 遮罩调暗，按界面资源审查。 状态栏电池/时钟已独立持有原宿主，后台和关闭停止轮询，实际读取继续排空，错误保持可选语义。 |
 | P6.1 | I | 模型与仓储分离 | `lib/features/local_comics/local_repository.dart; lib/features/history/history_repository.dart; lib/features/favorites/favorites_repository.dart` | 主体 SQL 已迁入仓储；后续新增 SQL 继续遵守边界。 |
 | P6.2 | P | 收藏业务职责 | `lib/features/favorites/read_later_service.dart; lib/features/favorites/favorite_updates_service.dart; lib/features/favorites/favorites_manager.dart` | 稍后阅读/追更已分离；管理器仍有全局依赖和统一生命周期待收束。 |
-| P6.3 | P | 本地库与导入下载 | `lib/features/local_comics/local.dart; lib/features/local_comics/local_deletion_paths.dart` | 队列/仓储/迁移已拆分；删除保护同时核对文本路径和原生实际路径，保留章节也参与引用检查，真实 Windows 联接回归通过。SAF 仍用提供者路径；外部路径并发替换、删除回滚和未受保护写入者继续处理。 add/remove 已校验写入所有权，页序迁移持有存储保留；下载及外部 SQL 剩余边界见 local_storage_writer_audit.zh.md。 |
+| P6.3 | P | 本地库与导入下载 | `lib/features/local_comics/local.dart; lib/features/local_comics/local_deletion_paths.dart` | 队列/仓储/迁移已拆分；删除保护同时核对文本路径和原生实际路径，保留章节也参与引用检查，真实 Windows 联接回归通过。SAF 仍用提供者路径；外部路径并发替换、删除回滚和未受保护写入者继续处理。 add/remove 已校验写入所有权，页序迁移持有存储保留；下载及外部 SQL 剩余边界见 local_storage_writer_audit.zh.md。 搬迁已通过版本1日志原子更新绝对引用并恢复中断；本轮增加原实例未知提交隔离、下载目录分配保留与设置恢复入口，12点VM中断通过。历史无日志损坏路径、未完成副本修复及跨进程/平台边界仍待处理。 |
 | P6.4 | I | WebDAV 实例化与拆分 | `lib/features/webdav_library/webdav_library_synchronizer.dart; lib/features/webdav_library/webdav_library_snapshot_store.dart; lib/features/webdav_library/webdav_library_source.dart` | 配置/发现/快照与缓存/同步协调/源适配已分离，实例注入和路径、增量同步、取消回归已有证据；仍受 P6 总体数据/性能/平台退出条件约束。 |
 | P6.5 | P | 应用同步职责 | `lib/features/sync/data_sync_controller.dart; lib/features/sync/app_data_import_journal.dart; lib/app_runtime/data_sync.dart` | 独立导入日志与启动前恢复已接入，替换前保留不可变备份及完整资源清单；提交后清理和未提交回滚可跨进程续作。恢复中再次终止、真实导入器和 bootstrap 有回归；全写入者屏障、备份导入及其他数据/平台失败矩阵仍需完成。 |
 | P6.6 | P | 同步窄接口与协议 | `lib/features/sync/data_sync_operation.dart; lib/features/sync/data_sync_recovery.dart; test/features/sync/data_sync_recovery_test.dart` | v2 操作关联导入终态与旧配置 checkpoint；匹配收据恢复通知/固定时间/设置，持久清 marker 后才 ack，不重复传输。退出排空真实恢复 I/O；重启保守保留 pending。v3 上传 journal/内容对账与条件写入已接入并有真实进程和生产 HTTP 组合回归，使用原 endpoint/快照/版本；旧记录、损坏或不匹配证据继续阻断。v4 实际内容基线识别未通知落盘并在覆盖前拒绝下载等待期间的编辑，真实应用集成与独立 VM 磁盘协议已有证据；同步服务跨进程所有权、候选完成决定及保守孤立恢复已接入，连接/isolate/独立 VM 与恢复再次终止已有回归；所有应用写入者的跨进程快照锁、原生真实 close 故障及完整平台失败矩阵仍待完成。 |
-| P6.7 | P | 原子性约束 | `local_deletion_recovery.zh.md; local_deletion_journal.dart; local_deletion_storage.dart` | 三库事务与持久隔离目录日志已接入；异常回滚、清理重试、重开连接和管理器恢复均有测试。SAF 真机、强制终止/断电、外部写入与恢复冲突修复入口仍需验收。 已验证 Windows 独立 VM 三个确定终止窗口的三库/日志恢复协议；不替代完整应用、SAF、其他平台或断电验收。 |
+| P6.7 | P | 原子性约束 | `local_deletion_recovery.zh.md; local_deletion_journal.dart; local_deletion_storage.dart; comic_copy_record.dart` | 三库删除事务与持久隔离日志已接入；异常回滚、重开、管理器恢复和三个Windows VM中断窗口已有证据。本地与选定收藏夹的导入使用单次SQLite协调提交，四点VM中断后两库一致。复制独立输出并保留逐项错误；版本1意图/完成记录阻止新半成品自动登记，完整副本恢复元数据，收藏需显式选择当前库。最终四点复制中断审计通过。未完成副本续复制/修复、历史无标记半成品、未知提交对账、failed detach、旧半提交、孤立同ID、SAF/外部竞态/跨进程锁与断电仍待完成；上述证据不替代完整应用与五平台验收。 新清理确认绑定实际记录并支持下次恢复扫描续作；五点VM中断后两库/图片保持且控制文件清空。旧无完成/确认意图、记录变更冲突与未完成副本修复仍待处理。 |
 | P7.1 | I | 按能力拆解析器 | `lib/features/comic_source/parser.dart; source_*_parser.dart; source_parser_context.dart` | 已拆分账户、发现、分类、搜索、收藏、图片、评论、漫画及元数据；源身份上下文固定。完整能力/错误矩阵继续按 P7.2/P7.5 验收。 |
 | P7.2 | P | JS 与最小源兼容 | `source_capability_matrix.zh.md; test/features/comic_source/source_capabilities_test.dart; test/features/comic_source/source_comic_completion_test.dart; source_comments_completion_test.dart` | 真实 QuickJS 已覆盖登录、重登录、游标、新旧分类、多能力隔离、图片配置/回调及图片脚本释放；本轮补详情原始 Promise 等待、嵌套模型脱离 JS 图及结果/异常引用释放专项。归档/投票/其余元数据、其他回调所有权与完整取消矩阵仍待补齐，专项不替代最终全量。 普通/章节评论新增 20 项真实 QuickJS 引用释放、原 Promise 等待及源退休回归。 |
 | P7.3 | I | 重复流程对照表 | `repeated_workflow_matrix.zh.md` | 已核对更新、图片、归档、同步和导入的调度、取消、所有权与提交差异；登记已有共享原语和不可合并语义。P7.4/P7.5 及数据/平台验收继续追踪。 |
 | P7.4 | P | 仅抽真实共性 | `lib/foundation/throttled_task_runner.dart; lib/network/request_scope.dart; lib/foundation/platform_dialog_queue.dart; lib/network/webdav.dart` | 分享/保存/目录选择用独立 PlatformDialogQueue 实例，无旧目录选择别名；closeWebDavClient 由数据同步和漫画备份复用临时连接释放，书库长连接保留独立协议。继续以 P7.3 对照核查其他共性与重复实现。 |
-| P7.5 | P | 结构化错误 | `lib/features/comic_source/source_update_service.dart; lib/foundation/res.dart; lib/foundation/share_file_operation.dart` | 源仓库/更新与目录预览已有稳定错误码、原始异常及范围，UI/CLI 在边界展示；取消不误计 CLI 成功，FailureDetails/Res 区分失败、取消和 UnsupportedError，八类源解析器保留异常。本轮 ShareFileCleanupFailure 保留操作/清理双重错误与堆栈，Windows 保留 HRESULT，Android 保留 suppressed 清理诊断。源脚本预览已保留解析器异常；检查/预览清理重试保留原 cause/stack，安装按尝试保留迟到和已清除行的错误，文件释放不能解除 HTTP 失败。其他服务、Apple activity 报错、字符串校验失败和全消费端分类展示仍待迁移。 保存/设置与漫画导出统一保留原操作及清理错误/堆栈，释放失败由原宿主重试，不重新导出或保存。 |
+| P7.5 | P | 结构化错误 | `lib/features/comic_source/source_update_service.dart; lib/foundation/res.dart; lib/foundation/share_file_operation.dart` | 源仓库/更新与目录预览已有稳定错误码、原始异常及范围，UI/CLI 在边界展示；取消不误计 CLI 成功，FailureDetails/Res 区分失败、取消和 UnsupportedError，八类源解析器保留异常。本轮 ShareFileCleanupFailure 保留操作/清理双重错误与堆栈，Windows 保留 HRESULT，Android 保留 suppressed 清理诊断。源脚本预览已保留解析器异常；检查/预览清理重试保留原 cause/stack，安装按尝试保留迟到和已清除行的错误，文件释放不能解除 HTTP 失败。其他服务、Apple activity 报错、字符串校验失败和全消费端分类展示仍待迁移。 保存/设置与漫画导出统一保留原操作及清理错误/堆栈，释放失败由原宿主重试，不重新导出或保存。  导入注册、补偿、输出删除与 PDF 释放保留提交状态、原始原因和堆栈，不再由回滚/释放错误覆盖原失败。 |
 | P7.6 | P | 技术规则复用 | `lib/features/comic_source/parser.dart:23; lib/features/comic_storage/archive_metadata.dart` | 元数据/文件规则已有公共实现；版本比较/日期等仍需用途和兼容审查。 |
 | P8.1 | P | 兼容与测试开关退场 | `lib/features/local_comics/local.dart:52; lib/app_runtime/data_sync.dart` | 同步单例/reset/debug、9 个归一化 debug 转发及 JSAutoFreeFunction 已删除；本地漫画等域仍有 reset/debug，聚合导出继续审查。 无调用的旧批量归档执行器已退役，历史元数据编解码独立保留，不构成当前导入入口。  原 36 项调查现已全部处理；最终复扫 379 个生产文件、6036 个声明、304 个候选，无新增未分类项。详见 investigation_resolution.zh.md；历史数量不代表当前扫描。 |
 | P8.2 | P | 恢复 lint 与边界类型 | `analysis_options.yaml` | collection_methods_unrelated_type 已启用并提升为 warning，25 处诊断已处理；use_build_context_synchronously 已提升为 warning，导入展示修复 21 处、评论视图修复 8 处、源页面修复 8 处、本地库修复 3 处、同步窗口修复 1 处，历史页面修复 2 处，收藏面板修复 7 处，网络收藏页修复 9 处，应用设置修复 9 处，本地收藏设置/图片统计各修复 1 处，富文本评论修复 1 处，详情点赞/评分修复 4 处，详情下载修复 3 处，本地收藏文件导入修复 2 处，网络收藏批量导入修复 1 处，调试提示/本地跳转各修复 1 处，阅读手势最后 2 处已修复，剩余 0；剩余 21 项 info 已处理，严格分析清零且 CI 对 info 失败；Settings 异构兼容入口仍显式 dynamic，全面消费端类型化按 P3 继续，P8.2 尚不代表全部边界已收束。 |
@@ -645,7 +780,7 @@ Cookie SQL、过期清理和连接生命周期均接入准入，同步 JS API �
 | 条目 | 当前结论 | 完成所需证据 |
 |---|---|---|
 | 9.1 业务不依赖页面/State | 未完成 | ReaderImages/全局手势 State 已有退场证据；继续扩展业务入口登记并移除残余反向 UI 引用 |
-| 9.2 业务环与 CI | 未证明 | 对全部关键业务服务检查传递依赖，分类保留 UI 环；138 个受控入口结构/架构门禁通过，仍不是全库无业务环的证明 |
+| 9.2 业务环与 CI | 未证明 | 对全部关键业务服务检查传递依赖，分类保留 UI 环；174 个受控入口结构/架构门禁通过，仍不是全库无业务环的证明 |
 | 9.3 阅读器控制器与策略 | 部分 | P5.3/P5.5/P5.6 已有实现证据；继续 P5.7 实际平台效果、七模式原生联合及固定设备性能验收。原用户未提交功能已按授权撤销 |
 | 9.4 依赖与生命周期 | 部分 | WebDAV 实例隔离和 DataSync 端口注入已有回归；继续宿主/核心/图片/原生完整退出、其他生产全局 reset 退场和失败释放矩阵 |
 | 9.5 删除与兼容层 | 未完成 | P1 候选判定已完成一轮；继续所有兼容转发真实调用审查、P8.1 退场及最终复扫 |

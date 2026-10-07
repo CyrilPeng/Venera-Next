@@ -4,7 +4,7 @@ import 'package:enough_convert/enough_convert.dart';
 import 'package:flutter_7zip/flutter_7zip.dart';
 import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -12,6 +12,7 @@ import 'package:venera_next/foundation/file_type.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:zip_flutter/zip_flutter.dart';
 import '../local_storage_guard.dart';
+import 'comic_import_output.dart';
 
 /// Comic Book Archive. Currently supports CBZ, ZIP and 7Z formats.
 abstract class CBZ {
@@ -168,6 +169,8 @@ abstract class CBZ {
         );
   }
 
+  /// The registrar must report a confirmed non-commit to discard owned output
+  /// after failure; unclassified errors retain it because a write may have won.
   static Future<LocalComic> import(
     File file, {
     Future<void> Function(LocalComic comic)? registerComic,
@@ -239,6 +242,7 @@ abstract class CBZ {
       );
     }
     dest.createSync();
+    final output = ComicImportOutput(dest);
     try {
       File coverFile;
       if (metaData.chapters == null && layout.useChapterDirectories) {
@@ -321,11 +325,10 @@ abstract class CBZ {
         cover: 'cover.${coverFile.extension}',
         createdAt: DateTime.now(),
       );
-      await registerComic?.call(comic);
+      await output.register(comic, registerComic);
       return comic;
-    } catch (_) {
-      await dest.deleteIgnoreError(recursive: true);
-      rethrow;
+    } catch (error, stack) {
+      return await output.fail(error, stack);
     }
   }
 

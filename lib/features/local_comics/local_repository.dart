@@ -203,6 +203,28 @@ class LocalRepository {
     ];
   }
 
+  List<List<Object?>> directoryBindings() => [
+    for (final row in db.select(
+      'SELECT id, comic_type, directory FROM comics ORDER BY id, comic_type',
+    ))
+      [row['id'], row['comic_type'], row['directory']],
+  ];
+
+  void replaceDirectory(
+    String id,
+    ComicType type,
+    String before,
+    String after,
+  ) {
+    db.execute(
+      'UPDATE comics SET directory = ? WHERE id = ? AND comic_type = ? AND directory = ?',
+      [after, id, type.value, before],
+    );
+    if (db.updatedRows != 1) {
+      throw StateError('Comic directory changed during relocation');
+    }
+  }
+
   List<LocalComic> getComics(LocalSortType sortType) {
     var res = db.select('''
       SELECT * FROM comics
@@ -224,6 +246,11 @@ class LocalRepository {
     }
     return localComicFromRow(res.first);
   }
+
+  List<LocalComic> findByDirectory(String directory) => db
+      .select('SELECT * FROM comics WHERE directory = ?', [directory])
+      .map(localComicFromRow)
+      .toList();
 
   List<LocalComic> getRecent() {
     final res = db.select('''

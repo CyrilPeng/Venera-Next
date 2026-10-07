@@ -1,3 +1,6 @@
+import 'package:venera_next/foundation/persistence_failure.dart';
+import 'package:venera_next/features/local_comics/import_export/comic_import_service.dart';
+import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -15,6 +18,10 @@ import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/file_system.dart';
 
 void main() {
+  const service = ComicImportService(
+    localManager: LocalManager.new,
+    favoritesManager: LocalFavoritesManager.new,
+  );
   TestWidgetsFlutterBinding.ensureInitialized();
   group('PDF import rendering', () {
     test('uses three times the PDF point size below the edge limit', () {
@@ -100,7 +107,7 @@ void main() {
             onProgress: (current, total) {
               if (current == 1) firstPageReady.complete();
             },
-            registerComic: (comic) => const ImportComic().registerComic(comic),
+            registerComic: (comic) => service.registerComic(comic),
           );
           // Always finish the renderer, including when a regression assertion
           // fails, so test cleanup cannot race a live import.
@@ -161,8 +168,7 @@ void main() {
               onProgress: (current, total) {
                 if (current == 1) firstPageReady.complete();
               },
-              registerComic: (comic) =>
-                  const ImportComic().registerComic(comic),
+              registerComic: (comic) => service.registerComic(comic),
             );
             try {
               await firstPageReady.future;
@@ -192,7 +198,7 @@ void main() {
                 _Document([_Page()]),
                 title: 'Volume $index',
                 registerComic: (comic) =>
-                    const ImportComic().registerComic(comic, folder: folder),
+                    service.registerComic(comic, folder: folder),
               );
             }
             expect(favorites.find('1', ComicType.local), contains(folder));
@@ -224,9 +230,21 @@ void main() {
                 _Document([_Page()]),
                 title: 'Unregistered',
                 registerComic: (comic) =>
-                    const ImportComic().registerComic(comic, folder: folder),
+                    service.registerComic(comic, folder: folder),
               ),
-              throwsA(isA<SqliteException>()),
+              throwsA(
+                isA<PersistenceFailure>()
+                    .having(
+                      (failure) => failure.commitState,
+                      "state",
+                      PersistenceCommitState.notCommitted,
+                    )
+                    .having(
+                      (failure) => failure.cause,
+                      "cause",
+                      isA<SqliteException>(),
+                    ),
+              ),
             );
             expect(manager.findByName('Unregistered'), isNull);
             expect(favorites.find('1', ComicType.local), isEmpty);
@@ -247,12 +265,12 @@ void main() {
             document,
             title: 'Volume 1',
             onProgress: (current, total) => progress.add((current, total)),
-            registerComic: (comic) => const ImportComic().registerComic(comic),
+            registerComic: (comic) => service.registerComic(comic),
           );
           final second = await PdfComicImporter.importDocument(
             _Document([_Page()]),
             title: 'Volume 2',
-            registerComic: (comic) => const ImportComic().registerComic(comic),
+            registerComic: (comic) => service.registerComic(comic),
           );
 
           expect(progress, [(0, 2), (1, 2), (2, 2)]);
@@ -300,7 +318,7 @@ void main() {
           final kept = await PdfComicImporter.importDocument(
             _Document([_Page()]),
             title: 'Kept',
-            registerComic: (comic) => const ImportComic().registerComic(comic),
+            registerComic: (comic) => service.registerComic(comic),
           );
           final cancellation = DocumentImportCancellation();
           final document = _Document([_Page(), _Page()]);
@@ -405,9 +423,21 @@ void main() {
           PdfComicImporter.importDocument(
             document,
             title: 'Unregistered',
-            registerComic: (_) async => throw StateError('Registration failed'),
+            registerComic: (_) async => throw PersistenceFailure(
+              commitState: PersistenceCommitState.notCommitted,
+              cause: StateError('Registration failed'),
+              stackTrace: StackTrace.current,
+            ),
           ),
-          throwsStateError,
+          throwsA(
+            isA<PersistenceFailure>()
+                .having((failure) => failure.cause, 'cause', isA<StateError>())
+                .having(
+                  (failure) => failure.commitState,
+                  'state',
+                  PersistenceCommitState.notCommitted,
+                ),
+          ),
         );
         expect(document.disposed, isTrue);
         expect(manager.directory.listSync().whereType<Directory>(), isEmpty);

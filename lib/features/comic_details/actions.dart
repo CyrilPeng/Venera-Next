@@ -268,14 +268,15 @@ abstract mixin class ComicPageActions {
     final target = comic;
     final source = comicSource;
     final owner = context;
+    final library = LocalManager();
     _choosingDownload = true;
     try {
-      if (LocalManager().isDownloading(target.id, target.comicType)) {
+      if (library.isDownloading(target.id, target.comicType)) {
         owner.showMessage(message: "The comic is downloading".tl);
         return;
       }
       if (target.chapters == null &&
-          LocalManager().isDownloaded(target.id, target.comicType, 0)) {
+          library.isDownloaded(target.id, target.comicType, 0)) {
         owner.showMessage(message: "The comic is downloaded".tl);
         return;
       }
@@ -292,8 +293,10 @@ abstract mixin class ComicPageActions {
           return;
         }
         if (selection.url != null) {
-          if (LocalManager().isDownloading(target.id, target.comicType)) return;
-          LocalManager().addTask(ArchiveDownloadTask(selection.url!, target));
+          if (library.isDownloading(target.id, target.comicType)) return;
+          library.addTask(
+            ArchiveDownloadTask(selection.url!, target, storage: library),
+          );
           owner.showMessage(message: "Download started".tl);
           update();
           return;
@@ -301,15 +304,20 @@ abstract mixin class ComicPageActions {
       }
 
       if (!owner.mounted || !isComicActive(target)) return;
-      if (LocalManager().isDownloading(target.id, target.comicType)) return;
+      if (library.isDownloading(target.id, target.comicType)) return;
       if (target.chapters == null) {
-        LocalManager().addTask(
-          ImagesDownloadTask(source: source, comicId: target.id, comic: target),
+        library.addTask(
+          ImagesDownloadTask(
+            storage: library,
+            source: source,
+            comicId: target.id,
+            comic: target,
+          ),
         );
       } else {
         List<int>? selected;
         var downloaded = <int>[];
-        var localComic = LocalManager().find(target.id, target.comicType);
+        var localComic = library.find(target.id, target.comicType);
         if (localComic != null) {
           for (int i = 0; i < target.chapters!.length; i++) {
             if (localComic.downloadedChapters.contains(
@@ -330,9 +338,10 @@ abstract mixin class ComicPageActions {
         if (!owner.mounted || !isComicActive(target) || selected == null) {
           return;
         }
-        if (LocalManager().isDownloading(target.id, target.comicType)) return;
-        LocalManager().addTask(
+        if (library.isDownloading(target.id, target.comicType)) return;
+        library.addTask(
           ImagesDownloadTask(
+            storage: library,
             source: source,
             comicId: target.id,
             comic: target,

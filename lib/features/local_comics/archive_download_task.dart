@@ -4,9 +4,10 @@ import 'dart:isolate';
 import 'package:flutter_saf/flutter_saf.dart';
 import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/comic_type.dart';
-import 'package:venera_next/features/local_comics/local.dart';
+import 'download_task_storage.dart';
+import 'local_comic_model.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/network/file_downloader.dart';
@@ -28,9 +29,11 @@ class ArchiveDownloadTask extends DownloadTask {
   ArchiveDownloadTask(
     this.archiveUrl,
     this.comic, {
+    required DownloadTaskStorage storage,
     FileDownloader Function(String, String)? createDownloader,
     Future<void> Function(String, String)? extractArchive,
-  }) : _createDownloader =
+  }) : _storage = storage,
+       _createDownloader =
            createDownloader ?? ((url, path) => FileDownloader(url, path)),
        _extract = extractArchive ?? _extractArchive {
     source = ComicSource.find(comic.sourceKey)!;
@@ -45,22 +48,20 @@ class ArchiveDownloadTask extends DownloadTask {
   Future<void>? _cleanup;
   Directory? _workspace;
   String? _ownedOutputPath;
-  LocalManager? _outputManager;
+  final DownloadTaskStorage _storage;
 
   Future<void> _clearOwnedOutput() async {
     final outputPath = _ownedOutputPath;
     if (outputPath == null) return;
     // A successfully registered comic owns its files, even if cancellation
     // arrived while a prior run was finishing. Use the original manager.
-    if (_outputManager!.find(id, comicType) != null) {
+    if (_storage.find(id, comicType) != null) {
       _ownedOutputPath = null;
-      _outputManager = null;
       return;
     }
     final directory = Directory(outputPath);
     if (await directory.exists()) await directory.delete(recursive: true);
     _ownedOutputPath = null;
-    _outputManager = null;
   }
 
   Future<void> _clearWorkspace() async {
@@ -118,7 +119,7 @@ class ArchiveDownloadTask extends DownloadTask {
   void cancel() {
     _stop();
     path = null;
-    LocalManager().removeTask(this);
+    _storage.removeTask(this);
     final stopped = pendingCleanup;
     _cleanup =
         () async {
@@ -191,7 +192,7 @@ class ArchiveDownloadTask extends DownloadTask {
     notifyListeners();
     if (!_isCurrent(generation)) return;
     if (path == null) {
-      final manager = LocalManager();
+      final manager = _storage;
       final allocation = await manager.allocateDownloadDirectory(
         comic.id,
         comicType,
@@ -200,7 +201,6 @@ class ArchiveDownloadTask extends DownloadTask {
       final dir = allocation.directory;
       if (allocation.isNew) {
         _ownedOutputPath = dir.path;
-        _outputManager = manager;
       }
       if (!_isCurrent(generation)) return;
       if (!(await dir.exists())) await dir.create();
@@ -245,9 +245,8 @@ class ArchiveDownloadTask extends DownloadTask {
       return;
     }
     if (!_isCurrent(generation)) return;
-    LocalManager().completeTask(this);
+    _storage.completeTask(this);
     _ownedOutputPath = null;
-    _outputManager = null;
     _isRunning = false;
     _speed = 0;
     await _clearWorkspace();
@@ -290,13 +289,17 @@ class ArchiveDownloadTask extends DownloadTask {
     };
   }
 
-  static ArchiveDownloadTask? fromJson(Map<String, dynamic> json) {
+  static ArchiveDownloadTask? fromJson(
+    DownloadTaskStorage storage,
+    Map<String, dynamic> json,
+  ) {
     if (json["type"] != "ArchiveDownloadTask") {
       return null;
     }
     return ArchiveDownloadTask(
       json["archiveUrl"],
       ComicDetails.fromJson(json["comic"]),
+      storage: storage,
     )..path = json["path"];
   }
 

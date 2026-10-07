@@ -1,7 +1,8 @@
 import 'pica_import_storage.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
-import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
+import 'package:venera_next/features/favorites/favorites_manager.dart';
+import 'package:venera_next/features/history/history_manager.dart';
+import 'package:venera_next/features/history/image_favorites.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/log.dart';

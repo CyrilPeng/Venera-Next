@@ -1,8 +1,8 @@
 import 'package:venera_next/foundation/app_sync_preferences.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
-import 'package:venera_next/features/sync/sync.dart';
+import 'package:venera_next/features/favorites/favorites_manager.dart';
+import 'package:venera_next/features/sync/data_sync_controller.dart';
 import 'package:venera_next/features/sync/data_sync_transfer.dart';
 import 'package:venera_next/features/sync/data_sync_recovery.dart';
 import 'data_sync_transfer.dart';

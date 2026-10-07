@@ -12,6 +12,7 @@ import 'package:venera_next/features/comic_source/source_comic_parser.dart';
 import 'package:venera_next/features/comic_source/source_images_parser.dart';
 import 'package:venera_next/features/comic_source/source_parser_context.dart';
 import 'package:venera_next/features/history/image_favorites_models.dart';
+import 'package:venera_next/features/history/image_favorites_cache.dart';
 import 'package:venera_next/features/history/image_favorites_provider.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -328,13 +329,32 @@ void main() {
       oldCache.createSync(recursive: true);
       oldCache.writeAsBytesSync([99]);
       expect(await a.readFromCache(), isNull);
+      // Seed files using the already shipped v2 keys, independently of the
+      // shared helper, so moving cache ownership cannot orphan existing data.
+      for (final (provider, storedKey) in [
+        (
+          a,
+          'ImageFavorites v2 ["favorite_provider_test","book",["ordinal",1],1,""]',
+        ),
+        (
+          _Provider(_image()),
+          'ImageFavorites v2 ["favorite_provider_test","book",["id","first"],1,"known-image"]',
+        ),
+      ]) {
+        final stored = File(
+          '${App.cachePath}/image_favorites/${md5.convert(storedKey.codeUnits)}',
+        )..writeAsBytesSync([88]);
+        expect(await provider.readFromCache(), [88]);
+        await deleteImageFavoriteCache(provider.imageFavorite);
+        expect(stored.existsSync(), isFalse);
+      }
       await a.writeToCache(Uint8List.fromList([1]));
       await b.writeToCache(Uint8List.fromList([2]));
       await c.writeToCache(Uint8List.fromList([3]));
       expect(await a.readFromCache(), [1]);
       expect(await b.readFromCache(), [2]);
       expect(await c.readFromCache(), [3]);
-      await ImageFavoritesProvider.deleteFromCache(a.imageFavorite);
+      await deleteImageFavoriteCache(a.imageFavorite);
       expect(await a.readFromCache(), isNull);
       expect(await b.readFromCache(), [2]);
     },

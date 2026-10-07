@@ -43,7 +43,8 @@ class EpubImportData {
 
 abstract final class EpubComicImporter {
   /// Keeps extraction, output and optional registration under the storage guard.
-  /// Registration owns database rollback; failures remove this import's output.
+  /// Registration owns database rollback. Confirmed non-commits remove output;
+  /// unknown and committed failures retain it for recovery.
   static Future<LocalComic> import(
     File file, {
     DocumentImportProgress? onProgress,
@@ -111,11 +112,11 @@ abstract final class EpubComicImporter {
         cover: coverName,
         chapters: chapterMap,
       );
-      await registerComic?.call(comic);
+      await session.output.register(comic, registerComic);
       return comic;
-    } catch (_) {
-      await session?.abort();
-      rethrow;
+    } catch (error, stack) {
+      if (session != null) return await session.output.fail(error, stack);
+      Error.throwWithStackTrace(error, stack);
     } finally {
       await cache.deleteIgnoreError(recursive: true);
     }

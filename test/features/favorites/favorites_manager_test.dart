@@ -93,6 +93,52 @@ Future<void> _withFavoritesManager(
 
 void main() {
   test(
+    'unavailable favorites query local existence only after admission',
+    () async {
+      await _withFavoritesManager((manager) async {
+        await manager.createFolder('cleanup');
+        await manager.addComic('cleanup', _favorite('present'));
+        await manager.addComic('cleanup', _favorite('missing'));
+        await manager.addComic(
+          'cleanup',
+          _favorite('remote')..type = const ComicType(987654321),
+        );
+        final release = Completer<void>();
+        final exclusive = AppDataOperations.instance.run(() => release.future);
+        final checked = <String>[];
+        final removing = manager.removeInvalid(
+          localComicExists: (id) {
+            checked.add(id);
+            return id == 'present';
+          },
+        );
+        expect(checked, isEmpty);
+        expect(manager.count('cleanup'), 3);
+        release.complete();
+        await exclusive;
+        expect(await removing, 2);
+        expect(checked, unorderedEquals(['present', 'missing']));
+        expect(manager.getFolderComics('cleanup').single.id, 'present');
+      });
+    },
+  );
+
+  test('local lookup failure reaches caller and cleanup can retry', () async {
+    await _withFavoritesManager((manager) async {
+      await manager.createFolder('cleanup');
+      await manager.addComic('cleanup', _favorite('missing'));
+      final error = StateError('original local lookup failure');
+      await expectLater(
+        manager.removeInvalid(localComicExists: (_) => throw error),
+        throwsA(same(error)),
+      );
+      expect(manager.count('cleanup'), 1);
+      expect(await manager.removeInvalid(localComicExists: (_) => false), 1);
+      expect(manager.count('cleanup'), 0);
+    });
+  });
+
+  test(
     'queued favorite writes capture their mutable inputs before admission',
     () async {
       await _withFavoritesManager((manager) async {

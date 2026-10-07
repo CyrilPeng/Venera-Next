@@ -1,7 +1,8 @@
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
+import 'comic_import_output.dart';
 
 typedef DocumentImportProgress = void Function(int current, int total);
 
@@ -22,10 +23,12 @@ class DocumentImportCancelled implements Exception {
 }
 
 class DocumentImportSession {
-  DocumentImportSession._({required this.title, required this.directory});
+  DocumentImportSession._({required this.title, required Directory directory})
+    : output = ComicImportOutput(directory);
 
   final String title;
-  final Directory directory;
+  final ComicImportOutput output;
+  Directory get directory => output.directory;
 
   static DocumentImportSession start(String title) {
     final normalizedTitle = title.trim();
@@ -110,8 +113,6 @@ class DocumentImportSession {
       createdAt: DateTime.now(),
     );
   }
-
-  Future<void> abort() => directory.deleteIgnoreError(recursive: true);
 
   static String _normalizeExtension(String extension) {
     final normalized = extension.startsWith('.')

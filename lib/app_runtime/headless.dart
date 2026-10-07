@@ -3,9 +3,10 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/features/follow_updates/follow_updates.dart';
+import 'package:venera_next/features/follow_updates/follow_updates_manager.dart';
 import 'package:venera_next/foundation/appdata.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
+import 'package:venera_next/features/favorites/favorites_api.dart';
+import 'package:venera_next/features/favorites/favorites_manager.dart';
 
 import 'bootstrap_core.dart';
 import 'data_sync.dart';

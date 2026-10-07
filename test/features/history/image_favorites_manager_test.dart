@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/history/image_favorites_cache.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'image_favorites_repository_test.dart' show comic;
 
@@ -80,7 +81,7 @@ void main() {
       );
       await a.writeToCache(Uint8List.fromList([1]));
       await b.writeToCache(Uint8List.fromList([2]));
-      await ImageFavoritesProvider.deleteFromCache(a.imageFavorite);
+      await deleteImageFavoriteCache(a.imageFavorite);
       expect(await a.readFromCache(), isNull);
       expect(await b.readFromCache(), [2]);
     } finally {

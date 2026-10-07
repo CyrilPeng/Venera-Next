@@ -1,3 +1,5 @@
+import 'package:venera_next/features/local_comics/import_export/comic_import_service.dart';
+import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +11,10 @@ import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/file_system.dart';
 
 void main() {
+  const service = ComicImportService(
+    localManager: LocalManager.new,
+    favoritesManager: LocalFavoritesManager.new,
+  );
   for (final copy in [false, true]) {
     testWidgets(
       'directory registration waits for exclusive storage: copy=$copy',
@@ -48,9 +54,11 @@ void main() {
             final exclusive = manager.runWithExclusiveStorage(
               () => gate.future,
             );
-            final importing = const ImportComic().registerComics({
-              null: [comic],
-            }, copy);
+            final importing = service.runImport(
+              (operation) => operation.registerComics({
+                null: [comic],
+              }, copy: copy),
+            );
             try {
               await pumpEventQueue();
               expect(manager.findByName('External'), isNull);
@@ -63,16 +71,18 @@ void main() {
               await exclusive;
             }
             expect(
-              await importing.timeout(const Duration(seconds: 10)),
+              (await importing.timeout(const Duration(seconds: 10))).succeeded,
               isTrue,
             );
             expect(manager.findByName('External'), isNotNull);
             final release = await LocalComicStorageGuard.instance
                 .prepareForExit();
             try {
-              expect(
-                await const ImportComic().registerComics({}, copy),
-                isFalse,
+              await expectLater(
+                service.runImport(
+                  (operation) => operation.registerComics({}, copy: copy),
+                ),
+                throwsA(isA<LocalComicStorageBusy>()),
               );
             } finally {
               release();

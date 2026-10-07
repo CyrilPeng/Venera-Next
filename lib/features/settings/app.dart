@@ -2,16 +2,15 @@ import 'package:venera_next/foundation/app_sync_preferences.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/history/history.dart';
-import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/features/settings/app_controls.dart';
+import 'package:venera_next/features/settings/local_storage_settings.dart';
 import 'package:venera_next/features/settings/settings_task_presenter.dart';
 import 'package:venera_next/features/settings/data_sync_schedule_fields.dart';
 import 'package:venera_next/features/settings/webdav_settings.dart';
@@ -40,45 +39,7 @@ class _AppSettingsState extends State<AppSettings> {
       slivers: [
         SliverAppbar(title: Text("App".tl)),
         SettingPartTitle(title: "Data".tl, icon: Icons.storage),
-        ListTile(
-          title: Text("Storage Path for local comics".tl),
-          subtitle: Text(LocalManager().path, softWrap: false),
-          trailing: IconButton(
-            icon: const Icon(Icons.copy),
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: LocalManager().path));
-              context.showMessage(message: "Path copied to clipboard".tl);
-            },
-          ),
-        ).toSliver(),
-        CallbackSetting(
-          title: "Set New Storage Path".tl,
-          actionTitle: "Set".tl,
-          callback: () async {
-            await _tasks.run(
-              context,
-              task: (operation) async {
-                final selection = await operation.pickDirectory(
-                  () => DirectoryPicker().pickDirectory(
-                    checkStop: operation.checkActive,
-                  ),
-                );
-                if (selection == null) {
-                  operation.cancel();
-                  return null;
-                }
-                return operation.useDirectory(selection, (directory) async {
-                  await selection.retainAccessForSession();
-                  operation.checkActive();
-                  return LocalManager().setNewPath(directory.path);
-                });
-              },
-              errorMessage: "Error".tl,
-              successMessage: "Path set successfully".tl,
-              onSuccess: () => setState(() {}),
-            );
-          },
-        ).toSliver(),
+        const LocalStorageSettings().toSliver(),
         ListTile(
           title: Text("Cache Size".tl),
           subtitle: Text(bytesToReadableString(CacheManager().currentSize)),

@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/persistence_failure.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'package:archive/archive_io.dart' as archive;
@@ -139,8 +140,63 @@ void main() {
     },
   );
 
+  test(
+    'backup restore reports a failed acknowledgement without deleting saved pages',
+    () async {
+      final oldOps = ComicBackupManager.ops;
+      final oldImporter = ComicBackupManager.importComic;
+      final oldRegister = ComicBackupManager.registerImportedComic;
+      final oldConfig = appdata.settings['backupWebdav'];
+      final oldPath = appdata.settings['backupWebdavPath'];
+      final error = StateError('restore acknowledgement failed');
+      appdata.settings['backupWebdav'] = ['https://example.com/dav', 'u', 'p'];
+      appdata.settings['backupWebdavPath'] = '/backup';
+      ComicBackupManager.ops = _ArchiveDownloadOps(book('Restored'));
+      ComicBackupManager.importComic = null;
+      ComicBackupManager.registerImportedComic = (comic) async {
+        await manager.add(comic, comic.id);
+        throw error;
+      };
+      try {
+        final result = await ComicBackupManager.restore([
+          BackupFile(name: 'Restored.cbz', size: 1, modified: DateTime(2024)),
+        ]);
+        expect(result.success, 0);
+        expect(result.failed, 1);
+        expect(
+          result.failures.single.error,
+          isA<PersistenceFailure>()
+              .having(
+                (failure) => failure.commitState,
+                'state',
+                PersistenceCommitState.unknown,
+              )
+              .having((failure) => failure.cause, 'cause', same(error)),
+        );
+        final saved = manager.findByName('Restored')!;
+        expect(
+          File(
+            '${manager.path}/${saved.directory}/${saved.cover}',
+          ).readAsStringSync(),
+          'Restored',
+        );
+        expect(Directory(App.cachePath).listSync(), isEmpty);
+      } finally {
+        ComicBackupManager.ops = oldOps;
+        ComicBackupManager.importComic = oldImporter;
+        ComicBackupManager.registerImportedComic = oldRegister;
+        appdata.settings['backupWebdav'] = oldConfig;
+        appdata.settings['backupWebdavPath'] = oldPath;
+      }
+    },
+  );
+
   test('registration error removes archive output and permits retry', () async {
-    final error = StateError('registration rejected');
+    final error = PersistenceFailure(
+      commitState: PersistenceCommitState.notCommitted,
+      cause: StateError('registration rejected'),
+      stackTrace: StackTrace.current,
+    );
     await expectLater(
       CBZ.import(book('Register'), registerComic: (_) async => throw error),
       throwsA(same(error)),

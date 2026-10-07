@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:venera_next/features/sync/sync.dart';
+import 'package:venera_next/features/sync/data_sync_controller.dart';
 import 'webdav_library.dart';
 
 /// The mounted application owns automatic sync scheduling, not transfer data.

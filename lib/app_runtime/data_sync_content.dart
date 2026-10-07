@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:isolate';
 
 import 'package:venera_next/features/comic_source/source_transaction_journal.dart';
-import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/history/history_manager.dart';
 import 'package:venera_next/features/sync/app_data_import_journal.dart';
 import 'package:venera_next/features/sync/data_sync_commit.dart';
 import 'package:venera_next/features/sync/data_sync_content.dart';

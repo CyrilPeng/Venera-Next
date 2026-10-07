@@ -126,6 +126,13 @@ def violations(graph, baseline):
             continue
         for target in sorted(reachable(graph, root) & ui):
             errors.append(f"Business entry point reaches UI: {root} -> {target}")
+    acyclic = set(baseline.get("acyclic_business_files", []))
+    for source in sorted(acyclic - graph.keys()):
+        errors.append(f"Missing acyclic business file: {source}")
+    for component in cycles({(source, target) for source, targets in graph.items()
+                             for target in targets}):
+        if acyclic.intersection(component):
+            errors.append("Business dependency cycle: " + ", ".join(component))
     return errors
 
 

@@ -6,9 +6,10 @@ import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/foundation/appdata.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/comic_type.dart';
-import 'package:venera_next/features/local_comics/local.dart';
+import 'download_task_storage.dart';
+import 'local_comic_model.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -40,6 +41,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
   String? comicTitle;
 
   ImagesDownloadTask({
+    required DownloadTaskStorage storage,
     required this.source,
     required this.comicId,
     this.comic,
@@ -48,7 +50,8 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     Stream<ImageDownloadProgress> Function(String, String)? loadThumbnail,
     Future<DownloadDirectoryAllocation> Function(String, ComicType, String)?
     allocateDirectory,
-  }) : _loadThumbnail = loadThumbnail ?? ImageDownloader.loadThumbnail,
+  }) : _storage = storage,
+       _loadThumbnail = loadThumbnail ?? ImageDownloader.loadThumbnail,
        _allocateDirectory = allocateDirectory;
 
   final Stream<ImageDownloadProgress> Function(String, String) _loadThumbnail;
@@ -57,10 +60,10 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
   _allocateDirectory;
   Future<void>? _allocationFuture;
   String? _ownedOutputPath;
-  LocalManager? _outputManager;
+  final DownloadTaskStorage _storage;
 
   Future<void> _allocateOutput() async {
-    final manager = _outputManager = LocalManager();
+    final manager = _storage;
     final allocation =
         await (_allocateDirectory ?? manager.allocateDownloadDirectory)(
           comicId,
@@ -78,7 +81,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
   @override
   void cancel() {
     final directoryPath = path;
-    final manager = _outputManager ?? LocalManager();
+    final manager = _storage;
     final removedChapters = List<String>.of(chapters ?? const []);
     _stopRun();
     manager.removeTask(this);
@@ -118,7 +121,6 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
           }
           if (path == cleanupPath) path = null;
           _ownedOutputPath = null;
-          _outputManager = null;
         }().catchError((Object error, StackTrace stack) {
           Log.error('Download', error, stack);
         });
@@ -366,7 +368,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
       }
     }
 
-    await LocalManager().saveCurrentDownloadingTasks();
+    await _storage.saveCurrentDownloadingTasks();
     if (!_isCurrentRun(generation)) return;
 
     if (_cover == null) {
@@ -410,7 +412,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
         _cover = res.data;
         notifyListeners();
       }
-      await LocalManager().saveCurrentDownloadingTasks();
+      await _storage.saveCurrentDownloadingTasks();
       if (!_isCurrentRun(generation)) return;
     }
 
@@ -480,7 +482,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
       }
       _message = "$_downloadedCount/$_totalCount";
       notifyListeners();
-      await LocalManager().saveCurrentDownloadingTasks();
+      await _storage.saveCurrentDownloadingTasks();
       if (!_isCurrentRun(generation)) return;
     }
 
@@ -502,16 +504,15 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
         _index++;
         _downloadedCount++;
         _message = "$_downloadedCount/$_totalCount";
-        await LocalManager().saveCurrentDownloadingTasks();
+        await _storage.saveCurrentDownloadingTasks();
         if (!_isCurrentRun(generation)) return;
       }
       _index = 0;
       _chapter++;
     }
 
-    LocalManager().completeTask(this);
+    _storage.completeTask(this);
     _ownedOutputPath = null;
-    _outputManager = null;
     _isRunning = false;
     stopRecorder();
   }
@@ -553,7 +554,10 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     };
   }
 
-  static ImagesDownloadTask? fromJson(Map<String, dynamic> json) {
+  static ImagesDownloadTask? fromJson(
+    DownloadTaskStorage storage,
+    Map<String, dynamic> json,
+  ) {
     if (json["type"] != "ImagesDownloadTask") {
       return null;
     }
@@ -567,6 +571,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     }
 
     return ImagesDownloadTask(
+        storage: storage,
         source: ComicSource.find(json["source"])!,
         comicId: json["comicId"],
         comic: json["comic"] == null

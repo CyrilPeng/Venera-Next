@@ -12,6 +12,7 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/local_comics/download_directory_allocator.dart';
+import 'package:venera_next/features/local_comics/download_task_storage.dart';
 import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/file_downloader.dart';
 
@@ -29,6 +30,144 @@ void main() {
     ComicSourceManager().remove(sourceKey);
     LocalManager.resetForTesting();
   });
+
+  test(
+    'image download retains its injected library across allocation',
+    () async {
+      final root = Directory.systemTemp.createTempSync('download-owner-');
+      final storage = _TaskStorage(root.path);
+      final allocated = Completer<void>();
+      final release = Completer<void>();
+      storage.afterAllocate = () async {
+        allocated.complete();
+        await release.future;
+      };
+      final task = ImagesDownloadTask(
+        storage: storage,
+        source: _testSource(sourceKey, loadComicPages: (_, _) async => Res([])),
+        comicId: 'owned',
+        comic: _archiveComic(sourceKey, id: 'owned'),
+        loadThumbnail: (_, _) => Stream.value(
+          ImageDownloadProgress(
+            currentBytes: 3,
+            totalBytes: 3,
+            imageBytes: Uint8List.fromList([1, 2, 3]),
+          ),
+        ),
+      );
+      addTearDown(() async {
+        if (!release.isCompleted) release.complete();
+        task.pause();
+        await task.pendingCleanup;
+        await task.debugResumeFuture;
+        root.deleteSync(recursive: true);
+      });
+      task.resume();
+      await allocated.future;
+      expect(storage.completed, isEmpty);
+      release.complete();
+      await task.debugResumeFuture;
+      expect(task.isError, isFalse);
+      expect(storage.saves, 3);
+      expect(storage.completed, [same(task)]);
+      expect(storage.comic!.id, 'owned');
+      expect(File('${task.path}/${storage.comic!.cover}').existsSync(), isTrue);
+      task.cancel();
+      await task.pendingCleanup;
+      expect(storage.removed, [same(task)]);
+      expect(Directory('${root.path}/output').existsSync(), isTrue);
+    },
+  );
+
+  test(
+    'archive download retains its library while extraction drains',
+    () async {
+      final root = Directory.systemTemp.createTempSync('archive-owner-');
+      App.cachePath = root.path;
+      final storage = _TaskStorage(root.path);
+      final extracting = Completer<void>();
+      final release = Completer<void>();
+      final task = ArchiveDownloadTask(
+        'https://example.invalid/owned.zip',
+        _archiveComic(sourceKey),
+        storage: storage,
+        createDownloader: (url, path) => _ArchiveDownloader(
+          url,
+          path,
+          Stream.value(const DownloadingStatus(1, 1, 0, true)),
+        ),
+        extractArchive: (_, path) async {
+          extracting.complete();
+          await release.future;
+          File('$path/cover.jpg').writeAsBytesSync([7]);
+        },
+      );
+      addTearDown(() async {
+        if (!release.isCompleted) release.complete();
+        task.pause();
+        await task.pendingCleanup;
+        await task.pendingRun;
+        root.deleteSync(recursive: true);
+      });
+      task.resume();
+      await extracting.future;
+      expect(storage.completed, isEmpty);
+      release.complete();
+      await task.pendingRun;
+      expect(task.isError, isFalse);
+      expect(storage.completed, [same(task)]);
+      task.cancel();
+      await task.pendingCleanup;
+      expect(storage.removed, [same(task)]);
+      expect(File('${root.path}/output/cover.jpg').readAsBytesSync(), [7]);
+    },
+  );
+
+  test(
+    'restored downloads keep their owning queue and snapshot path',
+    () async {
+      final root = Directory.systemTemp.createTempSync('restored-owner-');
+      final firstPath = Directory('${root.path}/first')..createSync();
+      final secondPath = Directory('${root.path}/second')..createSync();
+      LocalManager create() => LocalManager.forTesting(
+        openDatabase: sqlite3.open,
+        initializeSources: () async {},
+      );
+      final first = create();
+      final second = create();
+      addTearDown(() async {
+        await first.pendingDownloadTaskWrites;
+        await second.pendingDownloadTaskWrites;
+        first.dispose();
+        second.dispose();
+        root.deleteSync(recursive: true);
+      });
+      final initial = ImagesDownloadTask(
+        storage: first,
+        source: ComicSource.find(sourceKey)!,
+        comicId: 'restored',
+      ).toJson();
+      final firstFile = File('${firstPath.path}/downloading_tasks.json')
+        ..writeAsStringSync(jsonEncode([initial]));
+      final secondFile = File('${secondPath.path}/downloading_tasks.json')
+        ..writeAsStringSync('[]');
+      App.dataPath = firstPath.path;
+      await first.init();
+      App.dataPath = secondPath.path;
+      await second.init();
+      expect(first.downloadingTasks.single.id, 'restored');
+      expect(second.downloadingTasks, isEmpty);
+      // Restore again while the application global points at a different owner.
+      first.restoreDownloadingTasks();
+      final restored = first.downloadingTasks.single;
+      restored.cancel();
+      await restored.pendingCleanup;
+      await first.pendingDownloadTaskWrites;
+      expect(first.downloadingTasks, isEmpty);
+      expect(jsonDecode(firstFile.readAsStringSync()), isEmpty);
+      expect(secondFile.readAsStringSync(), '[]');
+    },
+  );
 
   for (final resumeAfterAllocation in [false, true]) {
     test(
@@ -50,6 +189,7 @@ void main() {
         );
         var allocations = 0;
         final task = ImagesDownloadTask(
+          storage: LocalManager(),
           source: ComicSource.find(sourceKey)!,
           comicId: 'owned',
           comic: _archiveComic(sourceKey, id: 'owned'),
@@ -138,6 +278,7 @@ void main() {
         final task = restored
             ? _pendingImageTask(sourceKey, directory.path, chapters: ['new/a'])
             : (ImagesDownloadTask(
+                storage: LocalManager(),
                 source: ComicSource.find(sourceKey)!,
                 comicId: 'external',
                 comic: _archiveComic(sourceKey, id: 'external'),
@@ -187,6 +328,7 @@ void main() {
       );
       final bytes = Uint8List.fromList([0xff, 0xd8, 0xff, 0xe0]);
       final task = ImagesDownloadTask(
+        storage: LocalManager(),
         source: source,
         comicId: 'committed',
         comic: _archiveComic(sourceKey, id: 'committed'),
@@ -247,6 +389,7 @@ void main() {
           onListen: () => restarted.complete(),
         );
         final task = ImagesDownloadTask(
+          storage: LocalManager(),
           source: ComicSource.find(sourceKey)!,
           comicId: 'thumbnail',
           comic: _archiveComic(sourceKey, id: 'thumbnail'),
@@ -358,7 +501,7 @@ void main() {
           return controller.stream;
         };
 
-    final task = ImagesDownloadTask.fromJson({
+    final task = ImagesDownloadTask.fromJson(LocalManager(), {
       'type': 'ImagesDownloadTask',
       'source': sourceKey,
       'comicId': 'comic-1',
@@ -410,7 +553,11 @@ void main() {
     ComicSourceManager().remove(sourceKey);
     ComicSourceManager().add(source);
 
-    final task = ImagesDownloadTask(source: source, comicId: 'comic-1');
+    final task = ImagesDownloadTask(
+      storage: LocalManager(),
+      source: source,
+      comicId: 'comic-1',
+    );
 
     task.resume();
     await pumpEventQueue();
@@ -455,7 +602,7 @@ void main() {
           ),
         );
 
-    final task = ImagesDownloadTask.fromJson({
+    final task = ImagesDownloadTask.fromJson(LocalManager(), {
       'type': 'ImagesDownloadTask',
       'source': sourceKey,
       'comicId': 'comic-1',
@@ -510,6 +657,7 @@ void main() {
       );
       App.dataPath = dataDir.path;
       final task = ImagesDownloadTask(
+        storage: LocalManager(),
         source: ComicSource.find(sourceKey)!,
         comicId: 'comic-1',
       );
@@ -540,10 +688,12 @@ void main() {
         root.deleteSync(recursive: true);
       });
       final existing = ImagesDownloadTask(
+        storage: LocalManager(),
         source: ComicSource.find(sourceKey)!,
         comicId: 'existing',
       );
       final restored = ImagesDownloadTask(
+        storage: LocalManager(),
         source: ComicSource.find(sourceKey)!,
         comicId: 'restored',
       );
@@ -635,7 +785,7 @@ void main() {
       final manager = LocalManager();
       await manager.init();
       final db = sqlite3.open('${root.path}/local.db');
-      final task = ImagesDownloadTask.fromJson({
+      final task = ImagesDownloadTask.fromJson(LocalManager(), {
         'type': 'ImagesDownloadTask',
         'source': sourceKey,
         'comicId': 'finished',
@@ -701,7 +851,7 @@ void main() {
       await manager.init();
       final blocker = Directory('${root.path}/downloading_tasks.json')
         ..createSync();
-      final task = ImagesDownloadTask.fromJson({
+      final task = ImagesDownloadTask.fromJson(LocalManager(), {
         'type': 'ImagesDownloadTask',
         'source': sourceKey,
         'comicId': 'finished',
@@ -770,7 +920,11 @@ void main() {
           return calls == 1 ? first.future : second.future;
         },
       );
-      final task = ImagesDownloadTask(source: source, comicId: 'one');
+      final task = ImagesDownloadTask(
+        storage: LocalManager(),
+        source: source,
+        comicId: 'one',
+      );
       addTearDown(task.pause);
       task.resume();
       final obsolete = task.debugResumeFuture!;
@@ -814,7 +968,7 @@ void main() {
           },
         ),
       );
-      final task = ImagesDownloadTask.fromJson({
+      final task = ImagesDownloadTask.fromJson(LocalManager(), {
         'type': 'ImagesDownloadTask',
         'source': sourceKey,
         'comicId': 'one',
@@ -1078,6 +1232,7 @@ void main() {
       final task = ArchiveDownloadTask(
         'https://example.invalid/book.zip',
         _archiveComic(sourceKey),
+        storage: LocalManager(),
         createDownloader: (url, path) {
           transfers++;
           transferPaths.add(path);
@@ -1143,6 +1298,7 @@ void main() {
       final task = ArchiveDownloadTask(
         'https://example.invalid/book.zip',
         _archiveComic(sourceKey),
+        storage: LocalManager(),
         createDownloader: (url, path) => _ArchiveDownloader(
           url,
           path,
@@ -1196,6 +1352,7 @@ void main() {
       final task = ArchiveDownloadTask(
         'https://example.invalid/book.zip',
         _archiveComic(sourceKey),
+        storage: LocalManager(),
         createDownloader: (url, path) => _ArchiveDownloader(
           url,
           path,
@@ -1237,6 +1394,7 @@ void main() {
         return ArchiveDownloadTask(
           'https://example.invalid/$index.zip',
           _archiveComic(sourceKey, id: 'archive-$index'),
+          storage: LocalManager(),
           createDownloader: (url, path) {
             paths['$index'] = path;
             File(path).writeAsStringSync('zip-$index');
@@ -1307,6 +1465,7 @@ void main() {
       final task = ArchiveDownloadTask(
         'https://example.invalid/registered.zip',
         _archiveComic(sourceKey),
+        storage: LocalManager(),
         createDownloader: (url, path) => _ArchiveDownloader(
           url,
           path,
@@ -1354,6 +1513,7 @@ void main() {
       final supplied = ArchiveDownloadTask(
         'https://example.invalid/external.zip',
         _archiveComic(sourceKey, id: 'external'),
+        storage: LocalManager(),
       )..path = external.path;
       manager.restorePausedDownloads([supplied]);
       supplied.cancel();
@@ -1376,6 +1536,7 @@ void main() {
       final task = ArchiveDownloadTask(
         'https://example.invalid/book.zip',
         _archiveComic(sourceKey),
+        storage: LocalManager(),
         createDownloader: (url, path) => _ArchiveDownloader(
           url,
           path,
@@ -1425,7 +1586,11 @@ void main() {
     App.cachePath = cacheDir.path;
 
     final source = ComicSource.find(sourceKey)!;
-    final task = ImagesDownloadTask(source: source, comicId: 'comic-1');
+    final task = ImagesDownloadTask(
+      storage: LocalManager(),
+      source: source,
+      comicId: 'comic-1',
+    );
     LocalManager().restorePausedDownloads([task]);
 
     task.runRecorder();
@@ -1531,7 +1696,7 @@ ImagesDownloadTask _pendingImageTask(
   String source,
   String path, {
   List<String>? chapters,
-}) => ImagesDownloadTask.fromJson({
+}) => ImagesDownloadTask.fromJson(LocalManager(), {
   'type': 'ImagesDownloadTask',
   'source': source,
   'comicId': 'pending',
@@ -1574,4 +1739,41 @@ class _ArchiveDownloader extends FileDownloader {
   final Stream<DownloadingStatus> statuses;
   @override
   Stream<DownloadingStatus> start() => statuses;
+}
+
+class _TaskStorage implements DownloadTaskStorage {
+  _TaskStorage(this.path);
+  @override
+  final String path;
+  Future<void> Function()? afterAllocate;
+  final completed = <DownloadTask>[];
+  final removed = <DownloadTask>[];
+  int saves = 0;
+  LocalComic? comic;
+
+  @override
+  Future<DownloadDirectoryAllocation> allocateDownloadDirectory(
+    String id,
+    ComicType type,
+    String name,
+  ) async {
+    final directory = Directory('$path/output')..createSync();
+    await afterAllocate?.call();
+    return DownloadDirectoryAllocation(directory, isNew: true);
+  }
+
+  @override
+  LocalComic? find(String id, ComicType type) => comic;
+
+  @override
+  Future<void> saveCurrentDownloadingTasks() async => saves++;
+
+  @override
+  void completeTask(DownloadTask task) {
+    completed.add(task);
+    comic = task.toLocalComic();
+  }
+
+  @override
+  void removeTask(DownloadTask task) => removed.add(task);
 }

@@ -340,14 +340,20 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   bool downloadComic(FavoriteItem c) {
+    final library = LocalManager();
     var source = c.type.comicSource;
     if (source != null) {
-      bool isDownloaded = LocalManager().isDownloaded(c.id, (c).type);
+      bool isDownloaded = library.isDownloaded(c.id, (c).type);
       if (isDownloaded) {
         return false;
       }
-      LocalManager().addTask(
-        ImagesDownloadTask(source: source, comicId: c.id, comicTitle: c.title),
+      library.addTask(
+        ImagesDownloadTask(
+          storage: library,
+          source: source,
+          comicId: c.id,
+          comicTitle: c.title,
+        ),
       );
       return true;
     }

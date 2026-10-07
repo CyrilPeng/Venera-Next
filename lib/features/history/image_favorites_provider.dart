@@ -1,9 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/comic_type.dart';
@@ -14,6 +11,7 @@ import 'package:venera_next/network/image_stream.dart';
 import 'package:venera_next/network/request_scope.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/features/history/image_favorites_models.dart';
+import 'image_favorites_cache.dart';
 import 'image_favorites_provider.dart' as image_provider;
 
 class ImageFavoritesProvider
@@ -131,8 +129,7 @@ class ImageFavoritesProvider
   }
 
   Future<void> writeToCache(Uint8List image) async {
-    var fileName = md5.convert(key.codeUnits).toString();
-    var file = File(FilePath.join(App.cachePath, 'image_favorites', fileName));
+    final file = imageFavoriteCacheFile(key);
     if (!file.existsSync()) {
       file.createSync(recursive: true);
     }
@@ -140,8 +137,7 @@ class ImageFavoritesProvider
   }
 
   Future<Uint8List?> readFromCache() async {
-    var fileName = md5.convert(key.codeUnits).toString();
-    var file = File(FilePath.join(App.cachePath, 'image_favorites', fileName));
+    final file = imageFavoriteCacheFile(key);
     if (!file.existsSync()) {
       return null;
     }
@@ -152,17 +148,6 @@ class ImageFavoritesProvider
       // A vanished entry is a miss; retain errors for entries still present.
       if (!file.existsSync()) return null;
       rethrow;
-    }
-  }
-
-  /// Delete a image favorite cache
-  static Future<void> deleteFromCache(ImageFavorite imageFavorite) async {
-    var fileName = md5
-        .convert(ImageFavoritesProvider(imageFavorite).key.codeUnits)
-        .toString();
-    var file = File(FilePath.join(App.cachePath, 'image_favorites', fileName));
-    if (file.existsSync()) {
-      await file.delete();
     }
   }
 
@@ -322,14 +307,7 @@ class ImageFavoritesProvider
   }
 
   @override
-  String get key =>
-      'ImageFavorites v2 ${jsonEncode([
-        sourceKey,
-        cid,
-        eid.isEmpty ? ['ordinal', imageFavorite.ep] : ['id', eid],
-        page,
-        imageFavorite.imageKey,
-      ])}';
+  String get key => imageFavoriteCacheKey(imageFavorite);
 }
 
 class _FavoriteReadContext {

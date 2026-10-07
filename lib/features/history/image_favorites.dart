@@ -3,7 +3,7 @@ import 'package:venera_next/foundation/persistence_failure.dart';
 import 'history_manager.dart';
 import 'image_favorite_actions.dart';
 import 'image_favorites_models.dart';
-import 'image_favorites_provider.dart';
+import 'image_favorites_cache.dart';
 import 'image_favorites_statistics.dart';
 
 class ImageFavoriteManager with ChangeNotifier {
@@ -12,12 +12,12 @@ class ImageFavoriteManager with ChangeNotifier {
     Future<void> Function(ImageFavorite)? deleteCache,
     Future<ImageFavoritesComputed> Function(String)? readStatistics,
   }) : _history = (() => history),
-       _deleteCache = deleteCache ?? ImageFavoritesProvider.deleteFromCache,
+       _deleteCache = deleteCache ?? deleteImageFavoriteCache,
        _readStatistics = readStatistics ?? readImageFavoritesStatistics;
 
   ImageFavoriteManager._()
     : _history = HistoryManager.new,
-      _deleteCache = ImageFavoritesProvider.deleteFromCache,
+      _deleteCache = deleteImageFavoriteCache,
       _readStatistics = readImageFavoritesStatistics;
 
   static ImageFavoriteManager? _cache;

@@ -56,6 +56,32 @@ class ArchitectureDependenciesTest(unittest.TestCase):
         self.assertEqual(MODULE.cycles({('a', 'b'), ('b', 'a'), ('b', 'c'),
                                         ('c', 'b'), ('d', 'e')}), [['a', 'b', 'c']])
 
+    def test_enrolled_business_file_cannot_reenter_through_an_adapter(self):
+        graph = {'owner.dart': {'codec.dart'}, 'codec.dart': {'task.dart'},
+                 'task.dart': {'owner.dart'}}
+        baseline = {'allowed_feature_edges': [],
+                    'acyclic_business_files': ['owner.dart']}
+        self.assertEqual(MODULE.violations(graph, baseline), [
+            'Business dependency cycle: codec.dart, owner.dart, task.dart'])
+        graph['task.dart'] = {'contract.dart'}
+        graph['contract.dart'] = set()
+        self.assertEqual(MODULE.violations(graph, baseline), [])
+
+    def test_unrelated_reachable_cycle_does_not_enroll_its_caller(self):
+        graph = {'owner.dart': {'first.dart'}, 'first.dart': {'second.dart'},
+                 'second.dart': {'first.dart'}}
+        baseline = {'allowed_feature_edges': [],
+                    'acyclic_business_files': ['owner.dart']}
+        self.assertEqual(MODULE.violations(graph, baseline), [])
+        graph['owner.dart'].add('owner.dart')
+        self.assertEqual(MODULE.violations(graph, baseline), [
+            'Business dependency cycle: owner.dart'])
+
+    def test_deleted_cycle_enrollment_is_not_silently_ignored(self):
+        self.assertEqual(MODULE.violations({}, {
+            'allowed_feature_edges': [], 'acyclic_business_files': ['gone.dart']
+        }), ['Missing acyclic business file: gone.dart'])
+
     def test_missing_business_entrypoint_is_rejected(self):
         self.assertEqual(MODULE.violations({}, {'allowed_feature_edges': [],
                          'business_entrypoints': ['missing.dart']}),

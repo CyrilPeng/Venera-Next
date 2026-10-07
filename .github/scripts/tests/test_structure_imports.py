@@ -17,6 +17,7 @@ class StructureImportsTest(unittest.TestCase):
     def test_structure_boundaries_are_clean(self):
         self.assertEqual(MODULE._scan_restricted_imports(), set())
         self.assertEqual(MODULE._scan_forbidden_feature_dependencies(), set())
+        self.assertEqual(MODULE._scan_feature_entrypoint_violations(), set())
 
     def test_feature_dependency_report_contains_current_edges(self):
         edges = MODULE._feature_dependency_edges()

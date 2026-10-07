@@ -10,7 +10,7 @@ class LocalComicStorageBusy implements Exception {
   String toString() => message;
 }
 
-/// Keeps document imports out of storage migration and library recovery.
+/// Keeps imports and directory allocation out of migration and recovery.
 /// Normal reading remains available throughout these operations.
 class LocalComicStorageGuard {
   static final instance = LocalComicStorageGuard();
@@ -49,7 +49,7 @@ class LocalComicStorageGuard {
     _checkAdmission();
     if (_imports.isNotEmpty) {
       throw const LocalComicStorageBusy(
-        'Wait for document imports to finish or cancel them before changing the local library.',
+        'Wait for local file operations to finish before changing the local library.',
       );
     }
     if (_exclusive != null) {

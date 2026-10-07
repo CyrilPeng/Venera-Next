@@ -3,6 +3,8 @@ import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/features/settings/settings_task_presenter.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
+import 'package:venera_next/features/local_comics/local.dart';
+import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -61,7 +63,11 @@ class _LocalFavoritesSettingsState extends State<LocalFavoritesSettings> {
             await _tasks.run(
               context,
               task: (_) async {
-                count = await LocalFavoritesManager().removeInvalid();
+                final local = LocalManager();
+                count = await LocalFavoritesManager().removeInvalid(
+                  localComicExists: (id) =>
+                      local.find(id, ComicType.local) != null,
+                );
                 return null;
               },
               errorMessage: "Error".tl,

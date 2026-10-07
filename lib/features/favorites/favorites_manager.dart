@@ -17,13 +17,12 @@ import 'package:flutter/foundation.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'favorite_cover_cache.dart';
-import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
 import 'dart:io';
 
 import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 
 typedef FollowUpdatesChangeListener = void Function();
@@ -118,6 +117,38 @@ class LocalFavoritesManager with ChangeNotifier {
     return _mutate(() => _addComic(folder, captured, order, updateTime));
   }
 
+  /// Borrow this connection's path while holding its mutation queue. The
+  /// callback commits an addition in a coordinated SQLite transaction and
+  /// returns its exact identity; caches and notifications are published here.
+  Future<void> addComicWithStorage(
+    String folder,
+    List<String> tags,
+    FavoriteItem Function(
+      String databasePath,
+      String translatedTags,
+      bool append,
+    )
+    commit,
+  ) {
+    final capturedTags = List<String>.of(tags);
+    return _mutate(() {
+      if (!existsFolder(folder)) {
+        throw const FormatException('Favorite folder no longer exists');
+      }
+      final comic = commit(
+        _dbPath,
+        _translateTags(capturedTags),
+        appdata.settings['newFavoriteAddTo'] == 'end',
+      );
+      // Read the committed count; do not increment a possibly stale cache after
+      // a transaction that also changed another database.
+      counts[folder] = count(folder);
+      _refreshIdentityCounts([(comic.id, comic.type.value)]);
+      _syncFollowUpdatesIfAffected([folder]);
+      notifyListeners();
+    });
+  }
+
   Future<void> moveFavorite(
     String sourceFolder,
     String targetFolder,
@@ -185,7 +216,9 @@ class LocalFavoritesManager with ChangeNotifier {
     return _mutate(() => _batchDeleteComics(folder, captured));
   }
 
-  Future<int> removeInvalid() => _mutate(_removeInvalid);
+  Future<int> removeInvalid({
+    required bool Function(String id) localComicExists,
+  }) => _mutate(() => _removeInvalid(localComicExists));
 
   Future<void> reorder(List<FavoriteItem> newFolder, String folder) {
     final captured = newFolder.map((item) => item.detached()).toList();
@@ -1187,14 +1220,13 @@ class LocalFavoritesManager with ChangeNotifier {
     _applyDeletedComics(removed);
   }
 
-  Future<int> _removeInvalid() async {
+  Future<int> _removeInvalid(bool Function(String id) localComicExists) async {
     int count = 0;
     await Future.microtask(() {
       var all = allComics();
       for (var c in all) {
         var comicSource = c.type.comicSource;
-        if ((c.type == ComicType.local &&
-                LocalManager().find(c.id, c.type) == null) ||
+        if ((c.type == ComicType.local && !localComicExists(c.id)) ||
             (c.type != ComicType.local && comicSource == null)) {
           _deleteComicWithId(c.folder, c.id, c.type);
           count++;

@@ -543,6 +543,9 @@ FOUNDATION_ENTRYPOINT_TARGETS = {
 UTILS_IO_PATH = (LIB_DIR / "utils" / "io.dart").resolve()
 FILE_SYSTEM_ENTRYPOINT_PATH = (LIB_DIR / "foundation" / "file_system.dart").resolve()
 
+# Managers and transfer services enrolled in dependency_baseline.json are
+# business entry points themselves. Do not redirect them through UI barrels;
+# check_architecture_dependencies.py enforces their complete dependency graph.
 FEATURE_ENTRYPOINT_TARGETS = {
     _feature_path("comic_source", "source_update_service.dart"): _feature_path(
         "comic_source", "comic_source_api.dart"
@@ -650,10 +653,6 @@ FEATURE_ENTRYPOINT_TARGETS = {
         "favorites",
         "favorites.dart",
     ),
-    _feature_path("favorites", "favorites_manager.dart"): _feature_path(
-        "favorites",
-        "favorites.dart",
-    ),
     _feature_path("favorites", "favorite_models.dart"): _feature_path(
         "favorites",
         "favorites_api.dart",
@@ -661,10 +660,6 @@ FEATURE_ENTRYPOINT_TARGETS = {
     _feature_path("favorites", "favorites_page.dart"): _feature_path(
         "favorites",
         "favorites.dart",
-    ),
-    _feature_path("follow_updates", "follow_updates_manager.dart"): _feature_path(
-        "follow_updates",
-        "follow_updates.dart",
     ),
     _feature_path("follow_updates", "follow_updates_page.dart"): _feature_path(
         "follow_updates",
@@ -674,19 +669,11 @@ FEATURE_ENTRYPOINT_TARGETS = {
         "history",
         "history.dart",
     ),
-    _feature_path("history", "history_manager.dart"): _feature_path(
-        "history",
-        "history.dart",
-    ),
     _feature_path("history", "history_page.dart"): _feature_path(
         "history",
         "history.dart",
     ),
     _feature_path("history", "history_summary.dart"): _feature_path(
-        "history",
-        "history.dart",
-    ),
-    _feature_path("history", "image_favorites.dart"): _feature_path(
         "history",
         "history.dart",
     ),
@@ -725,16 +712,6 @@ FEATURE_ENTRYPOINT_TARGETS = {
         "comic_storage",
         "comic_storage.dart",
     ),
-    _feature_path("local_comics", "import_export", "cbz.dart"): _feature_path(
-        "local_comics",
-        "import_export",
-        "import_export.dart",
-    ),
-    _feature_path("local_comics", "import_export", "epub.dart"): _feature_path(
-        "local_comics",
-        "import_export",
-        "import_export.dart",
-    ),
     _feature_path(
         "local_comics",
         "import_export",
@@ -744,20 +721,11 @@ FEATURE_ENTRYPOINT_TARGETS = {
         "import_export",
         "import_export.dart",
     ),
-    _feature_path("local_comics", "import_export", "pdf.dart"): _feature_path(
-        "local_comics",
-        "import_export",
-        "import_export.dart",
-    ),
     _feature_path("local_comics", "downloading_page.dart"): _feature_path(
         "local_comics",
         "local_comics.dart",
     ),
     _feature_path("local_comics", "download.dart"): _feature_path(
-        "local_comics",
-        "local_comics.dart",
-    ),
-    _feature_path("local_comics", "local.dart"): _feature_path(
         "local_comics",
         "local_comics.dart",
     ),
@@ -885,15 +853,7 @@ FEATURE_ENTRYPOINT_TARGETS = {
         "settings",
         "settings.dart",
     ),
-    _feature_path("sync", "app_data_transfer.dart"): _feature_path(
-        "sync",
-        "sync.dart",
-    ),
     _feature_path("sync", "comic_archive_page.dart"): _feature_path(
-        "sync",
-        "sync.dart",
-    ),
-    _feature_path("sync", "comic_backup.dart"): _feature_path(
         "sync",
         "sync.dart",
     ),

@@ -138,13 +138,19 @@ class FavoritesRepository {
     required bool append,
     int? order,
     String? updateTime,
+    String? schema,
   }) => _transaction(() {
-    if (comicExists(folder, item.id, item.type.value)) return false;
+    if (comicExists(folder, item.id, item.type.value, schema: schema)) {
+      return false;
+    }
     final position =
-        order ?? (append ? maxValue(folder) + 1 : minValue(folder) - 1);
+        order ??
+        (append
+            ? maxValue(folder, schema: schema) + 1
+            : minValue(folder, schema: schema) - 1);
     db.execute(
       '''
-      INSERT INTO ${_table(folder)}
+      INSERT INTO ${_qualifiedTable(folder, schema)}
         (id, name, author, type, tags, cover_path, time, translated_tags, display_order)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
     ''',
@@ -162,10 +168,12 @@ class FavoritesRepository {
     );
     if (updateTime != null &&
         db
-            .select('PRAGMA table_info(${_table(folder)});')
+            .select(
+              'PRAGMA ${schema == null ? '' : '${_table(schema)}.'}table_info(${_table(folder)});',
+            )
             .any((row) => row['name'] == 'last_update_time')) {
       db.execute(
-        'UPDATE ${_table(folder)} SET last_update_time = ? WHERE id = ? AND type = ?;',
+        'UPDATE ${_qualifiedTable(folder, schema)} SET last_update_time = ? WHERE id = ? AND type = ?;',
         [updateTime, item.id, item.type.value],
       );
     }
@@ -318,6 +326,9 @@ class FavoritesRepository {
 
   static String _table(String folder) => '"${folder.replaceAll('"', '""')}"';
 
+  static String _qualifiedTable(String folder, String? schema) =>
+      schema == null ? _table(folder) : '${_table(schema)}.${_table(folder)}';
+
   List<String> folderNames() {
     final folders =
         db
@@ -344,19 +355,19 @@ class FavoritesRepository {
       db.select('SELECT COUNT(*) AS c FROM ${_table(folder)};').first['c']
           as int;
 
-  int maxValue(String folder) =>
+  int maxValue(String folder, {String? schema}) =>
       db
               .select(
-                'SELECT MAX(display_order) AS value FROM ${_table(folder)};',
+                'SELECT MAX(display_order) AS value FROM ${_qualifiedTable(folder, schema)};',
               )
               .first['value']
           as int? ??
       0;
 
-  int minValue(String folder) =>
+  int minValue(String folder, {String? schema}) =>
       db
               .select(
-                'SELECT MIN(display_order) AS value FROM ${_table(folder)};',
+                'SELECT MIN(display_order) AS value FROM ${_qualifiedTable(folder, schema)};',
               )
               .first['value']
           as int? ??
@@ -560,8 +571,13 @@ class FavoritesRepository {
     }).toList();
   }
 
-  bool comicExists(String folder, String id, int type) => db.select(
-    'SELECT 1 FROM ${_table(folder)} WHERE id = ? AND type = ? LIMIT 1;',
+  bool comicExists(
+    String folder,
+    String id,
+    int type, {
+    String? schema,
+  }) => db.select(
+    'SELECT 1 FROM ${_qualifiedTable(folder, schema)} WHERE id = ? AND type = ? LIMIT 1;',
     [id, type],
   ).isNotEmpty;
 
