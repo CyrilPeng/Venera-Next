@@ -25,6 +25,7 @@ void main() {
         Uint8List.fromList(
           utf8.encode('throw new Error("worker startup failed");'),
         ),
+        entryPoint: runJsComputeWorker,
       );
       await expectLater(
         engine.execute('() => 1', []),
@@ -43,7 +44,11 @@ void main() {
     final native = Directory('build/windows/x64/runner/Release').absolute.path;
     DynamicLibrary.open('$native/flutter_windows.dll');
     DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
-    final pool = JSPool.create(loadJsInit: () async => Uint8List(0));
+    final pool = JSPool.create(
+      loadJsInit: () async => Uint8List(0),
+      createEngine: (script) =>
+          IsolateJsEngine(script, entryPoint: runJsComputeWorker),
+    );
     addTearDown(pool.close);
     expect(await pool.execute('(a, b) => a + b', [20, 22]), 42);
     final closing = pool.close();
@@ -56,7 +61,10 @@ void main() {
   test(
     'async compute resolves and close joins accepted work',
     () async {
-      final engine = IsolateJsEngine(Uint8List(0));
+      final engine = IsolateJsEngine(
+        Uint8List(0),
+        entryPoint: runJsComputeWorker,
+      );
       addTearDown(engine.close);
       expect(await engine.execute('() => 1', []), 1);
       final result = engine.execute('''async () => {
@@ -76,7 +84,10 @@ void main() {
   );
 
   test('sync and async failures leave the worker usable', () async {
-    final engine = IsolateJsEngine(Uint8List(0));
+    final engine = IsolateJsEngine(
+      Uint8List(0),
+      entryPoint: runJsComputeWorker,
+    );
     addTearDown(engine.close);
     for (final (code, message) in [
       ('() => { throw new Error("sync failure"); }', 'sync failure'),
@@ -105,7 +116,10 @@ void main() {
       App.isInitialized = false;
       final owner = JsEngine.create(loadInitScript: () async => Uint8List(0));
       await owner.init();
-      final engine = IsolateJsEngine(Uint8List(0));
+      final engine = IsolateJsEngine(
+        Uint8List(0),
+        entryPoint: runJsComputeWorker,
+      );
       final function = owner.runCode('() => 42') as JSInvokable;
       try {
         await expectLater(
@@ -131,7 +145,10 @@ void main() {
   test(
     'unsendable arguments release task admission before close',
     () async {
-      final engine = IsolateJsEngine(Uint8List(0));
+      final engine = IsolateJsEngine(
+        Uint8List(0),
+        entryPoint: runJsComputeWorker,
+      );
       final port = ReceivePort();
       addTearDown(port.close);
       addTearDown(engine.close);
@@ -149,7 +166,10 @@ void main() {
   test(
     'close before spawn completion joins its late handle',
     () async {
-      final engine = IsolateJsEngine(Uint8List(0));
+      final engine = IsolateJsEngine(
+        Uint8List(0),
+        entryPoint: runJsComputeWorker,
+      );
       final closing = engine.close();
       expect(engine.close(), same(closing));
       await closing.timeout(const Duration(seconds: 3));

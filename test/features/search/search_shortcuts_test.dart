@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera_next/features/search/search.dart';
+import 'package:venera_next/features/search/search_shortcut.dart';
 
 void main() {
   test('search shortcuts round-trip author metadata', () {

@@ -1,7 +1,7 @@
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/reader.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/context.dart';
 
 void openLocalComic(LocalComic comic) {
@@ -13,9 +13,9 @@ void openLocalComic(LocalComic comic) {
     historyPage: history?.page,
     historyGroup: history?.group,
   );
-  App.rootContext.to(
+  appNavigation.rootContext.to(
     () => Reader(
-      onClosed: ReaderSessionScope.onClosedOf(App.rootContext),
+      onClosed: ReaderSessionScope.onClosedOf(appNavigation.rootContext),
       type: comic.comicType,
       cid: comic.id,
       name: comic.title,

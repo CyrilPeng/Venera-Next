@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/reader/brightness.dart';
+import 'package:venera_next/features/reader/brightness_policy.dart';
 
 void main() {
   group('reader brightness', () {

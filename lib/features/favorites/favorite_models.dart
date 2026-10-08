@@ -1,5 +1,7 @@
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 
 String _getTimeString(DateTime time) {
@@ -75,7 +77,10 @@ class FavoriteItem implements Comic {
   @override
   String get description {
     var time = this.time.substring(0, 10);
-    return appdata.settings['comicDisplayMode'] == 'detailed'
+    return GlobalPreferenceStore(
+              appdata.settings,
+            ).read(DiscoveryPreferences.comicDisplayMode) ==
+            'detailed'
         ? "$time | ${type == ComicType.local ? 'local' : type.comicSource?.name ?? "Unknown"}"
         : "${type.comicSource?.name ?? "Unknown"} | $time";
   }

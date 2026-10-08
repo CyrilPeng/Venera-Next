@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -11,7 +13,8 @@ import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/components/select.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
+import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -155,7 +158,9 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void initState() {
     findSearchSources();
-    var defaultSearchTarget = appdata.settings['defaultSearchTarget'];
+    var defaultSearchTarget = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(DiscoveryPreferences.defaultSearchTarget);
     if (defaultSearchTarget == "_aggregated_") {
       aggregatedSearch = true;
     } else if (defaultSearchTarget != null &&
@@ -179,7 +184,11 @@ class _SearchPageState extends State<SearchPage> {
         .where((e) => e.searchPageData != null)
         .map((e) => e.key)
         .toList();
-    var settings = appdata.settings['searchSources'] as List;
+    var settings =
+        GlobalPreferenceStore(
+          appdata.settings,
+        ).read(DiscoveryPreferences.searchSources) ??
+        const <String>[];
     var sources = <String>[];
     for (var source in settings) {
       if (all.contains(source)) {
@@ -202,7 +211,7 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   void manageSearchSources() {
-    showPopUpWidget(App.rootContext, setSearchSourcesWidget());
+    showPopUpWidget(appNavigation.rootContext, setSearchSourcesWidget());
   }
 
   Widget buildEmpty() {
@@ -406,7 +415,7 @@ class _SearchPageState extends State<SearchPage> {
     }
 
     bool showMethod = MediaQuery.of(context).size.width < 600;
-    bool showTranslation = App.locale.languageCode == "zh";
+    bool showTranslation = appLocale.languageCode == "zh";
     Widget buildItem(Pair<String, TranslationType> value) {
       if (value.left == "**URL**") {
         return ListTile(

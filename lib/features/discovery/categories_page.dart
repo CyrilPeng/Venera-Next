@@ -1,9 +1,12 @@
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
+import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -31,9 +34,9 @@ class _CategoriesPageState extends State<CategoriesPage>
   late TabController controller;
 
   void onSettingsChanged() {
-    var categories = List.from(
-      appdata.settings["categories"],
-    ).whereType<String>().toList();
+    var categories = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(DiscoveryPreferences.categoryPages);
     var allCategories = ComicSource.all()
         .map((e) => e.categoryData?.key)
         .where((element) => element != null)
@@ -53,9 +56,9 @@ class _CategoriesPageState extends State<CategoriesPage>
   @override
   void initState() {
     super.initState();
-    var categories = List.from(
-      appdata.settings["categories"],
-    ).whereType<String>().toList();
+    var categories = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(DiscoveryPreferences.categoryPages);
     var allCategories = ComicSource.all()
         .map((e) => e.categoryData?.key)
         .where((element) => element != null)
@@ -69,7 +72,7 @@ class _CategoriesPageState extends State<CategoriesPage>
   }
 
   void addPage() {
-    showPopUpWidget(App.rootContext, setCategoryPagesWidget());
+    showPopUpWidget(appNavigation.rootContext, setCategoryPagesWidget());
   }
 
   @override
@@ -241,7 +244,7 @@ class _CategoryPage extends StatelessWidget {
 
   Widget buildCategory(CategoryItem c) {
     return buildTag(c.label, () {
-      var context = App.mainNavigatorKey!.currentContext!;
+      var context = appNavigation.mainNavigatorKey!.currentContext!;
       c.target.jump(context);
     });
   }
@@ -268,5 +271,5 @@ class _CategoryPage extends StatelessWidget {
     );
   }
 
-  bool get enableTranslation => App.locale.languageCode == 'zh';
+  bool get enableTranslation => appLocale.languageCode == 'zh';
 }

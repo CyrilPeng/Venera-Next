@@ -7,10 +7,8 @@ import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/image_stream.dart';
 import 'base_image_provider.dart';
 import 'image_provider_lifecycle.dart';
-import 'cached_image.dart' as image_provider;
 
-class CachedImageProvider
-    extends BaseImageProvider<image_provider.CachedImageProvider> {
+class CachedImageProvider extends BaseImageProvider<CachedImageProvider> {
   /// Image provider for normal image.
   ///
   /// [url] is the url of the image. Local file path is also supported.

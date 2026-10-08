@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_page_route.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -61,7 +62,7 @@ class PopUpWidget<T> extends PopupRoute<T> {
         enabledCallback: () => popDisposition != RoutePopDisposition.doNotPop,
         gestureWidth: 20.0,
         onStartPopGesture: () =>
-            IOSBackGestureController(controller!, navigator!),
+            IOSBackGestureController(controller!, navigator!, route: this),
         child: body,
       );
     }
@@ -159,7 +160,9 @@ class _PopUpWidgetScaffoldState extends State<PopUpWidgetScaffold> {
                     icon: const Icon(Icons.arrow_back_sharp),
                     onPressed:
                         widget.onBack ??
-                        () => context.canPop() ? context.pop() : App.pop(),
+                        () => context.canPop()
+                            ? context.pop()
+                            : appNavigation.pop(),
                   ),
                 ),
                 const SizedBox(width: 16),

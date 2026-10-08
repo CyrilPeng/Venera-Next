@@ -4,6 +4,7 @@ import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
@@ -29,7 +30,7 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
             "dark": "Dark".tl,
           },
           onChanged: () async {
-            App.forceRebuild();
+            appNavigation.forceRebuild();
           },
         ).toSliver(),
         SelectSetting.preference(
@@ -46,7 +47,7 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
           },
           onChanged: () async {
             await App.init();
-            App.forceRebuild();
+            appNavigation.forceRebuild();
           },
         ).toSliver(),
       ],

@@ -15,6 +15,7 @@ import 'package:venera_next/features/reader/layout_detection.dart';
 import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
@@ -81,7 +82,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         builder: (context, child) => ReaderPlatformEffectsScope(child: child!),
-        navigatorKey: App.rootNavigatorKey,
+        navigatorKey: appNavigation.rootNavigatorKey,
         home: OverlayWidget(_ReaderHarness(key: key, onClosed: onClosed)),
       ),
     );

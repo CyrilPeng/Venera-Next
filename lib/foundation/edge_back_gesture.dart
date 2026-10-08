@@ -188,5 +188,17 @@ class _EdgeBackRecognizer extends OneSequenceGestureRecognizer {
   void didStopTrackingLastPointer(int pointer) => _clear();
 
   @override
+  void dispose() {
+    // Accepted arena entries no longer exist, so the base class cannot reject
+    // them on disposal. Retire the active gesture before removing its routes.
+    try {
+      _cancel();
+    } finally {
+      _pointers.clear();
+      super.dispose();
+    }
+  }
+
+  @override
   String get debugDescription => 'edge back swipe';
 }

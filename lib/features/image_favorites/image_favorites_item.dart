@@ -10,7 +10,8 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/image_favorites/image_favorites_gallery_page.dart';
 import 'package:venera_next/features/image_favorites/image_favorites_photo_view.dart';
 import 'package:venera_next/features/reader/reader.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
+import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -41,13 +42,13 @@ class _ImageFavoritesItemState extends State<ImageFavoritesItem>
   late final imageFavorites = widget.imageFavoritesComic.images.toList();
 
   void goComicInfo(ImageFavoritesComic comic) {
-    App.mainNavigatorKey?.currentContext?.to(
+    appNavigation.mainNavigatorKey?.currentContext?.to(
       () => ComicPage(id: comic.id, sourceKey: comic.sourceKey),
     );
   }
 
   void goReaderPage(ImageFavoritesComic comic, int ep, int page) {
-    App.rootContext.to(
+    appNavigation.rootContext.to(
       () => ReaderWithLoading(
         id: comic.id,
         sourceKey: comic.sourceKey,
@@ -58,7 +59,7 @@ class _ImageFavoritesItemState extends State<ImageFavoritesItem>
   }
 
   void goPhotoView(ImageFavorite imageFavorite) {
-    Navigator.of(App.rootContext).push(
+    Navigator.of(appNavigation.rootContext).push(
       MaterialPageRoute(
         builder: (context) => ImageFavoritesPhotoView(
           comic: widget.imageFavoritesComic,
@@ -70,7 +71,9 @@ class _ImageFavoritesItemState extends State<ImageFavoritesItem>
 
   void copyTitle() {
     Clipboard.setData(ClipboardData(text: widget.imageFavoritesComic.title));
-    App.rootContext.showMessage(message: 'Copy the title successfully'.tl);
+    appNavigation.rootContext.showMessage(
+      message: 'Copy the title successfully'.tl,
+    );
   }
 
   void onLongPress() {
@@ -122,7 +125,7 @@ class _ImageFavoritesItemState extends State<ImageFavoritesItem>
         icon: Icons.grid_view,
         text: 'Gallery View'.tl,
         onClick: () {
-          App.mainNavigatorKey?.currentContext?.to(
+          appNavigation.mainNavigatorKey?.currentContext?.to(
             () => ImageFavoritesGalleryPage(comic: widget.imageFavoritesComic),
           );
         },
@@ -255,7 +258,7 @@ class _ImageFavoritesItemState extends State<ImageFavoritesItem>
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           onPressed: () {
-            App.mainNavigatorKey?.currentContext?.to(
+            appNavigation.mainNavigatorKey?.currentContext?.to(
               () =>
                   ImageFavoritesGalleryPage(comic: widget.imageFavoritesComic),
             );
@@ -277,7 +280,7 @@ class _ImageFavoritesItemState extends State<ImageFavoritesItem>
   }
 
   Widget buildBottom() {
-    var enableTranslate = App.locale.languageCode == 'zh';
+    var enableTranslate = appLocale.languageCode == 'zh';
     String time = DateFormat(
       'yyyy-MM-dd',
     ).format(widget.imageFavoritesComic.time);

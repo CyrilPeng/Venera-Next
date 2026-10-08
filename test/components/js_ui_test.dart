@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/js_ui.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -43,7 +43,10 @@ void main() {
     api = JsUiApi();
   });
   Future<void> host(WidgetTester tester) => tester.pumpWidget(
-    MaterialApp(navigatorKey: App.rootNavigatorKey, home: const Scaffold()),
+    MaterialApp(
+      navigatorKey: appNavigation.rootNavigatorKey,
+      home: const Scaffold(),
+    ),
   );
   dynamic invoke(Map<String, dynamic> message) {
     try {
@@ -76,7 +79,7 @@ void main() {
         case 'button':
           await tester.tap(find.text('Run'));
         case 'back':
-          App.rootNavigatorKey.currentState!.pop();
+          appNavigation.rootNavigatorKey.currentState!.pop();
         case 'barrier':
           await tester.tapAt(const Offset(1, 1));
         case 'unmount':
@@ -108,7 +111,7 @@ void main() {
         case 'button':
           await tester.tap(find.text('Cancel'));
         case 'back':
-          App.rootNavigatorKey.currentState!.pop();
+          appNavigation.rootNavigatorKey.currentState!.pop();
         case 'barrier':
           await tester.tapAt(const Offset(1, 1));
         case 'finished':
@@ -214,7 +217,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Run'));
       await tester.pump();
-      App.rootNavigatorKey.currentState!.pop();
+      appNavigation.rootNavigatorKey.currentState!.pop();
       await finishFrames(tester);
       await result;
       if (fail) {

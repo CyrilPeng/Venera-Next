@@ -13,6 +13,7 @@ import 'package:venera_next/features/local_comics/import_export/import_export.da
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/local_comics/local_storage_guard.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/file_system.dart';
@@ -155,7 +156,7 @@ void main() {
         (tester) async {
           await tester.pumpWidget(
             MaterialApp(
-              navigatorKey: App.rootNavigatorKey,
+              navigatorKey: appNavigation.rootNavigatorKey,
               home: const Scaffold(),
             ),
           );

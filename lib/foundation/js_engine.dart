@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
@@ -26,6 +27,7 @@ import 'package:pointycastle/block/modes/ecb.dart';
 import 'package:pointycastle/block/modes/ofb.dart';
 import 'package:uuid/uuid.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/js_pool.dart';
 import 'package:venera_next/network/app_dio.dart';
 import 'package:venera_next/network/cache.dart';
@@ -141,15 +143,18 @@ void _releaseJsResources(
   if (failures.isNotEmpty) throw JsResourceReleaseFailure(failures);
 }
 
-/// A bridge result owns each distinct Dart reference once. The bridge may
-/// produce several independently duplicated wrappers for the same JS function.
-void _releaseJsResultReferences(Object? value) {
-  final visited = Set<Object>.identity();
-  final references = <JSRef>[];
+void _visitJsResultGraph(
+  Object? value,
+  Set<Object> visited,
+  void Function(JSRef) onReference, {
+  void Function(Future<dynamic>)? onFuture,
+}) {
   void visit(Object? current) {
     if (current == null || !visited.add(current)) return;
     if (current is JSRef) {
-      references.add(current);
+      onReference(current);
+    } else if (current is Future) {
+      onFuture?.call(current);
     } else if (current is Map) {
       for (final entry in current.entries.toList()) {
         visit(entry.key);
@@ -163,6 +168,13 @@ void _releaseJsResultReferences(Object? value) {
   }
 
   visit(value);
+}
+
+/// A bridge result owns each distinct Dart reference once. The bridge may
+/// produce several independently duplicated wrappers for the same JS function.
+void _releaseJsResultReferences(Object? value) {
+  final references = <JSRef>[];
+  _visitJsResultGraph(value, Set<Object>.identity(), references.add);
   _releaseJsResources([
     for (final reference in references)
       (name: 'result reference', release: reference.free),
@@ -173,6 +185,103 @@ void _releaseJsResultReferences(Object? value) {
 /// native wrapper is released once, including aliases in a result graph.
 void discardJsResult(Object? value) => _releaseJsResultReferences(value);
 
+/// Observe every Future reachable from a result graph whose synchronous
+/// references have already been discarded. Release newly arriving references
+/// once across all descendant graphs, including rejected values and map keys.
+/// This never cancels a Future or closes its runtime; the returned Future joins
+/// actual descendant settlement and retains rejection/cleanup diagnostics.
+Future<void> drainJsResultDescendants(Object? value) =>
+    _JsResultDescendantDrain().start(value);
+
+class _JsResultDescendantDrain {
+  final _visited = Set<Object>.identity();
+  final _done = Completer<void>();
+  final _failures = <({String resource, Object error, StackTrace stack})>[];
+  int _pending = 0;
+  bool _collecting = true;
+
+  Future<void> start(Object? value) {
+    final futures = <Future<dynamic>>[];
+    try {
+      // Seed references already handled by synchronous discard so aliases in
+      // a later Promise value cannot free them again, even after a failed free.
+      _visitJsResultGraph(value, _visited, (_) {}, onFuture: futures.add);
+    } catch (error, stack) {
+      _failures.add((
+        resource: 'result graph scan',
+        error: error,
+        stack: stack,
+      ));
+    }
+    // Seed the entire root before subscribing: a synchronous Future may yield
+    // a reference that appears later in the already-discarded root graph.
+    for (final future in futures) {
+      _observe(future);
+    }
+    _collecting = false;
+    _completeIfIdle();
+    return _done.future;
+  }
+
+  void _observe(Future<dynamic> future) {
+    _pending++;
+    try {
+      unawaited(
+        future.then<void>(
+          (value) => _settle(value, null),
+          onError: (Object error, StackTrace stack) => _settle(error, stack),
+        ),
+      );
+    } catch (error, stack) {
+      _pending--;
+      _failures.add((
+        resource: 'Promise subscription',
+        error: error,
+        stack: stack,
+      ));
+    }
+  }
+
+  void _settle(Object? value, StackTrace? rejectionStack) {
+    if (rejectionStack != null) {
+      _failures.add((
+        resource: 'nested Promise',
+        error: value!,
+        stack: rejectionStack,
+      ));
+    }
+    final references = <JSRef>[];
+    try {
+      _visitJsResultGraph(value, _visited, references.add, onFuture: _observe);
+    } catch (error, stack) {
+      _failures.add((
+        resource: 'nested result scan',
+        error: error,
+        stack: stack,
+      ));
+    }
+    try {
+      _releaseJsResources([
+        for (final reference in references)
+          (name: 'nested result reference', release: reference.free),
+      ]);
+    } on JsResourceReleaseFailure catch (error) {
+      _failures.addAll(error.failures);
+    }
+    _pending--;
+    _completeIfIdle();
+  }
+
+  void _completeIfIdle() {
+    if (_collecting || _pending != 0 || _done.isCompleted) return;
+    if (_failures.isEmpty) {
+      _done.complete();
+    } else {
+      _done.completeError(JsResourceReleaseFailure(_failures));
+    }
+  }
+}
+
 class JsEngine with _JSEngineApi, Init {
   factory JsEngine() => _cache ?? (_cache = JsEngine._create());
 
@@ -181,14 +290,23 @@ class JsEngine with _JSEngineApi, Init {
   JsEngine._create() : this.create();
 
   /// Owns clients returned by the factory and releases them with this engine.
+  /// [loadInitScript] supplies the initialization image for this runtime and
+  /// its compute workers. Each worker evaluates the image in a fresh runtime;
+  /// unconditional top-level compute would recursively initialize more workers.
   JsEngine.create({
     Dio Function()? createHttpClient,
     Future<Uint8List> Function()? loadInitScript,
+    JsPoolEngine Function(Uint8List)? createComputeWorker,
   }) : _createHttpClient = createHttpClient ?? _newHttpClient,
-       _loadInitScript = loadInitScript ?? _readInitScript;
+       _loadInitScript = loadInitScript ?? _readInitScript,
+       _createComputeWorker = createComputeWorker ?? _newComputeWorker;
 
   final Dio Function() _createHttpClient;
   final Future<Uint8List> Function() _loadInitScript;
+  final JsPoolEngine Function(Uint8List) _createComputeWorker;
+  Uint8List? _computeScript;
+  JSPool? _computePool;
+  final _computeClosures = <JSPool, Future<void>>{};
   bool _disposed = false;
   final _temporaryClients = <Dio>{};
   final _retiredClients = <Dio>{};
@@ -215,6 +333,47 @@ class JsEngine with _JSEngineApi, Init {
   dynamic debugOwnResult(dynamic result) {
     _checkActive();
     return _trackOwnedResult(result, _pendingResults, _engine);
+  }
+
+  static JsPoolEngine _newComputeWorker(Uint8List script) =>
+      IsolateJsEngine(script, entryPoint: runJsComputeWorker);
+
+  Future<dynamic> _compute(String function, List<dynamic> args) {
+    _checkActive();
+    final script = _computeScript;
+    if (script == null) {
+      throw StateError('JS compute script is not initialized');
+    }
+    final pool = _computePool ??= JSPool.create(
+      loadJsInit: () async => script,
+      createEngine: _createComputeWorker,
+    );
+    return pool.execute(function, args);
+  }
+
+  void _closeComputePool() {
+    final pool = _computePool;
+    _computePool = null;
+    if (pool == null) return;
+    // Keep failed pools with their original owner and retain every close result.
+    _computeClosures[pool] = Future<void>.sync(pool.close).catchError((
+      Object error,
+      StackTrace stack,
+    ) {
+      _shutdownFailures.add((
+        resource: 'JS compute pool',
+        error: error,
+        stack: stack,
+      ));
+    });
+  }
+
+  Future<void> _drainComputePools() async {
+    await Future.wait(_computeClosures.values.toList());
+    final failures = _shutdownFailures.where(
+      (failure) => failure.resource == 'JS compute pool',
+    );
+    if (failures.isNotEmpty) throw JsResourceReleaseFailure(failures);
   }
 
   static Dio _newHttpClient() => AppDio(
@@ -316,6 +475,7 @@ class JsEngine with _JSEngineApi, Init {
       return;
     }
     try {
+      if (_computeClosures.isNotEmpty) await _drainComputePools();
       if (App.isInitialized) {
         await SingleInstanceCookieJar.createInstance();
       }
@@ -341,13 +501,28 @@ class JsEngine with _JSEngineApi, Init {
       }
       final jsInit = await _loadInitScript();
       _checkActive();
-      _engine!.evaluate(utf8.decode(jsInit), name: "<init>");
+      _computeScript = Uint8List.fromList(jsInit);
+      _engine!.evaluate(utf8.decode(_computeScript!), name: "<init>");
     } catch (e, s) {
       try {
         _releaseResources();
-      } catch (cleanupError) {
+      } on JsResourceReleaseFailure {
+        // Synchronous release already recorded the failures. Compute cleanup
+        // must still finish before failed initialization returns to its owner.
+      } catch (cleanupError, cleanupStack) {
+        _shutdownFailures.add((
+          resource: 'initialization cleanup',
+          error: cleanupError,
+          stack: cleanupStack,
+        ));
+      }
+      await Future.wait(_computeClosures.values.toList());
+      if (_shutdownFailures.isNotEmpty) {
         Error.throwWithStackTrace(
-          JsEngineInitializationFailure(e, cleanupError),
+          JsEngineInitializationFailure(
+            e,
+            JsResourceReleaseFailure(_shutdownFailures),
+          ),
           s,
         );
       }
@@ -490,7 +665,7 @@ class JsEngine with _JSEngineApi, Init {
           case "UI":
             return _uiMessageBridge.handleUIMessage(Map.from(message));
           case "getLocale":
-            return "${App.locale.languageCode}_${App.locale.countryCode}";
+            return "${appLocale.languageCode}_${appLocale.countryCode}";
           case "getPlatform":
             return Platform.operatingSystem;
           case "setClipboard":
@@ -513,7 +688,7 @@ class JsEngine with _JSEngineApi, Init {
             if (args != null && args is! List) {
               throw "Args must be a list";
             }
-            return JSPool().execute(func, args ?? []);
+            return _compute(func, args ?? []);
         }
       }
       return null;
@@ -1011,6 +1186,7 @@ class JsEngine with _JSEngineApi, Init {
     final scopes = _callbackScopes.toList();
     final ownedReferences = _ownedReferences.toList();
     _closed = true;
+    _closeComputePool();
     final engine = _engine;
     if (engine != null) {
       for (final delivery in _bridgeResults[engine] ?? <Completer<dynamic>>{}) {
@@ -1142,6 +1318,7 @@ class JsEngine with _JSEngineApi, Init {
       await Future.wait(_nativeReleases.toList());
     }
     await Future.wait(_adapterDrains.values.toList());
+    await Future.wait(_computeClosures.values.toList());
     if (_shutdownFailures.isNotEmpty) {
       throw JsResourceReleaseFailure(_shutdownFailures);
     }
@@ -1730,5 +1907,57 @@ class JsCallbackScope {
       for (final function in functions)
         (name: 'callback', release: function.free),
     ]);
+  }
+}
+
+/// Worker bootstrap belongs to the runtime; the pool owns only scheduling and ports.
+void runJsComputeWorker(JsWorkerStart params) async {
+  var sendPort = params.replies;
+  final port = ReceivePort();
+  sendPort.send(port.sendPort);
+  final engine = JsEngine.create(loadInitScript: () async => params.script);
+  Exception? failure;
+  try {
+    await engine.init();
+    await for (final message in port) {
+      if (message is JsWorkerStop) break;
+      if (message is Task) {
+        JSInvokable? jsFunc;
+        dynamic result;
+        try {
+          final evaluated = engine.runCode(message.jsFunction);
+          if (evaluated is! JSInvokable) {
+            result = evaluated;
+            throw Exception(
+              "The provided code does not evaluate to a function.",
+            );
+          }
+          jsFunc = evaluated;
+          result = await jsFunc.invoke(message.args);
+          validateJsComputeTransferValue(result, Set<Object>.identity());
+          sendPort.send(TaskResult(message.id, result, null));
+        } catch (e) {
+          sendPort.send(TaskResult(message.id, null, e.toString()));
+        } finally {
+          JSRef.freeRecursive(result);
+          jsFunc?.free();
+        }
+      }
+    }
+  } catch (e, s) {
+    // Publishing the failure triggers the parent's forced-close path. Defer
+    // it until owned resources finish cleanup so that path cannot interrupt us.
+    failure = Exception("JS worker failed: $e\n$s");
+  } finally {
+    final errors = <String>[];
+    try {
+      await engine.closeAndWait();
+    } catch (error) {
+      errors.add('engine: $error');
+    }
+    port.close();
+    sendPort.send(JsWorkerStopped(errors.isEmpty ? null : errors.join('; ')));
+    if (failure != null) sendPort.send(failure);
+    Isolate.exit();
   }
 }

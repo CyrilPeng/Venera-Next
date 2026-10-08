@@ -2,13 +2,13 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  // The default in Settings._data is 'system'.
+  // The persisted default remains 'system'.
   const defaultLanguage = 'system';
 
   setUp(() {
@@ -19,51 +19,59 @@ void main() {
     appdata.settings['language'] = defaultLanguage;
   });
 
-  group('App.locale explicit language setting', () {
+  group('appLocale explicit language setting', () {
     test('zh-CN selects simplified Chinese', () {
       appdata.settings['language'] = 'zh-CN';
-      expect(App.locale, const Locale('zh', 'CN'));
+      expect(appLocale, const Locale('zh', 'CN'));
     });
 
     test('zh-TW selects traditional Chinese', () {
       appdata.settings['language'] = 'zh-TW';
-      expect(App.locale, const Locale('zh', 'TW'));
+      expect(appLocale, const Locale('zh', 'TW'));
     });
 
     test('en-US selects English', () {
       appdata.settings['language'] = 'en-US';
-      expect(App.locale, const Locale('en'));
+      expect(appLocale, const Locale('en'));
     });
 
     test('explicit choice overrides the reported system locale', () {
       // The tester reports English first, so an unrelated bug could leak the
       // system value through; the explicit setting must win.
       appdata.settings['language'] = 'zh-TW';
-      expect(App.locale, const Locale('zh', 'TW'));
+      expect(appLocale, const Locale('zh', 'TW'));
       appdata.settings['language'] = 'zh-CN';
-      expect(App.locale, const Locale('zh', 'CN'));
+      expect(appLocale, const Locale('zh', 'CN'));
     });
   });
 
-  group('App.locale system language under flutter_tester', () {
+  group('appLocale system language under flutter_tester', () {
+    test('malformed stored language follows system without rewriting it', () {
+      for (final value in <Object?>[null, false, 1, [], {}]) {
+        appdata.settings['language'] = value;
+        expect(appLocale, const Locale('en'));
+        expect(appdata.settings['language'], same(value));
+      }
+    });
+
     test('system resolves to the first supported reported language', () {
       appdata.settings['language'] = 'system';
-      expect(App.locale, const Locale('en'));
+      expect(appLocale, const Locale('en'));
     });
 
     test('unrecognized setting value falls back to system resolution', () {
       appdata.settings['language'] = 'fr-FR';
-      expect(App.locale, const Locale('en'));
+      expect(appLocale, const Locale('en'));
     });
 
     test(
       'restoring system resumes system resolution after an explicit choice',
       () {
         appdata.settings['language'] = 'zh-TW';
-        expect(App.locale, const Locale('zh', 'TW'));
+        expect(appLocale, const Locale('zh', 'TW'));
 
         appdata.settings['language'] = 'system';
-        expect(App.locale, const Locale('en'));
+        expect(appLocale, const Locale('en'));
       },
     );
   });
@@ -171,11 +179,11 @@ void main() {
       });
     }
 
-    test('App.locale delegates to the production resolver', () {
+    test('appLocale delegates to the production resolver', () {
       appdata.settings['language'] = 'system';
       expect(
         resolveAppLocale('system', PlatformDispatcher.instance.locales),
-        App.locale,
+        appLocale,
       );
     });
   });

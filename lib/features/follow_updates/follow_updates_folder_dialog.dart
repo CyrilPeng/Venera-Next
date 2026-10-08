@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -162,7 +164,7 @@ class _FollowUpdatesFolderDialogState
       }
       if (!active()) return;
       await saveSetting(
-        'followUpdatesFolder',
+        FavoritePreferences.followUpdatesFolder.key,
         () => _manager.setFollowUpdatesFolder(folder, generation: _generation),
         isCurrent: () =>
             widget.runtime == runtime && widget.createCheck == createCheck,
@@ -243,7 +245,10 @@ class _FollowUpdatesFolderDialogState
                   settingsSaveStatus,
                   if (_preparation != null && !savingSettings)
                     TextButton(onPressed: _leave, child: Text('Cancel'.tl)),
-                  if (appdata.settings['followUpdatesFolder'] != null)
+                  if (GlobalPreferenceStore(
+                        appdata.settings,
+                      ).read(FavoritePreferences.followUpdatesFolder) !=
+                      null)
                     TextButton(
                       onPressed: busy ? null : () => _confirm(null),
                       child: Text('Disable'.tl),

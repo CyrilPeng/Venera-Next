@@ -15,6 +15,7 @@ import 'package:venera_next/features/settings/reader_mode.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -63,7 +64,7 @@ Future<void> _flush(WidgetTester tester, Future<void> operation) async {
 
 Widget _host(Widget child, {Widget Function(BuildContext, Widget?)? builder}) =>
     MaterialApp(
-      navigatorKey: App.rootNavigatorKey,
+      navigatorKey: appNavigation.rootNavigatorKey,
       builder: builder,
       home: OverlayWidget(Scaffold(body: child)),
     );
@@ -175,7 +176,7 @@ void main() {
       var popped = 0;
       unawaited(
         showPopUpWidget<void>(
-          App.rootContext,
+          appNavigation.rootContext,
           Column(
             children: [
               Expanded(child: _SavePage(key: first)),
@@ -188,7 +189,7 @@ void main() {
       final a = Completer<void>(), b = Completer<void>();
       final sa = first.currentState!.saveSetting('a', () => a.future);
       final sb = second.currentState!.saveSetting('b', () => b.future);
-      await App.rootNavigatorKey.currentState!.maybePop();
+      await appNavigation.rootNavigatorKey.currentState!.maybePop();
       a.complete();
       await sa;
       await tester.pump(const Duration(milliseconds: 400));
@@ -209,14 +210,16 @@ void main() {
     _prepare();
     final key = GlobalKey<_SavePageState>();
     await tester.pumpWidget(_host(const Text('Home')));
-    unawaited(showPopUpWidget<void>(App.rootContext, _SavePage(key: key)));
+    unawaited(
+      showPopUpWidget<void>(appNavigation.rootContext, _SavePage(key: key)),
+    );
     await tester.pumpAndSettle();
     final release = Completer<void>();
     final save = key.currentState!.saveSetting('a', () => release.future);
     final leaving = key.currentState!.leaveSettings();
     unawaited(
       showDialog<void>(
-        context: App.rootContext,
+        context: appNavigation.rootContext,
         builder: (_) => const AlertDialog(content: Text('New route')),
       ),
     );
@@ -226,7 +229,7 @@ void main() {
     await leaving;
     await tester.pumpAndSettle();
     expect(find.text('New route'), findsOneWidget);
-    App.rootNavigatorKey.currentState!.pop();
+    appNavigation.rootNavigatorKey.currentState!.pop();
     await tester.pumpAndSettle();
     expect(find.text('Editing'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -347,7 +350,7 @@ void main() {
         var popped = false;
         unawaited(
           showPopUpWidget<void>(
-            App.rootContext,
+            appNavigation.rootContext,
             _SavePage(key: key),
           ).then((_) => popped = true),
         );
@@ -536,6 +539,50 @@ void main() {
       await _flush(tester, Future.wait([exclusive, appdata.saveData(false)]));
       expect(_saved(root)['dnsOverrides'], {'other.org': '3.3.3.3'});
       expect(find.text('DNS Overrides'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'proxy editor restores credentials and retains draft across mode switches',
+    (tester) async {
+      final root = _prepare();
+      appdata.settings['proxy'] = 'user:pass@proxy.test:+07897';
+      await tester.pumpWidget(_host(const NetworkSettings()));
+      await tester.tap(find.text('Proxy'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widgetList<TextFormField>(find.byType(TextFormField))
+            .map((field) => field.initialValue),
+        ['proxy.test', '+07897', 'user', 'pass'],
+      );
+      await tester.enterText(find.byType(TextFormField).first, 'edited.test');
+      await tester.tap(find.text('System'));
+      await _flush(tester, appdata.saveData(false));
+      expect(_saved(root)['proxy'], 'system');
+      await tester.tap(find.text('Manual'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widgetList<TextFormField>(find.byType(TextFormField))
+            .map((field) => field.initialValue),
+        ['edited.test', '+07897', 'user', 'pass'],
+      );
+      await tester.tap(find.text('Save'));
+      await _flush(tester, appdata.saveData(false));
+      await tester.pumpAndSettle();
+      expect(_saved(root)['proxy'], 'user:pass@edited.test:+07897');
+      expect(find.byType(TextFormField), findsNothing);
+      await tester.tap(find.text('Proxy'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).first)
+            .initialValue,
+        'edited.test',
+      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },

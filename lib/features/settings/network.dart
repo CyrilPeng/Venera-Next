@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/proxy_configuration.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:flutter/material.dart';
@@ -52,11 +53,7 @@ class _ProxySettingView extends StatefulWidget {
 }
 
 class _ProxySettingViewState extends SettingsSaveState<_ProxySettingView> {
-  String type = '';
-  String host = '';
-  String port = '';
-  String username = '';
-  String password = '';
+  late ProxyConfiguration configuration;
   int _selection = 0;
 
   Future<bool> _saveProxy(String value) => saveSetting(
@@ -66,62 +63,10 @@ class _ProxySettingViewState extends SettingsSaveState<_ProxySettingView> {
     }),
   );
 
-  // USERNAME:PASSWORD@HOST:PORT
-  String toProxyStr() {
-    if (type == 'direct') {
-      return 'direct';
-    } else if (type == 'system') {
-      return 'system';
-    }
-    var res = '';
-    if (username.isNotEmpty) {
-      res += username;
-      if (password.isNotEmpty) {
-        res += ':$password';
-      }
-      res += '@';
-    }
-    res += host;
-    if (port.isNotEmpty) {
-      res += ':$port';
-    }
-    return res;
-  }
-
-  void parseProxyString(String proxy) {
-    if (proxy == 'direct') {
-      type = 'direct';
-      return;
-    } else if (proxy == 'system') {
-      type = 'system';
-      return;
-    }
-    type = 'manual';
-    var parts = proxy.split('@');
-    if (parts.length == 2) {
-      var auth = parts[0].split(':');
-      if (auth.length == 2) {
-        username = auth[0];
-        password = auth[1];
-      }
-      parts = parts[1].split(':');
-      if (parts.length == 2) {
-        host = parts[0];
-        port = parts[1];
-      }
-    } else {
-      parts = proxy.split(':');
-      if (parts.length == 2) {
-        host = parts[0];
-        port = parts[1];
-      }
-    }
-  }
-
   @override
   void initState() {
     final proxy = _networkSettings.read(NetworkPreferences.proxy);
-    parseProxyString(proxy);
+    configuration = ProxyConfiguration.parse(proxy);
     super.initState();
   }
 
@@ -133,30 +78,33 @@ class _ProxySettingViewState extends SettingsSaveState<_ProxySettingView> {
         onBack: leaveSettings,
         tailing: [settingsSaveStatus],
         body: SingleChildScrollView(
-          child: RadioGroup<String>(
-            groupValue: type,
+          child: RadioGroup<ProxyMode>(
+            groupValue: configuration.mode,
             onChanged: (v) {
               if (!acceptsSettingsChanges) return;
               _selection++;
               setState(() {
-                type = v ?? type;
+                configuration = configuration.copyWith(mode: v);
               });
-              if (type != 'manual') {
-                _saveProxy(toProxyStr());
+              if (configuration.mode != ProxyMode.manual) {
+                _saveProxy(configuration.serialize());
               }
             },
             child: Column(
               children: [
-                RadioListTile<String>(
+                RadioListTile<ProxyMode>(
                   title: Text("Direct".tl),
-                  value: 'direct',
+                  value: ProxyMode.direct,
                 ),
-                RadioListTile<String>(
+                RadioListTile<ProxyMode>(
                   title: Text("System".tl),
-                  value: 'system',
+                  value: ProxyMode.system,
                 ),
-                RadioListTile(title: Text("Manual".tl), value: 'manual'),
-                if (type == 'manual') buildManualProxy(),
+                RadioListTile(
+                  title: Text("Manual".tl),
+                  value: ProxyMode.manual,
+                ),
+                if (configuration.mode == ProxyMode.manual) buildManualProxy(),
               ],
             ),
           ),
@@ -177,9 +125,9 @@ class _ProxySettingViewState extends SettingsSaveState<_ProxySettingView> {
               border: const OutlineInputBorder(),
               labelText: "Host".tl,
             ),
-            initialValue: host,
+            initialValue: configuration.host,
             onChanged: (v) {
-              host = v;
+              configuration = configuration.copyWith(host: v);
             },
             validator: (v) {
               if (v?.isEmpty ?? false) {
@@ -194,9 +142,9 @@ class _ProxySettingViewState extends SettingsSaveState<_ProxySettingView> {
               border: const OutlineInputBorder(),
               labelText: "Port".tl,
             ),
-            initialValue: port,
+            initialValue: configuration.port,
             onChanged: (v) {
-              port = v;
+              configuration = configuration.copyWith(port: v);
             },
             validator: (v) {
               if (v?.isEmpty ?? true) {
@@ -214,12 +162,12 @@ class _ProxySettingViewState extends SettingsSaveState<_ProxySettingView> {
               border: const OutlineInputBorder(),
               labelText: "Username".tl,
             ),
-            initialValue: username,
+            initialValue: configuration.username,
             onChanged: (v) {
-              username = v;
+              configuration = configuration.copyWith(username: v);
             },
             validator: (v) {
-              if ((v?.isEmpty ?? false) && password.isNotEmpty) {
+              if ((v?.isEmpty ?? false) && configuration.password.isNotEmpty) {
                 return "Username cannot be empty".tl;
               }
               return null;
@@ -231,9 +179,9 @@ class _ProxySettingViewState extends SettingsSaveState<_ProxySettingView> {
               border: const OutlineInputBorder(),
               labelText: "Password".tl,
             ),
-            initialValue: password,
+            initialValue: configuration.password,
             onChanged: (v) {
-              password = v;
+              configuration = configuration.copyWith(password: v);
             },
           ),
           const SizedBox(height: 16),
@@ -246,12 +194,12 @@ class _ProxySettingViewState extends SettingsSaveState<_ProxySettingView> {
                           PopupIndicatorWidget.maybeOf(context)?.route ??
                           ModalRoute.of(context);
                       final selection = _selection;
-                      final value = toProxyStr();
+                      final value = configuration.serialize();
                       final saved = await _saveProxy(value);
                       if (mounted &&
                           saved &&
                           selection == _selection &&
-                          value == toProxyStr()) {
+                          value == configuration.serialize()) {
                         await leaveSettings(route);
                       }
                     }

@@ -1,4 +1,5 @@
 import 'package:venera_next/foundation/app_sync_preferences.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -7,7 +8,6 @@ import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/scroll.dart';
-import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/features/settings/app_controls.dart';
 import 'package:venera_next/features/settings/local_storage_settings.dart';
@@ -17,6 +17,7 @@ import 'package:venera_next/features/settings/webdav_settings.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/features/webdav_library/webdav_library.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -61,18 +62,7 @@ class _AppSettingsState extends State<AppSettings> {
           },
         ).toSliver(),
         const CacheLimitSetting().toSliver(),
-        SliderSetting(
-          title: "Auto Clear History".tl,
-          settingsIndex: "historyRetentionDays",
-          interval: 7,
-          min: 0,
-          max: 182,
-          onChanged: () {
-            final retentionDays =
-                (appdata.settings['historyRetentionDays'] as num).round();
-            HistoryManager().clearExpiredHistory(retentionDays);
-          },
-        ).toSliver(),
+        const HistoryRetentionSetting().toSliver(),
         CallbackSetting(
           title: "Export App Data".tl,
           callback: () async {
@@ -123,7 +113,7 @@ class _AppSettingsState extends State<AppSettings> {
                         await importAppData(cacheFile);
                       }
                     } finally {
-                      App.forceRebuild();
+                      appNavigation.forceRebuild();
                     }
                     return null;
                   },
@@ -163,9 +153,9 @@ class _AppSettingsState extends State<AppSettings> {
           actionTitle: 'Set'.tl,
         ).toSliver(),
         SettingPartTitle(title: "User".tl, icon: Icons.person_outline),
-        SelectSetting(
+        SelectSetting.preference(
           title: "Language".tl,
-          settingKey: "language",
+          preference: AppPreferences.language,
           optionTranslation: const {
             "system": "System",
             "zh-CN": "简体中文",
@@ -173,7 +163,7 @@ class _AppSettingsState extends State<AppSettings> {
             "en-US": "English",
           },
           onChanged: () {
-            App.forceRebuild();
+            appNavigation.forceRebuild();
           },
         ).toSliver(),
         if (!App.isLinux) const AuthorizationRequiredSetting().toSliver(),
@@ -428,7 +418,7 @@ class _WebdavSettingState extends State<_WebdavSetting> {
                       context.showMessage(message: "Saved Failed".tl);
                     } else {
                       context.showMessage(message: "Saved".tl);
-                      App.rootPop();
+                      appNavigation.rootPop();
                     }
                   },
                   child: Text("Continue".tl),

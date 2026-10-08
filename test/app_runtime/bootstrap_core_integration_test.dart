@@ -10,6 +10,7 @@ import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/js_engine.dart';
@@ -51,13 +52,18 @@ void main() {
       final cache = CacheManager.instance!;
       final librarySource = webDavLibrary.source;
       final originalCookies = SingleInstanceCookieJar.instance!;
-      expect(App.rootNavigatorKey.currentContext, isNull);
+      expect(appNavigation.rootNavigatorKey.currentContext, isNull);
       expect(dataChanges, 0);
       expect(File('${root.path}/appdata.json').existsSync(), isTrue);
       expect(File('${root.path}/cookie.db').existsSync(), isTrue);
       expect(local.path, startsWith(root.path));
       expect(ComicSource.all(), isEmpty);
       expect(engine.runCode('1 + 1'), 2);
+      expect(
+        await engine.runCode('''sendMessage({method:'compute',
+        function:'() => 6 * 7', args:[]})'''),
+        42,
+      );
       expect(librarySource.isDisposed, isFalse);
       expect(history.isInitialized, isTrue);
       await appdata.saveData(false);

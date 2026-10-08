@@ -9,10 +9,13 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/reader_preferences.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 Future<void> _flush(WidgetTester tester, Future<void> operation) async {
@@ -119,7 +122,7 @@ void main() {
       late StateSetter updateHost;
       await tester.pumpWidget(
         MaterialApp(
-          navigatorKey: App.rootNavigatorKey,
+          navigatorKey: appNavigation.rootNavigatorKey,
           builder: (_, child) => WindowFrame(child!, onExit: () => exits++),
           home: StatefulBuilder(
             builder: (context, setState) {
@@ -169,9 +172,12 @@ void main() {
     },
   );
 
-  for (final width in [360.0, 600.0]) {
+  for (final (width, typed) in [
+    for (final width in [360.0, 600.0])
+      for (final typed in [false, true]) (width, typed),
+  ]) {
     testWidgets(
-      'nullable selector rejects a late selection for a replaced field at $width',
+      'nullable selector rejects a late selection for a replaced field at $width (typed=$typed)',
       (tester) async {
         _prepare();
         tester.view.physicalSize = Size(width, 720);
@@ -187,6 +193,18 @@ void main() {
             StatefulBuilder(
               builder: (context, setState) {
                 updateHost = setState;
+                if (typed) {
+                  return SelectSetting.preference(
+                    title: 'Choose target',
+                    preference: key == 'defaultSearchTarget'
+                        ? DiscoveryPreferences.defaultSearchTarget
+                        : const StringPreference('initialPage', '0'),
+                    optionTranslation: const {
+                      '0': 'Default option',
+                      'other': 'Other option',
+                    },
+                  );
+                }
                 return SelectSetting(
                   title: 'Choose target',
                   settingKey: key,

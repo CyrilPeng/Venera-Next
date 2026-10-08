@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
@@ -11,6 +13,7 @@ import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 
@@ -61,8 +64,8 @@ void main() {
           final previousSettings = {
             for (final key in [
               'comicDisplayMode',
-              favoriteDisplayModeKey,
-              favoriteGalleryColumnsKey,
+              FavoritePreferences.displayMode.key,
+              FavoritePreferences.galleryColumns.key,
               'followUpdatesFolder',
               'quickFavorite',
               'language',
@@ -79,14 +82,20 @@ void main() {
           var manager = LocalFavoritesManager();
           final history = HistoryManager();
           appdata.settings['comicDisplayMode'] = 'brief';
-          appdata.settings[favoriteDisplayModeKey] = columns == null
-              ? favoriteDisplayList
-              : favoriteDisplayGallery;
-          appdata.settings[favoriteGalleryColumnsKey] = columns ?? 0;
+          appdata.settings[FavoritePreferences.displayMode.key] =
+              columns == null ? 'list' : 'gallery';
+          appdata.settings[FavoritePreferences.galleryColumns.key] =
+              columns ?? 0;
           configureComicWidgets(
             favoriteDisplayStateResolver: () => ComicFavoriteDisplayState(
-              isGallery: isFavoriteGalleryMode(),
-              galleryColumns: favoriteGalleryColumns(),
+              isGallery:
+                  (GlobalPreferenceStore(
+                    appdata.settings,
+                  ).read(FavoritePreferences.displayMode) ==
+                  'gallery'),
+              galleryColumns: GlobalPreferenceStore(
+                appdata.settings,
+              ).read(FavoritePreferences.galleryColumns),
             ),
           );
           addTearDown(configureComicWidgets);
@@ -146,7 +155,7 @@ void main() {
                     ? Brightness.dark
                     : Brightness.light,
               ),
-              navigatorKey: App.rootNavigatorKey,
+              navigatorKey: appNavigation.rootNavigatorKey,
               home: const Scaffold(body: FavoritesPage()),
             ),
           );
@@ -206,7 +215,7 @@ void main() {
           ];
           expect(_comicOrder(tester), expected);
 
-          App.rootNavigatorKey.currentState!.pop();
+          appNavigation.rootNavigatorKey.currentState!.pop();
           await tester.pumpAndSettle();
           await tester.pump(const Duration(milliseconds: 250));
           expect(
@@ -229,7 +238,7 @@ void main() {
                     ? Brightness.dark
                     : Brightness.light,
               ),
-              navigatorKey: App.rootNavigatorKey,
+              navigatorKey: appNavigation.rootNavigatorKey,
               home: const Scaffold(body: FavoritesPage()),
             ),
           );

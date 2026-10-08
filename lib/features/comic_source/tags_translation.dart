@@ -7,14 +7,14 @@ https://github.com/EhTagTranslation/Database/tree/master/database
 
 import 'dart:convert';
 import 'package:flutter/services.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/extensions.dart';
 
 extension TagsTranslation on String {
   static final Map<String, Map<String, String>> _data = {};
 
   static Future<void> readData() async {
-    var fileName = App.locale.countryCode == 'TW'
+    var fileName = appLocale.countryCode == 'TW'
         ? "assets/tags_tw.json"
         : "assets/tags.json";
     var data = await rootBundle.load(fileName);
@@ -60,7 +60,7 @@ extension TagsTranslation on String {
   String get translateTagsToCN => _translateTags(this);
 
   String get translateTagIfNeed {
-    var locale = App.locale;
+    var locale = appLocale;
     if (locale.languageCode == "zh") {
       return translateTagsToCN;
     } else {

@@ -20,6 +20,7 @@ import 'package:venera_next/features/reader/chapter_navigation_button.dart';
 import 'package:venera_next/features/reader/chapters.dart';
 import 'package:venera_next/features/reader/chapter_menu.dart';
 import 'package:venera_next/features/reader/eink_refresh.dart';
+import 'package:venera_next/features/reader/eink_refresh_controller.dart';
 import 'package:venera_next/features/reader/gesture_port.dart';
 import 'package:venera_next/features/reader/image_favorite_swipe.dart';
 import 'package:venera_next/features/reader/platform_effects_controller.dart';

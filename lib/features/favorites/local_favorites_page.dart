@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/components/file_save_task.dart';
 import 'favorite_models.dart';
 import 'dart:convert';
@@ -28,6 +30,8 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
+import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/navigation_admission.dart';
@@ -207,7 +211,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
         } else if (tag.contains(':') &&
             checkKeyWordMatch(k, tag.split(':')[1], true)) {
           return true;
-        } else if (App.locale.languageCode != 'en' &&
+        } else if (appLocale.languageCode != 'en' &&
             checkKeyWordMatch(k, tag.translateTagsToCN, true)) {
           return true;
         }
@@ -524,7 +528,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                         final target = widget;
                         final generation = manager.connectionGeneration;
                         showInputDialog(
-                          context: App.rootContext,
+                          context: appNavigation.rootContext,
                           title: "Rename".tl,
                           hintText: "New Name".tl,
                           onConfirm: (value) async {
@@ -610,7 +614,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                         final target = widget;
                         final generation = manager.connectionGeneration;
                         showAsyncConfirmDialog(
-                          context: App.rootContext,
+                          context: appNavigation.rootContext,
                           title: "Delete".tl,
                           content: "Delete folder '@f' ?".tlParams({
                             "f": widget.folder,
@@ -732,7 +736,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       text: "Read".tl,
                       onClick: () {
                         final c = selectedComics.keys.first as FavoriteItem;
-                        App.rootContext.to(
+                        appNavigation.rootContext.to(
                           () => ReaderWithLoading(
                             id: c.id,
                             sourceKey: c.sourceKey,
@@ -746,7 +750,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       text: "Jump to Detail".tl,
                       onClick: () {
                         final c = selectedComics.keys.first as FavoriteItem;
-                        App.mainNavigatorKey?.currentContext?.to(
+                        appNavigation.mainNavigatorKey?.currentContext?.to(
                           () => ComicPage(id: c.id, sourceKey: c.sourceKey),
                         );
                       },
@@ -847,12 +851,15 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                     context.showMessage(message: "Download started".tl);
                   },
                 ),
-                if (appdata.settings["onClickFavorite"] == "viewDetail")
+                if (GlobalPreferenceStore(
+                      appdata.settings,
+                    ).read(FavoritePreferences.onClickFavorite) ==
+                    "viewDetail")
                   MenuEntry(
                     icon: Icons.menu_book_outlined,
                     text: "Read".tl,
                     onClick: () {
-                      App.mainNavigatorKey?.currentContext?.to(
+                      appNavigation.mainNavigatorKey?.currentContext?.to(
                         () =>
                             ReaderWithLoading(id: c.id, sourceKey: c.sourceKey),
                       );
@@ -871,8 +878,11 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                   }
                   lastSelectedIndex = comics.indexOf(c);
                 });
-              } else if (appdata.settings["onClickFavorite"] == "viewDetail") {
-                App.mainNavigatorKey?.currentContext?.to(
+              } else if (GlobalPreferenceStore(
+                    appdata.settings,
+                  ).read(FavoritePreferences.onClickFavorite) ==
+                  "viewDetail") {
+                appNavigation.mainNavigatorKey?.currentContext?.to(
                   () => ComicPage(
                     id: c.id,
                     sourceKey: c.sourceKey,
@@ -882,7 +892,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                   ),
                 );
               } else {
-                App.mainNavigatorKey?.currentContext?.to(
+                appNavigation.mainNavigatorKey?.currentContext?.to(
                   () => ReaderWithLoading(id: c.id, sourceKey: c.sourceKey),
                 );
               }
@@ -964,7 +974,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
         .toList();
 
     showPopUpWidget(
-      App.rootContext,
+      appNavigation.rootContext,
       StatefulBuilder(
         builder: (context, setState) {
           return PopUpWidgetScaffold(
@@ -1282,7 +1292,11 @@ class _ReorderComicsPageState extends State<_ReorderComicsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final gallery = isFavoriteGalleryMode();
+    final gallery =
+        (GlobalPreferenceStore(
+          appdata.settings,
+        ).read(FavoritePreferences.displayMode) ==
+        'gallery');
     final displayMode = gallery
         ? ComicTileDisplayMode.gallery
         : ComicTileDisplayMode.detailed;
@@ -1382,7 +1396,11 @@ class _ReorderComicsPageState extends State<_ReorderComicsPage> {
                 key: _key,
                 controller: _scrollController,
                 gridDelegate: SliverGridDelegateWithComics(
-                  galleryColumns: gallery ? favoriteGalleryColumns() : null,
+                  galleryColumns: gallery
+                      ? GlobalPreferenceStore(
+                          appdata.settings,
+                        ).read(FavoritePreferences.galleryColumns)
+                      : null,
                   forceDetailed: !gallery,
                 ),
                 children: children,

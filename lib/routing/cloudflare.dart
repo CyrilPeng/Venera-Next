@@ -2,6 +2,7 @@ import 'dart:io' as io;
 
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -11,7 +12,7 @@ import 'package:venera_next/routing/webview.dart';
 import 'package:venera_next/foundation/extensions.dart';
 
 void passCloudflare(CloudflareException e, void Function() onFinished) async {
-  final rootContext = App.rootContext;
+  final rootContext = appNavigation.rootContext;
   var url = e.url;
   var uri = Uri.parse(url);
 
@@ -136,7 +137,7 @@ void passCloudflare(CloudflareException e, void Function() onFinished) async {
         }
         if (!await persistCookies(cookies)) return;
         if (!success) {
-          App.rootPop();
+          appNavigation.rootPop();
           success = true;
         }
       }

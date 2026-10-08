@@ -1,6 +1,8 @@
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_update_service.dart';
 import 'package:venera_next/foundation/startup_update_check.dart';
 import 'package:venera_next/network/app_dio.dart';
@@ -32,6 +34,8 @@ StartupUpdateCheck createStartupUpdateCheck({
   checkSources: () async {
     await sources.checkUpdates();
   },
-  applicationCheckEnabled: () => appdata.settings['checkUpdateOnStart'],
+  applicationCheckEnabled: () => GlobalPreferenceStore(
+    appdata.settings,
+  ).read(AppPreferences.checkUpdateOnStart),
   checkApplication: checkApplication,
 );

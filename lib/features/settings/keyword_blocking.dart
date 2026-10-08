@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/keyword_settings_store.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
@@ -5,18 +6,10 @@ import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/translations.dart';
 
-/// Both lists use keyword membership: retries cannot append a duplicate or
-/// remove a different row after another edit changes the list order.
-Future<void> _saveKeyword(String key, String word, bool blocked) =>
-    appdata.updateSettings((draft) {
-      final words = List<String>.from(draft[key] as List);
-      if (blocked) {
-        if (!words.contains(word)) words.add(word);
-      } else {
-        words.removeWhere((candidate) => candidate == word);
-      }
-      draft[key] = words;
-    });
+final _keywordSettings = KeywordSettingsStore(
+  readSettings: () => appdata.settings,
+  updateSettings: (change) => appdata.updateSettings(change),
+);
 
 class KeywordBlockingSettings extends StatefulWidget {
   const KeywordBlockingSettings({super.key, this.comments = false});
@@ -29,7 +22,8 @@ class KeywordBlockingSettings extends StatefulWidget {
 
 class _KeywordBlockingSettingsState
     extends SettingsSaveState<KeywordBlockingSettings> {
-  String get _key => widget.comments ? 'blockedCommentWords' : 'blockedWords';
+  BlockedKeywordList get _target =>
+      widget.comments ? BlockedKeywordList.comments : BlockedKeywordList.comics;
 
   @override
   void initState() {
@@ -43,17 +37,17 @@ class _KeywordBlockingSettingsState
 
   void _add() {
     if (!acceptsSettingsChanges) return;
-    final key = _key;
+    final target = _target;
     showDialog<void>(
       context: context,
-      builder: (_) => _AddKeywordDialog(settingKey: key),
+      builder: (_) => _AddKeywordDialog(target: target),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final key = _key;
-    final words = List<String>.from(appdata.settings[key] as List);
+    final target = _target;
+    final words = _keywordSettings.read(target);
     return protectSettings(
       PopUpWidgetScaffold(
         title:
@@ -78,9 +72,9 @@ class _KeywordBlockingSettingsState
                 tooltip: 'Delete'.tl,
                 icon: const Icon(Icons.close),
                 onPressed: () => saveSetting((
-                  key,
+                  target,
                   word,
-                ), () => _saveKeyword(key, word, false)),
+                ), () => _keywordSettings.setBlocked(target, word, false)),
               ),
             );
           },
@@ -97,8 +91,8 @@ class _KeywordBlockingSettingsState
 }
 
 class _AddKeywordDialog extends StatefulWidget {
-  const _AddKeywordDialog({required this.settingKey});
-  final String settingKey;
+  const _AddKeywordDialog({required this.target});
+  final BlockedKeywordList target;
 
   @override
   State<_AddKeywordDialog> createState() => _AddKeywordDialogState();
@@ -112,15 +106,15 @@ class _AddKeywordDialogState extends SettingsSaveState<_AddKeywordDialog> {
     if (!acceptsSettingsChanges || savingSettings || hasSettingsSaveError) {
       return;
     }
-    final key = widget.settingKey;
+    final target = widget.target;
     final word = _controller.text;
-    if ((appdata.settings[key] as List).contains(word)) {
+    if (_keywordSettings.contains(target, word)) {
       setState(() => _error = 'Keyword already exists'.tl);
       return;
     }
     await saveSetting(
-      (key, word),
-      () => _saveKeyword(key, word, true),
+      (target, word),
+      () => _keywordSettings.setBlocked(target, word, true),
       // Closing is a route operation after save ownership has finished.
       onSaved: () => WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) leaveSettings();

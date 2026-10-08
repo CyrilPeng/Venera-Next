@@ -15,6 +15,7 @@ import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/features/comic_source/comic_source_manager.dart';
 import 'package:venera_next/features/comic_source/source.dart';
@@ -49,7 +50,7 @@ class ComicSourcePage extends StatelessWidget {
     final service = updateService;
     if (!showLoading) return service.update(source);
     if (service.isUpdating(source.key)) return;
-    final loadingContext = App.rootContext;
+    final loadingContext = appNavigation.rootContext;
     LoadingDialogController? controller;
     try {
       controller = showLoadingDialog(
@@ -67,7 +68,7 @@ class ComicSourcePage extends StatelessWidget {
       if (error is SourceFailure && error.code == SourceFailureCode.cancelled) {
         return;
       }
-      final context = App.rootNavigatorKey.currentContext;
+      final context = appNavigation.rootNavigatorKey.currentContext;
       if (context != null && context.mounted) {
         context.showMessage(
           message: error is DioException
@@ -224,13 +225,13 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
 
   void delete(ComicSource source) {
     showConfirmDialog(
-      context: App.rootContext,
+      context: appNavigation.rootContext,
       title: 'Uninstall source'.tl,
       content: "Delete comic source '@n' ?".tlParams({"n": source.name}),
       btnColor: context.colorScheme.error,
       onConfirm: () async {
         await ComicSourceManager().uninstallScript(source);
-        App.forceRebuild();
+        appNavigation.forceRebuild();
       },
     );
   }

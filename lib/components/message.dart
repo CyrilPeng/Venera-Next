@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/persistence_failure.dart';
@@ -700,7 +701,7 @@ Future<int?> showSelectDialog({
   int? current = initialIndex;
 
   await showDialog(
-    context: App.rootContext,
+    context: appNavigation.rootContext,
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setState) {

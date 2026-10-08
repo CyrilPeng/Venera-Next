@@ -10,6 +10,7 @@ import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/comic_source/source_repositories.dart';
 import 'package:venera_next/features/comic_source/source_repository_page.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -68,7 +69,7 @@ void main() {
   Future<void> pumpPage(WidgetTester tester, {Widget? child}) async {
     await tester.pumpWidget(
       MaterialApp(
-        navigatorKey: App.rootNavigatorKey,
+        navigatorKey: appNavigation.rootNavigatorKey,
         builder: (_, child) =>
             SourceInstallationsScope(queue: queue, child: child!),
         home: child ?? const Scaffold(),

@@ -145,7 +145,11 @@ mixin _AppRouteTransitionMixin<T> on PageRoute<T> {
   }
 
   IOSBackGestureController _startPopGesture(PageRoute<T> route) {
-    return IOSBackGestureController(route.controller!, route.navigator!);
+    return IOSBackGestureController(
+      route.controller!,
+      route.navigator!,
+      route: route,
+    );
   }
 }
 
@@ -153,16 +157,30 @@ class IOSBackGestureController {
   final AnimationController controller;
 
   final NavigatorState navigator;
+  final Route<dynamic> route;
+  AnimationStatusListener? _statusListener;
+  bool _ended = false;
+  bool _finished = false;
+  bool _disposing = false;
 
-  IOSBackGestureController(this.controller, this.navigator) {
+  IOSBackGestureController(
+    this.controller,
+    this.navigator, {
+    required this.route,
+  }) {
     navigator.didStartUserGesture();
   }
 
   void dragEnd(double velocity, {bool cancelled = false}) {
+    if (_ended || _finished) return;
+    _ended = true;
     const Curve animationCurve = Curves.fastLinearToSlowEaseIn;
     final bool animateForward;
 
-    if (cancelled) {
+    if (!route.isCurrent) {
+      // A late pointer must not pop a route pushed after this gesture started.
+      animateForward = route.isActive;
+    } else if (cancelled) {
       animateForward = true;
     } else if (velocity.abs() >= _kMinFlingVelocity && controller.value < 0.9) {
       animateForward = velocity <= 0;
@@ -185,7 +203,7 @@ class IOSBackGestureController {
         curve: animationCurve,
       );
     } else {
-      navigator.pop();
+      if (route.isCurrent) navigator.pop();
       if (controller.isAnimating) {
         final droppedPageBackAnimationTime = lerpDouble(
           0,
@@ -201,19 +219,46 @@ class IOSBackGestureController {
     }
 
     if (controller.isAnimating) {
-      late AnimationStatusListener animationStatusCallback;
-      animationStatusCallback = (status) {
-        navigator.didStopUserGesture();
-        controller.removeStatusListener(animationStatusCallback);
-      };
-      controller.addStatusListener(animationStatusCallback);
+      _statusListener = (_) => _finish();
+      controller.addStatusListener(_statusListener!);
     } else {
-      navigator.didStopUserGesture();
+      _finish();
     }
   }
 
   void dragUpdate(double delta) {
+    if (_ended || _finished) return;
     controller.value -= delta;
+  }
+
+  void _finish() {
+    if (_finished) return;
+    _finished = true;
+    final listener = _statusListener;
+    _statusListener = null;
+    if (listener != null) controller.removeStatusListener(listener);
+    void stop() {
+      if (navigator.mounted) navigator.didStopUserGesture();
+    }
+
+    if (_disposing) {
+      // Navigator listeners can rebuild; owner disposal may run during build.
+      WidgetsBinding.instance.addPostFrameCallback((_) => stop());
+      WidgetsBinding.instance.ensureVisualUpdate();
+    } else {
+      stop();
+    }
+  }
+
+  /// Releases this gesture and its listener, never the route-owned controller.
+  void dispose() {
+    if (_finished) return;
+    _disposing = true;
+    if (!_ended && navigator.mounted && route.isActive) {
+      dragEnd(0, cancelled: true);
+    }
+    _ended = true;
+    _finish();
   }
 }
 
@@ -237,20 +282,40 @@ class IOSBackGestureDetector extends StatefulWidget {
 
 class _IOSBackGestureDetectorState extends State<IOSBackGestureDetector> {
   IOSBackGestureController? _backGestureController;
+
+  void _releaseGesture() {
+    final previous = _backGestureController;
+    _backGestureController = null;
+    previous?.dispose();
+  }
+
+  @override
+  void deactivate() {
+    _releaseGesture();
+    super.deactivate();
+  }
+
+  @override
+  void dispose() {
+    _releaseGesture();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return EdgeBackGestureDetector(
       enabled: widget.enabledCallback,
       edgeWidth: widget.gestureWidth,
-      onStart: () => _backGestureController = widget.onStartPopGesture(),
+      onStart: () {
+        _releaseGesture();
+        _backGestureController = widget.onStartPopGesture();
+      },
       onUpdate: (delta) => _backGestureController?.dragUpdate(delta),
       onEnd: (velocity) {
         _backGestureController?.dragEnd(velocity);
-        _backGestureController = null;
       },
       onCancel: () {
         _backGestureController?.dragEnd(0, cancelled: true);
-        _backGestureController = null;
       },
       child: widget.child,
     );
@@ -268,10 +333,10 @@ class SlidePageTransitionBuilder extends PageTransitionsBuilder {
   ) {
     final Animation<double> primaryAnimation = App.isIOS
         ? animation
-        : CurvedAnimation(parent: animation, curve: Curves.ease);
+        : animation.drive(CurveTween(curve: Curves.ease));
     final Animation<double> secondaryCurve = App.isIOS
         ? secondaryAnimation
-        : CurvedAnimation(parent: secondaryAnimation, curve: Curves.ease);
+        : secondaryAnimation.drive(CurveTween(curve: Curves.ease));
 
     return SlideTransition(
       position: Tween<Offset>(

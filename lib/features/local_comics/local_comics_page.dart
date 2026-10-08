@@ -11,6 +11,7 @@ import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -457,7 +458,7 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
   Future<bool> deleteComics(List<LocalComic> comics) async {
     bool isDeleted = false;
     await showDialog(
-      context: App.rootContext,
+      context: appNavigation.rootContext,
       builder: (context) {
         bool removeComicFile = true;
         bool removeFavoriteAndHistory = true;
@@ -696,8 +697,10 @@ Future<void> openComicFolder(LocalComic comic) async {
   } catch (e, s) {
     Log.error("Open Folder", "Failed to open comic folder: $e", s);
     // Show error message to user
-    if (App.rootContext.mounted) {
-      App.rootContext.showMessage(message: '${"Failed to open folder".tl}: $e');
+    if (appNavigation.rootContext.mounted) {
+      appNavigation.rootContext.showMessage(
+        message: '${"Failed to open folder".tl}: $e',
+      );
     }
   }
 }

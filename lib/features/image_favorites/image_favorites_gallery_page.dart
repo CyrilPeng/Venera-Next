@@ -8,6 +8,7 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/image_favorites/image_favorites_photo_view.dart';
 import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -119,7 +120,7 @@ class _ImageFavoritesGalleryPageState extends State<ImageFavoritesGalleryPage> {
   }
 
   void goReaderPage(ImageFavorite image) {
-    App.rootContext.to(
+    appNavigation.rootContext.to(
       () => ReaderWithLoading(
         id: image.id,
         sourceKey: image.sourceKey,

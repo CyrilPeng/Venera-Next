@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import "package:flutter/material.dart";
 import 'package:shimmer_animation/shimmer_animation.dart';
 import "package:venera_next/components/appbar.dart";
@@ -34,7 +36,11 @@ class _AggregatedSearchPageState extends State<AggregatedSearchPage> {
         .where((e) => e.searchPageData != null)
         .map((e) => e.key)
         .toList();
-    var settings = appdata.settings['searchSources'] as List;
+    var settings =
+        GlobalPreferenceStore(
+          appdata.settings,
+        ).read(DiscoveryPreferences.searchSources) ??
+        const <String>[];
     var sources = <String>[];
     for (var source in settings) {
       if (all.contains(source)) {

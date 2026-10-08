@@ -1,8 +1,9 @@
-"""Reject new feature dependencies and UI reachable from business entry points.
+"""Enforce the complete library inventory and business dependency boundary.
 
 The baseline records allowed *direct* feature edges, not individual imports.
-Existing UI cycles are reported, not mistaken for business-layer cycles.
-Business entry points are opt-in in the baseline as domains are migrated.
+Every library file has an explicit business, UI, or pending-review boundary.
+Pending files are not assumed to be UI, but business code cannot depend on them.
+UI/pending cycles are reported, while all business dependencies must be acyclic.
 """
 
 import argparse
@@ -115,20 +116,68 @@ def reachable(graph, root):
     return seen
 
 
+def classification_violations(graph, baseline):
+    """Require a complete, disjoint inventory, including disconnected files.
+
+    Business membership is stored, not recomputed from current reachability:
+    removing an entry point cannot quietly unprotect its former dependencies.
+    """
+    errors = []
+    roles = {}
+    for name in ('business_files', 'ui_files', 'pending_review_files'):
+        paths = baseline.get(name)
+        if paths is None:
+            errors.append(f'Missing file classification: {name}')
+            continue
+        if not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
+            errors.append(f'File classification must be a list of paths: {name}')
+            continue
+        seen = set()
+        for path in paths:
+            if path in seen:
+                errors.append(f'Duplicate file classification in {name}: {path}')
+                continue
+            seen.add(path)
+            roles.setdefault(path, []).append(name)
+    for path in sorted(roles.keys() - graph.keys()):
+        errors.append(f'Missing classified library file: {path}')
+    for path in sorted(graph.keys() - roles.keys()):
+        errors.append(f'Unclassified library file: {path}')
+    for path, names in sorted(roles.items()):
+        if len(names) > 1:
+            errors.append(f'Conflicting file classification: {path} ({", ".join(names)})')
+    protected = set(baseline.get('business_entrypoints', []))
+    protected.update(baseline.get('acyclic_business_files', []))
+    for path in sorted(protected):
+        if roles.get(path) != ['business_files']:
+            errors.append(f'Business protection requires business classification: {path}')
+    return errors
+
+
 def violations(graph, baseline):
     allowed = {tuple(edge) for edge in baseline["allowed_feature_edges"]}
     errors = [f"New feature dependency: {a} -> {b}"
               for a, b in sorted(feature_edges(graph) - allowed)]
     ui = set(baseline.get("ui_files", []))
-    for root in baseline.get("business_entrypoints", []):
+    pending = set(baseline.get("pending_review_files", []))
+    entrypoints = set(baseline.get("business_entrypoints", []))
+    business_files = set(baseline.get("business_files", []))
+    for root in sorted(entrypoints | business_files):
+        label = 'Business entry point' if root in entrypoints else 'Business file'
         if root not in graph:
-            errors.append(f"Missing business entry point: {root}")
+            if root in entrypoints:
+                errors.append(f"Missing business entry point: {root}")
             continue
-        for target in sorted(reachable(graph, root) & ui):
-            errors.append(f"Business entry point reaches UI: {root} -> {target}")
+        dependencies = reachable(graph, root)
+        business_files.update(dependencies)
+        for target in sorted(dependencies & ui):
+            errors.append(f"{label} reaches UI: {root} -> {target}")
+        for target in sorted(dependencies & pending):
+            errors.append(f"{label} reaches pending review: {root} -> {target}")
     acyclic = set(baseline.get("acyclic_business_files", []))
     for source in sorted(acyclic - graph.keys()):
         errors.append(f"Missing acyclic business file: {source}")
+    acyclic.update(business_files)
     for component in cycles({(source, target) for source, targets in graph.items()
                              for target in targets}):
         if acyclic.intersection(component):
@@ -163,14 +212,65 @@ def application_settings_violations(lib):
         'features/local_comics/download.dart': {'downloadThreads'},
         'features/settings/network.dart': {'proxy', 'dnsOverrides', 'enableDnsOverrides', 'sni', 'downloadThreads'},
         'features/settings/appearance.dart': {'color', 'theme_mode'},
+        'features/discovery/explore_page.dart': {'explore_pages'},
+        'features/discovery/categories_page.dart': {'categories'},
+        'features/favorites/side_bar.dart': {'favorites'},
+        'features/search/search_page.dart': {'searchSources', 'defaultSearchTarget'},
+        'features/search/aggregated_search_page.dart': {'searchSources'},
+        'features/search/search_result_page.dart': {'searchSources', 'autoAddLanguageFilter'},
+        'features/settings/explore_settings.dart': {'explore_pages', 'categories', 'favorites', 'searchSources', 'defaultSearchTarget', 'comicDisplayMode', 'comicTileScale', 'showFavoriteStatusOnTile', 'showHistoryStatusOnTile', 'showUpdateStatusOnTile', 'autoAddLanguageFilter', 'initialPage', 'comicListDisplayMode', 'reverseChapterOrder'},
+        'app_shell/main_page.dart': {'initialPage'},
+        'app_runtime/init.dart': {'showFavoriteStatusOnTile', 'showHistoryStatusOnTile', 'showUpdateStatusOnTile'},
+        'components/layout.dart': {'comicDisplayMode', 'comicTileScale'},
+        'features/comic_widgets/comic_tile.dart': {'comicDisplayMode', 'blockedWords'},
+        'features/comic_widgets/comic_list.dart': {'comicListDisplayMode', 'blockedWords'},
+        'features/favorites/favorite_models.dart': {'comicDisplayMode'},
+        'features/settings/keyword_blocking.dart': {'blockedWords', 'blockedCommentWords'},
+        'features/comic_details/comments_page.dart': {'blockedCommentWords'},
+        'features/reader/chapter_comments.dart': {'blockedCommentWords'},
+        'foundation/keyword_settings_store.dart': {'blockedWords', 'blockedCommentWords'},
+        'features/settings/debug.dart': {'ignoreBadCertificate'},
     }
+    favorite_keys = {
+        'favoritesDisplayMode', 'favoritesGalleryColumns', 'localFavoritesFirst',
+        'autoCloseFavoritePanel', 'newFavoriteAddTo', 'moveFavoriteAfterRead',
+        'quickFavorite', 'onClickFavorite', 'readLaterFolder', 'followUpdatesFolder',
+    }
+    for name in (
+        'app_runtime/init.dart', 'app_runtime/headless.dart',
+        'app_runtime/follow_updates.dart',
+        'features/favorites/favorites_display.dart',
+        'features/favorites/favorites_manager.dart',
+        'features/favorites/local_favorites_page.dart',
+        'features/favorites/favorite_actions.dart',
+        'features/settings/local_favorites.dart',
+        'features/comic_details/actions.dart', 'features/comic_details/favorite.dart',
+        'features/follow_updates/follow_updates_page.dart',
+        'features/follow_updates/follow_updates_folder_dialog.dart',
+        'features/sync/pica_import.dart',
+    ):
+        watched.setdefault(name, set()).update(favorite_keys)
+    behavior_keys = {'language', 'checkUpdateOnStart', 'historyRetentionDays'}
+    for name in (
+        'main.dart', 'foundation/app_locale.dart', 'app_runtime/application_updates.dart',
+        'features/settings/about.dart', 'features/settings/app.dart',
+        'features/settings/app_controls.dart', 'features/history/history_manager.dart',
+    ):
+        watched.setdefault(name, set()).update(behavior_keys)
+    literal_keys = favorite_keys | behavior_keys | {'blockedWords', 'blockedCommentWords'}
     errors = []
     pattern = re.compile(r'''\bappdata\.(?:settings|implicitData)\s*\[\s*['"]([^'"]+)['"]\s*\]''')
+    form_pattern = re.compile(r'''\b(?:settingKey|settingsIndex)\s*:\s*['"]([^'"]+)['"]''')
     for name, keys in watched.items():
         source = lib / name
         if not source.exists():
             continue
-        used = set(pattern.findall(uncomment(source.read_text(encoding='utf-8'))))
+        text = uncomment(source.read_text(encoding='utf-8'))
+        used = set(pattern.findall(text)) | set(form_pattern.findall(text))
+        if keys & literal_keys:
+            # Reject raw-key aliases too. Recovery may still inspect original
+            # values using the canonical Preference.key without normalizing.
+            used.update(set(re.findall(r'''['"]([^'"]+)['"]''', text)) & literal_keys)
         for key in sorted(used & keys):
             errors.append(f'Use typed application preferences: {name} ({key})')
     return errors
@@ -185,7 +285,7 @@ def startup_violations(lib):
         if not source.exists():
             continue
         text = uncomment(source.read_text(encoding='utf-8'))
-        forbidden = r'App\.rootContext|WindowFrame|BackgroundSync|configureComicWidgets|initializeAutoSync|Timer\.periodic|DataSync\(\)\.start\('
+        forbidden = r'\bappNavigation\b|\bcreatePlatformInteractiveBindings\b|WindowFrame|BackgroundSync|configureComicWidgets|initializeAutoSync|Timer\.periodic|DataSync\(\)\.start\('
         if re.search(forbidden, text):
             errors.append(f'Core/headless startup activates interactive behavior: {name}')
         if name.endswith('headless.dart') and 'init.dart' in set(directives(text)):
@@ -199,7 +299,10 @@ def main():
     args = parser.parse_args()
     graph = graph_for(ROOT / "lib")
     baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
-    errors = violations(graph, baseline)
+    errors = classification_violations(graph, baseline)
+    # Reject malformed inventories before evaluating their dependency rules.
+    if not errors:
+        errors.extend(violations(graph, baseline))
     errors.extend(reader_settings_violations(ROOT / "lib"))
     errors.extend(application_settings_violations(ROOT / "lib"))
     errors.extend(startup_violations(ROOT / "lib"))
@@ -208,6 +311,10 @@ def main():
         for component in cycles(feature_edges(graph)):
             print("  " + ", ".join(component))
         print(f"Business entry points under enforcement: {len(baseline['business_entrypoints'])}")
+        for name in ('business_files', 'ui_files', 'pending_review_files'):
+            paths = baseline.get(name)
+            count = len(paths) if isinstance(paths, list) else 'invalid'
+            print(f"{name}: {count}")
     for error in errors:
         print(error)
     if not errors:

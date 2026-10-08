@@ -14,6 +14,7 @@ import 'package:venera_next/features/favorites/local_favorites_page.dart';
 import 'package:venera_next/features/favorites/side_bar.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -109,7 +110,7 @@ Widget _local({
 );
 
 Widget _host(Widget child, {Future<void> Function()? onExit}) => MaterialApp(
-  navigatorKey: App.rootNavigatorKey,
+  navigatorKey: appNavigation.rootNavigatorKey,
   builder: onExit == null
       ? null
       : (_, child) => WindowFrame(child!, onExit: onExit),

@@ -15,7 +15,6 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/js_engine.dart';
-import 'package:venera_next/foundation/js_pool.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/opencc.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -136,10 +135,8 @@ CoreBootstrap createCoreBootstrap({
             ? [library.source.create()]
             : const [],
       );
-      final pool = JSPool();
       final engine = JsEngine();
       registerProducer('JS engine', engine.closeAndWait);
-      registerProducer('JS compute pool', pool.close);
       await engine.init();
       final sources = ComicSourceManager();
       registerProducer('comic sources', sources.closeAndWait);

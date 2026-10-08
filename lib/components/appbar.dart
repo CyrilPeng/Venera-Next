@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/rendering.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/extensions.dart';
@@ -289,7 +290,11 @@ class AppTabBar extends StatefulWidget {
 }
 
 class _AppTabBarState extends State<AppTabBar> {
-  late TabController _controller;
+  TabController? _controller;
+  Animation<double>? _animation;
+  bool _active = true;
+  bool _restoredIndex = false;
+  Object? _pendingCenter;
 
   late List<GlobalKey> keys;
 
@@ -315,45 +320,87 @@ class _AppTabBarState extends State<AppTabBar> {
 
   @override
   void dispose() {
+    _pendingCenter = null;
+    _animation?.removeListener(onTabChanged);
+    scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void deactivate() {
+    _active = false;
+    _pendingCenter = null;
+    super.deactivate();
+  }
+
+  @override
+  void activate() {
+    super.activate();
+    _active = true;
+    _scheduleCenter();
+  }
+
+  void _bindController() {
+    final next = widget.controller ?? DefaultTabController.of(context);
+    if (identical(next, _controller)) return;
+    _animation?.removeListener(onTabChanged);
+    _pendingCenter = null;
+    _controller = next;
+    _animation = next.animation;
+    previousIndex = null;
+    offsets = [];
+    _animation?.addListener(onTabChanged);
   }
 
   PageStorageBucket get bucket => PageStorage.of(context);
 
   @override
   void didChangeDependencies() {
-    _controller = widget.controller ?? DefaultTabController.of(context);
-    initPainter();
     super.didChangeDependencies();
-    var prevIndex = bucket.readState(context) as int?;
-    if (prevIndex != null &&
-        prevIndex != _controller.index &&
-        prevIndex >= 0 &&
-        prevIndex < widget.tabs.length) {
-      _controller.index = prevIndex;
+    _bindController();
+    if (!_restoredIndex) {
+      _restoredIndex = true;
+      final prevIndex = bucket.readState(context);
+      if (prevIndex is int &&
+          prevIndex != _controller!.index &&
+          prevIndex >= 0 &&
+          prevIndex < widget.tabs.length &&
+          prevIndex < _controller!.length) {
+        _controller!.index = prevIndex;
+      }
     }
-    _controller.animation!.addListener(onTabChanged);
+    initPainter();
+    _scheduleCenter();
   }
 
   @override
   void didUpdateWidget(covariant AppTabBar oldWidget) {
-    if (widget.controller != oldWidget.controller) {
-      _controller = widget.controller ?? DefaultTabController.of(context);
-      _controller.animation!.addListener(onTabChanged);
-      initPainter();
-    }
     super.didUpdateWidget(oldWidget);
+    if (keys.length > widget.tabs.length) {
+      keys.removeRange(widget.tabs.length, keys.length);
+    }
+    while (keys.length < widget.tabs.length) {
+      keys.add(GlobalKey());
+    }
+    if (widget.controller != oldWidget.controller) {
+      _bindController();
+      initPainter();
+      _scheduleCenter();
+    }
   }
 
   void initPainter() {
     var old = painter;
     painter = _IndicatorPainter(
-      controller: _controller,
+      controller: _controller!,
       color: context.colorScheme.primary,
       padding: tabPadding,
       radius: tabRadius,
     );
-    if (old != null && old.offsets != null && old.itemHeight != null) {
+    if (old != null &&
+        identical(old.controller, _controller) &&
+        old.offsets != null &&
+        old.itemHeight != null) {
       painter!.update(old.offsets!, old.itemHeight!);
     }
   }
@@ -361,14 +408,33 @@ class _AppTabBarState extends State<AppTabBar> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _controller.animation ?? _controller,
+      animation: _animation ?? _controller!,
       builder: buildTabBar,
     );
   }
 
   void _tabLayoutCallback(List<double> offsets, double itemHeight) {
+    final changed = !listEquals(this.offsets, offsets);
     painter!.update(offsets, itemHeight);
     this.offsets = offsets;
+    if (changed) _scheduleCenter();
+  }
+
+  void _scheduleCenter() {
+    if (!_active || !mounted) return;
+    final request = Object();
+    final owner = _controller;
+    _pendingCenter = request;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !_active ||
+          !identical(request, _pendingCenter) ||
+          !identical(owner, _controller)) {
+        return;
+      }
+      _pendingCenter = null;
+      updateScrollOffset(owner!.index);
+    });
   }
 
   Widget buildTabBar(BuildContext context, Widget? _) {
@@ -415,32 +481,38 @@ class _AppTabBarState extends State<AppTabBar> {
   int? previousIndex;
 
   void onTabChanged() {
-    final int i = _controller.index;
+    if (!mounted || !_active) return;
+    final int i = _controller!.index;
     if (i == previousIndex) {
       return;
     }
-    updateScrollOffset(i);
+    _scheduleCenter();
     previousIndex = i;
     bucket.writeState(context, i);
   }
 
   void updateScrollOffset(int i) {
+    if (i < 0 ||
+        i >= widget.tabs.length ||
+        i + 1 >= offsets.length ||
+        scrollController.positions.length != 1 ||
+        !scrollController.position.hasContentDimensions) {
+      return;
+    }
     // try to scroll to center the tab
-    final RenderBox tabBarBox =
-        tabBarKey.currentContext!.findRenderObject() as RenderBox;
+    final tabBarBox = tabBarKey.currentContext?.findRenderObject();
+    if (tabBarBox is! RenderBox || !tabBarBox.hasSize) return;
     final double tabLeft = offsets[i];
     final double tabRight = offsets[i + 1];
     final double tabWidth = tabRight - tabLeft;
     final double tabCenter = tabLeft + tabWidth / 2;
     final double tabBarWidth = tabBarBox.size.width;
     double scrollOffset = tabCenter - tabBarWidth / 2;
-    if (scrollOffset == scrollController.offset) {
-      return;
-    }
     scrollOffset = scrollOffset.clamp(
       0.0,
       scrollController.position.maxScrollExtent,
     );
+    if (scrollOffset == scrollController.offset) return;
     scrollController.animateTo(
       scrollOffset,
       duration: const Duration(milliseconds: 200),
@@ -449,7 +521,7 @@ class _AppTabBarState extends State<AppTabBar> {
   }
 
   void onTabClicked(int i) {
-    _controller.animateTo(i);
+    _controller!.animateTo(i);
   }
 
   Widget buildTab(int i) {
@@ -462,7 +534,7 @@ class _AppTabBarState extends State<AppTabBar> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: DefaultTextStyle(
             style: DefaultTextStyle.of(context).style.copyWith(
-              color: i == _controller.animation?.value.round()
+              color: i == _animation?.value.round()
                   ? context.colorScheme.primary
                   : context.colorScheme.onSurface,
               fontWeight: FontWeight.w500,
@@ -600,7 +672,11 @@ class _IndicatorPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return false;
+    return oldDelegate is! _IndicatorPainter ||
+        controller != oldDelegate.controller ||
+        color != oldDelegate.color ||
+        padding != oldDelegate.padding ||
+        radius != oldDelegate.radius;
   }
 }
 
@@ -617,14 +693,15 @@ class TabViewBody extends StatefulWidget {
 }
 
 class _TabViewBodyState extends State<TabViewBody> {
-  late TabController _controller;
+  TabController? _controller;
+  bool _active = true;
 
   int _currentIndex = 0;
 
   void updateIndex() {
-    if (_controller.index != _currentIndex) {
+    if (mounted && _active && _controller!.index != _currentIndex) {
       setState(() {
-        _currentIndex = _controller.index;
+        _currentIndex = _controller!.index;
       });
     }
   }
@@ -632,20 +709,49 @@ class _TabViewBodyState extends State<TabViewBody> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _controller = widget.controller ?? DefaultTabController.of(context);
-    _currentIndex = _controller.index;
-    _controller.addListener(updateIndex);
+    _bindController();
+  }
+
+  void _bindController() {
+    final next = widget.controller ?? DefaultTabController.of(context);
+    if (!identical(next, _controller)) {
+      _controller?.removeListener(updateIndex);
+      _controller = next;
+      next.addListener(updateIndex);
+    }
+    _currentIndex = next.index;
+  }
+
+  @override
+  void didUpdateWidget(covariant TabViewBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _bindController();
+  }
+
+  @override
+  void deactivate() {
+    _active = false;
+    super.deactivate();
+  }
+
+  @override
+  void activate() {
+    super.activate();
+    _active = true;
+    _currentIndex = _controller!.index;
   }
 
   @override
   void dispose() {
+    _controller?.removeListener(updateIndex);
     super.dispose();
-    _controller.removeListener(updateIndex);
   }
 
   @override
   Widget build(BuildContext context) {
-    return widget.children[_currentIndex];
+    return widget.children.isEmpty
+        ? const SizedBox.shrink()
+        : widget.children[_currentIndex];
   }
 }
 
@@ -675,6 +781,47 @@ abstract mixin class _SearchBarMixin {
   String getText();
 }
 
+/// Each field owns its editing resource; an external controller targets only
+/// its latest attached field. Retiring an older field cannot detach a newer one.
+mixin _SearchBarBinding<W extends StatefulWidget> on State<W>
+    implements _SearchBarMixin {
+  late final TextEditingController _editingController;
+  late SearchBarController _controller;
+  SearchBarController get searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = searchController;
+    _editingController = TextEditingController(text: _controller.currentText);
+    _controller._state = this;
+  }
+
+  @override
+  void didUpdateWidget(covariant W oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = searchController;
+    if (identical(next, _controller)) return;
+    if (identical(_controller._state, this)) _controller._state = null;
+    _controller = next;
+    _editingController.text = next.currentText;
+    next._state = this;
+  }
+
+  @override
+  void dispose() {
+    if (identical(_controller._state, this)) _controller._state = null;
+    _editingController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void setText(String text) => _editingController.text = text;
+
+  @override
+  String getText() => _editingController.text;
+}
+
 class SliverSearchBar extends StatefulWidget {
   const SliverSearchBar({
     super.key,
@@ -697,28 +844,9 @@ class SliverSearchBar extends StatefulWidget {
 }
 
 class _SliverSearchBarState extends State<SliverSearchBar>
-    with _SearchBarMixin {
-  late TextEditingController _editingController;
-
-  late SearchBarController _controller;
-
+    with _SearchBarBinding<SliverSearchBar> {
   @override
-  void initState() {
-    _controller = widget.controller;
-    _controller._state = this;
-    _editingController = TextEditingController(text: _controller.currentText);
-    super.initState();
-  }
-
-  @override
-  void setText(String text) {
-    _editingController.text = text;
-  }
-
-  @override
-  String getText() {
-    return _editingController.text;
-  }
+  SearchBarController get searchController => widget.controller;
 
   @override
   Widget build(BuildContext context) {
@@ -832,7 +960,10 @@ class _SliverSearchBarDelegate extends SliverPersistentHeaderDelegate {
     return oldDelegate is! _SliverSearchBarDelegate ||
         editingController != oldDelegate.editingController ||
         controller != oldDelegate.controller ||
-        topPadding != oldDelegate.topPadding;
+        topPadding != oldDelegate.topPadding ||
+        onChanged != oldDelegate.onChanged ||
+        action != oldDelegate.action ||
+        focusNode != oldDelegate.focusNode;
   }
 }
 
@@ -847,28 +978,10 @@ class AppSearchBar extends StatefulWidget {
   State<AppSearchBar> createState() => _SearchBarState();
 }
 
-class _SearchBarState extends State<AppSearchBar> with _SearchBarMixin {
-  late TextEditingController _editingController;
-
-  late SearchBarController _controller;
-
+class _SearchBarState extends State<AppSearchBar>
+    with _SearchBarBinding<AppSearchBar> {
   @override
-  void setText(String text) {
-    _editingController.text = text;
-  }
-
-  @override
-  String getText() {
-    return _editingController.text;
-  }
-
-  @override
-  void initState() {
-    _controller = widget.controller;
-    _controller._state = this;
-    _editingController = TextEditingController(text: _controller.currentText);
-    super.initState();
-  }
+  SearchBarController get searchController => widget.controller;
 
   @override
   Widget build(BuildContext context) {

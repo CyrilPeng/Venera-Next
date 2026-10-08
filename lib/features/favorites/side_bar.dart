@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/gesture.dart';
@@ -7,7 +9,7 @@ import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorite_actions.dart';
 import 'package:venera_next/features/favorites/favorites_constants.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -59,7 +61,9 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
         .where((e) => e.favoriteData != null)
         .map((e) => e.favoriteData!.key)
         .toList();
-    var settings = appdata.settings['favorites'] as List;
+    var settings = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(DiscoveryPreferences.favoritePages);
     for (var p in settings) {
       if (all.contains(p) && !networkFolders.contains(p)) {
         networkFolders.add(p);
@@ -204,7 +208,10 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
-              showPopUpWidget(App.rootContext, setFavoritesPagesWidget());
+              showPopUpWidget(
+                appNavigation.rootContext,
+                setFavoritesPagesWidget(),
+              );
             },
           ),
         ],

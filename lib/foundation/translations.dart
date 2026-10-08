@@ -2,11 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
-import 'app.dart';
+import 'app_locale.dart';
 
 extension AppTranslation on String {
   String _translate() {
-    var locale = App.locale;
+    var locale = appLocale;
     var key = "${locale.languageCode}_${locale.countryCode}";
     if (locale.languageCode == "en") {
       key = "en_US";

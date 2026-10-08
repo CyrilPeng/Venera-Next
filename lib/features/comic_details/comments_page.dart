@@ -10,22 +10,18 @@ import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/components/side_bar.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/keyword_filter.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 bool shouldBlockComment(Comment comment) {
-  var blockedWords = appdata.settings["blockedCommentWords"] as List;
-  if (blockedWords.isEmpty) return false;
-
-  var content = comment.content.toLowerCase();
-  for (var word in blockedWords) {
-    if (content.contains(word.toString().toLowerCase())) {
-      return true;
-    }
-  }
-  return false;
+  return KeywordFilter(
+    GlobalPreferenceStore(appdata.settings).read(KeywordPreferences.comments),
+  ).blocksComment(comment.content);
 }
 
 class CommentsPage extends StatefulWidget {

@@ -1,15 +1,20 @@
 import 'dart:math' as math;
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/keyword_settings_store.dart';
+import 'package:venera_next/foundation/navigation_admission.dart';
+import 'package:venera_next/components/settings_save_state.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/image.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/select.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
+import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/extensions.dart';
@@ -125,7 +130,8 @@ void _openComicPage({
   String? title,
   int? heroID,
 }) {
-  final targetContext = context ?? App.mainNavigatorKey?.currentContext;
+  final targetContext =
+      context ?? appNavigation.mainNavigatorKey?.currentContext;
   targetContext?.to(
     () => _buildComicPage(
       id: id,
@@ -249,7 +255,7 @@ class ComicTile extends StatelessWidget {
         text: 'Copy Title'.tl,
         onClick: () {
           Clipboard.setData(ClipboardData(text: comic.title));
-          App.rootContext.showMessage(message: 'Title copied'.tl);
+          appNavigation.rootContext.showMessage(message: 'Title copied'.tl);
         },
       ),
       MenuEntry(
@@ -278,7 +284,9 @@ class ComicTile extends StatelessWidget {
     final type = switch (displayMode) {
       ComicTileDisplayMode.detailed => 'detailed',
       ComicTileDisplayMode.gallery => 'gallery',
-      null => appdata.settings['comicDisplayMode'],
+      null => GlobalPreferenceStore(
+        appdata.settings,
+      ).read(DiscoveryPreferences.comicDisplayMode),
     };
 
     Widget child = switch (type) {
@@ -654,69 +662,136 @@ class ComicTile extends StatelessWidget {
   }
 
   void block(BuildContext comicTileContext) {
-    showDialog(
-      context: App.rootContext,
-      builder: (context) {
-        var words = <String>[];
-        var all = <String>[];
-        all.addAll(_splitText(comic.title));
-        if (comic.subtitle != null && comic.subtitle != "") {
-          all.add(comic.subtitle!);
-        }
-        all.addAll(comic.tags ?? []);
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return ContentDialog(
-              title: 'Block'.tl,
-              content: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: math.min(400, context.height - 136),
-                ),
-                child: SingleChildScrollView(
-                  child: Wrap(
-                    runSpacing: 8,
-                    spacing: 8,
-                    children: [
-                      for (var word in all)
-                        OptionChip(
-                          text: (comic.tags?.contains(word) ?? false)
-                              ? word.translateTagIfNeed
-                              : word,
-                          isSelected: words.contains(word),
-                          onTap: () {
-                            setState(() {
-                              if (!words.contains(word)) {
-                                words.add(word);
-                              } else {
-                                words.remove(word);
-                              }
-                            });
-                          },
-                        ),
-                    ],
-                  ),
-                ).paddingHorizontal(16),
-              ),
-              actions: [
-                Button.filled(
-                  onPressed: () {
-                    context.pop();
-                    for (var word in words) {
-                      appdata.settings['blockedWords'].add(word);
-                    }
-                    appdata.saveData();
-                    context.showMessage(message: 'Blocked'.tl);
-                    onBlocked?.call();
-                  },
-                  child: Text('Block'.tl),
-                ),
-              ],
-            );
-          },
+    if (!NavigationAdmission.allows(comicTileContext)) return;
+    final owner = comicTileContext.widget;
+    final route = ModalRoute.of(comicTileContext);
+    bool ownerCurrent() =>
+        comicTileContext.mounted &&
+        identical(comicTileContext.widget, owner) &&
+        (route == null || route.isActive) &&
+        NavigationAdmission.allows(comicTileContext);
+    final tags = List<String>.of(comic.tags ?? const []);
+    final words = [
+      ..._splitText(comic.title),
+      if (comic.subtitle != null && comic.subtitle != '') comic.subtitle!,
+      ...tags,
+    ];
+    final work = comicTileContext
+        .getInheritedWidgetOfExactType<SettingsSaveScope>()
+        ?.work;
+    showDialog<void>(
+      context: comicTileContext,
+      builder: (_) {
+        final dialog = _BlockComicDialog(
+          words: words,
+          tags: tags,
+          ownerCurrent: ownerCurrent,
+          onBlocked: onBlocked,
         );
+        return work == null
+            ? dialog
+            : SettingsSaveScope(work: work, child: dialog);
       },
     );
   }
+}
+
+class _BlockComicDialog extends StatefulWidget {
+  const _BlockComicDialog({
+    required this.words,
+    required this.tags,
+    required this.ownerCurrent,
+    this.onBlocked,
+  });
+  final List<String> words, tags;
+  final bool Function() ownerCurrent;
+  final VoidCallback? onBlocked;
+  @override
+  State<_BlockComicDialog> createState() => _BlockComicDialogState();
+}
+
+class _BlockComicDialogState extends SettingsSaveState<_BlockComicDialog> {
+  final _words = <String>[];
+  final _settings = KeywordSettingsStore(
+    readSettings: () => appdata.settings,
+    updateSettings: (change) => appdata.updateSettings(change),
+  );
+
+  void _block() {
+    if (!acceptsSettingsChanges ||
+        savingSettings ||
+        hasSettingsSaveError ||
+        !widget.ownerCurrent()) {
+      return;
+    }
+    final words = List<String>.unmodifiable(_words);
+    final callback = widget.onBlocked;
+    saveSetting(
+      BlockedKeywordList.comics,
+      () => _settings.blockAll(BlockedKeywordList.comics, words),
+      onSaved: () {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted ||
+              !acceptsSettingsChanges ||
+              !NavigationAdmission.allows(context) ||
+              ModalRoute.of(context)?.isCurrent != true) {
+            return;
+          }
+          if (widget.ownerCurrent()) {
+            context.showMessage(message: 'Blocked'.tl);
+            callback?.call();
+          }
+          if (mounted) leaveSettings();
+        });
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => protectSettings(
+    ContentDialog(
+      title: 'Block'.tl,
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: math.max(0, math.min(400, context.height - 136)),
+        ),
+        child: SingleChildScrollView(
+          child: AbsorbPointer(
+            absorbing: savingSettings || hasSettingsSaveError,
+            child: ExcludeFocus(
+              excluding: savingSettings || hasSettingsSaveError,
+              child: Wrap(
+                runSpacing: 8,
+                spacing: 8,
+                children: [
+                  for (final word in widget.words)
+                    OptionChip(
+                      text: widget.tags.contains(word)
+                          ? word.translateTagIfNeed
+                          : word,
+                      isSelected: _words.contains(word),
+                      onTap: () {
+                        if (savingSettings || hasSettingsSaveError) return;
+                        setState(() {
+                          if (!_words.remove(word)) _words.add(word);
+                        });
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ).paddingHorizontal(16),
+      ),
+      actions: [
+        settingsSaveStatus,
+        FilledButton(
+          onPressed: savingSettings || hasSettingsSaveError ? null : _block,
+          child: Text('Block'.tl),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ComicDescription extends StatelessWidget {
@@ -749,7 +824,7 @@ class _ComicDescription extends StatelessWidget {
       }
     }
     var enableTranslate =
-        App.locale.languageCode == 'zh' && this.enableTranslate;
+        appLocale.languageCode == 'zh' && this.enableTranslate;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[

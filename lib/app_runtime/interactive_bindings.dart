@@ -1,11 +1,7 @@
 import 'dart:async';
-import 'package:venera_next/app_runtime/windows_heartbeat.dart';
-import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/event_subscription.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/window_placement_tracker.dart';
-import 'package:venera_next/routing/app_links.dart';
-import 'package:venera_next/routing/handle_text_share.dart';
 
 /// Platform listeners and heartbeat belong to the mounted interactive app.
 class InteractiveBindings {
@@ -19,19 +15,6 @@ class InteractiveBindings {
     this.placement,
     this.onError = _logError,
   });
-
-  factory InteractiveBindings.platform({WindowPlacementTracker? placement}) {
-    final heartbeat = WindowsHeartbeat();
-    return InteractiveBindings(
-      android: App.isAndroid,
-      windows: App.isWindows,
-      links: createAppLinkSubscription,
-      shares: createTextShareSubscription,
-      heartbeat: heartbeat.send,
-      closeHeartbeat: heartbeat.close,
-      placement: placement,
-    );
-  }
 
   final bool android;
   final bool windows;

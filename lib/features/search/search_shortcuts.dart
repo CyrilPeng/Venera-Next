@@ -3,117 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/routing/page_jump_target.dart';
 
-enum SearchShortcutKind { author, tag }
-
-class SearchShortcut {
-  const SearchShortcut({
-    required this.kind,
-    required this.sourceKey,
-    required this.namespace,
-    required this.value,
-  });
-
-  final SearchShortcutKind kind;
-  final String sourceKey;
-  final String namespace;
-  final String value;
-
-  bool get isAuthor => kind == SearchShortcutKind.author;
-
-  String get identity =>
-      '$sourceKey\u0000${kind.name}\u0000$namespace\u0000$value';
-
-  Map<String, dynamic> toJson() {
-    return {
-      'kind': kind.name,
-      'sourceKey': sourceKey,
-      'namespace': namespace,
-      'value': value,
-    };
-  }
-
-  static SearchShortcut? fromJson(dynamic value) {
-    if (value is! Map) return null;
-    final kindValue = value['kind'];
-    final sourceKey = value['sourceKey'];
-    final namespace = value['namespace'];
-    final shortcutValue = value['value'];
-    if (kindValue is! String ||
-        sourceKey is! String ||
-        namespace is! String ||
-        shortcutValue is! String ||
-        sourceKey.trim().isEmpty ||
-        namespace.trim().isEmpty ||
-        shortcutValue.trim().isEmpty) {
-      return null;
-    }
-
-    final kind = switch (kindValue) {
-      'author' => SearchShortcutKind.author,
-      'tag' => SearchShortcutKind.tag,
-      _ => null,
-    };
-    if (kind == null) return null;
-    return SearchShortcut(
-      kind: kind,
-      sourceKey: sourceKey.trim(),
-      namespace: namespace.trim(),
-      value: shortcutValue.trim(),
-    );
-  }
-}
-
-class SearchShortcutManager extends ChangeNotifier {
-  SearchShortcutManager._() {
-    appdata.settings.addListener(_onSettingsChanged);
-  }
-
-  static final instance = SearchShortcutManager._();
-
-  List<SearchShortcut> get all => _read(appdata.settings);
-
-  List<SearchShortcut> _read(Settings settings) {
-    final raw = settings['searchShortcuts'];
-    if (raw is! List) return const [];
-    return raw
-        .map(SearchShortcut.fromJson)
-        .whereType<SearchShortcut>()
-        .toList(growable: false);
-  }
-
-  bool contains(SearchShortcut shortcut) {
-    return all.any((item) => item.identity == shortcut.identity);
-  }
-
-  Future<void> add(SearchShortcut shortcut) => appdata.updateSettings((
-    settings,
-  ) {
-    final items = _read(settings).toList();
-    if (items.any((item) => item.identity == shortcut.identity)) return;
-    items.add(shortcut);
-    settings['searchShortcuts'] = items.map((item) => item.toJson()).toList();
-  });
-
-  Future<void> remove(SearchShortcut shortcut) =>
-      appdata.updateSettings((settings) {
-        final items = _read(settings)
-            .where((item) => item.identity != shortcut.identity)
-            .map((item) => item.toJson())
-            .toList();
-        settings['searchShortcuts'] = items;
-      });
-
-  void _onSettingsChanged() {
-    notifyListeners();
-  }
-}
+import 'search_shortcut.dart';
+import 'search_shortcut_manager.dart';
 
 PageJumpTarget? resolveSearchShortcut(SearchShortcut shortcut) {
   return ComicSource.find(

@@ -44,6 +44,69 @@ void main() {
   });
 
   test(
+    'invalid insertion falls back to append and invalid movement preserves ordinary timestamps',
+    () async {
+      await manager.createFolder('order');
+      appdata.settings['newFavoriteAddTo'] = 'unknown';
+      appdata.settings['moveFavoriteAfterRead'] = 'unknown';
+      appdata.settings['followUpdatesFolder'] = null;
+      await manager.addComic('order', _comic('first'));
+      await manager.addComic('order', _comic('second'));
+      expect(manager.getFolderComics('order').map((e) => e.id), [
+        'first',
+        'second',
+      ]);
+      final db = sqlite3.open('${root.path}/local_favorite.db');
+      try {
+        db.execute('UPDATE "order" SET time = ?;', ['2000-01-01 00:00:00']);
+        await manager.onRead('first', ComicType.local);
+        expect(
+          db.select('SELECT time FROM "order" WHERE id = ?;', [
+            'first',
+          ]).single['time'],
+          '2000-01-01 00:00:00',
+        );
+        expect(appdata.settings['moveFavoriteAfterRead'], 'unknown');
+        expect(appdata.settings['newFavoriteAddTo'], 'unknown');
+      } finally {
+        db.dispose();
+      }
+    },
+  );
+
+  test(
+    'initialization still detects and persists malformed raw folder repairs',
+    () async {
+      await manager.closeAndWait();
+      appdata.settings['followUpdatesFolder'] = {'invalid': true};
+      appdata.settings['quickFavorite'] = 12;
+      await manager.init();
+      final saved = jsonDecode(
+        File('${root.path}/appdata.json').readAsStringSync(),
+      )['settings'];
+      expect(saved['followUpdatesFolder'], isNull);
+      expect(saved['quickFavorite'], isNull);
+    },
+  );
+
+  test(
+    'folder rename updates exact raw matches and preserves unrelated malformed values',
+    () async {
+      await manager.createFolder('old');
+      appdata.settings['quickFavorite'] = 'old';
+      appdata.settings['readLaterFolder'] = ' old ';
+      appdata.settings['followUpdatesFolder'] = {'invalid': true};
+      await manager.rename('old', 'new');
+      final saved = jsonDecode(
+        File('${root.path}/appdata.json').readAsStringSync(),
+      )['settings'];
+      expect(saved['quickFavorite'], 'new');
+      expect(saved['readLaterFolder'], ' old ');
+      expect(saved['followUpdatesFolder'], {'invalid': true});
+    },
+  );
+
+  test(
     'initialization rechecks a same-name table replacement while queued',
     () async {
       await manager.closeAndWait();

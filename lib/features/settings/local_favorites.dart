@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/features/settings/settings_task_presenter.dart';
@@ -24,31 +25,31 @@ class _LocalFavoritesSettingsState extends State<LocalFavoritesSettings> {
     return SmoothCustomScrollView(
       slivers: [
         SliverAppbar(title: Text("Local Favorites".tl)),
-        SwitchSetting(
+        SwitchSetting.preference(
           title: "Show local favorites before network favorites".tl,
-          settingKey: "localFavoritesFirst",
+          preference: FavoritePreferences.localFavoritesFirst,
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.preference(
           title: "Auto close favorite panel after operation".tl,
-          settingKey: "autoCloseFavoritePanel",
+          preference: FavoritePreferences.autoCloseFavoritePanel,
         ).toSliver(),
-        SelectSetting(
+        SelectSetting.preference(
           title: "Add new favorite to".tl,
-          settingKey: "newFavoriteAddTo",
+          preference: FavoritePreferences.newFavoriteAddTo,
           optionTranslation: {"start": "Start".tl, "end": "End".tl},
         ).toSliver(),
-        SelectSetting(
+        SelectSetting.preference(
           title: "Move favorite after reading".tl,
-          settingKey: "moveFavoriteAfterRead",
+          preference: FavoritePreferences.moveFavoriteAfterRead,
           optionTranslation: {
             "none": "None".tl,
             "end": "End".tl,
             "start": "Start".tl,
           },
         ).toSliver(),
-        SelectSetting(
+        SelectSetting.preference(
           title: "Quick Favorite".tl,
-          settingKey: "quickFavorite",
+          preference: FavoritePreferences.quickFavorite,
           help:
               "Long press on the favorite button to quickly add to this folder"
                   .tl,
@@ -78,9 +79,9 @@ class _LocalFavoritesSettingsState extends State<LocalFavoritesSettings> {
           },
           actionTitle: 'Delete'.tl,
         ).toSliver(),
-        SelectSetting(
+        SelectSetting.preference(
           title: "Click favorite".tl,
-          settingKey: "onClickFavorite",
+          preference: FavoritePreferences.onClickFavorite,
           optionTranslation: {
             "viewDetail": "View Detail".tl,
             "read": "Read".tl,

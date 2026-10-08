@@ -377,6 +377,7 @@ class _ImageFavoritesPageState extends State<ImageFavoritesPage> {
           initTimeFilterSelect: timeFilterSelect,
           initNumFilterSelect: numFilterSelect,
           updateConfig: (sortType, timeFilter, numFilter) {
+            if (!mounted) return;
             setState(() {
               this.sortType = sortType;
               timeFilterSelect = timeFilter;
@@ -414,6 +415,24 @@ class _ImageFavoritesDialogState extends State<_ImageFavoritesDialog> {
   late TimeRangeType timeRangeType;
   DateTime? start;
   DateTime? end;
+  TimeRange? _unchangedRollingRange;
+
+  TimeRange? get _selectedTimeRange {
+    if (timeRangeType == TimeRangeType.custom) {
+      if (_unchangedRollingRange != null) return _unchangedRollingRange;
+      final first = start, last = end;
+      if (first == null || last == null || first.isAfter(last)) return null;
+      return TimeRange(end: last, duration: last.difference(first));
+    }
+    return switch (timeRangeType) {
+      TimeRangeType.all => TimeRange.all,
+      TimeRangeType.lastWeek => TimeRange.lastWeek,
+      TimeRangeType.lastMonth => TimeRange.lastMonth,
+      TimeRangeType.lastHalfYear => TimeRange.lastHalfYear,
+      TimeRangeType.lastYear => TimeRange.lastYear,
+      TimeRangeType.custom => null,
+    };
+  }
 
   @override
   void initState() {
@@ -427,13 +446,17 @@ class _ImageFavoritesDialogState extends State<_ImageFavoritesDialog> {
       _ => TimeRangeType.custom,
     };
     if (timeRangeType == TimeRangeType.custom) {
-      end = widget.initTimeFilterSelect.end;
+      final initial = widget.initTimeFilterSelect;
+      // Non-preset rolling ranges remain rolling until a date is edited.
+      if (initial.end == null) _unchangedRollingRange = initial;
+      end = initial.end ?? DateTime.now();
       start = end!.subtract(widget.initTimeFilterSelect.duration);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final selectedRange = _selectedTimeRange;
     Widget tabBar = Material(
       borderRadius: BorderRadius.circular(8),
       child: AppTabBar(
@@ -492,14 +515,22 @@ class _ImageFavoritesDialogState extends State<_ImageFavoritesDialog> {
                             title: Text("Start Time".tl),
                             trailing: TextButton(
                               onPressed: () async {
+                                final last = end ?? DateTime.now();
+                                final initial = start ?? last;
+                                final minimum = DateTime(2000);
                                 final date = await showDatePicker(
                                   context: context,
-                                  initialDate: start ?? DateTime.now(),
-                                  firstDate: DateTime(2000),
-                                  lastDate: end ?? DateTime.now(),
+                                  initialDate: initial,
+                                  firstDate: initial.isBefore(minimum)
+                                      ? initial
+                                      : minimum,
+                                  lastDate: last,
                                 );
-                                if (date != null) {
+                                if (date != null &&
+                                    mounted &&
+                                    timeRangeType == TimeRangeType.custom) {
                                   setState(() {
+                                    _unchangedRollingRange = null;
                                     start = date;
                                   });
                                 }
@@ -515,14 +546,24 @@ class _ImageFavoritesDialogState extends State<_ImageFavoritesDialog> {
                             title: Text("End Time".tl),
                             trailing: TextButton(
                               onPressed: () async {
+                                final initial = end ?? start ?? DateTime.now();
+                                final minimum = start ?? DateTime(2000);
+                                final today = DateTime.now();
                                 final date = await showDatePicker(
                                   context: context,
-                                  initialDate: end ?? DateTime.now(),
-                                  firstDate: start ?? DateTime(2000),
-                                  lastDate: DateTime.now(),
+                                  initialDate: initial,
+                                  firstDate: initial.isBefore(minimum)
+                                      ? initial
+                                      : minimum,
+                                  lastDate: initial.isAfter(today)
+                                      ? initial
+                                      : today,
                                 );
-                                if (date != null) {
+                                if (date != null &&
+                                    mounted &&
+                                    timeRangeType == TimeRangeType.custom) {
                                   setState(() {
+                                    _unchangedRollingRange = null;
                                     end = date;
                                   });
                                 }
@@ -558,33 +599,21 @@ class _ImageFavoritesDialogState extends State<_ImageFavoritesDialog> {
       ),
       actions: [
         FilledButton(
-          onPressed: () {
-            appdata.implicitData["image_favorites_sort"] = sortType.value;
-            TimeRange timeRange;
-            if (timeRangeType == TimeRangeType.custom) {
-              timeRange = TimeRange(
-                end: end,
-                duration: end!.difference(start!),
-              );
-            } else {
-              timeRange = switch (timeRangeType) {
-                TimeRangeType.all => TimeRange.all,
-                TimeRangeType.lastWeek => TimeRange.lastWeek,
-                TimeRangeType.lastMonth => TimeRange.lastMonth,
-                TimeRangeType.lastHalfYear => TimeRange.lastHalfYear,
-                TimeRangeType.lastYear => TimeRange.lastYear,
-                _ => TimeRange.all,
-              };
-            }
-            appdata.implicitData["image_favorites_time_filter"] = timeRange
-                .toString();
-            appdata.implicitData["image_favorites_number_filter"] = numFilter;
-            appdata.writeImplicitData();
-            if (mounted) {
-              Navigator.pop(context);
-              widget.updateConfig(sortType, timeRange, numFilter);
-            }
-          },
+          onPressed: selectedRange == null
+              ? null
+              : () {
+                  appdata.implicitData["image_favorites_sort"] = sortType.value;
+                  final timeRange = selectedRange;
+                  appdata.implicitData["image_favorites_time_filter"] =
+                      timeRange.toString();
+                  appdata.implicitData["image_favorites_number_filter"] =
+                      numFilter;
+                  appdata.writeImplicitData();
+                  if (mounted) {
+                    Navigator.pop(context);
+                    widget.updateConfig(sortType, timeRange, numFilter);
+                  }
+                },
           child: Text("Confirm".tl),
         ),
       ],

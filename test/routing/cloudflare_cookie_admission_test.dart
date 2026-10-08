@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -35,7 +35,7 @@ void main() {
         if (!missing) SingleInstanceCookieJar('${directory.path}/cookie.db');
         await tester.pumpWidget(
           MaterialApp(
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             home: const Scaffold(body: Text('source')),
           ),
         );

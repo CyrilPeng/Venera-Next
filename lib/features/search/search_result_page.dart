@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -5,7 +7,7 @@ import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/select.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -113,7 +115,9 @@ class _SearchResultPageState extends State<SearchResultPage> {
     return applySearchLanguageFilter(
       text,
       sourceKey: sourceKey,
-      setting: appdata.settings["autoAddLanguageFilter"] ?? 'none',
+      setting: GlobalPreferenceStore(
+        appdata.settings,
+      ).read(DiscoveryPreferences.autoAddLanguageFilter),
     );
   }
 
@@ -301,7 +305,7 @@ class _SuggestionsState extends State<_Suggestions> {
 
   Widget buildSuggestions(BuildContext context) {
     bool showMethod = MediaQuery.of(context).size.width < 600;
-    bool showTranslation = App.locale.languageCode == "zh";
+    bool showTranslation = appLocale.languageCode == "zh";
 
     Widget buildItem(Pair<String, TranslationType> value) {
       var subTitle = TagsTranslation.translationTagWithNamespace(
@@ -436,7 +440,11 @@ class _SearchSettingsDialogState extends State<_SearchSettingsDialog> {
   @override
   Widget build(BuildContext context) {
     var sources = ComicSource.all();
-    var enabled = appdata.settings['searchSources'] as List;
+    var enabled =
+        GlobalPreferenceStore(
+          appdata.settings,
+        ).read(DiscoveryPreferences.searchSources) ??
+        const <String>[];
     sources.removeWhere((e) {
       return !enabled.contains(e.key);
     });

@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/scroll.dart';
@@ -20,17 +21,14 @@ class _ExploreSettingsState extends State<ExploreSettings> {
     return SmoothCustomScrollView(
       slivers: [
         SliverAppbar(title: Text("Explore".tl)),
-        SelectSetting(
+        SelectSetting.preference(
           title: "Display mode of comic tile".tl,
-          settingKey: "comicDisplayMode",
+          preference: DiscoveryPreferences.comicDisplayMode,
           optionTranslation: {"detailed": "Detailed".tl, "brief": "Brief".tl},
         ).toSliver(),
-        SliderSetting(
+        SliderSetting.preference(
           title: "Size of comic tile".tl,
-          settingsIndex: "comicTileScale",
-          interval: 0.05,
-          min: 0.5,
-          max: 1.5,
+          preference: DiscoveryPreferences.comicTileScale,
         ).toSliver(),
         PopupWindowSetting(
           title: "Explore Pages".tl,
@@ -48,21 +46,21 @@ class _ExploreSettingsState extends State<ExploreSettings> {
           title: "Search Sources".tl,
           builder: setSearchSourcesWidget,
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.preference(
           title: "Show favorite status on comic tile".tl,
-          settingKey: "showFavoriteStatusOnTile",
+          preference: DiscoveryPreferences.showFavoriteStatusOnTile,
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.preference(
           title: "Show history on comic tile".tl,
-          settingKey: "showHistoryStatusOnTile",
+          preference: DiscoveryPreferences.showHistoryStatusOnTile,
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.preference(
           title: "Show update status on comic tile".tl,
-          settingKey: "showUpdateStatusOnTile",
+          preference: DiscoveryPreferences.showUpdateStatusOnTile,
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.preference(
           title: "Reverse default chapter order".tl,
-          settingKey: "reverseChapterOrder",
+          preference: AppPreferences.reverseChapterOrder,
         ).toSliver(),
         PopupWindowSetting(
           title: "Keyword blocking".tl,
@@ -72,9 +70,9 @@ class _ExploreSettingsState extends State<ExploreSettings> {
           title: "Comment keyword blocking".tl,
           builder: () => const KeywordBlockingSettings(comments: true),
         ).toSliver(),
-        SelectSetting(
+        SelectSetting.preference(
           title: "Default Search Target".tl,
-          settingKey: "defaultSearchTarget",
+          preference: DiscoveryPreferences.defaultSearchTarget,
           optionTranslation: {
             '_aggregated_': "Aggregated".tl,
             ...(() {
@@ -86,9 +84,9 @@ class _ExploreSettingsState extends State<ExploreSettings> {
             }()),
           },
         ).toSliver(),
-        SelectSetting(
+        SelectSetting.preference(
           title: "Auto Language Filters".tl,
-          settingKey: "autoAddLanguageFilter",
+          preference: DiscoveryPreferences.autoAddLanguageFilter,
           optionTranslation: {
             'none': "None".tl,
             'chinese': "Chinese",
@@ -96,9 +94,9 @@ class _ExploreSettingsState extends State<ExploreSettings> {
             'japanese': "Japanese",
           },
         ).toSliver(),
-        SelectSetting(
+        SelectSetting.preference(
           title: "Initial Page".tl,
-          settingKey: "initialPage",
+          preference: DiscoveryPreferences.initialPage,
           optionTranslation: {
             '0': "Home Page".tl,
             '1': "Favorites Page".tl,
@@ -106,9 +104,9 @@ class _ExploreSettingsState extends State<ExploreSettings> {
             '3': "Categories Page".tl,
           },
         ).toSliver(),
-        SelectSetting(
+        SelectSetting.preference(
           title: "Display mode of comic list".tl,
-          settingKey: "comicListDisplayMode",
+          preference: DiscoveryPreferences.comicListDisplayMode,
           optionTranslation: {
             "paging": "Paging".tl,
             "Continuous": "Continuous".tl,
@@ -128,7 +126,7 @@ Widget setExplorePagesWidget() {
   }
   return MultiPagesFilter(
     title: "Explore Pages".tl,
-    settingsIndex: "explore_pages",
+    preference: DiscoveryPreferences.explorePages,
     pages: pages,
   );
 }
@@ -142,7 +140,7 @@ Widget setCategoryPagesWidget() {
   }
   return MultiPagesFilter(
     title: "Category Pages".tl,
-    settingsIndex: "categories",
+    preference: DiscoveryPreferences.categoryPages,
     pages: pages,
   );
 }
@@ -156,7 +154,7 @@ Widget setFavoritesPagesWidget() {
   }
   return MultiPagesFilter(
     title: "Network Favorite Pages".tl,
-    settingsIndex: "favorites",
+    preference: DiscoveryPreferences.favoritePages,
     pages: pages,
   );
 }
@@ -170,7 +168,7 @@ Widget setSearchSourcesWidget() {
   }
   return MultiPagesFilter(
     title: "Search Sources".tl,
-    settingsIndex: "searchSources",
+    preference: DiscoveryPreferences.searchSources,
     pages: pages,
   );
 }

@@ -7,6 +7,7 @@ import 'package:venera_next/features/local_comics/import_export/import_comic.dar
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/features/local_comics/local_storage_guard.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/file_system.dart';
 
@@ -30,7 +31,7 @@ void main() {
         await tester.runAsync(manager.init);
         await tester.pumpWidget(
           MaterialApp(
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             home: const Scaffold(),
           ),
         );
@@ -111,7 +112,10 @@ void main() {
       final manager = LocalManager();
       await tester.runAsync(manager.init);
       await tester.pumpWidget(
-        MaterialApp(navigatorKey: App.rootNavigatorKey, home: const Scaffold()),
+        MaterialApp(
+          navigatorKey: appNavigation.rootNavigatorKey,
+          home: const Scaffold(),
+        ),
       );
       try {
         final source = Directory('${manager.path}/Recovered')..createSync();

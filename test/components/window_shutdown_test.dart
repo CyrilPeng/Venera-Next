@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/window_frame.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/routing/page_replacement.dart';
 import 'package:window_manager/window_manager.dart';
@@ -115,7 +115,7 @@ void main() {
       try {
         await tester.pumpWidget(
           MaterialApp(
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               child!,
               finalize: (_) =>
@@ -247,7 +247,7 @@ void main() {
       late BuildContext retained;
       await tester.pumpWidget(
         MaterialApp(
-          navigatorKey: App.rootNavigatorKey,
+          navigatorKey: appNavigation.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
             Shortcuts(
               shortcuts: {
@@ -261,7 +261,7 @@ void main() {
           home: const Scaffold(body: Text('Home')),
         ),
       );
-      App.rootNavigatorKey.currentState!.push(
+      appNavigation.rootNavigatorKey.currentState!.push(
         MaterialPageRoute<void>(
           builder: (context) {
             retained = context;
@@ -331,11 +331,11 @@ void main() {
       await retained.toReplacement<void>(latePage);
       expect(replaceWithRootPage(retained, (_) => latePage()), isFalse);
       retained.pop();
-      App.pop();
-      App.rootPop();
+      appNavigation.pop();
+      appNavigation.rootPop();
       await tester.pump();
       expect(built, isFalse);
-      expect(App.rootNavigatorKey.currentState!.canPop(), isTrue);
+      expect(appNavigation.rootNavigatorKey.currentState!.canPop(), isTrue);
       expect(exits, 0);
       wait.completeError(StateError('save failed'));
       await tester.pumpAndSettle();

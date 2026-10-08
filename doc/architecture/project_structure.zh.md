@@ -1,5 +1,137 @@
 # 项目结构约定
 
+## P2/P3/P4/P8：应用行为配置与历史清理归属（2026-10-08）
+
+AppPreferences集中语言、启动更新和历史保留规则。HistoryRetentionChange持有显式保存/清理/准入/目标检查回调，把一个选择的持久化与清理交给原宿主等待，重试保留首次截止时间。HistoryManager提供绑定原连接代次的装配；设置页复用HistoryRetentionSetting，拖动预览与正式提交分离。原通用字段、SQL和保存协议不变。
+
+完整分类502文件：319业务、134UI、49待审查，234业务入口；57条允许特性边保持。设置页移除history聚合UI导入后退出环，SCC从47文件缩至46。详见[应用行为配置兼容](application_behavior_compatibility.md)。
+
+## P2/P3/P8：收藏配置类型化与原值恢复（2026-10-08）
+
+FavoritePreferences集中十项收藏配置，AutoCountPreference保留图库列数的零哨兵与取整规则。实际表单复用类型化设置字段，菜单使用规范Preference写入；显示文件只保留UI、菜单代次与保存归属。原显示helper/常量已移除，所有调用直接迁移。
+
+规范.key仍允许初始化修复和清空回滚读取原值，类型化视图不替代恢复证据。数据库、通用字段服务与保存状态机未改。完整分类501文件：318业务、134UI、49待审查，233业务入口；57条允许特性边和47文件SCC不变。详见[收藏配置兼容边界](favorite_preferences_compatibility.md)。
+
+## P2/P3/P4/P8：关键词过滤与屏蔽保存归属（2026-10-08）
+
+KeywordPreferences集中漫画/评论关键词的旧key和默认值；KeywordFilter只处理显式字符串快照中的匹配规则。KeywordSettingsStore从features/settings迁到foundation，注入原读取端口与保存队列，服务两个实际UI消费者，不保留旧路径转发。批量成员编辑在准入时读当前草稿，并可安全重试。漫画卡片的私有对话框复用SettingsSaveState，保留原阅读会话并等待真正持久化。
+
+chapter_comments.dart的过滤规则迁出后归为UI。完整分类501文件：318业务、133UI、50待审查，233业务入口；57条允许特性边和47文件SCC保持。Appdata仅移除重复默认值，存储/同步/恢复主体和通用设置基础设施未改。详见[关键词兼容与保存语义](keyword_filter_compatibility.md)。
+
+## P2/P4/P8：顶栏控制器归属与组件分类（2026-10-08）
+
+components/appbar.dart保留顶栏、标签及搜索输入UI职责：标签监听绑定实际控制器/动画，自建滚动与文本资源随宿主释放，两种搜索栏复用私有字段生命周期mixin。页面恢复与替换选择区分初次挂载和后续更换，延迟居中按当前宿主/布局执行；没有新增业务入口或全局定位器。
+
+appbar、scroll、rating、chapter_navigation_button四文件归为UI。完整分类500文件：317业务、132UI、51待审查，232业务入口；57条特性边与47文件SCC不变。参见[顶栏控制器兼容与验收范围](appbar_controller_compatibility.md)。
+
+## P3/P8：发现与显示配置类型化（2026-10-08）
+
+DiscoveryPreferences新增八项发现/显示配置，StringIndexPreference保留旧字符串索引格式并限制启动页范围，ChoicePreference支持显式旧值别名。发现设置表单及MainPage、布局、漫画卡片/列表、收藏描述、搜索和运行时状态读取共用类型规则。通用保存队列与Appdata存储/恢复主体不变；已迁移字面量key受架构门禁限制。
+
+完整分类仍为500文件：317业务、128UI、55待审查，232业务入口；57条特性边及47文件SCC保持。收藏模型的全局配置依赖与其他配置/生命周期仍待收束。参见[显示配置兼容矩阵](discovery_display_compatibility.md)。
+
+## P2/P4/P8：导航手势与观察者归属（2026-10-08）
+
+foundation/edge_back_gesture.dart管理边缘输入识别，app_page_route.dart管理页面过渡和原Route的手势生命周期；IOSBackGestureController要求显式route，页面/弹窗/侧栏三个实际入口均已接入。components/navigation_bar.dart管理Pane观察者订阅、原Navigator路由快照和主视图更新回调；menu.dart仍负责菜单路由、焦点、布局和选择准入。四文件归入UI，未添加业务转发或新依赖。
+
+完整分类为500文件：317业务、128UI、55待审查，232业务入口；57条特性边和47文件SCC不变。参见[导航归属与验证范围](navigation_ownership_compatibility.md)。分类和本机Widget回归不替代导航全局适配、其他组件生命周期及原生设备验收。
+
+## P4/P7/P8：调试嵌套 Promise 的完成与引用清理（2026-10-08）
+
+DebugEvaluation的result保留顶层显示期限，completion等待返回结果图中的嵌套Promise清理。DebugEvaluator注入同步release与异步drain，集中保留多个清理异常；运行时适配绑定实际引擎并分类关闭取消。foundation/js_engine.dart的共享图遍历负责跨派生图身份去重与引用释放，JsEngine类主体未变。
+
+页面继续独立显示结果与记录后台失败。已返回图的嵌套Promise缺口已修复，未返回的脚本工作不在completion合同内，见[调试执行说明](debug_evaluation_compatibility.md)。500文件分类、232业务入口、57条边及47文件SCC保持不变；原方案整体验收继续。
+
+## P2/P3/P4/P7/P8：调试执行边界与引用释放修复（2026-10-08）
+
+features/settings/debug_evaluator.dart提供注入执行/释放依赖的顶层任务、格式化和结构化失败；debug_evaluator_runtime.dart绑定实际引擎并复用既有原生结果所有权。debug.dart保留输入、状态、显示及装配，不再内置执行/清理流程。证书开关采用已有NetworkPreferences；未增加兼容转导出。
+
+调试页归为UI，完整500文件为317业务、124UI、59待审查，232业务入口；原依赖边不放宽，47文件SCC未变。嵌套Promise尚未随顶层completion排空，见[调试执行说明](debug_evaluation_compatibility.md)，继续按原P4/P7要求处理。
+
+## P2/P3/P8：设置规则独立与页面职责分类（2026-10-08）
+
+foundation/proxy_configuration.dart持有不可变代理编辑模型和旧编解码；features/settings/keyword_settings_store.dart通过已有设置端口与注入队列执行两列表的成员增删。network.dart和keyword_blocking.dart保留表单、提示、窗口和Appdata装配；无兼容转导出。见[设置规则兼容说明](settings_rules_compatibility.md)。
+
+12个设置页面完成UI职责核实；完整498文件为315业务、123UI、60待审查，230业务入口。业务依赖不触及UI/待审查或文件环；原57条特性边不放宽。debug.dart混合JS执行仍待审查，47文件SCC、全配置和生命周期等原方案要求继续推进。
+
+## P2/P7/P8：评论解析独立与组件职责分类（2026-10-07）
+
+foundation/comment_markup.dart负责评论文本/标签/图片解析及不可变结果；components/rich_comment_content.dart保留原主题样式、TextSpan、识别器和图片控件。新业务入口无需Widget树或全局reset，仅依赖自身与字符串扩展。见[评论标记兼容说明](comment_markup_compatibility.md)。
+
+本轮核实13个UI组件，完整496文件分为313业务、111UI、72待审查，业务入口228个。原依赖边不放宽；逐文件理由和剩余生命周期见business_boundary_inventory.md，47文件SCC继续核查。
+
+## P3/P8：图片收藏时间筛选往返修复（2026-10-07）
+
+TimeRange在features/image_favorites/type.dart集中处理既有end:duration配置的完整epoch/滚动范围及非法旧值回退；图片收藏对话框在页面内处理选齐日期、保留未改滚动范围和异步存活检查。本批是独立行为修复，不新增服务层或迁移存储协议；原持久化调用仍待P4完善。
+
+新增time_range_test.dart与time_filter_widget_test.dart，兼容约束见[image_favorites_time_range_compatibility.md](image_favorites_time_range_compatibility.md)。文件分类和依赖基线不变，其余优化按原方案推进。
+
+## P3/P8：发现配置类型化与可空值兼容（2026-10-07）
+
+DiscoveryPreferences在application_preferences.dart集中五个发现/搜索字段；preferences.dart新增可空字符串及两种列表规则。全局存储使用ReaderPreferenceSettings端口，SettingFieldStore区分规则返回null与未提供规则。发现、分类、搜索及网络收藏的消费页面使用类型化读取；MultiPagesFilter直接接收preference，无旧settingsIndex转接。类型化视图不替代源事务/启动/WebDAV的原始数据协议，见[discovery_configuration_compatibility.md](discovery_configuration_compatibility.md)。
+
+文件分类仍为495文件：312业务、98UI、85待审查，227业务入口。架构脚本新增消费端字面量key与表单参数门禁。其余配置、生命周期和总体验收继续按原方案推进；本批验证见optimization_progress.zh.md。
+
+## P2/P3/P4/P8：设置字段服务与亮度规则边界（2026-10-07）
+
+通用设置和亮度表单经features/settings/setting_field.dart执行字段读写，保存队列和当前设置在UI边界装配。foundation/reader_preference_settings.dart定义七操作端口，ReaderPreferenceStore只依赖端口与规则；Settings实现该端口，原落盘/通知归属不变。typed/raw范围解析集中，旧可空值/列表仍使用明确的兼容入口。亮度纯规则位于features/reader/brightness_policy.dart，brightness.dart只含UI预览、遮罩和控件。
+
+完整清单495文件：312业务、98UI、85待审查，227业务入口。新增三项业务及三项UI的依据见[business_boundary_inventory.md](business_boundary_inventory.md)。剩余动态配置、生命周期与47文件SCC继续核查；验证以optimization_progress.zh.md本轮记录为准。
+
+## P2/P3/P5/P8：阅读入口服务、墨水屏策略与职责分类（2026-10-07）
+
+ReaderEntryLoader/ReaderProps在reader_entry_loader.dart中接收源详情、历史和本地查询；loading.dart只装配及展示。EInkRefreshController/样式/请求在eink_refresh_controller.dart，原eink_refresh.dart只保留覆盖层。local_comics_api.dart提供稳定本地漫画模型，页面和旧聚合入口不转导出本次迁出类型。
+
+完整清单现为492文件：309业务、95UI、88待审查，业务入口224个。新增47项UI及5项业务的逐文件依据见[business_boundary_inventory.md](business_boundary_inventory.md)；数据/绘制适配与含UI的聚合入口按实际职责区分。剩余88项和47文件SCC继续审查；设置字段与亮度规则仍待P3迁移。验证记录见optimization_progress.zh.md本轮条目。
+
+## P0/P2/P8：全文件边界登记与混合职责拆分（2026-10-07）
+
+业务边界现由dependency_baseline.json的完整互斥清单控制：489文件分为304业务、48UI、137待审查；业务入口219个。业务文件即使不再被入口引用也持续受控，不得依赖UI或待审查文件，不得成环。新增/删除文件必须同步登记。完整规则、分类依据与未完成范围见[business_boundary_inventory.md](business_boundary_inventory.md)。
+
+搜索模型/管理器分别位于search_shortcut.dart与search_shortcut_manager.dart；赞助模型/加载分别位于sponsor_catalog.dart与sponsors_loader.dart。原页面文件保留呈现与交互，不提供兼容转导出。137项待审查和47文件SCC继续逐项核查；保留原特性依赖约束，不把绘制/原生适配一概视为页面。验证记录见optimization_progress.zh.md本轮条目。
+
+## P2/P4/P8：环境与导航分离、交互装配边界及入口补录（2026-10-07）
+
+- 最终交付：Windows release构建成功（99.4秒），打包CHANGELOG/init.js/translation.json与源码一致；app.so SHA-256 `E5714F6180D7A9C5BCD5DBB412F4CAEDC24164B619686734B287B97A548F3E7D`。58条冻结路径与最终全量一致；Flutter3.41.6 / Dart3.11.4不替代声明SDK和五平台验收。navigation-boundary-artifact-hashes.json绑定源码、验证、产物与提交。
+
+- 基线 `12b1171`。App虽然已无项目文件环，仍把根Navigator、页面context、返回与重建回调暴露给所有环境消费者。现将这些原有交互状态完整迁入routing/app_navigation.dart，30个生产文件及18个既有测试直接导入appNavigation；App仅保留平台、路径、版本与环境初始化，不再导入Flutter widgets/material或项目导航代码。导航准入、根/内部返回优先级及回调行为按原主体迁移，无兼容转发，也未新增State查找注册表。
+- InteractiveBindings的默认平台工厂原先经链接/分享处理器引入页面路由，ApplicationHost也因此间接依赖UI。工厂迁至app_runtime/interactive_platform_bindings.dart，由main直接装配；生命周期协调类仅持有注入的订阅、心跳和窗口跟踪器。两个新交互模块纳入业务禁入清单。窗口平台适配保留原生依赖；这一改动不宣称所有服务都已去除全局依赖。
+- 逐项阅读后补录15个业务/策略/基础设施入口，受控根 **183→198**：目录替换、事件订阅、阅读配置存储、图像流读取、本地阅读位置、连续/画廊快照、图片缓存策略、Windows心跳、应用宿主、交互协调、更新装配、窗口位置、图片关闭协调与阅读预下载。分类理由逐文件记录于navigation-boundary-dependency-audit-final.json；实际全库485文件，业务可达283文件，均无登记UI和文件环。未扩大特性允许边；198根的全部可达依赖继续受成环门禁约束。将平台路由工厂接回协调类的外部图探针被门禁拒绝，包括宿主间接到达导航模块。
+- LocalComicImageProvider、CachedImageProvider、ReaderImageProvider移除仅用于引用自身泛型类型的self import，使用同一类的直接类型名。冻结审计核对去除该限定后整个提供器主体一致，并核对原导航字段/方法与平台工厂主体一致。三个自环消失，未新增/扩大SCC；剩余一个47文件的聚合/界面/导航组仍须逐文件核查，不能据此声称全项目无环或全域业务边界已验收。
+- 前半段导航/阅读退出/JS交互/同步窗口/旧图片提供器专项 **226项通过**；最终生命周期/窗口/宿主/图片关闭专项 **31项通过**。复用原行为测试，未为机械迁移添加镜像测试。最终全量 **3914项通过、2项既有跳过**，LCOV **35,423/47,907（73.94%）**；严格分析零诊断、55个Dart文件格式、Python87项含3项既有跳过、结构/架构、版本及Git依赖检查通过。首轮分析的一项旧App导入已清理；启动检查也同步为新的导航与平台工厂名称，两项新增Python回归在旧规则失败、修复后通过；全量开始后仅新增Python检查变更，55条Dart路径和基线哈希与开跑时一致；最终58条源码/测试/基线/检查路径与全量一致。
+- 原52项仍 **24 I / 27 P / 1 U**，9.1/9.2仅对已核实范围部分证明。其余202个未被业务根触达的文件包含页面、绘制/平台适配与待分类逻辑；未登记服务、跨域窄接口、App/Log等全局资源生命周期、P3全配置、P4/P5剩余生命周期与平台行为、P6恢复/所有写入者、P7/P8、完整CLI、声明SDK、五平台和固定设备性能继续待验。
+
+## P2/P8：基础层拆环与完整业务可达图门禁（2026-10-07）
+
+- 最终交付：Windows release构建成功（95.5秒），打包CHANGELOG/init.js/translation.json与源码一致；app.so SHA-256 `0B169F0E0AB2AD1986CF3FF050D7152B533467177DEA9CDFA837520E0EB2B24E`。19条冻结路径与最终全量一致；Flutter3.41.6 / Dart3.11.4不替代声明SDK和五平台验收。foundation-locale-artifact-hashes.json绑定源码、验证、产物与提交。
+
+- 基线 `bf71927`。语言解析与实时设置读取迁至foundation/app_locale.dart；13个生产消费者及既有语言测试直接导入，不在App保留转导出或注册回调。删除无调用的App.data别名，App不再依赖Appdata。语言解析函数体与基线逐字相同；每次读取当前设置与系统语言，保持中英选择、脚本优先于地区、未知设置回退与切换后即时生效，翻译/标签/JS语言返回规则不改。
+- **App/AppData/Log三文件环已消除**；App、app_locale、Appdata、Log新增四个业务入口和无环限制，入口 **179→183**。分别可达2/19/18/9个项目文件，无登记UI；没有新增/扩大SCC。所有183个受控业务入口的完整可达图现在没有文件环。特性允许边和UI登记未放宽；未登记业务与非业务UI图仍需逐项分类，不能把这一范围扩大为全项目无环。
+- 架构检查从指定文件成环扩展到**所有已登记业务入口的可达依赖成环**，下游新环即使没有经过入口或指定文件也会失败；保留显式文件缺失检查，多个入口共享的环只报一次。两项新增回归在旧门禁均失败，覆盖共享下游环、条件导出的自环及不相关UI环仍可保留；最终Python **85项，3项既有跳过**。此门禁使用完整import/export/part及条件分支图，不新增例外开关。
+- 50项语言/翻译/设置/JS归属/真实core专项通过；复用既有23项语言测试，没有为纯迁移增加镜像式Dart测试。最终全量 **3914项通过、2项既有跳过**，LCOV **35,422/47,900（73.95%）**。严格分析零诊断、16个Dart文件格式、结构/架构、版本与Git依赖检查通过。源码、测试、基线及两个Python检查文件共19路径冻结；依赖图和原解析函数一致性证据见foundation-locale-dependency-audit.json及冻结脚本。
+- 原52项保持 **24 I / 27 P / 1 U**，9.2更新为受控范围内部分证明；未登记服务/关键业务入口分类、跨域窄接口及完整P2退出条件仍待完成。Log的惰性IOSink尚无明确关闭/flush所有者，结构拆环不代表日志生命周期修复。P3全配置、P4完整生命周期、P5平台行为、P6恢复/所有写入者、P7/P8、完整CLI、声明SDK、五平台及固定设备性能继续待验。
+
+## P2/P4/P7：JS计算池归属、关闭等待与依赖拆环（2026-10-07）
+
+- 最终交付：Windows release构建成功（95.0秒），打包CHANGELOG/init.js/translation.json与源码一致；app.so SHA-256 `C2B9E64002A3B21CA02918B36701372A290577A034931522C2C89E5108AA9693`。七条冻结路径与最终全量一致；Flutter3.41.6 / Dart3.11.4不替代声明SDK和五平台验收。js-compute-owner-artifact-hashes.json绑定源码、验证、产物与提交。
+
+- 基线 `fba3bf8`。修复前真实Windows QuickJS探针两项失败：独立引擎的compute丢失自定义初始化脚本，closeAndWait早于已接纳的计算结束。每个JsEngine现按需持有自己的JSPool；初始化时复制实际脚本，计算和嵌套计算使用同一初始化镜像，关闭一个引擎不影响另一个。未使用compute时不创建池。
+- 删除全局JSPool及隐式默认工厂；池仅调度worker与端口，runtime bootstrap移到js_engine.dart，通过显式工厂/入口注入。worker发送停止确认前await engine.closeAndWait，覆盖其嵌套计算池与原生/HTTP释放；核心只登记原JS engine，由它关闭自己的池。**js_engine.dart ↔ js_pool.dart环已消除**；业务入口 **177→179**，新增两个无环限制。两个新根可达31/19个项目文件、均无登记UI；无新增/扩大SCC，允许特性边与UI登记不变。受控业务可达环只剩App/AppData/Log三文件，不等于全项目无环。
+- 关闭先拒绝JS结果交付，再等待原计算、池初始化与worker清理。部分启动失败清理完成后可重试；关闭失败保留原池、原始错误与稳定关闭Future，并等待其他worker。复核另复现初始化抛错叠加同步HTTP关闭失败时提前返回；新增失败回归后修复为等待计算池，保留初始化原因和两类释放错误。初始化脚本是每个worker都会执行的镜像，构造器已明确此契约；无条件在镜像顶层再调compute会递归初始化更多worker，生产assets/init.js仅定义compute API。脚本缓存测试入口未在本批删除，完整错误分类及reset生命周期仍待审查。
+- 新增 **11项回归**；补强前44项扩展回归、补强后25项归属/生命周期/core回归通过。最终全量 **3914项通过、2项既有跳过**，LCOV **35,422/47,900（73.95%）**；严格分析零诊断、六个Dart文件格式、Python83项含3项既有跳过、结构/架构、版本与Git依赖检查通过。原生脚本隔离、嵌套compute和真实core关闭有Windows QuickJS测试；受控worker故障与延迟不替代全平台HTTP/进程退出证明。
+- 首次分析的一项括号lint已修复；初次全量在格式检查提示换行差异后核对进程并主动终止，不计作通过。旧冻结与日志保留，最终源码/测试/基线七路径以js-compute-owner-frozen-sources-v3.json及full-v3日志为准。原52项仍 **24 I / 27 P / 1 U**，46.2%仅为实现证据占比；基础三文件环、P3全配置、P4完整生命周期、P5平台行为、P6恢复/所有写入者、P7/P8、完整CLI、声明SDK、五平台及固定设备性能继续待验。
+
+## P2/P4/P7：缓存校验请求归属与网络依赖拆环（2026-10-07）
+
+- 最终交付：Windows release构建成功（95.5秒）；打包CHANGELOG/init.js/translation.json与源码一致，app.so SHA-256 `97A5216EDD12071272871D33FC3A6BE5ADB7174F80EE8842B3AC24FC11FB1FC0`。六条冻结路径与最终全量一致；Flutter3.41.6 / Dart3.11.4不替代声明SDK或五平台验收。cache-owner-artifact-hashes.json绑定源码、测试、依赖图、产物与提交。
+
+- 基线 `d6a156e`。修复前两项回归明确失败：缓存HEAD未经过原客户端适配器；Authorization变化后仍复用上一凭据缓存。NetworkCacheManager现在只保留共享缓存数据，每个AppDio装配自己的NetworkCacheInterceptor；HEAD复用原客户端、完整拦截器链、当前适配器和取消令牌，不再创建额外AppDio。请求头在Cookie等拦截器之前保存，校验重放时不重复追加Cookie，HEAD响应的Cookie更新仍经过原链处理。
+- JSON响应判断移入network/json_response.dart，消费者直接导入，没有在app_dio保留转导出。文件环 **app_dio.dart ↔ cache.dart已消除**；新增三个业务入口及三个无环限制，受控入口 **174→177**。AppDio/cache/JSON入口分别可达28/2/1个项目文件，无登记UI、无新增或扩大SCC；允许特性边和UI登记未放宽。基础/JS环仍在，不能据此声称全项目无业务环。
+- HEAD校验显式消费字节响应，不把校验进度交给GET回调；失败保留原始异常/堆栈并完成原GET，405/501只回退一次GET。取消后不会回退或返回缓存；原客户端关闭与OwnedDioClient排空可等待同一适配器上的HEAD、迟到响应与清理失败。缓存被清除或替换后不返回旧校验结果；旧失败不能删除新缓存。请求头按大小写无关名称比较，Authorization/token参与身份匹配，响应表示类型也参与匹配。
+- 最终复核的独立探针另复现GET请求体被URL缓存忽略：在v1源码返回无关缓存结果。现普通请求体和单订阅流均绕过缓存读取及插入，仅由实际GET发送；不会为其派发HEAD或污染无请求体缓存。首轮全量在核对启动进程后主动终止，最后进度+2294，不计作通过；日志和v1冻结/审计保留。最终证据使用cache-owner-frozen-sources-v2.json，未覆盖旧证据。
+- 净增 **20项回归**；最终全量 **3903项通过、2项既有跳过**，LCOV **35,395/47,883（73.92%）**。补强前198项网络/收藏回归通过；最终20项及独立请求体探针21项通过，包含三个真实Windows RHttp/回环HTTP场景：匹配、变化后GET、HEAD中关闭原客户端。原适配器收到正确方法序列并完成waitForIdle；迟到响应的关闭/取消双重错误由所有者保留。真实测试VM不替代完整应用或五平台验证。严格分析零诊断、五个Dart文件格式、Python83项含3项既有跳过、结构/架构、版本及Git依赖检查通过。
+- 原52项仍 **24 I / 27 P / 1 U**，46.2%仅为实现证据占比。共享缓存的全生命周期、完整HTTP缓存协议/失效矩阵、正在进行的GET在clear后再次填充缓存，以及基础/JS环、P3配置、P4完整关闭、P5平台行为、P6恢复/所有写入者、P7/P8、完整CLI、声明SDK、五平台和固定设备性能继续待验；本批不改持久布局和依赖版本。
+
 ## P6/P7：迁移结果不确定时的实例隔离与恢复入口（2026-10-07）
 
 - 最终交付：Windows release构建成功（94.9秒）；打包CHANGELOG/init.js/translation.json与源码一致，app.so SHA-256 `5A38AED3362A9AF16067FE4B17E0D6A9F8952C3376B8C7E21D7131850362D9B7`。12条冻结路径与最终全量/12点进程中断一致；Flutter3.41.6 / Dart3.11.4不替代声明SDK及五平台验收。library-authority-artifact-hashes.json绑定源码、日志、截图、产物与提交。

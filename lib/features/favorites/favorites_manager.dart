@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'network_favorite_import.dart';
 import 'favorite_folder_import.dart';
 import 'favorite_updates_service.dart';
@@ -138,7 +140,10 @@ class LocalFavoritesManager with ChangeNotifier {
       final comic = commit(
         _dbPath,
         _translateTags(capturedTags),
-        appdata.settings['newFavoriteAddTo'] == 'end',
+        GlobalPreferenceStore(
+              appdata.settings,
+            ).read(FavoritePreferences.newFavoriteAddTo) ==
+            'end',
       );
       // Read the committed count; do not increment a possibly stale cache after
       // a transaction that also changed another database.
@@ -361,7 +366,7 @@ class LocalFavoritesManager with ChangeNotifier {
         if (folder != null && !existsFolder(folder)) {
           throw StateError('Favorite folder no longer exists');
         }
-        draft['followUpdatesFolder'] = folder;
+        draft[FavoritePreferences.followUpdatesFolder.key] = folder;
       }),
       () => true,
       commitState: PersistenceCommitState.unknown,
@@ -379,9 +384,9 @@ class LocalFavoritesManager with ChangeNotifier {
     await _finishFolderMutation(
       () => appdata.updateSettings((draft) {
         _checkSourceGeneration(generation);
-        if (draft['followUpdatesFolder'] == expected &&
+        if (draft[FavoritePreferences.followUpdatesFolder.key] == expected &&
             !existsFolder(expected)) {
-          draft['followUpdatesFolder'] = null;
+          draft[FavoritePreferences.followUpdatesFolder.key] = null;
           changed = true;
         }
       }),
@@ -443,7 +448,9 @@ class LocalFavoritesManager with ChangeNotifier {
 
   late final _updates = FavoriteUpdatesService(
     repository: () => _repository,
-    folder: () => appdata.settings['followUpdatesFolder'],
+    folder: () => GlobalPreferenceStore(
+      appdata.settings,
+    ).read(FavoritePreferences.followUpdatesFolder),
   );
 
   Future<void>? _hashedIdsRefresh;
@@ -567,7 +574,9 @@ class LocalFavoritesManager with ChangeNotifier {
         }
       }
 
-      prepareTracking(appdata.settings['followUpdatesFolder']);
+      prepareTracking(
+        appdata.settings[FavoritePreferences.followUpdatesFolder.key],
+      );
       if (!databaseExisted) prepareTracking(trackingFolderName);
       _checkInitialization(generation);
       _database = database;
@@ -590,8 +599,12 @@ class LocalFavoritesManager with ChangeNotifier {
                   : !databaseExisted && available.contains(trackingFolderName)
                   ? trackingFolderName
                   : null;
-              final tracking = resolve(draft['followUpdatesFolder']);
-              final quick = resolve(draft['quickFavorite']);
+              final tracking = resolve(
+                draft[FavoritePreferences.followUpdatesFolder.key],
+              );
+              final quick = resolve(
+                draft[FavoritePreferences.quickFavorite.key],
+              );
               // A preceding queued edit may select another valid folder. Prepare
               // its schema outside the draft before publishing any repaired value.
               if (tracking != null &&
@@ -599,13 +612,15 @@ class LocalFavoritesManager with ChangeNotifier {
                 return tracking;
               }
               changed =
-                  draft['followUpdatesFolder'] != tracking ||
-                  draft['quickFavorite'] != quick;
-              if (draft['followUpdatesFolder'] != tracking) {
-                draft['followUpdatesFolder'] = tracking;
+                  draft[FavoritePreferences.followUpdatesFolder.key] !=
+                      tracking ||
+                  draft[FavoritePreferences.quickFavorite.key] != quick;
+              if (draft[FavoritePreferences.followUpdatesFolder.key] !=
+                  tracking) {
+                draft[FavoritePreferences.followUpdatesFolder.key] = tracking;
               }
-              if (draft['quickFavorite'] != quick) {
-                draft['quickFavorite'] = quick;
+              if (draft[FavoritePreferences.quickFavorite.key] != quick) {
+                draft[FavoritePreferences.quickFavorite.key] = quick;
               }
               return null;
             },
@@ -650,7 +665,9 @@ class LocalFavoritesManager with ChangeNotifier {
 
   late final _readLater = ReadLaterService(
     repository: () => _repository,
-    configuredFolder: () => appdata.settings['readLaterFolder'],
+    configuredFolder: () => GlobalPreferenceStore(
+      appdata.settings,
+    ).read(FavoritePreferences.readLaterFolder),
     translateTags: _translateTags,
   );
 
@@ -697,7 +714,9 @@ class LocalFavoritesManager with ChangeNotifier {
         try {
           await appdata.updateSettings((draft) {
             _checkSourceGeneration(generation);
-            if (commit.created) draft['readLaterFolder'] = commit.folder;
+            if (commit.created) {
+              draft[FavoritePreferences.readLaterFolder.key] = commit.folder;
+            }
           });
         } catch (error, stack) {
           failures.add((error: error, stackTrace: stack));
@@ -783,8 +802,10 @@ class LocalFavoritesManager with ChangeNotifier {
   void refreshUpdateIds() => _updates.refresh();
 
   void _syncFollowUpdatesIfAffected(Iterable<String> folders) {
-    var folder = appdata.settings['followUpdatesFolder'];
-    if (folder is! String || !folders.contains(folder)) {
+    var folder = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(FavoritePreferences.followUpdatesFolder);
+    if (folder == null || !folders.contains(folder)) {
       return;
     }
     refreshUpdateIds();
@@ -1000,7 +1021,11 @@ class LocalFavoritesManager with ChangeNotifier {
       folder,
       comic,
       translatedTags: _translateTags(comic.tags),
-      append: appdata.settings['newFavoriteAddTo'] == "end",
+      append:
+          GlobalPreferenceStore(
+            appdata.settings,
+          ).read(FavoritePreferences.newFavoriteAddTo) ==
+          "end",
       order: order,
       updateTime: updateTime,
     );
@@ -1119,13 +1144,15 @@ class LocalFavoritesManager with ChangeNotifier {
     await _finishFolderMutation(
       () => appdata.updateSettings((draft) {
         for (final key in [
-          'readLaterFolder',
-          'quickFavorite',
-          'followUpdatesFolder',
+          FavoritePreferences.readLaterFolder.key,
+          FavoritePreferences.quickFavorite.key,
+          FavoritePreferences.followUpdatesFolder.key,
         ]) {
           if (draft[key] == name) {
             draft[key] = null;
-            if (key == 'followUpdatesFolder') followChanged = true;
+            if (key == FavoritePreferences.followUpdatesFolder.key) {
+              followChanged = true;
+            }
           }
         }
       }),
@@ -1269,8 +1296,10 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   Future<void> _clearDatabase(String path) async {
-    final previousTracking = appdata.settings['followUpdatesFolder'];
-    final previousQuick = appdata.settings['quickFavorite'];
+    final previousTracking =
+        appdata.settings[FavoritePreferences.followUpdatesFolder.key];
+    final previousQuick =
+        appdata.settings[FavoritePreferences.quickFavorite.key];
     await _closeAndWait();
     Directory? backupDirectory;
     FileReplacement? replacement;
@@ -1301,8 +1330,8 @@ class LocalFavoritesManager with ChangeNotifier {
           closed && (!prepared || await recover(() => replacement!.restore()));
       await recover(
         () => appdata.restoreSettingsFields({
-          'followUpdatesFolder': previousTracking,
-          'quickFavorite': previousQuick,
+          FavoritePreferences.followUpdatesFolder.key: previousTracking,
+          FavoritePreferences.quickFavorite.key: previousQuick,
         }, persist: false),
       );
       if (restored) {
@@ -1394,13 +1423,15 @@ class LocalFavoritesManager with ChangeNotifier {
     await _finishFolderMutation(
       () => appdata.updateSettings((draft) {
         for (final key in [
-          'readLaterFolder',
-          'quickFavorite',
-          'followUpdatesFolder',
+          FavoritePreferences.readLaterFolder.key,
+          FavoritePreferences.quickFavorite.key,
+          FavoritePreferences.followUpdatesFolder.key,
         ]) {
           if (draft[key] == before) {
             draft[key] = after;
-            if (key == 'followUpdatesFolder') followChanged = true;
+            if (key == FavoritePreferences.followUpdatesFolder.key) {
+              followChanged = true;
+            }
           }
         }
       }),
@@ -1409,12 +1440,16 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   void _onRead(String id, ComicType type) {
-    if (appdata.settings['moveFavoriteAfterRead'] == "none") {
+    final movement = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(FavoritePreferences.moveFavoriteAfterRead);
+    if (movement == "none") {
       _markAsRead(id, type);
       return;
     }
-    var followUpdatesFolder = appdata.settings['followUpdatesFolder'];
-    final movement = appdata.settings['moveFavoriteAfterRead'];
+    var followUpdatesFolder = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(FavoritePreferences.followUpdatesFolder);
     final changed = _repository.recordRead(
       folderNames.where((folder) => folder != readLaterFolder),
       id,
@@ -1423,10 +1458,8 @@ class LocalFavoritesManager with ChangeNotifier {
           .toIso8601String()
           .replaceFirst('T', ' ')
           .substring(0, 19),
-      movement: movement is String ? movement : null,
-      trackingFolder: followUpdatesFolder is String
-          ? followUpdatesFolder
-          : null,
+      movement: movement,
+      trackingFolder: followUpdatesFolder,
     );
     if (changed.contains(followUpdatesFolder)) {
       _updates.recordCommittedRead(id, type.value);
@@ -1484,7 +1517,11 @@ class LocalFavoritesManager with ChangeNotifier {
       source: source,
       folderId: folderId,
       items: items,
-      append: appdata.settings['newFavoriteAddTo'] == 'end',
+      append:
+          GlobalPreferenceStore(
+            appdata.settings,
+          ).read(FavoritePreferences.newFavoriteAddTo) ==
+          'end',
       oldToNew: oldToNew,
       translateTags: _translateTags,
     );
@@ -1521,7 +1558,11 @@ class LocalFavoritesManager with ChangeNotifier {
     final (folder, comics) = importFavoriteFolder(
       json,
       _repository,
-      append: appdata.settings['newFavoriteAddTo'] == 'end',
+      append:
+          GlobalPreferenceStore(
+            appdata.settings,
+          ).read(FavoritePreferences.newFavoriteAddTo) ==
+          'end',
       translateTags: _translateTags,
     );
     refreshImportedFavorites({folder: comics});
@@ -1530,7 +1571,10 @@ class LocalFavoritesManager with ChangeNotifier {
 
   void _prepareTableForFollowUpdates(String table, [bool clearData = true]) {
     _repository.prepareForFollowUpdates(table, clearData: clearData);
-    if (appdata.settings['followUpdatesFolder'] == table) {
+    if (GlobalPreferenceStore(
+          appdata.settings,
+        ).read(FavoritePreferences.followUpdatesFolder) ==
+        table) {
       refreshUpdateIds();
     }
   }
@@ -1565,8 +1609,10 @@ class LocalFavoritesManager with ChangeNotifier {
       existsFolder(folder) ? _repository.getComicsWithUpdatesInfo(folder) : [];
 
   void _markAsRead(String id, ComicType type, {bool notify = true}) {
-    var folder = appdata.settings['followUpdatesFolder'];
-    if (folder is! String || !existsFolder(folder)) {
+    var folder = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(FavoritePreferences.followUpdatesFolder);
+    if (folder == null || !existsFolder(folder)) {
       return;
     }
     _repository.markAsRead(folder, id, type.value);

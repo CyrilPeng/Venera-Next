@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/keyword_filter.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,7 +13,7 @@ import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/res.dart';
@@ -245,29 +248,14 @@ class _SliverGridComics extends StatelessWidget {
 
 /// return the first blocked keyword, or null if not blocked
 String? isBlocked(Comic item) {
-  for (var word in appdata.settings['blockedWords']) {
-    if (item.title.contains(word)) {
-      return word;
-    }
-    if (item.subtitle?.contains(word) ?? false) {
-      return word;
-    }
-    if (item.description.contains(word)) {
-      return word;
-    }
-    for (var tag in item.tags ?? <String>[]) {
-      if (tag == word) {
-        return word;
-      }
-      if (tag.contains(':')) {
-        tag = tag.split(':')[1];
-        if (tag == word) {
-          return word;
-        }
-      }
-    }
-  }
-  return null;
+  return KeywordFilter(
+    GlobalPreferenceStore(appdata.settings).read(KeywordPreferences.comics),
+  ).firstComicMatch(
+    title: item.title,
+    subtitle: item.subtitle,
+    description: item.description,
+    tags: item.tags ?? const [],
+  );
 }
 
 class ComicList extends StatefulWidget {
@@ -463,7 +451,7 @@ class ComicListState extends State<ComicList> {
                 onTap: () {
                   String value = '';
                   showDialog(
-                    context: App.rootContext,
+                    context: appNavigation.rootContext,
                     builder: (context) {
                       return ContentDialog(
                         title: "Jump to page".tl,
@@ -607,7 +595,9 @@ class ComicListState extends State<ComicList> {
 
   @override
   Widget build(BuildContext context) {
-    var type = appdata.settings['comicListDisplayMode'];
+    final type = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(DiscoveryPreferences.comicListDisplayMode);
     return type == 'paging' ? buildPagingMode() : buildContinuousMode();
   }
 

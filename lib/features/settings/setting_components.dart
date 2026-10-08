@@ -1,7 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:venera_next/foundation/preferences.dart';
-import 'package:venera_next/foundation/reader_preference_store.dart';
+import 'setting_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_reorderable_grid_view/widgets/reorderable_builder.dart';
 import 'package:venera_next/components/button.dart';
@@ -10,71 +9,11 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/select.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
-
-class _SettingField<T extends Object> {
-  const _SettingField(
-    this.key,
-    this.preference,
-    this.comicId,
-    this.sourceKey,
-    this.device,
-  );
-  final String key;
-  final Preference<T>? preference;
-  final String? comicId, sourceKey;
-  final bool device;
-
-  bool matches(_SettingField<T> other) =>
-      key == other.key &&
-      comicId == other.comicId &&
-      sourceKey == other.sourceKey &&
-      device == other.device &&
-      identical(preference, other.preference);
-
-  T? read() {
-    final raw = comicId != null
-        ? appdata.settings.getReaderSetting(comicId!, sourceKey!, key)
-        : device
-        ? appdata.settings.getDeviceReaderSetting(key)
-        : appdata.settings[key];
-    return preference?.normalize(raw) ?? raw as T?;
-  }
-
-  Future<void> save(T value) {
-    final snapshot = jsonEncode(preference?.normalize(value) ?? value);
-    return appdata.updateSettings((settings) {
-      final decoded = jsonDecode(snapshot);
-      final typed = preference;
-      if (typed != null) {
-        ReaderPreferenceStore(
-          settings: settings,
-          comicId: comicId,
-          sourceKey: sourceKey,
-          scope: comicId != null
-              ? ReaderPreferenceScope.comic
-              : device
-              ? ReaderPreferenceScope.device
-              : ReaderPreferenceScope.global,
-        ).write(typed, typed.normalize(decoded));
-        return;
-      }
-      final stored = decoded is num && decoded.toInt() == decoded
-          ? decoded.toInt()
-          : decoded;
-      if (comicId != null) {
-        settings.setReaderSetting(comicId!, sourceKey!, key, stored);
-      } else if (device) {
-        settings.setDeviceReaderSetting(key, stored);
-      } else {
-        settings[key] = stored;
-      }
-    });
-  }
-}
 
 const _savingIndicator = SizedBox.square(
   dimension: 18,
@@ -84,18 +23,22 @@ const _savingIndicator = SizedBox.square(
 /// Own the actual save until it finishes, including during forced unmount.
 /// Each edit joins appdata's queue immediately; a later successful snapshot
 /// includes earlier edits and can repair an earlier persistence failure.
-abstract class _SettingState<W extends StatefulWidget, T extends Object>
+abstract class _SettingState<W extends StatefulWidget, T>
     extends SettingsSaveState<W> {
-  _SettingField<T> get field;
+  final fields = SettingFieldStore(
+    readSettings: () => appdata.settings,
+    updateSettings: (change) => appdata.updateSettings(change),
+  );
+  SettingField<T> get field;
   VoidCallback? get onSaved;
   int _revision = 0;
   T? _preview;
-  _SettingField<T>? _previewField;
+  SettingField<T>? _previewField;
   bool get saving => savingSettings;
   T? get currentValue =>
       _preview != null && _previewField?.matches(field) == true
       ? _preview!
-      : field.read();
+      : fields.read(field);
   Future<void> change(T value) async {
     if (!acceptsSettingsChanges) return;
     final target = field;
@@ -109,10 +52,10 @@ abstract class _SettingState<W extends StatefulWidget, T extends Object>
         target.key,
         target.comicId,
         target.sourceKey,
-        target.device,
+        target.scope,
         target.preference,
       ),
-      () => target.save(value),
+      () => fields.save(target, value),
       onSaved: () => onSaved?.call(),
       isCurrent: () => revision == _revision && target.matches(field),
     );
@@ -207,12 +150,12 @@ class SwitchSetting extends StatefulWidget {
 
 class _SwitchSettingState extends _SettingState<SwitchSetting, bool> {
   @override
-  _SettingField<bool> get field => _SettingField(
-    widget.settingKey,
-    widget.preference,
-    widget.comicId,
-    widget.comicSource,
-    widget.useDeviceSettings,
+  SettingField<bool> get field => SettingField.reader(
+    key: widget.settingKey,
+    preference: widget.preference,
+    comicId: widget.comicId,
+    sourceKey: widget.comicSource,
+    useDeviceSettings: widget.useDeviceSettings,
   );
   @override
   VoidCallback? get onSaved => widget.onChanged;
@@ -249,7 +192,7 @@ class SelectSetting extends StatelessWidget {
   factory SelectSetting.preference({
     Key? key,
     required String title,
-    required Preference<String> preference,
+    required Preference<String?> preference,
     VoidCallback? onChanged,
     required Map<String, String> optionTranslation,
     String? help,
@@ -266,7 +209,7 @@ class SelectSetting extends StatelessWidget {
   factory SelectSetting.reader({
     Key? key,
     required String title,
-    required Preference<String> preference,
+    required Preference<String?> preference,
     VoidCallback? onChanged,
     String? comicId,
     String? comicSource,
@@ -286,7 +229,7 @@ class SelectSetting extends StatelessWidget {
     help: help,
   );
 
-  final Preference<String>? preference;
+  final Preference<String?>? preference;
 
   final String title;
 
@@ -354,7 +297,7 @@ class _DoubleLineSelectSettings extends StatefulWidget {
     this.useDeviceSettings = false,
   });
 
-  final Preference<String>? preference;
+  final Preference<String?>? preference;
 
   final String title;
 
@@ -378,14 +321,14 @@ class _DoubleLineSelectSettings extends StatefulWidget {
 }
 
 class _DoubleLineSelectSettingsState
-    extends _SettingState<_DoubleLineSelectSettings, String> {
+    extends _SettingState<_DoubleLineSelectSettings, String?> {
   @override
-  _SettingField<String> get field => _SettingField(
-    widget.settingKey,
-    widget.preference,
-    widget.comicId,
-    widget.comicSource,
-    widget.useDeviceSettings,
+  SettingField<String?> get field => SettingField.reader(
+    key: widget.settingKey,
+    preference: widget.preference,
+    comicId: widget.comicId,
+    sourceKey: widget.comicSource,
+    useDeviceSettings: widget.useDeviceSettings,
   );
   @override
   VoidCallback? get onSaved => widget.onChanged;
@@ -481,7 +424,7 @@ class _EndSelectorSelectSetting extends StatefulWidget {
     this.useDeviceSettings = false,
   });
 
-  final Preference<String>? preference;
+  final Preference<String?>? preference;
 
   final String title;
 
@@ -505,14 +448,14 @@ class _EndSelectorSelectSetting extends StatefulWidget {
 }
 
 class _EndSelectorSelectSettingState
-    extends _SettingState<_EndSelectorSelectSetting, String> {
+    extends _SettingState<_EndSelectorSelectSetting, String?> {
   @override
-  _SettingField<String> get field => _SettingField(
-    widget.settingKey,
-    widget.preference,
-    widget.comicId,
-    widget.comicSource,
-    widget.useDeviceSettings,
+  SettingField<String?> get field => SettingField.reader(
+    key: widget.settingKey,
+    preference: widget.preference,
+    comicId: widget.comicId,
+    sourceKey: widget.comicSource,
+    useDeviceSettings: widget.useDeviceSettings,
   );
   @override
   VoidCallback? get onSaved => widget.onChanged;
@@ -663,12 +606,12 @@ class SliderSetting extends StatefulWidget {
 
 class _SliderSettingState extends _SettingState<SliderSetting, num> {
   @override
-  _SettingField<num> get field => _SettingField(
-    widget.settingsIndex,
-    widget.preference,
-    widget.comicId,
-    widget.comicSource,
-    widget.useDeviceSettings,
+  SettingField<num> get field => SettingField.reader(
+    key: widget.settingsIndex,
+    preference: widget.preference,
+    comicId: widget.comicId,
+    sourceKey: widget.comicSource,
+    useDeviceSettings: widget.useDeviceSettings,
   );
   @override
   VoidCallback? get onSaved => widget.onChanged;
@@ -712,7 +655,7 @@ class PopupWindowSetting extends StatelessWidget {
       title: Text(title),
       trailing: const Icon(Icons.arrow_right),
       onTap: () {
-        showPopUpWidget(App.rootContext, builder());
+        showPopUpWidget(appNavigation.rootContext, builder());
       },
     );
   }
@@ -722,13 +665,13 @@ class MultiPagesFilter extends StatefulWidget {
   const MultiPagesFilter({
     super.key,
     required this.title,
-    required this.settingsIndex,
+    required this.preference,
     required this.pages,
   });
 
   final String title;
 
-  final String settingsIndex;
+  final Preference<List<String>?> preference;
 
   // key - name
   final Map<String, String> pages;
@@ -738,10 +681,10 @@ class MultiPagesFilter extends StatefulWidget {
 }
 
 class _MultiPagesFilterState
-    extends _SettingState<MultiPagesFilter, List<String>> {
+    extends _SettingState<MultiPagesFilter, List<String>?> {
   @override
-  _SettingField<List<String>> get field =>
-      _SettingField(widget.settingsIndex, null, null, null, false);
+  SettingField<List<String>?> get field =>
+      SettingField(key: widget.preference.key, preference: widget.preference);
   @override
   VoidCallback? get onSaved => null;
 
@@ -749,7 +692,7 @@ class _MultiPagesFilterState
 
   @override
   void initState() {
-    keys = List.from(appdata.settings[widget.settingsIndex]);
+    keys = List<String>.from(fields.read<List<String>?>(field) ?? const []);
     keys.remove("");
     super.initState();
   }

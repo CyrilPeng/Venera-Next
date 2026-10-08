@@ -10,6 +10,7 @@ import 'package:venera_next/foundation/app_data_sync_fields.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
 import 'package:venera_next/foundation/reader_settings.dart';
 import 'package:venera_next/foundation/reader_preferences.dart';
+import 'package:venera_next/foundation/reader_preference_settings.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/init.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -576,7 +577,7 @@ class AppdataWriteFailure implements Exception {
 
 final appdata = Appdata._create();
 
-class Settings with ChangeNotifier {
+class Settings with ChangeNotifier implements ReaderPreferenceSettings {
   int _batchDepth = 0;
   bool _notificationPending = false;
   @override
@@ -600,28 +601,9 @@ class Settings with ChangeNotifier {
   final _data = <String, dynamic>{
     ...ReaderPreferences.storageDefaults,
     ...applicationPreferenceDefaults,
-    'comicDisplayMode': 'detailed', // detailed, brief
-    'comicTileScale': 1.00, // 0.75-1.25
-    'favoritesDisplayMode': 'list', // list, gallery
-    'favoritesGalleryColumns': 0, // 0 means automatic, 2-6 are fixed
-    'newFavoriteAddTo': 'end', // start, end
-    'moveFavoriteAfterRead': 'none', // none, end, start
-    'explore_pages': [],
-    'categories': [],
-    'favorites': [],
-    'searchSources': null,
     'searchShortcuts': [],
-    'showFavoriteStatusOnTile': true,
-    'showHistoryStatusOnTile': false,
-    'showUpdateStatusOnTile': true,
-    'blockedWords': [],
-    'blockedCommentWords': [],
-    'defaultSearchTarget': null,
     'comicLayoutDetections': <String, dynamic>{},
-    'language': 'system', // system, zh-CN, zh-TW, en-US
-    'historyRetentionDays': 0, // 0 means disabled
     'enableLongPressToZoom': true,
-    'checkUpdateOnStart': false,
     'webdav': [], // empty means not configured
     'webdavProxyEnabled': true,
     'backupWebdav': [], // empty means not configured
@@ -633,32 +615,25 @@ class Settings with ChangeNotifier {
     'webdavComicLibrarySyncIntervalMinutes': 360,
     "disableSyncFields": "", // "field1, field2, ..."
     'dataVersion': 0,
-    'quickFavorite': null,
-    'readLaterFolder': null,
-    'onClickFavorite': 'viewDetail', // viewDetail, read
     'enableCustomImageProcessing': false,
     'customImageProcessing': defaultCustomImageProcessing,
-    'autoAddLanguageFilter': 'none', // none, chinese, english, japanese
     'comicSourceListUrl': "",
     'comicSourceRepositories': <Map<String, dynamic>>[],
     'comicSourceOrigins': <String, dynamic>{},
     'comicSourceRepositoriesMigrated': false,
-    'followUpdatesFolder': null,
-    'initialPage': '0',
-    'comicListDisplayMode': 'paging', // paging, continuous
     'comicSpecificSettings': <String, Map<String, dynamic>>{},
     'deviceSpecificSettings': <String, Map<String, dynamic>>{},
     'deviceId': '',
-    'localFavoritesFirst': true,
-    'autoCloseFavoritePanel': false,
   };
 
   /// Legacy heterogeneous settings bridge; typed consumers use preference snapshots.
+  @override
   dynamic operator [](String key) {
     if (key == 'longPressAction') return _longPressAction(_data) ?? 'zoom';
     return _data[key];
   }
 
+  @override
   void operator []=(String key, dynamic value) {
     _data[key] = value;
     if (key != "dataVersion") {
@@ -715,6 +690,7 @@ class Settings with ChangeNotifier {
     );
   }
 
+  @override
   dynamic getReaderSetting(String comicId, String sourceKey, String key) {
     if (key == 'readerMode') return resolveReaderMode(comicId, sourceKey);
     if (key == 'longPressAction' &&
@@ -798,6 +774,7 @@ class Settings with ChangeNotifier {
     return getDeviceReaderSetting('readerMode') as String;
   }
 
+  @override
   void setActiveReaderSetting(
     String? comicId,
     String? sourceKey,
@@ -813,6 +790,7 @@ class Settings with ChangeNotifier {
     }
   }
 
+  @override
   void setReaderSetting(
     String comicId,
     String sourceKey,
@@ -851,6 +829,7 @@ class Settings with ChangeNotifier {
     return legacy is bool ? (legacy ? 'zoom' : 'none') : null;
   }
 
+  @override
   dynamic getDeviceReaderSetting(String key) {
     if (key == 'longPressAction') {
       if (isDeviceSpecificSettingsEnabled()) {
@@ -868,6 +847,7 @@ class Settings with ChangeNotifier {
     return _data['deviceSpecificSettings'][deviceId]?[key] ?? _data[key];
   }
 
+  @override
   void setDeviceReaderSetting(String key, dynamic value) {
     var deviceId = _getOrCreateDeviceId();
     (_data['deviceSpecificSettings'] as Map<String, dynamic>).putIfAbsent(

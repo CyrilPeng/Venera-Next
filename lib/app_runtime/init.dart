@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
@@ -13,6 +14,8 @@ import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 
 import 'core_bootstrap.dart';
 
@@ -46,8 +49,14 @@ Future<void> init(CoreBootstrap core) async {
       LocalFavoritesManager().removeListener(listener);
     },
     favoriteDisplayStateResolver: () => ComicFavoriteDisplayState(
-      isGallery: isFavoriteGalleryMode(),
-      galleryColumns: favoriteGalleryColumns(),
+      isGallery:
+          (GlobalPreferenceStore(
+            appdata.settings,
+          ).read(FavoritePreferences.displayMode) ==
+          'gallery'),
+      galleryColumns: GlobalPreferenceStore(
+        appdata.settings,
+      ).read(FavoritePreferences.galleryColumns),
     ),
   );
   if (App.isAndroid) {
@@ -64,17 +73,18 @@ Future<void> init(CoreBootstrap core) async {
 
 ComicTileState _resolveComicTileState(Comic comic) {
   final type = _comicTypeOf(comic);
-  final history = appdata.settings['showHistoryStatusOnTile']
+  final preferences = GlobalPreferenceStore(appdata.settings);
+  final history = preferences.read(DiscoveryPreferences.showHistoryStatusOnTile)
       ? HistoryManager().find(comic.id, type)
       : null;
   return ComicTileState(
     isFavorite:
-        appdata.settings['showFavoriteStatusOnTile'] &&
+        preferences.read(DiscoveryPreferences.showFavoriteStatusOnTile) &&
         LocalFavoritesManager().isExist(comic.id, type),
     historyPage: history?.page,
     historyMaxPage: history?.maxPage,
     hasNewUpdate:
-        appdata.settings['showUpdateStatusOnTile'] &&
+        preferences.read(DiscoveryPreferences.showUpdateStatusOnTile) &&
         type != ComicType.local &&
         LocalFavoritesManager().hasNewUpdate(comic.id, type),
   );
@@ -119,7 +129,7 @@ void reloadComicSourcesForDebug() async {
     await ComicSourceManager().reloadForDebug();
   } catch (error, stack) {
     Log.error('Reload comic sources', error, stack);
-    final context = App.rootNavigatorKey.currentContext;
+    final context = appNavigation.rootNavigatorKey.currentContext;
     if (context != null && context.mounted) {
       showToast(message: error.toString(), context: context);
     }

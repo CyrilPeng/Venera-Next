@@ -60,6 +60,7 @@ import 'package:venera_next/features/reader/brightness.dart';
 import 'package:venera_next/features/reader/settings_panel.dart';
 import 'package:venera_next/routing/settings.dart' show ReaderSettings;
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
@@ -490,7 +491,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('Settings'), findsOneWidget);
-        final navigator = App.rootNavigatorKey.currentState!;
+        final navigator = appNavigation.rootNavigatorKey.currentState!;
         unawaited(
           navigator.push<void>(
             MaterialPageRoute(
@@ -909,7 +910,7 @@ void main() {
         await fixture.mount(tester, pushed: false);
         final reader = fixture.readerKey.currentState!;
         final request = reader.createProgressRequest();
-        final navigator = App.rootNavigatorKey.currentState!;
+        final navigator = appNavigation.rootNavigatorKey.currentState!;
         unawaited(
           navigator.push<void>(
             MaterialPageRoute(
@@ -1251,7 +1252,10 @@ void main() {
             }
             await tester.pumpAndSettle();
             expect(find.byType(ChapterCommentsPage), findsNothing);
-            expect(App.rootNavigatorKey.currentState!.canPop(), false);
+            expect(
+              appNavigation.rootNavigatorKey.currentState!.canPop(),
+              false,
+            );
             if (embedded && changeSource) {
               expect(find.text('Replacement source'), findsOneWidget);
             }
@@ -2075,7 +2079,7 @@ void main() {
         await tester.pump();
         final nextKey = GlobalKey<_TestReaderState>();
         unawaited(
-          App.rootNavigatorKey.currentState!.push(
+          appNavigation.rootNavigatorKey.currentState!.push(
             MaterialPageRoute<void>(
               builder: (_) => Scaffold(
                 body: _TestReader(key: nextKey, onClosed: () {}),
@@ -2091,7 +2095,7 @@ void main() {
         await tester.pump();
         expect(platform.orientation, contains('landscapeLeft'));
         platform.events.clear();
-        App.rootNavigatorKey.currentState!.removeRoute(oldRoute);
+        appNavigation.rootNavigatorKey.currentState!.removeRoute(oldRoute);
         await tester.pump();
         await tester.pump(const Duration(seconds: 1));
         expect(platform.events, isEmpty);
@@ -2584,7 +2588,7 @@ void main() {
         old.fullscreen();
         await _pumpUntil(tester, () => native.fullscreen && native.visible);
         unawaited(
-          App.rootNavigatorKey.currentState!.push<void>(
+          appNavigation.rootNavigatorKey.currentState!.push<void>(
             MaterialPageRoute(
               builder: (_) => Scaffold(
                 body: _TestReader(
@@ -2600,7 +2604,7 @@ void main() {
         await tester.pump(const Duration(seconds: 1));
         expect(nextKey.currentState, isNotNull);
         native.events.clear();
-        App.rootNavigatorKey.currentState!.removeRoute(oldRoute);
+        appNavigation.rootNavigatorKey.currentState!.removeRoute(oldRoute);
         await tester.pump();
         await tester.pump(const Duration(seconds: 1));
         expect(fixture.readerKey.currentState, isNull);
@@ -2841,7 +2845,7 @@ void main() {
         final reader = fixture.readerKey.currentState!;
         expect(leases, hasLength(1));
         unawaited(
-          App.rootNavigatorKey.currentState!.push<void>(
+          appNavigation.rootNavigatorKey.currentState!.push<void>(
             MaterialPageRoute(
               builder: (_) => const Scaffold(body: Text('Cover reader')),
             ),
@@ -2854,7 +2858,7 @@ void main() {
         expect(leases.first.closes, 1);
         leases.first.send(2);
         expect(reader.page, 1);
-        App.rootNavigatorKey.currentState!.pop();
+        appNavigation.rootNavigatorKey.currentState!.pop();
         await tester.pump();
         await tester.pump(const Duration(seconds: 1));
         expect(leases, hasLength(2));
@@ -3403,12 +3407,12 @@ void main() {
             20,
           );
           if (detach) {
-            App.rootNavigatorKey.currentState!.pop();
+            appNavigation.rootNavigatorKey.currentState!.pop();
             await tester.pumpAndSettle();
             expect(fixture.readerKey.currentState, isNull);
             fixture.closeWindow(tester);
           } else {
-            await App.rootNavigatorKey.currentState!.maybePop();
+            await appNavigation.rootNavigatorKey.currentState!.maybePop();
           }
           await tester.pump();
           expect(fixture.exits, 0);
@@ -3456,13 +3460,13 @@ void main() {
           await fixture.mount(tester, pushed: true);
           expect(favorites.reads, 1);
           if (detach) {
-            App.rootNavigatorKey.currentState!.pop();
+            appNavigation.rootNavigatorKey.currentState!.pop();
             await tester.pumpAndSettle();
             fixture.closeWindow(tester);
             await tester.pump();
             expect(fixture.exits, 0);
           } else {
-            unawaited(App.rootNavigatorKey.currentState!.maybePop());
+            unawaited(appNavigation.rootNavigatorKey.currentState!.maybePop());
             await tester.pump(const Duration(milliseconds: 400));
             expect(fixture.readerKey.currentState, isNotNull);
           }
@@ -3526,7 +3530,7 @@ void main() {
             expect(_paintedImages(photoFinder.first), findsNothing);
 
             if (detachReader) {
-              App.rootNavigatorKey.currentState!.removeRoute(
+              appNavigation.rootNavigatorKey.currentState!.removeRoute(
                 ModalRoute.of(reader.context)!,
               );
               await tester.pumpAndSettle();
@@ -3746,7 +3750,7 @@ void main() {
           downloads.preload('owned-prefetch', null, 'book', 'one');
           await tester.pump();
           if (detachReader) {
-            App.rootNavigatorKey.currentState!.removeRoute(
+            appNavigation.rootNavigatorKey.currentState!.removeRoute(
               ModalRoute.of(reader.context)!,
             );
             await tester.pumpAndSettle();
@@ -3867,7 +3871,7 @@ void main() {
           expect(reader.mode, originalMode);
 
           if (detachReader) {
-            App.rootNavigatorKey.currentState!.removeRoute(
+            appNavigation.rootNavigatorKey.currentState!.removeRoute(
               ModalRoute.of(reader.context)!,
             );
             await tester.pumpAndSettle();
@@ -4056,7 +4060,7 @@ void main() {
         await tester.pump();
         expect(deliveries, 1);
 
-        App.rootNavigatorKey.currentState!.removeRoute(
+        appNavigation.rootNavigatorKey.currentState!.removeRoute(
           ModalRoute.of(reader.context)!,
         );
         await tester.pumpAndSettle();
@@ -4104,7 +4108,7 @@ void main() {
         await tester.pump();
         expect(find.text('Saving...'), findsOneWidget);
         expect(fixture.readerKey.currentState, same(reader));
-        expect(App.rootNavigatorKey.currentState!.canPop(), isTrue);
+        expect(appNavigation.rootNavigatorKey.currentState!.canPop(), isTrue);
         expect(fixture.history.progress.last.page, 2);
         saving.completeError(StateError('progress disk failure'));
         await tester.pumpAndSettle();
@@ -4220,7 +4224,7 @@ void main() {
           }),
         );
         final reader = fixture.readerKey.currentState!;
-        expect(App.rootNavigatorKey.currentState!.canPop(), isFalse);
+        expect(appNavigation.rootNavigatorKey.currentState!.canPop(), isFalse);
         reader.setPage(2);
         reader.autoReading.start();
         final progressRequest = reader.createProgressRequest();
@@ -4689,7 +4693,7 @@ class _ReaderFixture {
               ? null
               : 'WindowOwnerQA',
         ),
-        navigatorKey: App.rootNavigatorKey,
+        navigatorKey: appNavigation.rootNavigatorKey,
         builder: (context, child) {
           Widget content = ReaderPlatformEffectsScope(
             child: OverlayWidget(child!),
@@ -4736,7 +4740,7 @@ class _ReaderFixture {
     );
     if (pushed) {
       unawaited(
-        App.rootNavigatorKey.currentState!.push<void>(
+        appNavigation.rootNavigatorKey.currentState!.push<void>(
           MaterialPageRoute(builder: (_) => reader()),
         ),
       );

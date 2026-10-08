@@ -8,6 +8,7 @@ import 'package:venera_next/features/local_comics/import_export/import_presentat
 import 'package:venera_next/features/local_comics/import_export/pdf_import_batch.dart';
 import 'package:venera_next/features/local_comics/import_export/pdf_import_tasks.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -72,7 +73,7 @@ void main() {
     late BuildContext context;
     await tester.pumpWidget(
       MaterialApp(
-        navigatorKey: App.rootNavigatorKey,
+        navigatorKey: appNavigation.rootNavigatorKey,
         home: Builder(
           builder: (owner) {
             context = owner;

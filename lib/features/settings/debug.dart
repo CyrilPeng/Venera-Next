@@ -1,17 +1,27 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/settings/logs.dart';
+import 'package:venera_next/features/settings/debug_evaluator.dart';
+import 'package:venera_next/features/settings/debug_evaluator_runtime.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/js_engine.dart';
+import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
+
+void _reportDebugFailure(Object error, StackTrace stack) {
+  try {
+    Log.error('JS Evaluator', error, stack);
+  } catch (_) {
+    // Logging is best effort; the operation still retains its original failure.
+  }
+}
 
 class DebugPage extends StatefulWidget {
   const DebugPage({super.key, this.evaluate});
@@ -41,26 +51,19 @@ class DebugPageState extends State<DebugPage> {
       result = 'Loading'.tl;
     });
     try {
-      final output =
-          await Future<Object?>.sync(
-                () => widget.evaluate != null
-                    ? widget.evaluate!(controller.text)
-                    : JsEngine().runCode(controller.text, '<debug>'),
-              )
-              .then((value) {
-                try {
-                  try {
-                    return value is Map || value is List
-                        ? const JsonEncoder.withIndent('  ').convert(value)
-                        : value.toString();
-                  } catch (_) {
-                    return value.toString();
-                  }
-                } finally {
-                  JSRef.freeRecursive(value);
-                }
-              })
-              .timeout(const Duration(seconds: 30));
+      final evaluate = widget.evaluate;
+      final evaluator = evaluate == null
+          ? createDebugEvaluator(JsEngine())
+          : DebugEvaluator(
+              evaluate: evaluate,
+              release: discardJsResult,
+              drain: drainJsResultDescendants,
+            );
+      final operation = evaluator.start(controller.text);
+      unawaited(
+        operation.completion.then<void>((_) {}, onError: _reportDebugFailure),
+      );
+      final output = await operation.result;
       if (mounted) setState(() => result = output);
     } catch (error) {
       if (mounted) setState(() => result = error.toString());
@@ -99,9 +102,9 @@ class DebugPageState extends State<DebugPage> {
           },
           actionTitle: 'Open'.tl,
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.preference(
           title: "Ignore Certificate Errors".tl,
-          settingKey: "ignoreBadCertificate",
+          preference: NetworkPreferences.ignoreBadCertificate,
         ).toSliver(),
         SliverToBoxAdapter(
           child: Column(

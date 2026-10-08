@@ -5,10 +5,9 @@ import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/image_provider/base_image_provider.dart';
 import 'package:venera_next/foundation/file_system.dart';
-import 'local_comic_image.dart' as image_provider;
 
 class LocalComicImageProvider
-    extends BaseImageProvider<image_provider.LocalComicImageProvider> {
+    extends BaseImageProvider<LocalComicImageProvider> {
   /// Image provider for normal image.
   ///
   /// [url] is the url of the image. Local file path is also supported.

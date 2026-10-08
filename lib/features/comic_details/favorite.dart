@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -116,7 +118,9 @@ class _FavoriteList extends StatefulWidget {
 class _FavoriteListState extends State<_FavoriteList> {
   @override
   Widget build(BuildContext context) {
-    final localFavoritesFirst = appdata.settings['localFavoritesFirst'] ?? true;
+    final localFavoritesFirst = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(FavoritePreferences.localFavoritesFirst);
 
     final localSection = _LocalSection(
       cid: widget.cid,
@@ -278,7 +282,11 @@ class _NetworkSectionState extends State<NetworkFavoriteSection> {
     context.showMessage(
       message: multi ? "Success".tl : (wasAdded ? "Removed".tl : "Added".tl),
     );
-    if (appdata.settings['autoCloseFavoritePanel'] ?? false) context.pop();
+    if (GlobalPreferenceStore(
+      appdata.settings,
+    ).read(FavoritePreferences.autoCloseFavoritePanel)) {
+      context.pop();
+    }
   }
 
   Widget _buildLoadingSkeleton() {
@@ -527,7 +535,9 @@ class _LocalSectionState extends State<_LocalSection> {
       target.onFavorite(localAdded.isNotEmpty);
       if (owner.mounted &&
           route?.isCurrent != false &&
-          (appdata.settings['autoCloseFavoritePanel'] ?? false)) {
+          (GlobalPreferenceStore(
+            appdata.settings,
+          ).read(FavoritePreferences.autoCloseFavoritePanel))) {
         owner.pop();
       }
     } catch (error, stack) {

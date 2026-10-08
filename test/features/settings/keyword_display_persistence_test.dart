@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -23,8 +24,8 @@ Directory _prepare() {
   appdata.settings['disableSyncFields'] = '';
   appdata.settings['blockedWords'] = <String>['alpha', 'beta'];
   appdata.settings['blockedCommentWords'] = <String>['comment'];
-  appdata.settings[favoriteDisplayModeKey] = favoriteDisplayList;
-  appdata.settings[favoriteGalleryColumnsKey] = 0;
+  appdata.settings[FavoritePreferences.displayMode.key] = 'list';
+  appdata.settings[FavoritePreferences.galleryColumns.key] = 0;
   registerShowMessageHandler((context, message) {});
   addTearDown(() {
     App.dataPath = previousPath;
@@ -121,7 +122,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 10));
       }
       expect(exits, 1);
-      expect(_saved(root)[favoriteDisplayModeKey], favoriteDisplayGallery);
+      expect(_saved(root)[FavoritePreferences.displayMode.key], 'gallery');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
@@ -361,18 +362,18 @@ void main() {
     final exclusive = AppDataOperations.instance.run(() => release.future);
     await tester.tap(find.text('Gallery'));
     await tester.pump();
-    expect(appdata.settings[favoriteDisplayModeKey], favoriteDisplayList);
+    expect(appdata.settings[FavoritePreferences.displayMode.key], 'list');
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     release.complete();
     await _flush(tester, Future.wait([exclusive, appdata.saveData(false)]));
     await tester.pumpAndSettle();
-    expect(_saved(root)[favoriteDisplayModeKey], favoriteDisplayGallery);
+    expect(_saved(root)[FavoritePreferences.displayMode.key], 'gallery');
     await tester.tap(find.byTooltip('Favorite display mode'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('4 columns'));
     await _flush(tester, appdata.saveData(false));
     await tester.pumpAndSettle();
-    expect(_saved(root)[favoriteGalleryColumnsKey], 4);
+    expect(_saved(root)[FavoritePreferences.galleryColumns.key], 4);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
@@ -401,7 +402,7 @@ void main() {
       await tester.tap(find.text('Gallery'));
       await tester.pumpAndSettle();
       await _flush(tester, appdata.saveData(false));
-      expect(appdata.settings[favoriteDisplayModeKey], favoriteDisplayList);
+      expect(appdata.settings[FavoritePreferences.displayMode.key], 'list');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
@@ -432,7 +433,7 @@ void main() {
       blocked.deleteSync();
       await tester.tap(find.byTooltip('Retry'));
       await _flush(tester, appdata.saveData(false));
-      expect(_saved(root)[favoriteDisplayModeKey], favoriteDisplayGallery);
+      expect(_saved(root)[FavoritePreferences.displayMode.key], 'gallery');
       expect(find.byTooltip('Retry'), findsNothing);
       expect(find.byTooltip('Favorite display mode'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());

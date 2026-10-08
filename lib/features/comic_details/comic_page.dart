@@ -21,7 +21,7 @@ import 'package:venera_next/features/comic_details/chapters.dart';
 import 'package:venera_next/features/comic_details/comments_preview.dart';
 import 'package:venera_next/features/comic_details/cover_viewer.dart';
 import 'package:venera_next/features/comic_details/thumbnails.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/consts.dart';
@@ -717,7 +717,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
     }
 
     bool enableTranslation =
-        App.locale.languageCode == 'zh' && comicSource.enableTagsTranslate;
+        appLocale.languageCode == 'zh' && comicSource.enableTagsTranslate;
 
     return SliverLazyToBoxAdapter(
       child: Column(

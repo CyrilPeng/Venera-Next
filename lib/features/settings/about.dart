@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:venera_next/foundation/application_preferences.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -113,9 +114,9 @@ class _AboutSettingsState extends State<AboutSettings> {
             context.to(() => const ChangelogPage());
           },
         ).toSliver(),
-        SwitchSetting(
+        SwitchSetting.preference(
           title: "Check for updates on startup".tl,
-          settingKey: "checkUpdateOnStart",
+          preference: AppPreferences.checkUpdateOnStart,
         ).toSliver(),
         ListTile(
           title: const Text("Github"),

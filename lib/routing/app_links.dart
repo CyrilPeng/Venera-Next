@@ -1,7 +1,7 @@
 import 'package:venera_next/foundation/event_subscription.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:app_links/app_links.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
@@ -21,11 +21,11 @@ Future<bool> handleAppLink(Uri uri, {bool Function()? isActive}) async {
       if (source.linkHandler!.domains.contains(uri.host)) {
         var id = source.linkHandler!.linkToId(uri.toString());
         if (id != null) {
-          if (App.mainNavigatorKey == null) {
+          if (appNavigation.mainNavigatorKey == null) {
             await Future.delayed(const Duration(milliseconds: 200));
           }
           if (isActive?.call() == false) return false;
-          App.mainNavigatorKey?.currentContext?.to(() {
+          appNavigation.mainNavigatorKey?.currentContext?.to(() {
             return ComicPage(id: id, sourceKey: source.key);
           });
           return true;

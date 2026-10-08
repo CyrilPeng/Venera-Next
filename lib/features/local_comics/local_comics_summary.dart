@@ -13,6 +13,7 @@ import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -168,7 +169,7 @@ class _LocalComicsSummaryState extends State<LocalComicsSummary> {
   void import() {
     showDialog(
       barrierDismissible: false,
-      context: App.rootContext,
+      context: appNavigation.rootContext,
       builder: (context) {
         return const _ImportComicsWidget();
       },

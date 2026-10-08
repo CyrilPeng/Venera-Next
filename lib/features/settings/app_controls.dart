@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/settings_save_state.dart';
+import 'package:venera_next/features/history/history_manager.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
@@ -9,6 +10,104 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
+
+/// Preview while dragging; only the released choice authorizes cleanup.
+class HistoryRetentionSetting extends StatefulWidget {
+  const HistoryRetentionSetting({super.key});
+  @override
+  State<HistoryRetentionSetting> createState() =>
+      _HistoryRetentionSettingState();
+}
+
+class _HistoryRetentionSettingState
+    extends SettingsSaveState<HistoryRetentionSetting> {
+  double? _preview;
+  Object? _selection;
+
+  @override
+  void initState() {
+    super.initState();
+    appdata.settings.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  void _previewDays(double value) {
+    if (!acceptsSettingsChanges || savingSettings || hasSettingsSaveError) {
+      return;
+    }
+    setState(() => _preview = value);
+  }
+
+  Future<void> _save(double value) async {
+    if (!acceptsSettingsChanges || savingSettings || hasSettingsSaveError) {
+      return;
+    }
+    final manager = HistoryManager();
+    final request = manager.createRetentionChange(value.round());
+    _selection = request;
+    await saveSetting(
+      (
+        AppPreferences.historyRetentionDays.key,
+        manager,
+        manager.connectionGeneration,
+      ),
+      request.run,
+      isCurrent: () => identical(_selection, request),
+      onSaved: () => _preview = null,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value =
+        _preview ??
+        GlobalPreferenceStore(
+          appdata.settings,
+        ).read(AppPreferences.historyRetentionDays).toDouble();
+    final enabled =
+        acceptsSettingsChanges && !savingSettings && !hasSettingsSaveError;
+    return protectSettings(
+      Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            title: Text('Auto Clear History'.tl, softWrap: true, maxLines: 2),
+            trailing: Text(
+              value.toString(),
+              style: const TextStyle(fontSize: 12),
+            ),
+            subtitle: Slider(
+              value: value.clamp(0, AppPreferences.historyRetentionEditorMax),
+              min: 0,
+              max: AppPreferences.historyRetentionEditorMax,
+              divisions:
+                  (AppPreferences.historyRetentionEditorMax /
+                          AppPreferences.historyRetentionEditorStep)
+                      .toInt(),
+              onChanged: enabled ? _previewDays : null,
+              onChangeEnd: enabled ? _save : null,
+            ),
+          ),
+          if (hasSettingsSaveError)
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: settingsSaveStatus,
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    appdata.settings.removeListener(_refresh);
+    super.dispose();
+  }
+}
 
 class CacheLimitSetting extends StatelessWidget {
   const CacheLimitSetting({super.key});

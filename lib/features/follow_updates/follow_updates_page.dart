@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
 import 'follow_updates_folder_dialog.dart';
 import 'follow_updates_runtime.dart';
@@ -10,7 +12,7 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/navigation_admission.dart';
@@ -47,7 +49,9 @@ class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
 
   List<FavoriteItemWithUpdateInfo> previewComics = [];
 
-  String? get folder => appdata.settings["followUpdatesFolder"];
+  String? get folder => GlobalPreferenceStore(
+    appdata.settings,
+  ).read(FavoritePreferences.followUpdatesFolder);
 
   void updatePreviewData() {
     if (folder == null) {
@@ -68,7 +72,7 @@ class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
         scheduleMicrotask(() async {
           if (!mounted || !acceptsSettingsChanges) return;
           await saveSetting(
-            'followUpdatesFolder',
+            FavoritePreferences.followUpdatesFolder.key,
             () => manager.clearMissingFollowUpdatesFolder(
               expected,
               generation: generation,
@@ -212,7 +216,9 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
     updateComics();
   }
 
-  String? get folder => appdata.settings["followUpdatesFolder"];
+  String? get folder => GlobalPreferenceStore(
+    appdata.settings,
+  ).read(FavoritePreferences.followUpdatesFolder);
 
   var updatedComics = <FavoriteItemWithUpdateInfo>[];
   var allComics = <FavoriteItemWithUpdateInfo>[];
@@ -376,7 +382,7 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
                       final items = updatedComics.toList();
                       final runtime = _runtime;
                       showAsyncConfirmDialog(
-                        context: App.rootContext,
+                        context: appNavigation.rootContext,
                         title: "Mark all as read".tl,
                         content: "Do you want to mark all as read?".tl,
                         onConfirm: () async {
@@ -512,7 +518,7 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
     final job = FollowUpdateJob(folder!, true);
 
     var loadingController = showLoadingDialog(
-      App.rootContext,
+      appNavigation.rootContext,
       withProgress: true,
       cancelButtonText: "Cancel".tl,
       onCancel: job.cancel,

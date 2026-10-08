@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'pica_import_storage.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
@@ -39,7 +41,11 @@ Future<void> importLegacyPicaArchive(
           data,
           favoritesPath: favorites.databasePath,
           historyPath: historyPath,
-          appendFavorites: appdata.settings['newFavoriteAddTo'] == 'end',
+          appendFavorites:
+              GlobalPreferenceStore(
+                appdata.settings,
+              ).read(FavoritePreferences.newFavoriteAddTo) ==
+              'end',
           translateTags: (tags) => tags
               .map((tag) => (tag, tag.translateTagsToCN))
               .where((pair) => pair.$1 != pair.$2)

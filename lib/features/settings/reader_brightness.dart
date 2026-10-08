@@ -5,6 +5,7 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/preferences.dart';
 import 'package:venera_next/foundation/reader_preference_store.dart';
 import 'package:venera_next/foundation/reader_preferences.dart';
+import 'setting_field.dart';
 
 class ReaderBrightnessSetting extends StatefulWidget {
   const ReaderBrightnessSetting({
@@ -27,6 +28,20 @@ class ReaderBrightnessSetting extends StatefulWidget {
 
 class _ReaderBrightnessSettingState
     extends SettingsSaveState<ReaderBrightnessSetting> {
+  final _fields = SettingFieldStore(
+    readSettings: () => appdata.settings,
+    updateSettings: (change) => appdata.updateSettings(change),
+  );
+
+  SettingField<T> _field<T extends Object>(Preference<T> preference) =>
+      SettingField(
+        key: preference.key,
+        preference: preference,
+        comicId: widget.comicId,
+        sourceKey: widget.sourceKey,
+        scope: ReaderPreferenceScope.active,
+      );
+
   var _localPreview = ReaderBrightnessPreview();
   ReaderBrightnessPreview? _observedPreview;
   ReaderBrightnessPreview get _preview => widget.preview ?? _localPreview;
@@ -65,16 +80,11 @@ class _ReaderBrightnessSettingState
     VoidCallback release,
   ) async {
     final comic = widget.comicId, source = widget.sourceKey;
+    final field = _field(preference);
     try {
       await saveSetting(
         (comic, source, preference.key),
-        () => appdata.updateSettings((draft) {
-          ReaderPreferenceStore(
-            settings: draft,
-            comicId: comic,
-            sourceKey: source,
-          ).write(preference, value);
-        }),
+        () => _fields.save(field, value),
         onSaved: () => widget.onChanged?.call(preference.key),
         isCurrent: () => comic == widget.comicId && source == widget.sourceKey,
       );
@@ -103,17 +113,12 @@ class _ReaderBrightnessSettingState
 
   @override
   Widget build(BuildContext context) {
-    final store = ReaderPreferenceStore(
-      settings: appdata.settings,
-      comicId: widget.comicId,
-      sourceKey: widget.sourceKey,
-    );
     final enabled =
         _preview.enabled ??
-        store.read(ReaderPreferences.readerBrightnessEnabled);
+        _fields.read(_field(ReaderPreferences.readerBrightnessEnabled))!;
     final brightness =
         _preview.brightness ??
-        store.read<num>(ReaderPreferences.readerBrightness);
+        _fields.read<num>(_field(ReaderPreferences.readerBrightness))!;
     return protectSettings(
       widget.panel
           ? ReaderBrightnessPanel(

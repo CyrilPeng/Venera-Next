@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'network_favorite_import.dart';
 import 'network_favorite_import_dialog.dart';
 import 'favorite_models.dart';
@@ -11,7 +13,7 @@ import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/select.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -23,7 +25,7 @@ import 'package:venera_next/foundation/widget_utils.dart';
 
 /// Open a dialog to create a new favorite folder.
 Future<void> newFolder() => showDialog<void>(
-  context: App.rootContext,
+  context: appNavigation.rootContext,
   builder: (_) => CreateFavoriteFolderDialog(
     validate: validateFolderName,
     create: (name) async => await LocalFavoritesManager().createFolder(name),
@@ -74,10 +76,12 @@ void addFavorite(List<Comic> comics) {
       .toList();
   var saving = false;
   String? error;
-  String? selectedFolder = appdata.settings['quickFavorite'];
+  String? selectedFolder = GlobalPreferenceStore(
+    appdata.settings,
+  ).read(FavoritePreferences.quickFavorite);
 
   showDialog(
-    context: App.rootContext,
+    context: appNavigation.rootContext,
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setState) {
@@ -230,7 +234,7 @@ Future<List<FavoriteItem>> updateComicsInfo(String folder) async {
   var index = 0;
 
   showDialog(
-    context: App.rootContext,
+    context: appNavigation.rootContext,
     builder: (context) {
       return ValueListenableBuilder(
         valueListenable: finished,
@@ -301,11 +305,11 @@ Future<List<FavoriteItem>> updateComicsInfo(String folder) async {
 Future<void> sortFolders() async {
   final manager = LocalFavoritesManager();
   final generation = manager.connectionGeneration;
-  final owner = App.rootContext;
+  final owner = appNavigation.rootContext;
   var folders = manager.folderNames;
 
   await showPopUpWidget(
-    App.rootContext,
+    appNavigation.rootContext,
     StatefulBuilder(
       builder: (context, setState) {
         return PopUpWidgetScaffold(
@@ -376,12 +380,12 @@ Future<void> importNetworkFolder(
   final manager = LocalFavoritesManager();
   if (manager.existsFolder(resultName) &&
       !manager.isLinkedToNetworkFolder(resultName, source, folderID ?? '')) {
-    App.rootContext.showMessage(message: 'Folder already exists'.tl);
+    appNavigation.rootContext.showMessage(message: 'Folder already exists'.tl);
     return;
   }
   final generation = manager.connectionGeneration;
   await showDialog<void>(
-    context: App.rootContext,
+    context: appNavigation.rootContext,
     builder: (_) => NetworkFavoriteImportDialog(
       collect: (scope, progress) => collectNetworkFavorites(
         data: data,

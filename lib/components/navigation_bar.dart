@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_page_route.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -146,9 +147,27 @@ class NaviPaneState extends State<NaviPane>
   }
 
   @override
+  void didUpdateWidget(covariant NaviPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.observer, widget.observer)) {
+      oldWidget.observer.removeListener(onNavigatorStateChange);
+      if (oldWidget.navigatorKey == widget.navigatorKey) {
+        widget.observer._adoptRoutes(
+          oldWidget.observer,
+          widget.navigatorKey.currentState,
+        );
+      }
+      widget.observer.addListener(onNavigatorStateChange);
+    }
+  }
+
+  @override
   void dispose() {
     controller.dispose();
     widget.observer.removeListener(onNavigatorStateChange);
+    widget.observer._releaseDetachedNavigator();
+    mainViewUpdateHandler = null;
+    _naviItemTapListeners.clear();
     super.dispose();
   }
 
@@ -193,8 +212,8 @@ class NaviPaneState extends State<NaviPane>
         : EdgeInsets.zero;
     return _NaviPopScope(
       action: () {
-        if (App.mainNavigatorKey!.currentState!.canPop()) {
-          App.mainNavigatorKey!.currentState!.maybePop();
+        if (appNavigation.mainNavigatorKey!.currentState!.canPop()) {
+          appNavigation.mainNavigatorKey!.currentState!.maybePop();
         } else {
           SystemNavigator.pop();
         }
@@ -520,7 +539,7 @@ class _SingleBottomNaviWidgetState extends State<_SingleBottomNaviWidget>
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: CurvedAnimation(parent: controller, curve: Curves.ease),
+      animation: controller,
       builder: (context, child) {
         return MouseRegion(
           cursor: SystemMouseCursors.click,
@@ -570,6 +589,30 @@ class _SingleBottomNaviWidgetState extends State<_SingleBottomNaviWidget>
 
 class NaviObserver extends NavigatorObserver implements Listenable {
   var routes = Queue<Route>();
+  NavigatorState? _owner;
+
+  void _adoptRoutes(NaviObserver previous, NavigatorState? owner) {
+    _owner = owner;
+    routes
+      ..clear()
+      ..addAll(previous.routes.where((route) => route.navigator == owner));
+    previous._owner = null;
+    previous.routes.clear();
+  }
+
+  void _releaseDetachedNavigator() {
+    if (navigator == null) {
+      _owner = null;
+      routes.clear();
+    }
+  }
+
+  void _bindNavigator() {
+    if (!identical(_owner, navigator)) {
+      _owner = navigator;
+      routes.clear();
+    }
+  }
 
   int get pageCount {
     int count = 0;
@@ -583,27 +626,41 @@ class NaviObserver extends NavigatorObserver implements Listenable {
 
   @override
   void didPop(Route route, Route? previousRoute) {
-    routes.removeLast();
+    _bindNavigator();
+    routes.remove(route);
     notifyListeners();
   }
 
   @override
   void didPush(Route route, Route? previousRoute) {
+    _bindNavigator();
     routes.addLast(route);
     notifyListeners();
   }
 
   @override
   void didRemove(Route route, Route? previousRoute) {
+    _bindNavigator();
     routes.remove(route);
     notifyListeners();
   }
 
   @override
   void didReplace({Route? newRoute, Route? oldRoute}) {
-    routes.remove(oldRoute);
-    if (newRoute != null) {
-      routes.add(newRoute);
+    _bindNavigator();
+    final stack = routes.toList();
+    final index = oldRoute == null ? -1 : stack.indexOf(oldRoute);
+    if (index >= 0) {
+      if (newRoute == null) {
+        stack.removeAt(index);
+      } else {
+        stack[index] = newRoute;
+      }
+      routes
+        ..clear()
+        ..addAll(stack);
+    } else if (newRoute != null) {
+      routes.addLast(newRoute);
     }
     notifyListeners();
   }
@@ -621,8 +678,8 @@ class NaviObserver extends NavigatorObserver implements Listenable {
   }
 
   void notifyListeners() {
-    for (var listener in listeners) {
-      listener();
+    for (final listener in List<VoidCallback>.of(listeners)) {
+      if (listeners.contains(listener)) listener();
     }
   }
 }
@@ -678,10 +735,31 @@ class _NaviMainViewState extends State<_NaviMainView> {
 
   @override
   void initState() {
-    state.mainViewUpdateHandler = () {
-      setState(() {});
-    };
+    state.mainViewUpdateHandler = _update;
     super.initState();
+  }
+
+  void _update() => setState(() {});
+
+  void _detach(NaviPaneState previous) {
+    if (previous.mainViewUpdateHandler == _update) {
+      previous.mainViewUpdateHandler = null;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _NaviMainView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.state, state)) {
+      _detach(oldWidget.state);
+      state.mainViewUpdateHandler = _update;
+    }
+  }
+
+  @override
+  void dispose() {
+    _detach(state);
+    super.dispose();
   }
 
   @override

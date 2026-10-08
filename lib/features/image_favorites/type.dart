@@ -1,5 +1,3 @@
-import 'package:venera_next/foundation/extensions.dart';
-
 enum ImageFavoriteSortType {
   title("Title"),
   timeAsc("Time Asc"),
@@ -39,23 +37,41 @@ class TimeRange {
 
   @override
   String toString() {
-    return "${end?.millisecond}:${duration.inMilliseconds}";
+    return "${end?.millisecondsSinceEpoch}:${duration.inMilliseconds}";
   }
 
-  /// Parse a time range from a string, return [TimeRange.all] if failed
-  factory TimeRange.fromString(String? str) {
-    if (str == null) {
+  /// Preserve the existing `end:duration` format, including rolling ranges.
+  /// Invalid or irrecoverably truncated old dates fall back to [TimeRange.all].
+  factory TimeRange.fromString(Object? str) {
+    if (str is! String) {
       return TimeRange.all;
     }
     final parts = str.split(":");
-    if (parts.length != 2 || !parts[0].isInt || !parts[1].isInt) {
+    if (parts.length != 2) return TimeRange.all;
+    final milliseconds = int.tryParse(parts[1]);
+    if (milliseconds == null || milliseconds < 0) return TimeRange.all;
+    final endMilliseconds = parts[0] == 'null' ? null : int.tryParse(parts[0]);
+    if (parts[0] != 'null' && endMilliseconds == null) return TimeRange.all;
+    // The old writer saved DateTime.millisecond instead of the epoch. Those
+    // 0..999 values cannot recover dates selected by the UI (year 2000 onward).
+    if (endMilliseconds != null &&
+        endMilliseconds >= 0 &&
+        endMilliseconds < 1000) {
       return TimeRange.all;
     }
-    final end = parts[0] == "null"
-        ? null
-        : DateTime.fromMillisecondsSinceEpoch(int.parse(parts[0]));
-    final duration = Duration(milliseconds: int.parse(parts[1]));
-    return TimeRange(end: end, duration: duration);
+    try {
+      final duration = Duration(milliseconds: milliseconds);
+      // Duration uses microseconds internally; reject integer overflow.
+      if (duration.inMilliseconds != milliseconds) return TimeRange.all;
+      final end = endMilliseconds == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(endMilliseconds);
+      // Filtering and the date editor must be able to represent the start too.
+      (end ?? DateTime.now()).subtract(duration);
+      return TimeRange(end: end, duration: duration);
+    } on ArgumentError {
+      return TimeRange.all;
+    }
   }
 
   /// Check if a time is in the range

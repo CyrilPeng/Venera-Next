@@ -1,12 +1,15 @@
 import 'history_cache.dart';
 import 'history_repository.dart';
 import 'history_model.dart';
+import 'history_retention_change.dart';
 import 'dart:async';
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/comic_type.dart';
@@ -139,7 +142,9 @@ class HistoryManager with ChangeNotifier {
       // Retention uses the ordered mutation queue. Even when disabled, drain
       // previously accepted writes before declaring this connection ready.
       await clearExpiredHistory(
-        (appdata.settings['historyRetentionDays'] as num?)?.round() ?? 0,
+        GlobalPreferenceStore(
+          appdata.settings,
+        ).read(AppPreferences.historyRetentionDays),
       );
       _checkInitialization(generation);
       if (hasPendingWrites) await waitForAsyncWrites();
@@ -485,13 +490,36 @@ class HistoryManager with ChangeNotifier {
 
   Future<void> clearHistory() => _delete((repository) => repository.clear());
 
+  HistoryRetentionChange createRetentionChange(int days) {
+    final generation = _generation;
+    return HistoryRetentionChange(
+      days: days,
+      access: (action) => _operations.access(action),
+      checkTarget: () {
+        if (!isInitialized || generation != _generation) {
+          throw StateError('History retention belongs to a closed connection');
+        }
+      },
+      saveDays: (value) => appdata.updateSettings((draft) {
+        GlobalPreferenceStore(
+          draft,
+        ).write(AppPreferences.historyRetentionDays, value);
+      }),
+      clearBefore: _clearHistoryBefore,
+    );
+  }
+
   Future<void> clearExpiredHistory(int retentionDays) {
     if (retentionDays <= 0) return Future.value();
     final cutoff = DateTime.now()
         .subtract(Duration(days: retentionDays))
         .millisecondsSinceEpoch;
-    return _delete((repository) => repository.clearBefore(cutoff));
+    return _clearHistoryBefore(cutoff);
   }
+
+  // Keep the isolate callback outside the edit factory's captured manager scope.
+  Future<void> _clearHistoryBefore(int cutoff) =>
+      _delete((repository) => repository.clearBefore(cutoff));
 
   Future<void> clearUnfavoritedHistory() {
     // The user's deletion decision uses the favorite identities at submission.

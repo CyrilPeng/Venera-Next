@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -15,8 +17,9 @@ import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/reader.dart';
+import 'package:venera_next/features/search/search_shortcut.dart';
 import 'package:venera_next/features/search/search_shortcuts.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -100,7 +103,7 @@ abstract mixin class ComicPageActions {
     final target = comic;
     final owner = context;
     showSideBar(
-      App.rootContext,
+      appNavigation.rootContext,
       ComicFavoritePanel(
         cid: comic.id,
         type: comic.comicType,
@@ -125,8 +128,10 @@ abstract mixin class ComicPageActions {
 
   Future<void> quickFavorite() async {
     if (_addingQuickFavorite != null) return;
-    var folder = appdata.settings['quickFavorite'];
-    if (folder is! String) {
+    var folder = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(FavoritePreferences.quickFavorite);
+    if (folder == null) {
       return;
     }
     final owner = context;
@@ -231,10 +236,10 @@ abstract mixin class ComicPageActions {
   ///
   /// [group] the chapter group number, start from 1
   void read([int? ep, int? page, int? group]) {
-    App.rootContext
+    appNavigation.rootContext
         .to(
           () => Reader(
-            onClosed: ReaderSessionScope.onClosedOf(App.rootContext),
+            onClosed: ReaderSessionScope.onClosedOf(appNavigation.rootContext),
             type: comic.comicType,
             cid: comic.id,
             name: comic.title,
@@ -364,7 +369,7 @@ abstract mixin class ComicPageActions {
 
   void onTapTag(String tag, String namespace) {
     var target = searchTargetForTag(tag, namespace);
-    var context = App.mainNavigatorKey!.currentContext!;
+    var context = appNavigation.mainNavigatorKey!.currentContext!;
     target?.jump(context);
   }
 
@@ -445,7 +450,7 @@ abstract mixin class ComicPageActions {
 
   void showComments() {
     showSideBar(
-      App.rootContext,
+      appNavigation.rootContext,
       CommentsPage(data: comic, source: comicSource),
     );
   }

@@ -11,7 +11,7 @@ import 'package:venera_next/features/reader/reader.dart'
     show ReaderPlatformEffectsScope, ReaderSessionScope;
 import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/app_runtime/background_sync.dart';
-import 'package:venera_next/app_runtime/interactive_bindings.dart';
+import 'package:venera_next/app_runtime/interactive_platform_bindings.dart';
 import 'package:venera_next/app_runtime/window_placement.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
@@ -33,6 +33,8 @@ import 'components/message.dart';
 import 'components/window_frame.dart';
 import 'components/window_selection_task.dart';
 import 'foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
+import 'foundation/app_locale.dart';
 import 'foundation/appdata.dart';
 import 'foundation/context.dart';
 import 'foundation/js_engine.dart';
@@ -111,7 +113,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late final _library = webDavLibrary;
-  late final _interactiveBindings = InteractiveBindings.platform(
+  late final _interactiveBindings = createPlatformInteractiveBindings(
     placement: widget.host.placement?.attach(),
   );
   late final _dataSync = widget.host.sync;
@@ -122,7 +124,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     sources: widget.host.sourceUpdates,
     checkApplication: (scope) async {
       if (!mounted || widget.host.isClosing) return;
-      final navigator = App.rootNavigatorKey.currentState;
+      final navigator = appNavigation.rootNavigatorKey.currentState;
       final context = navigator?.overlay?.context;
       if (context == null || !context.mounted) return;
       await ApplicationUpdatePrompt(
@@ -150,7 +152,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       ),
     );
     mountWebDavLibrary(_library);
-    App.registerForceRebuild(forceRebuild);
+    appNavigation.registerForceRebuild(forceRebuild);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !widget.host.isClosing) {
         _interactiveBindings.start();
@@ -173,7 +175,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       return;
     }
     WidgetsBinding.instance.removeObserver(this);
-    App.registerForceRebuild(null);
+    appNavigation.registerForceRebuild(null);
     hideContentOverlay?.remove();
     hideContentOverlay = null;
     unawaited(
@@ -190,7 +192,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   void didChangeLocales(List<Locale>? locales) {
-    if (mounted && appdata.settings['language'] == 'system') {
+    if (mounted &&
+        GlobalPreferenceStore(appdata.settings).read(AppPreferences.language) ==
+            'system') {
       forceRebuild();
     }
   }
@@ -215,12 +219,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             child: Container(
               width: double.infinity,
               height: double.infinity,
-              color: App.rootContext.colorScheme.surface,
+              color: appNavigation.rootContext.colorScheme.surface,
             ),
           );
         },
       );
-      Overlay.of(App.rootContext).insert(hideContentOverlay!);
+      Overlay.of(appNavigation.rootContext).insert(hideContentOverlay!);
     } else if (hideContentOverlay != null &&
         state == AppLifecycleState.resumed) {
       hideContentOverlay!.remove();
@@ -230,10 +234,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         !isAuthPageActive &&
         !IO.isSelectingFiles) {
       isAuthPageActive = true;
-      App.rootContext.to(
+      appNavigation.rootContext.to(
         () => AuthPage(
           onSuccessfulAuth: () {
-            App.rootContext.pop();
+            appNavigation.rootContext.pop();
             isAuthPageActive = false;
           },
         ),
@@ -340,7 +344,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     ).read(AppPreferences.authorizationRequired)) {
       home = AuthPage(
         onSuccessfulAuth: () {
-          App.rootContext.toReplacement(() => const MainPage());
+          appNavigation.rootContext.toReplacement(() => const MainPage());
         },
       );
     } else {
@@ -364,7 +368,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           home: home,
           debugShowCheckedModeBanner: false,
           theme: getTheme(primary, secondary, tertiary, Brightness.light),
-          navigatorKey: App.rootNavigatorKey,
+          navigatorKey: appNavigation.rootNavigatorKey,
           darkTheme: getTheme(primary, secondary, tertiary, Brightness.dark),
           themeMode: switch (GlobalPreferenceStore(
             appdata.settings,
@@ -378,7 +382,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             GlobalMaterialLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          locale: App.locale,
+          locale: appLocale,
           supportedLocales: const [
             Locale('zh', 'CN'),
             Locale('zh', 'TW'),
@@ -417,10 +421,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   Shortcuts(
                     shortcuts: {
                       LogicalKeySet(LogicalKeyboardKey.escape):
-                          VoidCallbackIntent(App.pop),
+                          VoidCallbackIntent(appNavigation.pop),
                     },
                     child: MouseBackDetector(
-                      onTapDown: App.pop,
+                      onTapDown: appNavigation.pop,
                       child: SyncWindowBinding(
                         controller: _dataSync,
                         isFinalizing: () => this.widget.host.isClosing,

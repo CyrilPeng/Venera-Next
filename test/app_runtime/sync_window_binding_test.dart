@@ -11,7 +11,7 @@ import 'package:venera_next/app_runtime/interactive_bindings.dart';
 import 'package:venera_next/foundation/event_subscription.dart';
 import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/features/history/history_manager.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/window_placement.dart';
 import 'package:venera_next/foundation/window_placement_tracker.dart';
@@ -133,7 +133,7 @@ void main() {
       try {
         await tester.pumpWidget(
           MaterialApp(
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
                 controller: fixture.controller,
@@ -328,7 +328,7 @@ void main() {
         });
         await tester.pumpWidget(
           MaterialApp(
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
                 controller: fixture.controller,
@@ -392,7 +392,7 @@ void main() {
         });
         await tester.pumpWidget(
           MaterialApp(
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
                 controller: fixture.controller,
@@ -482,7 +482,7 @@ void main() {
 
         await tester.pumpWidget(
           MaterialApp(
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
                 controller: fixture.controller,
@@ -559,7 +559,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          navigatorKey: App.rootNavigatorKey,
+          navigatorKey: appNavigation.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
             SyncWindowBinding(
               controller: fixture.controller,
@@ -632,7 +632,7 @@ void main() {
         HistoryManager.cache = _PendingHistory(() async {});
         await tester.pumpWidget(
           MaterialApp(
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
                 controller: fixture.controller,
@@ -718,7 +718,7 @@ void main() {
       HistoryManager.cache = _PendingHistory(() async {});
       await tester.pumpWidget(
         MaterialApp(
-          navigatorKey: App.rootNavigatorKey,
+          navigatorKey: appNavigation.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
             SyncWindowBinding(
               controller: fixture.controller,
@@ -769,7 +769,7 @@ void main() {
       HistoryManager.cache = _PendingHistory(() async {});
       await tester.pumpWidget(
         MaterialApp(
-          navigatorKey: App.rootNavigatorKey,
+          navigatorKey: appNavigation.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
             SyncWindowBinding(
               controller: fixture.controller,
@@ -811,7 +811,7 @@ void main() {
       var exits = 0;
       HistoryManager.cache = _PendingHistory(() async {});
       Widget host(bool bound) => MaterialApp(
-        navigatorKey: mode == 'no-root' ? null : App.rootNavigatorKey,
+        navigatorKey: mode == 'no-root' ? null : appNavigation.rootNavigatorKey,
         builder: (_, child) => WindowFrame(
           bound
               ? SyncWindowBinding(
@@ -879,7 +879,7 @@ void main() {
         var exits = 0;
         await tester.pumpWidget(
           MaterialApp(
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
                 controller: fixture.controller,
@@ -935,7 +935,7 @@ void main() {
         });
         await tester.pumpWidget(
           MaterialApp(
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
                 controller: fixture.controller,
@@ -1001,7 +1001,7 @@ void main() {
         late WindowFrameController frame;
         await tester.pumpWidget(
           MaterialApp(
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(controller: fixture.controller, child: child!),
               onExit: () => exits++,
@@ -1069,7 +1069,7 @@ void main() {
     late WindowFrameController frame;
     await tester.pumpWidget(
       MaterialApp(
-        navigatorKey: App.rootNavigatorKey,
+        navigatorKey: appNavigation.rootNavigatorKey,
         builder: (_, child) => WindowFrame(
           SyncWindowBinding(controller: fixture.controller, child: child!),
           onExit: () => exits++,
@@ -1120,7 +1120,7 @@ void main() {
           () => releases++;
       await tester.pumpWidget(
         MaterialApp(
-          navigatorKey: App.rootNavigatorKey,
+          navigatorKey: appNavigation.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
             SyncWindowBinding(
               controller: fixture.controller,
@@ -1172,7 +1172,7 @@ void main() {
         var exits = 0;
         await tester.pumpWidget(
           MaterialApp(
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             builder: (context, child) => WindowFrame(
               SyncWindowBinding(controller: fixture.controller, child: child!),
               onExit: () => exits++,
@@ -1209,7 +1209,7 @@ void main() {
       var exits = 0;
       await tester.pumpWidget(
         MaterialApp(
-          navigatorKey: App.rootNavigatorKey,
+          navigatorKey: appNavigation.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
             SyncWindowBinding(controller: fixture.controller, child: child!),
             onExit: () => exits++,

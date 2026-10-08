@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'dart:isolate';
+import 'dart:typed_data';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
-import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 
 abstract class JsPoolEngine {
@@ -22,20 +21,12 @@ class JSPool {
   int _generation = 0;
   bool _cleanupRequired = false;
 
-  static final JSPool _singleton = JSPool._internal();
-
-  factory JSPool() {
-    return _singleton;
-  }
-
-  JSPool._internal() : this.create();
-
-  /// Owns every engine returned by the factory, including partial startup.
+  /// Owns workers produced by this factory, including partial startup.
   JSPool.create({
-    Future<Uint8List> Function()? loadJsInit,
-    JsPoolEngine Function(Uint8List)? createEngine,
-  }) : _loadJsInit = loadJsInit ?? _loadBundledScript,
-       _createEngine = createEngine ?? IsolateJsEngine.new;
+    required Future<Uint8List> Function() loadJsInit,
+    required JsPoolEngine Function(Uint8List) createEngine,
+  }) : _loadJsInit = loadJsInit,
+       _createEngine = createEngine;
 
   final Future<Uint8List> Function() _loadJsInit;
   final JsPoolEngine Function(Uint8List) _createEngine;
@@ -91,11 +82,6 @@ class JSPool {
     } finally {
       _initFuture = null;
     }
-  }
-
-  static Future<Uint8List> _loadBundledScript() async {
-    var jsInitBuffer = await rootBundle.load("assets/init.js");
-    return jsInitBuffer.buffer.asUint8List();
   }
 
   Future<void> close() {
@@ -216,13 +202,13 @@ class IsolateJsEngine implements JsPoolEngine {
 
   IsolateJsEngine(
     Uint8List jsInit, {
-    void Function(JsWorkerStart)? entryPoint,
+    required void Function(JsWorkerStart) entryPoint,
   }) {
     _receivePort = ReceivePort();
     _receivePort!.listen(_onMessage);
     _spawnFuture =
         Isolate.spawn(
-          entryPoint ?? _run,
+          entryPoint,
           (replies: _receivePort!.sendPort, script: jsInit),
           onExit: _receivePort!.sendPort,
           onError: _receivePort!.sendPort,
@@ -301,87 +287,12 @@ class IsolateJsEngine implements JsPoolEngine {
     );
   }
 
-  static void _run(JsWorkerStart params) async {
-    var sendPort = params.replies;
-    final port = ReceivePort();
-    sendPort.send(port.sendPort);
-    final engine = JsEngine();
-    Exception? failure;
-    try {
-      JsEngine.cacheJsInit(params.script);
-      await engine.init();
-      await for (final message in port) {
-        if (message is JsWorkerStop) break;
-        if (message is Task) {
-          JSInvokable? jsFunc;
-          dynamic result;
-          try {
-            final evaluated = engine.runCode(message.jsFunction);
-            if (evaluated is! JSInvokable) {
-              result = evaluated;
-              throw Exception(
-                "The provided code does not evaluate to a function.",
-              );
-            }
-            jsFunc = evaluated;
-            result = await jsFunc.invoke(message.args);
-            _validateTransferValue(result, Set<Object>.identity());
-            sendPort.send(TaskResult(message.id, result, null));
-          } catch (e) {
-            sendPort.send(TaskResult(message.id, null, e.toString()));
-          } finally {
-            JSRef.freeRecursive(result);
-            jsFunc?.free();
-          }
-        }
-      }
-    } catch (e, s) {
-      // Publishing the failure triggers the parent's forced-close path. Defer
-      // it until owned resources finish cleanup so that path cannot interrupt us.
-      failure = Exception("JS worker failed: $e\n$s");
-    } finally {
-      final errors = <String>[];
-      try {
-        engine.dispose();
-      } catch (error) {
-        errors.add('engine: $error');
-      }
-      try {
-        await JSPool().close();
-      } catch (error) {
-        errors.add('compute pool: $error');
-      }
-      port.close();
-      sendPort.send(JsWorkerStopped(errors.isEmpty ? null : errors.join('; ')));
-      if (failure != null) sendPort.send(failure);
-      Isolate.exit();
-    }
-  }
-
-  static void _validateTransferValue(dynamic value, Set<Object> seen) {
-    if (value is JSRef) {
-      throw StateError(
-        'JS compute cannot transfer native JavaScript references',
-      );
-    }
-    if (value is Map && seen.add(value)) {
-      for (final entry in value.entries) {
-        _validateTransferValue(entry.key, seen);
-        _validateTransferValue(entry.value, seen);
-      }
-    } else if (value is List && seen.add(value)) {
-      for (final item in value) {
-        _validateTransferValue(item, seen);
-      }
-    }
-  }
-
   @override
   Future<dynamic> execute(String jsFunction, List<dynamic> args) async {
     if (_isClosed) {
       throw Exception("IsolateJsEngine is closed.");
     }
-    _validateTransferValue(args, Set<Object>.identity());
+    validateJsComputeTransferValue(args, Set<Object>.identity());
     final sendPort = await _sendPortCompleter.future;
     if (_isClosed) {
       throw Exception("IsolateJsEngine is closed.");
@@ -490,4 +401,20 @@ class TaskResult {
   final String? error;
 
   const TaskResult(this.id, this.result, this.error);
+}
+
+void validateJsComputeTransferValue(dynamic value, Set<Object> seen) {
+  if (value is JSRef) {
+    throw StateError('JS compute cannot transfer native JavaScript references');
+  }
+  if (value is Map && seen.add(value)) {
+    for (final entry in value.entries) {
+      validateJsComputeTransferValue(entry.key, seen);
+      validateJsComputeTransferValue(entry.value, seen);
+    }
+  } else if (value is List && seen.add(value)) {
+    for (final item in value) {
+      validateJsComputeTransferValue(item, seen);
+    }
+  }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/reader/eink_refresh.dart';
+import 'package:venera_next/features/reader/eink_refresh_controller.dart';
 
 void main() {
   group('EInkRefreshController', () {

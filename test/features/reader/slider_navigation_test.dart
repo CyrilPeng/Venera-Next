@@ -15,6 +15,7 @@ import 'package:venera_next/features/reader/continuous_view.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -85,7 +86,7 @@ void main() {
           MaterialApp(
             builder: (context, child) =>
                 ReaderPlatformEffectsScope(child: child!),
-            navigatorKey: App.rootNavigatorKey,
+            navigatorKey: appNavigation.rootNavigatorKey,
             home: Scaffold(body: OverlayWidget(_Reader(key: key))),
           ),
         );

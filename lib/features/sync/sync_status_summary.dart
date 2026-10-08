@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sliver_tools/sliver_tools.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/message.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -67,7 +67,7 @@ class SyncStatusSummary extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     onTap: () {
                       showDialogMessage(
-                        App.rootContext,
+                        appNavigation.rootContext,
                         "Error".tl,
                         syncStatus.lastError!,
                       );

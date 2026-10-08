@@ -3,7 +3,7 @@ import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/history/history.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -237,7 +237,7 @@ class __ChartLineState extends State<_ChartLine>
   Widget build(BuildContext context) {
     var text = widget.text;
     var enableTranslation =
-        App.locale.countryCode == 'CN' && widget.enableTranslation;
+        appLocale.countryCode == 'CN' && widget.enableTranslation;
     if (enableTranslation) {
       text = text.translateTagsToCN;
     }

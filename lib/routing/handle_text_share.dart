@@ -1,7 +1,7 @@
 import 'package:venera_next/foundation/event_subscription.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:flutter/services.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/search/search.dart';
 
@@ -9,12 +9,12 @@ import 'package:venera_next/features/search/search.dart';
 EventSubscription<Object?> createTextShareSubscription() => EventSubscription(
   events: const EventChannel('venera/text_share').receiveBroadcastStream(),
   handle: (event, isActive) async {
-    if (App.mainNavigatorKey == null) {
+    if (appNavigation.mainNavigatorKey == null) {
       await Future.delayed(const Duration(milliseconds: 200));
     }
     if (!isActive()) return;
     if (event is String) {
-      App.rootNavigatorKey.currentContext?.to(
+      appNavigation.rootNavigatorKey.currentContext?.to(
         () => AggregatedSearchPage(keyword: event),
       );
     }

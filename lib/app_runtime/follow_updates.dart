@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/follow_updates/follow_updates_api.dart';
 import 'package:venera_next/features/follow_updates/follow_updates_manager.dart';
@@ -42,7 +44,9 @@ Future<void Function()> prepareApplicationFollowUpdatesForExit(
 
 FollowUpdatesRuntime createFollowUpdatesRuntime(DataSyncController sync) =>
     FollowUpdatesRuntime(
-      folder: () => appdata.settings['followUpdatesFolder'] as String?,
+      folder: () => GlobalPreferenceStore(
+        appdata.settings,
+      ).read(FavoritePreferences.followUpdatesFolder),
       isChecking: () => FollowUpdateJob.isChecking,
       waitForDownload: sync.waitForDownload,
       createTask: (folder) => FollowUpdateJob(folder, false),

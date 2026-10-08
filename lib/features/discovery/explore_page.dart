@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -7,7 +9,7 @@ import 'package:venera_next/components/navigation_bar.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -37,7 +39,9 @@ class _ExplorePageState extends State<ExplorePage>
   late List<String> pages;
 
   void onSettingsChanged() {
-    var explorePages = List<String>.from(appdata.settings["explore_pages"]);
+    var explorePages = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(DiscoveryPreferences.explorePages);
     var all = ComicSource.all()
         .map((e) => e.explorePages)
         .expand((e) => e.map((e) => e.title))
@@ -60,14 +64,16 @@ class _ExplorePageState extends State<ExplorePage>
   }
 
   void addPage() {
-    showPopUpWidget(App.rootContext, setExplorePagesWidget());
+    showPopUpWidget(appNavigation.rootContext, setExplorePagesWidget());
   }
 
   NaviPaneState? naviPane;
 
   @override
   void initState() {
-    pages = List<String>.from(appdata.settings["explore_pages"]);
+    pages = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(DiscoveryPreferences.explorePages);
     var all = ComicSource.all()
         .map((e) => e.explorePages)
         .expand((e) => e.map((e) => e.title))
@@ -263,7 +269,9 @@ class _SingleExplorePageState extends AutomaticGlobalState<_SingleExplorePage>
   }
 
   void onSettingsChanged() {
-    var explorePages = appdata.settings["explore_pages"];
+    var explorePages = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(DiscoveryPreferences.explorePages);
     if (!explorePages.contains(widget.title)) {
       _wantKeepAlive = false;
       updateKeepAlive();
@@ -469,7 +477,8 @@ Iterable<Widget> _buildExplorePagePart(
               if (part.viewMore != null)
                 TextButton(
                   onPressed: () {
-                    var context = App.mainNavigatorKey!.currentContext!;
+                    var context =
+                        appNavigation.mainNavigatorKey!.currentContext!;
                     part.viewMore!.jump(context);
                   },
                   child: Text("View more".tl),

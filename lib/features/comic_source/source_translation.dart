@@ -1,4 +1,4 @@
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_locale.dart';
 
 import 'source.dart';
 
@@ -9,7 +9,7 @@ extension ComicSourceTranslation on String {
     if (comicSource == null || comicSource.translations == null) {
       return this;
     }
-    var locale = App.locale;
+    var locale = appLocale;
     var lc = locale.languageCode;
     var cc = locale.countryCode;
     var key = "$lc${cc == null ? "" : "_$cc"}";

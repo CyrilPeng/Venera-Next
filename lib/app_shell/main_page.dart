@@ -4,10 +4,12 @@ import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/search/search.dart';
 import 'package:venera_next/features/settings/settings.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 import '../components/navigation_bar.dart';
-import '../foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import '../foundation/context.dart';
 import 'home_page.dart';
 
@@ -35,8 +37,12 @@ class _MainPageState extends State<MainPage> {
   void initState() {
     _observer = NaviObserver();
     _navigatorKey = GlobalKey();
-    App.mainNavigatorKey = _navigatorKey;
-    index = int.tryParse(appdata.settings['initialPage'].toString()) ?? 0;
+    appNavigation.mainNavigatorKey = _navigatorKey;
+    index = int.parse(
+      GlobalPreferenceStore(
+        appdata.settings,
+      ).read(DiscoveryPreferences.initialPage),
+    );
     super.initState();
   }
 

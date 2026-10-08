@@ -6,11 +6,9 @@ import 'reader_image_processing.dart';
 import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/image_stream.dart';
 import 'base_image_provider.dart';
-import 'reader_image.dart' as image_provider;
 import 'package:venera_next/foundation/appdata.dart';
 
-class ReaderImageProvider
-    extends BaseImageProvider<image_provider.ReaderImageProvider> {
+class ReaderImageProvider extends BaseImageProvider<ReaderImageProvider> {
   /// Image provider for normal image.
   const ReaderImageProvider(
     this.imageKey,

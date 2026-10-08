@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
 
 class SliverGridViewWithFixedItemHeight extends StatelessWidget {
   const SliverGridViewWithFixedItemHeight({
@@ -89,9 +91,15 @@ class SliverGridDelegateWithComics extends SliverGridDelegate {
 
   final bool forceDetailed;
 
-  final bool useBriefMode = appdata.settings['comicDisplayMode'] == 'brief';
+  final bool useBriefMode =
+      GlobalPreferenceStore(
+        appdata.settings,
+      ).read(DiscoveryPreferences.comicDisplayMode) ==
+      'brief';
 
-  final double scale = (appdata.settings['comicTileScale'] as num).toDouble();
+  final double scale = GlobalPreferenceStore(
+    appdata.settings,
+  ).read(DiscoveryPreferences.comicTileScale).toDouble();
 
   @override
   SliverGridLayout getLayout(SliverConstraints constraints) {

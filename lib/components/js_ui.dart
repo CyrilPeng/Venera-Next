@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:url_launcher/url_launcher_string.dart';
-import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -26,7 +26,7 @@ class JsUiApi implements JsUiMessageHandler {
       case 'showMessage':
         var m = message['message'];
         if (m.toString().isNotEmpty) {
-          App.rootContext.showMessage(message: m.toString());
+          appNavigation.rootContext.showMessage(message: m.toString());
         }
       case 'showDialog':
         return _showDialog(message);
@@ -106,7 +106,7 @@ class JsUiApi implements JsUiMessageHandler {
       }
       final closed =
           showDialog<void>(
-            context: App.rootContext,
+            context: appNavigation.rootContext,
             builder: (context) {
               dialogContext = context;
               return DialogResourceScope(
@@ -150,7 +150,7 @@ class JsUiApi implements JsUiMessageHandler {
     try {
       final cancel = onCancel == null ? null : callbacks.retain(onCancel);
       final controller = showLoadingDialog(
-        App.rootContext,
+        appNavigation.rootContext,
         barrierDismissible: onCancel != null,
         allowCancel: onCancel != null,
         onCancel: cancel == null
@@ -207,7 +207,7 @@ class JsUiApi implements JsUiMessageHandler {
         }
       }
       await showInputDialog(
-        context: App.rootContext,
+        context: appNavigation.rootContext,
         title: title,
         onClosed: callbacks.dispose,
         image: imageUrl,

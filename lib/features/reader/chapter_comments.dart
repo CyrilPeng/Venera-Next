@@ -8,6 +8,9 @@ import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart'
     show Comment;
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/keyword_filter.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/foundation/image_work.dart';
@@ -125,12 +128,9 @@ class _ChapterCommentsViewState extends State<_ChapterCommentsView> {
   ReaderChapterCommentsController _create() => ReaderChapterCommentsController(
     request: widget.request,
     work: widget.work,
-    includeComment: (comment) {
-      final content = comment.content.toLowerCase();
-      return !(appdata.settings['blockedCommentWords'] as List).any(
-        (word) => content.contains(word.toString().toLowerCase()),
-      );
-    },
+    includeComment: (comment) => !KeywordFilter(
+      GlobalPreferenceStore(appdata.settings).read(KeywordPreferences.comments),
+    ).blocksComment(comment.content),
     onChanged: () {
       if (mounted) setState(() {});
     },

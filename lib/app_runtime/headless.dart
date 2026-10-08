@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/widgets.dart';
@@ -59,7 +61,9 @@ Future<void> runHeadlessMode(List<String> args) async {
         break;
       case HeadlessCommand.updateSubscribe:
         commandExitCode = await runHeadlessSubscriptionCommand(
-          folder: appdata.settings['followUpdatesFolder'] as String?,
+          folder: GlobalPreferenceStore(
+            appdata.settings,
+          ).read(FavoritePreferences.followUpdatesFolder),
           selected: request.comic,
           updateSelected: _updateSelectedSubscription,
           updateAll: (folder) => updateFolder(folder, true).map(
