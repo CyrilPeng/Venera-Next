@@ -5,47 +5,146 @@ import 'network_favorite_import_dialog.dart';
 import 'favorite_models.dart';
 import 'create_favorite_folder_dialog.dart';
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:venera_next/components/button.dart';
+import 'package:venera_next/components/async_confirm_dialog.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/select.dart';
+import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
-import 'package:venera_next/routing/app_navigation.dart';
+import 'package:venera_next/network/request_scope.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
+import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/translations.dart';
-import 'package:venera_next/foundation/widget_utils.dart';
 
 /// Open a dialog to create a new favorite folder.
-Future<void> newFolder() => showDialog<void>(
-  context: appNavigation.rootContext,
-  builder: (_) => CreateFavoriteFolderDialog(
-    validate: validateFolderName,
-    create: (name) async => await LocalFavoritesManager().createFolder(name),
-    selectImport: (operation) async {
-      final file = await operation.pickFile(
-        () => selectFile(ext: ['json'], checkStop: operation.checkActive),
-      );
-      return file == null
-          ? null
-          : operation.useFile(
-              file,
-              (selected) async => utf8.decode(await selected.readAsBytes()),
-            );
-    },
-    importJson: (json) async => await LocalFavoritesManager().fromJson(json),
-  ),
-);
+Future<void> newFolder(
+  BuildContext context, {
+  ValueChanged<List<String>>? onChanged,
+}) {
+  final result = _newFolder(context, onChanged: onChanged);
+  unawaited(
+    result.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {
+        Log.error('Favorite folder presentation', error, stack);
+      },
+    ),
+  );
+  return result;
+}
 
-String? validateFolderName(String newFolderName) {
-  var folders = LocalFavoritesManager().folderNames;
+Future<void> _newFolder(
+  BuildContext context, {
+  ValueChanged<List<String>>? onChanged,
+}) async {
+  final owner = WindowSelectionTask(context);
+  if (!owner.canPresent) return;
+  // Popup content has its own Navigator; its inner route can remain current
+  // while another root route covers the popup.
+  final popup = context
+      .getInheritedWidgetOfExactType<PopupIndicatorWidget>()
+      ?.route;
+  if (popup?.isCurrent == false) return;
+  final manager = LocalFavoritesManager.cache;
+  if (manager == null) return;
+  final generation = manager.connectionGeneration;
+  final dataPath = App.dataPath;
+  bool isCurrent() =>
+      identical(LocalFavoritesManager.cache, manager) &&
+      manager.connectionGeneration == generation &&
+      App.dataPath == dataPath;
+  void checkCurrent() {
+    if (!isCurrent()) throw const SelectionCancelled();
+  }
+
+  Future<void> write(FutureOr<void> Function() action) =>
+      AppDataOperations.instance.access(() async {
+        checkCurrent();
+        await action();
+      });
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final disposed = Completer<void>();
+  final removalFailed = Completer<void>();
+  removalFailed.future.ignore();
+  try {
+    await owner.run<void>((operation) async {
+      operation.checkActive();
+      if (popup?.isCurrent == false) throw const SelectionCancelled();
+      checkCurrent();
+      late final ResourceDialogRoute<void> dialog;
+      dialog = ResourceDialogRoute<void>(
+        context: context,
+        themes: InheritedTheme.capture(from: context, to: navigator.context),
+        barrierColor: DialogTheme.of(context).barrierColor ?? Colors.black54,
+        onDispose: () {
+          if (!disposed.isCompleted) disposed.complete();
+        },
+        builder: (_) => CreateFavoriteFolderDialog(
+          isCurrent: () =>
+              owner.canPresent &&
+              dialog.isCurrent &&
+              popup?.isActive != false &&
+              isCurrent(),
+          validate: (name) {
+            checkCurrent();
+            return validateFolderName(name, folders: manager.folderNames);
+          },
+          create: (name) => write(() async => await manager.createFolder(name)),
+          selectImport: (operation) async {
+            checkCurrent();
+            final file = await operation.pickFile(
+              () => selectFile(ext: ['json'], checkStop: operation.checkActive),
+            );
+            return file == null
+                ? null
+                : operation.useFile(
+                    file,
+                    (selected) async =>
+                        utf8.decode(await selected.readAsBytes()),
+                  );
+          },
+          importJson: (json) => write(() => manager.fromJson(json)),
+        ),
+      );
+      final release = owner.retainPresentation(() {
+        try {
+          if (navigator.mounted && dialog.isActive) {
+            navigator.removeRoute(dialog);
+          }
+        } catch (error, stack) {
+          if (!removalFailed.isCompleted) {
+            removalFailed.completeError(error, stack);
+          }
+          rethrow;
+        }
+      }, isCurrent: () => dialog.isCurrent);
+      await Future.any<void>([
+        navigator.push(dialog),
+        disposed.future,
+        removalFailed.future,
+      ]);
+      release();
+    });
+    if (owner.canPresent && popup?.isCurrent != false && isCurrent()) {
+      onChanged?.call(List.unmodifiable(manager.folderNames));
+    }
+  } on SelectionCancelled {
+    // The original caller or database can retire before presentation or commit.
+  }
+}
+
+String? validateFolderName(String newFolderName, {List<String>? folders}) {
+  folders ??= LocalFavoritesManager().folderNames;
   if (newFolderName.isEmpty) {
     return "Folder name cannot be empty".tl;
   } else if (newFolderName.length > 50) {
@@ -56,10 +155,36 @@ String? validateFolderName(String newFolderName) {
   return null;
 }
 
-void addFavorite(List<Comic> comics) {
-  final manager = LocalFavoritesManager();
+Future<void> addFavorite(
+  BuildContext context,
+  List<Comic> comics, {
+  bool Function()? isCurrent,
+}) {
+  final result = _addFavorite(context, comics, isCurrent: isCurrent);
+  unawaited(
+    result.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {
+        Log.error('Add favorites', error, stack);
+      },
+    ),
+  );
+  return result;
+}
+
+Future<void> _addFavorite(
+  BuildContext context,
+  List<Comic> comics, {
+  bool Function()? isCurrent,
+}) async {
+  if (!context.mounted || isCurrent?.call() == false) return;
+  final owner = WindowSelectionTask(context);
+  final manager = LocalFavoritesManager.cache;
+  if (!owner.canPresent || manager == null) return;
   final generation = manager.connectionGeneration;
-  final folders = manager.folderNames;
+  final dataPath = App.dataPath;
+  final folders = List<String>.unmodifiable(manager.folderNames);
+  if (folders.isEmpty) return;
   final items = comics
       .map(
         (comic) => FavoriteItem(
@@ -74,340 +199,225 @@ void addFavorite(List<Comic> comics) {
         ),
       )
       .toList();
-  var saving = false;
-  String? error;
+  bool currentDatabase() =>
+      identical(LocalFavoritesManager.cache, manager) &&
+      manager.connectionGeneration == generation &&
+      App.dataPath == dataPath;
   String? selectedFolder = GlobalPreferenceStore(
     appdata.settings,
   ).read(FavoritePreferences.quickFavorite);
-
-  showDialog(
-    context: appNavigation.rootContext,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          return ContentDialog(
-            title: "Select a folder".tl,
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  title: Text("Folder".tl),
-                  trailing: Select(
-                    current: selectedFolder,
-                    values: folders,
-                    minWidth: 112,
-                    onTap: (v) {
-                      if (saving) return;
-                      setState(() {
-                        selectedFolder = folders[v];
-                      });
-                    },
-                  ),
-                ),
-                if (error != null) Text(error!),
-              ],
-            ),
-            actions: [
-              FilledButton(
-                onPressed: saving
-                    ? null
-                    : () async {
-                        if (selectedFolder != null) {
-                          final folder = selectedFolder!;
-                          final route = ModalRoute.of(context);
-                          setState(() {
-                            saving = true;
-                            error = null;
-                          });
-                          try {
-                            await AppDataOperations.instance.access(() async {
-                              if (!context.mounted ||
-                                  route?.isCurrent == false) {
-                                return;
-                              }
-                              if (manager.connectionGeneration != generation) {
-                                throw StateError(
-                                  'Favorites database changed. Reopen this dialog.',
-                                );
-                              }
-                              for (final item in items) {
-                                await manager.addComic(folder, item);
-                              }
-                            });
-                            if (context.mounted && route?.isCurrent != false) {
-                              context.pop();
-                            }
-                          } catch (failure, stack) {
-                            Log.error('Add favorites', failure, stack);
-                            error = failure.toString();
-                          } finally {
-                            if (context.mounted) setState(() => saving = false);
-                          }
-                        }
-                      },
-                child: saving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text("Confirm".tl),
-              ),
-            ],
-          );
-        },
-      );
-    },
-  );
-}
-
-Future<List<FavoriteItem>> updateComicsInfo(String folder) async {
-  final manager = LocalFavoritesManager();
-  final generation = manager.connectionGeneration;
-  var comics = manager.getFolderComics(folder);
-  bool isCanceled = false;
-
-  void checkActive() {
-    if (isCanceled || manager.connectionGeneration != generation) {
-      throw StateError('Favorite update was cancelled or its database changed');
-    }
-  }
-
-  Future<void> updateSingleComic(int index) async {
-    int retry = 3;
-
-    while (true) {
-      try {
-        checkActive();
-        var c = comics[index];
-        var comicSource = c.type.comicSource;
-        if (comicSource == null) return;
-
-        var newInfo = (await comicSource.loadComicInfo!(c.id)).data;
-
-        var newTags = <String>[];
-        for (var entry in newInfo.tags.entries) {
-          const shouldIgnore = ['author', 'artist', 'time'];
-          var namespace = entry.key;
-          if (shouldIgnore.contains(namespace.toLowerCase())) {
-            continue;
-          }
-          for (var tag in entry.value) {
-            newTags.add("$namespace:$tag");
-          }
-        }
-
-        final updated = FavoriteItem(
-          id: c.id,
-          name: newInfo.title,
-          coverPath: newInfo.cover,
-          author:
-              newInfo.subTitle ??
-              newInfo.tags['author']?.firstOrNull ??
-              c.author,
-          type: c.type,
-          tags: newTags,
-        );
-
-        await manager.updateInfo(
-          folder,
-          updated,
-          generation: generation,
-          checkActive: checkActive,
-        );
-        comics[index] = updated;
-        return;
-      } catch (e) {
-        checkActive();
-        retry--;
-        if (retry == 0) {
-          rethrow;
-        }
-        continue;
-      }
-    }
-  }
-
-  var finished = ValueNotifier(0);
-
-  var errors = 0;
-
-  var index = 0;
-
-  showDialog(
-    context: appNavigation.rootContext,
-    builder: (context) {
-      return ValueListenableBuilder(
-        valueListenable: finished,
-        builder: (context, value, child) {
-          var isFinished = value == comics.length;
-          return ContentDialog(
-            title: isFinished ? "Finished".tl : "Updating".tl,
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                LinearProgressIndicator(value: value / comics.length),
-                const SizedBox(height: 4),
-                Text("$value/${comics.length}"),
-                const SizedBox(height: 4),
-                if (errors > 0) Text('${"Error".tl}: $errors'),
-              ],
-            ).paddingHorizontal(16),
-            actions: [
-              Button.filled(
-                color: isFinished ? null : context.colorScheme.error,
-                onPressed: () {
-                  isCanceled = true;
-                  context.pop();
-                },
-                child: isFinished ? Text("OK".tl) : Text("Cancel".tl),
-              ),
-            ],
-          );
-        },
-      );
-    },
-  ).then((_) {
-    isCanceled = true;
-  });
-
-  while (index < comics.length) {
-    var futures = <Future>[];
-    const maxConcurrency = 4;
-
-    if (isCanceled) {
-      return comics;
-    }
-
-    for (var i = 0; i < maxConcurrency; i++) {
-      if (index + i >= comics.length) break;
-      futures.add(
-        updateSingleComic(index + i).then(
-          (v) {
-            finished.value++;
-          },
-          onError: (_) {
-            errors++;
-            finished.value++;
+  if (!folders.contains(selectedFolder)) selectedFolder = null;
+  await showAsyncConfirmDialog(
+    context: context,
+    title: 'Select a folder'.tl,
+    content: '',
+    contentBuilder: (dialogContext, enabled) => StatefulBuilder(
+      builder: (context, setState) => ListTile(
+        title: Text('Folder'.tl),
+        trailing: Select(
+          current: selectedFolder,
+          values: folders,
+          minWidth: 112,
+          onTap: (index) {
+            if (!enabled ||
+                !context.mounted ||
+                !owner.active ||
+                isCurrent?.call() == false ||
+                !currentDatabase()) {
+              return;
+            }
+            setState(() => selectedFolder = folders[index]);
           },
         ),
-      );
-    }
-
-    await Future.wait(futures);
-    index += maxConcurrency;
-  }
-
-  return comics;
-}
-
-Future<void> sortFolders() async {
-  final manager = LocalFavoritesManager();
-  final generation = manager.connectionGeneration;
-  final owner = appNavigation.rootContext;
-  var folders = manager.folderNames;
-
-  await showPopUpWidget(
-    appNavigation.rootContext,
-    StatefulBuilder(
-      builder: (context, setState) {
-        return PopUpWidgetScaffold(
-          title: "Sort".tl,
-          tailing: [
-            Tooltip(
-              message: "Help".tl,
-              child: IconButton(
-                icon: const Icon(Icons.help_outline),
-                onPressed: () {
-                  showInfoDialog(
-                    context: context,
-                    title: "Reorder".tl,
-                    content: "Long press and drag to reorder.".tl,
-                  );
-                },
-              ),
-            ),
-          ],
-          body: ReorderableListView.builder(
-            onReorder: (oldIndex, newIndex) {
-              if (oldIndex < newIndex) {
-                newIndex--;
-              }
-              setState(() {
-                var item = folders.removeAt(oldIndex);
-                folders.insert(newIndex, item);
-              });
-            },
-            itemCount: folders.length,
-            itemBuilder: (context, index) {
-              return ListTile(
-                key: ValueKey(folders[index]),
-                title: Text(folders[index]),
-              );
-            },
-          ),
-        );
-      },
+      ),
     ),
-  );
-
-  try {
-    await AppDataOperations.instance.access(() async {
-      if (manager.connectionGeneration != generation) {
-        throw StateError('Favorites database changed. Try again.');
+    onConfirm: () async {
+      final folder = selectedFolder;
+      if (folder == null ||
+          !owner.active ||
+          isCurrent?.call() == false ||
+          !currentDatabase()) {
+        throw const SelectionCancelled();
       }
-      await manager.updateOrder(folders);
-    });
-  } catch (error, stack) {
-    Log.error('Sort favorite folders', error, stack);
-    if (owner.mounted) owner.showMessage(message: error.toString());
-  }
+      await AppDataOperations.instance.access(() async {
+        if (!currentDatabase() || !manager.existsFolder(folder)) {
+          throw const SelectionCancelled();
+        }
+        await manager.addComics(folder, items);
+      });
+    },
+  );
 }
 
 Future<void> importNetworkFolder(
+  BuildContext context,
   String source,
   int updatePageNum,
   String? folder,
-  String? folderID,
-) async {
+  String? folderID, {
+  bool Function()? isCurrent,
+}) {
+  final result = _importNetworkFolder(
+    context,
+    source,
+    updatePageNum,
+    folder,
+    folderID,
+    isCurrent: isCurrent,
+  );
+  unawaited(
+    result.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {
+        Log.error('Network favorite import presentation', error, stack);
+      },
+    ),
+  );
+  return result;
+}
+
+Future<void> _importNetworkFolder(
+  BuildContext context,
+  String source,
+  int updatePageNum,
+  String? folder,
+  String? folderID, {
+  bool Function()? isCurrent,
+}) async {
+  if (!context.mounted || isCurrent?.call() == false) return;
+  final owner = WindowSelectionTask(context);
+  if (!owner.canPresent) return;
   final comicSource = ComicSource.find(source);
   final data = comicSource?.favoriteData;
-  if (comicSource == null || data == null || updatePageNum <= 0) return;
+  final manager = LocalFavoritesManager.cache;
+  if (comicSource == null ||
+      data == null ||
+      manager == null ||
+      updatePageNum <= 0) {
+    return;
+  }
   final resultName = folder == null || folder.isEmpty
       ? comicSource.name
       : folder;
-  final manager = LocalFavoritesManager();
   if (manager.existsFolder(resultName) &&
       !manager.isLinkedToNetworkFolder(resultName, source, folderID ?? '')) {
-    appNavigation.rootContext.showMessage(message: 'Folder already exists'.tl);
+    context.showMessage(message: 'Folder already exists'.tl);
     return;
   }
   final generation = manager.connectionGeneration;
-  await showDialog<void>(
-    context: appNavigation.rootContext,
-    builder: (_) => NetworkFavoriteImportDialog(
-      collect: (scope, progress) => collectNetworkFavorites(
-        data: data,
-        sourceKey: source,
-        folderId: folderID,
-        pageLimit: updatePageNum,
-        scope: scope,
-        exists: (id) =>
-            manager.existsFolder(resultName) &&
-            manager.comicExists(resultName, id, ComicType(source.hashCode)),
-        onProgress: progress,
-      ),
-      publish: manager.publishNetworkFavoriteImport,
-      commit: (items, scope) async => await manager.importNetworkFavorites(
-        resultName,
-        source,
-        folderID ?? '',
-        items,
-        oldToNew: data.isOldToNewSort ?? false,
-        checkActive: scope.check,
-        generation: generation,
-      ),
-    ),
-  );
+  final dataPath = App.dataPath;
+  bool currentDatabase() =>
+      identical(LocalFavoritesManager.cache, manager) &&
+      manager.connectionGeneration == generation &&
+      App.dataPath == dataPath;
+  bool currentTarget() =>
+      owner.active &&
+      isCurrent?.call() != false &&
+      currentDatabase() &&
+      identical(ComicSource.find(source), comicSource) &&
+      identical(comicSource.favoriteData, data);
+  void checkTarget() {
+    if (!currentTarget()) throw const RequestCancelled();
+  }
+
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final disposed = Completer<void>();
+  final removalFailed = Completer<void>();
+  removalFailed.future.ignore();
+  Future<void>? lastWork;
+  Object? presentationError;
+  StackTrace? presentationStack;
+  try {
+    await owner.run<void>((operation) async {
+      operation.checkActive();
+      checkTarget();
+      late final ResourceDialogRoute<void> route;
+      final content = NetworkFavoriteImportDialog(
+        isCurrent: currentTarget,
+        onStarted: (work) => lastWork = work,
+        collect: (scope, progress) => collectNetworkFavorites(
+          data: data,
+          sourceKey: source,
+          folderId: folderID,
+          pageLimit: updatePageNum,
+          scope: scope,
+          isCurrent: currentTarget,
+          exists: (id) =>
+              manager.existsFolder(resultName) &&
+              manager.comicExists(resultName, id, ComicType(source.hashCode)),
+          onProgress: progress,
+        ),
+        publish: (result) async {
+          if (currentDatabase()) {
+            await manager.publishNetworkFavoriteImport(result);
+          }
+        },
+        commit: (items, scope) => AppDataOperations.instance.access(() async {
+          scope.check();
+          checkTarget();
+          return manager.importNetworkFavorites(
+            resultName,
+            source,
+            folderID ?? '',
+            items,
+            oldToNew: data.isOldToNewSort ?? false,
+            checkActive: () {
+              scope.check();
+              checkTarget();
+            },
+            generation: generation,
+          );
+        }),
+      );
+      route = ResourceDialogRoute<void>(
+        context: context,
+        themes: InheritedTheme.capture(from: context, to: navigator.context),
+        barrierColor: DialogTheme.of(context).barrierColor ?? Colors.black54,
+        onDispose: () {
+          if (!disposed.isCompleted) disposed.complete();
+        },
+        builder: (_) => content,
+      );
+      final release = owner.retainPresentation(() {
+        try {
+          if (navigator.mounted && route.isActive) navigator.removeRoute(route);
+        } catch (error, stack) {
+          if (!removalFailed.isCompleted) {
+            removalFailed.completeError(error, stack);
+          }
+          rethrow;
+        }
+      }, isCurrent: () => route.isCurrent);
+      await Future.any<void>([
+        navigator.push(route),
+        disposed.future,
+        removalFailed.future,
+      ]);
+      release();
+    });
+  } on SelectionCancelled {
+    // No presentation was admitted.
+  } on RequestCancelled {
+    // The captured source or database retired before admission.
+  } catch (error, stack) {
+    presentationError = error;
+    presentationStack = stack;
+  }
+  try {
+    await lastWork;
+  } on SelectionCancelled {
+    // Closing a view cancels further reads, but has already drained accepted work.
+  } catch (error, stack) {
+    if (presentationError != null) {
+      throw SelectionCleanupFailure(
+        [(error: presentationError, stack: presentationStack!)],
+        operationError: error,
+        operationStack: stack,
+      );
+    }
+    rethrow;
+  }
+  if (presentationError != null) {
+    Error.throwWithStackTrace(presentationError, presentationStack!);
+  }
 }

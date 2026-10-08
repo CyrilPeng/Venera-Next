@@ -17,6 +17,8 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'sidebar_presentation_test.dart' show settleSidebarWork;
+
 class _File extends FileSelection {
   _File({this.release}) : super('selected.pdf');
   final Future<void> Function()? release;
@@ -92,6 +94,89 @@ void main() {
       null,
     );
   });
+
+  for (final report in [false, true]) {
+    testWidgets(
+      'pending consumer failure belongs to closing host: opt-in=$report',
+      (tester) async {
+        final registry = SelectionTaskRegistry();
+        final host = _Host(registry: registry, window: false);
+        await tester.pumpWidget(host.app());
+        final task = WindowSelectionTask(host.context);
+        final pending = Completer<void>();
+        final original = StateError('original consumer failure');
+        final stack = StackTrace.fromString('original consumer stack');
+        var calls = 0;
+        Object? operationError;
+        final result = task
+            .run<void>((_) async {
+              calls++;
+              await pending.future;
+              Error.throwWithStackTrace(original, stack);
+            }, reportFailureOnClose: report)
+            .catchError((Object error) {
+              operationError = error;
+            });
+        addTearDown(() async {
+          if (!pending.isCompleted) pending.complete();
+          await settleSidebarWork(tester, () => result);
+          await settleSidebarWork(tester, registry.closeAndWait);
+        });
+        await tester.pump();
+        Object? closeError;
+        var closed = false;
+        final closing = registry.closeAndWait().then<void>(
+          (_) => closed = true,
+          onError: (Object error) {
+            closeError = error;
+          },
+        );
+        await tester.pump();
+        expect(closed, isFalse);
+        expect(closeError, isNull);
+        pending.complete();
+        await settleSidebarWork(tester, () => Future.wait([result, closing]));
+        expect(operationError, same(original));
+        if (report) {
+          final failure =
+              (closeError as SelectionCleanupFailure).failures.single
+                  as ({Object error, StackTrace stack});
+          expect(failure.error, same(original));
+          expect(failure.stack, same(stack));
+        } else {
+          expect(closeError, isNull);
+          expect(closed, isTrue);
+        }
+        await settleSidebarWork(tester, registry.closeAndWait);
+        expect(calls, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'opt-in close before consumer starts remains expected cancellation',
+    (tester) async {
+      final registry = SelectionTaskRegistry();
+      final host = _Host(registry: registry, window: false);
+      await tester.pumpWidget(host.app());
+      final task = WindowSelectionTask(host.context);
+      var calls = 0;
+      Object? reported;
+      final result = task
+          .run<void>((_) async {
+            calls++;
+          }, reportFailureOnClose: true)
+          .catchError((Object error) {
+            reported = error;
+          });
+      final closing = registry.closeAndWait();
+      await settleSidebarWork(tester, () => Future.wait([result, closing]));
+      expect(reported, isA<SelectionCancelled>());
+      expect(calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'independent view cleanup retains stacks and original cause across host retries',
@@ -197,6 +282,56 @@ void main() {
       final retry = task.closeAndWait();
       await tester.pumpAndSettle();
       await retry;
+      expect(closes, 2);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'window close reports failed presentation before an explicit retry',
+    (tester) async {
+      final host = _Host();
+      await tester.pumpWidget(host.app());
+      final task = WindowSelectionTask(host.context);
+      final finished = Completer<void>();
+      final original = StateError('original view close failed');
+      final originalStack = StackTrace.fromString('original view close stack');
+      var closes = 0;
+      var fails = true;
+      Object? operationError;
+      final result = task
+          .run<void>((_) async {
+            task.retainPresentation(() {
+              closes++;
+              if (!finished.isCompleted) finished.complete();
+              if (fails) Error.throwWithStackTrace(original, originalStack);
+            });
+            await finished.future;
+          })
+          .catchError((Object error) {
+            operationError = error;
+          });
+      addTearDown(() async {
+        fails = false;
+        if (!finished.isCompleted) finished.complete();
+        await settleSidebarWork(tester, task.closeAndWait);
+        await settleSidebarWork(tester, () => result);
+      });
+      await tester.pump();
+      host.close(tester);
+      await tester.pumpAndSettle();
+      final reported = tester.takeException() as SelectionCleanupFailure;
+      final failure =
+          reported.failures.single as ({Object error, StackTrace stack});
+      expect(failure.error, same(original));
+      expect(failure.stack, same(originalStack));
+      expect(operationError, isA<SelectionCleanupFailure>());
+      expect(host.exits, 0);
+      expect(closes, 1);
+      fails = false;
+      host.close(tester);
+      await tester.pumpAndSettle();
+      expect(host.exits, 1);
       expect(closes, 2);
       expect(tester.takeException(), isNull);
     },

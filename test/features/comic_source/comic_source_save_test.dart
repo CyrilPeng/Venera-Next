@@ -840,9 +840,11 @@ void main() {
       manager.remove(key);
     });
 
-    final count = await SourceUpdateService.instance.checkUpdates();
+    final updates = SourceUpdateService(manager: ComicSourceManager());
+    addTearDown(updates.closeAndWait);
+    final report = await updates.checkUpdates();
 
-    expect(count, 0);
+    expect(report.updates, isEmpty);
     expect(ComicSourceManager().availableUpdates, isEmpty);
   });
 }

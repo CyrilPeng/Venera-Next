@@ -6,19 +6,17 @@ import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/services.dart';
-import 'package:flutter_reorderable_grid_view/widgets/reorderable_builder.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/flyout.dart';
-import 'package:venera_next/components/layout.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/message.dart';
-import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/components/select.dart';
 import 'package:venera_next/components/settings_save_state.dart';
-import 'package:venera_next/components/window_frame.dart';
+import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
@@ -26,13 +24,19 @@ import 'package:venera_next/features/favorites/favorite_actions.dart';
 import 'package:venera_next/features/favorites/favorites_display.dart';
 import 'package:venera_next/features/favorites/favorites_constants.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
+import 'package:venera_next/features/favorites/comic_reorder_page.dart';
+import 'package:venera_next/features/favorites/folder_rename_dialog.dart';
+import 'package:venera_next/features/favorites/favorite_confirmation_dialog.dart';
+import 'package:venera_next/features/favorites/favorite_transfer_dialog.dart';
+import 'package:venera_next/features/favorites/favorite_metadata_dialog.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_locale.dart';
-import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -62,6 +66,7 @@ class LocalFavoritesPage extends StatefulWidget {
   final void Function(bool isNetwork, String? folder) onFolderSelected;
   final VoidCallback updateFolderList;
   final Future<void> Function(
+    BuildContext context,
     String source,
     int pages,
     String folder,
@@ -81,10 +86,6 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   Map<Comic, bool> selectedComics = {};
 
-  var selectedLocalFolders = <String>{};
-
-  late List<String> added = [];
-
   String keyword = "";
   bool searchHasUpper = false;
 
@@ -97,6 +98,19 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   bool get isAllFolder => widget.folder == localAllFolderLabel;
 
   LocalFavoritesManager get manager => LocalFavoritesManager();
+
+  late final LocalFavoritesManager _observedManager;
+  late final int _observedGeneration;
+  late final String _observedDataPath;
+  WindowSelectionTask? _queryOwner;
+  final _metadataTasks = <WindowSelectionTask>{};
+
+  bool get _canReadObservedFolder =>
+      mounted &&
+      _queryOwner?.active == true &&
+      identical(LocalFavoritesManager.cache, _observedManager) &&
+      _observedManager.connectionGeneration == _observedGeneration &&
+      App.dataPath == _observedDataPath;
 
   bool isLoading = false;
   int _queryGeneration = 0;
@@ -126,7 +140,8 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   void updateComics() {
-    if (!mounted) return;
+    if (!_canReadObservedFolder) return;
+    final manager = _observedManager;
     final generation = ++_queryGeneration;
     final folder = widget.folder;
     _loadError = null;
@@ -149,7 +164,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
         unawaited(
           reading.then<void>(
             (value) {
-              if (!mounted ||
+              if (!_canReadObservedFolder ||
                   generation != _queryGeneration ||
                   widget.folder != folder) {
                 return;
@@ -161,7 +176,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
             },
             onError: (Object error, StackTrace stack) {
               Log.error('Favorites query', error, stack);
-              if (!mounted ||
+              if (!_canReadObservedFolder ||
                   generation != _queryGeneration ||
                   widget.folder != folder) {
                 return;
@@ -258,11 +273,15 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   @override
   void initState() {
+    super.initState();
+    _observedManager = LocalFavoritesManager();
+    _observedGeneration = _observedManager.connectionGeneration;
+    _observedDataPath = App.dataPath;
     readFilterSelect =
         appdata.implicitData["local_favorites_read_filter"] ??
         readFilterList[0];
     if (!isAllFolder) {
-      var (a, b) = LocalFavoritesManager().findLinked(widget.folder);
+      var (a, b) = _observedManager.findLinked(widget.folder);
       networkSource = a;
       networkFolder = b;
     } else {
@@ -270,9 +289,15 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
       networkFolder = null;
     }
     comics = [];
+    _observedManager.addListener(updateComics);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_queryOwner != null) return;
+    _queryOwner = WindowSelectionTask(context);
     updateComics();
-    LocalFavoritesManager().addListener(updateComics);
-    super.initState();
   }
 
   void _retireUpdateFlyout() {
@@ -290,10 +315,11 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   void didUpdateWidget(LocalFavoritesPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.folder != widget.folder) {
+      _cancelMetadataUpdates();
       _filterRequest++;
-      final linked = isAllFolder
+      final linked = isAllFolder || !_canReadObservedFolder
           ? (null, null)
-          : manager.findLinked(widget.folder);
+          : _observedManager.findLinked(widget.folder);
       networkSource = linked.$1;
       networkFolder = linked.$2;
       updateComics();
@@ -306,8 +332,10 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   @override
   void dispose() {
+    _cancelMetadataUpdates();
     _retireUpdateFlyout();
-    LocalFavoritesManager().removeListener(updateComics);
+    _observedManager.removeListener(updateComics);
+    scrollController.dispose();
     super.dispose();
   }
 
@@ -382,6 +410,14 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final target = widget;
+    final selection = selectedComics.keys.cast<FavoriteItem>().toList();
+    final selectedItems = selection.map((comic) => comic.detached()).toList();
+    bool isCurrentSelection() =>
+        _canReadObservedFolder &&
+        widget.folder == target.folder &&
+        multiSelectMode &&
+        listEquals(selectedComics.keys.toList(), selection);
     var title = widget.folder;
     if (title == localAllFolderLabel) {
       title = "All".tl;
@@ -424,7 +460,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       }
                       final folder = widget.folder;
                       final importFolder = widget.importFolder;
-                      final generation = manager.connectionGeneration;
+                      final generation = _observedManager.connectionGeneration;
                       final route = ModalRoute.of(context);
                       if (!identical(_updateFlyoutRoute, route)) {
                         _updateFlyoutRoute = route;
@@ -435,11 +471,11 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                         });
                       }
                       bool isCurrent() =>
-                          mounted &&
+                          _canReadObservedFolder &&
                           widget.folder == folder &&
                           widget.importFolder == importFolder &&
-                          manager.connectionGeneration == generation &&
-                          manager.findLinked(folder) ==
+                          _observedManager.connectionGeneration == generation &&
+                          _observedManager.findLinked(folder) ==
                               (source, remoteFolder) &&
                           NavigationAdmission.allows(this.context);
                       return _FavoriteFolderSyncPanel(
@@ -448,6 +484,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                         onUpdate: (pages) async {
                           if (!isCurrent()) return;
                           await importFolder(
+                            this.context,
                             source,
                             pages,
                             folder,
@@ -525,33 +562,20 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       icon: Icons.edit_outlined,
                       text: "Rename".tl,
                       onClick: () {
-                        final target = widget;
-                        final generation = manager.connectionGeneration;
-                        showInputDialog(
-                          context: appNavigation.rootContext,
-                          title: "Rename".tl,
-                          hintText: "New Name".tl,
-                          onConfirm: (value) async {
-                            var err = validateFolderName(value.toString());
-                            if (err != null) {
-                              return err;
+                        renameFavoriteFolder(
+                          context,
+                          manager: _observedManager,
+                          folder: target.folder,
+                          isCurrent: () =>
+                              _canReadObservedFolder &&
+                              widget.folder == target.folder,
+                          onRenamed: (name) {
+                            target.updateFolderList();
+                            if (_canReadObservedFolder &&
+                                _queryOwner?.canPresent == true &&
+                                widget.folder == target.folder) {
+                              target.onFolderSelected(false, name);
                             }
-                            await AppDataOperations.instance.access(() async {
-                              if (manager.connectionGeneration != generation) {
-                                throw StateError(
-                                  'Favorites database changed. Try again.',
-                                );
-                              }
-                              await manager.rename(
-                                target.folder,
-                                value.toString(),
-                              );
-                            });
-                            if (mounted && widget.folder == target.folder) {
-                              target.updateFolderList();
-                              target.onFolderSelected(false, value.toString());
-                            }
-                            return null;
                           },
                         );
                       },
@@ -560,32 +584,33 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       icon: Icons.reorder,
                       text: "Reorder".tl,
                       onClick: () {
-                        context
-                            .to(() {
-                              return _ReorderComicsPage(widget.folder, (
-                                comics,
-                              ) {
-                                if (mounted) this.comics = comics;
-                              });
-                            })
-                            .then((value) {
-                              if (mounted) {
-                                setState(() {});
-                              }
-                            });
+                        if (_queryOwner?.canPresent != true) return;
+                        reorderFavoriteComics(
+                          context,
+                          manager: _observedManager,
+                          folder: target.folder,
+                          isCurrent: () =>
+                              _canReadObservedFolder &&
+                              widget.folder == target.folder,
+                        );
                       },
                     ),
                     MenuEntry(
                       icon: Icons.upload_file,
                       text: "Export".tl,
                       onClick: () {
-                        var json = LocalFavoritesManager().folderToJson(
-                          widget.folder,
+                        if (!_canReadObservedFolder ||
+                            _queryOwner?.canPresent != true ||
+                            widget.folder != target.folder) {
+                          return;
+                        }
+                        final json = _observedManager.folderToJson(
+                          target.folder,
                         );
                         saveFileForWindow(
                           context,
                           data: utf8.encode(json),
-                          filename: "${widget.folder}.json",
+                          filename: "${target.folder}.json",
                         );
                       },
                     ),
@@ -593,17 +618,12 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       icon: Icons.update,
                       text: "Update Comics Info".tl,
                       onClick: () {
-                        final folder = widget.folder;
-                        final generation = manager.connectionGeneration;
-                        updateComicsInfo(folder).then((newComics) {
-                          if (mounted &&
-                              widget.folder == folder &&
-                              manager.connectionGeneration == generation) {
-                            setState(() {
-                              comics = newComics;
-                            });
-                          }
-                        });
+                        if (_queryOwner?.canPresent != true ||
+                            !_canReadObservedFolder ||
+                            widget.folder != target.folder) {
+                          return;
+                        }
+                        _refreshMetadata(context, target.folder);
                       },
                     ),
                     MenuEntry(
@@ -611,26 +631,26 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       text: "Delete Folder".tl,
                       color: context.colorScheme.error,
                       onClick: () {
-                        final target = widget;
-                        final generation = manager.connectionGeneration;
-                        showAsyncConfirmDialog(
-                          context: appNavigation.rootContext,
+                        if (_queryOwner?.canPresent != true) return;
+                        confirmFavoriteMutation(
+                          context: context,
+                          manager: _observedManager,
+                          folder: target.folder,
                           title: "Delete".tl,
                           content: "Delete folder '@f' ?".tlParams({
-                            "f": widget.folder,
+                            "f": target.folder,
                           }),
                           btnColor: context.colorScheme.error,
-                          onConfirm: () async {
-                            await AppDataOperations.instance.access(() async {
-                              if (manager.connectionGeneration != generation) {
-                                throw StateError(
-                                  'Favorites database changed. Try again.',
-                                );
-                              }
-                              await manager.deleteFolder(target.folder);
-                            });
-                            if (mounted && widget.folder == target.folder) {
-                              target.updateFolderList();
+                          isCurrent: () =>
+                              _canReadObservedFolder &&
+                              widget.folder == target.folder,
+                          mutate: () =>
+                              _observedManager.deleteFolder(target.folder),
+                          onCommitted: () {
+                            target.updateFolderList();
+                            if (_canReadObservedFolder &&
+                                _queryOwner?.canPresent == true &&
+                                widget.folder == target.folder) {
                               target.onFolderSelected(false, null);
                             }
                           },
@@ -668,13 +688,41 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                     MenuEntry(
                       icon: Icons.drive_file_move,
                       text: "Move to folder".tl,
-                      onClick: () => favoriteOption('move'),
+                      onClick: () {
+                        if (_queryOwner?.canPresent != true ||
+                            !isCurrentSelection()) {
+                          return;
+                        }
+                        showFavoriteTransferDialog(
+                          context: context,
+                          manager: _observedManager,
+                          source: target.folder,
+                          comics: selectedItems,
+                          move: true,
+                          isCurrent: isCurrentSelection,
+                          onCommitted: _cancel,
+                        );
+                      },
                     ),
                   if (!isAllFolder)
                     MenuEntry(
                       icon: Icons.copy,
                       text: "Copy to folder".tl,
-                      onClick: () => favoriteOption('add'),
+                      onClick: () {
+                        if (_queryOwner?.canPresent != true ||
+                            !isCurrentSelection()) {
+                          return;
+                        }
+                        showFavoriteTransferDialog(
+                          context: context,
+                          manager: _observedManager,
+                          source: target.folder,
+                          comics: selectedItems,
+                          move: false,
+                          isCurrent: isCurrentSelection,
+                          onCommitted: _cancel,
+                        );
+                      },
                     ),
                   MenuEntry(
                     icon: Icons.select_all,
@@ -697,20 +745,25 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       text: "Delete Comic".tl,
                       color: context.colorScheme.error,
                       onClick: () {
-                        final folder = widget.folder;
-                        final generation = manager.connectionGeneration;
-                        final items = selectedComics.keys
-                            .cast<FavoriteItem>()
-                            .toList();
-                        showAsyncConfirmDialog(
+                        if (_queryOwner?.canPresent != true ||
+                            !isCurrentSelection()) {
+                          return;
+                        }
+                        confirmFavoriteMutation(
                           context: context,
+                          manager: _observedManager,
+                          folder: target.folder,
                           title: "Delete".tl,
                           content: "Delete @c comics?".tlParams({
-                            "c": selectedComics.length,
+                            "c": selectedItems.length,
                           }),
                           btnColor: context.colorScheme.error,
-                          onConfirm: () =>
-                              _deleteComicWithId(folder, generation, items),
+                          isCurrent: isCurrentSelection,
+                          mutate: () => _observedManager.batchDeleteComics(
+                            target.folder,
+                            selectedItems,
+                          ),
+                          onCommitted: _cancel,
                         );
                       },
                     ),
@@ -818,11 +871,47 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                     icon: Icons.delete,
                     text: "Delete".tl,
                     onClick: () async {
-                      await LocalFavoritesManager().deleteComicWithId(
-                        widget.folder,
-                        c.id,
-                        (c as FavoriteItem).type,
-                      );
+                      if (!_canReadObservedFolder ||
+                          _queryOwner?.canPresent != true ||
+                          widget.folder != target.folder) {
+                        return;
+                      }
+                      final item = (c as FavoriteItem).detached();
+                      final owner = WindowSelectionTask(context);
+                      try {
+                        await owner.run<void>((operation) async {
+                          operation.checkActive();
+                          await AppDataOperations.instance.access(() async {
+                            // An accepted deletion may outlive its page, but
+                            // cannot enter a replacement database after queuing.
+                            if (!identical(
+                                  LocalFavoritesManager.cache,
+                                  _observedManager,
+                                ) ||
+                                _observedManager.connectionGeneration !=
+                                    _observedGeneration ||
+                                App.dataPath != _observedDataPath ||
+                                !_observedManager.existsFolder(target.folder)) {
+                              throw const SelectionCancelled();
+                            }
+                            await _observedManager.deleteComicWithId(
+                              target.folder,
+                              item.id,
+                              item.type,
+                            );
+                          });
+                        }, reportFailureOnClose: true);
+                      } on SelectionCancelled {
+                        // The original caller or database retired before admission.
+                      } catch (error, stack) {
+                        Log.error('Delete favorite', error, stack);
+                        if (context.mounted &&
+                            owner.canPresent &&
+                            _canReadObservedFolder &&
+                            widget.folder == target.folder) {
+                          context.showMessage(message: error.toString());
+                        }
+                      }
                     },
                   ),
                 MenuEntry(
@@ -962,174 +1051,31 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     );
   }
 
-  void favoriteOption(String option) {
-    final sourceFolder = widget.folder;
-    final generation = manager.connectionGeneration;
-    final items = selectedComics.keys.cast<FavoriteItem>().toList();
-    final selectedLocalFolders = <String>{};
-    var saving = false;
-    String? error;
-    var targetFolders = LocalFavoritesManager().folderNames
-        .where((folder) => folder != widget.folder)
-        .toList();
+  void _cancelMetadataUpdates() {
+    for (final task in _metadataTasks.toList()) {
+      task.cancel();
+    }
+  }
 
-    showPopUpWidget(
-      appNavigation.rootContext,
-      StatefulBuilder(
-        builder: (context, setState) {
-          return PopUpWidgetScaffold(
-            title: widget.folder,
-            body: Padding(
-              padding: EdgeInsets.only(bottom: context.padding.bottom + 16),
-              child: Container(
-                constraints: const BoxConstraints(
-                  maxHeight: 700,
-                  maxWidth: 500,
-                ),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: targetFolders.length + 1,
-                        itemBuilder: (context, index) {
-                          if (index == targetFolders.length) {
-                            return SizedBox(
-                              height: 36,
-                              child: Center(
-                                child: TextButton(
-                                  onPressed: () {
-                                    newFolder().then((v) {
-                                      if (!context.mounted) return;
-                                      setState(() {
-                                        targetFolders = LocalFavoritesManager()
-                                            .folderNames
-                                            .where(
-                                              (folder) =>
-                                                  folder != widget.folder,
-                                            )
-                                            .toList();
-                                      });
-                                    });
-                                  },
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.add, size: 20),
-                                      const SizedBox(width: 4),
-                                      Text("New Folder".tl),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-                          var folder = targetFolders[index];
-                          var disabled = false;
-                          if (selectedLocalFolders.isNotEmpty) {
-                            if (added.contains(folder) &&
-                                !added.contains(selectedLocalFolders.first)) {
-                              disabled = true;
-                            } else if (!added.contains(folder) &&
-                                added.contains(selectedLocalFolders.first)) {
-                              disabled = true;
-                            }
-                          }
-                          return CheckboxListTile(
-                            title: Row(
-                              children: [
-                                Text(folder),
-                                const SizedBox(width: 8),
-                              ],
-                            ),
-                            value: selectedLocalFolders.contains(folder),
-                            onChanged: disabled || saving
-                                ? null
-                                : (v) {
-                                    setState(() {
-                                      if (v!) {
-                                        selectedLocalFolders.add(folder);
-                                      } else {
-                                        selectedLocalFolders.remove(folder);
-                                      }
-                                    });
-                                  },
-                          );
-                        },
-                      ),
-                    ),
-                    Center(
-                      child: FilledButton(
-                        onPressed: saving
-                            ? null
-                            : () async {
-                                if (selectedLocalFolders.isEmpty) {
-                                  return;
-                                }
-                                final targets = selectedLocalFolders.toList();
-                                final route = ModalRoute.of(context);
-                                setState(() {
-                                  saving = true;
-                                  error = null;
-                                });
-                                try {
-                                  await AppDataOperations.instance.access(
-                                    () async {
-                                      if (!context.mounted ||
-                                          route?.isCurrent == false) {
-                                        return;
-                                      }
-                                      if (manager.connectionGeneration !=
-                                          generation) {
-                                        throw StateError(
-                                          'Favorites database changed. Reopen this dialog.',
-                                        );
-                                      }
-                                      await manager.transferFavorites(
-                                        sourceFolder,
-                                        targets,
-                                        items,
-                                        move: option == 'move',
-                                      );
-                                    },
-                                  );
-                                  if (context.mounted &&
-                                      route?.isCurrent != false) {
-                                    context.pop();
-                                  }
-                                  if (mounted &&
-                                      widget.folder == sourceFolder) {
-                                    updateComics();
-                                    _cancel();
-                                  }
-                                } catch (failure, stack) {
-                                  Log.error(
-                                    'Transfer favorites',
-                                    failure,
-                                    stack,
-                                  );
-                                  error = failure.toString();
-                                } finally {
-                                  if (context.mounted) {
-                                    setState(() => saving = false);
-                                  }
-                                }
-                              },
-                        child: saving
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(option == 'move' ? "Move".tl : "Add".tl),
-                      ),
-                    ),
-                    if (error != null) Text(error!),
-                  ],
-                ),
-              ),
-            ),
-          );
+  void _refreshMetadata(BuildContext context, String folder) {
+    final owner = WindowSelectionTask(context);
+    _metadataTasks.add(owner);
+    final result = showFavoriteMetadataDialog(
+      context: context,
+      owner: owner,
+      manager: _observedManager,
+      folder: folder,
+      isCurrent: () => _canReadObservedFolder && widget.folder == folder,
+    );
+    unawaited(
+      result.then<void>(
+        (_) {
+          _metadataTasks.remove(owner);
+        },
+        onError: (Object error, StackTrace stack) {
+          // Presentation reports its original error and host; consume this page's
+          // completion without transferring that failure to another page.
+          _metadataTasks.remove(owner);
         },
       ),
     );
@@ -1148,269 +1094,6 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
       selectedComics.clear();
       multiSelectMode = false;
     });
-  }
-
-  Future<void> _deleteComicWithId(
-    String folder,
-    int generation,
-    List<FavoriteItem> toBeDeleted,
-  ) async {
-    await AppDataOperations.instance.access(() async {
-      if (manager.connectionGeneration != generation) {
-        throw StateError('Favorites database changed. Try again.');
-      }
-      await manager.batchDeleteComics(folder, toBeDeleted);
-    });
-    if (mounted && widget.folder == folder) _cancel();
-  }
-}
-
-class _ReorderComicsPage extends StatefulWidget {
-  const _ReorderComicsPage(this.name, this.onReorder);
-
-  final String name;
-
-  final void Function(List<FavoriteItem>) onReorder;
-
-  @override
-  State<_ReorderComicsPage> createState() => _ReorderComicsPageState();
-}
-
-class _ReorderComicsPageState extends State<_ReorderComicsPage> {
-  final _key = GlobalKey();
-  var reorderWidgetKey = UniqueKey();
-  final _scrollController = ScrollController();
-  late var comics = LocalFavoritesManager().getFolderComics(widget.name);
-  bool changed = false;
-  late final _manager = LocalFavoritesManager();
-  late final int _generation;
-  Future<void> _pendingSave = Future.value();
-  int _saveRevision = 0;
-  Object? _saveError;
-  bool _leaving = false;
-  WindowFrameController? _window;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final window = context
-        .getInheritedWidgetOfExactType<WindowFrameController>();
-    if (identical(window, _window)) return;
-    _window?.removeExitTask(_flushOrder);
-    _window = window;
-    _window?.addExitTask(_flushOrder);
-  }
-
-  Future<void> _flushOrder() => _pendingSave;
-
-  void _saveOrder() {
-    final revision = ++_saveRevision;
-    final snapshot = comics.toList();
-    final folder = widget.name;
-    changed = true;
-    _saveError = null;
-    _pendingSave = AppDataOperations.instance
-        .access(() async {
-          if (_manager.connectionGeneration != _generation) {
-            throw StateError('Favorites database changed. Reopen this page.');
-          }
-          await _manager.reorder(snapshot, folder);
-        })
-        .then<void>(
-          (_) {
-            if (revision != _saveRevision) return;
-            changed = false;
-            if (mounted) {
-              widget.onReorder(snapshot);
-              setState(() {});
-            }
-          },
-          onError: (Object error, StackTrace stack) {
-            if (revision == _saveRevision) {
-              _saveError = error;
-              if (mounted) setState(() {});
-            }
-            Error.throwWithStackTrace(error, stack);
-          },
-        );
-    unawaited(
-      _pendingSave.catchError((Object error, StackTrace stack) {
-        Log.error('Reorder favorites', error, stack);
-      }),
-    );
-  }
-
-  Future<void> _leave() async {
-    if (_leaving) return;
-    final route = ModalRoute.of(context);
-    setState(() => _leaving = true);
-    try {
-      await _flushOrder();
-      if (mounted && route?.isCurrent != false) context.pop();
-    } catch (error) {
-      if (mounted) context.showMessage(message: error.toString());
-    } finally {
-      if (mounted) setState(() => _leaving = false);
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    // Bind the connection before the first user edit or a data replacement.
-    _generation = _manager.connectionGeneration;
-    appdata.settings.addListener(_onDisplaySettingsChanged);
-  }
-
-  void _onDisplaySettingsChanged() {
-    if (mounted) setState(() {});
-  }
-
-  static int _floatToInt8(double x) {
-    return (x * 255.0).round() & 0xff;
-  }
-
-  Color lightenColor(Color color, double lightenValue) {
-    int red = (_floatToInt8(color.r) + ((255 - color.r) * lightenValue))
-        .round();
-    int green = (_floatToInt8(color.g) * 255 + ((255 - color.g) * lightenValue))
-        .round();
-    int blue = (_floatToInt8(color.b) * 255 + ((255 - color.b) * lightenValue))
-        .round();
-
-    return Color.fromARGB(_floatToInt8(color.a), red, green, blue);
-  }
-
-  @override
-  void dispose() {
-    appdata.settings.removeListener(_onDisplaySettingsChanged);
-    _scrollController.dispose();
-    _window?.removeExitTask(_flushOrder);
-    _window?.trackExitTask(_pendingSave);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final gallery =
-        (GlobalPreferenceStore(
-          appdata.settings,
-        ).read(FavoritePreferences.displayMode) ==
-        'gallery');
-    final displayMode = gallery
-        ? ComicTileDisplayMode.gallery
-        : ComicTileDisplayMode.detailed;
-    var tiles = comics.map((e) {
-      var comicSource = e.type.comicSource;
-      return Padding(
-        key: Key(e.hashCode.toString()),
-        padding: const EdgeInsets.all(4),
-        child: ComicTile(
-          enableLongPressed: false,
-          displayMode: displayMode,
-          comic: Comic(
-            e.name,
-            e.coverPath,
-            e.id,
-            e.author,
-            e.tags,
-            "${e.time} | ${comicSource?.name ?? "Unknown"}",
-            comicSource?.key ??
-                (e.type == ComicType.local ? "local" : "Unknown"),
-            null,
-            null,
-          ),
-        ),
-      );
-    }).toList();
-    return PopScope(
-      canPop: !changed && !_leaving,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) unawaited(_leave());
-      },
-      child: AbsorbPointer(
-        absorbing: _leaving,
-        child: Scaffold(
-          appBar: Appbar(
-            title: Text("Reorder".tl),
-            actions: [
-              if (_saveError != null)
-                TextButton(onPressed: _saveOrder, child: Text('Retry'.tl)),
-              if (changed && _saveError == null)
-                const Center(
-                  child: SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              Tooltip(
-                message: "Information".tl,
-                child: IconButton(
-                  icon: const Icon(Icons.info_outline),
-                  onPressed: () {
-                    showInfoDialog(
-                      context: context,
-                      title: "Reorder".tl,
-                      content: "Long press and drag to reorder.".tl,
-                    );
-                  },
-                ),
-              ),
-              Tooltip(
-                message: "Reverse".tl,
-                child: IconButton(
-                  icon: const Icon(Icons.swap_vert),
-                  onPressed: () {
-                    setState(() {
-                      comics = comics.reversed.toList();
-                      changed = true;
-                    });
-                    _saveOrder();
-                  },
-                ),
-              ),
-            ],
-          ),
-          body: ReorderableBuilder<FavoriteItem>(
-            key: reorderWidgetKey,
-            scrollController: _scrollController,
-            longPressDelay: App.isDesktop
-                ? const Duration(milliseconds: 100)
-                : const Duration(milliseconds: 500),
-            onReorder: (reorderFunc) {
-              changed = true;
-              setState(() {
-                comics = reorderFunc(comics);
-              });
-              _saveOrder();
-            },
-            dragChildBoxDecoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: lightenColor(
-                Theme.of(context).splashColor.withAlpha(255),
-                0.2,
-              ),
-            ),
-            builder: (children) {
-              return GridView(
-                key: _key,
-                controller: _scrollController,
-                gridDelegate: SliverGridDelegateWithComics(
-                  galleryColumns: gallery
-                      ? GlobalPreferenceStore(
-                          appdata.settings,
-                        ).read(FavoritePreferences.galleryColumns)
-                      : null,
-                  forceDetailed: !gallery,
-                ),
-                children: children,
-              );
-            },
-            children: tiles,
-          ),
-        ),
-      ),
-    );
   }
 }
 

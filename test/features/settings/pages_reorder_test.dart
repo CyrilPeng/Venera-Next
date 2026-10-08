@@ -87,7 +87,11 @@ Future<void> _reloadPages(
 
 Future<void> _flushSettings(WidgetTester tester) async {
   var completed = false;
-  final saved = appdata.saveData(false).whenComplete(() => completed = true);
+  // Join the UI's actual writes without persisting another snapshot that could
+  // hide a missing save and add unrelated I/O before the reload assertions.
+  final saved = appdata
+      .runPersistenceMaintenance((_) async {})
+      .whenComplete(() => completed = true);
   // File I/O uses real time; its widget callbacks still need the test clock.
   for (var i = 0; i < 500 && !completed; i++) {
     await tester.runAsync(

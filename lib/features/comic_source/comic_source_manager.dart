@@ -43,6 +43,7 @@ class ComicSourceManager with ChangeNotifier, Init {
   /// Observe an already assembled runtime without creating or replacing it.
   static ComicSourceManager? get current =>
       _instance?._closing == true ? null : _instance;
+  bool get isClosing => _closing;
   bool _closing = false;
   Future<void>? _closeFuture;
   JsEngine? _sourceEngine;
@@ -798,7 +799,9 @@ class ComicSourceManager with ChangeNotifier, Init {
     return source;
   });
 
-  Future<void> replaceScript(
+  /// Returns this mutation's exact replacement, even if another accepted
+  /// operation changes the registry before the caller resumes.
+  Future<ComicSource> replaceScript(
     ComicSource source,
     String js, {
     required void Function() validate,
@@ -807,7 +810,7 @@ class ComicSourceManager with ChangeNotifier, Init {
     () => _replaceScript(source, js, validate: validate, origin: origin),
   );
 
-  Future<void> _replaceScript(
+  Future<ComicSource> _replaceScript(
     ComicSource source,
     String js, {
     required void Function() validate,
@@ -920,9 +923,14 @@ class ComicSourceManager with ChangeNotifier, Init {
       failures: committedErrors,
       checkpoint: checkpoint,
     );
+    return replacement;
   }
 
-  Future<void> uninstallScript(ComicSource source) => _mutate(() async {
+  Future<void> uninstallScript(
+    ComicSource source, {
+    void Function()? validate,
+  }) => _mutate(() async {
+    validate?.call();
     final index = _sources.indexOf(source);
     if (index < 0 || !identical(find(source.key), source)) {
       throw ComicSourceParseException('The source is no longer installed.');

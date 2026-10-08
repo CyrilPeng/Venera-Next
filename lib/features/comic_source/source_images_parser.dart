@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/network/image_loading_config.dart';
+import 'package:venera_next/network/request_scope.dart';
 
 import 'normalization.dart';
 import 'types.dart';
@@ -123,14 +125,35 @@ class SourceImagesParser {
     }
     return (id, next) async {
       try {
-        var res = await context.runReadCode("""
+        return await context.runReadCodeToCompletion<Res<List<String>>>(
+          """
           ${context.sourceExpression}.comic.loadThumbnails(${jsonEncode(id)}, ${jsonEncode(next)})
-        """);
-        final result = normalizeComicSourceStringListResult(res, 'thumbnails');
-        if (result == null) throw "Invalid data";
-        return Res(result.items, subData: result.data['next']);
+        """,
+          consume: (raw) {
+            final result = normalizeComicSourceStringListResult(
+              raw,
+              'thumbnails',
+            );
+            if (result == null) throw 'Invalid data';
+            final cursor = result.data['next'];
+            if (cursor != null && cursor is! String) {
+              throw const FormatException('Invalid thumbnail cursor');
+            }
+            return Res(List<String>.of(result.items), subData: cursor);
+          },
+        );
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
+        if (e is RequestCancelled) {
+          return Res.failure(
+            OperationFailure(
+              message: e.toString(),
+              kind: FailureKind.cancelled,
+              cause: e,
+              stackTrace: s,
+            ),
+          );
+        }
         return Res.fromException(e, s);
       }
     };

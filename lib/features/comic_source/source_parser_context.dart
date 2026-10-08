@@ -76,6 +76,22 @@ class SourceParserContext {
     return _guardValue(await engine.runReadCode(code, name));
   }
 
+  Future<T> runCodeToCompletion<T>(
+    String code, {
+    required T Function(dynamic result) consume,
+    String? name,
+  }) {
+    checkCurrent();
+    return engine.runCodeToCompletion<T>(
+      code,
+      consume: (value) {
+        checkCurrent();
+        return consume(value);
+      },
+      name: name,
+    );
+  }
+
   Future<T> runReadCodeToCompletion<T>(
     String code, {
     required T Function(dynamic result) consume,
@@ -92,13 +108,19 @@ class SourceParserContext {
     );
   }
 
-  dynamic Function(List<dynamic>) retainCallback(
-    JSInvokable function, {
-    JsCallbackScope? scope,
-  }) {
+  JsCallback retainCallback(JSInvokable function, {JsCallbackScope? scope}) {
     final callback = (scope ?? callbacks).retain(function);
-    return (arguments) {
+    return (arguments, {consume}) {
       checkCurrent();
+      if (consume != null) {
+        return callback(
+          arguments,
+          consume: (value) {
+            checkCurrent();
+            consume(value);
+          },
+        );
+      }
       return _guardResult(callback(arguments));
     };
   }

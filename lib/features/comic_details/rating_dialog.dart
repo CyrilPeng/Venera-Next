@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/translations.dart';
 
@@ -19,7 +20,9 @@ class _ComicRatingDialogState extends State<ComicRatingDialog> {
   bool isLoading = false;
 
   Future<void> submit() async {
-    if (isLoading) return;
+    if (isLoading || !NavigationAdmission.allows(context)) return;
+    final route = ModalRoute.of(context);
+    final navigator = Navigator.of(context);
     setState(() => isLoading = true);
     Res<bool> result;
     try {
@@ -29,11 +32,17 @@ class _ComicRatingDialogState extends State<ComicRatingDialog> {
     }
     if (!mounted) return;
     setState(() => isLoading = false);
+    if (route?.isCurrent != true ||
+        !identical(ModalRoute.of(context), route) ||
+        !navigator.mounted ||
+        !NavigationAdmission.allows(context)) {
+      return;
+    }
     if (result.error) {
       context.showMessage(message: result.errorMessage!);
     } else {
       context.showMessage(message: "Success".tl);
-      Navigator.of(context).pop();
+      navigator.pop();
     }
   }
 

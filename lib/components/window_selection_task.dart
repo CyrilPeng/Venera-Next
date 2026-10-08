@@ -45,6 +45,7 @@ class WindowSelectionTask {
   bool _presentationCloseFailed = false;
   Object? _operationError;
   StackTrace? _operationStack;
+  Future<void>? _pendingResultOnClose;
 
   bool get active =>
       !operation.isCancelled &&
@@ -91,19 +92,46 @@ class WindowSelectionTask {
     );
   }
 
-  Future<T> run<T>(Future<T> Function(SelectionOperation) action) {
+  /// Opt in when closing must also report a still-pending consumer failure,
+  /// such as a save accepted by the page. Completed failures remain with the
+  /// caller; later closes retry cleanup without replaying the action.
+  Future<T> run<T>(
+    Future<T> Function(SelectionOperation) action, {
+    bool reportFailureOnClose = false,
+  }) {
     // run defers the callback to a microtask so registration precedes arbitrary
     // native/presentation callbacks, including synchronous window-close reentry.
     final result = operation.run(action);
+    final finished = _finish(result, rememberFailure: true);
+    if (reportFailureOnClose) {
+      final pending = finished.then<void>((_) {});
+      _pendingResultOnClose = pending;
+      unawaited(
+        pending.then<void>(
+          (_) => _pendingResultOnClose = null,
+          onError: (Object error, StackTrace stack) {
+            _pendingResultOnClose = null;
+          },
+        ),
+      );
+    }
     _releaseHost = _registry?.retain(cancel: cancel, close: closeAndWait);
-    _window?.addCloseStartListener(cancel);
+    _window?.addCloseStartListener(_onWindowClose);
     _window?.addExitTask(closeAndWait);
     _window?.trackExitTask(operation.settled);
     if (!active) cancel();
-    return _finish(result, rememberFailure: true);
+    return finished;
+  }
+
+  void _onWindowClose() {
+    // Join cleanup from the start of this close attempt. Waiting only for the
+    // operation would let a failed presentation be retried by the exit task
+    // before the window has reported the first failure.
+    _window?.trackExitTask(closeAndWait());
   }
 
   Future<void> closeAndWait() async {
+    final pending = _pendingResultOnClose;
     // A completed failed attempt is retried only by an explicit close, not by
     // cancellation or by another waiter finishing the same operation.
     if (_presentationCloseFailed) {
@@ -112,6 +140,13 @@ class WindowSelectionTask {
     }
     cancel();
     await _finish(operation.closeAndWait());
+    if (pending != null) {
+      try {
+        await pending;
+      } on SelectionCancelled {
+        // Closing can cancel an operation before its consumer is admitted.
+      }
+    }
   }
 
   Future<T> _finish<T>(Future<T> result, {bool rememberFailure = false}) async {
@@ -143,7 +178,7 @@ class WindowSelectionTask {
   }
 
   void _detachIfReleased() {
-    _window?.removeCloseStartListener(cancel);
+    _window?.removeCloseStartListener(_onWindowClose);
     if (!operation.hasPendingCleanup && _presentations.isEmpty) {
       _window?.removeExitTask(closeAndWait);
       _releaseHost?.call();

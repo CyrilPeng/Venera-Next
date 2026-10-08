@@ -1,0 +1,31 @@
+# JS input, selection and dialog disposal compatibility
+
+Baseline: `983b7cc90cffaa0ea209302043204fb74be61e8c` (2026-10-08).
+
+## Immediate validation and actual completion
+
+The public JS validator remains synchronous. Null/undefined accepts the submitted text; every other immediate value is converted to validation text. A returned Promise still produces the ordinary `Future<dynamic>` text immediately and does not become a valid asynchronous validator. The Dart input-confirmation API continues to await the Future returned by its own callback. Public `assets/init.js`, argument names, source/storage formats and CLI behavior are unchanged.
+
+`JsCallbackScope.retainImmediate` provides a narrow immediate consumer while reusing the existing engine callback-completion bridge. The original function runs once. Synchronous success/rejection is borrowed before its result graph is adopted and released; aliases, map keys and cycles use the existing identity-aware release machinery. Immediate consumer errors preserve their original stack, and result/consumer/release failures retain separate diagnostics. The native frame also protects conversion, adoption and Promise observation against synchronous shutdown reentry. Ordinary `JsCallback` invocation and its typedef retain their existing contracts.
+
+For a Promise, the immediate consumer receives a `Future<dynamic>` completion marker that never lends the eventual native success graph; its successful value is null. The returned `Future<void>` independently joins the original top-level invocation and its cleanup. Scope disposal ends future UI admission but does not stand in for the actual invocation ending. Closing the original native runtime remains a cancellation boundary. This is not an arbitrary descendant-Promise or unreturned-script-task completion guarantee.
+
+The JS input adapter separates presentation completion from accepted validator work. It registers the original application/window before invoking callbacks, returns its display result when the input closes, and retains the registration until accepted validator invocations settle. Original immediate errors are logged while their graph is borrowed; later rejections and release errors remain observed. No callback is replayed, no business queue is added, and synchronous invalid input can still be edited and retried.
+
+## Selection and route disposal
+
+`components/select_dialog.dart` is an explicit-context UI helper. The JS adapter supplies its original host, keeps string filtering and filtered-index validation, and returns null for an empty filtered list without requiring a UI host. Select changes, Cancel and Confirm require the original route to remain current and admitted. A replaced Navigator cannot be adopted by the old JS handler, and disposed callbacks cannot update state or close a later route.
+
+Confirm returns the current selection. Explicit Cancel returns null. Back, close and barrier dismissal retain the current selection, including an initial selection. Closing the original application or disposing its Navigator returns null, including disposal before the first widget build. An unrelated covering route is retained. Failed route removal completes the waiting task with its failure and keeps that exact route for an explicit close retry.
+
+`ResourceDialogRoute` shares the prior input-route disposal hook with selection and ordinary JS dialogs. Input behavior outside the route type is unchanged. Ordinary JS dialogs now complete on never-built route disposal and failed removal; callback task completion stays separate from presentation completion. JS dialogs retain DialogRoute's original theme/default barrier behavior, while input/selection retain captured themes and the dialog barrier color. Selection layout parameters, shared controls, other message helpers and loading behavior retain their prior implementation. `message.dart` has no forwarding select export and remains pending review.
+
+## Evidence and remaining work
+
+The input baseline has eight genuine failures covering aliased/rejected references, premature application completion, late result/rejection cleanup and reentrant shutdown. The corrected selection baseline preserves six behavior cases and fails six ownership cases. An earlier selection run was interrupted because a test matcher awaited an intentionally unclosed Future; that fixture was corrected without changing production behavior or test timeouts. Three ordinary-dialog baseline regressions fail on never-built disposal and failed removal. All baseline snapshots and logs are retained externally.
+
+The final suite adds 46 regressions across synthetic callbacks, real QuickJS input/selection, original application/window ownership, route removal retry and engine consumption/shutdown. Existing input-confirmation and JS lifecycle tests remain. Seven strict-analysis diagnostics in the new comment/tests were corrected before the second format/freeze; both source snapshots and intermediate diagnostics are retained. The final targeted/full-suite, coverage, analysis and build figures are recorded in the acceptance log and `js-input-ownership-artifact-hashes.json`.
+
+Inventory: 512 files, 325 business, 155 UI, 32 pending review, 240 business entry points. The new selection helper is UI. Six reverse UI/pending probes reject; all previous business protections, 57 feature edges and the 46-file navigation SCC remain. Source checks preserve 27 protocol/infrastructure blobs, the input body apart from its route type, other message helpers, selection layout parameters and engine/UI regions outside this change.
+
+This unit does not finish all callback-scope release-failure paths, arbitrary nested/foreign result graphs, launchUrl, loading/toast/other confirmation lifetime, favorite callback publication or archive selection. The original 52 rows remain 24 I / 27 P / 1 U. Domain interfaces, configuration, initialization, storage/recovery, remaining source/account contracts, compatibility retirement, complete CLI, declared Flutter 3.41.4, five-platform scenarios and repeated fixed-device performance measurements remain open. Local Flutter 3.41.6 / Dart 3.11.4 and temporary Windows fixtures do not replace those acceptance criteria.

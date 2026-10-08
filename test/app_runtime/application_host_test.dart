@@ -26,6 +26,59 @@ CoreBootstrap _core(
 );
 
 void main() {
+  test(
+    'source cancellation starts before waiting for its UI and mount consumers',
+    () async {
+      final sources = _ClosingSourceUpdates();
+      final fixture = SyncTestFixture();
+      var stores = 0;
+      final core = _core(() async => stores++);
+      await core.start();
+      final host = ApplicationHost(
+        core: core,
+        sync: fixture.controller,
+        sourceUpdates: sources,
+        dataOperations: AppDataOperations(),
+      );
+      host.selections.retain(
+        cancel: () {},
+        close: () => sources.cancelled.future,
+      );
+      host.attach(stop: () {}, close: () => sources.cancelled.future);
+      final closing = host.close();
+      await pumpEventQueue();
+      expect(sources.cancelled.isCompleted, isTrue);
+      expect(stores, 0);
+      sources.released.complete();
+      await closing;
+      expect(stores, 1);
+    },
+  );
+
+  test(
+    'each default application owns a distinct source update service',
+    () async {
+      final firstCore = _core(() async {}), secondCore = _core(() async {});
+      await firstCore.start();
+      await secondCore.start();
+      final first = ApplicationHost(
+        core: firstCore,
+        sync: SyncTestFixture().controller,
+        dataOperations: AppDataOperations(),
+      );
+      final second = ApplicationHost(
+        core: secondCore,
+        sync: SyncTestFixture().controller,
+        dataOperations: AppDataOperations(),
+      );
+      expect(first.sourceUpdates, isNot(same(second.sourceUpdates)));
+      await first.close();
+      expect(first.sourceUpdates.isClosed, isTrue);
+      expect(second.sourceUpdates.isClosed, isFalse);
+      await second.close();
+    },
+  );
+
   testWidgets(
     'a remounted application during finalization mounts only shutdown feedback',
     (tester) async {
@@ -308,4 +361,14 @@ void main() {
       await core.close();
     },
   );
+}
+
+class _ClosingSourceUpdates extends SourceUpdateService {
+  final cancelled = Completer<void>();
+  final released = Completer<void>();
+  @override
+  Future<void> closeAndWait() {
+    if (!cancelled.isCompleted) cancelled.complete();
+    return released.future;
+  }
 }

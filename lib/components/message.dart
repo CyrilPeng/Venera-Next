@@ -1,20 +1,16 @@
 import 'package:venera_next/foundation/navigation_admission.dart';
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/foundation/persistence_failure.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 import 'appbar.dart';
 import 'button.dart';
-import 'select.dart';
+import 'window_selection_task.dart';
 
 void showToast({
   required String message,
@@ -139,9 +135,17 @@ class OverlayWidget extends StatefulWidget {
 class OverlayWidgetState extends State<OverlayWidget> {
   final overlayKey = GlobalKey<OverlayState>();
 
+  late final OverlayEntry _contentEntry;
+
   OverlayEntry? _toastEntry;
 
   final _toasts = <_ToastRecord>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _contentEntry = OverlayEntry(builder: (context) => widget.child);
+  }
 
   void showToast({
     required String message,
@@ -182,8 +186,10 @@ class OverlayWidgetState extends State<OverlayWidget> {
       return;
     }
     if (_toasts.isEmpty) {
-      _toastEntry?.remove();
+      final entry = _toastEntry;
       _toastEntry = null;
+      entry?.remove();
+      entry?.dispose();
     } else {
       _toastEntry?.markNeedsBuild();
     }
@@ -197,16 +203,18 @@ class OverlayWidgetState extends State<OverlayWidget> {
 
   @override
   void dispose() {
-    removeAll();
-    super.dispose();
+    try {
+      removeAll();
+      _contentEntry.remove();
+      _contentEntry.dispose();
+    } finally {
+      super.dispose();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Overlay(
-      key: overlayKey,
-      initialEntries: [OverlayEntry(builder: (context) => widget.child)],
-    );
+    return Overlay(key: overlayKey, initialEntries: [_contentEntry]);
   }
 }
 
@@ -248,73 +256,27 @@ Future<void> showConfirmDialog({
   );
 }
 
-/// Wait for mutations, surface errors, and never replay a committed operation.
-Future<void> showAsyncConfirmDialog({
-  required BuildContext context,
-  required String title,
-  required String content,
-  required Future<void> Function() onConfirm,
-  Color? btnColor,
-}) {
-  var saving = false;
-  var committed = false;
-  String? error;
-  return showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => StatefulBuilder(
-      builder: (context, setState) {
-        return PopScope(
-          canPop: !saving,
-          child: ContentDialog(
-            title: title,
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [Text(content), if (error != null) Text(error!)],
-            ).paddingHorizontal(16).paddingVertical(8),
-            actions: [
-              TextButton(
-                onPressed: saving ? null : () => context.pop(),
-                child: Text('Cancel'.tl),
-              ),
-              Button.filled(
-                color: btnColor,
-                isLoading: saving,
-                onPressed: () async {
-                  if (saving) return;
-                  if (committed) {
-                    context.pop();
-                    return;
-                  }
-                  final route = ModalRoute.of(context);
-                  setState(() {
-                    saving = true;
-                    error = null;
-                  });
-                  try {
-                    await onConfirm();
-                    committed = true;
-                    if (context.mounted && route?.isCurrent != false) {
-                      context.pop();
-                    }
-                  } catch (failure, stack) {
-                    Log.error('Confirm operation', failure, stack);
-                    committed =
-                        failure is PersistenceFailure &&
-                        failure.commitState == PersistenceCommitState.committed;
-                    error = failure.toString();
-                  } finally {
-                    if (context.mounted) setState(() => saving = false);
-                  }
-                },
-                child: Text(committed ? 'OK'.tl : 'Confirm'.tl),
-              ),
-            ],
-          ),
-        );
-      },
-    ),
-  );
+/// Route disposal runs even if the navigator disappears before the first build.
+class ResourceDialogRoute<T> extends DialogRoute<T> {
+  ResourceDialogRoute({
+    required super.context,
+    required super.builder,
+    super.themes,
+    super.barrierColor,
+    super.barrierDismissible,
+    required this.onDispose,
+  });
+
+  final VoidCallback onDispose;
+
+  @override
+  void dispose() {
+    try {
+      onDispose();
+    } finally {
+      super.dispose();
+    }
+  }
 }
 
 /// Releases dialog-owned resources even when its navigator is unmounted.
@@ -333,8 +295,11 @@ class DialogResourceScope extends StatefulWidget {
 class _DialogResourceScopeState extends State<DialogResourceScope> {
   @override
   void dispose() {
-    widget.onDispose();
-    super.dispose();
+    try {
+      widget.onDispose();
+    } finally {
+      super.dispose();
+    }
   }
 
   @override
@@ -408,6 +373,15 @@ LoadingDialogController showLoadingDialog(
   }
 
   var finished = false;
+  var cancellationStarted = false;
+  var isCancelling = false;
+  WindowSelectionTask? inputOwner;
+  void cancel() {
+    if (cancellationStarted) return;
+    cancellationStarted = true;
+    onCancel?.call();
+  }
+
   void finish() {
     if (finished) return;
     finished = true;
@@ -418,53 +392,65 @@ LoadingDialogController showLoadingDialog(
     controller._setMessage = null;
     controller._isCurrent = null;
     try {
-      if (!wasClosed && cancelOnDismiss) onCancel?.call();
+      if (!wasClosed && cancelOnDismiss) cancel();
     } finally {
       onClosed?.call();
     }
   }
 
-  var loadingDialogRoute = DialogRoute(
+  var loadingDialogRoute = ResourceDialogRoute<void>(
     context: context,
     barrierDismissible: barrierDismissible,
+    onDispose: finish,
     builder: (BuildContext context) {
-      return DialogResourceScope(
-        onDispose: finish,
-        child: StatefulBuilder(
-          builder: (context, setState) {
-            controller._serProgress = (value) {
-              setState(() {
-                controller._progress = value;
-              });
-            };
-            controller._setMessage = (message) {
-              setState(() {
-                controller._message = message;
-              });
-            };
-            return ContentDialog(
-              title: controller._message ?? 'Loading'.tl,
-              content: LinearProgressIndicator(
-                value: controller._progress,
-                backgroundColor: context.colorScheme.surfaceContainer,
-              ).paddingHorizontal(16).paddingVertical(16),
-              actions: [
-                FilledButton(
-                  onPressed: allowCancel
-                      ? () {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          inputOwner ??= WindowSelectionTask(context);
+          controller._serProgress = (value) {
+            if (finished || !context.mounted) return;
+            setState(() {
+              controller._progress = value;
+            });
+          };
+          controller._setMessage = (message) {
+            if (finished || !context.mounted) return;
+            setState(() {
+              controller._message = message;
+            });
+          };
+          return ContentDialog(
+            title: controller._message ?? 'Loading'.tl,
+            content: LinearProgressIndicator(
+              value: controller._progress,
+              backgroundColor: context.colorScheme.surfaceContainer,
+            ).paddingHorizontal(16).paddingVertical(16),
+            actions: [
+              FilledButton(
+                onPressed: allowCancel
+                    ? () {
+                        if (isCancelling ||
+                            controller.closed ||
+                            !controller.isCurrent ||
+                            inputOwner?.canPresent != true) {
+                          return;
+                        }
+                        isCancelling = true;
+                        try {
+                          cancel();
+                        } finally {
                           try {
-                            onCancel?.call();
-                          } finally {
                             controller.close();
+                          } finally {
+                            isCancelling = false;
                           }
                         }
-                      : null,
-                  child: Text(cancelButtonText.tl),
-                ),
-              ],
-            );
-          },
-        ),
+                      }
+                    : null,
+                child: Text(cancelButtonText.tl),
+              ),
+            ],
+          );
+        },
       );
     },
   );
@@ -515,7 +501,8 @@ class ContentDialog extends StatelessWidget {
                     icon: const Icon(Icons.close),
                     onPressed: dismissible
                         ? () {
-                            if (NavigationAdmission.allows(context)) {
+                            if (NavigationAdmission.allows(context) &&
+                                ModalRoute.of(context)?.isCurrent != false) {
                               Navigator.of(context).maybePop();
                             }
                           }
@@ -570,109 +557,6 @@ class ContentDialog extends StatelessWidget {
   }
 }
 
-Future<void> showInputDialog({
-  required BuildContext context,
-  required String title,
-  String? hintText,
-  required FutureOr<Object?> Function(String) onConfirm,
-  void Function()? onClosed,
-  String? initialValue,
-  String confirmText = "Confirm",
-  String cancelText = "Cancel",
-  RegExp? inputValidator,
-  String? image,
-  Uint8List? imageData,
-}) {
-  var controller = TextEditingController(text: initialValue);
-  bool isLoading = false;
-  String? error;
-
-  final disposed = Completer<void>();
-  final closed = showDialog<void>(
-    context: context,
-    builder: (context) {
-      return DialogResourceScope(
-        onDispose: () {
-          controller.dispose();
-          try {
-            onClosed?.call();
-          } finally {
-            if (!disposed.isCompleted) disposed.complete();
-          }
-        },
-        child: StatefulBuilder(
-          builder: (context, setState) {
-            return ContentDialog(
-              title: title,
-              content: Column(
-                children: [
-                  if (image != null)
-                    SizedBox(
-                      height: 108,
-                      child: Image.network(image, fit: BoxFit.none),
-                    ).paddingBottom(8),
-                  if (image == null && imageData != null)
-                    SizedBox(
-                      height: 108,
-                      child: Image.memory(imageData, fit: BoxFit.none),
-                    ).paddingBottom(8),
-                  TextField(
-                    controller: controller,
-                    decoration: InputDecoration(
-                      hintText: hintText,
-                      border: const OutlineInputBorder(),
-                      errorText: error,
-                    ),
-                  ).paddingHorizontal(12),
-                ],
-              ),
-              actions: [
-                Button.filled(
-                  isLoading: isLoading,
-                  onPressed: () async {
-                    if (inputValidator != null &&
-                        !inputValidator.hasMatch(controller.text)) {
-                      setState(() => error = "Invalid input".tl);
-                      return;
-                    }
-                    if (isLoading) return;
-                    try {
-                      final futureOr = onConfirm(controller.text);
-                      Object? result;
-                      if (futureOr is Future) {
-                        setState(() => isLoading = true);
-                        result = await futureOr;
-                      } else {
-                        result = futureOr;
-                      }
-                      if (!context.mounted) return;
-                      if (result == null) {
-                        context.pop();
-                      } else {
-                        setState(() => error = result.toString());
-                      }
-                    } catch (failure) {
-                      if (context.mounted) {
-                        setState(() => error = failure.toString());
-                      }
-                    } finally {
-                      if (context.mounted && isLoading) {
-                        setState(() => isLoading = false);
-                      }
-                    }
-                  },
-                  child: Text(confirmText.tl),
-                ),
-              ],
-            );
-          },
-        ),
-      );
-    },
-  );
-  return Future.any<void>([closed, disposed.future]);
-}
-
 void showInfoDialog({
   required BuildContext context,
   required String title,
@@ -691,58 +575,4 @@ void showInfoDialog({
       );
     },
   );
-}
-
-Future<int?> showSelectDialog({
-  required String title,
-  required List<String> options,
-  int? initialIndex,
-}) async {
-  int? current = initialIndex;
-
-  await showDialog(
-    context: appNavigation.rootContext,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          return ContentDialog(
-            title: title,
-            content: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Select(
-                    current: current == null ? "" : options[current!],
-                    values: options,
-                    minWidth: 156,
-                    onTap: (i) {
-                      setState(() {
-                        current = i;
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  current = null;
-                  context.pop();
-                },
-                child: Text('Cancel'.tl),
-              ),
-              FilledButton(
-                onPressed: current == null ? null : context.pop,
-                child: Text('Confirm'.tl),
-              ),
-            ],
-          );
-        },
-      );
-    },
-  );
-
-  return current;
 }

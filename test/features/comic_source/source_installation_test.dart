@@ -667,7 +667,7 @@ class _Manager extends Fake implements ComicSourceManager {
   }
 
   @override
-  Future<void> replaceScript(
+  Future<ComicSource> replaceScript(
     ComicSource source,
     String js, {
     required void Function() validate,
@@ -679,6 +679,7 @@ class _Manager extends Fake implements ComicSourceManager {
       failNext = false;
       throw 'invalid replacement';
     }
+    return source;
   }
 }
 

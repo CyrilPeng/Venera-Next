@@ -44,7 +44,7 @@ void main() {
             JsEngine.cacheJsInit(await File('assets/init.js').readAsBytes());
             await engine.init();
           });
-          JsEngine.configureUiMessageHandler(JsUiApi());
+          engine.bindUiMessageHandler(JsUiApi());
           try {
             await tester.pumpWidget(
               MaterialApp(
@@ -114,7 +114,6 @@ void main() {
             expect(tester.takeException(), isNull);
           } finally {
             await tester.pumpWidget(const SizedBox());
-            JsEngine.configureUiMessageHandler(null);
             final closing = engine.closeAndWait();
             await tester.pumpAndSettle();
             await closing; // QuickJS reports leaked native references here.

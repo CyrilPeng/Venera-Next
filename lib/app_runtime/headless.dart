@@ -15,6 +15,7 @@ import 'data_sync.dart';
 import 'headless_arguments.dart';
 import 'headless_bindings.dart';
 import 'headless_source_update_command.dart';
+import 'headless_source_updates.dart';
 import 'headless_sync_command.dart';
 import 'headless_subscription_command.dart';
 import 'headless_output.dart';
@@ -40,6 +41,7 @@ Future<void> runHeadlessMode(List<String> args) async {
   final core = createCoreBootstrap(onDataChanged: sync.onDataChanged);
   var initialized = false;
   var commandExitCode = 0;
+  SourceUpdateService? sourceUpdates;
   try {
     await core.start();
     initialized = true;
@@ -54,8 +56,11 @@ Future<void> runHeadlessMode(List<String> args) async {
         );
         break;
       case HeadlessCommand.updateScript:
+        final updates = sourceUpdates = SourceUpdateService(
+          manager: ComicSourceManager.current,
+        );
         commandExitCode = await runHeadlessSourceUpdateCommand(
-          checkUpdates: _checkSourceUpdatesForCli,
+          checkUpdates: () => checkSourceUpdatesForCli(updates),
           emit: cliPrint,
         );
         break;
@@ -101,7 +106,10 @@ Future<void> runHeadlessMode(List<String> args) async {
     });
   } finally {
     final closed = await finishHeadlessRuntime(
-      closeCore: core.close,
+      closeCore: () async {
+        await sourceUpdates?.closeAndWait();
+        await core.close();
+      },
       disposeBindings: () {
         sync.dispose();
         configureComicSourceDataSavedHandler(null);
@@ -119,34 +127,6 @@ Future<void> runHeadlessMode(List<String> args) async {
 
   // Exit after command execution
   exit(commandExitCode);
-}
-
-Future<HeadlessSourceUpdateCheck> _checkSourceUpdatesForCli() async {
-  final service = SourceUpdateService.instance;
-  await service.checkUpdates();
-  final keys = List<String>.of(ComicSourceManager().availableUpdates.keys);
-  return HeadlessSourceUpdateCheck(
-    failures:
-        service.lastUpdateCheck?.failures
-            .map((failure) => failure.toString())
-            .toList() ??
-        const [],
-    updates: keys.map((key) {
-      final source = ComicSource.find(key);
-      return HeadlessSourceUpdate(
-        key: key,
-        name: source?.name ?? key,
-        version: source?.version ?? '',
-        url: source?.url ?? '',
-        update: () async {
-          if (source == null) {
-            throw StateError('Comic source no longer exists: $key');
-          }
-          await service.update(source);
-        },
-      );
-    }).toList(),
-  );
 }
 
 Future<HeadlessSubscriptionProgress?> _updateSelectedSubscription(

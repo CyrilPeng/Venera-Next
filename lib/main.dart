@@ -58,7 +58,7 @@ void main(List<String> args) {
         registerShowMessageHandler((context, message) {
           showToast(message: message, context: context);
         });
-        JsEngine.configureUiMessageHandler(JsUiApi());
+        JsEngine().bindUiMessageHandler(JsUiApi());
         final sync = createApplicationDataSync();
         final core = createCoreBootstrap(onDataChanged: sync.onDataChanged);
         try {
@@ -468,6 +468,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               if (installations != null) {
                 widget = SourceInstallationsScope(
                   queue: installations,
+                  updates: this.widget.host.sourceUpdates,
+                  refresh: forceRebuild,
                   child: widget,
                 );
               }

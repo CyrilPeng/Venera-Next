@@ -69,10 +69,10 @@ class SourceCommentsParser {
     return (id, subId, content, replyTo) async {
       Future<Res<bool>> func() async {
         try {
-          await context.runCode("""
+          await context.runCodeToCompletion<void>("""
             ${context.sourceExpression}.comic.sendComment(
               ${jsonEncode(id)}, ${jsonEncode(subId)}, ${jsonEncode(content)}, ${jsonEncode(replyTo)})
-          """);
+          """, consume: (_) {});
           return const Res(true);
         } catch (e, s) {
           Log.error("Network", "$e\n$s");
@@ -100,10 +100,10 @@ class SourceCommentsParser {
     return (comicId, epId, content, replyTo) async {
       Future<Res<bool>> func() async {
         try {
-          await context.runCode("""
+          await context.runCodeToCompletion<void>("""
             ${context.sourceExpression}.comic.sendChapterComment(
               ${jsonEncode(comicId)}, ${jsonEncode(epId)}, ${jsonEncode(content)}, ${jsonEncode(replyTo)})
-          """);
+          """, consume: (_) {});
           return const Res(true);
         } catch (e, s) {
           Log.error("Network", "$e\n$s");
@@ -121,10 +121,10 @@ class SourceCommentsParser {
     }
     return (id, subId, commentId, isUp, isCancel) async {
       try {
-        var res = await context.runCode("""
+        final count = await context.runCodeToCompletion<int>("""
           ${context.sourceExpression}.comic.voteComment(${jsonEncode(id)}, ${jsonEncode(subId)}, ${jsonEncode(commentId)}, ${jsonEncode(isUp)}, ${jsonEncode(isCancel)})
-        """);
-        return Res(res is num ? res.toInt() : 0);
+        """, consume: (raw) => raw is num ? raw.toInt() : 0);
+        return Res(count);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
         return Res.fromException(e, s);
@@ -138,10 +138,10 @@ class SourceCommentsParser {
     }
     return (id, subId, commentId, isLiking) async {
       try {
-        var res = await context.runCode("""
+        final count = await context.runCodeToCompletion<int>("""
           ${context.sourceExpression}.comic.likeComment(${jsonEncode(id)}, ${jsonEncode(subId)}, ${jsonEncode(commentId)}, ${jsonEncode(isLiking)})
-        """);
-        return Res(res is num ? res.toInt() : 0);
+        """, consume: (raw) => raw is num ? raw.toInt() : 0);
+        return Res(count);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
         return Res.fromException(e, s);

@@ -1,9 +1,10 @@
 import 'source_failure_presentation.dart';
-import 'source_failure.dart';
 import 'dart:async';
 import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/components/window_frame.dart';
+import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/foundation/navigation_admission.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'dart:convert';
 import 'dart:io' as io;
@@ -15,80 +16,64 @@ import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/features/comic_source/comic_source_manager.dart';
 import 'package:venera_next/features/comic_source/source.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/network/app_dio.dart';
 import 'package:venera_next/network/cookie_jar.dart';
 import 'package:venera_next/routing/webview.dart';
-import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 import 'parser.dart' show compareSemVer;
 import 'source_installation_widgets.dart';
+import 'source_installations_scope.dart';
 import 'source_translation.dart';
 import 'source_repositories.dart';
 import 'source_repository_page.dart';
 import 'source_script_editor.dart';
+import 'source_script_files.dart';
+import 'source_script_session.dart';
 import 'source_import_dialog.dart';
 import 'source_update_service.dart';
+import 'source_update_prompt.dart';
+import 'source_mutation_failure.dart';
 
 class ComicSourcePage extends StatelessWidget {
-  const ComicSourcePage({super.key});
+  const ComicSourcePage({
+    super.key,
+    this.scriptFiles = const SourceScriptFiles(),
+  });
 
-  @visibleForTesting
-  static SourceUpdateService updateService = SourceUpdateService.instance;
-
-  static Future<void> update(
-    ComicSource source, [
-    bool showLoading = true,
-  ]) async {
-    final service = updateService;
-    if (!showLoading) return service.update(source);
-    if (service.isUpdating(source.key)) return;
-    final loadingContext = appNavigation.rootContext;
-    LoadingDialogController? controller;
-    try {
-      controller = showLoadingDialog(
-        loadingContext,
-        onCancel: () => service.cancel(source.key),
-        barrierDismissible: false,
-      );
-      await service.update(
-        source,
-        onCommit: () {
-          if (loadingContext.mounted) controller?.close();
-        },
-      );
-    } catch (error) {
-      if (error is SourceFailure && error.code == SourceFailureCode.cancelled) {
-        return;
-      }
-      final context = appNavigation.rootNavigatorKey.currentContext;
-      if (context != null && context.mounted) {
-        context.showMessage(
-          message: error is DioException
-              ? 'Network error'.tl
-              : sourceFailureMessage(error),
-        );
-      }
-    } finally {
-      if (loadingContext.mounted) controller?.close();
-    }
-  }
+  final SourceScriptFiles scriptFiles;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(body: const _Body());
+    final owner = SourceInstallationsScope.ownerOf(context);
+    return Scaffold(
+      body: _Body(
+        manager: owner.queue.manager,
+        updates: owner.updates,
+        refresh: owner.refresh,
+        scriptFiles: scriptFiles,
+      ),
+    );
   }
 }
 
 class _Body extends StatefulWidget {
-  const _Body();
+  const _Body({
+    required this.manager,
+    required this.scriptFiles,
+    this.updates,
+    this.refresh,
+  });
+
+  final ComicSourceManager manager;
+  final SourceScriptFiles scriptFiles;
+  final SourceUpdateService? updates;
+  final VoidCallback? refresh;
 
   @override
   State<_Body> createState() => _BodyState();
@@ -113,6 +98,19 @@ AppBar _sourceAppbar(BuildContext context, String title) => AppBar(
 
 class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
   late final tabs = TabController(length: 2, vsync: this);
+  final _openingEditors = Set<ComicSource>.identity();
+  final _updates = Set<SourceUpdatePrompt>.identity();
+  final _deletions = Map<ComicSource, WindowSelectionTask>.identity();
+  final _deletionFailures = Map<ComicSource, SourceMutationFailure>.identity();
+
+  void _cancelActions() {
+    for (final prompt in _updates) {
+      prompt.cancel();
+    }
+    for (final task in _deletions.values) {
+      task.cancel();
+    }
+  }
 
   void updateUI() {
     if (mounted) setState(() {});
@@ -121,18 +119,35 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    ComicSourceManager().addListener(updateUI);
+    if (!widget.manager.isClosing) widget.manager.addListener(updateUI);
+  }
+
+  @override
+  void didUpdateWidget(covariant _Body oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.manager, widget.manager) ||
+        !identical(oldWidget.updates, widget.updates)) {
+      _cancelActions();
+    }
+    if (!identical(oldWidget.manager, widget.manager)) {
+      oldWidget.manager.removeListener(updateUI);
+      if (!widget.manager.isClosing) widget.manager.addListener(updateUI);
+    }
   }
 
   @override
   void dispose() {
-    ComicSourceManager().removeListener(updateUI);
+    _cancelActions();
+    widget.manager.removeListener(updateUI);
     tabs.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final sources = widget.manager.isClosing
+        ? <ComicSource>[]
+        : widget.manager.all();
     return Column(
       children: [
         _sourceAppbar(context, 'Comic Source'.tl),
@@ -188,7 +203,7 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
                     controller: PrimaryScrollController.of(context),
                     slivers: [
                       buildCard(context),
-                      if (ComicSource.isEmpty)
+                      if (sources.isEmpty)
                         SliverToBoxAdapter(
                           child: SourceManagementEmptyState(
                             icon: Icons.extension_outlined,
@@ -198,10 +213,11 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
                                     .tl,
                           ),
                         ),
-                      for (var source in ComicSource.all())
+                      for (var source in sources)
                         _SliverComicSource(
                           key: ObjectKey(source),
                           source: source,
+                          manager: widget.manager,
                           edit: edit,
                           update: update,
                           delete: delete,
@@ -223,110 +239,184 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
     );
   }
 
-  void delete(ComicSource source) {
-    showConfirmDialog(
-      context: appNavigation.rootContext,
-      title: 'Uninstall source'.tl,
-      content: "Delete comic source '@n' ?".tlParams({"n": source.name}),
-      btnColor: context.colorScheme.error,
-      onConfirm: () async {
-        await ComicSourceManager().uninstallScript(source);
-        appNavigation.forceRebuild();
-      },
-    );
+  void delete(ComicSource source) async {
+    final manager = widget.manager;
+    final refresh = widget.refresh;
+    final path = App.dataPath;
+    final task = WindowSelectionTask(context);
+    bool canPresent() =>
+        mounted &&
+        identical(widget.manager, manager) &&
+        !manager.isClosing &&
+        path == App.dataPath &&
+        task.canPresent;
+    if (!canPresent() ||
+        !identical(manager.find(source.key), source) ||
+        _deletions.containsKey(source)) {
+      return;
+    }
+    final previousFailure = _deletionFailures[source];
+    if (previousFailure != null) {
+      context.showMessage(message: sourceFailureMessage(previousFailure));
+      return;
+    }
+    _deletions[source] = task;
+    try {
+      await task.run<void>((_) async {
+        if (!canPresent()) throw const SelectionCancelled();
+        final confirmed = await showSourceActionDialog(
+          context: context,
+          task: task,
+          canPresent: canPresent,
+          builder: (context, finish) => ContentDialog(
+            title: 'Uninstall source'.tl,
+            content: Text(
+              "Delete comic source '@n' ?".tlParams({'n': source.name}),
+            ).paddingHorizontal(16).paddingVertical(8),
+            actions: [
+              FilledButton(
+                onPressed: () => finish(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: context.colorScheme.error,
+                ),
+                child: Text('Confirm'.tl),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !canPresent()) return;
+        task.checkActive();
+        // Once admitted, deletion belongs to the manager even if UI closes.
+        await manager.uninstallScript(
+          source,
+          validate: () {
+            if (path != App.dataPath) {
+              throw StateError(
+                'Source deletion belongs to a different data directory',
+              );
+            }
+          },
+        );
+        if (canPresent()) refresh?.call();
+      });
+    } on SelectionCancelled {
+      // The original route or window no longer accepts confirmation.
+    } catch (error, stack) {
+      if (error is SourceMutationFailure) _deletionFailures[source] = error;
+      Log.error('Uninstall comic source', error, stack);
+      if (mounted && canPresent()) {
+        context.showMessage(message: sourceFailureMessage(error));
+      }
+    } finally {
+      _deletions.remove(source);
+    }
   }
 
   void edit(ComicSource source) async {
-    if (App.isDesktop) {
-      try {
-        final directory = Directory('${App.cachePath}/source_edit');
-        await directory.create(recursive: true);
-        final draft = await File(
-          source.filePath,
-        ).copy('${directory.path}/${source.key}.js');
-        final process = await Process.run("code", [
-          draft.path,
-        ], runInShell: true);
-        if (process.exitCode != 0) throw process.stderr.toString();
-        if (!mounted) return;
-        String? error;
-        bool saving = false;
-        await showDialog(
-          context: context,
-          builder: (context) => StatefulBuilder(
-            builder: (context, updateDialog) => AlertDialog(
-              title: Text("Reload Configs".tl),
-              scrollable: true,
-              content: SelectableText(
-                error ??
-                    'Save the file in your editor, then reload it here.'.tl,
-              ),
-              actions: [
-                TextButton(
-                  onPressed: saving ? null : () => Navigator.pop(context),
-                  child: Text("Cancel".tl),
-                ),
-                TextButton(
-                  onPressed: saving
-                      ? null
-                      : () async {
-                          updateDialog(() {
-                            saving = true;
-                            error = null;
-                          });
-                          try {
-                            await ComicSourceManager().replaceScript(
-                              source,
-                              await draft.readAsString(),
-                              validate: () {},
-                            );
-                            if (context.mounted) {
-                              updateDialog(() => error = 'Source reloaded'.tl);
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              updateDialog(
-                                () => error = sourceFailureMessage(e),
-                              );
-                            }
-                          } finally {
-                            if (context.mounted) {
-                              updateDialog(() => saving = false);
-                            }
-                          }
-                        },
-                  child: Text(saving ? 'Loading'.tl : 'Reload'.tl),
-                ),
-              ],
-            ),
-          ),
-        );
-        return;
-      } catch (e) {
-        //
+    final task = WindowSelectionTask(context);
+    final manager = widget.manager;
+    if (!task.canPresent || manager.isClosing || !_openingEditors.add(source)) {
+      return;
+    }
+    final files = widget.scriptFiles;
+    final dataPath = App.dataPath;
+    final cachePath = App.cachePath;
+    void validatePath() {
+      if (App.dataPath != dataPath) {
+        throw StateError('Source editor belongs to a different data directory');
       }
     }
-    if (!mounted) return;
+
+    void checkOrigin() {
+      task.checkActive();
+      validatePath();
+      if (manager.isClosing || !identical(manager.find(source.key), source)) {
+        throw StateError('The source is no longer available to this editor');
+      }
+    }
+
     try {
-      final script = await File(source.filePath).readAsString();
-      if (!mounted) return;
-      context.to(
-        () => SourceScriptEditor(
-          script: script,
-          onSave: (script) => ComicSourceManager().replaceScript(
-            source,
-            script,
-            validate: () {},
-          ),
-        ),
+      checkOrigin();
+      final session = SourceScriptSession(
+        source: source,
+        replace: (target, script) =>
+            manager.replaceScript(target, script, validate: validatePath),
       );
+      final prepared = await task.run<({String? draft, String? script})>((
+        _,
+      ) async {
+        if (App.isDesktop) {
+          try {
+            final draft = await files.createDraft(
+              sourcePath: source.filePath,
+              cachePath: cachePath,
+            );
+            checkOrigin();
+            await files.openEditor(draft);
+            checkOrigin();
+            return (draft: draft, script: null);
+          } on SelectionCancelled {
+            rethrow;
+          } catch (_) {
+            // Preserve the built-in fallback only for this original owner.
+            checkOrigin();
+          }
+        }
+        final script = await files.read(source.filePath);
+        checkOrigin();
+        return (draft: null, script: script);
+      });
+      checkOrigin();
+      if (!mounted) return;
+      if (prepared.draft case final draft?) {
+        await showDialog<void>(
+          context: context,
+          builder: (_) => SourceScriptReloadDialog(
+            read: () => files.read(draft),
+            onSave: session.save,
+            canSave: () => session.canSave,
+          ),
+        );
+      } else {
+        await context.to(
+          () => SourceScriptEditor(
+            script: prepared.script!,
+            onSave: session.save,
+            canSave: () => session.canSave,
+          ),
+        );
+      }
+    } on SelectionCancelled {
+      // Preparation still settles under its original application/window.
     } catch (error) {
-      if (mounted) context.showMessage(message: error.toString());
+      if (mounted && task.canPresent) {
+        context.showMessage(message: error.toString());
+      }
+    } finally {
+      _openingEditors.remove(source);
     }
   }
 
-  void update(ComicSource source, [bool showLoading = true]) {
-    ComicSourcePage.update(source, showLoading);
+  void update(ComicSource source) async {
+    final service = widget.updates;
+    final manager = widget.manager;
+    if (service == null) return;
+    final prompt = SourceUpdatePrompt(
+      context: context,
+      source: source,
+      manager: manager,
+      service: service,
+      isCurrent: () =>
+          mounted &&
+          identical(widget.updates, service) &&
+          identical(widget.manager, manager),
+    );
+    _updates.add(prompt);
+    try {
+      await prompt.run();
+    } finally {
+      _updates.remove(prompt);
+    }
   }
 
   Widget buildCard(BuildContext context) => SliverToBoxAdapter(
@@ -339,7 +429,11 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
             spacing: 8,
             runSpacing: 8,
             children: [
-              const _CheckUpdatesButton(),
+              SourceUpdateCheckButton(
+                manager: widget.manager,
+                service: widget.updates,
+                refresh: widget.refresh,
+              ),
               IconButton(
                 onPressed: help,
                 tooltip: 'Help'.tl,
@@ -371,157 +465,18 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
   }
 }
 
-class _CheckUpdatesButton extends StatefulWidget {
-  const _CheckUpdatesButton();
-
-  @override
-  State<_CheckUpdatesButton> createState() => _CheckUpdatesButtonState();
-}
-
-class _CheckUpdatesButtonState extends State<_CheckUpdatesButton> {
-  bool isLoading = false;
-
-  Future<void> check() async {
-    if (isLoading) return;
-    setState(() => isLoading = true);
-    try {
-      await ComicSourcePage.updateService.checkUpdates();
-      if (!mounted) return;
-      final result = ComicSourcePage.updateService.lastUpdateCheck!;
-      if (result.updates.isEmpty &&
-          result.failures.isEmpty &&
-          result.skipped == 0) {
-        context.showMessage(message: 'No updates'.tl);
-      } else {
-        await showUpdateDialog(result);
-      }
-    } catch (error) {
-      if (mounted) context.showMessage(message: error.toString());
-    } finally {
-      if (mounted) setState(() => isLoading = false);
-    }
-  }
-
-  Future<void> showUpdateDialog(SourceUpdateCheck result) async {
-    final doUpdate = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Source update check'.tl),
-        content: SizedBox(
-          width: 440,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '@checked checked · @skipped not checked'.tlParams({
-                    'checked': result.checked.toString(),
-                    'skipped': result.skipped.toString(),
-                  }),
-                ),
-                if (result.skipped > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(
-                      'Unlinked sources are not checked. Link a repository from each source’s origin menu.'
-                          .tl,
-                    ),
-                  ),
-                if (result.updates.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(
-                      result.updates.entries
-                          .map(
-                            (e) =>
-                                '${ComicSource.find(e.key)?.name ?? e.key}: ${e.value}',
-                          )
-                          .join('\n'),
-                    ),
-                  ),
-                if (result.updates.isEmpty && result.checked > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text('Checked sources are up to date.'.tl),
-                  ),
-                if (result.failures.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(
-                      '${'Some sources could not be checked.'.tl}\n${result.failures.map((failure) => failure.format(sourceFailureMessage)).join('\n')}',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Close'.tl),
-          ),
-          if (result.updates.isNotEmpty)
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text('Update'.tl),
-            ),
-        ],
-      ),
-    );
-    if (doUpdate != true || !mounted) return;
-    final loadingController = showLoadingDialog(
-      context,
-      message: 'Updating'.tl,
-      withProgress: true,
-    );
-    final failures = <String>[];
-    var current = 0;
-    try {
-      for (final key in result.updates.keys) {
-        final source = ComicSource.find(key);
-        if (source != null) {
-          try {
-            await ComicSourcePage.update(source, false);
-          } catch (error) {
-            failures.add('${source.name}: ${sourceFailureMessage(error)}');
-          }
-        }
-        loadingController.setProgress(++current / result.updates.length);
-      }
-    } finally {
-      loadingController.close();
-    }
-    if (failures.isNotEmpty && mounted) {
-      context.showMessage(message: failures.join('\n'));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FilledButton.tonalIcon(
-      icon: isLoading
-          ? SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(Icons.update),
-      label: Text("Check updates".tl),
-      onPressed: isLoading ? null : check,
-    );
-  }
-}
-
 class _CallbackSetting extends StatefulWidget {
-  const _CallbackSetting({required this.setting, required this.sourceKey});
+  const _CallbackSetting({
+    super.key,
+    required this.setting,
+    required this.source,
+    required this.manager,
+  });
 
   final MapEntry<String, Map<String, dynamic>> setting;
 
-  final String sourceKey;
+  final ComicSource source;
+  final ComicSourceManager manager;
 
   @override
   State<_CallbackSetting> createState() => _CallbackSettingState();
@@ -535,22 +490,43 @@ class _CallbackSettingState extends State<_CallbackSetting> {
   String get title => widget.setting.value['title'] ?? key;
 
   bool isLoading = false;
+  WindowSelectionTask? _task;
+
+  @override
+  void dispose() {
+    _task?.cancel();
+    super.dispose();
+  }
 
   Future<void> onClick() async {
-    if (isLoading) return;
+    if (!mounted || isLoading) return;
+    final task = WindowSelectionTask(context);
+    final source = widget.source;
+    final manager = widget.manager;
+    bool current() =>
+        mounted &&
+        identical(widget.source, source) &&
+        identical(widget.manager, manager) &&
+        !manager.isClosing &&
+        identical(manager.find(source.key), source);
+    if (!task.canPresent || !current()) return;
+    final callback = widget.setting.value['callback'];
+    _task = task;
+    setState(() => isLoading = true);
     try {
-      var func = widget.setting.value['callback'];
-      var result = func([]);
-      if (result is Future) {
-        setState(() {
-          isLoading = true;
-        });
-        await result;
-      }
+      await task.run<void>((_) async {
+        if (!current()) throw const SelectionCancelled();
+        await invokeJsCallbackToCompletion(callback, []);
+      });
+    } on SelectionCancelled {
+      // UI cancellation still joins the original accepted invocation.
     } catch (error, stack) {
       Log.error('Source setting callback', error, stack);
-      if (mounted) context.showMessage(message: error.toString());
+      if (mounted && current() && task.canPresent) {
+        context.showMessage(message: error.toString());
+      }
     } finally {
+      _task = null;
       if (mounted && isLoading) {
         setState(() {
           isLoading = false;
@@ -561,13 +537,62 @@ class _CallbackSettingState extends State<_CallbackSetting> {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      title: Text(title.ts(widget.sourceKey)),
-      trailing: Button.normal(
-        onPressed: onClick,
-        isLoading: isLoading,
-        child: Text(buttonText.ts(widget.sourceKey)),
-      ).fixHeight(32),
+    final label = buttonText.ts(widget.source.key);
+    final translatedTitle = title.ts(widget.source.key);
+    final scaler = MediaQuery.textScalerOf(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final text = TextPainter(
+          text: TextSpan(text: label, style: const TextStyle(fontSize: 14)),
+          textScaler: scaler,
+          textDirection: Directionality.of(context),
+        )..layout();
+        // Keep the usual tile padding and enough title space beside the button.
+        final stacked =
+            scaler.scale(14) > 14 ||
+            text.width + 32 + 56 + 40 >= constraints.maxWidth;
+        text.layout(
+          maxWidth: (constraints.maxWidth - 64).clamp(1, double.infinity),
+        );
+        final height = (text.height + 16).clamp(48.0, double.infinity);
+        text.dispose();
+        final button = Semantics(
+          button: true,
+          enabled: !isLoading,
+          label: isLoading ? label : null,
+          child: Button.normal(
+            onPressed: onClick,
+            isLoading: isLoading,
+            padding: stacked
+                ? const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
+                : null,
+            child: Text(label),
+          ),
+        );
+        if (!stacked) {
+          return ListTile(
+            title: Text(translatedTitle),
+            trailing: button.fixHeight(32),
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                translatedTitle,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: BoxConstraints(minHeight: height),
+                child: button,
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -576,12 +601,14 @@ class _SliverComicSource extends StatefulWidget {
   const _SliverComicSource({
     super.key,
     required this.source,
+    required this.manager,
     required this.edit,
     required this.update,
     required this.delete,
   });
 
   final ComicSource source;
+  final ComicSourceManager manager;
 
   final void Function(ComicSource source) edit;
   final void Function(ComicSource source) update;
@@ -607,7 +634,8 @@ class _SliverComicSourceState extends SettingsSaveState<_SliverComicSource> {
   bool _current(ComicSource target) =>
       mounted &&
       identical(source, target) &&
-      identical(ComicSource.find(target.key), target);
+      !widget.manager.isClosing &&
+      identical(widget.manager.find(target.key), target);
 
   Future<void> _saveValue(ComicSource target, String key, dynamic value) async {
     if (!_current(target) ||
@@ -632,7 +660,9 @@ class _SliverComicSourceState extends SettingsSaveState<_SliverComicSource> {
       _settingsCallbacks?.dispose();
       _settingsCallbacks = null;
     }
-    final newVersion = ComicSourceManager().availableUpdates[source.key];
+    final newVersion = widget.manager.isClosing
+        ? null
+        : widget.manager.availableUpdates[source.key];
     final hasUpdate =
         newVersion != null && compareSemVer(newVersion, source.version);
     final canManageScript = source.filePath.isNotEmpty;
@@ -848,7 +878,12 @@ class _SliverComicSourceState extends SettingsSaveState<_SliverComicSource> {
             ),
           );
         } else if (type == "callback") {
-          yield _CallbackSetting(setting: item, sourceKey: source.key);
+          yield _CallbackSetting(
+            key: ValueKey(key),
+            setting: item,
+            source: target,
+            manager: widget.manager,
+          );
         }
       } catch (e, s) {
         Log.error("ComicSourcePage", "Failed to build a setting\n$e\n$s");
@@ -858,6 +893,7 @@ class _SliverComicSourceState extends SettingsSaveState<_SliverComicSource> {
 
   Iterable<Widget> _buildAccount() sync* {
     final target = source;
+    final manager = widget.manager;
     if (source.account == null) return;
     final bool logged = source.isLogged;
     if (!logged) {
@@ -937,7 +973,7 @@ class _SliverComicSourceState extends SettingsSaveState<_SliverComicSource> {
             },
             isCurrent: () => _current(target),
             onSaved: () {
-              ComicSourceManager().notifyStateChange();
+              manager.notifyStateChange();
             },
           );
         },

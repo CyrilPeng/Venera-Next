@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:venera_next/components/message.dart';
+import 'package:venera_next/components/async_confirm_dialog.dart';
 import 'package:venera_next/foundation/persistence_failure.dart';
 
 void main() {

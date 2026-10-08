@@ -1,9 +1,9 @@
 import 'package:venera_next/features/history/history_api.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/gesture.dart';
+import 'package:venera_next/components/summary_header.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -12,43 +12,82 @@ import 'history_manager.dart';
 import 'history_page.dart';
 
 class HistorySummary extends StatefulWidget {
-  const HistorySummary({super.key});
+  const HistorySummary({
+    super.key,
+    required this.manager,
+    required this.favoriteChanges,
+  });
+
+  final HistoryManager? manager;
+  final Listenable? favoriteChanges;
 
   @override
   State<HistorySummary> createState() => _HistorySummaryState();
 }
 
 class _HistorySummaryState extends State<HistorySummary> {
-  late List<History> history;
-  late int count;
-
-  void onHistoryChange() {
-    if (mounted) {
-      setState(() {
-        history = HistoryManager().getRecent();
-        count = HistoryManager().count();
-      });
-    }
-  }
+  late Listenable _changes;
+  List<History> _history = const [];
+  int _count = 0;
 
   @override
   void initState() {
-    history = HistoryManager().getRecent();
-    count = HistoryManager().count();
-    HistoryManager().addListener(onHistoryChange);
-    LocalFavoritesManager().addListener(onHistoryChange);
     super.initState();
+    _bind();
+  }
+
+  void _bind() {
+    _changes = Listenable.merge([widget.manager, widget.favoriteChanges]);
+    _changes.addListener(_changed);
+    _refresh();
+  }
+
+  // Preserve notification-driven queries; theme/layout builds reuse the data.
+  void _refresh() {
+    final owner = widget.manager;
+    if (owner == null || !owner.isInitialized) {
+      _history = const [];
+      _count = 0;
+      return;
+    }
+    final recent = owner.getRecent();
+    final count = owner.count();
+    _history = recent;
+    _count = count;
+  }
+
+  void _changed() {
+    if (mounted) setState(_refresh);
+  }
+
+  @override
+  void didUpdateWidget(covariant HistorySummary oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(oldWidget.manager, widget.manager) &&
+        identical(oldWidget.favoriteChanges, widget.favoriteChanges)) {
+      return;
+    }
+    _changes.removeListener(_changed);
+    _bind();
   }
 
   @override
   void dispose() {
-    HistoryManager().removeListener(onHistoryChange);
-    LocalFavoritesManager().removeListener(onHistoryChange);
+    _changes.removeListener(_changed);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final ready = widget.manager?.isInitialized == true;
+    return _buildSummary(
+      context,
+      ready ? _history : const [],
+      ready ? _count : 0,
+    );
+  }
+
+  Widget _buildSummary(BuildContext context, List<History> history, int count) {
     return SliverToBoxAdapter(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -67,28 +106,7 @@ class _HistorySummaryState extends State<HistorySummary> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                height: 56,
-                child: Row(
-                  children: [
-                    Center(child: Text('History'.tl, style: ts.s18)),
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.secondaryContainer,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(count.toString(), style: ts.s12),
-                    ),
-                    const Spacer(),
-                    const Icon(Icons.arrow_right),
-                  ],
-                ),
-              ).paddingHorizontal(16),
+              SummaryHeader(title: 'History'.tl, count: count),
               if (history.isNotEmpty)
                 SizedBox(
                   height: 136,

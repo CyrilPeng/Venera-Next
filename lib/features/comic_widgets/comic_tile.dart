@@ -32,7 +32,8 @@ typedef ComicPageBuilder =
       int? heroID,
     });
 
-typedef AddComicFavoriteHandler = void Function(List<Comic> comics);
+typedef AddComicFavoriteHandler =
+    Future<void> Function(BuildContext context, List<Comic> comics);
 typedef ComicTileStateResolver = ComicTileState Function(Comic comic);
 typedef ComicTileImageProviderResolver = ImageProvider? Function(Comic comic);
 typedef ComicWidgetListenerRegistrar = void Function(VoidCallback listener);
@@ -143,11 +144,11 @@ void _openComicPage({
   );
 }
 
-void _addComicToFavorites(List<Comic> comics) {
+Future<void> _addComicToFavorites(BuildContext context, List<Comic> comics) {
   final handler =
       _addComicFavoriteHandler ??
       (throw StateError("Add comic favorite handler is not configured."));
-  handler(comics);
+  return handler(context, comics);
 }
 
 ImageProvider? _findImageProvider(Comic comic) {
@@ -262,7 +263,7 @@ class ComicTile extends StatelessWidget {
         icon: Icons.stars_outlined,
         text: 'Add to favorites'.tl,
         onClick: () {
-          _addComicToFavorites([comic]);
+          _addComicToFavorites(context, [comic]);
         },
       ),
       MenuEntry(

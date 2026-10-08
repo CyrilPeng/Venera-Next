@@ -9,6 +9,7 @@ import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/side_bar.dart';
 import 'package:venera_next/components/window_frame.dart';
+import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/features/comic_details/archive_download_dialog.dart';
 import 'package:venera_next/features/comic_details/comments_page.dart';
 import 'package:venera_next/features/comic_details/favorite.dart';
@@ -270,10 +271,15 @@ abstract mixin class ComicPageActions {
 
   Future<void> download() async {
     if (_choosingDownload) return;
+    final owner = context;
+    if (!owner.mounted) return;
+    final admission = WindowSelectionTask(owner);
+    if (!admission.canPresent) return;
     final target = comic;
     final source = comicSource;
-    final owner = context;
     final library = LocalManager();
+    bool canContinue() => admission.canPresent && isComicActive(target);
+    if (!canContinue()) return;
     _choosingDownload = true;
     try {
       if (library.isDownloading(target.id, target.comicType)) {
@@ -287,14 +293,12 @@ abstract mixin class ComicPageActions {
       }
 
       if (source.archiveDownloader != null) {
-        final selection = await showDialog<ArchiveDownloadSelection>(
+        final selection = await showArchiveDownloadDialog(
           context: owner,
-          builder: (_) => ArchiveDownloadDialog(
-            downloader: source.archiveDownloader!,
-            comicId: target.id,
-          ),
+          downloader: source.archiveDownloader!,
+          comicId: target.id,
         );
-        if (!owner.mounted || !isComicActive(target) || selection == null) {
+        if (!owner.mounted || !canContinue() || selection == null) {
           return;
         }
         if (selection.url != null) {
@@ -308,7 +312,7 @@ abstract mixin class ComicPageActions {
         }
       }
 
-      if (!owner.mounted || !isComicActive(target)) return;
+      if (!owner.mounted || !canContinue()) return;
       if (library.isDownloading(target.id, target.comicType)) return;
       if (target.chapters == null) {
         library.addTask(
@@ -320,27 +324,29 @@ abstract mixin class ComicPageActions {
           ),
         );
       } else {
-        List<int>? selected;
+        final chapterIds = List<String>.unmodifiable(target.chapters!.ids);
+        final chapterTitles = List<String>.unmodifiable(
+          target.chapters!.titles,
+        );
         var downloaded = <int>[];
         var localComic = library.find(target.id, target.comicType);
         if (localComic != null) {
-          for (int i = 0; i < target.chapters!.length; i++) {
-            if (localComic.downloadedChapters.contains(
-              target.chapters!.ids.elementAt(i),
-            )) {
+          for (int i = 0; i < chapterIds.length; i++) {
+            if (localComic.downloadedChapters.contains(chapterIds[i])) {
               downloaded.add(i);
             }
           }
         }
-        await showSideBar(
+        final selected = await showSideBar<List<int>>(
           owner,
           _SelectDownloadChapter(
-            target.chapters!.titles.toList(),
-            (v) => selected = v,
-            downloaded,
+            chapterTitles,
+            List<int>.unmodifiable(downloaded),
+            isCurrent: () =>
+                owner.mounted && admission.active && isComicActive(target),
           ),
         );
-        if (!owner.mounted || !isComicActive(target) || selected == null) {
+        if (!owner.mounted || !canContinue() || selected == null) {
           return;
         }
         if (library.isDownloading(target.id, target.comicType)) return;
@@ -350,16 +356,15 @@ abstract mixin class ComicPageActions {
             source: source,
             comicId: target.id,
             comic: target,
-            chapters: selected!.map((i) {
-              return target.chapters!.ids.elementAt(i);
-            }).toList(),
+            chapters: selected.map((i) => chapterIds[i]).toList(),
           ),
         );
       }
       owner.showMessage(message: "Download started".tl);
       update();
-    } catch (error) {
-      if (owner.mounted && isComicActive(target)) {
+    } catch (error, stack) {
+      Log.error('Download selection', error, stack);
+      if (owner.mounted && canContinue()) {
         owner.showMessage(message: error.toString());
       }
     } finally {
@@ -469,11 +474,15 @@ abstract mixin class ComicPageActions {
 }
 
 class _SelectDownloadChapter extends StatefulWidget {
-  const _SelectDownloadChapter(this.eps, this.finishSelect, this.downloadedEps);
+  const _SelectDownloadChapter(
+    this.eps,
+    this.downloadedEps, {
+    required this.isCurrent,
+  });
 
   final List<String> eps;
-  final void Function(List<int>) finishSelect;
   final List<int> downloadedEps;
+  final bool Function() isCurrent;
 
   @override
   State<_SelectDownloadChapter> createState() => _SelectDownloadChapterState();
@@ -481,9 +490,54 @@ class _SelectDownloadChapter extends StatefulWidget {
 
 class _SelectDownloadChapterState extends State<_SelectDownloadChapter> {
   List<int> selected = [];
+  WindowSelectionTask? _owner;
+  NavigatorState? _navigator;
+  Object _generation = Object();
+  bool _confirming = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // A surviving sidebar never adopts a replacement application or window.
+    _owner ??= WindowSelectionTask(context);
+    _navigator ??= Navigator.of(context);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SelectDownloadChapter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.eps != widget.eps ||
+        oldWidget.downloadedEps != widget.downloadedEps ||
+        oldWidget.isCurrent != widget.isCurrent) {
+      _generation = Object();
+      selected = [];
+    }
+  }
+
+  bool _canSelect(Object generation) =>
+      mounted &&
+      identical(generation, _generation) &&
+      !_confirming &&
+      _owner?.canPresent == true &&
+      Navigator.maybeOf(context) == _navigator &&
+      widget.isCurrent();
+
+  void _submit(Object generation, List<int> selection) {
+    if (!_canSelect(generation)) return;
+    _confirming = true;
+    try {
+      _navigator!.pop<List<int>>(List<int>.unmodifiable(selection));
+    } finally {
+      _confirming = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final generation = _generation;
+    final active = _canSelect(generation);
+    final eps = widget.eps;
+    final downloaded = widget.downloadedEps;
     return Scaffold(
       appBar: Appbar(
         title: Text("Download".tl),
@@ -495,15 +549,15 @@ class _SelectDownloadChapterState extends State<_SelectDownloadChapter> {
           Expanded(
             child: ListView.builder(
               padding: EdgeInsets.zero,
-              itemCount: widget.eps.length,
+              itemCount: eps.length,
               itemBuilder: (context, i) {
                 return CheckboxListTile(
-                  title: Text(widget.eps[i]),
-                  value:
-                      selected.contains(i) || widget.downloadedEps.contains(i),
-                  onChanged: widget.downloadedEps.contains(i)
+                  title: Text(eps[i]),
+                  value: selected.contains(i) || downloaded.contains(i),
+                  onChanged: !active || downloaded.contains(i)
                       ? null
                       : (v) {
+                          if (!_canSelect(generation)) return;
                           setState(() {
                             if (selected.contains(i)) {
                               selected.remove(i);
@@ -528,27 +582,26 @@ class _SelectDownloadChapterState extends State<_SelectDownloadChapter> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: TextButton(
-                    onPressed: () {
-                      var res = <int>[];
-                      for (int i = 0; i < widget.eps.length; i++) {
-                        if (!widget.downloadedEps.contains(i)) {
-                          res.add(i);
-                        }
-                      }
-                      widget.finishSelect(res);
-                      context.pop();
-                    },
+                    onPressed: !active
+                        ? null
+                        : () {
+                            final res = <int>[];
+                            for (int i = 0; i < eps.length; i++) {
+                              if (!downloaded.contains(i)) res.add(i);
+                            }
+                            _submit(generation, res);
+                          },
                     child: Text("Download All".tl),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: FilledButton(
-                    onPressed: selected.isEmpty
+                    onPressed: !active || selected.isEmpty
                         ? null
                         : () {
-                            widget.finishSelect(selected);
-                            context.pop();
+                            if (selected.isEmpty) return;
+                            _submit(generation, selected);
                           },
                     child: Text("Download Selected".tl),
                   ),

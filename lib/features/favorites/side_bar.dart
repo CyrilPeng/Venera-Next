@@ -5,13 +5,16 @@ import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
+import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/favorites/favorite_actions.dart';
 import 'package:venera_next/features/favorites/favorites_constants.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
+import 'package:venera_next/features/favorites/folder_order_dialog.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/routing/settings.dart';
@@ -54,6 +57,12 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
   var folders = <String>[];
 
   var networkFolders = <String>[];
+  late final LocalFavoritesManager _manager;
+  late final int _managerGeneration;
+
+  bool get _hasManager =>
+      identical(LocalFavoritesManager.cache, _manager) &&
+      _manager.connectionGeneration == _managerGeneration;
 
   void findNetworkFolders() {
     networkFolders.clear();
@@ -73,19 +82,21 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
 
   @override
   void initState() {
+    _manager = LocalFavoritesManager();
+    _managerGeneration = _manager.connectionGeneration;
     widget.onFolderListReady?.call(this);
-    folders = LocalFavoritesManager().folderNames;
+    folders = _manager.folderNames;
     findNetworkFolders();
     appdata.settings.addListener(updateFolders);
-    LocalFavoritesManager().addListener(updateFolders);
+    _manager.addListener(updateFolders);
     super.initState();
   }
 
   @override
   void dispose() {
-    super.dispose();
     appdata.settings.removeListener(updateFolders);
-    LocalFavoritesManager().removeListener(updateFolders);
+    _manager.removeListener(updateFolders);
+    super.dispose();
   }
 
   @override
@@ -162,22 +173,31 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
                 icon: Icons.add,
                 text: 'Create Folder'.tl,
                 onClick: () {
-                  newFolder().then((value) {
-                    setState(() {
-                      folders = LocalFavoritesManager().folderNames;
-                    });
-                  });
+                  if (!_hasManager) return;
+                  newFolder(
+                    context,
+                    onChanged: (next) {
+                      if (!mounted || !_hasManager) return;
+                      setState(() => folders = next);
+                    },
+                  );
                 },
               ),
               MenuEntry(
                 icon: Icons.reorder,
                 text: 'Sort'.tl,
                 onClick: () {
-                  sortFolders().then((value) {
-                    setState(() {
-                      folders = LocalFavoritesManager().folderNames;
-                    });
-                  });
+                  if (!_hasManager) return;
+                  final owner = WindowSelectionTask(context);
+                  if (!owner.canPresent) return;
+                  sortFolders(context).then<void>(
+                    (_) {
+                      if (owner.canPresent && _hasManager) updateFolders();
+                    },
+                    onError: (Object error, StackTrace stack) {
+                      Log.error('Favorite folder list', error, stack);
+                    },
+                  );
                 },
               ),
             ],
@@ -223,10 +243,10 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
     bool isSelected =
         name == widget.selectedFolder && !widget.isNetworkSelected;
     int count = 0;
-    if (name == localAllFolderLabel) {
-      count = LocalFavoritesManager().totalComics;
-    } else {
-      count = LocalFavoritesManager().folderComics(name);
+    if (_hasManager) {
+      count = name == localAllFolderLabel
+          ? _manager.totalComics
+          : _manager.folderComics(name);
     }
     var folderName = name == localAllFolderLabel
         ? "All".tl
@@ -318,9 +338,9 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
 
   @override
   void updateFolders() {
-    if (!mounted) return;
+    if (!mounted || !_hasManager) return;
     setState(() {
-      folders = LocalFavoritesManager().folderNames;
+      folders = _manager.folderNames;
       findNetworkFolders();
     });
   }

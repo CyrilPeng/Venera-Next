@@ -1,5 +1,143 @@
 # Project Structure
 
+## R1 first-group boundaries (2026-10-09)
+
+Favorite entries receive the original BuildContext explicitly. Remote deletion/creation reuse async_confirm_dialog.dart and input_dialog.dart, removing the duplicate creation dialog. Bulk-add transaction/publication stays in manager/repository code; UI does not execute SQL. Network import reuses RequestScope.runToCompletion and window tasks await real completion. Folder opening accepts an injected system operation for isolated tests.
+
+No production files were added: **520 files, 326 business, 166 UI, 28 pending, 241 business entries**. Gates were not relaxed. Validation and remaining R1/R3 review are in the [batch report](completion_batches_2026_10_09.md).
+
+## Remaining migrations and verification cadence (2026-10-09)
+
+Use the four batches and layered verification in [optimization plan section 11](optimization_plan.en.md#remaining-work). R3 completes the 28 pending responsibility reviews, semantic classification of the original 46-file SCC, domain-wide narrow contracts and compatibility retirement together. R1/R2 business changes still satisfy existing boundary gates immediately.
+
+This update changes planning and verification frequency only. Structure remains **520 files: 326 business, 166 UI, 28 pending and 241 business entries**. Dependency baselines, allowed edges and CI are unchanged. Migration commits run formatting, strict analysis, structure/architecture and relevant tests; final full verification and platform builds are grouped by candidate inputs, with extra checks triggered by actual risk.
+
+## P2/P4/P6/P7/P8: Original ownership of favorite transfers and metadata refresh (2026-10-09)
+
+favorite_metadata_update.dart is an enforced business entry: it detaches comic inputs, injects load/save/admission/progress and owns batched RequestScope reads, retry and real completion. It has no Widget, root context or page State. FavoriteMetadataFailure retains identity, load/save stage, cause and stack; cancellation and unsupported results remain distinct.
+
+favorite_transfer_dialog.dart and favorite_metadata_dialog.dart are UI adapters for original selection/commit/publication and original source/progress/cancellation presentation respectively. They reuse WindowSelectionTask, PopUpWidget/ResourceDialogRoute, AppDataOperations and existing folder creation. LocalFavoritesPage calls them directly, owns metadata cancellation and refreshes through its original manager listener; no favoriteOption/updateComicsInfo forwarding remains. Transactions, SQL and schema stay in the repository; the manager preserves commit state and causes.
+
+Inventory: **520 files, 326 business, 166 UI, 28 pending and 241 business entries**. Remaining favorite_actions.dart responsibilities stay pending. 91 baseline blobs, 57 feature edges and the 46-file SCC are unchanged; 12 reverse probes reject violations. All 1020 Dart files are frozen after final formatting. Other favorite actions and domain-wide boundaries/lifetimes retain separate acceptance work. See [compatibility](favorite_workflow_ownership_compatibility.md).
+
+## P2/P4/P6/P8: Async confirmation and original favorite-write ownership (2026-10-09)
+
+async_confirm_dialog.dart owns shared confirmation presentation, original application/window registration, button admission and commitment-aware retry. It reuses ResourceDialogRoute, WindowSelectionTask and ContentDialog without a message.dart forwarding export. Its Future joins presentation and the last complete confirmation callback before the parent can replace its context.
+
+favorite_confirmation_dialog.dart is a favorite UI adapter exported by the existing favorites.dart entry. It captures manager/generation/path/folder, rechecks database admission and defers original-page publication. LocalFavoritesPage folder/selected-comic deletion and FollowUpdatesPage mark-all-read use it directly. Bulk mark-read SQL remains in the repository and uses one transaction over captured identities; the manager preserves commitment and rollback errors. Other favorite actions retain independent review scope.
+
+Both new files are fully reviewed as UI. Current inventory: 517 files, 325 business, 164 UI, 28 pending, 240 business entries. Eight reverse probes reject; 84 baseline blobs, 57 feature edges and the exact 46-file SCC remain. All 1013 lib/test Dart files are frozen. Ordinary ContentDialog and the rest of message.dart remain; only this confirmation's actions wrap. See [compatibility](async_confirm_ownership_compatibility.md).
+
+## P4/P6/P8: Comic reorder saves and original host ownership (2026-10-09)
+
+comic_reorder_page.dart owns original-page/route/database admission, order drafts and save status, reusing SettingsSaveState, AppDataOperations and the existing manager/repository. Cross-domain imports use comic_source_api.dart. The local page calls the entry directly without a forwarding layer. Duplicate save queues and transfer of callbacks between windows are removed; accepted saves retain their original hosts and the parent refreshes through its original listener.
+
+SettingsSaveState adds only a default-false retired-target dismissal policy, without acknowledging failures, moving registrations or bypassing other route owners. Comic order remains a complete idempotent assignment; manager and SQLite transactions are unchanged. List/gallery layout, drag delays and color calculation remain.
+
+The complete inventory is 515 files: 325 business, 162 UI, 28 pending and 240 business entries. Full review classifies the new page as UI and synchronizes current inventory counts. Seventy-nine baseline blobs, 57 feature edges and the exact 46-file SCC remain; six reverse probes reject. Other favorite actions and domain-wide lifetimes remain under review. See [compatibility](favorite_comic_order_compatibility.md).
+
+## P4/P6/P8: Favorite folder rename and original page ownership (2026-10-09)
+
+folder_rename_dialog.dart owns original-page rename input, commitment and selection publication after presentation. The local page calls it directly without a forwarding entry. It reuses showInputDialog, WindowSelectionTask, AppDataOperations, existing manager/repository and name validation, with no duplicated transaction or task framework. Input adds only optional confirmation failure reporting during close, default false, and preserves a completed confirmation across failed dismissal. JS/Dart callback and route cleanup protocols remain.
+
+LocalFavoritesPage retains its original listener/query connection and captures its host in didChangeDependencies; disposal removes that listener and releases its ScrollController. Other favorite actions keep their existing implementations and separate review scope. Full review classifies the new rename file as UI: 514 files, 325 business, 161 UI, 28 pending, 240 business entries; 57 feature edges, the exact 46-file SCC and 71 baseline blobs remain. Six reverse probes reject. See [compatibility](favorite_folder_rename_compatibility.md).
+
+## P4/P6/P8: Favorite folder order and original ownership (2026-10-09)
+
+folder_order_dialog.dart owns the favorite-folder draft, popup/help routes, interaction admission and original-host waiting/error presentation. The sidebar imports it directly and supplies context; favorite_actions.dart keeps no forwarding API. Existing LocalFavoritesManager, AppDataOperations and FavoritesRepository continue to own persistence, with unchanged formats and transactions.
+
+Optional PopUpWidget disposal/dismissal hooks preserve layout, inner Navigator, safe areas and animation. WindowSelectionTask optionally forwards a still-pending consumer failure to closing hosts; already-returned ordinary failures stay with their caller, and later closes only retry cleanup. The new file is fully reviewed as UI; other favorite actions retain their classification/review scope. Inventory: 513 files, 325 business, 160 UI, 28 pending, 240 business entries; 57 feature edges/the exact 46-file SCC remain and six reverse probes reject. See [compatibility](favorite_folder_order_compatibility.md).
+
+## P4/P6/P8: Favorite folder creation and original ownership (2026-10-09)
+
+CreateFavoriteFolderDialog owns draft, busy, error and acknowledgement state for its original request and registers operations through WindowSelectionTask. The folder sidebar projects its original manager's folders/counts and owns listeners. Both files have been fully reviewed as UI; create/JSON import/transactions remain in existing manager/repository/import modules.
+
+newFolder uses the original context, outer popup route and database identity, reusing existing route/host resource protocols. Sidebar, local transfer and comic details accept immutable folder lists through original-target callbacks. Other responsibilities in favorite_actions.dart, local_favorites_page.dart and comic details retain their existing classifications and review scope. Inventory: 512 files, 325 business, 159 UI, 28 pending and 240 business entry points; 57 feature edges/the exact 46-file SCC remain and six reverse probes reject. Three existing formatting differences are normalized with original-blob formatter proof. See [compatibility](favorite_creation_ownership_compatibility.md).
+
+## P4/P5/P8: Reader sidebar cleanup and original hosts (2026-10-09)
+
+ReaderSidebarBinding owns the original reader request's sidebar and borrowed pause. It reuses WindowSelectionTask to register original application/window ownership before arbitrary acquisition callbacks. Failed removals retain the exact route even after the page disappears; handles, close and dispose can explicitly retry without replaying released pauses. WindowSelectionTask joins complete cleanup from window close start so the first failure cannot be implicitly retried later in the same exit.
+
+SideBarRoute, reader shell/comment callers, WindowFrame and business/storage protocols remain unchanged. Inventory stays at 512 files, 325 business, 157 UI, 30 pending and 240 business entry points; six reverse probes reject, with 57 feature edges and the same 46-file SCC. Other lifetimes and domain-wide boundaries remain open. See [compatibility](reader_sidebar_cleanup_compatibility.md).
+
+## P4/P5/P8: Chapter selection and sidebar lifetimes (2026-10-09)
+
+SideBarRoute retains panel layout/animation and adds original-route interaction admission/disposal hooks. showSideBar reuses WindowSelectionTask and the nearest Navigator, returning typed route results while retaining failed removals. Ordinary download UI captures the displayed chapter mapping and checks its original hosts; business downloader/queue implementations remain. The reader binding adds only original-request admission and deferred borrowed-pause release on disposal.
+
+Inventory stays at 512 files, 325 business, 157 UI, 30 pending and 240 business entry points. Six reverse probes reject; 57 feature edges and the 46-file SCC remain. actions.dart is still pending; direct reader-sidebar failed removal and other action/domain boundaries remain open. See [compatibility](sidebar_selection_compatibility.md).
+
+## P2/P4/P7/P8: Archive selection and download ownership (2026-10-08)
+
+Archive selection UI consumes its injected ArchiveDownloader through existing business helpers. It owns interaction admission, input generations, original RequestScopes/application/window registrations, routes and error presentation. showArchiveDownloadDialog reuses existing route disposal and window-selection tasks; production download rechecks the original host/comic before queue publication. Downloader and queue implementations remain unchanged.
+
+A full review moves archive_download_dialog.dart from pending to UI. Inventory: 512 files, 325 business, 157 UI, 30 pending and 240 business entry points. Six reverse probes reject; 57 feature edges and the 46-file SCC remain. actions.dart stays pending; chapter-sidebar and other action lifetimes are not fully accepted by this unit. See [compatibility](archive_selection_compatibility.md).
+
+## P2/P4/P8: Loading dialog and toast resource ownership (2026-10-08)
+
+message.dart owns message/dialog rendering, interaction admission, routes and OverlayEntry resources; business capabilities are injected callbacks. Loading borrows an original-host snapshot while callers retain business tasks. JS loading separately joins display and actual cancellation within its existing WindowSelectionTask. ResourceDialogRoute handles never-built disposal; the owning OverlayWidget releases content/toast entries.
+
+A full review moves message.dart from pending to UI. Inventory: 512 files, 325 business, 156 UI, 31 pending, 240 business entry points. Six reverse UI/pending probes reject; original protection, 57 feature edges and the 46-file SCC remain. Other confirmations and arbitrary callback release still require original-plan acceptance. No business queue or compatibility forwarding is added. See [compatibility](loading_toast_compatibility.md).
+
+## P2/P4/P7/P8: JS input validation and selection ownership (2026-10-08)
+
+JsImmediateCallback provides immediate borrowing and independent top-level completion inside the original engine bridge. The JS input adapter owns synchronous text, display and original-host waits. components/select_dialog.dart owns only selection presentation, interaction admission and route cleanup; JS UI imports it directly without a message forwarding export. ResourceDialogRoute shares never-built disposal for input/selection/ordinary JS dialogs. Window tasks, public JS contracts and business queues remain.
+
+Inventory: 512 files, 325 business, 155 UI, 32 pending, 240 business entry points. The new selection helper is UI; original protection, 57 feature edges and the 46-file SCC remain. Six reverse UI/pending probes reject. message.dart, other UI/scope lifetimes and whole-plan acceptance stay open. See [compatibility](js_input_selection_compatibility.md).
+
+## P2/P4/P8: Input confirmation and original host ownership (2026-10-08)
+
+`components/input_dialog.dart` owns original-host input presentation, confirmation admission, text resources and close retry. JS UI and favorite rename import this UI entry directly; message.dart has no forwarding export. Presentation and accepted confirmation separately reuse existing WindowSelectionTask ownership, so a display-close failure does not replay completed work. Shared ContentDialog only adds a current-route close check; input content and other message helpers remain.
+
+Inventory: 511 files, 325 business, 154 UI, 32 pending, 240 business entry points. The new input helper is UI. Existing business protection, 57 feature edges and the 46-file SCC remain; four reverse UI/pending probes are rejected. Complete JS-validator resource ownership, remaining message.dart paths and domain-wide acceptance stay open. See [compatibility notes](input_dialog_compatibility.md).
+
+## P2/P4/P7/P8: JS dialog callbacks and engine ownership (2026-10-08)
+
+`JsEngine` owns its `JsUiMessageHandler` and passes the emitting runtime through a business-safe interface. Interactive/headless composition bind their corresponding instances. `JsUiApi` borrows its original UI host; dialog actions/loading cancellation reuse existing window/application registrations and top-level JS result consumption. Presentation, callback settlement and native release remain distinct; synchronous validation and other unfinished UI paths are not treated as complete.
+
+Inventory: 510 files, 325 business, 153 UI, 32 pending, 240 business entry points. JS UI moves from pending to UI. Previous business protection, 57 feature edges and the 46-file SCC remain; four reverse UI/pending probes are rejected. No business queue or dependency exception is added. See [compatibility notes](js_ui_callback_compatibility.md).
+
+## P2/P4/P7/P8: source update and deletion ownership (2026-10-08)
+
+`SourceUpdateService` retains its manager/repositories, data directory and requests; `SourceUpdateReport` retains immutable check results and exact source targets. `headless_source_updates.dart` adapts command data through the public source business entry rather than UI notification snapshots. `SourceInstallationsScope` also lends the service and original refresh callback. `source_update_prompt.dart` owns route presentation and existing window-task binding. Host close starts service cancellation and consumer drains together; the manager continues to own mutation and recovery.
+
+Inventory: 510 files, 325 business, 152 UI, 33 pending, 240 business entry points. Previous protections, 57 feature edges and the 46-file SCC remain. Six UI/pending reconnection probes from the service/new CLI adapter are rejected. No business queue, dependency exception or public JS/storage protocol was added. See [compatibility notes](source_update_ownership_compatibility.md).
+
+## P4/P7/P8: source setting callback completion and result release (2026-10-08)
+
+The optional synchronous consumer on `JsCallback` registers one call with its original `JsEngine`, awaits the top-level Promise and releases results. Ordinary calls retain scope cancellation. `SourceParserContext` checks original source identity at admission and successful consumption. The page reuses `WindowSelectionTask` for original-host ownership and handles loading, late messages and scaled-text layout. Arbitrary descendant Promises and unreturned tasks are outside this completion contract.
+
+No classification or dependency exception is added: 508 files, 324 business, 151 UI, 33 pending, 239 business entry points. Four UI and two pending-window reconnection probes are rejected; 57 feature edges and the 46-file SCC remain. See [callback compatibility](source_setting_callback_compatibility.md).
+
+## P2/P4/P7/P8: source editor sessions and manager ownership (2026-10-08)
+
+SourceScriptSession retains an explicit replacement callback and only the source instances produced by its editing session. SourceScriptFiles owns fixed-path reads, independent drafts and editor startup. replaceScript returns the exact replacement without changing its transaction/queue body. The page borrows its installation queue's manager; both editor UIs reuse WindowSelectionTask for original-host admission and completion while preserving drafts and diagnostics.
+
+Both entry points are protected business code. Classification is508 files:324 business,151 UI,33 pending,239 business entry points. Six reverse-UI probes are rejected;57 feature edges and the46-file SCC remain. An applied failure does not confirm a durable commit; the editor blocks replay and preserves the diagnosis. See [editor compatibility](source_editor_ownership_compatibility.md).
+
+## P4/P7/P8: source action results and archive reads (2026-10-08)
+
+JsEngine.runCodeToCompletion shares synchronous consumption/release with the read-completion entry; callers retain mutation retry/cancellation policy. SourceParserContext validates original identity. Nine mutation capabilities return only Dart data; archive reads use existing retries/normalizers and join top-level completion. Detail archive helpers preserve structured failures. UI,assets and public source protocols remain unchanged.
+
+Six existing business files stay protected. Inventory:506 files,322 business,151 UI,33 pending,237 entries;57 feature edges,all protections and46-file SCC remain. See [source action/archive compatibility](source_action_compatibility.md).
+
+## P2/P4/P8: summary subscriptions and dialog route ownership (2026-10-08)
+
+Home supplies existing source/history/favorite owners; summaries borrow explicit dependencies and detach original listeners. ComicSourceSummarySnapshot preserves source order/version rules, and HistorySummary retains notification-driven query caching. SummaryHeader owns shared title layout; sync errors and rating/discard continuation use local context and original route identity.
+
+Inventory:506 files,322 business,151 UI,33 pending,237 entries;57 feature edges,all original protections and46-file SCC remain. Editor production callers and remaining domain lifecycles still need review. See [summary/dialog compatibility](summary_dialog_compatibility.md).
+
+## P2/P4/P7/P8: detail preview loading and resource ownership (2026-10-08)
+
+ComicThumbnailPages owns per-comic cursor state, true completion and failures through explicit admission/retention callbacks; ThumbnailImage retains legacy crop rules. ComicThumbnails adapts the grid, navigation callbacks and original application/window ownership. Comment previews own their current input and scroll controller. The source adapter reuses the existing JS completion/release boundary; other image capabilities are unchanged.
+
+Inventory:504 files,321 business,143 UI,40 pending,236 entries;57 feature edges, all original protections and46-file SCC remain. See [detail preview compatibility](detail_preview_compatibility.md).
+
+## P2/P4/P5/P8: reader hint subscriptions and presentation boundaries (2026-10-08)
+
+ChapterSwipeIndicator borrows the current scroll controller through ListenableBuilder and derives displayed progress from its current direction/valid position. Seven reader presentation/adaptation files are classified as UI; polling, image-selection business and settings effects retain their existing boundaries. Six non-hint component blobs are unchanged.
+
+Inventory:502 files,319 business,141 UI,42 pending,234 entries;57 feature edges, all previous protections and46-file SCC remain. See [reader presentation boundaries](reader_presentation_compatibility.md).
+
 ## P2/P3/P4/P8: application preferences and retention cleanup ownership (2026-10-08)
 
 AppPreferences owns language, startup-update and retention rules. HistoryRetentionChange receives explicit persistence/cleanup/admission/target-check callbacks, retaining one edit through its original owner and reusing the first cutoff on retry. HistoryManager binds the original connection generation; HistoryRetentionSetting separates drag preview from submission. Generic fields, SQL and save protocols remain unchanged.
@@ -366,8 +504,8 @@ Each structure migration should:
 - Use `rg` to confirm old paths are gone.
 - Run `python .github/scripts/check_structure_imports.py`.
 - Update `CHANGELOG.md`.
-- Run `flutter analyze`.
-- Run relevant tests for the touched domains.
+- Run `flutter analyze --no-pub --fatal-infos --fatal-warnings`.
+- Run relevant tests for touched domains and affected consumers; use the [layered verification rules](optimization_plan.en.md#verification-cadence) for remaining optimization work. Many cross-domain references do not automatically require repeated full runs.
 
 ## Boundary Checks
 

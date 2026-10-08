@@ -1,5 +1,6 @@
 export 'favorites_api.dart';
 export 'favorite_actions.dart';
+export 'favorite_confirmation_dialog.dart';
 export 'favorites_display.dart';
 export 'favorites_manager.dart';
 export 'favorites_page.dart';

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
+import 'package:venera_next/components/async_confirm_dialog.dart';
 import 'package:venera_next/components/button.dart';
+import 'package:venera_next/components/input_dialog.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/layout.dart';
 import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/components/menu.dart';
-import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
@@ -15,8 +16,10 @@ import 'package:venera_next/features/favorites/favorites_display.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/res.dart';
+import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/persistence_failure.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/translations.dart';
-import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/network/cache.dart';
 
 Future<bool> confirmNetworkFavoriteDeletion(
@@ -24,47 +27,46 @@ Future<bool> confirmNetworkFavoriteDeletion(
   required Future<Res<bool>> Function() delete,
   required String message,
   VoidCallback? onCommitted,
+  bool Function()? isCurrent,
 }) async {
-  var loading = false;
-  return await showDialog<bool>(
-        context: context,
-        builder: (context) => StatefulBuilder(
-          builder: (context, setState) => ContentDialog(
-            title: "Remove".tl,
-            content: Text(message).paddingHorizontal(16),
-            actions: [
-              Button.filled(
-                isLoading: loading,
-                color: context.colorScheme.error,
-                onPressed: () async {
-                  if (loading) return;
-                  setState(() => loading = true);
-                  Res<bool> result;
-                  try {
-                    result = await delete();
-                  } catch (error, stack) {
-                    result = Res.fromException(error, stack);
-                  }
-                  if (result.success) {
-                    NetworkCacheManager().clear();
-                    onCommitted?.call();
-                  }
-                  if (!context.mounted) return;
-                  if (result.success) {
-                    context.showMessage(message: "Deleted".tl);
-                    Navigator.of(context).pop(true);
-                  } else {
-                    setState(() => loading = false);
-                    context.showMessage(message: result.errorMessage!);
-                  }
-                },
-                child: Text("Confirm".tl),
-              ),
-            ],
-          ),
-        ),
-      ) ??
-      false;
+  if (!context.mounted || isCurrent?.call() == false) return false;
+  var committed = false;
+  await showAsyncConfirmDialog(
+    context: context,
+    title: 'Remove'.tl,
+    content: message,
+    btnColor: context.colorScheme.error,
+    onConfirm: () async {
+      if (isCurrent?.call() == false) throw const SelectionCancelled();
+      final result = await delete();
+      if (result.error) {
+        final failure = result.failure;
+        Error.throwWithStackTrace(
+          failure ?? StateError(result.errorMessage!),
+          failure?.stackTrace ?? StackTrace.current,
+        );
+      }
+      committed = true;
+      _publishNetworkFavoriteChange(onCommitted);
+    },
+  );
+  return committed;
+}
+
+void _publishNetworkFavoriteChange(VoidCallback? onCommitted) {
+  try {
+    NetworkCacheManager().clear();
+    onCommitted?.call();
+  } catch (error, stack) {
+    Error.throwWithStackTrace(
+      PersistenceFailure(
+        commitState: PersistenceCommitState.committed,
+        cause: error,
+        stackTrace: stack,
+      ),
+      stack,
+    );
+  }
 }
 
 class NetworkFavoritePage extends StatelessWidget {
@@ -76,13 +78,21 @@ class NetworkFavoritePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return data.multiFolder
-        ? _MultiFolderFavoritesPage(data, showFolders: showFolders)
-        : _NormalFavoritePage(data, showFolders: showFolders);
+        ? _MultiFolderFavoritesPage(
+            data,
+            key: ObjectKey(data),
+            showFolders: showFolders,
+          )
+        : _NormalFavoritePage(
+            data,
+            key: ObjectKey(data),
+            showFolders: showFolders,
+          );
   }
 }
 
 class _NormalFavoritePage extends StatefulWidget {
-  const _NormalFavoritePage(this.data, {required this.showFolders});
+  const _NormalFavoritePage(this.data, {super.key, required this.showFolders});
 
   final FavoriteData data;
   final VoidCallback showFolders;
@@ -138,7 +148,14 @@ class _NormalFavoritePageState extends State<_NormalFavoritePage> {
                 icon: Icons.sync,
                 text: "Convert to local".tl,
                 onClick: () {
-                  importNetworkFolder(widget.data.key, 9999999, null, null);
+                  importNetworkFolder(
+                    context,
+                    data.key,
+                    9999999,
+                    null,
+                    null,
+                    isCurrent: () => mounted && identical(widget.data, data),
+                  );
                 },
               ),
             ],
@@ -175,6 +192,8 @@ class _NormalFavoritePageState extends State<_NormalFavoritePage> {
             icon: Icons.delete_outline,
             text: "Remove".tl,
             onClick: () async {
+              if (!mounted || !identical(widget.data, data)) return;
+              final list = comicListKey.currentState;
               await confirmNetworkFavoriteDeletion(
                 context,
                 delete: () => data.addOrDelFavorite!(
@@ -184,7 +203,14 @@ class _NormalFavoritePageState extends State<_NormalFavoritePage> {
                   comic.favoriteId,
                 ),
                 message: "Remove comic from favorite?".tl,
-                onCommitted: () => comicListKey.currentState?.remove(comic),
+                isCurrent: () => mounted && identical(widget.data, data),
+                onCommitted: () {
+                  if (mounted &&
+                      identical(widget.data, data) &&
+                      identical(comicListKey.currentState, list)) {
+                    list?.remove(comic);
+                  }
+                },
               );
             },
           ),
@@ -197,7 +223,11 @@ class _NormalFavoritePageState extends State<_NormalFavoritePage> {
 }
 
 class _MultiFolderFavoritesPage extends StatefulWidget {
-  const _MultiFolderFavoritesPage(this.data, {required this.showFolders});
+  const _MultiFolderFavoritesPage(
+    this.data, {
+    super.key,
+    required this.showFolders,
+  });
 
   final FavoriteData data;
   final VoidCallback showFolders;
@@ -368,6 +398,7 @@ class _MultiFolderFavoritesPageState extends State<_MultiFolderFavoritesPage> {
                 width: double.infinity,
                 child: Center(
                   child: TextButton(
+                    onPressed: createFolder,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -375,20 +406,47 @@ class _MultiFolderFavoritesPageState extends State<_MultiFolderFavoritesPage> {
                         const Icon(Icons.add, size: 18),
                       ],
                     ),
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) {
-                          return _CreateFolderDialog(widget.data, reload);
-                        },
-                      );
-                    },
                   ),
                 ),
               ),
             ),
         ],
       );
+    }
+  }
+
+  Future<void> createFolder() async {
+    if (!mounted) return;
+    final data = widget.data;
+    try {
+      await showInputDialog(
+        context: context,
+        title: 'Create a folder'.tl,
+        hintText: 'name'.tl,
+        confirmText: 'Submit',
+        reportConfirmationFailureOnClose: true,
+        onConfirm: (name) async {
+          if (!mounted || !identical(widget.data, data)) {
+            throw const SelectionCancelled();
+          }
+          final result = await data.addFolder!(name);
+          if (result.error) {
+            final failure = result.failure;
+            Error.throwWithStackTrace(
+              failure ?? StateError(result.errorMessage!),
+              failure?.stackTrace ?? StackTrace.current,
+            );
+          }
+          _publishNetworkFavoriteChange(() {
+            if (mounted && identical(widget.data, data)) reload();
+          });
+          return null;
+        },
+      );
+    } on SelectionCancelled {
+      // A retired folder page cannot start another request.
+    } catch (error, stack) {
+      Log.error('Network favorite folder creation', error, stack);
     }
   }
 }
@@ -455,80 +513,8 @@ class _FolderTile extends StatelessWidget {
       context,
       delete: deleteFolder!,
       message: "Delete folder?".tl,
+      isCurrent: () => context.mounted && identical(context.widget, this),
       onCommitted: updateState,
-    );
-  }
-}
-
-class _CreateFolderDialog extends StatefulWidget {
-  const _CreateFolderDialog(this.data, this.updateState);
-
-  final FavoriteData data;
-
-  final void Function() updateState;
-
-  @override
-  State<_CreateFolderDialog> createState() => _CreateFolderDialogState();
-}
-
-class _CreateFolderDialogState extends State<_CreateFolderDialog> {
-  var controller = TextEditingController();
-  bool loading = false;
-
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ContentDialog(
-      title: "Create a folder".tl,
-      content: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-            child: TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                labelText: "name".tl,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
-      actions: [
-        Button.filled(
-          isLoading: loading,
-          onPressed: () async {
-            if (loading) return;
-            setState(() => loading = true);
-            final onCommitted = widget.updateState;
-            Res<bool> result;
-            try {
-              result = await widget.data.addFolder!(controller.text);
-            } catch (error, stack) {
-              result = Res.fromException(error, stack);
-            }
-            if (result.success) {
-              NetworkCacheManager().clear();
-              onCommitted();
-            }
-            if (!context.mounted) return;
-            if (result.error) {
-              setState(() => loading = false);
-              context.showMessage(message: result.errorMessage!);
-            } else {
-              context.showMessage(message: "Created successfully".tl);
-              context.pop();
-            }
-          },
-          child: Text("Submit".tl),
-        ),
-      ],
     );
   }
 }
@@ -559,7 +545,14 @@ class _FavoriteFolder extends StatelessWidget {
                 icon: Icons.sync,
                 text: "Convert to local".tl,
                 onClick: () {
-                  importNetworkFolder(data.key, 9999999, title, folderID);
+                  importNetworkFolder(
+                    context,
+                    data.key,
+                    9999999,
+                    title,
+                    folderID,
+                    isCurrent: () => identical(context.widget, this),
+                  );
                 },
               ),
             ],
@@ -588,7 +581,13 @@ class _FavoriteFolder extends StatelessWidget {
                   comic.favoriteId,
                 ),
                 message: "Remove comic from favorite?".tl,
-                onCommitted: () => comicListKey.currentState?.remove(comic),
+                isCurrent: () =>
+                    context.mounted && identical(context.widget, this),
+                onCommitted: () {
+                  if (context.mounted && identical(context.widget, this)) {
+                    comicListKey.currentState?.remove(comic);
+                  }
+                },
               );
             },
           ),

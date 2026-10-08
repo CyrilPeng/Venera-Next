@@ -18,7 +18,24 @@ class _RealHttpOverrides extends HttpOverrides {}
 class _PendingUi implements JsUiMessageHandler {
   final result = Completer<dynamic>();
   @override
-  Object? handleUIMessage(Map<String, dynamic> message) => result.future;
+  Object? handleUIMessage(
+    Map<String, dynamic> message, {
+    required JsEngine engine,
+  }) => result.future;
+}
+
+class _UiReceipt implements JsUiMessageHandler {
+  _UiReceipt(this.label);
+  final String label;
+  final owners = <JsEngine>[];
+  @override
+  Object? handleUIMessage(
+    Map<String, dynamic> message, {
+    required JsEngine engine,
+  }) {
+    owners.add(engine);
+    return label;
+  }
 }
 
 class _Adapter implements HttpClientAdapter {
@@ -110,14 +127,44 @@ void main() {
   group(
     'native JS resource ownership',
     () {
+      test(
+        'independent engines keep their original UI handler and identity',
+        () async {
+          final firstUi = _UiReceipt('first');
+          final secondUi = _UiReceipt('second');
+          final first = JsEngine.create(
+            loadInitScript: () async => Uint8List(0),
+            uiMessageHandler: firstUi,
+          );
+          final second = JsEngine.create(
+            loadInitScript: () async => Uint8List(0),
+            uiMessageHandler: secondUi,
+          );
+          addTearDown(first.closeAndWait);
+          addTearDown(second.closeAndWait);
+          await first.init();
+          await second.init();
+          first.bindUiMessageHandler(firstUi);
+          expect(() => first.bindUiMessageHandler(secondUi), throwsStateError);
+          const request = 'sendMessage({method:"UI", function:"showMessage"})';
+          expect(first.runCode(request), 'first');
+          expect(second.runCode(request), 'second');
+          expect(firstUi.owners, [same(first)]);
+          expect(secondUi.owners, [same(second)]);
+          await first.closeAndWait();
+          expect(() => first.bindUiMessageHandler(firstUi), throwsStateError);
+          expect(second.runCode(request), 'second');
+          expect(secondUi.owners, [same(second), same(second)]);
+        },
+      );
+
       for (final lateFailure in [false, true]) {
         test(
           'shutdown ends a pending UI bridge before its late result; failure=$lateFailure',
           () async {
             final ui = _PendingUi();
-            JsEngine.configureUiMessageHandler(ui);
-            addTearDown(() => JsEngine.configureUiMessageHandler(null));
             final engine = JsEngine.create(
+              uiMessageHandler: ui,
               createHttpClient: () => Dio()..httpClientAdapter = _Adapter(),
               loadInitScript: () async => Uint8List(0),
             );

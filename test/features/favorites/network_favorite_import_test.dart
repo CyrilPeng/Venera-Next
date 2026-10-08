@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -7,9 +8,18 @@ import 'package:venera_next/features/favorites/network_favorite_import.dart';
 import 'package:venera_next/features/favorites/network_favorite_import_dialog.dart';
 import 'package:venera_next/features/favorites/favorites_repository.dart';
 import 'package:venera_next/features/favorites/favorite_models.dart';
+import 'package:venera_next/features/favorites/favorite_actions.dart';
+import 'package:venera_next/features/favorites/favorites_manager.dart';
+import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/res.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/network/request_scope.dart';
+import 'package:venera_next/components/window_selection_task.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
+
+import '../../components/sidebar_presentation_test.dart'
+    show pumpSidebar, settleSidebarWork;
 
 Comic comic(String id) => Comic(id, '', id, null, null, '', 'test', null, null);
 FavoriteItem item(String id) => FavoriteItem(
@@ -20,6 +30,49 @@ FavoriteItem item(String id) => FavoriteItem(
   type: const ComicType(2),
   tags: [],
 );
+
+class _ImportSource extends Fake implements ComicSource {
+  _ImportSource(this.favoriteData);
+  @override
+  final FavoriteData favoriteData;
+  @override
+  String get key => 'test';
+  @override
+  String get name => 'Synthetic favorites';
+  @override
+  int get intKey => key.hashCode;
+}
+
+class _ImportManager extends Fake implements LocalFavoritesManager {
+  int commits = 0;
+  int publications = 0;
+  @override
+  int get connectionGeneration => 1;
+  @override
+  bool existsFolder(String folder) => false;
+  @override
+  Future<NetworkFavoriteImportCommit> importNetworkFavorites(
+    String folder,
+    String source,
+    String folderId,
+    List<FavoriteItem> items, {
+    required bool oldToNew,
+    void Function()? checkActive,
+    int? generation,
+  }) async {
+    checkActive?.call();
+    commits++;
+    return NetworkFavoriteImportCommit(folder, items);
+  }
+
+  @override
+  Future<void> publishNetworkFavoriteImport(
+    NetworkFavoriteImportCommit result,
+  ) async {
+    publications++;
+  }
+}
+
 Future<List<FavoriteItem>> collect(
   FavoriteData data,
   RequestScope scope, {
@@ -34,6 +87,170 @@ Future<List<FavoriteItem>> collect(
   onProgress: (_) {},
 );
 void main() {
+  App.dataPath = Directory.systemTemp.path;
+  for (final replacement in ['source', 'database']) {
+    testWidgets('R1 import entry rejects a replaced $replacement', (
+      tester,
+    ) async {
+      final originalSources = List.of(ComicSource.all());
+      final originalManager = LocalFavoritesManager.cache;
+      final manager = _ImportManager();
+      final registry = SelectionTaskRegistry();
+      final pending = Completer<Res<List<Comic>>>();
+      var reads = 0;
+      final data = FavoriteData(
+        key: 'test',
+        title: 'Synthetic favorites',
+        multiFolder: false,
+        loadNext: null,
+        loadComic: (_, [folder]) {
+          reads++;
+          return pending.future;
+        },
+      );
+      var source = _ImportSource(data);
+      configureComicSourceRegistry(
+        all: () => [source],
+        find: (key) => key == 'test' ? source : null,
+        fromIntKey: (key) => key == 'test'.hashCode ? source : null,
+        isEmpty: () => false,
+      );
+      LocalFavoritesManager.cache = manager;
+      addTearDown(() async {
+        if (!pending.isCompleted) pending.complete(const Res([]));
+        await tester.pumpWidget(const SizedBox());
+        await settleSidebarWork(tester, registry.closeAndWait);
+        LocalFavoritesManager.cache = originalManager;
+        configureComicSourceRegistry(
+          all: () => originalSources,
+          find: (key) => originalSources.where((s) => s.key == key).firstOrNull,
+          fromIntKey: (key) =>
+              originalSources.where((s) => s.intKey == key).firstOrNull,
+          isEmpty: () => originalSources.isEmpty,
+        );
+      });
+      late BuildContext context;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (_, child) =>
+              SelectionTasksScope(registry: registry, child: child!),
+          home: Builder(
+            builder: (value) {
+              context = value;
+              return const Scaffold();
+            },
+          ),
+        ),
+      );
+      var ended = false;
+      final work = importNetworkFolder(
+        context,
+        'test',
+        5,
+        null,
+        null,
+      ).then((_) => ended = true);
+      await pumpSidebar(tester);
+      expect(reads, 1);
+      if (replacement == 'source') {
+        source = _ImportSource(data);
+      } else {
+        LocalFavoritesManager.cache = _ImportManager();
+      }
+      pending.complete(Res([comic('one')], subData: 5));
+      await pumpSidebar(tester);
+      expect(reads, 1);
+      expect(manager.commits, 0);
+      expect(manager.publications, 0);
+      expect(find.text('Cancelled'), findsOneWidget);
+      expect(ended, isFalse);
+      await tester.tap(find.text('OK'));
+      await settleSidebarWork(tester, () async => await work);
+      expect(ended, isTrue);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('R1 removed import waits for the real read before host closes', (
+    tester,
+  ) async {
+    final registry = SelectionTaskRegistry();
+    final pending = Completer<List<FavoriteItem>>();
+    var commits = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (_, child) =>
+            SelectionTasksScope(registry: registry, child: child!),
+        home: NetworkFavoriteImportDialog(
+          collect: (_, _) => pending.future,
+          commit: (_, _) {
+            commits++;
+            return NetworkFavoriteImportCommit('Target', []);
+          },
+          publish: (_) {},
+        ),
+      ),
+    );
+    await pumpSidebar(tester);
+    await tester.pumpWidget(const SizedBox());
+    var ended = false;
+    final closing = registry.closeAndWait().then((_) => ended = true);
+    await pumpSidebar(tester);
+    final endedEarly = ended;
+    pending.complete([item('one')]);
+    await settleSidebarWork(tester, () async => await closing);
+    expect(endedEarly, isFalse);
+    expect(commits, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'R1 import keeps its original callbacks across widget replacement',
+    (tester) async {
+      final pending = Completer<List<FavoriteItem>>();
+      var oldCommits = 0;
+      var newCommits = 0;
+      final registry = SelectionTaskRegistry();
+      Widget app(NetworkFavoriteImportDialog child) => MaterialApp(
+        builder: (_, page) =>
+            SelectionTasksScope(registry: registry, child: page!),
+        home: child,
+      );
+      await tester.pumpWidget(
+        app(
+          NetworkFavoriteImportDialog(
+            collect: (_, _) => pending.future,
+            commit: (_, _) {
+              oldCommits++;
+              return NetworkFavoriteImportCommit('Old', []);
+            },
+            publish: (_) {},
+          ),
+        ),
+      );
+      await pumpSidebar(tester);
+      await tester.pumpWidget(
+        app(
+          NetworkFavoriteImportDialog(
+            collect: (_, _) async => [],
+            commit: (_, _) {
+              newCommits++;
+              return NetworkFavoriteImportCommit('New', []);
+            },
+            publish: (_) {},
+          ),
+        ),
+      );
+      pending.complete([item('one')]);
+      await pumpSidebar(tester);
+      expect(oldCommits, 0);
+      expect(newCommits, 0);
+      await tester.pumpWidget(const SizedBox());
+      await settleSidebarWork(tester, registry.closeAndWait);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'committed import publishes after its dialog is forcibly unmounted',
     (tester) async {
@@ -101,7 +318,7 @@ void main() {
     },
   );
   test(
-    'cancellation during prefetch terminates waiting without further requests',
+    'R1 cancellation during prefetch drains the real request and keeps late error',
     () async {
       final pending = Completer<Res<List<Comic>>>();
       var calls = 0;
@@ -117,16 +334,50 @@ void main() {
         },
       );
       final scope = RequestScope();
-      final result = collect(data, scope);
-      final assertion = expectLater(result, throwsA(isA<RequestCancelled>()));
+      var ended = false;
+      Object? error;
+      final result = collect(data, scope).then<void>(
+        (_) => ended = true,
+        onError: (Object failure) {
+          error = failure;
+          ended = true;
+        },
+      );
       scope.cancel();
-      await assertion;
-      pending.completeError(StateError('late'));
       await Future<void>.delayed(Duration.zero);
+      final endedEarly = ended;
+      final late = StateError('late');
+      pending.completeError(late);
+      await result;
+      expect(endedEarly, isFalse);
+      expect(error, same(late));
       expect(calls, 1);
       scope.dispose();
     },
   );
+  for (final kind in [FailureKind.cancelled, FailureKind.unsupported]) {
+    test(
+      'R1 structured $kind favorite reads retain details without retries',
+      () async {
+        var calls = 0;
+        final failure = OperationFailure(message: 'source result', kind: kind);
+        final data = FavoriteData(
+          key: 'test',
+          title: '',
+          multiFolder: true,
+          loadNext: null,
+          loadComic: (_, [folder]) async {
+            calls++;
+            return Res.failure(failure);
+          },
+        );
+        final scope = RequestScope();
+        addTearDown(scope.dispose);
+        await expectLater(collect(data, scope), throwsA(same(failure)));
+        expect(calls, 1);
+      },
+    );
+  }
   test(
     'repeated cursor is rejected instead of collecting indefinitely',
     () async {

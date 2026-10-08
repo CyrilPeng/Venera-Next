@@ -1,5 +1,143 @@
 # 项目结构约定
 
+## R1 第一组边界（2026-10-09）
+
+收藏入口显式接收原 BuildContext；网络删除/创建复用 async_confirm_dialog.dart 与 input_dialog.dart，移除重复的创建对话框实现。批量添加的事务与发布留在 manager/repository 层，UI 不执行 SQL。网络导入复用 RequestScope.runToCompletion，窗口任务等待真实结束；打开目录允许注入系统调用以作隔离验证。
+
+无新增生产文件，完整清单保持 **520 文件：326 业务、166 UI、28 待审查，241 业务入口**；不放宽门禁。验证与剩余 R1/R3 审查见[批次报告](completion_batches_2026_10_09.md)。
+
+## 剩余迁移的批次与验证约定（2026-10-09）
+
+剩余实施采用[优化方案第 11 节](optimization_plan.zh.md#remaining-work)的四批次与分层验证规则。R3 集中完成 28 个待审查文件、原 46 文件 SCC 的语义分类、全域窄接口和兼容退出；R1/R2 的业务改动仍即时遵守已有边界门禁。
+
+本次仅更新计划与验证频率，结构保持 **520 文件：326 业务、166 UI、28 待审查，241 业务入口**。不修改依赖基线、允许边或 CI。迁移提交执行格式、严格分析、结构/架构及相关测试，最终全量与平台构建按候选输入集中安排，追加检查按实际风险触发。
+
+## P2/P4/P6/P7/P8：收藏转移与元数据刷新的原宿主归属（2026-10-09）
+
+favorite_metadata_update.dart 是受控业务入口：固定漫画副本，注入加载/保存/准入与进度，拥有 RequestScope 的批次读取、重试和完整结束；没有 Widget、根 context 或页面 State。FavoriteMetadataFailure 保留原漫画身份、load/save 阶段、原异常和堆栈；取消与不支持不混作普通失败。
+
+favorite_transfer_dialog.dart 和 favorite_metadata_dialog.dart 是 UI 适配，分别拥有原选择/提交/发布和原源/进度/取消展示。复用 WindowSelectionTask、PopUpWidget/ResourceDialogRoute、AppDataOperations 及现有创建入口，不新建通用任务框架。LocalFavoritesPage 直接调用入口，持有元数据取消责任并用原 manager 监听刷新；旧 favoriteOption/updateComicsInfo 无转发。转移事务、元数据 SQL 和 schema 保留在原 repository，manager 只保留提交状态与原错误。
+
+清单 **520 文件：326 业务、166 UI、28 待审查、241 业务入口**。favorite_actions.dart 剩余职责保持待审查分类。91 个基线 blob、57 条特性边和原 46 文件 SCC 保持，12 项反向探针拒绝；最后格式化后冻结全部 1020 条 Dart 路径。其他收藏动作、全域边界和生命周期继续独立验收，详见[兼容说明](favorite_workflow_ownership_compatibility.md)。
+
+## P2/P4/P6/P8：异步确认与收藏写入的原宿主归属（2026-10-09）
+
+async_confirm_dialog.dart 负责共享异步确认展示、原应用/窗口登记、按钮准入及提交状态对应的重试策略；复用 ResourceDialogRoute、WindowSelectionTask 和 ContentDialog，不从 message.dart 转导出。返回 Future 等待展示和最后一次完整确认回调，防止父页面提前替换时留下旧 context。
+
+favorite_confirmation_dialog.dart 是收藏 UI 适配入口，由既有 favorites.dart 导出；固定原 manager/连接/路径/文件夹，复核数据库准入并延后原页面发布。LocalFavoritesPage 文件夹/所选漫画删除及 FollowUpdatesPage 全部已读直接使用该入口。批量已读 SQL 留在 repository，以一个事务按固定身份执行；manager 保留提交与回滚错误状态。其他收藏动作继续独立审查。
+
+两个新文件全文登记为 UI，当前清单 517 文件：325 业务、164 UI、28 待审查、240 业务入口。84 个基线 blob、57 条特性边与原 46 文件 SCC 保持，8 项反向探针拒绝；冻结包含全部 1013 lib/test Dart 文件。普通 ContentDialog 和 message.dart 其余功能保持，只有此确认框 actions 采用换行布局。详见[兼容说明](async_confirm_ownership_compatibility.md)。
+
+## P4/P6/P8：漫画重排保存与原宿主归属（2026-10-09）
+
+comic_reorder_page.dart 负责原页面/路由/数据库准入、排序草稿和保存状态，复用 SettingsSaveState、AppDataOperations 与原 manager/repository。跨域依赖使用已有 comic_source_api.dart；本地收藏页直接调用新入口，无转发层。移除重复保存队列及原/新窗口间迁移回调，接受的保存留在原宿主，父列表由原监听刷新。
+
+SettingsSaveState 仅增加默认关闭的退役目标离开策略，不确认失败、不转移登记，并保留其他路由拥有者的决定。重排使用完整顺序的幂等赋值，管理器与 SQLite 事务保持。原列表/画廊布局、拖拽延迟和颜色计算保持。
+
+完整分类为 515 文件：325 业务、162 UI、28 待审查，240 业务入口；新页面全文登记为 UI，边界清单当前统计同步。79 个基线 blob、57 条特性边与原 46 文件 SCC 保持，6 项反向探针拒绝；其余收藏动作及全域生命周期继续审查。详见[兼容说明](favorite_comic_order_compatibility.md)。
+
+## P4/P6/P8：收藏文件夹重命名与原页面归属（2026-10-09）
+
+folder_rename_dialog.dart 负责原页面重命名输入、提交状态与展示结束后的选择发布；本地收藏页直接调用，不保留转发入口。复用 showInputDialog、WindowSelectionTask、AppDataOperations、原 manager/repository 和名称校验，不复制事务或另建任务框架。输入弹窗仅增加默认关闭的确认失败报告参数，并保留成功确认后的完成状态；JS/Dart 回调和路由清理协议保持。
+
+LocalFavoritesPage 的原监听和查询连接独立保留，在 didChangeDependencies 取得宿主快照；销毁解除原监听并释放 ScrollController。其他收藏动作继续原实现和单独审查。新重命名文件全文登记为 UI；分类为 514 文件：325 业务、161 UI、28 待审查，240 业务入口；57 条特性边、原 46 文件 SCC 和 71 个基线 blob 保持，6 项反向探针拒绝。详见[兼容说明](favorite_folder_rename_compatibility.md)。
+
+## P4/P6/P8：收藏文件夹排序与原宿主归属（2026-10-09）
+
+folder_order_dialog.dart 独立负责收藏夹排序草稿、弹窗/帮助路由、交互准入与原宿主的等待和错误提示；侧栏直接导入并传入 context，favorite_actions.dart 不保留转发。持久化继续由原 LocalFavoritesManager、AppDataOperations 与 FavoritesRepository 完成，数据格式和事务不变。
+
+PopUpWidget 的可选释放/关闭准入钩子不改变现有布局、内层 Navigator、安全区或动画。WindowSelectionTask 对仍在执行的消费任务增加可选关闭错误传递；普通已返回失败仍归调用者，后续关闭只重试清理。新文件已全文登记为 UI；其他收藏动作继续按原分类审查。分类为 513 文件：325 业务、160 UI、28 待审查，240 业务入口；57 条特性边与原 46 文件 SCC 保持，6 项反向探针拒绝。详见[兼容说明](favorite_folder_order_compatibility.md)。
+
+## P4/P6/P8：收藏文件夹创建与原宿主归属（2026-10-09）
+
+CreateFavoriteFolderDialog 负责原请求的编辑、忙碌、错误和提交后确认状态，复用 WindowSelectionTask 登记操作；收藏侧栏只投影原 manager 的文件夹和计数并管理监听。两文件已全文审查为 UI；业务创建、JSON 导入与事务继续在原 manager/repository/import 模块。
+
+newFolder 使用原 context、外层 popup 路由及原数据库身份，复用现有路由/宿主资源协议；侧栏、本地转移和漫画详情通过原目标回调接受不可变文件夹列表。favorite_actions.dart、local_favorites_page.dart 及漫画详情其余职责仍按原分类继续审查。分类为 512 文件：325 业务、159 UI、28 待审查，240 业务入口；57 条特性边及 46 文件 SCC 保持，6 项反向探针拒绝。三处既有格式差异通过原 blob 格式化证明后规范化。详见[兼容说明](favorite_creation_ownership_compatibility.md)。
+
+## P4/P5/P8：阅读侧栏失败清理与原宿主（2026-10-09）
+
+ReaderSidebarBinding 负责原阅读请求的侧栏与借用暂停；复用 WindowSelectionTask，在任意获取回调前登记原应用/窗口。移除失败保留原路由，页面移除后由原宿主继续清理；handle、close 和 dispose 均可明确重试，已释放暂停不重放。WindowSelectionTask 从窗口关闭开始等待完整清理，避免首次失败在同一退出流程内被隐式重试。
+
+SideBarRoute、阅读壳/评论调用者、窗口组件和业务/存储协议保持。分类仍为 512 文件：325 业务、157 UI、30 待审查，240 业务入口；6 项反向探针拒绝，57 条特性边及 46 文件 SCC 保持。其余生命周期及全域边界继续验收。详见[兼容说明](reader_sidebar_cleanup_compatibility.md)。
+
+## P4/P5/P8：章节选择与侧栏生命周期（2026-10-09）
+
+SideBarRoute 仍负责既有侧栏布局与动画，增加原路由的交互准入和释放钩子。showSideBar 复用 WindowSelectionTask 与最近 Navigator，返回路由的类型化结果并保留移除失败。普通下载 UI 固定展示时的章节映射并校验原宿主；业务下载器/队列保持。阅读绑定只接入原请求准入和销毁后的借用暂停释放。
+
+分类保持 512 文件：325 业务、157 UI、30 待审查，240 业务入口；六项反向探针拒绝，57 条特性边和 46 文件 SCC 保持。actions.dart 仍待审查；阅读侧栏直接移除失败及其他动作/域边界继续验收。详见[兼容说明](sidebar_selection_compatibility.md)。
+
+## P2/P4/P7/P8：归档选择与下载入队归属（2026-10-08）
+
+归档选择 UI 通过注入的 ArchiveDownloader 读取列表和链接，调用既有业务帮助函数；本文件负责交互准入、输入代次、原 RequestScope 与应用/窗口登记、路由和错误展示。showArchiveDownloadDialog 复用现有路由释放和窗口选择任务，生产 download 在入队前再次检查原宿主/漫画，下载器和队列实现保持。
+
+全文审查后 archive_download_dialog.dart 从待审查移入 UI。完整分类 512 文件：325 业务、157 UI、30 待审查，240 业务入口；六项反向探针拒绝，57 条特性边和 46 文件 SCC 保持。actions.dart 仍待审查，章节侧栏及其他动作不能因本批而视为完整验收。详见[兼容说明](archive_selection_compatibility.md)。
+
+## P2/P4/P8：加载弹窗与提示资源归属（2026-10-08）
+
+message.dart 负责消息与弹窗展示、交互准入、路由和 OverlayEntry 资源，业务能力通过回调传入。加载按钮借用原宿主快照，调用方继续持有业务任务；JS 加载在原 WindowSelectionTask 内分别等待展示与真实取消。ResourceDialogRoute 复用未构建销毁处理，内容和 toast entry 按所属 OverlayWidget 释放。
+
+全文审查后 message.dart 从待审查移入 UI。完整分类 512 文件：325 业务、156 UI、31 待审查，240 业务入口；六项反向 UI/待审查探针拒绝，原保护、57 条特性边和 46 文件 SCC 保持。其他确认与任意回调释放仍按原方案验收，未新增业务队列或兼容转发。详见[兼容说明](loading_toast_compatibility.md)。
+
+## P2/P4/P7/P8：JS 输入校验与选择归属（2026-10-08）
+
+`JsImmediateCallback` 在原引擎桥接内提供即时借用和独立顶层完成，JS 输入适配负责同步文字、展示和原宿主等待。`components/select_dialog.dart` 只负责选择展示、交互准入与原路由释放；JS UI 直接导入，不经 message 转导出。ResourceDialogRoute 共享输入/选择/普通 JS 弹窗的未构建销毁钩子；窗口任务、原 JS 协议及业务队列保持。
+
+完整分类 512 文件：325 业务、155 UI、32 待审查，240 业务入口。新选择文件归入 UI；原保护、57 条特性边及 46 文件 SCC 保持，六项反向 UI/待审查探针拒绝。message.dart、其余 UI/作用域生命周期和原方案全域验收仍开放。详见[兼容说明](js_input_selection_compatibility.md)。
+
+## P2/P4/P8：输入确认与原宿主归属（2026-10-08）
+
+`components/input_dialog.dart` 负责原宿主上的输入展示、确认准入、文本资源与关闭重试；JS UI 和收藏重命名直接依赖该 UI 入口，message.dart 不保留转导出。展示与已接受确认各自复用现有 WindowSelectionTask，完成写入不会因展示关闭失败而重放。共享 ContentDialog 只增加当前路由关闭检查；输入内容树和其余消息帮助函数保持。
+
+完整分类 511 文件：325 业务、154 UI、32 待审查，240 业务入口。新输入文件归入 UI；原业务保护、57 条特性边与 46 文件 SCC 保持，四项反向 UI/待审查探针拒绝。JS 校验完整资源归属、message.dart 的剩余展示路径及全域验收仍开放。详见[兼容说明](input_dialog_compatibility.md)。
+
+## P2/P4/P7/P8：JS 弹窗回调与引擎归属（2026-10-08）
+
+`JsEngine` 持有自己的 `JsUiMessageHandler`，通过业务安全接口传递发送引擎身份；交互与无头装配分别绑定对应实例。`JsUiApi` 借用原 UI 宿主，弹窗动作和加载取消复用既有窗口/应用任务登记及顶层 JS 完成消费机制。展示、回调完成和原生资源释放各自保持明确边界，输入同步校验与其他尚未收束的 UI 路径不被冒认为已完成。
+
+完整分类 510 文件：325 业务、153 UI、32 待审查，240 业务入口。JS UI 从待审查移入 UI，原业务保护、57 条特性边和 46 文件 SCC 保持；四项反向 UI/待审查探针拒绝。没有新增业务队列或依赖例外。详见[兼容说明](js_ui_callback_compatibility.md)。
+
+## P2/P4/P7/P8：源更新与删除归属（2026-10-08）
+
+`SourceUpdateService` 持有原管理器/仓库、数据目录与请求；`SourceUpdateReport` 保存本次检查的不可变结果和精确源目标。`headless_source_updates.dart` 仅经漫画源公开业务入口转换命令数据，不读取 UI 通知快照。`SourceInstallationsScope` 同时借出更新服务与原刷新回调；`source_update_prompt.dart` 负责原路由展示和既有窗口任务绑定。应用关闭并行启动更新取消与消费者排空，管理器继续独占实际变更与恢复。
+
+完整分类 510 文件：325 业务、152 UI、33 待审查，240 业务入口；旧保护、57 条特性边及 46 文件 SCC 保持。源更新服务与新 CLI 适配的六项反向 UI/待审查探针拒绝；未增加业务队列、依赖例外或公开 JS/存储协议。详见[兼容说明](source_update_ownership_compatibility.md)。
+
+## P4/P7/P8：源设置回调完成与结果释放（2026-10-08）
+
+`JsCallback` 的可选同步消费路径由原 `JsEngine` 记录单次调用、等待顶层 Promise 并释放结果；普通调用保持原作用域取消契约。`SourceParserContext` 在准入和成功消费时检查原源身份。页面通过既有 `WindowSelectionTask` 绑定原宿主，负责 loading、迟到提示与大字号布局，不给任意嵌套 Promise 或未返回任务添加完成保证。
+
+未新增文件分类或依赖例外。508 文件中 324 业务、151 UI、33 待审查，239 业务入口；四项接回 UI 和两项接回待审查窗口的探针均拒绝，57 条特性边及 46 文件 SCC 不变。详见[设置回调兼容边界](source_setting_callback_compatibility.md)。
+
+## P2/P4/P7/P8：源编辑会话与管理器归属（2026-10-08）
+
+SourceScriptSession只持有显式替换回调与本编辑会话的源实例；SourceScriptFiles承接固定路径的读取、独立草稿和编辑器启动。replaceScript返回精确替换结果，原事务/队列主体不变。页面从安装队列借用管理器；内外编辑器通过既有WindowSelectionTask管理原宿主准入和完成，UI保留草稿与错误反馈。
+
+两入口受业务约束，完整分类508文件：324业务、151UI、33待审查，239业务入口；六项反向UI探针拒绝，57条特性边及46文件SCC保持。applied失败不能作为持久提交确认，编辑会话停止重放并保留诊断。详见[源编辑兼容说明](source_editor_ownership_compatibility.md)。
+
+## P4/P7/P8：源操作结果与归档读取（2026-10-08）
+
+JsEngine.runCodeToCompletion与读取完成入口共用同步消费/释放主体，单次写操作的重试与取消语义由调用层决定。SourceParserContext校验原实例；九类写能力只保留Dart结果，归档读取使用原只读重试/归一化器并等待顶层Promise。详情归档辅助函数传递结构化失败；UI、资产与公开源协议未改。
+
+六个既有业务文件保持保护。完整分类506文件：322业务、151UI、33待审查，237业务入口；57条特性边、全部原保护及46文件SCC保持。详见[源操作结果与归档兼容](source_action_compatibility.md)。
+
+## P2/P4/P8：摘要订阅与弹窗路由归属（2026-10-08）
+
+首页只装配已存在的源/历史/收藏所有者，摘要通过显式参数借用并解绑原监听。ComicSourceSummarySnapshot保存原列表顺序与版本比较规则；HistorySummary保留仅由绑定/通知触发的查询缓存。SummaryHeader承担共享标题布局，同步错误和评分/丢弃确认使用局部context与原路由身份。
+
+分类506文件：322业务、151UI、33待审查，237业务入口；57条特性边、全部原保护及46文件SCC保持。编辑器生产调用者和其余全域生命周期仍需审查。详见[摘要与弹窗兼容说明](summary_dialog_compatibility.md)。
+
+## P2/P4/P7/P8：详情预览加载与资源归属（2026-10-08）
+
+ComicThumbnailPages通过显式准入/保留回调管理单漫画游标、真实完成和失败，ThumbnailImage保存旧裁剪规则。ComicThumbnails只做网格、导航回调及原应用/窗口适配；评论预览管理当前输入和自有滚动控制器。缩略图源适配复用原JS完成与引用释放边界，其他图片能力未改。
+
+完整分类504文件：321业务、143UI、40待审查，236业务入口；57条特性边、全部原保护和46文件SCC保持。详见[详情预览兼容说明](detail_preview_compatibility.md)。
+
+## P2/P4/P5/P8：阅读提示监听与组件边界（2026-10-08）
+
+ChapterSwipeIndicator通过ListenableBuilder借用当前滚动控制器，按当前方向/有效位置计算展示进度，控制器由原视图持有。七个阅读展示/适配文件核实为UI；状态轮询、图片选择业务与设置效果仍在原独立边界。除提示外六个组件blob不变。
+
+完整分类502文件：319业务、141UI、42待审查，234业务入口；57条特性边、全部旧保护和46文件SCC保持。详见[阅读提示与组件边界](reader_presentation_compatibility.md)。
+
 ## P2/P3/P4/P8：应用行为配置与历史清理归属（2026-10-08）
 
 AppPreferences集中语言、启动更新和历史保留规则。HistoryRetentionChange持有显式保存/清理/准入/目标检查回调，把一个选择的持久化与清理交给原宿主等待，重试保留首次截止时间。HistoryManager提供绑定原连接代次的装配；设置页复用HistoryRetentionSetting，拖动预览与正式提交分离。原通用字段、SQL和保存协议不变。
@@ -388,8 +526,8 @@ test/features/<domain>/
 - 使用 `rg` 确认旧路径没有残留引用。
 - 运行 `python .github/scripts/check_structure_imports.py`，确认没有受限方向的 import/export。
 - 更新 `CHANGELOG.md` 的当前版本 `变更` 小节。
-- 运行 `flutter analyze`。
-- 运行与迁移功能域相关的测试；跨域引用较多时运行更大范围测试。
+- 运行 `flutter analyze --no-pub --fatal-infos --fatal-warnings`。
+- 运行与迁移功能域及受影响消费者相关的测试；剩余优化按[分层验证规则](optimization_plan.zh.md#verification-cadence)选择范围，跨域引用较多不自动要求重复全量。
 - 每个独立迁移阶段单独提交，提交信息使用 `refactor(<scope>): ...`。
 
 ## 结构边界检查

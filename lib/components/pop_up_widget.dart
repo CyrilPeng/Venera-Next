@@ -8,15 +8,31 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 class PopUpWidget<T> extends PopupRoute<T> {
-  PopUpWidget(this.widget);
+  PopUpWidget(this.widget, {this.onDispose, this.canDismiss});
 
   final Widget widget;
+  final VoidCallback? onDispose;
+  final bool Function()? canDismiss;
+
+  @override
+  void dispose() {
+    try {
+      onDispose?.call();
+    } finally {
+      super.dispose();
+    }
+  }
 
   @override
   Color? get barrierColor => Colors.black54;
 
   @override
-  bool get barrierDismissible => true;
+  bool get barrierDismissible => canDismiss?.call() ?? true;
+
+  @override
+  RoutePopDisposition get popDisposition => canDismiss?.call() == false
+      ? RoutePopDisposition.doNotPop
+      : super.popDisposition;
 
   @override
   String? get barrierLabel => "exit";

@@ -7,6 +7,11 @@ import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/network/cache.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
+import 'package:venera_next/components/window_selection_task.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
+
+import '../../components/sidebar_presentation_test.dart'
+    show pumpSidebar, settleSidebarWork;
 
 FavoriteData data({
   required Future<Res<Map<String, String>>> Function() load,
@@ -22,6 +27,109 @@ FavoriteData data({
 );
 
 void main() {
+  testWidgets(
+    'R1 replacing a network source retires the original folder read',
+    (tester) async {
+      final pending = Completer<Res<Map<String, String>>>();
+      final original = data(load: () => pending.future);
+      final replacement = data(
+        load: () async => const Res({'new': 'New folder'}),
+      );
+      Widget page(FavoriteData input) => MaterialApp(
+        home: Scaffold(body: NetworkFavoritePage(input, showFolders: () {})),
+      );
+      await tester.pumpWidget(page(original));
+      await tester.pumpWidget(page(replacement));
+      await tester.pumpAndSettle();
+      expect(find.text('New folder'), findsOneWidget);
+      pending.complete(const Res({'old': 'Old folder'}));
+      await tester.pumpAndSettle();
+      expect(find.text('Old folder'), findsNothing);
+      expect(find.text('New folder'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('R1 network deletion drains with its original host', (
+    tester,
+  ) async {
+    final registry = SelectionTaskRegistry();
+    final pending = Completer<Res<bool>>();
+    var publications = 0;
+    late BuildContext context;
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (_, child) =>
+            SelectionTasksScope(registry: registry, child: child!),
+        home: Builder(
+          builder: (value) {
+            context = value;
+            return const Scaffold();
+          },
+        ),
+      ),
+    );
+    final work = confirmNetworkFavoriteDeletion(
+      context,
+      delete: () => pending.future,
+      message: 'Remove synthetic favorite?',
+      onCommitted: () => publications++,
+    );
+    await pumpSidebar(tester);
+    await tester.tap(find.text('Confirm'));
+    await tester.pumpWidget(const SizedBox());
+    var closed = false;
+    final closing = registry.closeAndWait().then((_) => closed = true);
+    await pumpSidebar(tester);
+    final closedEarly = closed;
+    pending.complete(const Res(true));
+    await settleSidebarWork(tester, () async {
+      expect(await work, isTrue);
+      await closing;
+    });
+    expect(closedEarly, isFalse);
+    expect(publications, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'R1 committed deletion publication failure cannot replay delete',
+    (tester) async {
+      var deletes = 0;
+      late BuildContext context;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (value) {
+              context = value;
+              return const Scaffold();
+            },
+          ),
+        ),
+      );
+      final work = confirmNetworkFavoriteDeletion(
+        context,
+        delete: () async {
+          deletes++;
+          return const Res(true);
+        },
+        message: 'Remove synthetic favorite?',
+        onCommitted: () => throw StateError('synthetic publication failed'),
+      );
+      await pumpSidebar(tester);
+      await tester.tap(find.text('Confirm'));
+      await pumpSidebar(tester);
+      expect(
+        find.textContaining('synthetic publication failed'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('OK'));
+      await settleSidebarWork(tester, () async => expect(await work, isTrue));
+      expect(deletes, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   tearDown(() => NetworkCacheManager().clear());
   testWidgets(
     'folder loading starts once and late failure after disposal is contained',

@@ -100,7 +100,10 @@ class JsSourceDataBridge {
 }
 
 abstract interface class JsUiMessageHandler {
-  Object? handleUIMessage(Map<String, dynamic> message);
+  Object? handleUIMessage(
+    Map<String, dynamic> message, {
+    required JsEngine engine,
+  });
 }
 
 /// Expected termination when the owner releases a JavaScript operation.
@@ -184,6 +187,60 @@ void _releaseJsResultReferences(Object? value) {
 /// Release a rejected result that no consumer will receive. Each distinct
 /// native wrapper is released once, including aliases in a result graph.
 void discardJsResult(Object? value) => _releaseJsResultReferences(value);
+
+/// Ordinary calls retain their existing synchronous/Future result contract.
+/// Supplying [consume] instead joins this invocation's actual top-level Promise
+/// and lends its result to a synchronous consumer, releasing the result/error
+/// graph before the returned `Future<void>` completes. Scope disposal does not
+/// finish an accepted consuming call; native runtime termination does.
+/// Descendant Promises and unreturned work are not joined by this contract.
+typedef JsCallback =
+    dynamic Function(
+      List<dynamic> arguments, {
+      void Function(dynamic result)? consume,
+    });
+
+/// Borrows the immediate success/rejection before its references are released.
+/// A Promise is represented by a `Future<dynamic>` completion marker with no
+/// native result. The returned Future joins the actual top-level invocation
+/// and cleanup independently of scope disposal. The consumer runs only once.
+typedef JsImmediateCallback =
+    Future<void> Function(
+      List<dynamic> arguments,
+      void Function(dynamic result, StackTrace? rejectionStack) consume,
+    );
+
+/// Invoke an action once and release its unused result. Plain Dart callbacks
+/// are also supported; scoped native callbacks provide their completion bridge.
+Future<void> invokeJsCallbackToCompletion(
+  dynamic Function(List<dynamic>) callback,
+  List<dynamic> arguments,
+) async {
+  if (callback is JsCallback) {
+    await callback(arguments, consume: (_) {});
+    return;
+  }
+  Object? result;
+  Object? failure;
+  StackTrace? failureStack;
+  try {
+    result = await callback(arguments);
+  } catch (error, stack) {
+    failure = error;
+    failureStack = stack;
+    rethrow;
+  } finally {
+    try {
+      discardJsResult([result, failure]);
+    } on JsResourceReleaseFailure catch (cleanup) {
+      if (failure == null) rethrow;
+      throw JsResourceReleaseFailure([
+        (resource: 'callback', error: failure, stack: failureStack!),
+        ...cleanup.failures,
+      ]);
+    }
+  }
+}
 
 /// Observe every Future reachable from a result graph whose synchronous
 /// references have already been discarded. Release newly arriving references
@@ -297,9 +354,11 @@ class JsEngine with _JSEngineApi, Init {
     Dio Function()? createHttpClient,
     Future<Uint8List> Function()? loadInitScript,
     JsPoolEngine Function(Uint8List)? createComputeWorker,
+    JsUiMessageHandler? uiMessageHandler,
   }) : _createHttpClient = createHttpClient ?? _newHttpClient,
        _loadInitScript = loadInitScript ?? _readInitScript,
-       _createComputeWorker = createComputeWorker ?? _newComputeWorker;
+       _createComputeWorker = createComputeWorker ?? _newComputeWorker,
+       _uiMessageHandler = uiMessageHandler;
 
   final Dio Function() _createHttpClient;
   final Future<Uint8List> Function() _loadInitScript;
@@ -324,6 +383,7 @@ class JsEngine with _JSEngineApi, Init {
   final _pendingResults = <Completer<dynamic>>{};
   final _ownedReferences = Set<_OwnedJsReference>.identity();
   final _ownedByRawReference = Expando<_OwnedJsReference>();
+  final _callbackInvocations = <_JsCallbackInvocation>{};
 
   @visibleForTesting
   int get debugOwnedReferenceCount => _ownedReferences.length;
@@ -409,13 +469,19 @@ class JsEngine with _JSEngineApi, Init {
 
   static JsSourceDataBridge? _sourceDataBridge;
 
-  static JsUiMessageHandler? _uiMessageHandler;
+  JsUiMessageHandler? _uiMessageHandler;
 
   static void configureSourceDataBridge(JsSourceDataBridge? bridge) {
     _sourceDataBridge = bridge;
   }
 
-  static void configureUiMessageHandler(JsUiMessageHandler? handler) {
+  /// Binds this runtime once, so another application's UI cannot replace it.
+  void bindUiMessageHandler(JsUiMessageHandler handler) {
+    _checkActive();
+    final previous = _uiMessageHandler;
+    if (previous != null && !identical(previous, handler)) {
+      throw StateError('JavaScript UI handler is already bound');
+    }
     _uiMessageHandler = handler;
   }
 
@@ -424,13 +490,6 @@ class JsEngine with _JSEngineApi, Init {
 
   JsUiMessageHandler get _uiMessageBridge =>
       _uiMessageHandler ?? (throw "JS UI message handler is not configured.");
-
-  static Future<void> reset() {
-    final oldEngine = _cache;
-    _cache = null;
-    oldEngine?.dispose();
-    return JsEngine().init();
-  }
 
   void resetDio() {
     _checkActive();
@@ -663,7 +722,10 @@ class JsEngine with _JSEngineApi, Init {
           case "delay":
             return _delay(Duration(milliseconds: message["time"]));
           case "UI":
-            return _uiMessageBridge.handleUIMessage(Map.from(message));
+            return _uiMessageBridge.handleUIMessage(
+              Map.from(message),
+              engine: this,
+            );
           case "getLocale":
             return "${appLocale.languageCode}_${appLocale.countryCode}";
           case "getPlatform":
@@ -1078,8 +1140,85 @@ class JsEngine with _JSEngineApi, Init {
     pending.clear();
   }
 
+  Future<void> _consumeCallbackResult(
+    JSInvokable function,
+    List<dynamic> arguments,
+    void Function(dynamic result) consume, {
+    void Function(dynamic result, StackTrace? rejectionStack)? consumeImmediate,
+  }) {
+    _checkActive();
+    final nativeEngine = _engine;
+    final invocation = _JsCallbackInvocation(this, nativeEngine, consume);
+    _callbackInvocations.add(invocation);
+    // A callback can synchronously reenter shutdown through a Dart bridge.
+    // Keep its native stack alive until invocation and lease release return.
+    final frame = Completer<void>();
+    final bridges = nativeEngine == null
+        ? null
+        : _bridgeDrains.putIfAbsent(nativeEngine, () => {});
+    bridges?.add(frame.future);
+    JSInvokable? lease;
+    Object? result;
+    StackTrace? rejectionStack;
+    try {
+      try {
+        final call =
+            _unwrapInvocationGraph([function, arguments], nativeEngine) as List;
+        final raw = call[0] as JSInvokable;
+        raw.dup();
+        lease = raw;
+        // Invoke the original function directly. Calling an owned wrapper here
+        // would add a logical cancellation waiter ahead of actual completion.
+        result = raw.invoke(call[1] as List);
+      } catch (error, stack) {
+        result = error;
+        rejectionStack = stack;
+      } finally {
+        try {
+          lease?.free();
+        } catch (error, stack) {
+          invocation.cleanupFailures.add((
+            resource: 'callback invocation lease',
+            error: error,
+            stack: stack,
+          ));
+        }
+      }
+      if (consumeImmediate != null) {
+        invocation.inspectImmediate(result, rejectionStack, consumeImmediate);
+      }
+      if (rejectionStack != null || result is! Future) {
+        invocation.settle(result, rejectionStack);
+      } else {
+        unawaited(
+          result.then<void>(
+            (value) => invocation.settle(value, null),
+            onError: (Object error, StackTrace stack) =>
+                invocation.settle(error, stack),
+          ),
+        );
+      }
+    } finally {
+      // Immediate conversion may itself reenter shutdown. Keep the original
+      // runtime alive until conversion, adoption and Promise observation end.
+      bridges?.remove(frame.future);
+      frame.complete();
+    }
+    return invocation.result;
+  }
+
   Future<dynamic> runReadCode(String js, [String? name]) =>
       _runReadCode(js, name, waitForCompletion: false);
+
+  /// Executes once and lends the completed result to a synchronous consumer.
+  /// The consumer returns detached Dart data; result/error references are
+  /// released before completion. Unlike reads, accepted actions are not
+  /// retried or converted to cancellation after their Promise has completed.
+  Future<T> runCodeToCompletion<T>(
+    String js, {
+    required T Function(dynamic result) consume,
+    String? name,
+  }) async => await _consumeCodeResult(js, name, consume) as T;
 
   /// Joins the original Promise and lends its result to a synchronous consumer.
   /// The consumer must return detached Dart data: all native result/error
@@ -1092,12 +1231,13 @@ class JsEngine with _JSEngineApi, Init {
       await _runReadCode(js, name, waitForCompletion: true, consume: consume)
           as T;
 
-  Future<dynamic> _consumeReadResult(
+  Future<dynamic> _consumeCodeResult(
     String js,
     String? name,
+    dynamic Function(dynamic result) consume, {
     RequestScope? scope,
-    dynamic Function(dynamic result) consume,
-  ) async {
+    String operation = 'source call',
+  }) async {
     Object? result;
     Object? failure;
     StackTrace? failureStack;
@@ -1115,7 +1255,7 @@ class JsEngine with _JSEngineApi, Init {
       } on JsResourceReleaseFailure catch (cleanup) {
         if (failure == null) rethrow;
         throw JsResourceReleaseFailure([
-          (resource: 'source read', error: failure, stack: failureStack!),
+          (resource: operation, error: failure, stack: failureStack!),
           ...cleanup.failures,
         ]);
       }
@@ -1135,9 +1275,20 @@ class JsEngine with _JSEngineApi, Init {
         scope?.check();
         if (waitForCompletion) {
           return scope == null
-              ? await _consumeReadResult(js, name, scope, consume!)
+              ? await _consumeCodeResult(
+                  js,
+                  name,
+                  consume!,
+                  operation: 'source read',
+                )
               : await scope.runToCompletion(
-                  () => _consumeReadResult(js, name, scope, consume!),
+                  () => _consumeCodeResult(
+                    js,
+                    name,
+                    consume!,
+                    scope: scope,
+                    operation: 'source read',
+                  ),
                 );
         }
         return scope == null
@@ -1244,10 +1395,24 @@ class JsEngine with _JSEngineApi, Init {
     void release() {
       _bridgeDrains.remove(engine);
       _bridgeResults.remove(engine);
-      _releaseJsResources([
-        (name: 'runtime', release: engine.close),
-        (name: 'runtime port', release: engine.port.close),
-      ]);
+      Object? failure;
+      StackTrace? failureStack;
+      try {
+        _releaseJsResources([
+          (name: 'runtime', release: engine.close),
+          (name: 'runtime port', release: engine.port.close),
+        ]);
+      } catch (error, stack) {
+        failure = error;
+        failureStack = stack;
+        rethrow;
+      } finally {
+        for (final invocation in _callbackInvocations.toList()) {
+          if (identical(invocation.nativeEngine, engine)) {
+            invocation.runtimeClosed(failure, failureStack);
+          }
+        }
+      }
     }
 
     final bridges = _bridgeDrains[engine];
@@ -1317,6 +1482,11 @@ class JsEngine with _JSEngineApi, Init {
     while (_nativeReleases.isNotEmpty) {
       await Future.wait(_nativeReleases.toList());
     }
+    while (_callbackInvocations.isNotEmpty) {
+      await Future.wait(
+        _callbackInvocations.map((call) => call.settled).toList(),
+      );
+    }
     await Future.wait(_adapterDrains.values.toList());
     await Future.wait(_computeClosures.values.toList());
     if (_shutdownFailures.isNotEmpty) {
@@ -1329,6 +1499,152 @@ class JsEngine with _JSEngineApi, Init {
     _disposed = true;
     if (identical(_cache, this)) _cache = null;
     _releaseResources();
+  }
+}
+
+/// One consuming call, independent of its snapshot scope's logical waiters.
+class _JsCallbackInvocation {
+  _JsCallbackInvocation(this.owner, this.nativeEngine, this.consume);
+  final JsEngine owner;
+  final FlutterQjs? nativeEngine;
+  final void Function(dynamic result) consume;
+  final _completion = Completer<void>();
+  final cleanupFailures =
+      <({String resource, Object error, StackTrace stack})>[];
+  ({Object error, StackTrace stack})? _immediateFailure;
+  bool _settling = false;
+  late final Future<void> settled = result.then<void>(
+    (_) {},
+    onError: (Object _) {},
+  );
+  Future<void> get result => _completion.future;
+
+  void inspectImmediate(
+    Object? raw,
+    StackTrace? rejectionStack,
+    void Function(dynamic result, StackTrace? rejectionStack) inspect,
+  ) {
+    Object? value = raw;
+    var stack = rejectionStack;
+    if (stack == null && !owner._ownsRuntime(nativeEngine)) {
+      value = JsDisposedError('JavaScript callback runtime is closed');
+      stack = StackTrace.current;
+    }
+    if (cleanupFailures.isNotEmpty) {
+      value = JsResourceReleaseFailure([
+        if (stack != null) (resource: 'callback', error: value!, stack: stack),
+        ...cleanupFailures,
+      ]);
+      stack ??= cleanupFailures.first.stack;
+    }
+    if (stack == null && raw is Future) {
+      // Match ordinary scoped Future<dynamic> string conversion without
+      // lending native values that would outlive this synchronous consumer.
+      final marker = result.then<dynamic>((_) => null);
+      marker.ignore();
+      value = marker;
+    }
+    try {
+      inspect(value, stack);
+    } catch (error, stack) {
+      _immediateFailure = (error: error, stack: stack);
+    }
+  }
+
+  void settle(Object? raw, StackTrace? rejectionStack) {
+    if (_completion.isCompleted) return; // The original native runtime ended.
+    _settling = true;
+    Object? borrowed = raw;
+    Object? failure;
+    StackTrace? failureStack;
+    try {
+      if (owner._ownsRuntime(nativeEngine)) {
+        borrowed = owner._ownResult(raw, owner._pendingResults, nativeEngine);
+        final immediate = _immediateFailure;
+        if (immediate != null) {
+          _immediateFailure = (
+            error:
+                owner._ownResult(
+                      immediate.error,
+                      owner._pendingResults,
+                      nativeEngine,
+                    )
+                    as Object,
+            stack: immediate.stack,
+          );
+        }
+      }
+      if (rejectionStack != null) {
+        Error.throwWithStackTrace(borrowed!, rejectionStack);
+      }
+      if (!owner._ownsRuntime(nativeEngine)) {
+        throw JsDisposedError('JavaScript callback runtime is closed');
+      }
+      consume(borrowed);
+    } catch (error, stack) {
+      failure = error;
+      failureStack = stack;
+    } finally {
+      try {
+        discardJsResult([borrowed, failure, _immediateFailure?.error]);
+      } catch (error, stack) {
+        if (error is JsResourceReleaseFailure) {
+          cleanupFailures.addAll(error.failures);
+        } else {
+          cleanupFailures.add((
+            resource: 'callback result cleanup',
+            error: error,
+            stack: stack,
+          ));
+        }
+      }
+      owner._shutdownFailures.addAll(cleanupFailures);
+      _finish(failure, failureStack);
+    }
+  }
+
+  void runtimeClosed(Object? failure, StackTrace? stack) {
+    if (_completion.isCompleted || _settling) return;
+    if (failure != null) {
+      cleanupFailures.add((
+        resource: 'callback runtime',
+        error: failure,
+        stack: stack!,
+      ));
+    }
+    _finish(
+      JsDisposedError('JavaScript callback runtime is closed'),
+      StackTrace.current,
+    );
+  }
+
+  void _finish(Object? failure, StackTrace? stack) {
+    owner._callbackInvocations.remove(this);
+    // Observe ignored results without changing the Future seen by its caller.
+    unawaited(settled);
+    final immediate = _immediateFailure;
+    if (cleanupFailures.isNotEmpty || (failure != null && immediate != null)) {
+      _completion.completeError(
+        JsResourceReleaseFailure([
+          if (failure != null)
+            (resource: 'callback', error: failure, stack: stack!),
+          if (immediate != null)
+            (
+              resource: 'immediate callback consumer',
+              error: immediate.error,
+              stack: immediate.stack,
+            ),
+          ...cleanupFailures,
+        ]),
+        stack,
+      );
+    } else if (failure != null) {
+      _completion.completeError(failure, stack);
+    } else if (immediate != null) {
+      _completion.completeError(immediate.error, immediate.stack);
+    } else {
+      _completion.complete();
+    }
   }
 }
 
@@ -1856,7 +2172,9 @@ class DocumentWrapper {
 /// Explicit ownership for native callbacks retained beyond one evaluation.
 /// Scopes are released by their owner, or before their engine closes.
 class JsCallbackScope {
-  JsCallbackScope() : _engine = JsEngine(), _parent = null {
+  JsCallbackScope({JsEngine? engine})
+    : _engine = engine ?? JsEngine(),
+      _parent = null {
     _engine._callbackScopes.add(this);
   }
   JsCallbackScope._child(this._engine, this._parent);
@@ -1879,12 +2197,32 @@ class JsCallbackScope {
   final _pendingResults = <Completer<dynamic>>{};
   bool _disposed = false;
 
-  dynamic Function(List<dynamic>) retain(JSInvokable function) {
+  void _retain(JSInvokable function) {
     if (_disposed) throw StateError('JavaScript callback scope is closed');
     if (_functions.add(function)) function.dup();
-    return (args) {
+  }
+
+  JsCallback retain(JSInvokable function) {
+    _retain(function);
+    return (args, {consume}) {
       if (_disposed) throw StateError('JavaScript callback scope is closed');
+      if (consume != null) {
+        return _engine._consumeCallbackResult(function, args, consume);
+      }
       return _engine._trackResult(function(args), _pendingResults);
+    };
+  }
+
+  JsImmediateCallback retainImmediate(JSInvokable function) {
+    _retain(function);
+    return (arguments, consume) {
+      if (_disposed) throw StateError('JavaScript callback scope is closed');
+      return _engine._consumeCallbackResult(
+        function,
+        arguments,
+        (_) {},
+        consumeImmediate: consume,
+      );
     };
   }
 

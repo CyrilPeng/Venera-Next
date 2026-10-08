@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/res.dart';
+import 'package:venera_next/network/request_scope.dart';
 
 import 'models.dart';
 import 'normalization.dart';
@@ -47,9 +49,9 @@ class SourceComicParser {
     }
     return (id, isLiking) async {
       try {
-        await context.runCode("""
+        await context.runCodeToCompletion<void>("""
           ${context.sourceExpression}.comic.likeComic(${jsonEncode(id)}, ${jsonEncode(isLiking)})
-        """);
+        """, consume: (_) {});
         return const Res(true);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
@@ -64,9 +66,9 @@ class SourceComicParser {
     }
     return (id, rating) async {
       try {
-        await context.runCode("""
+        await context.runCodeToCompletion<void>("""
           ${context.sourceExpression}.comic.starRating(${jsonEncode(id)}, ${jsonEncode(rating)})
-        """);
+        """, consume: (_) {});
         return const Res(true);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
@@ -80,32 +82,52 @@ class SourceComicParser {
       return null;
     }
     return ArchiveDownloader(
-      (cid) async {
-        try {
-          var res = await context.runReadCode("""
+      (cid) => _readArchive<List<ArchiveInfo>>(
+        () =>
+            """
               ${context.sourceExpression}.comic.archive.getArchives(${jsonEncode(cid)})
-            """);
-          final archives = normalizeComicSourceArchiveList(res);
+            """,
+        (raw) {
+          final archives = normalizeComicSourceArchiveList(raw);
           if (archives == null) throw "Invalid data";
-          return Res(archives);
-        } catch (e, s) {
-          Log.error("Network", "$e\n$s");
-          return Res.fromException(e, s);
-        }
-      },
-      (cid, aid) async {
-        try {
-          var res = await context.runReadCode("""
+          return archives;
+        },
+      ),
+      (cid, aid) => _readArchive<String>(
+        () =>
+            """
               ${context.sourceExpression}.comic.archive.getDownloadUrl(${jsonEncode(cid)}, ${jsonEncode(aid)})
-            """);
-          final url = normalizeComicSourceArchiveDownloadUrl(res);
+            """,
+        (raw) {
+          final url = normalizeComicSourceArchiveDownloadUrl(raw);
           if (url == null) throw "Invalid data";
-          return Res(url);
-        } catch (e, s) {
-          Log.error("Network", "$e\n$s");
-          return Res.fromException(e, s);
-        }
-      },
+          return url;
+        },
+      ),
     );
+  }
+
+  Future<Res<T>> _readArchive<T>(
+    String Function() code,
+    T Function(dynamic result) consume,
+  ) async {
+    try {
+      return Res(
+        await context.runReadCodeToCompletion<T>(code(), consume: consume),
+      );
+    } catch (error, stack) {
+      Log.error('Network', '$error\n$stack');
+      if (error is RequestCancelled) {
+        return Res.failure(
+          OperationFailure(
+            message: error.toString(),
+            kind: FailureKind.cancelled,
+            cause: error,
+            stackTrace: stack,
+          ),
+        );
+      }
+      return Res.fromException(error, stack);
+    }
   }
 }

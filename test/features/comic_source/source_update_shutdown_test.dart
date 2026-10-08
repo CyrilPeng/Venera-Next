@@ -50,7 +50,7 @@ void main() {
           return Dio()..httpClientAdapter = adapter;
         },
       );
-      final source = _source();
+      final source = _registeredSource();
       final old = expectLater(service.update(source), throwsA(_cancelled));
       await pumpEventQueue();
       service.cancel(source.key);
@@ -94,17 +94,21 @@ void main() {
       final service = SourceUpdateService(
         createDio: () => Dio()..httpClientAdapter = adapter,
       );
+      var published = false;
       final checking = service.checkUpdates();
+      checking.then<void>((_) {
+        published = true;
+      }, onError: (Object _, StackTrace _) {});
       expect(identical(checking, service.checkUpdates()), isTrue);
       final checked = expectLater(checking, throwsA(_cancelled));
       await adapter.entered.future;
       final closing = service.closeAndWait();
       await adapter.draining.future;
       expect(adapter.urls, ['https://example.test/a.json']);
-      expect(service.lastUpdateCheck, isNull);
+      expect(published, isFalse);
       adapter.released.complete();
       await Future.wait([checked, closing]);
-      expect(service.lastUpdateCheck, isNull);
+      expect(published, isFalse);
     },
   );
 
@@ -118,7 +122,7 @@ void main() {
       final service = SourceUpdateService(
         createDio: () => Dio()..httpClientAdapter = adapter,
       );
-      final updating = service.update(_source());
+      final updating = service.update(_registeredSource());
       final checked = expectLater(
         updating,
         throwsA(
@@ -201,7 +205,7 @@ void main() {
       });
       final updated = expectLater(
         service.update(
-          _source(url: 'http://127.0.0.1:${server.port}/source.js'),
+          _registeredSource(url: 'http://127.0.0.1:${server.port}/source.js'),
         ),
         throwsA(_cancelled),
       );
@@ -226,6 +230,15 @@ final _cancelled = isA<SourceFailure>().having(
   'code',
   SourceFailureCode.cancelled,
 );
+
+ComicSource _registeredSource({
+  String key = 'source',
+  String url = 'https://example.test/source.js',
+}) {
+  final source = _source(key: key, url: url);
+  ComicSourceManager().add(source);
+  return source;
+}
 
 ComicSource _source({
   String key = 'source',

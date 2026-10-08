@@ -522,6 +522,13 @@ class FavoritesRepository {
     );
   }
 
+  void markComicsAsRead(String folder, Iterable<(String, int)> identities) =>
+      _transaction(() {
+        for (final (id, type) in identities.toSet()) {
+          markAsRead(folder, id, type);
+        }
+      });
+
   void reorder(
     String folder,
     Iterable<(String, int)> identities,

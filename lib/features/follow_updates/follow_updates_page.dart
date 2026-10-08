@@ -11,9 +11,10 @@ import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/components/settings_save_state.dart';
+import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/routing/app_navigation.dart';
-import 'package:venera_next/foundation/app_data_operations.dart';
+import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -222,6 +223,8 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
 
   var updatedComics = <FavoriteItemWithUpdateInfo>[];
   var allComics = <FavoriteItemWithUpdateInfo>[];
+  ({LocalFavoritesManager manager, int generation, String path, String folder})?
+  _listTarget;
 
   /// Sort comics by update time in descending order with nulls at the end.
   void sortComics() {
@@ -353,6 +356,21 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
   }
 
   Widget buildUpdatedComics() {
+    final pageContext = context;
+    final target = _listTarget;
+    final shown = updatedComics;
+    final items = shown.map((comic) => comic.detached()).toList();
+    final runtime = _runtime;
+    final owner = WindowSelectionTask(pageContext);
+    bool isCurrent() =>
+        target != null &&
+        owner.active &&
+        identical(_runtime, runtime) &&
+        identical(updatedComics, shown) &&
+        folder == target.folder &&
+        identical(LocalFavoritesManager.cache, target.manager) &&
+        target.manager.connectionGeneration == target.generation &&
+        App.dataPath == target.path;
     return SliverMainAxisGroup(
       slivers: [
         SliverToBoxAdapter(
@@ -373,37 +391,21 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
                 const SizedBox(width: 8),
                 Text("Updates".tl, style: ts.s18),
                 const Spacer(),
-                if (updatedComics.isNotEmpty)
+                if (updatedComics.isNotEmpty && target != null)
                   IconButton(
                     icon: Icon(Icons.clear_all),
                     onPressed: () {
-                      final manager = LocalFavoritesManager();
-                      final generation = manager.connectionGeneration;
-                      final items = updatedComics.toList();
-                      final runtime = _runtime;
-                      showAsyncConfirmDialog(
-                        context: appNavigation.rootContext,
+                      if (!owner.canPresent || !isCurrent()) return;
+                      confirmFavoriteMutation(
+                        context: pageContext,
+                        manager: target.manager,
+                        folder: target.folder,
                         title: "Mark all as read".tl,
                         content: "Do you want to mark all as read?".tl,
-                        onConfirm: () async {
-                          await AppDataOperations.instance.access(() async {
-                            if (manager.connectionGeneration != generation) {
-                              throw StateError(
-                                'Favorites database changed. Try again.',
-                              );
-                            }
-                            for (var comic in items) {
-                              await manager.markAsRead(
-                                comic.id,
-                                comic.type,
-                                notify: false,
-                              );
-                            }
-                            manager.notifyChanges();
-                            await appdata.saveData();
-                          });
-                          runtime?.notifyChanged();
-                        },
+                        isCurrent: isCurrent,
+                        mutate: () =>
+                            target.manager.markAllAsRead(target.folder, items),
+                        onCommitted: () => runtime?.notifyChanged(),
                       );
                     },
                   ),
@@ -543,15 +545,24 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
   }
 
   void updateComics() {
-    if (folder == null) {
+    final selectedFolder = folder;
+    if (selectedFolder == null) {
       setState(() {
+        _listTarget = null;
         allComics = [];
         updatedComics = [];
       });
       return;
     }
+    final manager = LocalFavoritesManager();
     setState(() {
-      allComics = LocalFavoritesManager().getComicsWithUpdatesInfo(folder!);
+      allComics = manager.getComicsWithUpdatesInfo(selectedFolder);
+      _listTarget = (
+        manager: manager,
+        generation: manager.connectionGeneration,
+        path: App.dataPath,
+        folder: selectedFolder,
+      );
       sortComics();
       updatedComics = allComics.where((c) => c.hasNewUpdate).toList();
     });

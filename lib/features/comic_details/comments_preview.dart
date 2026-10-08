@@ -37,6 +37,32 @@ class _ComicCommentsPreviewState extends State<ComicCommentsPreview> {
   }
 
   @override
+  void didUpdateWidget(covariant ComicCommentsPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    comments = widget.comments.where((c) => !shouldBlockComment(c)).toList();
+  }
+
+  @override
+  void dispose() {
+    scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scroll(double offset) {
+    if (scrollController.positions.length != 1) return;
+    final position = scrollController.position;
+    if (!position.hasPixels || !position.hasContentDimensions) return;
+    scrollController.animateTo(
+      (position.pixels + offset).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      ),
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.ease,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MultiSliver(
       children: [
@@ -48,23 +74,11 @@ class _ComicCommentsPreviewState extends State<ComicCommentsPreview> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.chevron_left),
-                  onPressed: () {
-                    scrollController.animateTo(
-                      scrollController.position.pixels - 340,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.ease,
-                    );
-                  },
+                  onPressed: () => _scroll(-340),
                 ),
                 IconButton(
                   icon: const Icon(Icons.chevron_right),
-                  onPressed: () {
-                    scrollController.animateTo(
-                      scrollController.position.pixels + 340,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.ease,
-                    );
-                  },
+                  onPressed: () => _scroll(340),
                 ),
               ],
             ),
@@ -142,7 +156,14 @@ class _CommentWidget extends StatelessWidget {
                     fit: BoxFit.cover,
                   ),
                 ).paddingRight(8),
-              Text(comment.userName, style: ts.bold),
+              Expanded(
+                child: Text(
+                  comment.userName,
+                  style: ts.bold,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),

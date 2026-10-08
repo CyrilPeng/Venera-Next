@@ -100,13 +100,14 @@ Map _saved(Directory root) =>
 
 Widget _local({
   String folder = 'A',
-  Future<void> Function(String, int, String, String)? importFolder,
+  Future<void> Function(BuildContext, String, int, String, String)?
+  importFolder,
 }) => LocalFavoritesPage(
   folder: folder,
   showFolders: () {},
   onFolderSelected: (_, _) {},
   updateFolderList: () {},
-  importFolder: importFolder ?? (_, _, _, _) async {},
+  importFolder: importFolder ?? (_, _, _, _, _) async {},
 );
 
 Widget _host(Widget child, {Future<void> Function()? onExit}) => MaterialApp(
@@ -230,7 +231,7 @@ void main() {
       await tester.pumpWidget(
         _host(
           _local(
-            importFolder: (source, pages, folder, remote) async {
+            importFolder: (_, source, pages, folder, remote) async {
               calls.add((source, pages, folder, remote));
             },
           ),
@@ -277,7 +278,7 @@ void main() {
             update = setState;
             return showing
                 ? _local(
-                    importFolder: (_, _, _, _) async {
+                    importFolder: (_, _, _, _, _) async {
                       calls++;
                     },
                   )

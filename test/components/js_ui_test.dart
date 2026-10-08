@@ -8,6 +8,7 @@ import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/js_engine.dart';
 
 class _Callback extends JSInvokable {
   _Callback(this.action);
@@ -26,6 +27,7 @@ class _Callback extends JSInvokable {
 
 void main() {
   late JsUiApi api;
+  late JsEngine engine;
   final messages = <String>[];
   setUp(() {
     rootBundle.clear();
@@ -36,10 +38,12 @@ void main() {
     messages.clear();
     registerShowMessageHandler((context, message) => messages.add(message));
     addTearDown(() {
+      engine.dispose();
       appdata.settings['language'] = language;
       Log.isMuted = muted;
       registerShowMessageHandler((context, message) {});
     });
+    engine = JsEngine.create();
     api = JsUiApi();
   });
   Future<void> host(WidgetTester tester) => tester.pumpWidget(
@@ -50,7 +54,7 @@ void main() {
   );
   dynamic invoke(Map<String, dynamic> message) {
     try {
-      return api.handleUIMessage(message);
+      return api.handleUIMessage(message, engine: engine);
     } finally {
       JSRef.freeRecursive(message);
     } // Same borrowing rule as the JS bridge.
@@ -122,7 +126,14 @@ void main() {
       await finishFrames(tester);
       expect(callback.calls, dismissal == 'finished' ? 0 : 1);
       expect(callback.destroyed, 1);
-      if (dismissal == 'unmount') await host(tester);
+      if (dismissal == 'unmount') {
+        await host(tester);
+        expect(
+          () => invoke({'function': 'showLoading'}),
+          throwsA(isA<JsDisposedError>()),
+        );
+        api = JsUiApi();
+      }
       final nextId = invoke({'function': 'showLoading'});
       expect(nextId, id);
       invoke({'function': 'cancelLoading', 'id': nextId});

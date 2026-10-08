@@ -19,13 +19,14 @@ class CloudflareException implements DioException {
   }
 
   @override
-  DioException copyWith(
-      {RequestOptions? requestOptions,
-      Response<dynamic>? response,
-      DioExceptionType? type,
-      Object? error,
-      StackTrace? stackTrace,
-      String? message}) {
+  DioException copyWith({
+    RequestOptions? requestOptions,
+    Response<dynamic>? response,
+    DioExceptionType? type,
+    Object? error,
+    StackTrace? stackTrace,
+    String? message,
+  }) {
     return this;
   }
 

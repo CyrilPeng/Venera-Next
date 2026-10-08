@@ -103,13 +103,11 @@ void main() {
   });
 
   test('image onLoadFailed callback is freed after valid config', () async {
-    final callback = _FakeJSInvokable((args) => <String, dynamic>{
-          'url': 'next-url',
-        });
-
-    final result = await ImageDownloader.debugResolveImageLoadFailure(
-      callback,
+    final callback = _FakeJSInvokable(
+      (args) => <String, dynamic>{'url': 'next-url'},
     );
+
+    final result = await ImageDownloader.debugResolveImageLoadFailure(callback);
 
     expect(result, {'url': 'next-url'});
     expect(callback.destroyCount, 1);
@@ -120,33 +118,32 @@ void main() {
       (args) async => <String, dynamic>{'url': 'async-url'},
     );
 
-    final result = await ImageDownloader.debugResolveImageLoadFailure(
-      callback,
-    );
+    final result = await ImageDownloader.debugResolveImageLoadFailure(callback);
 
     expect(result, {'url': 'async-url'});
     expect(callback.destroyCount, 1);
   });
 
-  test('image onLoadFailed callback accepts dynamically typed config', () async {
-    final callback = _FakeJSInvokable(
-      (args) => <dynamic, dynamic>{'url': 'dynamic-url'},
-    );
+  test(
+    'image onLoadFailed callback accepts dynamically typed config',
+    () async {
+      final callback = _FakeJSInvokable(
+        (args) => <dynamic, dynamic>{'url': 'dynamic-url'},
+      );
 
-    final result = await ImageDownloader.debugResolveImageLoadFailure(
-      callback,
-    );
+      final result = await ImageDownloader.debugResolveImageLoadFailure(
+        callback,
+      );
 
-    expect(result, {'url': 'dynamic-url'});
-    expect(callback.destroyCount, 1);
-  });
+      expect(result, {'url': 'dynamic-url'});
+      expect(callback.destroyCount, 1);
+    },
+  );
 
   test('image onLoadFailed callback is freed after invalid config', () async {
     final callback = _FakeJSInvokable((args) => 'bad-config');
 
-    final result = await ImageDownloader.debugResolveImageLoadFailure(
-      callback,
-    );
+    final result = await ImageDownloader.debugResolveImageLoadFailure(callback);
 
     expect(result, isNull);
     expect(callback.destroyCount, 1);
@@ -157,9 +154,7 @@ void main() {
       (args) => <dynamic, dynamic>{1: 'bad-key'},
     );
 
-    final result = await ImageDownloader.debugResolveImageLoadFailure(
-      callback,
-    );
+    final result = await ImageDownloader.debugResolveImageLoadFailure(callback);
 
     expect(result, isNull);
     expect(callback.destroyCount, 1);

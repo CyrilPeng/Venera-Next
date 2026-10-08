@@ -23,7 +23,12 @@ class ApplicationHost {
     SourceUpdateService? sourceUpdates,
     AppDataOperations? dataOperations,
     ApplicationUpdateService? applicationUpdates,
-  }) : sourceUpdates = sourceUpdates ?? SourceUpdateService.instance,
+  }) : sourceUpdates =
+           sourceUpdates ??
+           SourceUpdateService(
+             manager: sourceInstallations?.manager,
+             repositories: sourceInstallations?.repositories,
+           ),
        applicationUpdates = applicationUpdates ?? createApplicationUpdates(),
        dataOperations = dataOperations ?? AppDataOperations.instance;
 
@@ -99,12 +104,14 @@ class ApplicationHost {
     // release fails. Older mounts cannot disappear from the final drain.
     await Future.wait([
       attempt('selection tasks', selections.closeAndWait),
+      // Selections and startup mounts may be awaiting this shared check.
+      // Start cancellation before waiting for any of those consumers.
+      attempt('source updates', sourceUpdates.closeAndWait),
       if (sourceInstallations case final installations?)
         attempt('source installations', installations.closeAndWait),
       for (var i = 0; i < _mounts.length; i++)
         attempt('interactive mount ${i + 1}', _mounts[i].closeAndWait),
     ]);
-    await attempt('source updates', sourceUpdates.closeAndWait);
     await attempt('application updates', applicationUpdates.closeAndWait);
     await attempt('window writes', _drainWindows);
     if (!_syncPrepared) {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/app_runtime/core_bootstrap.dart';
 import 'package:venera_next/app_runtime/headless_bindings.dart';
+import 'package:venera_next/foundation/js_engine.dart';
 
 void main() {
   test(
@@ -70,10 +71,12 @@ void main() {
   );
 
   test('headless UI requests fail explicitly without a navigator', () {
+    final engine = JsEngine.create();
+    addTearDown(engine.closeAndWait);
     expect(
       () => const HeadlessJsUiHandler().handleUIMessage({
         'function': 'showDialog',
-      }),
+      }, engine: engine),
       throwsUnsupportedError,
     );
   });

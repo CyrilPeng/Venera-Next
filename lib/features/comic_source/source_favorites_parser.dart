@@ -55,10 +55,10 @@ class SourceFavoritesParser {
     ) async {
       func() async {
         try {
-          await context.runCode("""
+          await context.runCodeToCompletion<void>("""
             ${context.sourceExpression}.favorites.addOrDelFavorite(
               ${jsonEncode(comicId)}, ${jsonEncode(folderId)}, ${jsonEncode(isAdding)})
-          """);
+          """, consume: (_) {});
           return const Res(true);
         } catch (e, s) {
           Log.error("Network", "$e\n$s");
@@ -140,9 +140,9 @@ class SourceFavoritesParser {
       if (context.checkExists("favorites.addFolder")) {
         addFolder = (name) async {
           try {
-            await context.runCode("""
+            await context.runCodeToCompletion<void>("""
             ${context.sourceExpression}.favorites.addFolder(${jsonEncode(name)})
-          """);
+          """, consume: (_) {});
             return const Res(true);
           } catch (e, s) {
             Log.error("Network", "$e\n$s");
@@ -153,9 +153,9 @@ class SourceFavoritesParser {
       if (context.checkExists("favorites.deleteFolder")) {
         deleteFolder = (key) async {
           try {
-            await context.runCode("""
+            await context.runCodeToCompletion<void>("""
             ${context.sourceExpression}.favorites.deleteFolder(${jsonEncode(key)})
-          """);
+          """, consume: (_) {});
             return const Res(true);
           } catch (e, s) {
             Log.error("Network", "$e\n$s");

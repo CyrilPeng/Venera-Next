@@ -612,12 +612,18 @@ class _LocalSectionState extends State<_LocalSection> {
             ],
           ),
           onTap: () {
-            newFolder().then((v) {
-              if (!mounted) return;
-              setState(() {
-                localFolders = LocalFavoritesManager().folderNames;
-              });
-            });
+            final target = widget;
+            newFolder(
+              context,
+              onChanged: (folders) {
+                if (!mounted ||
+                    widget.cid != target.cid ||
+                    widget.type != target.type) {
+                  return;
+                }
+                setState(() => localFolders = folders);
+              },
+            );
           },
         ),
       ],

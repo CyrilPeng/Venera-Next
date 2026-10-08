@@ -88,6 +88,75 @@ void main() {
   );
 
   for (final size in [const Size(360, 640), const Size(800, 360)]) {
+    for (final external in [false, true]) {
+      testWidgets(
+        'blocked ${external ? 'external' : 'built-in'} saves retain readable errors and drafts at $size',
+        (tester) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          var blocked = false;
+          var calls = 0;
+          Future<void> save(String _) async {
+            calls++;
+            blocked = true;
+            throw List.filled(
+              20,
+              'Source change was applied: recovery required',
+            ).join('\n');
+          }
+
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: ThemeData.dark(),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(2)),
+                child: child!,
+              ),
+              home: external
+                  ? Scaffold(
+                      body: SourceScriptReloadDialog(
+                        read: () async => 'draft',
+                        onSave: save,
+                        canSave: () => !blocked,
+                      ),
+                    )
+                  : SourceScriptEditor(
+                      script: 'draft',
+                      onSave: save,
+                      canSave: () => !blocked,
+                    ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          if (!external) await waitForEditor(tester);
+          final button = find.widgetWithText(
+            TextButton,
+            external ? 'Reload' : 'Save and reload',
+          );
+          await tester.tap(button);
+          await tester.pumpAndSettle();
+          expect(tester.widget<TextButton>(button).onPressed, isNull);
+          expect(calls, 1);
+          expect(
+            tester.widget<SelectableText>(find.byType(SelectableText)).data,
+            contains('Copy your edits before closing.'),
+          );
+          if (!external) {
+            await tester.enterText(find.byType(TextField), 'retained draft');
+            expect(find.text('retained draft'), findsOneWidget);
+            expect(
+              tester.getSize(find.byType(TextField)).height,
+              greaterThan(0),
+            );
+          }
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
     testWidgets(
       'long errors stay scrollable at $size with dark theme and large text',
       (tester) async {

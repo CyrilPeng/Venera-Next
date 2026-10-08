@@ -1,10 +1,18 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:venera_next/components/window_frame.dart';
+import 'package:venera_next/components/window_selection_task.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
+import 'thumbnail_pages.dart';
+import 'thumbnail_image.dart';
 import 'package:flutter/material.dart';
 import 'package:sliver_tools/sliver_tools.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/image.dart';
 import 'package:venera_next/components/loading.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart'
+    show ComicThumbnailLoader;
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
@@ -31,84 +39,127 @@ class ComicThumbnails extends StatefulWidget {
 }
 
 class _ComicThumbnailsState extends State<ComicThumbnails> {
-  late List<String> thumbnails;
-
-  bool isInitialLoading = true;
-
-  String? next;
-
-  String? error;
-
-  bool isLoading = false;
+  ComicThumbnailPages? _pages;
+  ComicThumbnailPages? _scheduled;
+  SelectionTaskRegistry? _registry;
+  WindowFrameController? _window;
+  List<String> _initial = const [];
 
   @override
-  void initState() {
-    super.initState();
-    thumbnails = List.from(widget.initialThumbnails);
-    loadNext();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final registry = context
+        .dependOnInheritedWidgetOfExactType<SelectionTasksScope>()
+        ?.registry;
+    final window = context
+        .dependOnInheritedWidgetOfExactType<WindowFrameController>();
+    if (_pages == null ||
+        registry != _registry ||
+        window?.addExitTask != _window?.addExitTask) {
+      _window?.removeCloseFailureListener(_resume);
+      _registry = registry;
+      _window = window;
+      _window?.addCloseFailureListener(_resume);
+      _replacePages();
+    }
   }
 
-  void loadNext() async {
-    final loadComicThumbnail = widget.loadComicThumbnail;
-    if (loadComicThumbnail == null) return;
-    if (!isInitialLoading && next == null) {
+  @override
+  void didUpdateWidget(covariant ComicThumbnails oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.comicId != widget.comicId ||
+        oldWidget.sourceKey != widget.sourceKey ||
+        oldWidget.loadComicThumbnail != widget.loadComicThumbnail ||
+        !listEquals(_initial, widget.initialThumbnails)) {
+      _replacePages();
+    }
+  }
+
+  void _resume() {
+    scheduleMicrotask(() {
+      if (mounted) {
+        _scheduleLoad();
+        WidgetsBinding.instance.scheduleFrame();
+      }
+    });
+  }
+
+  void _replacePages() {
+    unawaited(_pages?.closeAndWait());
+    final registry = _registry;
+    final window = _window;
+    _initial = List.of(widget.initialThumbnails);
+    _pages = ComicThumbnailPages(
+      comicId: widget.comicId,
+      load: widget.loadComicThumbnail,
+      initial: _initial,
+      canLoad: () =>
+          mounted && registry?.isClosing != true && window?.isClosing != true,
+      retain: (scope, settled) {
+        void cancel() => scope.cancel();
+        Future<void> close() {
+          cancel();
+          return settled;
+        }
+
+        final release = registry?.retain(cancel: cancel, close: close);
+        window?.addCloseStartListener(cancel);
+        window?.addExitTask(close);
+        window?.trackExitTask(settled);
+        return () {
+          window?.removeCloseStartListener(cancel);
+          window?.removeExitTask(close);
+          release?.call();
+        };
+      },
+      onChanged: () {
+        if (mounted) setState(() {});
+      },
+    );
+    _scheduleLoad();
+  }
+
+  void _scheduleLoad() {
+    final pages = _pages!;
+    if (!pages.hasMore ||
+        pages.isLoading ||
+        pages.failure != null ||
+        identical(_scheduled, pages)) {
       return;
     }
-    if (isLoading) return;
-    Future.microtask(() {
-      setState(() {
-        isLoading = true;
-      });
+    _scheduled = pages;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (identical(_scheduled, pages)) _scheduled = null;
+      if (mounted && identical(_pages, pages)) unawaited(pages.loadNext());
     });
-    var res = await loadComicThumbnail(widget.comicId, next);
-    if (res.success) {
-      thumbnails.addAll(res.data);
-      next = res.subData;
-      isInitialLoading = false;
-    } else {
-      error = res.errorMessage;
-    }
-    if (mounted) {
-      setState(() {
-        isLoading = false;
-      });
-    }
+  }
+
+  @override
+  void dispose() {
+    _window?.removeCloseFailureListener(_resume);
+    unawaited(_pages?.closeAndWait());
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final pages = _pages!;
+    final thumbnails = pages.items;
+    final error = pages.failure?.errorMessage;
     return MultiSliver(
       children: [
         SliverToBoxAdapter(child: ListTile(title: Text("Preview".tl))),
         SliverGrid(
           delegate: SliverChildBuilderDelegate((context, index) {
             if (index == thumbnails.length - 1 && error == null) {
-              loadNext();
+              _scheduleLoad();
             }
-            var url = thumbnails[index];
-            ImagePart? part;
-            if (url.contains('@')) {
-              var params = url.split('@')[1].split('&');
-              url = url.split('@')[0];
-              double? x1, y1, x2, y2;
-              try {
-                for (var p in params) {
-                  if (p.startsWith('x')) {
-                    var r = p.split('=')[1];
-                    x1 = double.parse(r.split('-')[0]);
-                    x2 = double.parse(r.split('-')[1]);
-                  }
-                  if (p.startsWith('y')) {
-                    var r = p.split('=')[1];
-                    y1 = double.parse(r.split('-')[0]);
-                    y2 = double.parse(r.split('-')[1]);
-                  }
-                }
-              } catch (_) {
-                // ignore
-              }
-              part = ImagePart(x1: x1, y1: y1, x2: x2, y2: y2);
-            }
+            final thumbnail = ThumbnailImage.parse(thumbnails[index]);
+            final url = thumbnail.url;
+            final crop = thumbnail.crop;
+            final part = crop == null
+                ? null
+                : ImagePart(x1: crop.x1, x2: crop.x2, y1: crop.y1, y2: crop.y2);
             return Padding(
               padding: context.width < changePoint
                   ? const EdgeInsets.all(4)
@@ -161,12 +212,15 @@ class _ComicThumbnailsState extends State<ComicThumbnails> {
           SliverToBoxAdapter(
             child: Column(
               children: [
-                Text(error!),
-                Button.outlined(onPressed: loadNext, child: Text("Retry".tl)),
+                Text(error),
+                Button.outlined(
+                  onPressed: pages.loadNext,
+                  child: Text("Retry".tl),
+                ),
               ],
             ),
           )
-        else if (isLoading)
+        else if (pages.isLoading)
           const SliverListLoadingIndicator(),
         const SliverToBoxAdapter(child: Divider()),
       ],

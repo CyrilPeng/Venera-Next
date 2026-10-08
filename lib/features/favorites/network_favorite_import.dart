@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/comic_type.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/sqlite_transaction.dart';
 import 'package:venera_next/network/request_scope.dart';
@@ -35,18 +36,41 @@ Future<List<FavoriteItem>> collectNetworkFavorites({
   required RequestScope scope,
   required bool Function(String id) exists,
   required void Function(FavoriteImportProgress) onProgress,
+  bool Function()? isCurrent,
 }) async {
   if (pageLimit <= 0) return [];
+  void checkActive() {
+    scope.check();
+    if (isCurrent?.call() == false) throw const RequestCancelled();
+  }
+
   Future<Res<T>> request<T>(Future<Res<T>> Function() load) async {
     for (var attempt = 0; ; attempt++) {
-      scope.check();
+      checkActive();
       try {
-        final result = await scope.run(load);
-        if (result.error) throw StateError(result.errorMessage!);
-        return result;
-      } catch (_) {
-        scope.check();
-        if (attempt == 2) rethrow;
+        return await scope.runToCompletion(() async {
+          final result = await load();
+          if (result.error) {
+            final failure = result.failure;
+            if (failure != null) {
+              Error.throwWithStackTrace(
+                failure,
+                failure.stackTrace ?? StackTrace.current,
+              );
+            }
+            throw StateError(result.errorMessage!);
+          }
+          return result;
+        });
+      } catch (error) {
+        if (scope.isCancelled ||
+            isCurrent?.call() == false ||
+            error is RequestCancelled ||
+            error is UnsupportedError ||
+            error is FailureDetails && error.kind != FailureKind.failed ||
+            attempt == 2) {
+          rethrow;
+        }
       }
     }
   }
@@ -67,7 +91,7 @@ Future<List<FavoriteItem>> collectNetworkFavorites({
     page = math.max(1, (total as int? ?? 1) - pageLimit + 1);
   }
   while (pages < pageLimit) {
-    scope.check();
+    checkActive();
     final Res<List<Comic>> result;
     if (data.loadComic != null) {
       result = await request(() => data.loadComic!(page, folderId));
@@ -76,7 +100,7 @@ Future<List<FavoriteItem>> collectNetworkFavorites({
     } else {
       throw UnsupportedError('Source has no favorite loader');
     }
-    scope.check();
+    checkActive();
     final batch = result.data;
     received += batch.length;
     for (final comic in batch) {
@@ -88,7 +112,7 @@ Future<List<FavoriteItem>> collectNetworkFavorites({
             coverPath: comic.cover,
             type: ComicType(sourceKey.hashCode),
             author: comic.subtitle ?? '',
-            tags: comic.tags ?? [],
+            tags: List.of(comic.tags ?? []),
           ),
         );
       }
@@ -112,7 +136,7 @@ Future<List<FavoriteItem>> collectNetworkFavorites({
       cursor = next;
     }
   }
-  scope.check();
+  checkActive();
   return items;
 }
 

@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_page_route.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 
 class SideBarRoute<T> extends PopupRoute<T> {
   SideBarRoute(
@@ -16,6 +20,8 @@ class SideBarRoute<T> extends PopupRoute<T> {
     this.addBottomPadding = true,
     this.addTopPadding = true,
     this.transitionDuration = const Duration(milliseconds: 300),
+    this.onDispose,
+    this.isOwnerActive,
   });
 
   final Widget widget;
@@ -32,7 +38,17 @@ class SideBarRoute<T> extends PopupRoute<T> {
 
   final bool addBottomPadding;
 
+  final VoidCallback? onDispose;
+
+  final bool Function()? isOwnerActive;
+
   bool _barrierSawPointerDown = false;
+
+  bool get _canInteract =>
+      navigator?.mounted == true &&
+      isActive &&
+      isCurrent &&
+      (isOwnerActive?.call() ?? true);
 
   @override
   Color? get barrierColor => showBarrier ? Colors.black54 : Colors.transparent;
@@ -50,6 +66,15 @@ class SideBarRoute<T> extends PopupRoute<T> {
   }
 
   @override
+  void dispose() {
+    try {
+      onDispose?.call();
+    } finally {
+      super.dispose();
+    }
+  }
+
+  @override
   Widget buildModalBarrier() {
     if (!showBarrier) {
       return const SizedBox.shrink();
@@ -57,7 +82,7 @@ class SideBarRoute<T> extends PopupRoute<T> {
     return Listener(
       behavior: HitTestBehavior.opaque,
       onPointerDown: (event) {
-        if (event.position == Offset.zero) {
+        if (!_canInteract || event.position == Offset.zero) {
           return;
         }
         _barrierSawPointerDown = true;
@@ -66,7 +91,7 @@ class SideBarRoute<T> extends PopupRoute<T> {
         dismissible: dismissible,
         onDismiss: dismissible
             ? () {
-                if (!_barrierSawPointerDown) {
+                if (!_canInteract || !_barrierSawPointerDown) {
                   return;
                 }
                 navigator?.maybePop();
@@ -146,7 +171,7 @@ class SideBarRoute<T> extends PopupRoute<T> {
 
     if (App.isIOS) {
       body = IOSBackGestureDetector(
-        enabledCallback: () => true,
+        enabledCallback: () => _canInteract,
         gestureWidth: 20.0,
         onStartPopGesture: () =>
             IOSBackGestureController(controller!, navigator!, route: this),
@@ -180,7 +205,7 @@ class SideBarRoute<T> extends PopupRoute<T> {
   }
 }
 
-Future<void> showSideBar(
+Future<T?> showSideBar<T>(
   BuildContext context,
   Widget widget, {
   bool showBarrier = true,
@@ -189,15 +214,77 @@ Future<void> showSideBar(
   double width = 500,
   bool addTopPadding = false,
 }) {
-  return Navigator.of(context).push(
-    SideBarRoute(
-      widget,
-      showBarrier: showBarrier,
-      useSurfaceTintColor: useSurfaceTintColor,
-      dismissible: dismissible,
-      width: width,
-      addTopPadding: addTopPadding,
-      addBottomPadding: true,
+  if (!context.mounted) return Future<T?>.value(null);
+  final task = WindowSelectionTask(context);
+  final navigator = Navigator.of(context);
+  final disposed = Completer<T?>();
+  final removalFailed = Completer<T?>();
+  removalFailed.future.ignore();
+  SideBarRoute<T>? route;
+
+  void finish() {
+    if (!disposed.isCompleted) disposed.complete(null);
+  }
+
+  bool isOwnerActive() =>
+      task.active && Navigator.maybeOf(context) == navigator;
+
+  Future<T?> present() async {
+    try {
+      return await task.run((operation) async {
+        operation.checkActive();
+        if (!isOwnerActive()) throw const SelectionCancelled();
+        final sidebar = route = SideBarRoute<T>(
+          widget,
+          showBarrier: showBarrier,
+          useSurfaceTintColor: useSurfaceTintColor,
+          dismissible: dismissible,
+          width: width,
+          addTopPadding: addTopPadding,
+          addBottomPadding: true,
+          onDispose: finish,
+          isOwnerActive: isOwnerActive,
+        );
+        final release = task.retainPresentation(() {
+          try {
+            if (navigator.mounted && sidebar.isActive) {
+              navigator.removeRoute(sidebar);
+            } else {
+              finish();
+            }
+          } catch (error, stack) {
+            if (!removalFailed.isCompleted) {
+              removalFailed.completeError(error, stack);
+            }
+            rethrow;
+          }
+        }, isCurrent: () => sidebar.isCurrent);
+        final selected = await Future.any<T?>([
+          navigator.push(sidebar),
+          disposed.future,
+          removalFailed.future,
+        ]);
+        release();
+        return selected;
+      });
+    } on SelectionCancelled {
+      return null;
+    } finally {
+      if (route?.navigator == null) finish();
+    }
+  }
+
+  final result = present();
+  // Some presentation-only callers deliberately do not await a result. Keep
+  // their error observed while returning the original failed future to callers
+  // that do await it; the original host still owns any failed route cleanup.
+  unawaited(
+    result.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {
+        Log.error('Sidebar presentation', error, stack);
+      },
     ),
   );
+  return result;
 }

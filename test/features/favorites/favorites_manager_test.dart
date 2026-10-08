@@ -93,6 +93,126 @@ Future<void> _withFavoritesManager(
 
 void main() {
   test(
+    'R1 bulk favorites roll back together and retry without duplicate identities',
+    () async {
+      await _withFavoritesManager((manager) async {
+        await manager.createFolder('bulk');
+        final db = sqlite3.open(manager.databasePath);
+        try {
+          db.execute(
+            "CREATE TRIGGER fail_bulk BEFORE INSERT ON bulk WHEN new.id = 'bad' BEGIN SELECT RAISE(ABORT, 'injected'); END;",
+          );
+          final items = [
+            _favorite('good'),
+            _favorite('bad'),
+            _favorite('good'),
+          ];
+          await expectLater(
+            manager.addComics('bulk', items),
+            throwsA(
+              isA<PersistenceFailure>().having(
+                (failure) => failure.commitState,
+                'commit',
+                PersistenceCommitState.notCommitted,
+              ),
+            ),
+          );
+          expect(manager.getFolderComics('bulk'), isEmpty);
+          expect(manager.folderComics('bulk'), 0);
+          db.execute('DROP TRIGGER fail_bulk');
+          expect(await manager.addComics('bulk', items), 2);
+          expect(await manager.addComics('bulk', items), 0);
+          expect(
+            manager.getFolderComics('bulk').map((item) => item.id),
+            unorderedEquals(['good', 'bad']),
+          );
+          await manager.closeAndWait();
+          await manager.init();
+          expect(
+            manager.getFolderComics('bulk').map((item) => item.id),
+            unorderedEquals(['good', 'bad']),
+          );
+        } finally {
+          db.dispose();
+        }
+      });
+    },
+  );
+
+  test('R1 queued bulk favorites snapshot values and notify once', () async {
+    await _withFavoritesManager((manager) async {
+      await manager.createFolder('bulk');
+      final release = Completer<void>();
+      final lock = AppDataOperations.instance.run(() => release.future);
+      final first = _favorite('original')..tags = ['original-tag'];
+      final items = [first, _favorite('other')];
+      var notifications = 0;
+      void changed() => notifications++;
+      manager.addListener(changed);
+      final saving = manager.addComics('bulk', items);
+      first.id = 'replacement';
+      first.tags.add('late');
+      items.clear();
+      release.complete();
+      await lock;
+      expect(await saving, 2);
+      expect(manager.getComic('bulk', 'original', ComicType.local).tags, [
+        'original-tag',
+      ]);
+      expect(notifications, 1);
+      manager.removeListener(changed);
+    });
+  });
+
+  for (final transfer in [false, true]) {
+    test(
+      'R1 committed ${transfer ? 'transfer' : 'bulk add'} refreshes views after observer failure',
+      () async {
+        await _withFavoritesManager((manager) async {
+          await manager.createFolder('source');
+          await manager.createFolder('target');
+          await manager.prepareTableForFollowUpdates('target');
+          await manager.addComic('source', _favorite('new'));
+          appdata.settings['followUpdatesFolder'] = 'target';
+          var notifications = 0;
+          void changed() => notifications++;
+          manager.addListener(changed);
+          final failure = StateError('tracking observer');
+          registerFollowUpdatesChangeListener(() => throw failure);
+          try {
+            final work = transfer
+                ? manager.transferFavorites(
+                    'source',
+                    ['target'],
+                    [_favorite('new')],
+                    move: true,
+                  )
+                : manager.addComics('target', [_favorite('new')]);
+            await expectLater(
+              work,
+              throwsA(
+                isA<PersistenceFailure>()
+                    .having(
+                      (value) => value.commitState,
+                      'commit',
+                      PersistenceCommitState.committed,
+                    )
+                    .having((value) => value.cause, 'cause', same(failure)),
+              ),
+            );
+            expect(manager.getFolderComics('target').single.id, 'new');
+            expect(manager.folderComics('target'), 1);
+            expect(notifications, 1);
+          } finally {
+            registerFollowUpdatesChangeListener(null);
+            manager.removeListener(changed);
+          }
+        });
+      },
+    );
+  }
+
+  test(
     'unavailable favorites query local existence only after admission',
     () async {
       await _withFavoritesManager((manager) async {
@@ -325,7 +445,19 @@ void main() {
               [item],
               move: true,
             ),
-            throwsA(isA<SqliteException>()),
+            throwsA(
+              isA<PersistenceFailure>()
+                  .having(
+                    (error) => error.commitState,
+                    'commit state',
+                    PersistenceCommitState.notCommitted,
+                  )
+                  .having(
+                    (error) => error.cause,
+                    'original SQL failure',
+                    isA<SqliteException>(),
+                  ),
+            ),
           );
           expect(
             [

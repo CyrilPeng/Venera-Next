@@ -2,13 +2,15 @@
 
 本清单对应原方案 P0.4、P2.1 和 P8.3。路径以 `lib/` 为根，完整、可执行的登记在 [dependency_baseline.json](dependency_baseline.json)，由 `.github/scripts/check_architecture_dependencies.py` 在 CI 中检查。
 
-截至 2026-10-08，502 个 Dart 文件分属互斥的三组：319 个 `business_files`、134 个 `ui_files`、49 个 `pending_review_files`。234 个业务入口是业务组的子集。起始283个受控依赖全部保留；本轮登记历史保留修改入口，设置页退出原依赖环。移除调用或入口不会使已经登记的文件自动退出保护。
+截至 2026-10-09，520 个 Dart 文件分属互斥的三组：326 个 business_files、166 个 ui_files、28 个 pending_review_files。241 个业务入口是业务组的子集。起始283个受控依赖全部保留。新增 favorite_metadata_update.dart 全文审查为注入加载/保存/准入的业务服务，固定输入并拥有批次请求的真实完成；favorite_metadata_dialog.dart 与 favorite_transfer_dialog.dart 为原页面、窗口、路由和数据库的 UI 适配，复用现有任务机制。其余 favorite_actions.dart 仍待独立审查，不因迁出两个流程将整文件改为 UI。分类不代替全域行为验收。
 
 `pending_review_files` 是尚未完成职责核查的迁移清单，**不是 UI 分类结论，也不是业务依赖例外**。业务文件及其传递依赖不能到达 UI 或待审查文件，且不得成环。新增、删除、重复或跨组登记会触发检查；即使文件没有被任何入口引用，也必须登记。相对路径、package 导入、条件导入/导出及 part 的现有解析规则继续适用。
 
 这一检查约束项目文件依赖，不是 Dart 符号级语义证明。Flutter painting、原生资源和手势值类型不等于 Widget 页面；不能通过禁止全部 Flutter 依赖代替职责核查。业务文件内部新增页面职责、待审查文件中的服务、全局资源所有权及跨域接口仍须代码审查。原有 45 个 UI 禁入文件和 16 个成环保护文件均保留，57 条允许的直接特性依赖未扩大。
 
 This inventory is enforced for every library file, including disconnected files. Business membership persists independently of current reachability. Both UI and pending-review files are forbidden from business dependency closures, which must also remain acyclic. Pending review is an explicit migration backlog, not a claim that those files are presentation-only. This is a project-file dependency check, not Dart symbol-level proof or lifecycle acceptance.
+
+Current inventory: 520 library files, 326 business, 166 UI, 28 pending and 241 business entries. The fully reviewed favorite_metadata_update.dart service injects loading, saving and admission and owns the real completion of its request batches. favorite_metadata_dialog.dart and favorite_transfer_dialog.dart are UI adapters for the original page/window/route/database. Remaining favorite_actions.dart responsibilities stay pending. See [favorite workflow compatibility](favorite_workflow_ownership_compatibility.md).
 
 ## 首批核实的业务边界 / Initial inspected business boundaries
 
@@ -104,7 +106,9 @@ The reader entry service receives explicit source/history/local queries. Missing
 | `foundation/widget_utils.dart` | Widget layout wrappers, TextStyle and Color presentation extensions. |
 | `components/window_selection_task.dart` | Context/route/window adapter for independent SelectionOperation plus InheritedWidget registry scope. |
 
-## 继续核查 / Remaining review
+## 首轮待审查记录（历史） / Initial remaining review (historical)
+
+本节保留阅读入口首轮迁移后的数量；当前剩余数量以文首和逐项验收清单为准。 This section preserves the initial reader-entry review counts; current counts are recorded at the top and in the acceptance checklist.
 
 - 逐文件阅读基线中的 59 项待审查文件，区分纯展示、导航/平台装配、混合职责及尚未抽离的业务。不能按路径或不可达性批量宣布完成。
 - 剩余一个 47 文件的强连通分量包含聚合、导航和页面适配；仍需核实其中是否存在应迁出的业务职责，不以 UI 环可保留为由跳过审查。
@@ -229,3 +233,45 @@ Four business-to-UI reconnection probes are rejected. Remaining classification i
 `features/history/history_retention_change.dart` 只依赖基础类型配置和显式准入/目标/保存/清理回调，无Widget、全局Appdata或平台句柄。它固定选择与首次清理截止，管理一次操作及其失败重试；原管理器装配连接代次。两个接回设置UI的探针被拒绝，全部原保护和57条特性边保留。
 
 设置页不再导入history聚合UI，退出原SCC；实际剩余46文件，没有新增或扩大环。其余49个待审查文件及导航环的语义收束继续进行。见[应用行为兼容](application_behavior_compatibility.md)。
+
+## 阅读展示组件 / Reader presentation components
+
+章节滑动提示、信息文字、顶栏、设置面板、底栏进度、图片选择和状态信息七文件全文核实为UI；提示改用框架订阅借用控制器，其余六个组件blob不变。独立状态轮询、图片任务与设置效果业务保留。七项业务接回UI的探针被拒绝，全部旧保护、57条特性边和46文件SCC保持；42个待审查文件继续逐项核实。
+
+见[阅读提示与组件边界](reader_presentation_compatibility.md)。
+
+## 详情预览 / Detail previews
+
+thumbnail_pages管理单漫画分页准入、游标和真实完成，thumbnail_image保留旧裁剪语法，均不含页面或全局管理器调用。thumbnails与comments_preview经全文审查归入UI；原应用/窗口适配留在组件侧，评论过滤规则不变。业务通过现有comic_source_api获取加载契约，没有增加私有入口例外。四项接回UI探针被拒绝，原保护、57条特性边和46文件SCC保持；40个待审查文件继续核实。
+
+见[详情预览兼容说明](detail_preview_compatibility.md)。
+
+## 摘要与弹窗 / Summaries and dialogs
+
+source_summary_snapshot仅消费显式源列表与更新映射，复用原版本比较并保留顺序、重复项及首个同key源。comic_source_summary、history_summary、sync_status_summary、rating_dialog、source_script_editor及action_button、cover_viewer经全文核实归入UI；后两者源码blob不变。新增summary_header为纯展示，八项业务接回UI探针均被拒绝。摘要借用显式所有者，历史仅在绑定/通知时查询；当前路由和关闭准入检查留在UI。原保护、57条特性边及46文件SCC保持，33个待审查文件继续核实。
+
+见[摘要与弹窗兼容说明](summary_dialog_compatibility.md)。
+
+## 源操作与归档结果 / Source action and archive results
+
+js_engine、source_parser_context、source_comic_parser、source_comments_parser、source_favorites_parser和archive_download保持既有业务分类。九类写能力复用同步结果消费/释放主体，不引入只读网络重试；归档读取保留重试与原模型规则，上层转交结构化失败。六项业务接回UI探针被拒绝，全部原保护、57条特性边和46文件SCC保持。此批未修改源编辑页面，也不证明任意嵌套Promise、未返回任务和全部跨域生命周期已验收。
+
+见[源操作与归档兼容说明](source_action_compatibility.md)。
+
+## 源编辑会话 / Source editor sessions
+
+`source_script_session.dart`只接收源实例与显式替换回调，保存自己的精确替换结果并保留不可重放的失败；`source_script_files.dart`管理固定路径读取、独立草稿和进程启动，不解析应用全局路径或导入UI。两个新业务入口受约束，六项接回源页面/编辑器的探针被拒绝；原保护、57条特性边与46文件SCC保持。页面和编辑器继续属于UI，33个待审查文件数量不因这次修复降低。详见[源编辑兼容说明](source_editor_ownership_compatibility.md)。
+
+## 异步确认与收藏写入 / Async confirmations and favorite mutations
+
+async_confirm_dialog.dart 使用 ResourceDialogRoute 与 WindowSelectionTask 管理原展示和已接受确认，区分可确认与可关闭自身的准入；未知/已提交结果只允许确认关闭。favorite_confirmation_dialog.dart 固定原管理器、连接、路径和文件夹，在 AppDataOperations 实际准入时复核，并在展示与确认均结束后向仍有效的原页面发布结果。三个调用者固定目标、选择和追更运行时；旧 message.dart 不保留转发。
+
+两份新文件均为 UI 适配，没有业务导出或新任务框架。存储仍使用原 SQLite 结构；新增批量已读事务仅操作明确的 (id,type)，删除的提交后失败保留提交状态与原异常。原 WindowSelectionTask、窗口、输入框、设置保存、全局数据准入及其他收藏动作保持。参见[兼容说明](async_confirm_ownership_compatibility.md)。
+
+## 收藏转移与元数据刷新 / Favorite transfer and metadata refresh
+
+favorite_metadata_update.dart 是业务服务及受控业务入口：输入漫画副本、加载/保存回调、原目标准入和进度回调，四项一批，普通读取最多三次尝试，保存仅一次。RequestScope.runToCompletion 等待真实源结果；取消不重放写入，保留原错误、阶段和提交状态。没有 Widget、根 context 或页面 State。
+
+favorite_transfer_dialog.dart 和 favorite_metadata_dialog.dart 全文登记为 UI。前者固定原选择和收藏夹，后者固定原管理器和源实例；都复用 WindowSelectionTask、原路由释放钩子和 AppDataOperations。页面持有刷新取消责任，原宿主排空已接受任务；保存后发布仅触达有效的原页面。转移多目标事务及元数据单条 SQL 仍在原 repository，manager 只增加提交状态保留。
+
+旧 favoriteOption、updateComicsInfo、未赋值的 added 和无生产用途的 selectedLocalFolders 字段已移除，无转发层。其他添加收藏、网络导入、导出和快捷删除继续独立审查。参见[兼容说明](favorite_workflow_ownership_compatibility.md)。

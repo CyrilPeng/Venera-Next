@@ -5,7 +5,7 @@ import 'package:venera_next/foundation/widget_utils.dart';
 
 const double chapterSwipeThreshold = 160;
 
-class ChapterSwipeIndicator extends StatefulWidget {
+class ChapterSwipeIndicator extends StatelessWidget {
   const ChapterSwipeIndicator({
     super.key,
     this.controller,
@@ -16,70 +16,38 @@ class ChapterSwipeIndicator extends StatefulWidget {
 
   final bool isPrev;
 
-  @override
-  State<ChapterSwipeIndicator> createState() => _ChapterSwipeIndicatorState();
-}
-
-class _ChapterSwipeIndicatorState extends State<ChapterSwipeIndicator> {
-  double value = 0;
-
-  late final isPrev = widget.isPrev;
-
-  ScrollController? controller;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.controller != null) {
-      controller = widget.controller;
-      controller!.addListener(onScroll);
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant ChapterSwipeIndicator oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      controller?.removeListener(onScroll);
-      controller = widget.controller;
-      controller?.addListener(onScroll);
-      if (value != 0) {
-        setState(() {
-          value = 0;
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-    controller?.removeListener(onScroll);
-  }
-
-  void onScroll() {
-    var position = controller!.position.pixels;
-    var offset = isPrev
-        ? controller!.position.minScrollExtent - position
-        : position - controller!.position.maxScrollExtent;
-    var newValue = offset / chapterSwipeThreshold;
-    newValue = newValue.clamp(0.0, 1.0);
-    if (newValue != value) {
-      setState(() {
-        value = newValue;
-      });
-    }
+  double get _progress {
+    final positions = controller?.positions;
+    if (positions == null || positions.length != 1) return 0;
+    final position = positions.single;
+    if (!position.hasPixels || !position.hasContentDimensions) return 0;
+    final offset = isPrev
+        ? position.minScrollExtent - position.pixels
+        : position.pixels - position.maxScrollExtent;
+    return offset.isFinite
+        ? (offset / chapterSwipeThreshold).clamp(0.0, 1.0)
+        : 0;
   }
 
   @override
   Widget build(BuildContext context) {
-    final msg = widget.isPrev
+    final scroll = controller;
+    if (scroll == null) return _buildIndicator(context);
+    // Flutter owns this subscription; the scroll controller belongs to the view.
+    return ListenableBuilder(
+      listenable: scroll,
+      builder: (context, _) => _buildIndicator(context),
+    );
+  }
+
+  Widget _buildIndicator(BuildContext context) {
+    final msg = isPrev
         ? "Swipe down for previous chapter".tl
         : "Swipe up for next chapter".tl;
 
     return CustomPaint(
       painter: _ProgressPainter(
-        value: value,
+        value: _progress,
         backgroundColor: context.colorScheme.surfaceContainerLow,
         color: context.colorScheme.surfaceContainerHighest,
       ),
@@ -87,12 +55,12 @@ class _ChapterSwipeIndicatorState extends State<ChapterSwipeIndicator> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            widget.isPrev ? Icons.arrow_downward : Icons.arrow_upward,
+            isPrev ? Icons.arrow_downward : Icons.arrow_upward,
             color: context.colorScheme.onSurface,
             size: 16,
           ),
           const SizedBox(width: 4),
-          Text(msg),
+          Flexible(child: Text(msg)),
         ],
       ).paddingVertical(6).paddingHorizontal(16),
     );

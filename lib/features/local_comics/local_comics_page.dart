@@ -2,6 +2,7 @@ import 'import_export/comic_export_service.dart';
 import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:venera_next/routing/local_reading.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/button.dart';
@@ -125,6 +126,11 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
   }
 
   Widget buildMultiSelectMenu() {
+    final selection = selectedComics.keys.toList();
+    bool currentSelection() =>
+        mounted &&
+        multiSelectMode &&
+        listEquals(selectedComics.keys.toList(), selection);
     return MenuButton(
       entries: [
         MenuEntry(
@@ -145,7 +151,8 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
           icon: Icons.favorite_border,
           text: "Add to favorites".tl,
           onClick: () {
-            addFavorite(selectedComics.keys.toList());
+            if (!currentSelection()) return;
+            addFavorite(context, selection, isCurrent: currentSelection);
           },
         ),
         if (selectedComics.length == 1)
@@ -153,7 +160,8 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
             icon: Icons.folder_open,
             text: "Open Folder".tl,
             onClick: () {
-              openComicFolder(selectedComics.keys.first);
+              if (!currentSelection()) return;
+              openComicFolder(context, selection.single);
             },
           ),
         if (selectedComics.length == 1)
@@ -402,7 +410,7 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
                   icon: Icons.folder_open,
                   text: "Open Folder".tl,
                   onClick: () {
-                    openComicFolder(c);
+                    openComicFolder(context, c);
                   },
                 ),
                 MenuEntry(
@@ -661,46 +669,49 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
 }
 
 /// Opens the folder containing the comic in the system file explorer
-Future<void> openComicFolder(LocalComic comic) async {
+Future<void> openComicFolder(
+  BuildContext context,
+  LocalComic comic, {
+  Future<void> Function(String path)? openDirectory,
+}) async {
+  if (!context.mounted) return;
+  final owner = WindowSelectionTask(context);
+  if (!owner.canPresent) return;
   try {
     final folderPath = comic.baseDir;
-
-    if (App.isWindows) {
-      await Process.run('explorer', [folderPath]);
-    } else if (App.isMacOS) {
-      await Process.run('open', [folderPath]);
-    } else if (App.isLinux) {
-      // Try different file managers commonly found on Linux
-      try {
-        await Process.run('xdg-open', [folderPath]);
-      } catch (e) {
-        // Fallback to other common file managers
-        try {
-          await Process.run('nautilus', [folderPath]);
-        } catch (e) {
-          try {
-            await Process.run('dolphin', [folderPath]);
-          } catch (e) {
+    await owner.run<void>((operation) async {
+      operation.checkActive();
+      if (openDirectory != null) {
+        await openDirectory(folderPath);
+        return;
+      }
+      if (App.isWindows) {
+        await Process.run('explorer', [folderPath]);
+      } else if (App.isMacOS) {
+        await Process.run('open', [folderPath]);
+      } else {
+        if (App.isLinux) {
+          for (final command in ['xdg-open', 'nautilus', 'dolphin', 'thunar']) {
+            operation.checkActive();
             try {
-              await Process.run('thunar', [folderPath]);
-            } catch (e) {
-              // Last resort: use the URL launcher with file:// protocol
-              await launchUrlString('file://$folderPath');
+              await Process.run(command, [folderPath]);
+              return;
+            } catch (_) {
+              // Keep the existing fallback order while the original caller lives.
+              operation.checkActive();
             }
           }
         }
+        operation.checkActive();
+        await launchUrlString('file://$folderPath');
       }
-    } else {
-      // For mobile platforms, use the URL launcher with file:// protocol
-      await launchUrlString('file://$folderPath');
-    }
+    }, reportFailureOnClose: true);
+  } on SelectionCancelled {
+    // Do not launch fallback applications for a retired caller.
   } catch (e, s) {
     Log.error("Open Folder", "Failed to open comic folder: $e", s);
-    // Show error message to user
-    if (appNavigation.rootContext.mounted) {
-      appNavigation.rootContext.showMessage(
-        message: '${"Failed to open folder".tl}: $e',
-      );
+    if (context.mounted && owner.canPresent) {
+      context.showMessage(message: '${"Failed to open folder".tl}: $e');
     }
   }
 }

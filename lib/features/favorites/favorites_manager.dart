@@ -119,6 +119,41 @@ class LocalFavoritesManager with ChangeNotifier {
     return _mutate(() => _addComic(folder, captured, order, updateTime));
   }
 
+  /// One accepted selection commits atomically, then publishes its exact result.
+  Future<int> addComics(String folder, Iterable<FavoriteItem> comics) {
+    final captured = comics.map((comic) => comic.detached()).toList();
+    return _mutate(() {
+      final added = _commitFavoriteTransaction(
+        () => runSqliteTransaction(_db, () {
+          if (!existsFolder(folder)) {
+            throw StateError('Favorite folder no longer exists');
+          }
+          final append =
+              GlobalPreferenceStore(
+                appdata.settings,
+              ).read(FavoritePreferences.newFavoriteAddTo) ==
+              'end';
+          return [
+            for (final comic in captured)
+              if (_repository.addComic(
+                folder,
+                comic,
+                translatedTags: _translateTags(comic.tags),
+                append: append,
+              ))
+                comic,
+          ];
+        }),
+      );
+      if (added.isNotEmpty) {
+        _publishCommittedFavorites([
+          folder,
+        ], added.map((comic) => (comic.id, comic.type.value)));
+      }
+      return added.length;
+    });
+  }
+
   /// Borrow this connection's path while holding its mutation queue. The
   /// callback commits an addition in a coordinated SQLite transaction and
   /// returns its exact identity; caches and notifications are published here.
@@ -198,18 +233,15 @@ class LocalFavoritesManager with ChangeNotifier {
     final identities = items.map((item) => (item.id, item.type.value)).toList();
     return _mutate(() {
       if (destinations.isEmpty || identities.isEmpty) return;
-      _repository.transferToFolders(
-        source,
-        destinations,
-        identities,
-        move: move,
+      _commitFavoriteTransaction(
+        () => _repository.transferToFolders(
+          source,
+          destinations,
+          identities,
+          move: move,
+        ),
       );
-      for (final folder in [source, ...destinations]) {
-        counts[folder] = count(folder);
-      }
-      _refreshIdentityCounts(identities);
-      _syncFollowUpdatesIfAffected([source, ...destinations]);
-      notifyListeners();
+      _publishCommittedFavorites([source, ...destinations], identities);
     });
   }
 
@@ -351,6 +383,20 @@ class LocalFavoritesManager with ChangeNotifier {
 
   Future<void> markAsRead(String id, ComicType type, {bool notify = true}) =>
       _mutate(() => _markAsRead(id, type, notify: notify));
+
+  /// The confirmation owns a folder and immutable identities. A later tracking
+  /// selection must not redirect these writes to a different folder.
+  Future<void> markAllAsRead(String folder, List<FavoriteItem> comics) {
+    final identities = comics
+        .map((comic) => (comic.id, comic.type.value))
+        .toList();
+    return _mutate(() async {
+      _commitFavoriteTransaction(
+        () => _repository.markComicsAsRead(folder, identities),
+      );
+      await _finishFolderMutation(() => appdata.saveData(), () => false);
+    });
+  }
 
   Future<void> setFollowUpdatesFolder(
     String? folder, {
@@ -1137,27 +1183,107 @@ class LocalFavoritesManager with ChangeNotifier {
   /// delete a folder
   Future<void> _deleteFolder(String name) async {
     final removedIdentities = _repository.identities(name);
-    _repository.deleteFolder(name);
-    counts.remove(name);
-    _refreshIdentityCounts(removedIdentities);
-    var followChanged = false;
-    await _finishFolderMutation(
-      () => appdata.updateSettings((draft) {
-        for (final key in [
-          FavoritePreferences.readLaterFolder.key,
-          FavoritePreferences.quickFavorite.key,
-          FavoritePreferences.followUpdatesFolder.key,
-        ]) {
-          if (draft[key] == name) {
-            draft[key] = null;
-            if (key == FavoritePreferences.followUpdatesFolder.key) {
-              followChanged = true;
+    _commitFavoriteTransaction(() => _repository.deleteFolder(name));
+    try {
+      counts.remove(name);
+      _refreshIdentityCounts(removedIdentities);
+      var followChanged = false;
+      await _finishFolderMutation(
+        () => appdata.updateSettings((draft) {
+          for (final key in [
+            FavoritePreferences.readLaterFolder.key,
+            FavoritePreferences.quickFavorite.key,
+            FavoritePreferences.followUpdatesFolder.key,
+          ]) {
+            if (draft[key] == name) {
+              draft[key] = null;
+              if (key == FavoritePreferences.followUpdatesFolder.key) {
+                followChanged = true;
+              }
             }
           }
-        }
-      }),
-      () => followChanged,
+        }),
+        () => followChanged,
+      );
+    } catch (error, stack) {
+      _throwCommittedFailure(error, stack);
+    }
+  }
+
+  T _commitFavoriteTransaction<T>(T Function() commit) {
+    try {
+      return commit();
+    } on SqliteTransactionRollbackError catch (error, stack) {
+      Error.throwWithStackTrace(
+        PersistenceFailure(
+          commitState: PersistenceCommitState.unknown,
+          cause: error.operationError,
+          stackTrace: error.operationStack,
+          cleanupFailures: [
+            (error: error.rollbackError, stackTrace: error.rollbackStack),
+          ],
+        ),
+        stack,
+      );
+    } catch (error, stack) {
+      Error.throwWithStackTrace(
+        PersistenceFailure(
+          commitState: PersistenceCommitState.notCommitted,
+          cause: error,
+          stackTrace: stack,
+        ),
+        stack,
+      );
+    }
+  }
+
+  Never _throwCommittedFailure(Object error, StackTrace stack) {
+    if (error is PersistenceFailure &&
+        error.commitState == PersistenceCommitState.committed) {
+      Error.throwWithStackTrace(error, stack);
+    }
+    Error.throwWithStackTrace(
+      PersistenceFailure(
+        commitState: PersistenceCommitState.committed,
+        cause: error,
+        stackTrace: stack,
+      ),
+      stack,
     );
+  }
+
+  void _publishCommittedFavorites(
+    Iterable<String> folders,
+    Iterable<(String, int)> identities,
+  ) {
+    final affected = folders.toSet();
+    final failures = <({Object error, StackTrace stackTrace})>[];
+    void publish(void Function() action) {
+      try {
+        action();
+      } catch (error, stack) {
+        failures.add((error: error, stackTrace: stack));
+      }
+    }
+
+    for (final folder in affected) {
+      publish(() => counts[folder] = count(folder));
+    }
+    publish(() => _refreshIdentityCounts(identities));
+    publish(() => _syncFollowUpdatesIfAffected(affected));
+    publish(notifyListeners);
+    if (failures.isNotEmpty) {
+      final first = failures.first;
+      Error.throwWithStackTrace(
+        PersistenceFailure(
+          commitState: PersistenceCommitState.committed,
+          cause: first.error,
+          stackTrace: first.stackTrace,
+          cleanupFailures: failures.skip(1),
+        ),
+        first.stackTrace,
+      );
+    }
   }
 
   /// SQL may already be committed. Publish the resulting state even if the
@@ -1237,14 +1363,20 @@ class LocalFavoritesManager with ChangeNotifier {
     if (comics.isEmpty) return;
     late Map<String, List<(String, int)>> removed;
     try {
-      removed = _repository.deleteComics([
-        folder,
-      ], comics.map((comic) => (comic.id, comic.type.value)));
+      removed = _commitFavoriteTransaction(
+        () => _repository.deleteComics([
+          folder,
+        ], comics.map((comic) => (comic.id, comic.type.value))),
+      );
     } catch (error) {
       Log.error('Batch Delete Comics', error.toString());
       rethrow;
     }
-    _applyDeletedComics(removed);
+    try {
+      _applyDeletedComics(removed);
+    } catch (error, stack) {
+      _throwCommittedFailure(error, stack);
+    }
   }
 
   Future<int> _removeInvalid(bool Function(String id) localComicExists) async {
@@ -1487,9 +1619,13 @@ class LocalFavoritesManager with ChangeNotifier {
       _updates.contains(id, type.value);
 
   void _updateInfo(String folder, FavoriteItem comic, [bool notify = true]) {
-    _repository.updateInfo(folder, comic);
+    _commitFavoriteTransaction(() => _repository.updateInfo(folder, comic));
     if (notify) {
-      notifyListeners();
+      try {
+        notifyListeners();
+      } catch (error, stack) {
+        _throwCommittedFailure(error, stack);
+      }
     }
   }
 

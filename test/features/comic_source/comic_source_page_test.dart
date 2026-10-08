@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/comic_source/source_repositories.dart';
+import 'package:venera_next/features/comic_source/source_update_prompt.dart';
 import 'package:venera_next/features/comic_source/source_repository_page.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/routing/app_navigation.dart';
@@ -19,6 +20,8 @@ import 'package:venera_next/network/app_dio.dart';
 void main() {
   late Directory dataDir;
   late SourceInstallations queue;
+  late SourceUpdateService service;
+  late BuildContext updateContext;
   late _SourceRequests requests;
   late List<String> messages;
   late Map<String, dynamic> previousSettings;
@@ -45,7 +48,11 @@ void main() {
     requests = _SourceRequests();
     messages = [];
     Dio createDio() => Dio()..httpClientAdapter = requests;
-    ComicSourcePage.updateService = SourceUpdateService(createDio: createDio);
+    service = SourceUpdateService(
+      manager: ComicSourceManager(),
+      repositories: SourceRepositories.instance,
+      createDio: createDio,
+    );
     queue = SourceInstallations(
       manager: ComicSourceManager(),
       repositories: SourceRepositories.instance,
@@ -59,7 +66,7 @@ void main() {
     await queue.closeAndWait();
     ComicSourceManager().remove('installed_source');
     previousSettings.forEach((key, value) => appdata.settings[key] = value);
-    ComicSourcePage.updateService = SourceUpdateService.instance;
+    await service.closeAndWait();
     SourceRepositories.debugCreateDio = null;
     registerShowMessageHandler((context, message) {});
     Log.isMuted = previousLogMuted;
@@ -70,12 +77,29 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         navigatorKey: appNavigation.rootNavigatorKey,
-        builder: (_, child) =>
-            SourceInstallationsScope(queue: queue, child: child!),
-        home: child ?? const Scaffold(),
+        builder: (_, child) => SourceInstallationsScope(
+          queue: queue,
+          updates: service,
+          child: child!,
+        ),
+        home:
+            child ??
+            Builder(
+              builder: (context) {
+                updateContext = context;
+                return const Scaffold();
+              },
+            ),
       ),
     );
   }
+
+  Future<void> updateSource(ComicSource source) => SourceUpdatePrompt(
+    context: updateContext,
+    source: source,
+    manager: queue.manager,
+    service: service,
+  ).run();
 
   ComicSource install({bool linked = false}) {
     final source = _installedSource(
@@ -111,7 +135,7 @@ void main() {
       (tester) async {
         await pumpPage(tester);
         final source = install(linked: linked);
-        final pending = ComicSourcePage.updateService.update(source);
+        final pending = service.update(source);
         final result = expectLater(
           pending,
           throwsA(
@@ -125,10 +149,10 @@ void main() {
           ),
         );
         await _pumpUntil(tester, () => requests.items.isNotEmpty);
-        ComicSourcePage.updateService.cancel(source.key);
+        service.cancel(source.key);
         await _pumpUntil(tester, () => requests.items.single.cancelled);
         await result;
-        expect(ComicSourcePage.updateService.isUpdating(source.key), isFalse);
+        expect(service.isUpdating(source.key), isFalse);
         expect(File(source.filePath).readAsStringSync(), 'original content');
         expect(messages, isEmpty);
       },
@@ -139,7 +163,7 @@ void main() {
     ) async {
       await pumpPage(tester);
       final source = install(linked: linked);
-      final update = ComicSourcePage.update(source);
+      final update = updateSource(source);
       await _pumpUntil(tester, () => requests.items.isNotEmpty);
       if (linked) {
         requests.items.single.reply(catalog());
@@ -149,12 +173,12 @@ void main() {
       final count = requests.items.length;
       await tester.tap(find.text('Cancel'));
       // Retry before the old request's cleanup runs; it must not clear the new lock.
-      final retry = ComicSourcePage.update(source);
+      final retry = updateSource(source);
       await _pumpUntil(tester, () => requests.items.length == count + 1);
       expect(request.cancelled, isTrue);
       request.reply('late cancelled response must not replace the script');
       await update;
-      await ComicSourcePage.update(source);
+      await updateSource(source);
       await tester.pump();
       expect(requests.items, hasLength(count + 1));
       expect(find.text('Loading'), findsOneWidget);
@@ -177,13 +201,11 @@ void main() {
       await pumpPage(tester);
       final source = install();
       var finished = false;
-      final running = ComicSourcePage.updateService
-          .update(source)
-          .catchError((_) {});
+      final running = service.update(source).catchError((_) {});
       running.whenComplete(() => finished = true);
       await _pumpUntil(tester, () => requests.items.isNotEmpty);
       final conflict = expectLater(
-        ComicSourcePage.updateService.update(source),
+        service.update(source),
         throwsA(
           isA<SourceFailure>().having(
             (error) => error.code,
@@ -207,7 +229,7 @@ void main() {
     (tester) async {
       await pumpPage(tester);
       final source = install(linked: true);
-      final update = ComicSourcePage.update(source);
+      final update = updateSource(source);
       await _pumpUntil(tester, () => requests.items.isNotEmpty);
       final lookup = requests.items.single;
       expect(lookup.options.uri.toString(), repository.url);
@@ -230,7 +252,7 @@ void main() {
     (tester) async {
       await pumpPage(tester);
       final source = install();
-      final update = ComicSourcePage.update(source);
+      final update = updateSource(source);
       await _pumpUntil(tester, () => requests.items.isNotEmpty);
       requests.items.single.reply('', status: 503);
       await _pumpUntil(tester, () => messages.isNotEmpty);
@@ -239,7 +261,7 @@ void main() {
       expect(find.text('Loading'), findsNothing);
       expect(ComicSourceManager().find(source.key), same(source));
       expect(File(source.filePath).readAsStringSync(), 'original content');
-      final retry = ComicSourcePage.update(source);
+      final retry = updateSource(source);
       await _pumpUntil(tester, () => requests.items.length == 2);
       await tester.tap(find.text('Cancel'));
       await _pumpUntil(tester, () => requests.items.last.cancelled);
@@ -351,7 +373,7 @@ void main() {
       addTearDown(tearDownScenario);
       final source = install();
       final result = expectLater(
-        ComicSourcePage.updateService.update(source),
+        service.update(source),
         throwsA(isA<DioException>()),
       );
       await pumpEventQueue();

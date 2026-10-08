@@ -48,6 +48,11 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
   bool get hasSettingsSaveError =>
       _latest.values.any((save) => save.hasFailures);
 
+  /// A retired target may let its page leave while the original host keeps
+  /// the failed save. This never acknowledges the failure or permits replay.
+  @protected
+  bool get mayLeaveSettingsAfterSaveFailure => false;
+
   bool get _canRetry => _latest.values.any(
     (save) => save.hasFailures && (save.isCurrent?.call() ?? true),
   );
@@ -105,7 +110,9 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
 
   void _updateGuards() {
     for (final guard in _guards.values) {
-      guard.canPopNotifier.value = !savingSettings && !hasSettingsSaveError;
+      guard.canPopNotifier.value =
+          !savingSettings &&
+          (!hasSettingsSaveError || mayLeaveSettingsAfterSaveFailure);
     }
   }
 
@@ -248,7 +255,14 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
     _leaving = true;
     setState(() {});
     try {
-      await waitForSettingsSave();
+      try {
+        await waitForSettingsSave();
+      } catch (_) {
+        if (!mayLeaveSettingsAfterSaveFailure) rethrow;
+      }
+      // The captured target can retire without changing this route's inherited
+      // widgets. Refresh only our guard; other owners still decide maybePop.
+      _updateGuards();
       if (mounted &&
           !_disposed &&
           _guards.containsKey(route) &&

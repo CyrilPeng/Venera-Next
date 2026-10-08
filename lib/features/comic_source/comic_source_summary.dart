@@ -1,58 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/gesture.dart';
+import 'package:venera_next/components/summary_header.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 import 'comic_source_manager.dart';
 import 'comic_source_page.dart';
-import 'parser.dart';
-import 'source.dart';
+import 'source_summary_snapshot.dart';
 
-class ComicSourceSummary extends StatefulWidget {
-  const ComicSourceSummary({super.key});
+class ComicSourceSummary extends StatelessWidget {
+  const ComicSourceSummary({super.key, required this.manager});
 
-  @override
-  State<ComicSourceSummary> createState() => _ComicSourceSummaryState();
-}
-
-class _ComicSourceSummaryState extends State<ComicSourceSummary> {
-  late List<String> comicSources;
-
-  void onComicSourceChange() {
-    setState(() {
-      comicSources = ComicSource.all().map((e) => e.name).toList();
-    });
-  }
-
-  @override
-  void initState() {
-    comicSources = ComicSource.all().map((e) => e.name).toList();
-    ComicSourceManager().addListener(onComicSourceChange);
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    ComicSourceManager().removeListener(onComicSourceChange);
-    super.dispose();
-  }
-
-  int get _availableUpdates {
-    int c = 0;
-    ComicSourceManager().availableUpdates.forEach((key, version) {
-      var source = ComicSource.find(key);
-      if (source != null) {
-        if (compareSemVer(version, source.version)) {
-          c++;
-        }
-      }
-    });
-    return c;
-  }
+  final ComicSourceManager? manager;
 
   @override
   Widget build(BuildContext context) {
+    final owner = manager;
+    if (owner == null || owner.isClosing) {
+      return _buildSummary(context, const ComicSourceSummarySnapshot.empty());
+    }
+    return ListenableBuilder(
+      listenable: owner,
+      builder: (context, _) => _buildSummary(
+        context,
+        ComicSourceSummarySnapshot.fromSources(
+          owner.all(),
+          owner.availableUpdates,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummary(
+    BuildContext context,
+    ComicSourceSummarySnapshot snapshot,
+  ) {
+    final comicSources = snapshot.names;
     return SliverToBoxAdapter(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -71,31 +55,10 @@ class _ComicSourceSummaryState extends State<ComicSourceSummary> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                height: 56,
-                child: Row(
-                  children: [
-                    Center(child: Text('Comic Source'.tl, style: ts.s18)),
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.secondaryContainer,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        comicSources.length.toString(),
-                        style: ts.s12,
-                      ),
-                    ),
-                    const Spacer(),
-                    const Icon(Icons.arrow_right),
-                  ],
-                ),
-              ).paddingHorizontal(16),
+              SummaryHeader(
+                title: 'Comic Source'.tl,
+                count: comicSources.length,
+              ),
               if (comicSources.isNotEmpty)
                 SizedBox(
                   width: double.infinity,
@@ -119,7 +82,7 @@ class _ComicSourceSummaryState extends State<ComicSourceSummary> {
                     }).toList(),
                   ).paddingHorizontal(16).paddingBottom(16),
                 ),
-              if (_availableUpdates > 0)
+              if (snapshot.availableUpdates > 0)
                 Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -142,7 +105,9 @@ class _ComicSourceSummaryState extends State<ComicSourceSummary> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            "@c updates".tlParams({'c': _availableUpdates}),
+                            "@c updates".tlParams({
+                              'c': snapshot.availableUpdates,
+                            }),
                             style: ts.withColor(context.colorScheme.primary),
                           ),
                         ],
