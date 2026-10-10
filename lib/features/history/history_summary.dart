@@ -101,7 +101,7 @@ class _HistorySummaryState extends State<HistorySummary> {
         child: ClickInkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: () {
-            context.to(() => const HistoryPage());
+            context.to(() => HistoryPage(manager: widget.manager));
           },
           child: Column(
             mainAxisSize: MainAxisSize.min,

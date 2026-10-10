@@ -17,9 +17,8 @@ void main() {
     root = Directory.systemTemp.createTempSync('natural-sort-');
     App.dataPath = root.path;
     App.cachePath = root.path;
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
-    HistoryManager.cache = null;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     await HistoryManager().init();
     local = LocalManager();
     await local.init();
@@ -45,8 +44,7 @@ void main() {
   });
   tearDown(() {
     HistoryManager().close();
-    HistoryManager.cache = null;
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     root.deleteSync(recursive: true);
   });
 

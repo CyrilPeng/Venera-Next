@@ -109,20 +109,23 @@ void main() {
   );
 
   test(
-    'captured default manager cannot follow a different application history',
+    'captured image library stays isolated and rejects its retired history',
     () async {
-      final previous = HistoryManager.cache;
       final replacement = HistoryManager.create(
         operations: AppDataOperations(),
       );
       try {
-        HistoryManager.cache = history;
-        final access = ImageFavoriteManager().capture();
+        final access = manager.capture();
         App.dataPath = (Directory(
           '${root.path}/second-host',
         )..createSync()).path;
         await replacement.init();
-        HistoryManager.cache = replacement;
+        final replacementImages = ImageFavoriteManager.create(
+          history: replacement,
+        );
+        addTearDown(replacementImages.dispose);
+        expect(access.isCurrent, isTrue);
+        history.close();
         expect(access.isCurrent, isFalse);
         await expectLater(
           access.isCollected('comic', 'source', 'chapter', 2),
@@ -132,12 +135,11 @@ void main() {
           access.toggle(selection(), checkActive: () {}),
           throwsStateError,
         );
-        expect(await manager.getAll(), isEmpty);
-        expect(await ImageFavoriteManager().getAll(), isEmpty);
+        expect(await replacementImages.getAll(), isEmpty);
       } finally {
         await replacement.waitForAsyncWrites();
         replacement.close();
-        HistoryManager.cache = previous;
+        replacement.dispose();
       }
     },
   );

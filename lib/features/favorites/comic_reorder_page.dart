@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -30,13 +31,14 @@ void reorderFavoriteComics(
   required bool Function() isCurrent,
 }) {
   if (!context.mounted || !isCurrent()) return;
+  final store = FavoritesScope.capture(context);
   final owner = WindowSelectionTask(context);
   final popup = context
       .getInheritedWidgetOfExactType<PopupIndicatorWidget>()
       ?.route;
   if (!owner.canPresent ||
       popup?.isCurrent == false ||
-      !identical(LocalFavoritesManager.cache, manager) ||
+      !(store.isCurrent && identical(store.manager, manager)) ||
       !manager.existsFolder(folder)) {
     return;
   }
@@ -48,6 +50,7 @@ void reorderFavoriteComics(
   unawaited(
     context.to<void>(
       () => _ComicReorderPage(
+        store: store,
         manager: manager,
         generation: generation,
         dataPath: dataPath,
@@ -62,6 +65,7 @@ void reorderFavoriteComics(
 
 class _ComicReorderPage extends StatefulWidget {
   const _ComicReorderPage({
+    required this.store,
     required this.manager,
     required this.generation,
     required this.dataPath,
@@ -70,6 +74,7 @@ class _ComicReorderPage extends StatefulWidget {
     required this.isCurrent,
   });
 
+  final FavoriteStoreBinding store;
   final LocalFavoritesManager manager;
   final int generation;
   final String dataPath;
@@ -90,7 +95,7 @@ class _ComicReorderPageState extends SettingsSaveState<_ComicReorderPage> {
   WindowSelectionTask? _owner;
 
   bool get _isCurrentDatabase =>
-      identical(LocalFavoritesManager.cache, widget.manager) &&
+      widget.store.isCurrent &&
       widget.manager.connectionGeneration == widget.generation &&
       App.dataPath == widget.dataPath;
 

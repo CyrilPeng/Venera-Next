@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/foundation/preferences.dart';
 import 'package:venera_next/foundation/reader_preferences.dart';
 import 'package:venera_next/foundation/reader_preference_store.dart';
@@ -673,16 +675,20 @@ class __CustomImageProcessingState
   @override
   void initState() {
     super.initState();
-    current = appdata.settings['customImageProcessing'];
+    current = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(ImageProcessingPreferences.script);
   }
 
   void _saveCode(String value) {
     if (!acceptsSettingsChanges) return;
     current = value;
     saveSetting(
-      'customImageProcessing',
+      ImageProcessingPreferences.script.key,
       () => appdata.updateSettings((draft) {
-        draft['customImageProcessing'] = value;
+        GlobalPreferenceStore(
+          draft,
+        ).write(ImageProcessingPreferences.script, value);
       }),
     );
   }
@@ -712,7 +718,8 @@ class __CustomImageProcessingState
           children: [
             SwitchSetting(
               title: "Enable".tl,
-              settingKey: "enableCustomImageProcessing",
+              settingKey: ImageProcessingPreferences.enabled.key,
+              preference: ImageProcessingPreferences.enabled,
             ),
             Expanded(
               child: Container(

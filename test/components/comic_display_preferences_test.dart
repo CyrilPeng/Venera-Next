@@ -61,18 +61,25 @@ void main() {
       // Continuous mode intentionally keeps a next-page loading indicator.
       for (
         var frame = 0;
-        frame < 10 &&
-            (tester.state<ComicListState>(find.byType(ComicList)).state['data']
-                    as Map)
-                .isEmpty;
+        frame < 10 && find.byType(SliverGridComics).evaluate().isEmpty;
         frame++
       ) {
         await tester.pump();
       }
       await tester.pump();
       expect(
-        tester.state<ComicListState>(find.byType(ComicList)).state['data'],
-        {1: <Comic>[]},
+        find.byType(SliverGridComics, skipOffstage: false),
+        findsOneWidget,
+        reason:
+            'Mode $raw: ${tester.widgetList<Text>(find.byType(Text)).map((text) => text.data).toList()}',
+      );
+      expect(
+        tester
+            .widget<SliverGridComics>(
+              find.byType(SliverGridComics, skipOffstage: false),
+            )
+            .comics,
+        isEmpty,
         reason: '$raw',
       );
       final continuous = raw == 'continuous' || raw == 'Continuous';

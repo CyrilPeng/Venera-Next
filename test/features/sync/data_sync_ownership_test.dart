@@ -15,6 +15,39 @@ void main() {
   tearDown(() => root.deleteSync(recursive: true));
 
   test(
+    'R2 application ownership excludes other writers but permits its sync lease',
+    () async {
+      final application = SqliteDataSyncOwnership.applicationData(
+        () => root.path,
+      )..acquire();
+      final other = SqliteDataSyncOwnership.applicationData(
+        () => '${root.path}/.',
+      );
+      final sync = SqliteDataSyncOwnership(() => root.path);
+      final independent = SqliteDataSyncOwnership.applicationData(
+        () => '${root.path}/other',
+      );
+      try {
+        sync.acquire();
+        independent.acquire();
+        expect(other.acquire, throwsA(isA<SqliteException>()));
+        final directory = root.path;
+        expect(
+          await Isolate.run(() => _attempt(directory, application: true)),
+          isFalse,
+        );
+        application.release();
+        other.acquire();
+      } finally {
+        application.release();
+        other.release();
+        sync.release();
+        independent.release();
+      }
+    },
+  );
+
+  test(
     'connections and isolates contend until the actual owner releases',
     () async {
       final owner = SqliteDataSyncOwnership(() => root.path)..acquire();
@@ -180,52 +213,59 @@ void main() {
     },
   );
 
-  test(
-    'independent VM excludes contenders and process death releases ownership',
-    () async {
-      final child = await Process.start(dartExecutable(), [
-        '--packages=${p.absolute('.dart_tool/package_config.json')}',
-        'test/fixtures/data_sync_ownership_probe.dart',
-        root.path,
-      ]);
-      final output = child.stdout.transform(utf8.decoder).join();
-      final errors = child.stderr.transform(utf8.decoder).join();
-      var exited = false;
-      final exit = child.exitCode.then((code) {
-        exited = true;
-        return code;
-      });
-      final owner = SqliteDataSyncOwnership(() => root.path);
-      try {
-        final ready = File('${root.path}/owner-ready');
-        final deadline = DateTime.now().add(const Duration(seconds: 30));
-        while (!ready.existsSync() &&
-            !exited &&
-            DateTime.now().isBefore(deadline)) {
-          await Future<void>.delayed(const Duration(milliseconds: 20));
+  for (final application in [false, true]) {
+    test(
+      'independent VM excludes contenders and process death releases ownership (application=$application)',
+      () async {
+        final child = await Process.start(dartExecutable(), [
+          '--packages=${p.absolute('.dart_tool/package_config.json')}',
+          'test/fixtures/data_sync_ownership_probe.dart',
+          root.path,
+          if (application) 'application',
+        ]);
+        final output = child.stdout.transform(utf8.decoder).join();
+        final errors = child.stderr.transform(utf8.decoder).join();
+        var exited = false;
+        final exit = child.exitCode.then((code) {
+          exited = true;
+          return code;
+        });
+        final owner = application
+            ? SqliteDataSyncOwnership.applicationData(() => root.path)
+            : SqliteDataSyncOwnership(() => root.path);
+        try {
+          final ready = File('${root.path}/owner-ready');
+          final deadline = DateTime.now().add(const Duration(seconds: 30));
+          while (!ready.existsSync() &&
+              !exited &&
+              DateTime.now().isBefore(deadline)) {
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+          }
+          expect(ready.existsSync(), isTrue);
+          expect(ready.readAsStringSync(), '${child.pid}');
+          expect(owner.acquire, throwsA(isA<SqliteException>()));
+          expect(child.kill(ProcessSignal.sigkill), isTrue);
+          expect(await exit.timeout(const Duration(seconds: 10)), isNot(0));
+          owner.acquire();
+          expect(await errors, isEmpty);
+          expect(await output, isEmpty);
+        } finally {
+          owner.release();
+          if (!exited) child.kill(ProcessSignal.sigkill);
+          await exit.timeout(const Duration(seconds: 10));
+          await child.stdin.close();
+          await errors;
+          await output;
         }
-        expect(ready.existsSync(), isTrue);
-        expect(ready.readAsStringSync(), '${child.pid}');
-        expect(owner.acquire, throwsA(isA<SqliteException>()));
-        expect(child.kill(ProcessSignal.sigkill), isTrue);
-        expect(await exit.timeout(const Duration(seconds: 10)), isNot(0));
-        owner.acquire();
-        expect(await errors, isEmpty);
-        expect(await output, isEmpty);
-      } finally {
-        owner.release();
-        if (!exited) child.kill(ProcessSignal.sigkill);
-        await exit.timeout(const Duration(seconds: 10));
-        await child.stdin.close();
-        await errors;
-        await output;
-      }
-    },
-  );
+      },
+    );
+  }
 }
 
-bool _attempt(String path) {
-  final owner = SqliteDataSyncOwnership(() => path);
+bool _attempt(String path, {bool application = false}) {
+  final owner = application
+      ? SqliteDataSyncOwnership.applicationData(() => path)
+      : SqliteDataSyncOwnership(() => path);
   try {
     owner.acquire();
     return true;

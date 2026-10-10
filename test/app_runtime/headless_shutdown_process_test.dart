@@ -6,15 +6,16 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   for (final failures in [
     <String>{},
+    {'prepare'},
     {'close'},
     {'dispose'},
     {'flush'},
-    {'close', 'dispose', 'flush'},
+    {'prepare', 'dispose', 'flush'},
     {'command'},
-    {'command', 'close', 'flush'},
-    {'close', 'dispose', 'flush', 'report'},
-    {'close', 'dispose', 'flush', 'emit'},
-    {'close', 'dispose', 'flush', 'report', 'emit'},
+    {'command', 'prepare', 'flush'},
+    {'prepare', 'dispose', 'flush', 'report'},
+    {'prepare', 'dispose', 'flush', 'emit'},
+    {'prepare', 'dispose', 'flush', 'report', 'emit'},
   ]) {
     test('shutdown protocol subprocess: $failures', () async {
       final directory = await Directory.systemTemp.createTemp(
@@ -43,9 +44,10 @@ void main() {
           })
           .toList();
       final failedStages = [
-        'close',
+        'prepare',
         'dispose',
         'flush',
+        'close',
       ].where(failures.contains).toList();
       expect(messages.map((message) => message['status']), [
         'running',
@@ -75,6 +77,13 @@ void main() {
       expect(trace['bindingsAfterClose'], isFalse);
       expect(trace['pendingChanges'], 1);
       expect(trace['persistedChanges'], failures.contains('flush') ? 0 : 1);
+      expect(trace['ownershipDuringFlush'], isTrue);
+      expect(
+        trace['ownershipAfterClose'],
+        failures.contains('prepare') ||
+            failures.contains('flush') ||
+            failures.contains('close'),
+      );
       expect(trace['events'], [
         'close started',
         'late source change',
@@ -82,6 +91,8 @@ void main() {
         'disposed',
         'flush started',
         if (!failures.contains('flush')) 'flush finished',
+        if (!failures.contains('prepare') && !failures.contains('flush'))
+          'stores closing',
       ]);
       expect(trace['reported'], [
         for (final stage in failedStages) 'Bad state: $stage failed',

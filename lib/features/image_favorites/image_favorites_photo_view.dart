@@ -1,3 +1,4 @@
+import 'package:venera_next/features/history/history_scope.dart';
 import 'package:venera_next/components/file_save_task.dart';
 import 'dart:async';
 
@@ -9,7 +10,9 @@ import 'package:photo_view/photo_view_gallery.dart';
 import 'package:venera_next/components/effects.dart';
 import 'package:venera_next/components/image_save_binding.dart';
 import 'package:venera_next/components/menu.dart';
-import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/history/history_api.dart';
+import 'package:venera_next/features/history/image_favorites.dart';
+import 'package:venera_next/features/history/image_favorites_provider.dart';
 import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_save_work.dart';
@@ -19,6 +22,7 @@ import 'package:venera_next/foundation/widget_utils.dart';
 
 class ImageFavoritesPhotoView extends StatefulWidget {
   const ImageFavoritesPhotoView({
+    this.manager,
     super.key,
     required this.comic,
     required this.imageFavorite,
@@ -27,6 +31,8 @@ class ImageFavoritesPhotoView extends StatefulWidget {
   final ImageFavoritesComic comic;
   final ImageFavorite imageFavorite;
 
+  final ImageFavoriteManager? manager;
+
   @override
   State<ImageFavoritesPhotoView> createState() =>
       _ImageFavoritesPhotoViewState();
@@ -34,6 +40,9 @@ class ImageFavoritesPhotoView extends StatefulWidget {
 
 class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView>
     with ContextMenuOwner {
+  late final ImageFavoriteManager _manager =
+      widget.manager ?? HistoryScope.readImages(context);
+
   @override
   Object get contextMenuIdentity => (widget.comic, currentPage);
   late PageController controller;
@@ -94,7 +103,7 @@ class _ImageFavoritesPhotoViewState extends State<ImageFavoritesPhotoView>
     final success = 'Delete @a images'.tlParams({'a': images.length});
     final failure = 'Error'.tl;
     try {
-      await ImageFavoriteManager().deleteImageFavorite(images);
+      await _manager.deleteImageFavorite(images);
       if (messages.mounted) {
         messages.showSnackBar(SnackBar(content: Text(success)));
       }

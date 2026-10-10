@@ -25,14 +25,14 @@ void main() {
     root = Directory.systemTemp.createTempSync('copy-cleanup-');
     App.dataPath = root.path;
     App.cachePath = root.path;
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     local = LocalManager();
     await local.init();
   });
   tearDown(() async {
     await local.pendingDownloadTaskWrites;
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     root.deleteSync(recursive: true);
   });
 

@@ -1,5 +1,7 @@
 # Local storage writer audit
 
+2026-10-09 R2 update: synchronous `write` also uses AppDataOperations.accessSync. Core owns a separate application-directory lease from startup recovery through final persistence and store closure, excluding other interactive/headless cores in that directory. Download commits retain queue ownership and are outside the application sync snapshot. The [R2 audit](storage_configuration_completion_2026_10_09.md) and [batch report](completion_batches_2026_10_09.md) list writers, external-path boundaries and evidence. The 2026-10-03 results below retain their original commit ownership.
+
 Date: 2026-10-03. Baseline: 8c238c6. Scope: LocalManager repository mutations and their production callers; not proof that every filesystem or external writer is controlled.
 
 | Entry | Production caller/owner | Decision |

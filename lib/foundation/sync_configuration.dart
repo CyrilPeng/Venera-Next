@@ -38,6 +38,18 @@ class SyncConfiguration {
   static int normalizeInterval(Object? value) =>
       value is int && intervalOptions.contains(value) ? value : 30;
 
+  static String readExcludedFields(Object? value) =>
+      value is String ? value : '';
+
+  /// Versions decide whether remote data can replace local data. A malformed
+  /// version must stop synchronization instead of silently becoming older.
+  static int requireDataVersion(Object? value) {
+    if (value is! int || value < 0) {
+      throw const FormatException('Invalid sync data version');
+    }
+    return value;
+  }
+
   factory SyncConfiguration.read(
     Object? Function(String) settings,
     Object? Function(String) implicit,
@@ -52,10 +64,9 @@ class SyncConfiguration {
             ? DataSyncMode.realtime
             : DataSyncMode.manual,
     };
-    final fields = settings('disableSyncFields');
     return SyncConfiguration(
       connection: SyncConnection.parse(settings('webdav')),
-      excludedFields: fields is String ? fields : '',
+      excludedFields: readExcludedFields(settings('disableSyncFields')),
       mode: mode,
       intervalMinutes: normalizeInterval(implicit('webdavSyncIntervalMinutes')),
     );

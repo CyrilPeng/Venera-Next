@@ -53,7 +53,7 @@ void main() {
     failRollback = false;
     journalReads = 0;
     faultConsumed = false;
-    manager = LocalManager.forTesting(
+    manager = LocalManager.independent(
       openDatabase: (path) {
         database = _DatabaseProxy(
           sqlite3.open(path),
@@ -378,7 +378,7 @@ void main() {
     () async {
       await uncertain();
       manager.dispose();
-      final reopened = LocalManager.forTesting(
+      final reopened = LocalManager.independent(
         openDatabase: sqlite3.open,
         initializeSources: () async {},
       );
@@ -468,7 +468,7 @@ void main() {
       await uncertain();
       final otherData = Directory(p.join(root.path, 'other'))..createSync();
       App.dataPath = otherData.path;
-      final other = LocalManager.forTesting(
+      final other = LocalManager.independent(
         openDatabase: sqlite3.open,
         initializeSources: () async {},
       );

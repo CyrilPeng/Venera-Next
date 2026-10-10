@@ -27,8 +27,6 @@ void main() {
         App.cachePath = (Directory('${root.path}/cache')..createSync()).path;
         final previous = appdata.captureImportCheckpoint();
         final previousImplicit = Map<String, dynamic>.of(appdata.implicitData);
-        final previousHistory = HistoryManager.cache;
-        HistoryManager.cache = null;
         final original = StateError('new metadata persistence failed');
         final originalStack = StackTrace.fromString(
           'original metadata failure',
@@ -200,7 +198,6 @@ void main() {
         } finally {
           controller?.dispose();
           HistoryManager.cache?.close();
-          HistoryManager.cache = previousHistory;
           await appdata.restoreImportCheckpoint(previous, persist: false);
           appdata.implicitData
             ..clear()

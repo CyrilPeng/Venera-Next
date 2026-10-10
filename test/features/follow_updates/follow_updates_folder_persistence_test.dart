@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -98,8 +99,8 @@ _prepare(WidgetTester tester) async {
   );
   App.dataPath = root.path;
   App.cachePath = root.path;
-  LocalFavoritesManager.cache = null;
-  final manager = LocalFavoritesManager();
+  _favoritesOwner = null;
+  final manager = _favoritesForView();
   appdata.settings['language'] = 'en-US';
   appdata.settings['disableSyncFields'] = '';
   await tester.runAsync(() async {
@@ -139,7 +140,7 @@ _prepare(WidgetTester tester) async {
     await tester.pumpWidget(const SizedBox());
     await _flush(tester, appdata.saveData(false));
     await tester.runAsync(manager.closeAndWait);
-    LocalFavoritesManager.cache = null;
+    _favoritesOwner = null;
     runtime.dispose();
     previous.forEach((key, value) => appdata.settings[key] = value);
     App.dataPath = previousPath;
@@ -164,23 +165,25 @@ Future<void> _open(
   Future<void> Function()? onExit,
 }) async {
   await tester.pumpWidget(
-    MaterialApp(
-      builder: onExit == null
-          ? null
-          : (_, child) => WindowFrame(child!, onExit: onExit),
-      home: Scaffold(
-        body: Center(
-          child: Builder(
-            builder: (context) => TextButton(
-              onPressed: () => showDialog<void>(
-                context: context,
-                builder: (_) => FollowUpdatesFolderDialog(
-                  runtime: runtime,
-                  onSaved: () {},
-                  createCheck: createCheck ?? createFollowUpdatesFolderCheck,
+    _libraryView(
+      MaterialApp(
+        builder: onExit == null
+            ? null
+            : (_, child) => WindowFrame(child!, onExit: onExit),
+        home: Scaffold(
+          body: Center(
+            child: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => FollowUpdatesFolderDialog(
+                    runtime: runtime,
+                    onSaved: () {},
+                    createCheck: createCheck,
+                  ),
                 ),
+                child: const Text('Open'),
               ),
-              child: const Text('Open'),
             ),
           ),
         ),
@@ -271,21 +274,23 @@ void main() {
       await tester.pumpWidget(
         FollowUpdatesScope(
           runtime: f.runtime,
-          child: MaterialApp(
-            builder: (_, child) => WindowFrame(
-              child!,
-              onExit: () async {
-                exits++;
-              },
-            ),
-            home: Scaffold(
-              body: StatefulBuilder(
-                builder: (_, setState) {
-                  update = setState;
-                  return CustomScrollView(
-                    slivers: [if (showing) const FollowUpdatesWidget()],
-                  );
+          child: _libraryView(
+            MaterialApp(
+              builder: (_, child) => WindowFrame(
+                child!,
+                onExit: () async {
+                  exits++;
                 },
+              ),
+              home: Scaffold(
+                body: StatefulBuilder(
+                  builder: (_, setState) {
+                    update = setState;
+                    return CustomScrollView(
+                      slivers: [if (showing) const FollowUpdatesWidget()],
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -489,20 +494,22 @@ void main() {
       await tester.pumpWidget(
         FollowUpdatesScope(
           runtime: f.runtime,
-          child: MaterialApp(
-            home: Scaffold(
-              body: StatefulBuilder(
-                builder: (_, setState) {
-                  update = setState;
-                  return showing
-                      ? FollowUpdatesPage(
-                          createCheck: (_) {
-                            checks++;
-                            return _Job();
-                          },
-                        )
-                      : const SizedBox();
-                },
+          child: _libraryView(
+            MaterialApp(
+              home: Scaffold(
+                body: StatefulBuilder(
+                  builder: (_, setState) {
+                    update = setState;
+                    return showing
+                        ? FollowUpdatesPage(
+                            createCheck: (_) {
+                              checks++;
+                              return _Job();
+                            },
+                          )
+                        : const SizedBox();
+                  },
+                ),
               ),
             ),
           ),
@@ -579,30 +586,32 @@ void main() {
       final job = _Job();
       var checks = 0;
       await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData.dark(),
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: const TextScaler.linear(1.8)),
-            child: child!,
-          ),
-          home: Scaffold(
-            body: Center(
-              child: Builder(
-                builder: (context) => TextButton(
-                  onPressed: () => showDialog<void>(
-                    context: context,
-                    builder: (_) => FollowUpdatesFolderDialog(
-                      runtime: f.runtime,
-                      onSaved: () {},
-                      createCheck: (_) {
-                        checks++;
-                        return job;
-                      },
+        _libraryView(
+          MaterialApp(
+            theme: ThemeData.dark(),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(1.8)),
+              child: child!,
+            ),
+            home: Scaffold(
+              body: Center(
+                child: Builder(
+                  builder: (context) => TextButton(
+                    onPressed: () => showDialog<void>(
+                      context: context,
+                      builder: (_) => FollowUpdatesFolderDialog(
+                        runtime: f.runtime,
+                        onSaved: () {},
+                        createCheck: (_) {
+                          checks++;
+                          return job;
+                        },
+                      ),
                     ),
+                    child: const Text('Open'),
                   ),
-                  child: const Text('Open'),
                 ),
               ),
             ),
@@ -640,4 +649,11 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+Widget _libraryView(Widget child) {
+  return FavoritesScope(manager: _favoritesForView(), child: child);
 }

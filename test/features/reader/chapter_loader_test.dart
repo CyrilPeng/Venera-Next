@@ -87,8 +87,8 @@ void main() {
     App.dataPath = root;
     App.cachePath = root;
     Log.isMuted = true;
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     manager = LocalManager();
     await manager.init();
     onlineCalls = 0;
@@ -101,7 +101,7 @@ void main() {
   });
   tearDown(() {
     ComicSourceManager().remove(_key);
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     Log.isMuted = false;
     temporary.deleteSync(recursive: true);
   });
@@ -233,8 +233,8 @@ void main() {
     () async {
       await add();
       final before = await load();
-      LocalManager.resetForTesting();
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager.current?.dispose();
+      LocalManager(initializeSources: () async {});
       manager = LocalManager();
       await manager.init();
       expect(await load(), before);
@@ -261,8 +261,8 @@ void main() {
     () async {
       await add();
       Directory('${manager.path}/book/first').deleteSync(recursive: true);
-      LocalManager.resetForTesting();
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager.current?.dispose();
+      LocalManager(initializeSources: () async {});
       manager = LocalManager();
       await manager.init();
       var notified = 0;

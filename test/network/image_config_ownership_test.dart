@@ -132,7 +132,7 @@ void main() {
 
   tearDown(() async {
     ImageDownloader.cancelAllLoadingImages();
-    ImageDownloader.debugResetSourceImageLoading();
+    ImageDownloader.configureSourceImageLoading();
     CacheManager.instance = previousCache;
     App.isInitialized = previousInitialized;
     appdata.settings['proxy'] = previousProxy;

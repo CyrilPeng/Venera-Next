@@ -37,6 +37,16 @@ bool _sqliteAvailable() {
   }
 }
 
+HistoryManager _ownedHistory() {
+  final manager = HistoryManager.create();
+  addTearDown(() async {
+    await manager.waitForAsyncWrites();
+    manager.close();
+    manager.dispose();
+  });
+  return manager;
+}
+
 void main() {
   group(
     'ordered history mutations',
@@ -47,13 +57,13 @@ void main() {
         directory = Directory.systemTemp.createTempSync('history-order-');
         App.dataPath = directory.path;
         App.cachePath = directory.path;
-        manager = HistoryManager();
+        manager = _ownedHistory();
         await manager.init();
       });
       tearDown(() async {
         await manager.waitForAsyncWrites();
         manager.close();
-        HistoryManager.cache = null;
+
         directory.deleteSync(recursive: true);
       });
 
@@ -322,7 +332,7 @@ void main() {
         () async {
           final previousFolder = appdata.settings['followUpdatesFolder'];
           final previousQuick = appdata.settings['quickFavorite'];
-          final favorites = LocalFavoritesManager();
+          final favorites = LocalFavoritesManager.independent();
           await favorites.init();
           try {
             final folder = await favorites.createFolder('kept');
@@ -341,7 +351,7 @@ void main() {
               manager.addHistory(_history('favorite')),
               manager.addHistory(_history('not-favorite')),
             ];
-            final clear = manager.clearUnfavoritedHistory();
+            final clear = manager.clearUnfavoritedHistory(manager: favorites);
             await favorites.deleteComicWithId(
               folder,
               'favorite',
@@ -353,7 +363,7 @@ void main() {
             await favorites.debugWaitForHashedIdsRefresh();
             await appdata.saveData(false);
             favorites.close();
-            LocalFavoritesManager.cache = null;
+
             appdata.settings['followUpdatesFolder'] = previousFolder;
             appdata.settings['quickFavorite'] = previousQuick;
           }
@@ -494,12 +504,6 @@ void main() {
         'venera-history-cache-',
       );
       addTearDown(() {
-        try {
-          HistoryManager().close();
-        } catch (_) {
-          // ignore cleanup failures in partially initialized tests
-        }
-        HistoryManager.cache = null;
         if (dataDir.existsSync()) {
           dataDir.deleteSync(recursive: true);
         }
@@ -510,9 +514,8 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      HistoryManager.cache = null;
 
-      final manager = HistoryManager();
+      final manager = _ownedHistory();
       await manager.init();
 
       await manager.addHistory(_history('comic-1'));
@@ -535,12 +538,6 @@ void main() {
         'venera-history-cache-',
       );
       addTearDown(() {
-        try {
-          HistoryManager().close();
-        } catch (_) {
-          // ignore cleanup failures in partially initialized tests
-        }
-        HistoryManager.cache = null;
         if (dataDir.existsSync()) {
           dataDir.deleteSync(recursive: true);
         }
@@ -551,9 +548,8 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      HistoryManager.cache = null;
 
-      final manager = HistoryManager();
+      final manager = _ownedHistory();
       await manager.init();
 
       final submitted = List.generate(5, (index) => _history('comic-$index'));
@@ -602,12 +598,6 @@ void main() {
         'venera-history-cache-',
       );
       addTearDown(() {
-        try {
-          HistoryManager().close();
-        } catch (_) {
-          // ignore cleanup failures in partially initialized tests
-        }
-        HistoryManager.cache = null;
         if (dataDir.existsSync()) {
           dataDir.deleteSync(recursive: true);
         }
@@ -618,9 +608,8 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      HistoryManager.cache = null;
 
-      final manager = HistoryManager();
+      final manager = _ownedHistory();
       await manager.init();
 
       final write = manager.addHistory(_history('comic-drained'));
@@ -650,7 +639,6 @@ void main() {
         oldDatabase.dispose();
       }
       manager.close();
-      HistoryManager.cache = null;
 
       final db = sqlite3.open('${dataDir.path}/history.db');
       try {
@@ -679,12 +667,6 @@ void main() {
         'venera-history-migration-cache-',
       );
       addTearDown(() {
-        try {
-          HistoryManager().close();
-        } catch (_) {
-          // ignore cleanup failures in partially initialized tests
-        }
-        HistoryManager.cache = null;
         if (dataDir.existsSync()) {
           dataDir.deleteSync(recursive: true);
         }
@@ -733,8 +715,8 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      HistoryManager.cache = null;
-      final manager = HistoryManager();
+
+      final manager = _ownedHistory();
       await manager.init();
 
       final saved = manager.find('legacy-comic', ComicType.local);
@@ -755,12 +737,6 @@ void main() {
         'venera-history-legacy-key-cache-',
       );
       addTearDown(() {
-        try {
-          HistoryManager().close();
-        } catch (_) {
-          // ignore cleanup failures in partially initialized tests
-        }
-        HistoryManager.cache = null;
         if (dataDir.existsSync()) {
           dataDir.deleteSync(recursive: true);
         }
@@ -810,8 +786,8 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      HistoryManager.cache = null;
-      final manager = HistoryManager();
+
+      final manager = _ownedHistory();
       await manager.init();
 
       final existing = _history('legacy-comic')..page = 7;
@@ -853,12 +829,6 @@ void main() {
         'venera-history-duration-cache-',
       );
       addTearDown(() {
-        try {
-          HistoryManager().close();
-        } catch (_) {
-          // ignore cleanup failures in partially initialized tests
-        }
-        HistoryManager.cache = null;
         if (dataDir.existsSync()) {
           dataDir.deleteSync(recursive: true);
         }
@@ -869,8 +839,8 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      HistoryManager.cache = null;
-      final manager = HistoryManager();
+
+      final manager = _ownedHistory();
       await manager.init();
 
       final first = _history('comic-first');

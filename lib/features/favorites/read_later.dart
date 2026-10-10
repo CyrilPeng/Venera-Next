@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'favorite_models.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
@@ -8,8 +9,6 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 
-import 'favorites_manager.dart';
-
 class ReadLaterButton extends StatelessWidget {
   const ReadLaterButton({super.key, required this.comic, this.onChanged});
 
@@ -18,7 +17,7 @@ class ReadLaterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final manager = LocalFavoritesManager();
+    final manager = FavoritesScope.read(context);
     return ListenableBuilder(
       listenable: Listenable.merge([manager, appdata.settings]),
       builder: (context, _) {
@@ -61,7 +60,7 @@ class ReadLaterSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final manager = LocalFavoritesManager();
+    final manager = FavoritesScope.read(context);
     return ListenableBuilder(
       listenable: Listenable.merge([manager, appdata.settings]),
       builder: (context, _) {
@@ -138,7 +137,7 @@ class ReadLaterPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final manager = LocalFavoritesManager();
+    final manager = FavoritesScope.read(context);
     return Scaffold(
       body: ListenableBuilder(
         listenable: Listenable.merge([manager, appdata.settings]),

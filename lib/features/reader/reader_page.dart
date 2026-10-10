@@ -1,3 +1,5 @@
+import 'package:venera_next/features/history/history_scope.dart';
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -9,7 +11,6 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/gesture_host.dart';
@@ -132,7 +133,7 @@ class Reader extends StatefulWidget {
 class ReaderState extends State<Reader>
     with ReaderImagePerPageHandler, WidgetsBindingObserver {
   final imageWork = ImageWork();
-  late final imageFavorites = ImageFavoriteManager();
+  late final imageFavorites = HistoryScope.readImages(context);
   final _targetValidity = ValueNotifier(0);
   final _shellChanges = ValueNotifier(0);
   Listenable get shellChanges => _shellChanges;
@@ -562,6 +563,7 @@ class ReaderState extends State<Reader>
           mounted &&
           !_sessionFrozen &&
           access.isCurrent &&
+          identical(HistoryScope.readImages(context), imageFavorites) &&
           cid == comic &&
           type == comicType &&
           eid == chapterId &&
@@ -603,6 +605,7 @@ class ReaderState extends State<Reader>
         mounted &&
         !_sessionFrozen &&
         access.isCurrent &&
+        identical(HistoryScope.readImages(context), imageFavorites) &&
         cid == comic &&
         type == comicType &&
         eid == chapterId &&
@@ -1296,7 +1299,7 @@ class ReaderState extends State<Reader>
       appdata.settings.readerSettings(cid, type.sourceKey).readerMode,
     );
     history = widget.history;
-    final historyManager = HistoryManager();
+    final historyManager = HistoryScope.read(context);
     final durationHistory = widget.history;
     _sessionRegistry = context
         .getInheritedWidgetOfExactType<SelectionTasksScope>()
@@ -1353,7 +1356,7 @@ class ReaderState extends State<Reader>
       handleVolumeEvent();
     }
     setImageCacheSize();
-    final favorites = LocalFavoritesManager();
+    final favorites = FavoritesScope.read(context);
     final favoriteGeneration = favorites.connectionGeneration;
     final comicId = cid;
     final comicType = type;

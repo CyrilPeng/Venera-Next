@@ -12,7 +12,7 @@ import 'package:venera_next/components/image.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/select.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -818,12 +818,10 @@ class _ComicDescription extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (tags != null) {
-      tags!.removeWhere((element) => element.removeAllBlank == "");
-      for (var s in tags!) {
-        s = s.replaceAll("\n", " ");
-      }
-    }
+    final displayTags = [
+      for (final tag in tags ?? const <String>[])
+        if (tag.removeAllBlank.isNotEmpty) tag.replaceAll('\n', ' '),
+    ];
     var enableTranslate =
         appLocale.languageCode == 'zh' && this.enableTranslate;
     return Column(
@@ -848,7 +846,7 @@ class _ComicDescription extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         const SizedBox(height: 4),
-        if (tags != null && tags!.isNotEmpty)
+        if (displayTags.isNotEmpty)
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -868,7 +866,7 @@ class _ComicDescription extends StatelessWidget {
                     spacing: 4,
                     runSpacing: 3,
                     children: [
-                      for (var s in tags!)
+                      for (var s in displayTags)
                         Container(
                           height: 21,
                           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -913,7 +911,7 @@ class _ComicDescription extends StatelessWidget {
                   Text(
                     description,
                     style: const TextStyle(fontSize: 12.0),
-                    maxLines: (tags == null || tags!.isEmpty) ? 3 : 2,
+                    maxLines: displayTags.isEmpty ? 3 : 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],

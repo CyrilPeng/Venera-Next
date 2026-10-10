@@ -2,10 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/network/image_loading_config.dart';
-import 'package:venera_next/network/request_scope.dart';
 
 import 'normalization.dart';
 import 'types.dart';
@@ -32,7 +30,7 @@ class SourceImagesParser {
         return Res(images);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
-        return Res.fromException(e, s);
+        return context.failureResult(e, s);
       }
     };
   }
@@ -144,17 +142,7 @@ class SourceImagesParser {
         );
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
-        if (e is RequestCancelled) {
-          return Res.failure(
-            OperationFailure(
-              message: e.toString(),
-              kind: FailureKind.cancelled,
-              cause: e,
-              stackTrace: s,
-            ),
-          );
-        }
-        return Res.fromException(e, s);
+        return context.failureResult(e, s);
       }
     };
   }

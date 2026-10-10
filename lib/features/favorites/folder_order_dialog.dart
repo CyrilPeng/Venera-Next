@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -12,8 +13,6 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
-
-import 'favorites_manager.dart';
 
 Future<void> sortFolders(BuildContext context) {
   final result = _sortFolders(context);
@@ -36,14 +35,14 @@ Future<void> _sortFolders(BuildContext context) async {
       .getInheritedWidgetOfExactType<PopupIndicatorWidget>()
       ?.route;
   if (parentPopup?.isCurrent == false) return;
-  final manager = LocalFavoritesManager.cache;
-  if (manager == null) return;
+  final store = FavoritesScope.capture(context);
+  final manager = store.manager;
   final generation = manager.connectionGeneration;
   final dataPath = App.dataPath;
   final folders = List<String>.of(manager.folderNames);
   final navigator = Navigator.of(context, rootNavigator: true);
   bool isCurrentDatabase() =>
-      identical(LocalFavoritesManager.cache, manager) &&
+      store.isCurrent &&
       manager.connectionGeneration == generation &&
       App.dataPath == dataPath;
   void checkDatabase() {

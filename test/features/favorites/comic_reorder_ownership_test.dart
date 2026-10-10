@@ -1,3 +1,5 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/history/history_scope.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -127,44 +129,46 @@ class _Host {
     updateFolderList: () {},
   );
 
-  Widget app({SelectionTaskRegistry? tasks}) => MaterialApp(
-    navigatorKey: appNavigation.rootNavigatorKey,
-    builder: (_, child) => SelectionTasksScope(
-      registry: tasks ?? registry,
-      child: NavigationAdmission(
-        allowsNavigation: () => allowed,
-        child: multipleWindows
-            ? Row(
-                children: [
-                  Expanded(
-                    child: WindowFrame(
-                      useSecondWindow ? const SizedBox() : child!,
-                      key: firstWindow,
-                      onExit: () => exits++,
+  Widget app({SelectionTaskRegistry? tasks}) => _libraryView(
+    MaterialApp(
+      navigatorKey: appNavigation.rootNavigatorKey,
+      builder: (_, child) => SelectionTasksScope(
+        registry: tasks ?? registry,
+        child: NavigationAdmission(
+          allowsNavigation: () => allowed,
+          child: multipleWindows
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: WindowFrame(
+                        useSecondWindow ? const SizedBox() : child!,
+                        key: firstWindow,
+                        onExit: () => exits++,
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: WindowFrame(
-                      useSecondWindow ? child! : const SizedBox(),
-                      key: secondWindow,
-                      onExit: () => secondExits++,
+                    Expanded(
+                      child: WindowFrame(
+                        useSecondWindow ? child! : const SizedBox(),
+                        key: secondWindow,
+                        onExit: () => secondExits++,
+                      ),
                     ),
-                  ),
-                ],
-              )
-            : window
-            ? WindowFrame(child!, onExit: () => exits++)
-            : child!,
+                  ],
+                )
+              : window
+              ? WindowFrame(child!, onExit: () => exits++)
+              : child!,
+        ),
       ),
-    ),
-    home: Scaffold(
-      body: nested
-          ? Navigator(
-              key: innerNavigator,
-              onGenerateRoute: (_) =>
-                  MaterialPageRoute<void>(builder: (_) => _content()),
-            )
-          : _content(),
+      home: Scaffold(
+        body: nested
+            ? Navigator(
+                key: innerNavigator,
+                onGenerateRoute: (_) =>
+                    MaterialPageRoute<void>(builder: (_) => _content()),
+              )
+            : _content(),
+      ),
     ),
   );
 
@@ -174,14 +178,14 @@ class _Host {
   );
 
   Future<void> mount(WidgetTester tester) async {
-    final previousManager = LocalFavoritesManager.cache;
-    final previousHistory = HistoryManager.cache;
+    final previousManager = _favoritesOwner;
+    final previousHistory = _historyOwner;
     final previousSettings = Map<String, dynamic>.from(
       appdata.toJson()['settings'] as Map,
     );
     final previousImplicit = Map<String, dynamic>.from(appdata.implicitData);
-    LocalFavoritesManager.cache = manager;
-    HistoryManager.cache = _History();
+    _favoritesOwner = manager;
+    _historyOwner = _History();
     appdata.settings['language'] = 'en-US';
     appdata.settings['favoritesDisplayMode'] = 'list';
     appdata.implicitData['local_favorites_read_filter'] = 'All';
@@ -204,8 +208,8 @@ class _Host {
           }
         });
       }
-      LocalFavoritesManager.cache = previousManager;
-      HistoryManager.cache = previousHistory;
+      _favoritesOwner = previousManager;
+      _historyOwner = previousHistory;
       previousSettings.forEach((key, value) => appdata.settings[key] = value);
       appdata.implicitData = previousImplicit;
       registerShowMessageHandler((_, _) {});
@@ -343,7 +347,7 @@ void main() {
       } else if (reason == 'registry') {
         await host.replaceRegistry(tester);
       } else if (reason == 'manager') {
-        LocalFavoritesManager.cache = _Manager();
+        await _replaceFavorites(tester, _Manager());
       } else if (reason == 'connection') {
         host.manager.connectionGeneration++;
       } else if (reason == 'folder') {
@@ -414,7 +418,7 @@ void main() {
           } else if (reason == 'registry') {
             await host.replaceRegistry(tester);
           } else if (reason == 'manager') {
-            LocalFavoritesManager.cache = _Manager();
+            await _replaceFavorites(tester, _Manager());
           } else if (reason == 'connection') {
             host.manager.connectionGeneration++;
           } else if (reason == 'parent') {
@@ -454,7 +458,7 @@ void main() {
       final replacing = AppDataOperations.instance.run(() async {
         await release.future;
         if (replacement == 'manager') {
-          LocalFavoritesManager.cache = next;
+          await _replaceFavorites(tester, next);
         } else if (replacement == 'connection') {
           host.manager.connectionGeneration++;
         } else {
@@ -656,7 +660,7 @@ void main() {
       } else if (reason == 'retargeted') {
         host.content.value = host.page('Other');
       } else {
-        LocalFavoritesManager.cache = _Manager();
+        await _replaceFavorites(tester, _Manager());
       }
       await pumpSidebar(tester);
       _back(tester)();
@@ -828,7 +832,7 @@ void main() {
         } else if (reason == 'registry') {
           await host.replaceRegistry(tester);
         } else if (reason == 'manager') {
-          LocalFavoritesManager.cache = _Manager();
+          await _replaceFavorites(tester, _Manager());
         } else if (reason == 'connection') {
           host.manager.connectionGeneration++;
         } else if (reason == 'path') {
@@ -958,7 +962,7 @@ void main() {
       } else if (reason == 'retargeted') {
         host.content.value = host.page('Other');
       } else {
-        LocalFavoritesManager.cache = _Manager();
+        await _replaceFavorites(tester, _Manager());
       }
       await pumpSidebar(tester);
       _back(tester)();
@@ -1025,4 +1029,26 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+Widget? _libraryChild;
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+HistoryManager? _historyOwner;
+HistoryManager _historyForView() => _historyOwner ??= HistoryManager.create();
+Widget _libraryView(Widget child) {
+  _libraryChild = child;
+  return FavoritesScope(
+    manager: _favoritesForView(),
+    child: HistoryScope(manager: _historyForView(), child: child),
+  );
+}
+
+Future<void> _replaceFavorites(
+  WidgetTester tester,
+  LocalFavoritesManager manager,
+) async {
+  _favoritesOwner = manager;
+  await tester.pumpWidget(_libraryView(_libraryChild!));
 }

@@ -64,9 +64,8 @@ Future<void> _withFavoritesManager(
   try {
     App.dataPath = dataDir.path;
     App.cachePath = cacheDir.path;
-    LocalFavoritesManager.cache = null;
 
-    manager = LocalFavoritesManager();
+    manager = LocalFavoritesManager.independent();
     await manager.init();
     await run(manager);
     await appdata.saveData(false);
@@ -79,7 +78,7 @@ Future<void> _withFavoritesManager(
         // ignore cleanup failures in partially initialized tests
       }
     }
-    LocalFavoritesManager.cache = null;
+
     appdata.settings['followUpdatesFolder'] = previousFollowUpdatesFolder;
     appdata.settings['quickFavorite'] = previousQuickFavorite;
     if (dataDir.existsSync()) {
@@ -91,7 +90,182 @@ Future<void> _withFavoritesManager(
   }
 }
 
+LocalFavoritesManager _ownedFavorites() {
+  final manager = LocalFavoritesManager.independent();
+  addTearDown(() async {
+    await manager.debugWaitForHashedIdsRefresh();
+    await manager.closeAndWait();
+    manager.dispose();
+  });
+  return manager;
+}
+
 void main() {
+  for (final action in [
+    'add',
+    'storage add',
+    'move',
+    'batch move',
+    'batch copy',
+    'delete',
+    'batch delete',
+    'external delete',
+    'read',
+    'mark read',
+    'read later add',
+    'read later remove',
+  ]) {
+    test(
+      'R2 $action publishes committed state after tracking failure',
+      () async {
+        await _withFavoritesManager((manager) async {
+          final previousLater = appdata.settings['readLaterFolder'];
+          final previousMovement = appdata.settings['moveFavoriteAfterRead'];
+          await manager.createFolder('source');
+          await manager.createFolder('target');
+          await manager.prepareTableForFollowUpdates('target');
+          await manager.addComic('source', _favorite('moving'));
+          await manager.addComic('target', _favorite('existing'));
+          appdata.settings['followUpdatesFolder'] = 'target';
+          appdata.settings['moveFavoriteAfterRead'] = 'end';
+          if (action.startsWith('read later')) {
+            appdata.settings['readLaterFolder'] = 'target';
+          }
+          await manager.updateUpdateTime(
+            'target',
+            'existing',
+            ComicType.local,
+            'new chapter',
+          );
+          final expected = switch (action) {
+            'add' || 'storage add' || 'read later add' => ['existing', 'new'],
+            'move' || 'batch move' || 'batch copy' => ['existing', 'moving'],
+            'delete' ||
+            'batch delete' ||
+            'external delete' ||
+            'read later remove' => <String>[],
+            _ => ['existing'],
+          };
+          final published = <List<String>>[];
+          void changed() => published.add(
+            manager.getFolderComics('target').map((comic) => comic.id).toList(),
+          );
+          final failure = StateError('R2 tracking observer');
+          manager.addListener(changed);
+          registerFollowUpdatesChangeListener(() => throw failure);
+          try {
+            Object? observed;
+            try {
+              switch (action) {
+                case 'add':
+                  await manager.addComic('target', _favorite('new'));
+                case 'storage add':
+                  await manager.addComicWithStorage('target', ['tag'], (
+                    path,
+                    translated,
+                    append,
+                  ) {
+                    final db = sqlite3.open(path);
+                    try {
+                      final item = _favorite('new');
+                      FavoritesRepository(db).addComic(
+                        'target',
+                        item,
+                        translatedTags: translated,
+                        append: append,
+                      );
+                      return item;
+                    } finally {
+                      db.dispose();
+                    }
+                  });
+                case 'move':
+                  await manager.moveFavorite(
+                    'source',
+                    'target',
+                    'moving',
+                    ComicType.local,
+                  );
+                case 'batch move':
+                  await manager.batchMoveFavorites('source', 'target', [
+                    _favorite('moving'),
+                  ]);
+                case 'batch copy':
+                  await manager.batchCopyFavorites('source', 'target', [
+                    _favorite('moving'),
+                  ]);
+                case 'delete':
+                  await manager.deleteComicWithId(
+                    'target',
+                    'existing',
+                    ComicType.local,
+                  );
+                case 'batch delete':
+                  await manager.batchDeleteComics('target', [
+                    _favorite('existing'),
+                  ]);
+                case 'external delete':
+                  _deleteExternally(manager, [
+                    ComicID(ComicType.local, 'existing'),
+                  ]);
+                case 'read':
+                  await manager.onRead('existing', ComicType.local);
+                case 'mark read':
+                  await manager.markAsRead('existing', ComicType.local);
+                case 'read later add':
+                  await manager.setReadLater(
+                    _favorite('new'),
+                    included: true,
+                    folderName: 'unused',
+                  );
+                case 'read later remove':
+                  await manager.setReadLater(
+                    _favorite('existing'),
+                    included: false,
+                    folderName: 'unused',
+                  );
+              }
+            } catch (error) {
+              observed = error;
+            }
+            expect(published, hasLength(1));
+            expect(published.single, unorderedEquals(expected));
+            expect(
+              observed,
+              isA<PersistenceFailure>()
+                  .having(
+                    (value) => value.commitState,
+                    'commit',
+                    PersistenceCommitState.committed,
+                  )
+                  .having((value) => value.cause, 'cause', same(failure)),
+            );
+            expect(manager.folderComics('target'), expected.length);
+            registerFollowUpdatesChangeListener(null);
+            manager.removeListener(changed);
+            await manager.closeAndWait();
+            await manager.init();
+            expect(
+              manager.getFolderComics('target').map((comic) => comic.id),
+              unorderedEquals(expected),
+            );
+            if (action == 'read' || action == 'mark read') {
+              expect(
+                manager.hasNewUpdate('existing', ComicType.local),
+                isFalse,
+              );
+            }
+          } finally {
+            registerFollowUpdatesChangeListener(null);
+            manager.removeListener(changed);
+            appdata.settings['readLaterFolder'] = previousLater;
+            appdata.settings['moveFavoriteAfterRead'] = previousMovement;
+          }
+        });
+      },
+    );
+  }
+
   test(
     'R1 bulk favorites roll back together and retry without duplicate identities',
     () async {
@@ -738,7 +912,13 @@ void main() {
         try {
           await expectLater(
             manager.publishNetworkFavoriteImport(result),
-            throwsStateError,
+            throwsA(
+              isA<PersistenceFailure>().having(
+                (failure) => failure.commitState,
+                'commit',
+                PersistenceCommitState.committed,
+              ),
+            ),
           );
           expect(manager.folderComics('Network'), 1);
           expect(manager.isExist('network-one', ComicType.local), isTrue);
@@ -1496,13 +1676,6 @@ void main() {
           appdata.settings['followUpdatesFolder'];
       final previousQuickFavorite = appdata.settings['quickFavorite'];
       addTearDown(() async {
-        await LocalFavoritesManager().debugWaitForHashedIdsRefresh();
-        try {
-          LocalFavoritesManager().close();
-        } catch (_) {
-          // ignore cleanup failures in partially initialized tests
-        }
-        LocalFavoritesManager.cache = null;
         appdata.settings['followUpdatesFolder'] = previousFollowUpdatesFolder;
         appdata.settings['quickFavorite'] = previousQuickFavorite;
         if (dataDir.existsSync()) {
@@ -1515,11 +1688,11 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      LocalFavoritesManager.cache = null;
+
       appdata.settings['followUpdatesFolder'] = 'obsolete-folder';
       appdata.settings['quickFavorite'] = 'obsolete-folder';
 
-      final manager = LocalFavoritesManager();
+      final manager = _ownedFavorites();
       await manager.init();
 
       expect(
@@ -1566,13 +1739,6 @@ void main() {
           appdata.settings['followUpdatesFolder'];
       final previousQuickFavorite = appdata.settings['quickFavorite'];
       addTearDown(() async {
-        await LocalFavoritesManager().debugWaitForHashedIdsRefresh();
-        try {
-          LocalFavoritesManager().close();
-        } catch (_) {
-          // ignore cleanup failures in partially initialized tests
-        }
-        LocalFavoritesManager.cache = null;
         appdata.settings['followUpdatesFolder'] = previousFollowUpdatesFolder;
         appdata.settings['quickFavorite'] = previousQuickFavorite;
         if (dataDir.existsSync()) {
@@ -1585,7 +1751,7 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      LocalFavoritesManager.cache = null;
+
       appdata.settings['followUpdatesFolder'] = null;
       appdata.settings['quickFavorite'] = 'custom';
 
@@ -1622,7 +1788,7 @@ void main() {
         seed.dispose();
       }
 
-      final manager = LocalFavoritesManager();
+      final manager = _ownedFavorites();
       await manager.init();
 
       expect(appdata.settings['followUpdatesFolder'], isNull);
@@ -1649,15 +1815,8 @@ void main() {
       final previousQuickFavorite = appdata.settings['quickFavorite'];
       addTearDown(() async {
         await appdata.saveData(false);
-        if (LocalFavoritesManager.cache != null) {
-          await LocalFavoritesManager().debugWaitForHashedIdsRefresh();
-          try {
-            LocalFavoritesManager().close();
-          } catch (_) {
-            // ignore cleanup failures in partially initialized tests
-          }
-        }
-        LocalFavoritesManager.cache = null;
+        if (LocalFavoritesManager.cache != null) {}
+
         appdata.settings['followUpdatesFolder'] = previousFollowUpdatesFolder;
         appdata.settings['quickFavorite'] = previousQuickFavorite;
         if (dataDir.existsSync()) {
@@ -1670,18 +1829,16 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      LocalFavoritesManager.cache = null;
 
-      final firstManager = LocalFavoritesManager();
+      final firstManager = _ownedFavorites();
       await firstManager.init();
       await firstManager.createFolder('B');
       appdata.settings['followUpdatesFolder'] = 'B';
       await firstManager.prepareTableForFollowUpdates('B');
       await firstManager.deleteFolder(LocalFavoritesManager.trackingFolderName);
       firstManager.close();
-      LocalFavoritesManager.cache = null;
 
-      final secondManager = LocalFavoritesManager();
+      final secondManager = _ownedFavorites();
       await secondManager.init();
 
       expect(secondManager.folderNames, ['B']);
@@ -1702,13 +1859,6 @@ void main() {
       final previousFollowUpdatesFolder =
           appdata.settings['followUpdatesFolder'];
       addTearDown(() async {
-        await LocalFavoritesManager().debugWaitForHashedIdsRefresh();
-        try {
-          LocalFavoritesManager().close();
-        } catch (_) {
-          // ignore cleanup failures in partially initialized tests
-        }
-        LocalFavoritesManager.cache = null;
         appdata.settings['followUpdatesFolder'] = previousFollowUpdatesFolder;
         if (dataDir.existsSync()) {
           dataDir.deleteSync(recursive: true);
@@ -1720,9 +1870,8 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      LocalFavoritesManager.cache = null;
 
-      final manager = LocalFavoritesManager();
+      final manager = _ownedFavorites();
       await manager.init();
       const folder = LocalFavoritesManager.trackingFolderName;
       final item = _favorite('updated-comic');
@@ -1756,7 +1905,7 @@ void main() {
           '2026-07-02',
         );
 
-        final preview = getFollowUpdatesPreviewComics(folder);
+        final preview = getFollowUpdatesPreviewComics(folder, manager: manager);
 
         expect(
           preview.map((comic) => comic.id),
@@ -1864,13 +2013,6 @@ void main() {
         'venera-favorites-cache-',
       );
       addTearDown(() async {
-        await LocalFavoritesManager().debugWaitForHashedIdsRefresh();
-        try {
-          LocalFavoritesManager().close();
-        } catch (_) {
-          // ignore cleanup failures in partially initialized tests
-        }
-        LocalFavoritesManager.cache = null;
         if (dataDir.existsSync()) {
           dataDir.deleteSync(recursive: true);
         }
@@ -1881,9 +2023,8 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      LocalFavoritesManager.cache = null;
 
-      final manager = LocalFavoritesManager();
+      final manager = _ownedFavorites();
       await manager.init();
       await manager.createFolder('source');
       await manager.createFolder('target');
@@ -1918,13 +2059,6 @@ void main() {
         'venera-favorites-cache-',
       );
       addTearDown(() async {
-        await LocalFavoritesManager().debugWaitForHashedIdsRefresh();
-        try {
-          LocalFavoritesManager().close();
-        } catch (_) {
-          // ignore cleanup failures in partially initialized tests
-        }
-        LocalFavoritesManager.cache = null;
         if (dataDir.existsSync()) {
           dataDir.deleteSync(recursive: true);
         }
@@ -1935,9 +2069,8 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      LocalFavoritesManager.cache = null;
 
-      final manager = LocalFavoritesManager();
+      final manager = _ownedFavorites();
       await manager.init();
       await manager.createFolder('source');
       await manager.createFolder('target');

@@ -1,3 +1,4 @@
+import 'package:venera_next/features/history/history_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:venera_next/components/appbar.dart';
@@ -19,15 +20,20 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 class ImageFavoritesPage extends StatefulWidget {
-  const ImageFavoritesPage({super.key, this.initialKeyword});
+  const ImageFavoritesPage({this.manager, super.key, this.initialKeyword});
 
   final String? initialKeyword;
+
+  final ImageFavoriteManager? manager;
 
   @override
   State<ImageFavoritesPage> createState() => _ImageFavoritesPageState();
 }
 
 class _ImageFavoritesPageState extends State<ImageFavoritesPage> {
+  late ImageFavoriteManager _manager =
+      widget.manager ?? HistoryScope.readImages(context);
+
   late ImageFavoriteSortType sortType;
   late TimeRange timeFilterSelect;
   late int numFilterSelect;
@@ -68,9 +74,7 @@ class _ImageFavoritesPageState extends State<ImageFavoritesPage> {
       _loadError = null;
     });
     try {
-      final result = await ImageFavoriteManager().getAll(
-        searchMode ? keyword : null,
-      );
+      final result = await _manager.getAll(searchMode ? keyword : null);
       if (!mounted || generation != _refreshGeneration) return;
       setState(() {
         _loadedComics = result;
@@ -89,21 +93,23 @@ class _ImageFavoritesPageState extends State<ImageFavoritesPage> {
 
   Future<void> deleteSelected() async {
     if (_deleting || selectedImageFavorites.isEmpty) return;
+    final owner = _manager;
+    bool current() => mounted && identical(owner, _manager);
     setState(() => _deleting = true);
     try {
-      await ImageFavoriteManager().deleteImageFavorite(
-        selectedImageFavorites.keys,
-      );
-      if (!mounted) return;
+      await owner.deleteImageFavorite(selectedImageFavorites.keys);
+      if (!current()) return;
       setState(() {
         multiSelectMode = false;
         selectedImageFavorites.clear();
       });
     } catch (error, stack) {
       Log.error('Image Favorites', error, stack);
-      if (mounted) context.showMessage(message: 'Error'.tl);
+      if (mounted && identical(owner, _manager)) {
+        context.showMessage(message: 'Error'.tl);
+      }
     } finally {
-      if (mounted) setState(() => _deleting = false);
+      if (current()) setState(() => _deleting = false);
     }
   }
 
@@ -156,13 +162,29 @@ class _ImageFavoritesPageState extends State<ImageFavoritesPage> {
         appdata.implicitData["image_favorites_number_filter"] ??
         numFilterList[0];
     updateImageFavorites();
-    ImageFavoriteManager().addListener(updateImageFavorites);
+    _manager.addListener(updateImageFavorites);
     super.initState();
   }
 
   @override
+  void didUpdateWidget(ImageFavoritesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.manager ?? HistoryScope.readImages(context);
+    if (identical(next, _manager)) return;
+    _manager.removeListener(updateImageFavorites);
+    _manager = next;
+    _deleting = false;
+    multiSelectMode = false;
+    selectedImageFavorites.clear();
+    _loadedComics = [];
+    comics = [];
+    _manager.addListener(updateImageFavorites);
+    updateImageFavorites();
+  }
+
+  @override
   void dispose() {
-    ImageFavoriteManager().removeListener(updateImageFavorites);
+    _manager.removeListener(updateImageFavorites);
     scrollController.dispose();
     controller.dispose();
     super.dispose();
@@ -328,6 +350,7 @@ class _ImageFavoritesPageState extends State<ImageFavoritesPage> {
         SliverList(
           delegate: SliverChildBuilderDelegate((context, index) {
             return ImageFavoritesItem(
+              manager: _manager,
               imageFavoritesComic: comics[index],
               selectedImageFavorites: selectedImageFavorites,
               addSelected: addSelected,

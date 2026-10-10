@@ -787,8 +787,8 @@ void main() {
             },
           ),
         );
-        final result = await SourceRepositories.forTesting(
-          dio,
+        final result = await SourceRepositories(
+          client: dio,
         ).checkUpdates([_source('a'), _source('b')]);
         expect(result.skipped, 2);
         expect(result.failures, hasLength(2));

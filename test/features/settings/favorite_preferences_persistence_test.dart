@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -47,8 +48,8 @@ void main() {
     previous = appdata.captureImportCheckpoint();
     root = Directory.systemTemp.createTempSync('favorite-preferences-');
     App.dataPath = App.cachePath = root.path;
-    LocalFavoritesManager.cache = null;
-    manager = LocalFavoritesManager();
+    _favoritesOwner = null;
+    manager = _favoritesForView();
     await manager.init();
     appdata.settings['extension'] = {
       'keep': [1, 'x'],
@@ -57,7 +58,7 @@ void main() {
   });
   tearDown(() async {
     await manager.closeAndWait();
-    LocalFavoritesManager.cache = null;
+    _favoritesOwner = null;
     await appdata.restoreImportCheckpoint(previous, persist: false);
     App.dataPath = previousPath;
     App.cachePath = previousCache;
@@ -70,15 +71,17 @@ void main() {
     double scale = 1,
   }) async {
     await tester.pumpWidget(
-      MaterialApp(
-        theme: dark ? ThemeData.dark() : ThemeData.light(),
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: TextScaler.linear(scale)),
-          child: child!,
+      _libraryView(
+        MaterialApp(
+          theme: dark ? ThemeData.dark() : ThemeData.light(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: const Scaffold(body: LocalFavoritesSettings()),
         ),
-        home: const Scaffold(body: LocalFavoritesSettings()),
       ),
     );
     await tester.pumpAndSettle();
@@ -226,4 +229,11 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
+}
+
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+Widget _libraryView(Widget child) {
+  return FavoritesScope(manager: _favoritesForView(), child: child);
 }

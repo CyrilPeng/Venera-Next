@@ -8,6 +8,7 @@ CoreBootstrap bootstrap({
   Future<void> Function()? environment,
   Future<void> Function()? stores,
   Future<void> Function()? finish,
+  FutureOr<void> Function()? releaseOwnership,
 }) => CoreBootstrap(
   environment: environment ?? () async {},
   settings: () async {},
@@ -16,9 +17,71 @@ CoreBootstrap bootstrap({
   stores: stores ?? () async {},
   finish: finish ?? () async {},
   failureCleanup: cleanup,
+  releaseOwnership: releaseOwnership,
 );
 
 void main() {
+  test(
+    'R2 directory ownership remains held until every store actually closes',
+    () async {
+      final gate = Completer<void>();
+      var released = false;
+      final core = bootstrap(
+        cleanup: [(name: 'store', close: () => gate.future)],
+        releaseOwnership: () => released = true,
+      );
+      await core.start();
+      final closing = core.close();
+      await pumpEventQueue();
+      expect(released, isFalse);
+      gate.complete();
+      await closing;
+      expect(released, isTrue);
+    },
+  );
+
+  for (final duringStartup in [false, true]) {
+    test(
+      'R2 failed store cleanup retains directory ownership (startup=$duringStartup)',
+      () async {
+        var released = false;
+        final core = bootstrap(
+          cleanup: [
+            (name: 'store', close: () => throw StateError('store close')),
+          ],
+          finish: () async {
+            if (duringStartup) throw StateError('startup failed');
+          },
+          releaseOwnership: () => released = true,
+        );
+        if (duringStartup) {
+          await expectLater(
+            core.start(),
+            throwsA(isA<CoreStartupRollbackFailure>()),
+          );
+        } else {
+          await core.start();
+          await expectLater(core.close(), throwsA(isA<CoreShutdownFailure>()));
+        }
+        expect(released, isFalse);
+      },
+    );
+  }
+
+  test(
+    'R2 successful startup rollback releases directory ownership once',
+    () async {
+      var releases = 0;
+      final core = bootstrap(
+        finish: () async => throw StateError('startup failed'),
+        releaseOwnership: () => releases++,
+      );
+      await expectLater(core.start(), throwsStateError);
+      await core.close();
+      expect(releases, 1);
+    },
+  );
+
   test(
     'closing before startup acquires nothing and prevents startup',
     () async {

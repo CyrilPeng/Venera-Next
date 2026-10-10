@@ -1,3 +1,4 @@
+import 'package:venera_next/features/history/history_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/scroll.dart';
@@ -6,22 +7,27 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 class ReadingStatsPage extends StatefulWidget {
-  const ReadingStatsPage({super.key});
+  const ReadingStatsPage({super.key, this.manager});
+
+  final HistoryManager? manager;
 
   @override
   State<ReadingStatsPage> createState() => _ReadingStatsPageState();
 }
 
 class _ReadingStatsPageState extends State<ReadingStatsPage> {
+  late final HistoryManager _manager =
+      widget.manager ?? HistoryScope.read(context);
+
   @override
   void initState() {
     super.initState();
-    HistoryManager().addListener(_onHistoryChanged);
+    _manager.addListener(_onHistoryChanged);
   }
 
   @override
   void dispose() {
-    HistoryManager().removeListener(_onHistoryChanged);
+    _manager.removeListener(_onHistoryChanged);
     super.dispose();
   }
 
@@ -31,7 +37,7 @@ class _ReadingStatsPageState extends State<ReadingStatsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final manager = HistoryManager();
+    final manager = _manager;
     final histories = manager.getAllByReadDuration();
     final totalDuration = Duration(
       milliseconds: manager.getTotalReadDurationMs(),

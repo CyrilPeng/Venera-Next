@@ -2,9 +2,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/res.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/comic_type.dart';
-import 'package:venera_next/features/local_comics/local_comics.dart';
+import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/image_provider/base_image_provider.dart';
 import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/image_stream.dart';
@@ -12,14 +12,16 @@ import 'package:venera_next/network/request_scope.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/features/history/image_favorites_models.dart';
 import 'image_favorites_cache.dart';
-import 'image_favorites_provider.dart' as image_provider;
 
-class ImageFavoritesProvider
-    extends BaseImageProvider<image_provider.ImageFavoritesProvider> {
+class ImageFavoritesProvider extends BaseImageProvider<ImageFavoritesProvider> {
   /// Image provider for imageFavorites
-  const ImageFavoritesProvider(this.imageFavorite);
+  const ImageFavoritesProvider(
+    this.imageFavorite, {
+    ComicImageLoader loadImage = ImageDownloader.loadComicImage,
+  }) : _loadImage = loadImage;
 
   final ImageFavorite imageFavorite;
+  final ComicImageLoader _loadImage;
 
   int get page => imageFavorite.page;
 
@@ -236,12 +238,7 @@ class ImageFavoritesProvider
   @protected
   Stream<ImageDownloadProgress> loadComicImage(String imageKey) {
     final context = Zone.current[_readContextKey] as _FavoriteReadContext?;
-    return ImageDownloader.loadComicImage(
-      imageKey,
-      sourceKey,
-      cid,
-      context?.imageChapterId ?? eid,
-    );
+    return _loadImage(imageKey, sourceKey, cid, context?.imageChapterId ?? eid);
   }
 
   Future<String> getImageKey() async {

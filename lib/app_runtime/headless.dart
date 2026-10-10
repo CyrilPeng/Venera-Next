@@ -11,6 +11,7 @@ import 'package:venera_next/features/favorites/favorites_api.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 
 import 'bootstrap_core.dart';
+import 'core_bootstrap.dart';
 import 'data_sync.dart';
 import 'headless_arguments.dart';
 import 'headless_bindings.dart';
@@ -106,10 +107,21 @@ Future<void> runHeadlessMode(List<String> args) async {
     });
   } finally {
     final closed = await finishHeadlessRuntime(
-      closeCore: () async {
-        await sourceUpdates?.closeAndWait();
-        await core.close();
+      prepareCore: () async {
+        final failures = <({String store, Object error, StackTrace stack})>[];
+        for (final resource in <CoreStartupCleanup>[
+          (name: 'source updates', close: () => sourceUpdates?.closeAndWait()),
+          (name: 'core producers', close: core.prepareForClose),
+        ]) {
+          try {
+            await resource.close();
+          } catch (error, stack) {
+            failures.add((store: resource.name, error: error, stack: stack));
+          }
+        }
+        if (failures.isNotEmpty) throw CoreShutdownFailure(failures);
       },
+      closeCore: core.close,
       disposeBindings: () {
         sync.dispose();
         configureComicSourceDataSavedHandler(null);

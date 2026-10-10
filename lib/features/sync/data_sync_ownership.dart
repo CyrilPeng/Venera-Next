@@ -18,13 +18,25 @@ class SqliteDataSyncOwnership implements DataSyncOwnership {
   SqliteDataSyncOwnership(
     this.dataPath, {
     Database Function(String)? openDatabase,
-  }) : _openDatabase = openDatabase ?? sqlite3.open;
+  }) : _openDatabase = openDatabase ?? sqlite3.open,
+       _fileName = fileName;
+
+  /// The core holds a distinct lease from startup recovery through final store
+  /// closure. This also covers headless work that never starts a sync service.
+  /// A second process cannot keep stale live handles across data replacement.
+  SqliteDataSyncOwnership.applicationData(
+    this.dataPath, {
+    Database Function(String)? openDatabase,
+  }) : _openDatabase = openDatabase ?? sqlite3.open,
+       _fileName = applicationDataFileName;
 
   static const fileName = '.data-sync-owner.sqlite';
+  static const applicationDataFileName = '.app-data-owner.sqlite';
   static const _schema =
       'CREATE TABLE sync_owner (id INTEGER PRIMARY KEY CHECK(id = 1))';
   final String Function() dataPath;
   final Database Function(String) _openDatabase;
+  final String _fileName;
   Database? _database;
   String? _root;
   bool _acquired = false;
@@ -45,7 +57,7 @@ class SqliteDataSyncOwnership implements DataSyncOwnership {
     // A failed acquisition may itself have failed to close. Retry that exact
     // connection before opening another one; never abandon an owned handle.
     _closeConnection();
-    final path = p.join(root, fileName);
+    final path = p.join(root, _fileName);
     for (final suffix in ['', '-journal', '-wal', '-shm']) {
       final type = FileSystemEntity.typeSync(path + suffix, followLinks: false);
       if (type != FileSystemEntityType.notFound &&

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/network/images.dart';
+import 'package:venera_next/network/shared_image_requests.dart';
 
 class _FakeJSInvokable extends JSInvokable {
   _FakeJSInvokable(this.callback);
@@ -24,10 +25,9 @@ class _FakeJSInvokable extends JSInvokable {
 }
 
 void main() {
-  tearDown(() {
-    ImageDownloader.debugLoadComicImageUnwrapped = null;
-    ImageDownloader.debugResetSourceImageLoading();
-    ImageDownloader.cancelAllLoadingImages();
+  tearDown(() async {
+    ImageDownloader.configureSourceImageLoading();
+    await ImageDownloader.cancelAllLoadingImages();
   });
 
   test('loadComicImage stops retrying when retry budget is exhausted', () {
@@ -172,7 +172,7 @@ void main() {
   });
 
   test(
-    'loadComicImage cancels source stream after last listener cancels',
+    'shared image owner cancels source after last listener cancels',
     () async {
       final sourceCanceled = Completer<void>();
       final source = StreamController<ImageDownloadProgress>(
@@ -188,15 +188,12 @@ void main() {
         }
       });
 
-      ImageDownloader.debugLoadComicImageUnwrapped =
-          (imageKey, sourceKey, cid, eid) => source.stream;
+      final requests = SharedImageRequests<ImageDownloadProgress>();
+      addTearDown(requests.cancelAll);
 
-      final subscription = ImageDownloader.loadComicImage(
-        'image-1',
-        'source',
-        'comic',
-        'chapter',
-      ).listen((_) {});
+      final subscription = requests
+          .open((_) => source.stream, key: 'image-1')
+          .listen((_) {});
       await pumpEventQueue();
 
       await subscription.cancel();
@@ -206,7 +203,7 @@ void main() {
   );
 
   test(
-    'loadComicImage recreates stream immediately after listener cancels',
+    'shared image owner recreates stream before old cancellation drains',
     () async {
       final firstCancelGate = Completer<void>();
       final firstCanceled = Completer<void>();
@@ -232,30 +229,25 @@ void main() {
       });
 
       var loadCount = 0;
-      ImageDownloader.debugLoadComicImageUnwrapped =
-          (imageKey, sourceKey, cid, eid) {
-            loadCount++;
-            return loadCount == 1 ? firstSource.stream : secondSource.stream;
-          };
+      final requests = SharedImageRequests<ImageDownloadProgress>();
+      addTearDown(requests.cancelAll);
+      Stream<ImageDownloadProgress> load() {
+        loadCount++;
+        return loadCount == 1 ? firstSource.stream : secondSource.stream;
+      }
 
-      final firstSubscription = ImageDownloader.loadComicImage(
-        'image-reload',
-        'source',
-        'comic',
-        'chapter',
-      ).listen((_) {});
+      final firstSubscription = requests
+          .open((_) => load(), key: 'image-reload')
+          .listen((_) {});
       await pumpEventQueue();
 
       final firstCancel = firstSubscription.cancel();
       await firstCanceled.future.timeout(const Duration(seconds: 1));
 
       final events = <ImageDownloadProgress>[];
-      final secondSubscription = ImageDownloader.loadComicImage(
-        'image-reload',
-        'source',
-        'comic',
-        'chapter',
-      ).listen(events.add);
+      final secondSubscription = requests
+          .open((_) => load(), key: 'image-reload')
+          .listen(events.add);
       await pumpEventQueue();
 
       expect(loadCount, 2);
@@ -277,7 +269,7 @@ void main() {
     },
   );
 
-  test('cancelAllLoadingImages cancels active source streams', () async {
+  test('shared image owner cancels all active source streams', () async {
     final sourceCanceled = Completer<void>();
     final source = StreamController<ImageDownloadProgress>(
       onCancel: () {
@@ -292,18 +284,15 @@ void main() {
       }
     });
 
-    ImageDownloader.debugLoadComicImageUnwrapped =
-        (imageKey, sourceKey, cid, eid) => source.stream;
+    final requests = SharedImageRequests<ImageDownloadProgress>();
+    addTearDown(requests.cancelAll);
 
-    final subscription = ImageDownloader.loadComicImage(
-      'image-2',
-      'source',
-      'comic',
-      'chapter',
-    ).listen((_) {});
+    final subscription = requests
+        .open((_) => source.stream, key: 'image-2')
+        .listen((_) {});
     await pumpEventQueue();
 
-    ImageDownloader.cancelAllLoadingImages();
+    await requests.cancelAll();
 
     await sourceCanceled.future.timeout(const Duration(seconds: 1));
     await subscription.cancel();

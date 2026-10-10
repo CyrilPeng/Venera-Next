@@ -1,3 +1,4 @@
+import 'package:venera_next/features/history/image_favorites.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -5,8 +6,9 @@ import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/image.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
+import 'package:venera_next/features/history/history_api.dart';
+import 'package:venera_next/features/history/image_favorites_provider.dart';
 import 'package:venera_next/features/image_favorites/image_favorites_gallery_page.dart';
 import 'package:venera_next/features/image_favorites/image_favorites_photo_view.dart';
 import 'package:venera_next/features/reader/reader.dart';
@@ -19,6 +21,7 @@ import 'package:venera_next/foundation/widget_utils.dart';
 
 class ImageFavoritesItem extends StatefulWidget {
   const ImageFavoritesItem({
+    this.manager,
     super.key,
     required this.imageFavoritesComic,
     required this.selectedImageFavorites,
@@ -30,6 +33,8 @@ class ImageFavoritesItem extends StatefulWidget {
   final Function(ImageFavorite) addSelected;
   final Map<ImageFavorite, bool> selectedImageFavorites;
   final bool multiSelectMode;
+
+  final ImageFavoriteManager? manager;
 
   @override
   State<ImageFavoritesItem> createState() => _ImageFavoritesItemState();
@@ -62,6 +67,7 @@ class _ImageFavoritesItemState extends State<ImageFavoritesItem>
     Navigator.of(appNavigation.rootContext).push(
       MaterialPageRoute(
         builder: (context) => ImageFavoritesPhotoView(
+          manager: widget.manager,
           comic: widget.imageFavoritesComic,
           imageFavorite: imageFavorite,
         ),
@@ -126,7 +132,10 @@ class _ImageFavoritesItemState extends State<ImageFavoritesItem>
         text: 'Gallery View'.tl,
         onClick: () {
           appNavigation.mainNavigatorKey?.currentContext?.to(
-            () => ImageFavoritesGalleryPage(comic: widget.imageFavoritesComic),
+            () => ImageFavoritesGalleryPage(
+              manager: widget.manager,
+              comic: widget.imageFavoritesComic,
+            ),
           );
         },
       ),
@@ -259,8 +268,10 @@ class _ImageFavoritesItemState extends State<ImageFavoritesItem>
           constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           onPressed: () {
             appNavigation.mainNavigatorKey?.currentContext?.to(
-              () =>
-                  ImageFavoritesGalleryPage(comic: widget.imageFavoritesComic),
+              () => ImageFavoritesGalleryPage(
+                manager: widget.manager,
+                comic: widget.imageFavoritesComic,
+              ),
             );
           },
         ),

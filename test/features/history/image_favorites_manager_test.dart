@@ -18,10 +18,8 @@ void main() {
       final root = Directory.systemTemp.createTempSync('image-favorites-');
       final previousData = App.dataPath;
       final previousCache = App.cachePath;
-      final previousManager = HistoryManager.cache;
       final history = HistoryManager.create();
-      HistoryManager.cache = history;
-      final manager = ImageFavoriteManager();
+      final manager = ImageFavoriteManager.create(history: history);
       var notifications = 0;
       Future<List<ImageFavoritesComic>>? observed;
       void changed() {
@@ -62,7 +60,8 @@ void main() {
         manager.removeListener(changed);
         await history.waitForAsyncWrites();
         if (history.isInitialized) history.close();
-        HistoryManager.cache = previousManager;
+        manager.dispose();
+        history.dispose();
         App.dataPath = previousData;
         App.cachePath = previousCache;
         root.deleteSync(recursive: true);

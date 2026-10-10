@@ -1,10 +1,33 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/features/local_comics/local_storage_guard.dart';
 import 'package:venera_next/features/local_comics/local_import_lifecycle.dart';
 
 void main() {
+  test(
+    'R2 unowned synchronous local writes cannot bypass an application snapshot',
+    () async {
+      final guard = LocalComicStorageGuard();
+      final release = Completer<void>();
+      final snapshot = AppDataOperations.instance.run(() => release.future);
+      var wrote = false;
+      try {
+        expect(
+          () => guard.write(() => wrote = true),
+          throwsA(isA<AppDataBusyException>()),
+        );
+        expect(wrote, isFalse);
+      } finally {
+        release.complete();
+        await snapshot;
+      }
+      guard.write(() => wrote = true);
+      expect(wrote, isTrue);
+    },
+  );
+
   test(
     'exit drains accepted waiters and rejects newcomers until owned release',
     () async {

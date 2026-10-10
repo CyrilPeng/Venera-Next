@@ -43,7 +43,7 @@ class SourceFavoritesParser {
         }
         return res;
       } catch (error, stack) {
-        return Res.fromException(error, stack);
+        return context.failureResult(error, stack);
       }
     }
 
@@ -62,7 +62,7 @@ class SourceFavoritesParser {
           return const Res(true);
         } catch (e, s) {
           Log.error("Network", "$e\n$s");
-          return Res<bool>.fromException(e, s);
+          return context.failureResult<bool>(e, s);
         }
       }
 
@@ -77,14 +77,13 @@ class SourceFavoritesParser {
       loadComic = (int page, [String? folder]) async {
         Future<Res<List<Comic>>> func() async {
           try {
-            var res = await context.runReadCode("""
+            return await context.runReadCodeToCompletion<Res<List<Comic>>>("""
             ${context.sourceExpression}.favorites.loadComics(
               ${jsonEncode(page)}, ${jsonEncode(folder)})
-          """);
-            return context.parseComicListResult(res, "maxPage");
+          """, consume: (res) => context.parseComicListResult(res, 'maxPage'));
           } catch (e, s) {
             Log.error("Network", "$e\n$s");
-            return Res.fromException(e, s);
+            return context.failureResult(e, s);
           }
         }
 
@@ -96,14 +95,13 @@ class SourceFavoritesParser {
       loadNext = (String? next, [String? folder]) async {
         Future<Res<List<Comic>>> func() async {
           try {
-            var res = await context.runReadCode("""
+            return await context.runReadCodeToCompletion<Res<List<Comic>>>("""
             ${context.sourceExpression}.favorites.loadNext(
               ${jsonEncode(next)}, ${jsonEncode(folder)})
-          """);
-            return context.parseComicListResult(res, "next");
+          """, consume: (res) => context.parseComicListResult(res, 'next'));
           } catch (e, s) {
             Log.error("Network", "$e\n$s");
-            return Res.fromException(e, s);
+            return context.failureResult(e, s);
           }
         }
 
@@ -121,17 +119,25 @@ class SourceFavoritesParser {
       loadFolders = ([String? comicId]) async {
         Future<Res<Map<String, String>>> func() async {
           try {
-            var res = await context.runReadCode("""
+            return await context
+                .runReadCodeToCompletion<Res<Map<String, String>>>(
+                  """
             ${context.sourceExpression}.favorites.loadFolders(${jsonEncode(comicId)})
-          """);
-            List<String>? subData;
-            if (res["favorited"] != null) {
-              subData = List.from(res["favorited"]);
-            }
-            return Res(Map.from(res["folders"]), subData: subData);
+          """,
+                  consume: (res) {
+                    List<String>? subData;
+                    if (res["favorited"] != null) {
+                      subData = List<String>.from(res["favorited"]);
+                    }
+                    return Res(
+                      Map<String, String>.from(res["folders"]),
+                      subData: subData,
+                    );
+                  },
+                );
           } catch (e, s) {
             Log.error("Network", "$e\n$s");
-            return Res.fromException(e, s);
+            return context.failureResult(e, s);
           }
         }
 
@@ -146,7 +152,7 @@ class SourceFavoritesParser {
             return const Res(true);
           } catch (e, s) {
             Log.error("Network", "$e\n$s");
-            return Res.fromException(e, s);
+            return context.failureResult(e, s);
           }
         };
       }
@@ -159,7 +165,7 @@ class SourceFavoritesParser {
             return const Res(true);
           } catch (e, s) {
             Log.error("Network", "$e\n$s");
-            return Res.fromException(e, s);
+            return context.failureResult(e, s);
           }
         };
       }

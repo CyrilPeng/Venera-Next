@@ -17,6 +17,99 @@ SPEC.loader.exec_module(MODULE)
 
 
 class ArchitectureDependenciesTest(unittest.TestCase):
+    def test_retired_global_dependencies_cannot_return_in_new_adapters(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lib = Path(directory)
+            source = lib / 'adapter.dart'
+            for code in (
+                'bool debugSkipComicSourceInit = false;',
+                'void resetForTesting() {}',
+                'static ImageLoader? debugLoadComicImageUnwrapped;',
+                'void debugResetSourceImageLoading() {}',
+                'Dio Function()? debugCreateDio;',
+                'factory LocalManager.forTesting() => manager;',
+                'SourceRepositories.forTesting({Dio? client});',
+                'static void resetOps() {}',
+                'static HistoryManager? cache;',
+                'static LocalFavoritesManager? cache = manager;',
+                'HistoryManager.cache = next;',
+                'LocalFavoritesManager . cache = next;',
+                'static set cache(HistoryManager? next) {}',
+            ):
+                with self.subTest(code=code):
+                    source.write_text(code, encoding='utf-8')
+                    self.assertEqual(MODULE.retired_dependency_violations(lib), [
+                        'Retired global dependency hook: adapter.dart'])
+
+    def test_backup_dependencies_are_instance_owned(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lib = Path(directory)
+            source = lib / 'features/sync/comic_backup.dart'
+            source.parent.mkdir(parents=True)
+            for code in (
+                'static ComicBackupWebDavOps ops = WebDavComicBackupOps();',
+                'static Future<void> Function(LocalComic, String)?\nexportComic;',
+                'static Future<LocalComic> Function(String)? importComic;',
+                'static Future<void> Function(LocalComic)? registerImportedComic;',
+            ):
+                with self.subTest(code=code):
+                    source.write_text(code, encoding='utf-8')
+                    self.assertEqual(MODULE.retired_dependency_violations(lib), [
+                        'Retired global dependency hook: features/sync/comic_backup.dart'])
+            source.write_text('''
+                static final instance = ComicBackupManager();
+                final Future<void> Function(LocalComic, String) exportComic;
+                ComicBackupManager({required this.exportComic});
+            ''', encoding='utf-8')
+            self.assertEqual(MODULE.retired_dependency_violations(lib), [])
+
+    def test_retirement_gate_keeps_diagnostics_injection_and_examples(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lib = Path(directory)
+            (lib / 'owner.dart').write_text('''
+                // resetForTesting was retired.
+                const example = "SourceRepositories.forTesting()";
+                factory LocalManager.independent({required Database db});
+                int get debugActiveLoadCount => active.length;
+                String validateForTesting(String input) => validate(input);
+                static HistoryManager? get cache => _cache;
+                final sameStore = HistoryManager.cache == manager;
+            ''', encoding='utf-8')
+            self.assertEqual(MODULE.retired_dependency_violations(lib), [])
+
+    def test_command_rejects_retired_hook_with_valid_dependency_inventory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'lib').mkdir()
+            (root / 'lib/owner.dart').write_text(
+                'void resetForTesting() {}', encoding='utf-8')
+            baseline = root / 'baseline.json'
+            baseline.write_text(json.dumps(self.classified(business=['owner.dart'])),
+                                encoding='utf-8')
+            output = io.StringIO()
+            with patch.multiple(MODULE, ROOT=root, BASELINE=baseline), \
+                    patch('sys.argv', ['check_architecture_dependencies.py']), \
+                    contextlib.redirect_stdout(output):
+                self.assertTrue(MODULE.main())
+            self.assertIn('Retired global dependency hook: owner.dart', output.getvalue())
+
+    def test_image_processing_and_webview_consumers_keep_typed_preferences(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lib = Path(directory)
+            for name, keys in {
+                'foundation/image_provider/reader_image.dart': ['enableCustomImageProcessing', 'customImageProcessing'],
+                'features/settings/reader.dart': ['enableCustomImageProcessing', 'customImageProcessing'],
+                'routing/webview.dart': ['proxy'],
+            }.items():
+                source = lib / name
+                source.parent.mkdir(parents=True, exist_ok=True)
+                for key in keys:
+                    source.write_text(f"final value = appdata.settings['{key}'];", encoding='utf-8')
+                    self.assertEqual(MODULE.application_settings_violations(lib), [
+                        f'Use typed application preferences: {name} ({key})'])
+                source.write_text('final value = store.read(preference);', encoding='utf-8')
+                self.assertEqual(MODULE.application_settings_violations(lib), [])
+
     def test_discovery_consumers_cannot_restore_literal_setting_reads(self):
         with tempfile.TemporaryDirectory() as directory:
             lib = Path(directory)

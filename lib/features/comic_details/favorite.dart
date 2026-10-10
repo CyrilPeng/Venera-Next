@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:math' as math;
@@ -7,7 +8,7 @@ import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:shimmer_animation/shimmer_animation.dart';
 import 'package:venera_next/components/appbar.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -60,8 +61,8 @@ class _FavoritePanelState extends State<ComicFavoritePanel>
   @override
   void initState() {
     comicSource = widget.type.comicSource!;
-    localFolders = LocalFavoritesManager().folderNames;
-    added = LocalFavoritesManager().find(widget.cid, widget.type);
+    localFolders = FavoritesScope.read(context).folderNames;
+    added = FavoritesScope.read(context).find(widget.cid, widget.type);
     hasNetwork = comicSource.favoriteData != null && comicSource.isLogged;
     super.initState();
   }
@@ -508,7 +509,7 @@ class _LocalSectionState extends State<_LocalSection> {
     bool sameTarget() => widget.cid == target.cid && widget.type == target.type;
     final owner = context;
     final route = ModalRoute.of(owner);
-    final manager = LocalFavoritesManager();
+    final manager = FavoritesScope.read(context);
     final generation = manager.connectionGeneration;
     setState(() => saving = true);
     try {

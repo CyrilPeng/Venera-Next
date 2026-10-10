@@ -26,9 +26,8 @@ void main() {
   });
 
   tearDown(() {
-    ImageDownloader.debugLoadComicImageUnwrapped = null;
     ComicSourceManager().remove(sourceKey);
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
   });
 
   test(
@@ -129,7 +128,7 @@ void main() {
       final root = Directory.systemTemp.createTempSync('restored-owner-');
       final firstPath = Directory('${root.path}/first')..createSync();
       final secondPath = Directory('${root.path}/second')..createSync();
-      LocalManager create() => LocalManager.forTesting(
+      LocalManager create() => LocalManager.independent(
         openDatabase: sqlite3.open,
         initializeSources: () async {},
       );
@@ -178,7 +177,7 @@ void main() {
         );
         App.dataPath = root.path;
         App.cachePath = root.path;
-        LocalManager.debugSkipComicSourceInit = true;
+        LocalManager(initializeSources: () async {});
         final manager = LocalManager();
         await manager.init();
         final allocated = Completer<DownloadDirectoryAllocation>();
@@ -215,7 +214,7 @@ void main() {
           if (!thumbnailStarted.isCompleted) thumbnail.stream.listen((_) {});
           await thumbnail.close();
           await manager.pendingDownloadTaskWrites;
-          LocalManager.resetForTesting();
+          LocalManager.current?.dispose();
           root.deleteSync(recursive: true);
         });
         task.resume();
@@ -262,12 +261,12 @@ void main() {
       );
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       addTearDown(() async {
         await manager.pendingDownloadTaskWrites;
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       for (final restored in [false, true]) {
@@ -319,7 +318,7 @@ void main() {
       );
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       final source = _testSource(
@@ -346,7 +345,7 @@ void main() {
         await task.pendingCleanup;
         await task.debugResumeFuture;
         await manager.pendingDownloadTaskWrites;
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       task.resume();
@@ -370,7 +369,7 @@ void main() {
         );
         App.dataPath = root.path;
         App.cachePath = root.path;
-        LocalManager.debugSkipComicSourceInit = true;
+        LocalManager(initializeSources: () async {});
         final manager = LocalManager();
         await manager.init();
         final started = Completer<void>();
@@ -406,7 +405,7 @@ void main() {
           if (loads < 2) second.stream.listen((_) {});
           await second.close();
           await manager.pendingDownloadTaskWrites;
-          LocalManager.resetForTesting();
+          LocalManager.current?.dispose();
           root.deleteSync(recursive: true);
         });
         task.resume();
@@ -496,10 +495,14 @@ void main() {
       }
     });
 
-    ImageDownloader.debugLoadComicImageUnwrapped =
-        (imageKey, sourceKey, cid, eid) {
-          return controller.stream;
-        };
+    Stream<ImageDownloadProgress> loadImage(
+      String imageKey,
+      String? sourceKey,
+      String cid,
+      String eid,
+    ) {
+      return controller.stream;
+    }
 
     final task = ImagesDownloadTask.fromJson(LocalManager(), {
       'type': 'ImagesDownloadTask',
@@ -525,7 +528,7 @@ void main() {
       'totalCount': 1,
       'index': 0,
       'chapter': 0,
-    })!;
+    }, loadImage: loadImage)!;
 
     task.resume();
     await streamStarted.future.timeout(const Duration(seconds: 1));
@@ -593,14 +596,18 @@ void main() {
 
     App.dataPath = dataDir.path;
     App.cachePath = cacheDir.path;
-    ImageDownloader.debugLoadComicImageUnwrapped =
-        (imageKey, sourceKey, cid, eid) => Stream.value(
-          ImageDownloadProgress(
-            currentBytes: 1,
-            totalBytes: 1,
-            imageBytes: Uint8List.fromList([1]),
-          ),
-        );
+    Stream<ImageDownloadProgress> loadImage(
+      String imageKey,
+      String? sourceKey,
+      String cid,
+      String eid,
+    ) => Stream.value(
+      ImageDownloadProgress(
+        currentBytes: 1,
+        totalBytes: 1,
+        imageBytes: Uint8List.fromList([1]),
+      ),
+    );
 
     final task = ImagesDownloadTask.fromJson(LocalManager(), {
       'type': 'ImagesDownloadTask',
@@ -626,7 +633,7 @@ void main() {
       'totalCount': 1,
       'index': 0,
       'chapter': 0,
-    })!;
+    }, loadImage: loadImage)!;
 
     task.resume();
     await task.debugResumeFuture!.timeout(const Duration(seconds: 1));
@@ -729,14 +736,14 @@ void main() {
       final root = Directory.systemTemp.createTempSync('download-complete-');
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       final db = sqlite3.open('${root.path}/local.db');
       addTearDown(() async {
         await manager.pendingDownloadTaskWrites;
         db.dispose();
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       final first = _CompletionTask('one');
@@ -781,7 +788,7 @@ void main() {
       final root = Directory.systemTemp.createTempSync('image-complete-');
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       final db = sqlite3.open('${root.path}/local.db');
@@ -812,7 +819,7 @@ void main() {
         task.pause();
         await manager.pendingDownloadTaskWrites;
         db.dispose();
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       manager.restorePausedDownloads([task]);
@@ -846,7 +853,7 @@ void main() {
       );
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       final blocker = Directory('${root.path}/downloading_tasks.json')
@@ -877,7 +884,7 @@ void main() {
       addTearDown(() async {
         task.pause();
         await manager.pendingDownloadTaskWrites;
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       manager.restorePausedDownloads([task]);
@@ -1036,9 +1043,11 @@ void main() {
         ),
       ];
       var streams = 0;
-      ImageDownloader.debugLoadComicImageUnwrapped =
-          (image, source, cid, eid) => controllers[streams++].stream;
-      final task = _pendingImageTask(sourceKey, root.path);
+      final task = _pendingImageTask(
+        sourceKey,
+        root.path,
+        loadImage: (image, source, cid, eid) => controllers[streams++].stream,
+      );
       addTearDown(() async {
         if (!cancelGate.isCompleted) cancelGate.complete();
         task.pause();
@@ -1078,13 +1087,15 @@ void main() {
         );
         App.dataPath = root.path;
         App.cachePath = root.path;
-        LocalManager.debugSkipComicSourceInit = true;
+        LocalManager(initializeSources: () async {});
         final manager = LocalManager();
         await manager.init();
+        late final StreamController<ImageDownloadProgress> controller;
         final task = _pendingImageTask(
           sourceKey,
           '${manager.path}/book',
           chapters: ['new/a'],
+          loadImage: (image, source, cid, eid) => controller.stream,
         );
         LocalComic record(List<String> downloaded) => LocalComic(
           id: task.id,
@@ -1104,12 +1115,10 @@ void main() {
         final page = File('${chapter.path}/page.jpg')..writeAsBytesSync([3]);
         final started = Completer<void>();
         final release = Completer<void>();
-        final controller = StreamController<ImageDownloadProgress>(
+        controller = StreamController<ImageDownloadProgress>(
           onListen: () => started.complete(),
           onCancel: () => release.future,
         );
-        ImageDownloader.debugLoadComicImageUnwrapped =
-            (image, source, cid, eid) => controller.stream;
         manager.restorePausedDownloads([task]);
         addTearDown(() async {
           if (!release.isCompleted) release.complete();
@@ -1118,7 +1127,7 @@ void main() {
           await task.debugResumeFuture;
           await manager.pendingDownloadTaskWrites;
           await controller.close();
-          LocalManager.resetForTesting();
+          LocalManager.current?.dispose();
           root.deleteSync(recursive: true);
         });
         task.resume();
@@ -1146,13 +1155,15 @@ void main() {
       );
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
+      late final StreamController<ImageDownloadProgress> controller;
       final task = _pendingImageTask(
         sourceKey,
         '${manager.path}/book',
         chapters: ['kept', 'shared:a', 'new/a', '..'],
+        loadImage: (image, source, cid, eid) => controller.stream,
       );
       await manager.add(
         LocalComic(
@@ -1176,12 +1187,10 @@ void main() {
       final sharedFile = File('${shared.path}/page.jpg')..writeAsBytesSync([2]);
       final started = Completer<void>();
       final cancelGate = Completer<void>();
-      final controller = StreamController<ImageDownloadProgress>(
+      controller = StreamController<ImageDownloadProgress>(
         onListen: () => started.complete(),
         onCancel: () => cancelGate.future,
       );
-      ImageDownloader.debugLoadComicImageUnwrapped =
-          (image, source, cid, eid) => controller.stream;
       manager.restorePausedDownloads([task]);
       addTearDown(() async {
         if (!cancelGate.isCompleted) cancelGate.complete();
@@ -1190,7 +1199,7 @@ void main() {
         await task.debugResumeFuture;
         await manager.pendingDownloadTaskWrites;
         await controller.close();
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       task.resume();
@@ -1220,7 +1229,7 @@ void main() {
       final root = Directory.systemTemp.createTempSync('archive-generation-');
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       final output = Directory('${manager.path}/archive')..createSync();
@@ -1258,7 +1267,7 @@ void main() {
         task.pause();
         await task.pendingCleanup;
         await manager.pendingDownloadTaskWrites;
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       task.resume();
@@ -1289,7 +1298,7 @@ void main() {
       final root = Directory.systemTemp.createTempSync('archive-cancel-');
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       final gate = Completer<void>();
@@ -1317,7 +1326,7 @@ void main() {
         task.pause();
         await task.pendingCleanup;
         await manager.pendingDownloadTaskWrites;
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       task.resume();
@@ -1382,7 +1391,7 @@ void main() {
       final root = Directory.systemTemp.createTempSync('archive-isolation-');
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       final paths = <String, String>{};
@@ -1425,7 +1434,7 @@ void main() {
           await task.pendingCleanup;
         }
         await manager.pendingDownloadTaskWrites;
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       for (final task in tasks) {
@@ -1454,7 +1463,7 @@ void main() {
       final root = Directory.systemTemp.createTempSync('archive-owned-output-');
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       final existing = Directory('${manager.path}/existing')..createSync();
@@ -1496,7 +1505,7 @@ void main() {
         task.pause();
         await task.pendingCleanup;
         await manager.pendingDownloadTaskWrites;
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       task.resume();
@@ -1530,7 +1539,7 @@ void main() {
       );
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       final task = ArchiveDownloadTask(
@@ -1551,7 +1560,7 @@ void main() {
         task.pause();
         await task.pendingCleanup;
         await manager.pendingDownloadTaskWrites;
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       task.resume();
@@ -1696,6 +1705,7 @@ ImagesDownloadTask _pendingImageTask(
   String source,
   String path, {
   List<String>? chapters,
+  ComicImageLoader? loadImage,
 }) => ImagesDownloadTask.fromJson(LocalManager(), {
   'type': 'ImagesDownloadTask',
   'source': source,
@@ -1720,7 +1730,7 @@ ImagesDownloadTask _pendingImageTask(
   'totalCount': 1,
   'index': 0,
   'chapter': 0,
-})!;
+}, loadImage: loadImage)!;
 
 ComicDetails _archiveComic(String source, {String id = 'archive'}) =>
     ComicDetails.fromJson({

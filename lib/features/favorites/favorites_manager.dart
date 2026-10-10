@@ -44,10 +44,13 @@ void _notifyFollowUpdatesChanged() {
 }
 
 class LocalFavoritesManager with ChangeNotifier {
-  factory LocalFavoritesManager() =>
-      cache ?? (cache = LocalFavoritesManager._create());
+  factory LocalFavoritesManager() => _cache ??= LocalFavoritesManager._create();
 
   LocalFavoritesManager._create();
+
+  /// An independently owned store; it does not replace the default application store.
+  factory LocalFavoritesManager.independent() =>
+      LocalFavoritesManager._create();
 
   Future<void>? _mutationTail;
 
@@ -182,10 +185,7 @@ class LocalFavoritesManager with ChangeNotifier {
       );
       // Read the committed count; do not increment a possibly stale cache after
       // a transaction that also changed another database.
-      counts[folder] = count(folder);
-      _refreshIdentityCounts([(comic.id, comic.type.value)]);
-      _syncFollowUpdatesIfAffected([folder]);
-      notifyListeners();
+      _publishCommittedFavorites([folder], [(comic.id, comic.type.value)]);
     });
   }
 
@@ -445,7 +445,9 @@ class LocalFavoritesManager with ChangeNotifier {
   void notifyListeners() =>
       AppDataOperations.instance.publish(super.notifyListeners);
 
-  static LocalFavoritesManager? cache;
+  static LocalFavoritesManager? _cache;
+
+  static LocalFavoritesManager? get cache => _cache;
 
   Database? _database;
 
@@ -484,8 +486,10 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   void notifyImportedFavorites(Iterable<String> folders) {
-    _syncFollowUpdatesIfAffected(folders);
-    notifyListeners();
+    _publishFavoriteChanges([
+      () => _syncFollowUpdatesIfAffected(folders),
+      notifyListeners,
+    ]);
   }
 
   Map<String, int> counts = {};
@@ -770,10 +774,10 @@ class LocalFavoritesManager with ChangeNotifier {
         try {
           final folder = commit.folder;
           if (folder != null && (commit.created || commit.added)) {
-            counts[folder] = _repository.count(folder);
-            _refreshIdentityCounts([(captured.id, captured.type.value)]);
-            _syncFollowUpdatesIfAffected([folder]);
-            notifyListeners();
+            _publishCommittedFavorites(
+              [folder],
+              [(captured.id, captured.type.value)],
+            );
           } else if (folder != null && commit.removed) {
             _applyDeletedComics({
               folder: [(captured.id, captured.type.value)],
@@ -783,6 +787,12 @@ class LocalFavoritesManager with ChangeNotifier {
           failures.add((error: error, stackTrace: stack));
         }
         if (failures.isNotEmpty) {
+          if (failures.length == 1) {
+            _throwCommittedFailure(
+              failures.single.error,
+              failures.single.stackTrace,
+            );
+          }
           Error.throwWithStackTrace(
             PersistenceFailure(
               commitState: PersistenceCommitState.committed,
@@ -1076,14 +1086,7 @@ class LocalFavoritesManager with ChangeNotifier {
       updateTime: updateTime,
     );
     if (!added) return false;
-    if (counts[folder] == null) {
-      counts[folder] = count(folder);
-    } else {
-      counts[folder] = counts[folder]! + 1;
-    }
-    _refreshIdentityCounts([(comic.id, comic.type.value)]);
-    _syncFollowUpdatesIfAffected([folder]);
-    notifyListeners();
+    _publishCommittedFavorites([folder], [(comic.id, comic.type.value)]);
     return true;
   }
 
@@ -1104,11 +1107,10 @@ class LocalFavoritesManager with ChangeNotifier {
       return;
     }
 
-    counts[targetFolder] = count(targetFolder);
-    counts[sourceFolder] = count(sourceFolder);
-    _refreshIdentityCounts([(id, type.value)]);
-    _syncFollowUpdatesIfAffected([sourceFolder, targetFolder]);
-    notifyListeners();
+    _publishCommittedFavorites(
+      [sourceFolder, targetFolder],
+      [(id, type.value)],
+    );
   }
 
   void _batchMoveFavorites(
@@ -1137,13 +1139,10 @@ class LocalFavoritesManager with ChangeNotifier {
       rethrow;
     }
 
-    // Update counts
-    counts[targetFolder] = count(targetFolder);
-    counts[sourceFolder] = count(sourceFolder);
-    _refreshIdentityCounts(items.map((item) => (item.id, item.type.value)));
-    _syncFollowUpdatesIfAffected([sourceFolder, targetFolder]);
-
-    notifyListeners();
+    _publishCommittedFavorites([
+      sourceFolder,
+      targetFolder,
+    ], items.map((item) => (item.id, item.type.value)));
   }
 
   void _batchCopyFavorites(
@@ -1172,12 +1171,9 @@ class LocalFavoritesManager with ChangeNotifier {
       rethrow;
     }
 
-    // Update counts
-    counts[targetFolder] = count(targetFolder);
-    _refreshIdentityCounts(items.map((item) => (item.id, item.type.value)));
-    _syncFollowUpdatesIfAffected([targetFolder]);
-
-    notifyListeners();
+    _publishCommittedFavorites([
+      targetFolder,
+    ], items.map((item) => (item.id, item.type.value)));
   }
 
   /// delete a folder
@@ -1257,8 +1253,23 @@ class LocalFavoritesManager with ChangeNotifier {
     Iterable<(String, int)> identities,
   ) {
     final affected = folders.toSet();
-    final failures = <({Object error, StackTrace stackTrace})>[];
-    void publish(void Function() action) {
+    _publishFavoriteChanges([
+      for (final folder in affected) () => counts[folder] = count(folder),
+      () => _refreshIdentityCounts(identities),
+      () => _syncFollowUpdatesIfAffected(affected),
+      notifyListeners,
+    ]);
+  }
+
+  /// A committed write is not undone by an observer failure. Attempt each
+  /// independent publication and preserve all failures for the original owner.
+  void _publishFavoriteChanges(
+    Iterable<void Function()> actions, {
+    Iterable<({Object error, StackTrace stackTrace})> priorFailures = const [],
+    PersistenceCommitState commitState = PersistenceCommitState.committed,
+  }) {
+    final failures = [...priorFailures];
+    for (final action in actions) {
       try {
         action();
       } catch (error, stack) {
@@ -1266,17 +1277,11 @@ class LocalFavoritesManager with ChangeNotifier {
       }
     }
 
-    for (final folder in affected) {
-      publish(() => counts[folder] = count(folder));
-    }
-    publish(() => _refreshIdentityCounts(identities));
-    publish(() => _syncFollowUpdatesIfAffected(affected));
-    publish(notifyListeners);
     if (failures.isNotEmpty) {
       final first = failures.first;
       Error.throwWithStackTrace(
         PersistenceFailure(
-          commitState: PersistenceCommitState.committed,
+          commitState: commitState,
           cause: first.error,
           stackTrace: first.stackTrace,
           cleanupFailures: failures.skip(1),
@@ -1299,56 +1304,45 @@ class LocalFavoritesManager with ChangeNotifier {
     } catch (error, stack) {
       failures.add((error: error, stackTrace: stack));
     }
-    try {
-      refreshUpdateIds();
-    } catch (error, stack) {
-      failures.add((error: error, stackTrace: stack));
-    }
-    if (followChanged()) {
-      try {
-        _notifyFollowUpdatesChanged();
-      } catch (error, stack) {
-        failures.add((error: error, stackTrace: stack));
-      }
-    }
-    notifyListeners();
-    if (failures.isNotEmpty) {
-      final first = failures.first;
-      Error.throwWithStackTrace(
-        PersistenceFailure(
-          commitState: commitState,
-          cause: first.error,
-          stackTrace: first.stackTrace,
-          cleanupFailures: failures.skip(1),
-        ),
-        first.stackTrace,
-      );
-    }
+    _publishFavoriteChanges(
+      [
+        refreshUpdateIds,
+        () {
+          if (followChanged()) _notifyFollowUpdatesChanged();
+        },
+        notifyListeners,
+      ],
+      priorFailures: failures,
+      commitState: commitState,
+    );
   }
 
   void _applyDeletedComics(Map<String, List<(String, int)>> removed) {
     if (removed.isEmpty) return;
-    final identities = <(String, int)>{};
-    for (final entry in removed.entries) {
-      counts[entry.key] = count(entry.key);
-      for (final (id, type) in entry.value) {
-        identities.add((id, type));
-      }
-    }
-    _refreshIdentityCounts(identities);
-    // A cover is shared across folders. Files cannot participate in SQLite
-    // rollback, so release them only after commit and the final reference.
-    final folders = folderNames;
-    for (final (id, type) in identities) {
-      if (_repository.findFolders(folders, id, type).isNotEmpty) continue;
-      try {
-        deleteFavoriteCover(dataDirectory: App.dataPath, id: id, intKey: type);
-      } catch (error, stack) {
-        Log.error('Favorite cover cleanup', error, stack);
-      }
-    }
-    _syncFollowUpdatesIfAffected(removed.keys);
-    notifyListeners();
+    final identities = removed.values.expand((items) => items).toSet();
+    _publishFavoriteChanges([
+      for (final folder in removed.keys) () => counts[folder] = count(folder),
+      () => _refreshIdentityCounts(identities),
+      () {
+        // Covers are shared across folders and cannot participate in rollback.
+        // Release them only after commit and after checking the last reference.
+        final folders = folderNames;
+        for (final (id, type) in identities) {
+          if (_repository.findFolders(folders, id, type).isNotEmpty) continue;
+          try {
+            deleteFavoriteCover(
+              dataDirectory: App.dataPath,
+              id: id,
+              intKey: type,
+            );
+          } catch (error, stack) {
+            Log.error('Favorite cover cleanup', error, stack);
+          }
+        }
+      },
+      () => _syncFollowUpdatesIfAffected(removed.keys),
+      notifyListeners,
+    ]);
   }
 
   /// Publish deletions committed by a coordinated database transaction.
@@ -1593,11 +1587,13 @@ class LocalFavoritesManager with ChangeNotifier {
       movement: movement,
       trackingFolder: followUpdatesFolder,
     );
-    if (changed.contains(followUpdatesFolder)) {
-      _updates.recordCommittedRead(id, type.value);
-      _notifyFollowUpdatesChanged();
-    }
-    notifyListeners();
+    _publishFavoriteChanges([
+      if (changed.contains(followUpdatesFolder)) ...[
+        () => _updates.recordCommittedRead(id, type.value),
+        _notifyFollowUpdatesChanged,
+      ],
+      notifyListeners,
+    ]);
   }
 
   List<FavoriteItem> searchInFolder(String folder, String keyword) =>
@@ -1679,15 +1675,13 @@ class LocalFavoritesManager with ChangeNotifier {
         result.generation != _connectionGeneration) {
       return;
     }
-    counts[result.folder] = count(result.folder);
-    _refreshIdentityCounts(result.identities);
-    refreshUpdateIds();
-    try {
-      _syncFollowUpdatesIfAffected([result.folder]);
-    } finally {
-      // A follow-up observer must not prevent ordinary views from refreshing.
-      notifyListeners();
-    }
+    _publishFavoriteChanges([
+      () => counts[result.folder] = count(result.folder),
+      () => _refreshIdentityCounts(result.identities),
+      refreshUpdateIds,
+      () => _syncFollowUpdatesIfAffected([result.folder]),
+      notifyListeners,
+    ]);
   });
 
   void _fromJson(String json) {
@@ -1701,8 +1695,11 @@ class LocalFavoritesManager with ChangeNotifier {
           'end',
       translateTags: _translateTags,
     );
-    refreshImportedFavorites({folder: comics});
-    notifyImportedFavorites([folder]);
+    _publishFavoriteChanges([
+      () => refreshImportedFavorites({folder: comics}),
+      () => _syncFollowUpdatesIfAffected([folder]),
+      notifyListeners,
+    ]);
   }
 
   void _prepareTableForFollowUpdates(String table, [bool clearData = true]) {
@@ -1752,10 +1749,14 @@ class LocalFavoritesManager with ChangeNotifier {
       return;
     }
     _repository.markAsRead(folder, id, type.value);
-    _updates.recordCommittedRead(id, type.value);
     if (notify) {
-      _notifyFollowUpdatesChanged();
-      notifyListeners();
+      _publishFavoriteChanges([
+        () => _updates.recordCommittedRead(id, type.value),
+        _notifyFollowUpdatesChanged,
+        notifyListeners,
+      ]);
+    } else {
+      _updates.recordCommittedRead(id, type.value);
     }
   }
 

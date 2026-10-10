@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
@@ -16,9 +17,6 @@ import 'package:venera_next/foundation/translations.dart';
 import 'follow_updates_manager.dart';
 import 'follow_updates_runtime.dart';
 
-FollowUpdateJob createFollowUpdatesFolderCheck(String folder) =>
-    FollowUpdateJob(folder, true);
-
 /// Preparation can be cancelled. Once accepted, the final assignment is owned
 /// by SettingsSaveState; retry only persists that captured assignment.
 class FollowUpdatesFolderDialog extends StatefulWidget {
@@ -26,11 +24,11 @@ class FollowUpdatesFolderDialog extends StatefulWidget {
     super.key,
     required this.runtime,
     required this.onSaved,
-    this.createCheck = createFollowUpdatesFolderCheck,
+    this.createCheck,
   });
   final FollowUpdatesRuntime runtime;
   final VoidCallback onSaved;
-  final FollowUpdateJob Function(String) createCheck;
+  final FollowUpdateJob Function(String)? createCheck;
 
   @override
   State<FollowUpdatesFolderDialog> createState() =>
@@ -54,7 +52,7 @@ class _FollowUpdatesFolderDialogState
   @override
   void initState() {
     super.initState();
-    _manager = LocalFavoritesManager();
+    _manager = FavoritesScope.read(context);
     _generation = _manager.connectionGeneration;
     _folders = List<String>.unmodifiable(_manager.folderNames);
   }
@@ -145,7 +143,9 @@ class _FollowUpdatesFolderDialogState
         );
         if (!prepared || !active()) return;
         if (_manager.count(folder) > 0) {
-          final job = _job = createCheck(folder);
+          final job = _job =
+              createCheck?.call(folder) ??
+              FollowUpdateJob(folder, true, manager: _manager);
           // Consume progress to start the job; done owns actual completion and
           // its errors independently of the presentation stream.
           final progress = job.progress.listen((value) {

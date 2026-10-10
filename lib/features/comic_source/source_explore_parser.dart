@@ -30,119 +30,118 @@ class SourceExploreParser {
       if (type == "singlePageWithMultiPart") {
         loadMultiPart = () async {
           try {
-            var res = await context.runReadCode(
-              "${context.sourceExpression}.explore[$i].load()",
-            );
-            return Res(
-              List.from(
-                res.keys
-                    .map(
-                      (e) => ExplorePagePart(
-                        e,
-                        (res[e] as List)
-                            .map<Comic>((e) => Comic.fromJson(e, context.key))
-                            .toList(),
-                        null,
-                      ),
-                    )
-                    .toList(),
-              ),
-            );
+            return await context
+                .runReadCodeToCompletion<Res<List<ExplorePagePart>>>(
+                  "${context.sourceExpression}.explore[$i].load()",
+                  consume: (res) => Res(
+                    List.from(
+                      res.keys
+                          .map(
+                            (e) => ExplorePagePart(
+                              e,
+                              (res[e] as List)
+                                  .map<Comic>(
+                                    (e) => Comic.fromJson(e, context.key),
+                                  )
+                                  .toList(),
+                              null,
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                );
           } catch (e, s) {
             Log.error("Data Analysis", "$e\n$s");
-            return Res.fromException(e, s);
+            return context.failureResult(e, s);
           }
         };
       } else if (type == "multiPageComicList") {
         if (context.checkExists("explore[$i].load")) {
           loadPage = (int page) async {
             try {
-              var res = await context.runReadCode(
+              return await context.runReadCodeToCompletion<Res<List<Comic>>>(
                 "${context.sourceExpression}.explore[$i].load(${jsonEncode(page)})",
-              );
-              return Res(
-                List.generate(
-                  res["comics"].length,
-                  (index) => Comic.fromJson(res["comics"][index], context.key),
-                ),
-                subData: res["maxPage"],
+                consume: (res) => context.parseComicListResult(res, 'maxPage'),
               );
             } catch (e, s) {
               Log.error("Network", "$e\n$s");
-              return Res.fromException(e, s);
+              return context.failureResult(e, s);
             }
           };
         } else {
           loadNext = (next) async {
             try {
-              var res = await context.runReadCode(
+              return await context.runReadCodeToCompletion<Res<List<Comic>>>(
                 "${context.sourceExpression}.explore[$i].loadNext(${jsonEncode(next)})",
-              );
-              return Res(
-                List.generate(
-                  res["comics"].length,
-                  (index) => Comic.fromJson(res["comics"][index], context.key),
-                ),
-                subData: res["next"],
+                consume: (res) => context.parseComicListResult(res, 'next'),
               );
             } catch (e, s) {
               Log.error("Network", "$e\n$s");
-              return Res.fromException(e, s);
+              return context.failureResult(e, s);
             }
           };
         }
       } else if (type == "multiPartPage") {
         loadMultiPart = () async {
           try {
-            var res = await context.runReadCode(
-              "${context.sourceExpression}.explore[$i].load()",
-            );
-            return Res(
-              List.from(
-                (res as List).map((e) {
-                  return ExplorePagePart(
-                    e['title'],
-                    (e['comics'] as List).map((e) {
-                      return Comic.fromJson(e, context.key);
-                    }).toList(),
-                    PageJumpTarget.parse(context.key, e['viewMore']),
-                  );
-                }),
-              ),
-            );
+            return await context
+                .runReadCodeToCompletion<Res<List<ExplorePagePart>>>(
+                  "${context.sourceExpression}.explore[$i].load()",
+                  consume: (res) => Res(
+                    List.from(
+                      (res as List).map((e) {
+                        return ExplorePagePart(
+                          e['title'],
+                          (e['comics'] as List).map((e) {
+                            return Comic.fromJson(e, context.key);
+                          }).toList(),
+                          PageJumpTarget.parse(context.key, e['viewMore']),
+                        );
+                      }),
+                    ),
+                  ),
+                );
           } catch (e, s) {
             Log.error("Data Analysis", "$e\n$s");
-            return Res.fromException(e, s);
+            return context.failureResult(e, s);
           }
         };
       } else if (type == 'mixed') {
         loadMixed = (index) async {
           try {
-            var res = await context.runReadCode(
+            return await context.runReadCodeToCompletion<Res<List<Object>>>(
               "${context.sourceExpression}.explore[$i].load(${jsonEncode(index)})",
+              consume: (res) {
+                var list = <Object>[];
+                for (var data in (res['data'] as List)) {
+                  if (data is List) {
+                    list.add(
+                      data.map((e) => Comic.fromJson(e, context.key)).toList(),
+                    );
+                  } else if (data is Map) {
+                    list.add(
+                      ExplorePagePart(
+                        data['title'],
+                        (data['comics'] as List).map((e) {
+                          return Comic.fromJson(e, context.key);
+                        }).toList(),
+                        data['viewMore'] == null
+                            ? null
+                            : PageJumpTarget.parse(
+                                context.key,
+                                data['viewMore'],
+                              ),
+                      ),
+                    );
+                  }
+                }
+                return Res(list, subData: res['maxPage']);
+              },
             );
-            var list = <Object>[];
-            for (var data in (res['data'] as List)) {
-              if (data is List) {
-                list.add(
-                  data.map((e) => Comic.fromJson(e, context.key)).toList(),
-                );
-              } else if (data is Map) {
-                list.add(
-                  ExplorePagePart(
-                    data['title'],
-                    (data['comics'] as List).map((e) {
-                      return Comic.fromJson(e, context.key);
-                    }).toList(),
-                    data['viewMore'],
-                  ),
-                );
-              }
-            }
-            return Res(list, subData: res['maxPage']);
           } catch (e, s) {
             Log.error("Network", "$e\n$s");
-            return Res.fromException(e, s);
+            return context.failureResult(e, s);
           }
         };
       }

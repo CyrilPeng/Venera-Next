@@ -17,6 +17,8 @@ Future<void> main(List<String> args) async {
   var bindingsActive = true;
   var pendingChanges = 0;
   var persistedChanges = 0;
+  var ownsDirectory = true;
+  var ownershipDuringFlush = false;
   var exitCode = await runHeadlessSyncCommand(
     'up',
     isConfigured: true,
@@ -32,13 +34,18 @@ Future<void> main(List<String> args) async {
   }
 
   final closing = finishHeadlessRuntime(
-    closeCore: () async {
+    prepareCore: () async {
       events.add('close started');
       await releaseCore.future;
       if (bindingsActive) pendingChanges++;
       events.add('late source change');
       events.add('close finished');
+      failIfRequested('prepare');
+    },
+    closeCore: () async {
+      events.add('stores closing');
       failIfRequested('close');
+      ownsDirectory = false;
     },
     disposeBindings: () {
       bindingsActive = false;
@@ -46,6 +53,7 @@ Future<void> main(List<String> args) async {
       failIfRequested('dispose');
     },
     flushPersistence: () async {
+      ownershipDuringFlush = ownsDirectory;
       events.add('flush started');
       await Future<void>.value();
       failIfRequested('flush');
@@ -76,6 +84,8 @@ Future<void> main(List<String> args) async {
       'bindingsAfterClose': bindingsActive,
       'pendingChanges': pendingChanges,
       'persistedChanges': persistedChanges,
+      'ownershipDuringFlush': ownershipDuringFlush,
+      'ownershipAfterClose': ownsDirectory,
     }),
   );
   exit(exitCode);

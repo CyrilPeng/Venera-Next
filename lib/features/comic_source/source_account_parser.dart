@@ -27,7 +27,7 @@ class SourceAccountParser {
             context.key,
             context.identity,
           );
-          await context.runReadCodeToCompletion<void>("""
+          await context.runCodeToCompletion<void>("""
           ${context.sourceExpression}.account.login(${jsonEncode(account)},
           ${jsonEncode(pwd)})
         """, consume: (_) {});
@@ -42,13 +42,13 @@ class SourceAccountParser {
           return const Res(true);
         } catch (e, s) {
           Log.error("Network", "$e\n$s");
-          return Res.fromException(e, s);
+          return context.failureResult(e, s);
         }
       };
     }
 
     Future<void> logout() async {
-      await context.runReadCodeToCompletion<void>(
+      await context.runCodeToCompletion<void>(
         "${context.sourceExpression}.account.logout()",
         consume: (_) {},
       );
@@ -60,15 +60,18 @@ class SourceAccountParser {
 
     if (context.checkExists('account.loginWithWebview')) {
       checkLoginStatus = (url, title) {
-        return context.runCode("""
+        return context.consumeSynchronous(
+          () => context.runOwnedCode("""
             ${context.sourceExpression}.account.loginWithWebview.checkStatus(
               ${jsonEncode(url)}, ${jsonEncode(title)})
-          """);
+          """),
+          (value) => value as bool,
+        );
       };
 
       if (context.checkExists('account.loginWithWebview.onLoginSuccess')) {
         onLoginSuccess = () async {
-          await context.runReadCodeToCompletion<void>("""
+          await context.runCodeToCompletion<void>("""
             ${context.sourceExpression}.account.loginWithWebview.onLoginSuccess()
           """, consume: (_) {});
         };
@@ -80,10 +83,9 @@ class SourceAccountParser {
     if (context.checkExists('account.loginWithCookies?.validate')) {
       validateCookies = (cookies) async {
         try {
-          var res = await context.runReadCode("""
+          return await context.runReadCodeToCompletion<bool>("""
             ${context.sourceExpression}.account.loginWithCookies.validate(${jsonEncode(cookies)})
-          """);
-          return res;
+          """, consume: (res) => res as bool);
         } catch (e, s) {
           Log.error("Network", "$e\n$s");
           return false;

@@ -49,15 +49,19 @@ class SourceMetadataParser {
       return null;
     }
     return (namespace, tag) {
-      var res = context.runCode("""
+      return context.consumeSynchronous(
+        () => context.runOwnedCode("""
           ${context.sourceExpression}.comic.onClickTag(${jsonEncode(namespace)}, ${jsonEncode(tag)})
-        """);
-      if (res is! Map) {
-        return null;
-      }
-      var r = Map<String, dynamic>.from(res);
-      r.removeWhere((key, value) => value == null);
-      return PageJumpTarget.parse(context.key, r);
+        """),
+        (res) {
+          if (res is! Map) {
+            return null;
+          }
+          var r = Map<String, dynamic>.from(res);
+          r.removeWhere((key, value) => value == null);
+          return PageJumpTarget.parse(context.key, r);
+        },
+      );
     };
   }
 
@@ -67,10 +71,12 @@ class SourceMetadataParser {
     }
     List<String> domains = List.from(context.getValue("comic.link.domains"));
     linkToId(String link) {
-      var res = context.runCode("""
+      return context.consumeSynchronous(
+        () => context.runOwnedCode("""
           ${context.sourceExpression}.comic.link.linkToId(${jsonEncode(link)})
-        """);
-      return res as String?;
+        """),
+        (res) => res as String?,
+      );
     }
 
     return LinkHandler(domains, linkToId);

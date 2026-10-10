@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
@@ -19,13 +20,13 @@ void main() {
   testWidgets(
     'all mounted previews refresh and release their domain listener',
     (tester) async {
-      final previous = LocalFavoritesManager.cache;
+      final previous = _favoritesOwner;
       final folder = appdata.settings['followUpdatesFolder'];
       final favorites = _Favorites();
-      LocalFavoritesManager.cache = favorites;
+      _favoritesOwner = favorites;
       appdata.settings['followUpdatesFolder'] = 'following';
       addTearDown(() {
-        LocalFavoritesManager.cache = previous;
+        _favoritesOwner = previous;
         appdata.settings['followUpdatesFolder'] = folder;
       });
       final runtime = _runtime();
@@ -34,10 +35,12 @@ void main() {
       addTearDown(replacement.dispose);
       Widget app(FollowUpdatesRuntime owner) => FollowUpdatesScope(
         runtime: owner,
-        child: const MaterialApp(
-          home: Scaffold(
-            body: CustomScrollView(
-              slivers: [FollowUpdatesWidget(), FollowUpdatesWidget()],
+        child: _libraryView(
+          MaterialApp(
+            home: Scaffold(
+              body: CustomScrollView(
+                slivers: [FollowUpdatesWidget(), FollowUpdatesWidget()],
+              ),
             ),
           ),
         ),
@@ -72,3 +75,10 @@ FollowUpdatesRuntime _runtime() => FollowUpdatesRuntime(
   onError: (_, _) {},
   observeChanges: (_) => () {},
 );
+
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+Widget _libraryView(Widget child) {
+  return FavoritesScope(manager: _favoritesForView(), child: child);
+}

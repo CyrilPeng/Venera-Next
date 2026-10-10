@@ -1,3 +1,5 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/history/history_scope.dart';
 import 'package:venera_next/features/reader/platform_effects.dart'
     show ReaderPlatformEffectsScope;
 import 'dart:convert';
@@ -28,8 +30,8 @@ void main() {
       final previous =
           jsonDecode(jsonEncode(appdata.toJson()['settings']))
               as Map<String, dynamic>;
-      final previousFavorites = LocalFavoritesManager.cache;
-      final previousHistory = HistoryManager.cache;
+      final previousFavorites = _favoritesOwner;
+      final previousHistory = _historyOwner;
       final directory = Directory.systemTemp.createTempSync(
         'slider-navigation-',
       );
@@ -38,7 +40,7 @@ void main() {
       try {
         App.dataPath = directory.path;
         App.cachePath = directory.path;
-        LocalFavoritesManager.cache = _Favorites();
+        _favoritesOwner = _Favorites();
         final settings = appdata.settings;
         settings['comicSpecificSettings'] = <String, dynamic>{};
         settings['deviceSpecificSettings'] = <String, dynamic>{};
@@ -51,15 +53,15 @@ void main() {
         settings['limitImageWidth'] = false;
         settings['preloadImageCount'] = 1;
         settings['language'] = 'en-US';
-        LocalManager.resetForTesting();
-        LocalManager.debugSkipComicSourceInit = true;
+        LocalManager.current?.dispose();
+        LocalManager(initializeSources: () async {});
         await tester.runAsync(() async {
           Directory('${directory.path}/comics').createSync();
           File(
             '${directory.path}/local_path',
           ).writeAsStringSync('${directory.path}/comics');
-          HistoryManager.cache = _TestHistory();
-          await HistoryManager().init();
+          _historyOwner = _TestHistory();
+          await _historyForView().init();
           await LocalManager().init();
           final png = img.encodePng(img.Image(width: 100, height: 200));
           final folder = Directory('${LocalManager().path}/book/one')
@@ -83,11 +85,13 @@ void main() {
           );
         });
         await tester.pumpWidget(
-          MaterialApp(
-            builder: (context, child) =>
-                ReaderPlatformEffectsScope(child: child!),
-            navigatorKey: appNavigation.rootNavigatorKey,
-            home: Scaffold(body: OverlayWidget(_Reader(key: key))),
+          _libraryView(
+            MaterialApp(
+              builder: (context, child) =>
+                  ReaderPlatformEffectsScope(child: child!),
+              navigatorKey: appNavigation.rootNavigatorKey,
+              home: Scaffold(body: OverlayWidget(_Reader(key: key))),
+            ),
           ),
         );
         Future<void> frames(int count) async {
@@ -138,12 +142,12 @@ void main() {
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 30)),
         );
-        LocalManager.resetForTesting();
-        if (HistoryManager.cache?.isInitialized == true) {
-          HistoryManager().close();
+        LocalManager.current?.dispose();
+        if (_historyOwner?.isInitialized == true) {
+          _historyForView().close();
         }
-        HistoryManager.cache = previousHistory;
-        LocalFavoritesManager.cache = previousFavorites;
+        _historyOwner = previousHistory;
+        _favoritesOwner = previousFavorites;
         Log.isMuted = false;
         previous.forEach((key, value) => appdata.settings[key] = value);
         await tester.runAsync(() async {
@@ -217,4 +221,16 @@ class _TestHistory extends HistoryManager {
   _TestHistory() : super.create();
   @override
   Future<void> addReadDuration(History history, Duration duration) async {}
+}
+
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+HistoryManager? _historyOwner;
+HistoryManager _historyForView() => _historyOwner ??= HistoryManager.create();
+Widget _libraryView(Widget child) {
+  return FavoritesScope(
+    manager: _favoritesForView(),
+    child: HistoryScope(manager: _historyForView(), child: child),
+  );
 }

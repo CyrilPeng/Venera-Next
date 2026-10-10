@@ -30,7 +30,6 @@ void main() {
       final root = Directory.systemTemp.createTempSync('app-data-queue-');
       final previousTracking = appdata.settings['followUpdatesFolder'];
       final previousQuick = appdata.settings['quickFavorite'];
-      LocalFavoritesManager.cache = null;
       final manager = LocalFavoritesManager();
       final release = Completer<void>();
       try {
@@ -142,7 +141,6 @@ void main() {
         await AppDataOperations.instance.run(() async {});
         await manager.closeAndWait();
         await appdata.saveData(false);
-        LocalFavoritesManager.cache = null;
         appdata.settings['followUpdatesFolder'] = previousTracking;
         appdata.settings['quickFavorite'] = previousQuick;
         root.deleteSync(recursive: true);
@@ -157,7 +155,6 @@ void main() {
         final root = Directory.systemTemp.createTempSync('favorites-import-');
         final previousTracking = appdata.settings['followUpdatesFolder'];
         final previousQuick = appdata.settings['quickFavorite'];
-        LocalFavoritesManager.cache = null;
         final manager = LocalFavoritesManager();
         try {
           App.dataPath = (Directory('${root.path}/data')..createSync()).path;
@@ -230,7 +227,6 @@ void main() {
         } finally {
           await manager.closeAndWait();
           await appdata.saveData(false);
-          LocalFavoritesManager.cache = null;
           appdata.settings['followUpdatesFolder'] = previousTracking;
           appdata.settings['quickFavorite'] = previousQuick;
           root.deleteSync(recursive: true);

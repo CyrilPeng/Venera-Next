@@ -66,7 +66,7 @@ void main() {
   });
 
   File archive(
-    int version, {
+    Object? version, {
     bool includeSources = false,
     bool includeFavorites = false,
   }) {
@@ -175,6 +175,59 @@ void main() {
     expect(await importAppData(archive(8), true), DataSyncCommitState.applied);
     expect(appdata.settings['dataVersion'], 8);
     expect(appdata.searchHistory, ['remote']);
+  });
+
+  test(
+    'sync rejects malformed local or remote versions before replacing data',
+    () async {
+      for (final invalid in ['8', -1, 8.5, <String>[]]) {
+        await expectLater(
+          importAppData(archive(invalid), true),
+          throwsFormatException,
+        );
+        expect(appdata.settings['dataVersion'], 7);
+        expect(appdata.searchHistory, ['local']);
+        appdata.settings['dataVersion'] = invalid;
+        await expectLater(
+          importAppData(archive(8), true),
+          throwsFormatException,
+        );
+        expect(appdata.settings['dataVersion'], same(invalid));
+        expect(appdata.searchHistory, ['local']);
+        appdata.settings['dataVersion'] = 7;
+      }
+    },
+  );
+
+  test(
+    'unversioned legacy archives still import through version checking',
+    () async {
+      expect(
+        await importAppData(archive(null), true),
+        DataSyncCommitState.applied,
+      );
+      expect(appdata.searchHistory, ['remote']);
+    },
+  );
+
+  test('sync export and import preserve malformed local exclusions', () async {
+    final previous = appdata.settings['disableSyncFields'];
+    addTearDown(() => appdata.settings['disableSyncFields'] = previous);
+    appdata.settings['disableSyncFields'] = ['language'];
+    for (final name in ['history.db', 'local_favorite.db', 'cookie.db']) {
+      _writeMarker('${App.dataPath}/$name', 'local');
+    }
+    Directory('${App.dataPath}/comic_source').createSync();
+    final output = await exportAppData();
+    expect(await output.exists(), isTrue);
+    expect(appdata.settings['disableSyncFields'], ['language']);
+    expect(await importAppData(archive(8), true), DataSyncCommitState.applied);
+    expect(appdata.settings['disableSyncFields'], ['language']);
+    expect(appdata.searchHistory, ['remote']);
+    final saved = jsonDecode(
+      await File('${App.dataPath}/appdata.json').readAsString(),
+    );
+    expect(saved['settings']['disableSyncFields'], ['language']);
   });
 
   test(
@@ -478,11 +531,7 @@ void main() {
   test(
     'failed rollback retains both database backups and restores independent cookies',
     () async {
-      final previousHistory = HistoryManager.cache;
-      final previousFavorites = LocalFavoritesManager.cache;
       final previousCookies = SingleInstanceCookieJar.instance;
-      HistoryManager.cache = null;
-      LocalFavoritesManager.cache = null;
       SingleInstanceCookieJar.instance = null;
       final history = HistoryManager();
       final favorites = LocalFavoritesManager();
@@ -548,8 +597,6 @@ void main() {
         history.close();
         await favorites.closeAndWait();
         SingleInstanceCookieJar.instance?.dispose();
-        HistoryManager.cache = previousHistory;
-        LocalFavoritesManager.cache = previousFavorites;
         SingleInstanceCookieJar.instance = previousCookies;
       }
     },

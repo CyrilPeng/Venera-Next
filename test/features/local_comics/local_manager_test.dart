@@ -40,8 +40,8 @@ void main() {
     final root = Directory.systemTemp.createTempSync('local-writer-owner-');
     App.dataPath = root.path;
     App.cachePath = root.path;
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     final manager = LocalManager();
     await manager.init();
     final first = _localComic('first');
@@ -74,7 +74,7 @@ void main() {
       if (!gate.isCompleted) gate.complete();
       await exclusive;
       await manager.pendingDownloadTaskWrites;
-      LocalManager.resetForTesting();
+      LocalManager.current?.dispose();
       root.deleteSync(recursive: true);
     }
   });
@@ -85,8 +85,8 @@ void main() {
       final root = Directory.systemTemp.createTempSync('local-delete-owner-');
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.resetForTesting();
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager.current?.dispose();
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       final db = sqlite3.open('${root.path}/local.db');
@@ -131,7 +131,7 @@ void main() {
         if (!gate.isCompleted) gate.complete();
         await importing;
         db.dispose();
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       }
     },
@@ -142,14 +142,14 @@ void main() {
       final root = Directory.systemTemp.createTempSync('local-delete-');
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.resetForTesting();
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager.current?.dispose();
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       final db = sqlite3.open('${root.path}/local.db');
       addTearDown(() {
         db.dispose();
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       final first = _localComic('first', downloaded: const ['a', 'b']);
@@ -196,12 +196,12 @@ void main() {
       final root = Directory.systemTemp.createTempSync('local-chapter-delete-');
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.resetForTesting();
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager.current?.dispose();
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
       addTearDown(() {
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       });
       final stale = _localComic('1', downloaded: const ['a']);
@@ -226,15 +226,15 @@ void main() {
         'venera-local-cache-',
       );
       addTearDown(() {
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         if (dataDir.existsSync()) dataDir.deleteSync(recursive: true);
         if (cacheDir.existsSync()) cacheDir.deleteSync(recursive: true);
       });
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      LocalManager.resetForTesting();
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager.current?.dispose();
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await manager.init();
 
@@ -281,7 +281,7 @@ void main() {
         'venera-local-cache-',
       );
       addTearDown(() {
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         if (dataDir.existsSync()) {
           dataDir.deleteSync(recursive: true);
         }
@@ -292,8 +292,8 @@ void main() {
 
       App.dataPath = dataDir.path;
       App.cachePath = cacheDir.path;
-      LocalManager.resetForTesting();
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager.current?.dispose();
+      LocalManager(initializeSources: () async {});
 
       final manager = LocalManager();
       await manager.init();

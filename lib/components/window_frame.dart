@@ -601,7 +601,7 @@ class _WindowButtonsState extends State<_WindowButtons> with WindowListener {
   void initState() {
     windowManager.addListener(this);
     windowManager.isMaximized().then((value) {
-      if (value) {
+      if (mounted && value) {
         setState(() {
           isMaximized = true;
         });

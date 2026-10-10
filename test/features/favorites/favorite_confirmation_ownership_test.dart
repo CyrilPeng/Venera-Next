@@ -1,3 +1,5 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/history/history_scope.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -207,27 +209,29 @@ class _Host {
     },
   );
 
-  Widget app() => MaterialApp(
-    navigatorKey: appNavigation.rootNavigatorKey,
-    builder: (_, child) => SelectionTasksScope(
-      registry: registry,
-      child: NavigationAdmission(
-        allowsNavigation: () => allowed,
-        child: FollowUpdatesScope(runtime: runtime, child: child!),
+  Widget app() => _libraryView(
+    MaterialApp(
+      navigatorKey: appNavigation.rootNavigatorKey,
+      builder: (_, child) => SelectionTasksScope(
+        registry: registry,
+        child: NavigationAdmission(
+          allowsNavigation: () => allowed,
+          child: FollowUpdatesScope(runtime: runtime, child: child!),
+        ),
       ),
-    ),
-    home: Scaffold(
-      body: ValueListenableBuilder<Widget>(
-        valueListenable: content,
-        builder: (_, value, _) => value,
+      home: Scaffold(
+        body: ValueListenableBuilder<Widget>(
+          valueListenable: content,
+          builder: (_, value, _) => value,
+        ),
       ),
     ),
   );
 
   Future<void> mount(WidgetTester value) async {
     tester = value;
-    final previousManager = LocalFavoritesManager.cache;
-    final previousHistory = HistoryManager.cache;
+    final previousManager = _favoritesOwner;
+    final previousHistory = _historyOwner;
     final previousData = App.dataPath;
     final previousCache = App.cachePath;
     final checkpoint = appdata.captureImportCheckpoint();
@@ -236,8 +240,8 @@ class _Host {
     );
     App.dataPath = root.path;
     App.cachePath = root.path;
-    LocalFavoritesManager.cache = manager;
-    HistoryManager.cache = _History();
+    _favoritesOwner = manager;
+    _historyOwner = _History();
     appdata.settings['language'] = 'en-US';
     appdata.settings['favoritesDisplayMode'] = 'list';
     appdata.settings['followUpdatesFolder'] = real ? null : 'Original';
@@ -266,8 +270,8 @@ class _Host {
       for (final owner in {runtime, originalRuntime}) {
         owner.dispose();
       }
-      LocalFavoritesManager.cache = previousManager;
-      HistoryManager.cache = previousHistory;
+      _favoritesOwner = previousManager;
+      _historyOwner = previousHistory;
       App.dataPath = previousData;
       App.cachePath = previousCache;
       registerShowMessageHandler((_, _) {});
@@ -279,8 +283,8 @@ class _Host {
       root.deleteSync(recursive: true);
     });
     if (real) {
-      LocalFavoritesManager.cache = null;
-      final database = actual = LocalFavoritesManager();
+      _favoritesOwner = null;
+      final database = actual = _favoritesForView();
       await tester.runAsync(() async {
         await database.init();
         for (final folder in ['Original', 'Other']) {
@@ -366,7 +370,7 @@ class _Host {
         runtime = _runtime();
         await tester.pumpWidget(app());
       case 'manager':
-        LocalFavoritesManager.cache = replacement = _Manager();
+        await _replaceFavorites(tester, replacement = _Manager());
       case 'connection':
         manager.connectionGeneration++;
       case 'path':
@@ -1032,4 +1036,26 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+Widget? _libraryChild;
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+HistoryManager? _historyOwner;
+HistoryManager _historyForView() => _historyOwner ??= HistoryManager.create();
+Widget _libraryView(Widget child) {
+  _libraryChild = child;
+  return FavoritesScope(
+    manager: _favoritesForView(),
+    child: HistoryScope(manager: _historyForView(), child: child),
+  );
+}
+
+Future<void> _replaceFavorites(
+  WidgetTester tester,
+  LocalFavoritesManager manager,
+) async {
+  _favoritesOwner = manager;
+  await tester.pumpWidget(_libraryView(_libraryChild!));
 }

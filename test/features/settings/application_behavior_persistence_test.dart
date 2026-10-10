@@ -1,3 +1,4 @@
+import 'package:venera_next/features/history/history_scope.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -55,11 +56,11 @@ void main() {
     previousCache = App.cachePath;
     root = Directory.systemTemp.createTempSync('application-behavior-');
     App.dataPath = App.cachePath = root.path;
-    previousManager = HistoryManager.cache;
+    previousManager = _historyOwner;
     appdata.settings['historyRetentionDays'] = 0;
     appdata.settings['language'] = 'en-US';
     manager = HistoryManager.create();
-    HistoryManager.cache = manager;
+    _historyOwner = manager;
     await manager.init();
     await manager.addHistory(
       History.fromMap({
@@ -82,7 +83,7 @@ void main() {
     // Re-awaiting that completed queue from real-time teardown retains its zone.
     expect(manager.hasPendingWrites, isFalse);
     manager.close();
-    HistoryManager.cache = previousManager;
+    _historyOwner = previousManager;
     await CacheManager.instance?.dispose();
     await appdata.restoreImportCheckpoint(checkpoint, persist: false);
     App.dataPath = previousPath;
@@ -97,15 +98,17 @@ void main() {
     bool dark = false,
   }) async {
     await tester.pumpWidget(
-      MaterialApp(
-        theme: dark ? ThemeData.dark() : ThemeData.light(),
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: TextScaler.linear(scale)),
-          child: child!,
+      _libraryView(
+        MaterialApp(
+          theme: dark ? ThemeData.dark() : ThemeData.light(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: Scaffold(body: child),
         ),
-        home: Scaffold(body: child),
       ),
     );
     await tester.pumpAndSettle();
@@ -303,4 +306,10 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+}
+
+HistoryManager? _historyOwner;
+HistoryManager _historyForView() => _historyOwner ??= HistoryManager.create();
+Widget _libraryView(Widget child) {
+  return HistoryScope(manager: _historyForView(), child: child);
 }

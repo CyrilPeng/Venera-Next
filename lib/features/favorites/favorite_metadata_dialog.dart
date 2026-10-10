@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -56,6 +57,7 @@ Future<void> _showFavoriteMetadataDialog({
       .getInheritedWidgetOfExactType<PopupIndicatorWidget>()
       ?.route;
   if (parentPopup?.isCurrent == false) return;
+  final store = FavoritesScope.capture(context);
   final generation = manager.connectionGeneration;
   final path = App.dataPath;
   final navigator = Navigator.of(context, rootNavigator: true);
@@ -105,7 +107,7 @@ Future<void> _showFavoriteMetadataDialog({
     if (!owner.active ||
         !isCurrent() ||
         parentPopup?.isActive == false ||
-        !identical(LocalFavoritesManager.cache, manager) ||
+        !(store.isCurrent && identical(store.manager, manager)) ||
         manager.connectionGeneration != generation ||
         App.dataPath != path) {
       throw const RequestCancelled();

@@ -101,30 +101,10 @@ class RandomCategoryPart extends BaseCategoryPart {
 }
 
 class DynamicCategoryPart extends BaseCategoryPart {
-  final dynamic Function(List<dynamic>) loader;
-
-  final String sourceKey;
+  final List<CategoryItem> Function() _load;
 
   @override
-  List<CategoryItem> get categories {
-    var data = loader([]);
-    if (data is! List) {
-      throw "DynamicCategoryPart loader must return a List";
-    }
-    var res = <CategoryItem>[];
-    for (var item in data) {
-      if (item is! Map) {
-        throw "DynamicCategoryPart loader must return a List of Map";
-      }
-      var label = item['label'];
-      var target = PageJumpTarget.parse(sourceKey, item['target']);
-      if (label is! String) {
-        throw "Category label must be a String";
-      }
-      res.add(CategoryItem(label, target));
-    }
-    return res;
-  }
+  List<CategoryItem> get categories => _load();
 
   @override
   bool get enableRandom => false;
@@ -133,7 +113,7 @@ class DynamicCategoryPart extends BaseCategoryPart {
   final String title;
 
   /// A [BaseCategoryPart] that show dynamic tags on category page.
-  const DynamicCategoryPart(this.title, this.loader, this.sourceKey);
+  const DynamicCategoryPart(this.title, this._load);
 }
 
 CategoryData getCategoryDataWithKey(String key) {

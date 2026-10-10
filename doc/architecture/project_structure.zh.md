@@ -1,5 +1,37 @@
 # 项目结构约定
 
+## R4 交付结构与证据（2026-10-10）
+
+最终候选保持 **524 文件：330 业务 / 194 UI / 0 待定，245 业务入口**；57 条允许特性边不变，业务无环且不能到达 UI，UI/导航环为 **42 个成员**。生产代码基点为 `5b338ad`，R4 只同步验收文档与冻结的 CHANGELOG，构建使用独立源码副本。
+
+P8.3 的门禁与覆盖趋势审查完成，原 52 项为 **37 I / 14 P / 1 U**；P8.5 仍为 P。实例/视图注入、只读默认入口与有用途的诊断/协议入口保持 R3 的实际边界。源码、构建输入、产物、删除/保留清单和原未完成范围统一见[R4 候选验收报告](final_acceptance_2026_10_09.md)；既有文档和数值不改写为新测试结果。
+
+## R3 第二组实例装配（2026-10-09）
+
+FavoritesScope 为每个界面提供明确收藏实例；FavoriteStoreBinding 固定原实例并识别视图换库，已接受工作继续由原存储完成。HistoryScope 提供历史和图片收藏依赖；阅读会话固定原所有者，摘要导航、图片收藏导航及导入门面沿实际调用链传递实例。SyncWindowBinding 注入历史排空回调，FollowUpdateJob 固定原收藏实例。
+
+HistoryManager/LocalFavoritesManager 的默认 cache 仅可读取，独立构造不修改默认实例；关闭/重开仍使用原生命周期。只读状态观察用于未初始化核心和导入清理。新增两个 scope 都属于 UI 装配，清单 **524：330 业务 / 194 UI / 0 待定，245 业务入口**，57 条允许边保持。P8.1 已关闭，完整判断与验证见[R3 审计](architecture_compatibility_completion_2026_10_09.md)和[批次报告](completion_batches_2026_10_09.md)。
+
+最终 UI/导航文件环为 **42 个成员**，本地收藏设置页退出上一组 43 文件环。
+
+## R3 第一组职责边界（2026-10-09）
+
+LocalComicRelatedData 承接迁移历史与三库删除的关联操作，adapter 固定原历史/收藏实例及连接代数；LocalManager 构造依赖只能绑定一次，独立实例不会替换默认所有者，失败关闭保留句柄。ComicImageLoader、SourceRepositories 客户端与 ComicBackupManager 依赖通过实例/显式请求参数传递。ComicList 使用类型化 PageStorage 快照与请求代数，CBZ/详情规则测试不再经过重复转发。
+
+完整清单为 **522 文件：330 业务、192 UI、0 待定，245 业务入口**。原 SCC 剩 43 个有理由的 UI/导航成员，业务环为零，57 条特性边保持；结构规则不再把业务 provider/download 重定向到 UI 聚合，UI 入口约束保持。全部文件判定和仍未退出的历史/收藏默认注册表测试替换见[R3 审计](architecture_compatibility_completion_2026_10_09.md)。
+
+## R2 存储与配置边界（2026-10-09）
+
+Core 通过 SqliteDataSyncOwnership.applicationData 持有独立目录锁；同步服务保留自身锁。无头关闭显式区分生产者排空、最后持久化和存储关闭，后两者之间不提前释放所有权。LocalComicStorageGuard 的同步写入也服从 AppDataOperations；下载队列保留原独立提交所有权。
+
+图片处理与 WebView 代理迁至现有 preference 边界，同步排除/版本/时间通过 codec 校验，raw JSON 与恢复适配器保留未知字段。收藏 SQL 提交与各类发布分离，复用一个私有错误聚合方法。生产清单仍为 **520 文件：326 业务、166 UI、28 待审查，241 业务入口**。完整边界见[R2 审计](storage_configuration_completion_2026_10_09.md)；R3 继续待定文件和 SCC 审查。
+
+## R1 第二组边界（2026-10-09）
+
+SourceParserContext 统一已拥有的异步结果消费、同步转换释放和取消分类，能力 parser 负责将借用 JS 图转换为 Dart 模型；DynamicCategoryPart 只接收类型化 loader。删除无人调用的 parser runReadCode；引擎公共读取、公开 JS 协议及源持久化格式保持。
+
+生产文件数量保持 **520：326 业务、166 UI、28 待审查，241 业务入口**。R1 审计及验证见[批次报告](completion_batches_2026_10_09.md)，R3 继续完整职责/SCC 审查，不放宽现有依赖门禁。
+
 ## R1 第一组边界（2026-10-09）
 
 收藏入口显式接收原 BuildContext；网络删除/创建复用 async_confirm_dialog.dart 与 input_dialog.dart，移除重复的创建对话框实现。批量添加的事务与发布留在 manager/repository 层，UI 不执行 SQL。网络导入复用 RequestScope.runToCompletion，窗口任务等待真实结束；打开目录允许注入系统调用以作隔离验证。

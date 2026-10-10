@@ -96,7 +96,7 @@ void main() {
     }
     configurations.clear();
     releases.clear();
-    ImageDownloader.debugResetSourceImageLoading();
+    ImageDownloader.configureSourceImageLoading();
     CacheManager.instance = previousCache;
     await cache.dispose();
     directory.deleteSync(recursive: true);

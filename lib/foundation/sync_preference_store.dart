@@ -15,7 +15,7 @@ class SyncPreferenceStore {
   final void Function(String, Object?) _writeSetting;
   final Map<String, dynamic> Function() _implicitData;
 
-  int get lastSyncTime => (_readSetting('lastSyncTime') as int?) ?? 0;
+  int get lastSyncTime => _readTimestamp(_readSetting('lastSyncTime')) ?? 0;
 
   SyncConfiguration get configuration =>
       SyncConfiguration.read(_readSetting, (key) => _implicitData()[key]);
@@ -33,9 +33,17 @@ class SyncPreferenceStore {
     }
   }
 
-  int? get lastAttempt {
-    final value = _implicitData()['webdavSyncLastAttempt'];
-    return value is int ? value : null;
+  int? get lastAttempt =>
+      _readTimestamp(_implicitData()['webdavSyncLastAttempt']);
+
+  static int? _readTimestamp(Object? value) {
+    if (value is! int || value < 0) return null;
+    try {
+      DateTime.fromMillisecondsSinceEpoch(value);
+      return value;
+    } on ArgumentError {
+      return null;
+    }
   }
 
   set lastAttempt(int? value) =>

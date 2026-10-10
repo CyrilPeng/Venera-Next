@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
@@ -60,7 +61,7 @@ class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
       previewComics = [];
       return;
     }
-    if (!LocalFavoritesManager().folderNames.contains(folder)) {
+    if (!FavoritesScope.read(context).folderNames.contains(folder)) {
       _count = 0;
       previewComics = [];
       final expected = folder!;
@@ -68,7 +69,7 @@ class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
           !hasSettingsSaveError &&
           acceptsSettingsChanges) {
         _repairing = expected;
-        final manager = LocalFavoritesManager();
+        final manager = FavoritesScope.read(context);
         final generation = manager.connectionGeneration;
         scheduleMicrotask(() async {
           if (!mounted || !acceptsSettingsChanges) return;
@@ -83,8 +84,11 @@ class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
         });
       }
     } else {
-      _count = LocalFavoritesManager().countUpdates(folder!);
-      previewComics = getFollowUpdatesPreviewComics(folder!);
+      _count = FavoritesScope.read(context).countUpdates(folder!);
+      previewComics = getFollowUpdatesPreviewComics(
+        folder!,
+        manager: FavoritesScope.read(context),
+      );
     }
   }
 
@@ -185,11 +189,8 @@ class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
 }
 
 class FollowUpdatesPage extends StatefulWidget {
-  const FollowUpdatesPage({
-    super.key,
-    this.createCheck = createFollowUpdatesFolderCheck,
-  });
-  final FollowUpdateJob Function(String) createCheck;
+  const FollowUpdatesPage({super.key, this.createCheck});
+  final FollowUpdateJob Function(String)? createCheck;
 
   @override
   State<FollowUpdatesPage> createState() => _FollowUpdatesPageState();
@@ -357,6 +358,7 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
 
   Widget buildUpdatedComics() {
     final pageContext = context;
+    final store = FavoritesScope.capture(context);
     final target = _listTarget;
     final shown = updatedComics;
     final items = shown.map((comic) => comic.detached()).toList();
@@ -368,7 +370,7 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
         identical(_runtime, runtime) &&
         identical(updatedComics, shown) &&
         folder == target.folder &&
-        identical(LocalFavoritesManager.cache, target.manager) &&
+        (store.isCurrent && identical(store.manager, target.manager)) &&
         target.manager.connectionGeneration == target.generation &&
         App.dataPath == target.path;
     return SliverMainAxisGroup(
@@ -493,7 +495,7 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
 
   void showSelector() {
     if (_folderSelector != null || !NavigationAdmission.allows(context)) return;
-    if (LocalFavoritesManager().folderNames.isEmpty) {
+    if (FavoritesScope.read(context).folderNames.isEmpty) {
       context.showMessage(message: 'No folders available'.tl);
       return;
     }
@@ -517,7 +519,11 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
   void checkNow() async {
     _runtime!.cancelChecking();
 
-    final job = FollowUpdateJob(folder!, true);
+    final job = FollowUpdateJob(
+      folder!,
+      true,
+      manager: FavoritesScope.read(context),
+    );
 
     var loadingController = showLoadingDialog(
       appNavigation.rootContext,
@@ -554,7 +560,7 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
       });
       return;
     }
-    final manager = LocalFavoritesManager();
+    final manager = FavoritesScope.read(context);
     setState(() {
       allComics = manager.getComicsWithUpdatesInfo(selectedFolder);
       _listTarget = (

@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/foundation/persistence_failure.dart';
 import 'package:venera_next/features/local_comics/import_export/comic_import_service.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
@@ -21,7 +22,7 @@ import 'package:venera_next/foundation/file_system.dart';
 void main() {
   const service = ComicImportService(
     localManager: LocalManager.new,
-    favoritesManager: LocalFavoritesManager.new,
+    favoritesManager: _favoritesForView,
   );
   TestWidgetsFlutterBinding.ensureInitialized();
   group('PDF import rendering', () {
@@ -61,14 +62,14 @@ void main() {
         );
         App.dataPath = dataDirectory.path;
         App.cachePath = cacheDirectory.path;
-        LocalManager.resetForTesting();
-        LocalManager.debugSkipComicSourceInit = true;
+        LocalManager.current?.dispose();
+        LocalManager(initializeSources: () async {});
         manager = LocalManager();
         await manager.init();
       });
 
       tearDown(() {
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         dataDirectory.deleteSync(recursive: true);
         cacheDirectory.deleteSync(recursive: true);
       });
@@ -78,8 +79,8 @@ void main() {
       ) async {
         final followFolder = appdata.settings['followUpdatesFolder'];
         final quickFavorite = appdata.settings['quickFavorite'];
-        LocalFavoritesManager.cache = null;
-        final favorites = LocalFavoritesManager();
+        _favoritesOwner = null;
+        final favorites = _favoritesForView();
         try {
           await favorites.init();
           await run(favorites);
@@ -87,7 +88,7 @@ void main() {
           await favorites.debugWaitForHashedIdsRefresh();
           await appdata.saveData(false);
           favorites.close();
-          LocalFavoritesManager.cache = null;
+          _favoritesOwner = null;
           appdata.settings['followUpdatesFolder'] = followFolder;
           appdata.settings['quickFavorite'] = quickFavorite;
         }
@@ -155,9 +156,11 @@ void main() {
         'library recovery refuses to register a partially converted PDF',
         (tester) async {
           await tester.pumpWidget(
-            MaterialApp(
-              navigatorKey: appNavigation.rootNavigatorKey,
-              home: const Scaffold(),
+            _libraryView(
+              MaterialApp(
+                navigatorKey: appNavigation.rootNavigatorKey,
+                home: const Scaffold(),
+              ),
             ),
           );
           await tester.runAsync(() async {
@@ -554,4 +557,11 @@ class _Image extends Fake implements PdfImage {
 
   @override
   void dispose() => disposed = true;
+}
+
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+Widget _libraryView(Widget child) {
+  return FavoritesScope(manager: _favoritesForView(), child: child);
 }

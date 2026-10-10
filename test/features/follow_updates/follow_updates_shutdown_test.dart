@@ -12,20 +12,16 @@ import 'package:venera_next/network/request_scope.dart';
 void main() {
   const sourceKey = 'follow_shutdown_source';
   const otherSourceKey = 'follow_shutdown_other_source';
-  late LocalFavoritesManager? previousFavorites;
   late _Favorites favorites;
 
   setUp(() {
     Log.isMuted = true;
-    previousFavorites = LocalFavoritesManager.cache;
     favorites = _Favorites([_item(sourceKey, 'first')]);
-    LocalFavoritesManager.cache = favorites;
   });
 
   tearDown(() async {
     final release = await FollowUpdateJob.prepareForExit();
     release();
-    LocalFavoritesManager.cache = previousFavorites;
     ComicSourceManager().remove(sourceKey);
     ComicSourceManager().remove(otherSourceKey);
     Log.isMuted = false;
@@ -34,7 +30,7 @@ void main() {
   test(
     'unobserved jobs are lazy and cancellation completes their done',
     () async {
-      final job = FollowUpdateJob('folder', true);
+      final job = FollowUpdateJob('folder', true, manager: favorites);
       var finished = false;
       unawaited(job.done.then((_) => finished = true));
       await pumpEventQueue();
@@ -61,7 +57,7 @@ void main() {
           return Res(_details(sourceKey));
         }),
       );
-      final unobserved = FollowUpdateJob('folder', true);
+      final unobserved = FollowUpdateJob('folder', true, manager: favorites);
       final preparing = FollowUpdateJob.prepareForExit();
       expect(identical(preparing, FollowUpdateJob.prepareForExit()), isTrue);
       final firstRelease = await preparing;
@@ -69,18 +65,26 @@ void main() {
       expect(unobserved.isCancelled, isTrue);
       expect(await unobserved.progress.toList(), isEmpty);
 
-      final rejected = FollowUpdateJob('folder', true);
+      final rejected = FollowUpdateJob('folder', true, manager: favorites);
       await rejected.done;
       expect(await rejected.progress.toList(), isEmpty);
       expect(
-        (await updateComic(favorites.comics.single, 'folder')).cancelled,
+        (await updateComic(
+          favorites.comics.single,
+          'folder',
+          manager: favorites,
+        )).cancelled,
         isTrue,
       );
       expect(sourceCalls, 0);
       expect(favorites.reads, 0);
 
       firstRelease();
-      final result = await updateComic(favorites.comics.single, 'folder');
+      final result = await updateComic(
+        favorites.comics.single,
+        'folder',
+        manager: favorites,
+      );
       expect(result.updated, isTrue);
       expect(sourceCalls, 1);
       expect(favorites.writes, 2);
@@ -90,14 +94,22 @@ void main() {
       final nextRelease = await nextPreparing;
       firstRelease();
       expect(
-        (await updateComic(favorites.comics.single, 'folder')).cancelled,
+        (await updateComic(
+          favorites.comics.single,
+          'folder',
+          manager: favorites,
+        )).cancelled,
         isTrue,
       );
       expect(sourceCalls, 1);
       nextRelease();
       nextRelease();
       expect(
-        (await updateComic(favorites.comics.single, 'folder')).updated,
+        (await updateComic(
+          favorites.comics.single,
+          'folder',
+          manager: favorites,
+        )).updated,
         isTrue,
       );
       expect(sourceCalls, 2);
@@ -112,7 +124,7 @@ void main() {
       );
       final events = <String>[];
       favorites.onNotify = () => events.add('notified');
-      final job = FollowUpdateJob('folder', true);
+      final job = FollowUpdateJob('folder', true, manager: favorites);
       final progress = <UpdateProgress>[];
       var streamEnded = false;
       final subscription = job.progress.listen(
@@ -151,7 +163,7 @@ void main() {
           return response.future;
         }),
       );
-      final job = FollowUpdateJob('folder', true);
+      final job = FollowUpdateJob('folder', true, manager: favorites);
       final subscription = job.progress.listen((_) {});
       await entered.future;
 
@@ -180,7 +192,11 @@ void main() {
           return response.future;
         }),
       );
-      final updating = updateComic(favorites.comics.single, 'folder');
+      final updating = updateComic(
+        favorites.comics.single,
+        'folder',
+        manager: favorites,
+      );
       await entered.future;
       final release = await FollowUpdateJob.prepareForExit();
       expect((await updating).cancelled, isTrue);
@@ -211,11 +227,11 @@ void main() {
       final replaced = Completer<void>();
       late FollowUpdateJob next;
       late Future<void Function()> preparation;
-      final old = FollowUpdateJob('folder', true);
+      final old = FollowUpdateJob('folder', true, manager: favorites);
       final subscription = old.progress.listen((progress) {
         if (progress.updated != 1 || replaced.isCompleted) return;
         favorites.comics = [];
-        next = FollowUpdateJob('folder', true);
+        next = FollowUpdateJob('folder', true, manager: favorites);
         next.progress.listen((_) {});
         preparation = FollowUpdateJob.prepareForExit();
         replaced.complete();
@@ -252,7 +268,7 @@ void main() {
         throw failure;
       };
       final errors = <Object>[];
-      final job = FollowUpdateJob('folder', true);
+      final job = FollowUpdateJob('folder', true, manager: favorites);
       final subscription = job.progress.listen((_) {}, onError: errors.add);
       addTearDown(subscription.cancel);
       await expectLater(job.done, throwsA(same(failure)));
@@ -262,7 +278,7 @@ void main() {
       expect(FollowUpdateJob.isChecking, isFalse);
 
       favorites.onNotify = null;
-      final retry = FollowUpdateJob('folder', true);
+      final retry = FollowUpdateJob('folder', true, manager: favorites);
       final results = await retry.progress.toList();
       await retry.done;
       expect(results.last.updated, 1);
@@ -275,7 +291,7 @@ void main() {
     () async {
       final failure = StateError('favorites unavailable');
       favorites.queryFailure = failure;
-      final job = FollowUpdateJob('folder', true);
+      final job = FollowUpdateJob('folder', true, manager: favorites);
       final observed = expectLater(
         job.progress.toList(),
         throwsA(same(failure)),
@@ -287,7 +303,7 @@ void main() {
       await completed;
       favorites.queryFailure = null;
       favorites.comics = [];
-      final retry = FollowUpdateJob('folder', true);
+      final retry = FollowUpdateJob('folder', true, manager: favorites);
       expect((await retry.progress.toList()).single.fraction, 1);
       await retry.done;
       final release = await FollowUpdateJob.prepareForExit();

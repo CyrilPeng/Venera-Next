@@ -86,7 +86,13 @@ class _Fixture {
           }
           return SourceInstallationsScope(queue: queue, child: content);
         },
-        home: Scaffold(body: child ?? const SourceRepositoriesPanel()),
+        home: Scaffold(
+          body:
+              child ??
+              SourceRepositoriesPanel(
+                createClient: () => Dio()..httpClientAdapter = adapter,
+              ),
+        ),
       );
   Map get saved =>
       (jsonDecode(File('${root.path}/appdata.json').readAsStringSync())
@@ -109,7 +115,6 @@ Future<_Fixture> _prepare(WidgetTester tester) async {
     repositories: SourceRepositories.instance,
     createClient: Dio.new,
   );
-  SourceRepositories.debugCreateDio = () => Dio()..httpClientAdapter = adapter;
   registerShowMessageHandler((_, _) {});
   tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
     const MethodChannel('window_manager'),
@@ -125,7 +130,6 @@ Future<_Fixture> _prepare(WidgetTester tester) async {
       tester,
       appdata.restoreImportCheckpoint(previous, persist: false),
     );
-    SourceRepositories.debugCreateDio = null;
     root.deleteSync(recursive: true);
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       const MethodChannel('window_manager'),

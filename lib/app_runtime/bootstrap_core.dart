@@ -35,6 +35,7 @@ CoreBootstrap createCoreBootstrap({
 }) {
   final cleanup = <CoreStartupCleanup>[];
   final producers = <CoreStartupCleanup>[];
+  SqliteDataSyncOwnership? applicationOwnership;
   var storeCleanupIndex = 0;
   void registerProducer(String name, FutureOr<void> Function() close) {
     Future<void>? closing;
@@ -48,6 +49,7 @@ CoreBootstrap createCoreBootstrap({
 
   return CoreBootstrap(
     failureCleanup: cleanup,
+    releaseOwnership: () => applicationOwnership?.release(),
     shutdownPreparation: () async {
       // A failed producer can still retain native resources. Keep its stores
       // and the remaining runtime dependencies available for diagnostics.
@@ -63,6 +65,12 @@ CoreBootstrap createCoreBootstrap({
     },
     environment: environment ?? App.init,
     settings: () async {
+      // One core owns this directory, including its isolates and accepted
+      // descendants, until stores close. In-process snapshots still use
+      // AppDataOperations; the lease also excludes other headless/UI processes.
+      final ownershipForApplication = applicationOwnership =
+          SqliteDataSyncOwnership.applicationData(() => App.dataPath);
+      ownershipForApplication.acquire();
       // Import recovery precedes settings fallback and every database opener.
       // No live application resource may observe a partly replaced snapshot.
       final ownership = SqliteDataSyncOwnership(() => App.dataPath);

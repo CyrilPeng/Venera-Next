@@ -63,11 +63,28 @@ class SourceCategoryParser {
             if (loader is! JSInvokable) {
               throw "DynamicCategoryPart loader must be a function";
             }
+            final invoke = context.retainCallback(loader);
             categoryParts.add(
               DynamicCategoryPart(
                 name,
-                context.retainCallback(loader),
-                context.key,
+                () => context.consumeSynchronous(() => invoke([]), (data) {
+                  if (data is! List) {
+                    throw 'DynamicCategoryPart loader must return a List';
+                  }
+                  return data.map((item) {
+                    if (item is! Map) {
+                      throw 'DynamicCategoryPart loader must return a List of Map';
+                    }
+                    final label = item['label'];
+                    if (label is! String) {
+                      throw 'Category label must be a String';
+                    }
+                    return CategoryItem(
+                      label,
+                      PageJumpTarget.parse(context.key, item['target']),
+                    );
+                  }).toList();
+                }),
               ),
             );
           }
@@ -156,47 +173,54 @@ class SourceCategoryParser {
     if (context.checkExists("categoryComics.optionLoader")) {
       optionLoader = (category, param) async {
         try {
-          dynamic res = await context.runReadCode("""
+          return await context.runReadCodeToCompletion<
+            Res<List<CategoryComicsOptions>>
+          >(
+            """
           ${context.sourceExpression}.categoryComics.optionLoader(
             ${jsonEncode(category)}, ${jsonEncode(param)})
-        """);
-          if (res is! List) {
-            return Res.error(
-              "Invalid data:\nExpected: List\nGot: ${res.runtimeType}",
-            );
-          }
-          var options = <CategoryComicsOptions>[];
-          for (var element in res) {
-            if (element is! Map) {
-              return Res.error(
-                "Invalid option data:\nExpected: Map\nGot: ${element.runtimeType}",
-              );
-            }
-            LinkedHashMap<String, String> map = LinkedHashMap<String, String>();
-            for (var option in element["options"] ?? []) {
-              if (option.isEmpty || !option.contains("-")) {
-                continue;
+        """,
+            consume: (res) {
+              if (res is! List) {
+                return Res.error(
+                  "Invalid data:\nExpected: List\nGot: ${res.runtimeType}",
+                );
               }
-              var split = option.split("-");
-              var key = split.removeAt(0);
-              var value = split.join("-");
-              map[key] = value;
-            }
-            options.add(
-              CategoryComicsOptions(
-                element["label"] ?? "",
-                map,
-                List.from(element["notShowWhen"] ?? []),
-                element["showWhen"] == null
-                    ? null
-                    : List.from(element["showWhen"]),
-              ),
-            );
-          }
-          return Res(options);
+              var options = <CategoryComicsOptions>[];
+              for (var element in res) {
+                if (element is! Map) {
+                  return Res.error(
+                    "Invalid option data:\nExpected: Map\nGot: ${element.runtimeType}",
+                  );
+                }
+                LinkedHashMap<String, String> map =
+                    LinkedHashMap<String, String>();
+                for (var option in element["options"] ?? []) {
+                  if (option.isEmpty || !option.contains("-")) {
+                    continue;
+                  }
+                  var split = option.split("-");
+                  var key = split.removeAt(0);
+                  var value = split.join("-");
+                  map[key] = value;
+                }
+                options.add(
+                  CategoryComicsOptions(
+                    element["label"] ?? "",
+                    map,
+                    List.from(element["notShowWhen"] ?? []),
+                    element["showWhen"] == null
+                        ? null
+                        : List.from(element["showWhen"]),
+                  ),
+                );
+              }
+              return Res(options);
+            },
+          );
         } catch (e, s) {
           Log.error("Data Analysis", "Failed to load category options.\n$e");
-          return Res.fromException(e, s);
+          return context.failureResult(e, s);
         }
       };
     }
@@ -219,27 +243,25 @@ class SourceCategoryParser {
       if (context.checkExists("categoryComics.ranking.load")) {
         load = (option, page) async {
           try {
-            var res = await context.runReadCode("""
+            return await context.runReadCodeToCompletion<Res<List<Comic>>>("""
             ${context.sourceExpression}.categoryComics.ranking.load(
               ${jsonEncode(option)}, ${jsonEncode(page)})
-          """);
-            return context.parseComicListResult(res, "maxPage");
+          """, consume: (res) => context.parseComicListResult(res, 'maxPage'));
           } catch (e, s) {
             Log.error("Network", "$e\n$s");
-            return Res.fromException(e, s);
+            return context.failureResult(e, s);
           }
         };
       } else {
         loadWithNext = (option, next) async {
           try {
-            var res = await context.runReadCode("""
+            return await context.runReadCodeToCompletion<Res<List<Comic>>>("""
             ${context.sourceExpression}.categoryComics.ranking.loadWithNext(
               ${jsonEncode(option)}, ${jsonEncode(next)})
-          """);
-            return context.parseComicListResult(res, "next");
+          """, consume: (res) => context.parseComicListResult(res, 'next'));
           } catch (e, s) {
             Log.error("Network", "$e\n$s");
-            return Res.fromException(e, s);
+            return context.failureResult(e, s);
           }
         };
       }
@@ -255,18 +277,20 @@ class SourceCategoryParser {
       optionsLoader: optionLoader,
       load: (category, param, options, page) async {
         try {
-          var res = await context.runReadCode("""
+          return await context.runReadCodeToCompletion<Res<List<Comic>>>(
+            """
               ${context.sourceExpression}.categoryComics.load(
                 ${jsonEncode(category)},
                 ${jsonEncode(param)},
                 ${jsonEncode(options)},
                 ${jsonEncode(page)}
               )
-            """);
-          return context.parseComicListResult(res, "maxPage");
+            """,
+            consume: (res) => context.parseComicListResult(res, 'maxPage'),
+          );
         } catch (e, s) {
           Log.error("Network", "$e\n$s");
-          return Res.fromException(e, s);
+          return context.failureResult(e, s);
         }
       },
       rankingData: rankingData,

@@ -128,15 +128,15 @@ void main() {
     App.dataPath = temporary.path;
     App.cachePath = temporary.path;
     Log.isMuted = true;
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     manager = LocalManager();
     await manager.init();
     source((_, _) async => const Res(['new-image']));
   });
   tearDown(() {
     ComicSourceManager().remove(_key);
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     Log.isMuted = previousLogMuted;
     App.dataPath = previousDataPath;
     App.cachePath = previousCachePath;
@@ -491,29 +491,34 @@ void main() {
           }),
         ),
       );
-      final previous = ImageDownloader.debugLoadComicImageUnwrapped;
       final imageChapters = <String>[];
-      ImageDownloader.debugLoadComicImageUnwrapped =
-          (key, source, id, chapter) {
-            imageChapters.add(chapter);
-            return Stream.value(
-              ImageDownloadProgress(
-                currentBytes: 1,
-                totalBytes: 1,
-                imageBytes: Uint8List.fromList([8]),
-              ),
-            );
-          };
-      try {
-        expect(
-          await read(ImageFavoritesProvider(_image(eid: '', imageKey: ''))),
-          [8],
+      Stream<ImageDownloadProgress> loadImage(
+        String key,
+        String? source,
+        String id,
+        String chapter,
+      ) {
+        imageChapters.add(chapter);
+        return Stream.value(
+          ImageDownloadProgress(
+            currentBytes: 1,
+            totalBytes: 1,
+            imageBytes: Uint8List.fromList([8]),
+          ),
         );
-        expect(pageChapters, [null]);
-        expect(imageChapters, ['0']);
-      } finally {
-        ImageDownloader.debugLoadComicImageUnwrapped = previous;
       }
+
+      expect(
+        await read(
+          ImageFavoritesProvider(
+            _image(eid: '', imageKey: ''),
+            loadImage: loadImage,
+          ),
+        ),
+        [8],
+      );
+      expect(pageChapters, [null]);
+      expect(imageChapters, ['0']);
     },
   );
 
@@ -548,22 +553,29 @@ void main() {
         SourceImagesParser(context).parseLoadComicPagesFunc()!,
         info: SourceComicParser(context).parseLoadComicFunc(),
       );
-      final previous = ImageDownloader.debugLoadComicImageUnwrapped;
       final downloads = <(String, String, String)>[];
-      ImageDownloader.debugLoadComicImageUnwrapped =
-          (key, source, id, chapter) {
-            downloads.add((key, id, chapter));
-            return Stream.value(
-              ImageDownloadProgress(
-                currentBytes: 1,
-                totalBytes: 1,
-                imageBytes: Uint8List.fromList([7]),
-              ),
-            );
-          };
+      Stream<ImageDownloadProgress> loadImage(
+        String key,
+        String? source,
+        String id,
+        String chapter,
+      ) {
+        downloads.add((key, id, chapter));
+        return Stream.value(
+          ImageDownloadProgress(
+            currentBytes: 1,
+            totalBytes: 1,
+            imageBytes: Uint8List.fromList([7]),
+          ),
+        );
+      }
+
       try {
         final image = _image(imageKey: '', eid: '', ep: 2, page: 2);
-        expect(await read(ImageFavoritesProvider(image)), [7]);
+        expect(
+          await read(ImageFavoritesProvider(image, loadImage: loadImage)),
+          [7],
+        );
         expect(
           engine.runCode('importCalls.join(",")'),
           'info:book,pages:book:first',
@@ -573,7 +585,6 @@ void main() {
         expect(image.imageKey, '');
         expect(engine.debugOwnedReferenceCount, 0);
       } finally {
-        ImageDownloader.debugLoadComicImageUnwrapped = previous;
         callbacks.dispose();
         engine.dispose();
       }

@@ -218,6 +218,33 @@ abstract final class FavoritePreferences {
   ];
 }
 
+abstract final class ImageProcessingPreferences {
+  static const enabled = BoolPreference('enableCustomImageProcessing', false);
+  static const script = StringPreference(
+    'customImageProcessing',
+    defaultCustomImageProcessing,
+  );
+  static const all = <Preference<Object>>[enabled, script];
+}
+
+const defaultCustomImageProcessing = '''
+/**
+ * Process an image
+ * @param image {ArrayBuffer} - The image to process
+ * @param cid {string} - The comic ID
+ * @param eid {string} - The episode ID
+ * @param page {number} - The page number
+ * @param sourceKey {string} - The source key
+ * @returns {Promise<ArrayBuffer> | {image: Promise<ArrayBuffer>, onCancel: () => void}} - The processed image
+ */
+async function processImage(image, cid, eid, page, sourceKey) {
+    let futureImage = new Promise((resolve, reject) => {
+        resolve(image);
+    });
+    return futureImage;
+}
+''';
+
 Map<String, Object?> get applicationPreferenceDefaults => {
   for (final preference in [
     ...AppPreferences.all,
@@ -226,6 +253,7 @@ Map<String, Object?> get applicationPreferenceDefaults => {
     ...DiscoveryPreferences.all,
     ...KeywordPreferences.all,
     ...FavoritePreferences.all,
+    ...ImageProcessingPreferences.all,
   ])
     preference.key: preference.storageDefault,
 };

@@ -18,8 +18,8 @@ void main() {
     root = Directory.systemTemp.createTempSync('epub-lifecycle-');
     App.dataPath = root.path;
     App.cachePath = (Directory('${root.path}/cache')..createSync()).path;
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     manager = LocalManager();
     await manager.init();
     final contents = archive.Archive();
@@ -39,7 +39,7 @@ void main() {
   });
   tearDown(() async {
     await manager.pendingDownloadTaskWrites;
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     root.deleteSync(recursive: true);
   });
 

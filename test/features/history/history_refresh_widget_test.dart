@@ -1,3 +1,4 @@
+import 'package:venera_next/features/history/history_scope.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,17 +36,17 @@ void main() {
   late _Manager manager;
   final messages = <String>[];
   setUp(() {
-    final old = HistoryManager.cache;
+    final old = _historyOwner;
     final language = appdata.settings['language'];
     final muted = Log.isMuted;
     manager = _Manager();
-    HistoryManager.cache = manager;
+    _historyOwner = manager;
     messages.clear();
     appdata.settings['language'] = 'en-US';
     Log.isMuted = true;
     registerShowMessageHandler((context, message) => messages.add(message));
     addTearDown(() {
-      HistoryManager.cache = old;
+      _historyOwner = old;
       manager.dispose();
       appdata.settings['language'] = language;
       Log.isMuted = muted;
@@ -53,7 +54,7 @@ void main() {
     });
   });
   Future<void> show(WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: HistoryPage()));
+    await tester.pumpWidget(_libraryView(MaterialApp(home: HistoryPage())));
     await tester.pumpAndSettle();
   }
 
@@ -163,4 +164,10 @@ void main() {
       emitsInOrder([emitsError(same(error)), emitsDone]),
     );
   });
+}
+
+HistoryManager? _historyOwner;
+HistoryManager _historyForView() => _historyOwner ??= HistoryManager.create();
+Widget _libraryView(Widget child) {
+  return HistoryScope(manager: _historyForView(), child: child);
 }

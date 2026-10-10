@@ -29,7 +29,6 @@ void main() {
     root = Directory.systemTemp.createTempSync('favorite-settings-');
     App.dataPath = root.path;
     App.cachePath = root.path;
-    LocalFavoritesManager.cache = null;
     appdata.settings['disableSyncFields'] = '';
     appdata.settings['readLaterFolder'] = null;
     manager = LocalFavoritesManager();
@@ -38,7 +37,6 @@ void main() {
   tearDown(() async {
     appdata.registerSyncDataRequestHandler(null);
     await manager.closeAndWait();
-    LocalFavoritesManager.cache = null;
     await appdata.restoreImportCheckpoint(before, persist: false);
     root.deleteSync(recursive: true);
   });

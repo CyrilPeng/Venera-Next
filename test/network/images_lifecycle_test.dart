@@ -23,7 +23,7 @@ void main() {
   });
   tearDown(() async {
     ImageDownloader.cancelAllLoadingImages();
-    ImageDownloader.debugResetSourceImageLoading();
+    ImageDownloader.configureSourceImageLoading();
     CacheManager.instance = previous;
     await cache.dispose();
     directory.deleteSync(recursive: true);

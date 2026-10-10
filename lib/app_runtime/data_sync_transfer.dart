@@ -12,6 +12,7 @@ import 'package:venera_next/features/history/image_favorites.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/sync_configuration.dart';
 import 'package:venera_next/network/webdav.dart';
 
 WebDavDataSyncTransfer createDataSyncTransfer({
@@ -79,14 +80,16 @@ class _ApplicationImportRecovery implements DataSyncImportRecovery {
 
 class _ApplicationSyncParticipant implements DataSyncParticipant {
   @override
-  int? get version => appdata.settings['dataVersion'] as int?;
+  int get version =>
+      SyncConfiguration.requireDataVersion(appdata.settings['dataVersion']);
 
   @override
   String get cachePath => App.cachePath;
 
   @override
   Future<int> prepareUploadVersion() => appdata.updateSettings((settings) {
-    final version = (settings['dataVersion'] as int) + 1;
+    final version =
+        SyncConfiguration.requireDataVersion(settings['dataVersion']) + 1;
     settings['dataVersion'] = version;
     return version;
   }, sync: false);

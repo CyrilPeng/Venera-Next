@@ -155,8 +155,8 @@ void main() {
     final root = Directory.systemTemp.createTempSync('venera-chapter-choice-');
     final ownedPath = root.resolveSymbolicLinksSync();
     final tempPath = Directory.systemTemp.resolveSymbolicLinksSync();
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     App.dataPath = root.path;
     App.cachePath = root.path;
     File('${root.path}/local_path').writeAsStringSync(root.path);
@@ -171,7 +171,7 @@ void main() {
     registerShowMessageHandler((_, message) => messages.add(message));
     library = LocalManager();
     addTearDown(() {
-      LocalManager.resetForTesting();
+      LocalManager.current?.dispose();
       App.isInitialized = initialized;
       Log.isMuted = muted;
       appdata.settings['language'] = language;

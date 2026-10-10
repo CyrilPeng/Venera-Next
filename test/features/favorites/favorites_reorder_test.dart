@@ -1,3 +1,5 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/history/history_scope.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:io';
@@ -77,10 +79,10 @@ void main() {
           );
           App.dataPath = directory.path;
           App.cachePath = directory.path;
-          LocalFavoritesManager.cache = null;
-          HistoryManager.cache = null;
-          var manager = LocalFavoritesManager();
-          final history = HistoryManager();
+
+          _historyOwner = null;
+          var manager = _favoritesForView();
+          final history = _historyForView();
           appdata.settings['comicDisplayMode'] = 'brief';
           appdata.settings[FavoritePreferences.displayMode.key] =
               columns == null ? 'list' : 'gallery';
@@ -114,8 +116,8 @@ void main() {
               manager.close();
               history.close();
             });
-            LocalFavoritesManager.cache = null;
-            HistoryManager.cache = null;
+
+            _historyOwner = null;
             for (final entry in previousSettings.entries) {
               appdata.settings[entry.key] = entry.value;
             }
@@ -149,14 +151,16 @@ void main() {
             await manager.debugWaitForHashedIdsRefresh();
           });
           await tester.pumpWidget(
-            MaterialApp(
-              theme: ThemeData(
-                brightness: kind == PointerDeviceKind.mouse
-                    ? Brightness.dark
-                    : Brightness.light,
+            _libraryView(
+              MaterialApp(
+                theme: ThemeData(
+                  brightness: kind == PointerDeviceKind.mouse
+                      ? Brightness.dark
+                      : Brightness.light,
+                ),
+                navigatorKey: appNavigation.rootNavigatorKey,
+                home: const Scaffold(body: FavoritesPage()),
               ),
-              navigatorKey: appNavigation.rootNavigatorKey,
-              home: const Scaffold(body: FavoritesPage()),
             ),
           );
           await tester.pumpAndSettle();
@@ -226,20 +230,22 @@ void main() {
           await tester.runAsync(() async {
             await manager.debugWaitForHashedIdsRefresh();
             manager.close();
-            LocalFavoritesManager.cache = null;
-            manager = LocalFavoritesManager();
+
+            manager = _favoritesForView();
             await manager.init();
             await manager.debugWaitForHashedIdsRefresh();
           });
           await tester.pumpWidget(
-            MaterialApp(
-              theme: ThemeData(
-                brightness: kind == PointerDeviceKind.mouse
-                    ? Brightness.dark
-                    : Brightness.light,
+            _libraryView(
+              MaterialApp(
+                theme: ThemeData(
+                  brightness: kind == PointerDeviceKind.mouse
+                      ? Brightness.dark
+                      : Brightness.light,
+                ),
+                navigatorKey: appNavigation.rootNavigatorKey,
+                home: const Scaffold(body: FavoritesPage()),
               ),
-              navigatorKey: appNavigation.rootNavigatorKey,
-              home: const Scaffold(body: FavoritesPage()),
             ),
           );
           await tester.pumpAndSettle();
@@ -253,4 +259,16 @@ void main() {
       );
     }
   }
+}
+
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+HistoryManager? _historyOwner;
+HistoryManager _historyForView() => _historyOwner ??= HistoryManager.create();
+Widget _libraryView(Widget child) {
+  return FavoritesScope(
+    manager: _favoritesForView(),
+    child: HistoryScope(manager: _historyForView(), child: child),
+  );
 }

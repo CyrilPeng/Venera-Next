@@ -665,10 +665,6 @@ FEATURE_ENTRYPOINT_TARGETS = {
         "follow_updates",
         "follow_updates.dart",
     ),
-    _feature_path("history", "history_image_provider.dart"): _feature_path(
-        "history",
-        "history.dart",
-    ),
     _feature_path("history", "history_page.dart"): _feature_path(
         "history",
         "history.dart",
@@ -679,11 +675,7 @@ FEATURE_ENTRYPOINT_TARGETS = {
     ),
     _feature_path("history", "image_favorites_models.dart"): _feature_path(
         "history",
-        "history.dart",
-    ),
-    _feature_path("history", "image_favorites_provider.dart"): _feature_path(
-        "history",
-        "history.dart",
+        "history_api.dart",
     ),
     _feature_path("image_favorites", "image_favorites_page.dart"): _feature_path(
         "image_favorites",
@@ -722,10 +714,6 @@ FEATURE_ENTRYPOINT_TARGETS = {
         "import_export.dart",
     ),
     _feature_path("local_comics", "downloading_page.dart"): _feature_path(
-        "local_comics",
-        "local_comics.dart",
-    ),
-    _feature_path("local_comics", "download.dart"): _feature_path(
         "local_comics",
         "local_comics.dart",
     ),

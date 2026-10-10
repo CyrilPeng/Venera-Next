@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -75,35 +76,37 @@ class _Host {
   _NavigatorState get navigator =>
       appNavigation.rootNavigatorKey.currentState! as _NavigatorState;
 
-  Widget app({SelectionTaskRegistry? tasks}) => MaterialApp(
-    builder: (_, _) {
-      Widget child = _Navigator(
-        key: appNavigation.rootNavigatorKey,
-        onGenerateRoute: (_) => MaterialPageRoute<void>(
-          builder: (value) {
-            context = value;
-            return Scaffold(body: content ?? const Text('Original owner'));
-          },
-        ),
-      );
-      if (window) child = WindowFrame(child, onExit: () => exits++);
-      return SelectionTasksScope(
-        registry: tasks ?? registry,
-        child: NavigationAdmission(
-          allowsNavigation: () => allowed,
-          child: child,
-        ),
-      );
-    },
+  Widget app({SelectionTaskRegistry? tasks}) => _libraryView(
+    MaterialApp(
+      builder: (_, _) {
+        Widget child = _Navigator(
+          key: appNavigation.rootNavigatorKey,
+          onGenerateRoute: (_) => MaterialPageRoute<void>(
+            builder: (value) {
+              context = value;
+              return Scaffold(body: content ?? const Text('Original owner'));
+            },
+          ),
+        );
+        if (window) child = WindowFrame(child, onExit: () => exits++);
+        return SelectionTasksScope(
+          registry: tasks ?? registry,
+          child: NavigationAdmission(
+            allowsNavigation: () => allowed,
+            child: child,
+          ),
+        );
+      },
+    ),
   );
 
   Future<void> mount(
     WidgetTester tester, {
     LocalFavoritesManager? database,
   }) async {
-    final original = LocalFavoritesManager.cache;
+    final original = _favoritesOwner;
     final language = appdata.settings['language'];
-    LocalFavoritesManager.cache = database ?? manager;
+    _favoritesOwner = database ?? manager;
     appdata.settings['language'] = 'en-US';
     registerShowMessageHandler((_, message) => messages.add(message));
     addTearDown(() async {
@@ -112,7 +115,7 @@ class _Host {
       await tester.pumpWidget(const SizedBox());
       await pumpSidebar(tester);
       await settleSidebarWork(tester, registry.closeAndWait);
-      LocalFavoritesManager.cache = original;
+      _favoritesOwner = original;
       appdata.settings['language'] = language;
       registerShowMessageHandler((_, _) {});
     });
@@ -405,7 +408,7 @@ void main() {
     await pumpSidebar(tester);
     _reorder(tester)(0, 3);
     final replacement = _Manager();
-    LocalFavoritesManager.cache = replacement;
+    await _replaceFavorites(tester, replacement);
     host.navigator.pop();
     await settleSidebarWork(tester, () => result);
     expect(host.manager.writes, isEmpty);
@@ -613,7 +616,7 @@ void main() {
           } else if (change == 'path') {
             App.dataPath = p.join(previousPath, 'synthetic-order-replacement');
           } else {
-            LocalFavoritesManager.cache = replacement;
+            await _replaceFavorites(tester, replacement);
           }
         });
         host.navigator.pop();
@@ -638,7 +641,7 @@ void main() {
     await pumpSidebar(tester);
     final reorder = _reorder(tester);
     final help = _help(tester);
-    LocalFavoritesManager.cache = _Manager();
+    await _replaceFavorites(tester, _Manager());
     reorder(0, 3);
     help();
     await pumpSidebar(tester);
@@ -761,20 +764,20 @@ void main() {
       );
       final previousData = App.dataPath;
       final previousCache = App.cachePath;
-      final previousManager = LocalFavoritesManager.cache;
+      final previousManager = _favoritesOwner;
       final previousSettings = Map<String, dynamic>.from(
         appdata.toJson()['settings'] as Map,
       );
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalFavoritesManager.cache = null;
-      final database = LocalFavoritesManager();
+      _favoritesOwner = null;
+      final database = _favoritesForView();
       addTearDown(() async {
         await tester.runAsync(() async {
           await AppDataOperations.instance.run(() async {});
           await database.closeAndWait();
         });
-        LocalFavoritesManager.cache = previousManager;
+        _favoritesOwner = previousManager;
         previousSettings.forEach((key, value) => appdata.settings[key] = value);
         App.dataPath = previousData;
         App.cachePath = previousCache;
@@ -862,4 +865,21 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+Widget? _libraryChild;
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+Widget _libraryView(Widget child) {
+  _libraryChild = child;
+  return FavoritesScope(manager: _favoritesForView(), child: child);
+}
+
+Future<void> _replaceFavorites(
+  WidgetTester tester,
+  LocalFavoritesManager manager,
+) async {
+  _favoritesOwner = manager;
+  await tester.pumpWidget(_libraryView(_libraryChild!));
 }

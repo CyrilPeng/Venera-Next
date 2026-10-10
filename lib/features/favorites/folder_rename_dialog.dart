@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -11,7 +12,7 @@ import 'package:venera_next/foundation/persistence_failure.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/translations.dart';
 
-import 'favorite_actions.dart' show validateFolderName;
+import 'folder_name_validation.dart';
 import 'favorites_manager.dart';
 
 Future<void> renameFavoriteFolder(
@@ -53,10 +54,11 @@ Future<void> _renameFavoriteFolder(
       .getInheritedWidgetOfExactType<PopupIndicatorWidget>()
       ?.route;
   if (popup?.isCurrent == false) return;
+  final store = FavoritesScope.capture(context);
   final generation = manager.connectionGeneration;
   final dataPath = App.dataPath;
   bool isCurrentDatabase() =>
-      identical(LocalFavoritesManager.cache, manager) &&
+      (store.isCurrent && identical(store.manager, manager)) &&
       manager.connectionGeneration == generation &&
       App.dataPath == dataPath;
   if (!isCurrentDatabase()) return;

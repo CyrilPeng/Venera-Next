@@ -8,24 +8,23 @@ import 'package:venera_next/foundation/app.dart';
 import '../history/image_favorites_repository_test.dart' show comic;
 
 void main() {
+  late ImageFavoriteManager imageManager;
   setUpAll(() {
     App.dataPath = Directory.systemTemp.path;
     App.cachePath = Directory.systemTemp.path;
   });
   late Directory root;
   late HistoryManager history;
-  late HistoryManager? previous;
   late String previousData;
   late String previousCache;
   Future<void> prepare() async {
     root = Directory.systemTemp.createTempSync('summary-lifecycle-');
     previousData = App.dataPath;
     previousCache = App.cachePath;
-    previous = HistoryManager.cache;
     App.dataPath = root.path;
     App.cachePath = root.path;
     history = HistoryManager.create();
-    HistoryManager.cache = history;
+    imageManager = ImageFavoriteManager.create(history: history);
     await history.init();
     await history.accessImageFavorites(
       (repository, _) => repository.save(comic('sample')),
@@ -35,7 +34,8 @@ void main() {
   tearDown(() {
     expect(history.hasPendingWrites, isFalse);
     history.close();
-    HistoryManager.cache = previous;
+    imageManager.dispose();
+    history.dispose();
     App.dataPath = previousData;
     App.cachePath = previousCache;
     root.deleteSync(recursive: true);
@@ -46,9 +46,11 @@ void main() {
   ) async {
     await prepare();
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: Scaffold(
-          body: CustomScrollView(slivers: [ImageFavoritesSummary()]),
+          body: CustomScrollView(
+            slivers: [ImageFavoritesSummary(manager: imageManager)],
+          ),
         ),
       ),
     );
@@ -65,9 +67,11 @@ void main() {
   ) async {
     await prepare();
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: Scaffold(
-          body: SmoothCustomScrollView(slivers: [ImageFavoritesSummary()]),
+          body: SmoothCustomScrollView(
+            slivers: [ImageFavoritesSummary(manager: imageManager)],
+          ),
         ),
       ),
     );
@@ -88,9 +92,9 @@ void main() {
         home: Scaffold(
           body: SmoothCustomScrollView(
             controller: controller,
-            slivers: const [
+            slivers: [
               SliverToBoxAdapter(child: SizedBox(height: 350)),
-              ImageFavoritesSummary(),
+              ImageFavoritesSummary(manager: imageManager),
             ],
           ),
         ),

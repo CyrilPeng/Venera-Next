@@ -12,7 +12,7 @@ import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/scroll.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -312,57 +312,45 @@ class ComicListState extends State<ComicList> {
   final Map<int, bool> _loading = {};
 
   bool _isReloading = false;
+  int _generation = 0;
 
   String? _nextUrl;
 
   late bool enablePageStorage = widget.enablePageStorage;
 
-  Map<String, dynamic> get state => {
-    'maxPage': _maxPage,
-    'data': _data,
-    'page': _page,
-    'error': _error,
-    'loading': _loading,
-    'nextUrl': _nextUrl,
-  };
-
-  void restoreState(Map<String, dynamic>? state) {
-    if (state == null || !enablePageStorage) {
+  void _restoreState(Object? state) {
+    if (state is! _ComicListSnapshot || !enablePageStorage) {
       return;
     }
-    _maxPage = state['maxPage'];
+    _maxPage = state.maxPage;
     _data.clear();
-    final data = state['data'];
-    if (data is Map) {
-      for (final entry in data.entries) {
-        final key = entry.key;
-        final value = entry.value;
-        if (key is int && value is Iterable) {
-          _data[key] = List<Comic>.from(value);
-        }
-      }
+    for (final entry in state.data.entries) {
+      _data[entry.key] = List.of(entry.value);
     }
-    _page = state['page'];
-    _error = state['error'];
-    _loading.clear();
-    final loading = state['loading'];
-    if (loading is Map) {
-      for (final entry in loading.entries) {
-        if (entry.key is int && entry.value is bool) {
-          _loading[entry.key] = entry.value;
-        }
-      }
-    }
-    _nextUrl = state['nextUrl'];
+    _page = state.page;
+    _error = state.error;
+    _nextUrl = state.nextUrl;
   }
 
   void storeState() {
-    if (enablePageStorage) {
-      PageStorage.of(context).writeState(context, state);
+    if (mounted && enablePageStorage) {
+      PageStorage.of(context).writeState(
+        context,
+        _ComicListSnapshot(
+          maxPage: _maxPage,
+          data: _data,
+          page: _page,
+          error: _error,
+          nextUrl: _nextUrl,
+        ),
+      );
     }
   }
 
   void refresh() {
+    if (!mounted) return;
+    _generation++;
+    _isReloading = false;
     _data.clear();
     _page = 1;
     _maxPage = null;
@@ -374,18 +362,20 @@ class ComicListState extends State<ComicList> {
   }
 
   Future<void> reload() async {
-    if (_isReloading) return;
-    if (widget.loadPage == null || _data.isEmpty) {
+    if (!mounted || _isReloading) return;
+    final loadPage = widget.loadPage;
+    if (loadPage == null || _data.isEmpty) {
       refresh();
       return;
     }
     _isReloading = true;
+    final generation = _generation;
     final pages = _data.keys.toList()..sort();
     try {
       final results = await Future.wait([
-        for (final page in pages) widget.loadPage!(page),
+        for (final page in pages) loadPage(page),
       ]);
-      if (!mounted) return;
+      if (!_isCurrent(generation)) return;
       setState(() {
         for (var index = 0; index < pages.length; index++) {
           final result = results[index];
@@ -402,18 +392,26 @@ class ComicListState extends State<ComicList> {
       });
       storeState();
     } finally {
-      _isReloading = false;
+      if (_isCurrent(generation)) _isReloading = false;
     }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    restoreState(PageStorage.of(context).readState(context));
+    _restoreState(PageStorage.of(context).readState(context));
     widget.refreshHandlerCallback?.call(refresh);
     widget.reloadHandlerCallback?.call(() {
       unawaited(reload());
     });
+  }
+
+  bool _isCurrent(int generation) => mounted && generation == _generation;
+
+  @override
+  void dispose() {
+    _generation++;
+    super.dispose();
   }
 
   void remove(Comic c) {
@@ -528,20 +526,24 @@ class ComicListState extends State<ComicList> {
   }
 
   Future<void> _loadPage(int page) async {
-    if (widget.loadPage == null && widget.loadNext == null) {
+    final generation = _generation;
+    final loadPage = widget.loadPage;
+    final loadNext = widget.loadNext;
+    if (loadPage == null && loadNext == null) {
       _error = "loadPage and loadNext can't be null at the same time";
       Future.microtask(() {
-        setState(() {});
+        if (_isCurrent(generation)) setState(() {});
       });
+      return;
     }
     if (_data[page] != null || _loading[page] == true) {
       return;
     }
     _loading[page] = true;
     try {
-      if (widget.loadPage != null) {
-        var res = await widget.loadPage!(page);
-        if (!mounted) return;
+      if (loadPage != null) {
+        var res = await loadPage(page);
+        if (!_isCurrent(generation)) return;
         if (res.success) {
           if (res.data.isEmpty) {
             setState(() {
@@ -562,34 +564,37 @@ class ComicListState extends State<ComicList> {
           });
         }
       } else {
-        try {
-          while (_data[page] == null) {
-            await _fetchNext();
-          }
-          if (mounted) {
-            setState(() {});
-          }
-        } catch (e) {
-          if (mounted) {
-            setState(() {
-              _error = e.toString();
-            });
-          }
+        while (_isCurrent(generation) && _data[page] == null) {
+          await _fetchNext(loadNext!, generation);
+        }
+        if (_isCurrent(generation)) {
+          setState(() {});
         }
       }
+    } catch (error) {
+      if (_isCurrent(generation)) {
+        setState(() => _error = error.toString());
+      }
     } finally {
-      _loading[page] = false;
-      storeState();
+      if (_isCurrent(generation)) {
+        _loading[page] = false;
+        storeState();
+      }
     }
   }
 
-  Future<void> _fetchNext() async {
-    var res = await widget.loadNext!(_nextUrl);
+  Future<void> _fetchNext(
+    Future<Res<List<Comic>>> Function(String?) loadNext,
+    int generation,
+  ) async {
+    var res = await loadNext(_nextUrl);
+    if (!_isCurrent(generation)) return;
+    if (res.error) throw res.errorMessage ?? 'Unknown error'.tl;
     _data[_data.length + 1] = List<Comic>.from(res.data);
     if (res.subData == null) {
       _maxPage = _data.length;
     } else {
-      _nextUrl = res.subData;
+      _nextUrl = res.subData as String;
     }
   }
 
@@ -724,4 +729,25 @@ class ComicListState extends State<ComicList> {
       ],
     );
   }
+}
+
+/// PageStorage is an in-memory UI snapshot, not a persisted data format. Active
+/// requests belong to their original State and are never restored as loading.
+class _ComicListSnapshot {
+  _ComicListSnapshot({
+    required this.maxPage,
+    required Map<int, List<Comic>> data,
+    required this.page,
+    required this.error,
+    required this.nextUrl,
+  }) : data = Map.unmodifiable({
+         for (final entry in data.entries)
+           entry.key: List<Comic>.unmodifiable(entry.value),
+       });
+
+  final int? maxPage;
+  final Map<int, List<Comic>> data;
+  final int page;
+  final String? error;
+  final String? nextUrl;
 }

@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -29,16 +30,16 @@ void main() {
     root = Directory.systemTemp.createTempSync('read-later-');
     App.dataPath = root.path;
     App.cachePath = root.path;
-    LocalFavoritesManager.cache = null;
+    _favoritesOwner = null;
     appdata.settings['readLaterFolder'] = null;
-    manager = LocalFavoritesManager();
+    manager = _favoritesForView();
     await manager.init();
   });
   tearDown(() async {
     await manager.debugWaitForHashedIdsRefresh();
     await appdata.saveData(false);
     manager.close();
-    LocalFavoritesManager.cache = null;
+    _favoritesOwner = null;
     for (final entry in settings.entries) {
       appdata.settings[entry.key] = entry.value;
     }
@@ -126,9 +127,9 @@ void main() {
       };
       await manager.debugWaitForHashedIdsRefresh();
       manager.close();
-      LocalFavoritesManager.cache = null;
+      _favoritesOwner = null;
       appdata.settings['readLaterFolder'] = null;
-      manager = LocalFavoritesManager();
+      manager = _favoritesForView();
       await manager.init();
       await appdata.syncData(saved);
       expect(manager.readLaterFolder, 'Later');
@@ -140,13 +141,15 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: CustomScrollView(
-            slivers: [
-              const ReadLaterSummary(),
-              SliverToBoxAdapter(child: ReadLaterButton(comic: _comic('1'))),
-            ],
+      _libraryView(
+        MaterialApp(
+          home: Scaffold(
+            body: CustomScrollView(
+              slivers: [
+                const ReadLaterSummary(),
+                SliverToBoxAdapter(child: ReadLaterButton(comic: _comic('1'))),
+              ],
+            ),
           ),
         ),
       ),
@@ -182,27 +185,29 @@ void main() {
         await AppTranslation.init();
         final boundaryKey = GlobalKey();
         await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData(
-              colorSchemeSeed: Colors.indigo,
-              useMaterial3: true,
-            ),
-            builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: const TextScaler.linear(1.5)),
-              child: child!,
-            ),
-            home: RepaintBoundary(
-              key: boundaryKey,
-              child: Scaffold(
-                body: CustomScrollView(
-                  slivers: [
-                    const ReadLaterSummary(),
-                    SliverToBoxAdapter(
-                      child: ReadLaterButton(comic: _comic('1')),
-                    ),
-                  ],
+          _libraryView(
+            MaterialApp(
+              theme: ThemeData(
+                colorSchemeSeed: Colors.indigo,
+                useMaterial3: true,
+              ),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: const TextScaler.linear(1.5)),
+                child: child!,
+              ),
+              home: RepaintBoundary(
+                key: boundaryKey,
+                child: Scaffold(
+                  body: CustomScrollView(
+                    slivers: [
+                      const ReadLaterSummary(),
+                      SliverToBoxAdapter(
+                        child: ReadLaterButton(comic: _comic('1')),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -231,4 +236,11 @@ void main() {
       });
     }
   }
+}
+
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+Widget _libraryView(Widget child) {
+  return FavoritesScope(manager: _favoritesForView(), child: child);
 }

@@ -1,8 +1,10 @@
+import 'package:venera_next/features/history/history_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/scroll.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
+import 'package:venera_next/features/history/image_favorites.dart';
+import 'package:venera_next/features/history/history_api.dart';
 import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -12,13 +14,18 @@ import 'package:venera_next/foundation/widget_utils.dart';
 import 'image_favorites_page.dart';
 
 class ImageFavoritesSummary extends StatefulWidget {
-  const ImageFavoritesSummary({super.key});
+  const ImageFavoritesSummary({this.manager, super.key});
+
+  final ImageFavoriteManager? manager;
 
   @override
   State<ImageFavoritesSummary> createState() => _ImageFavoritesSummaryState();
 }
 
 class _ImageFavoritesSummaryState extends State<ImageFavoritesSummary> {
+  late ImageFavoriteManager _manager =
+      widget.manager ?? HistoryScope.readImages(context);
+
   ImageFavoritesComputed? imageFavoritesCompute;
 
   int displayType = 0;
@@ -28,7 +35,7 @@ class _ImageFavoritesSummaryState extends State<ImageFavoritesSummary> {
   void refreshImageFavorites() async {
     final generation = ++_refreshGeneration;
     try {
-      final result = await ImageFavoriteManager().compute();
+      final result = await _manager.compute();
       if (!mounted || generation != _refreshGeneration) return;
       setState(() => imageFavoritesCompute = result);
     } catch (e, stackTrace) {
@@ -39,13 +46,26 @@ class _ImageFavoritesSummaryState extends State<ImageFavoritesSummary> {
   @override
   void initState() {
     refreshImageFavorites();
-    ImageFavoriteManager().addListener(refreshImageFavorites);
+    _manager.addListener(refreshImageFavorites);
     super.initState();
   }
 
   @override
+  void didUpdateWidget(ImageFavoritesSummary oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.manager ?? HistoryScope.readImages(context);
+    if (identical(next, _manager)) return;
+    _manager.removeListener(refreshImageFavorites);
+    _manager = next;
+    imageFavoritesCompute = null;
+    _scrollGeneration++;
+    _manager.addListener(refreshImageFavorites);
+    refreshImageFavorites();
+  }
+
+  @override
   void dispose() {
-    ImageFavoriteManager().removeListener(refreshImageFavorites);
+    _manager.removeListener(refreshImageFavorites);
     super.dispose();
   }
 
@@ -66,7 +86,7 @@ class _ImageFavoritesSummaryState extends State<ImageFavoritesSummary> {
         child: ClickInkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: () {
-            context.to(() => const ImageFavoritesPage());
+            context.to(() => ImageFavoritesPage(manager: _manager));
           },
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -180,7 +200,12 @@ class _ImageFavoritesSummaryState extends State<ImageFavoritesSummary> {
               maxCount: maxCount,
               enableTranslation: displayType != 2,
               onTap: (text) {
-                context.to(() => ImageFavoritesPage(initialKeyword: text));
+                context.to(
+                  () => ImageFavoritesPage(
+                    manager: _manager,
+                    initialKeyword: text,
+                  ),
+                );
               },
             );
           }).toList(),

@@ -25,11 +25,7 @@ abstract class CBZ {
     return detectFileType(header);
   }
 
-  static Future<void> extractArchive(File file, Directory out) async {
-    await extractArchiveForTesting(file, out);
-  }
-
-  static Future<void> extractArchiveForTesting(
+  static Future<void> extractArchive(
     File file,
     Directory out, {
     Future<void> Function(String archivePath, String outputPath, int threads)?
@@ -332,25 +328,6 @@ abstract class CBZ {
     }
   }
 
-  static Map<String, Object?> inspectImportLayoutForTesting(
-    Directory directory,
-  ) {
-    final layout = ComicFileSystemLayout.inspect(
-      directory,
-      unwrapSingleDirectory: true,
-    );
-    return {
-      'root': layout.root.name,
-      'rootImages': layout.rootPages.map((file) => file.name).toList(),
-      'cover': layout.inferredCover?.name,
-      'chapters': {
-        for (final chapter in layout.chapters)
-          chapter.title: chapter.pages.map((file) => file.name).toList(),
-      },
-      'useChapterDirectories': layout.useChapterDirectories,
-    };
-  }
-
   static Future<File> export(LocalComic comic, String outFilePath) async {
     var cache = Directory(FilePath.join(App.cachePath, 'cbz_export'));
     if (cache.existsSync()) cache.deleteSync(recursive: true);
@@ -362,7 +339,7 @@ abstract class CBZ {
       pageCount = images.length;
       int i = 1;
       for (var image in images) {
-        var src = File(_localFilePathFromImageUri(image));
+        var src = File(localFilePathFromImageUri(image));
         var dstName = compatiblePageFileName(i, image.split('.').last);
         var dst = File(FilePath.join(cache.path, dstName));
         await src.copyMem(dst.path);
@@ -381,11 +358,11 @@ abstract class CBZ {
         allImages.addAll(images);
         chapterPageCounts.add(MapEntry(chapterName!, images.length));
       }
-      chapters = _buildChapterRanges(chapterPageCounts);
+      chapters = buildChapterRanges(chapterPageCounts);
       pageCount = allImages.length;
       int i = 1;
       for (var image in allImages) {
-        var src = File(_localFilePathFromImageUri(image));
+        var src = File(localFilePathFromImageUri(image));
         var dstName = compatiblePageFileName(i, image.split('.').last);
         var dst = File(FilePath.join(cache.path, dstName));
         await src.copyMem(dst.path);
@@ -407,7 +384,7 @@ abstract class CBZ {
     ).writeAsString(jsonEncode(metaData));
     await File(
       FilePath.join(cache.path, 'ComicInfo.xml'),
-    ).writeAsString(_buildComicInfoXml(metaData, pageCount: pageCount));
+    ).writeAsString(buildComicInfoXml(metaData, pageCount: pageCount));
     var cbz = File(outFilePath);
     if (cbz.existsSync()) cbz.deleteSync();
     await _compress(cache.path, cbz.path);
@@ -422,21 +399,11 @@ abstract class CBZ {
     return '${pageIndex.toString().padLeft(4, '0')}.$normalizedExtension';
   }
 
-  static String localFilePathFromImageUriForTesting(String imageUri) {
-    return _localFilePathFromImageUri(imageUri);
-  }
-
-  static String _localFilePathFromImageUri(String imageUri) {
+  static String localFilePathFromImageUri(String imageUri) {
     return imageUri.replaceFirst('file://', '');
   }
 
-  static List<ComicChapter> buildChapterRangesForTesting(
-    Map<String, int> chapterPageCounts,
-  ) {
-    return _buildChapterRanges(chapterPageCounts.entries);
-  }
-
-  static List<ComicChapter> _buildChapterRanges(
+  static List<ComicChapter> buildChapterRanges(
     Iterable<MapEntry<String, int>> chapterPageCounts,
   ) {
     final chapters = <ComicChapter>[];
@@ -450,14 +417,7 @@ abstract class CBZ {
     return chapters;
   }
 
-  static String buildComicInfoXmlForTesting(
-    ComicMetaData data, {
-    required int pageCount,
-  }) {
-    return _buildComicInfoXml(data, pageCount: pageCount);
-  }
-
-  static String _buildComicInfoXml(
+  static String buildComicInfoXml(
     ComicMetaData data, {
     required int pageCount,
   }) {

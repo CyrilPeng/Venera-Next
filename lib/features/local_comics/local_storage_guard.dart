@@ -91,7 +91,7 @@ class LocalComicStorageGuard {
         'Local comic storage is busy. Try again later.',
       );
     }
-    return action();
+    return AppDataOperations.instance.accessSync(action);
   }
 
   /// Reject new operations, then drain accepted imports (including waiters)

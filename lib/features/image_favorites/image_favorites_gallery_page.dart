@@ -1,3 +1,4 @@
+import 'package:venera_next/features/history/history_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/gesture.dart';
@@ -15,9 +16,15 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 class ImageFavoritesGalleryPage extends StatefulWidget {
-  const ImageFavoritesGalleryPage({super.key, required this.comic});
+  const ImageFavoritesGalleryPage({
+    this.manager,
+    super.key,
+    required this.comic,
+  });
 
   final ImageFavoritesComic comic;
+
+  final ImageFavoriteManager? manager;
 
   @override
   State<ImageFavoritesGalleryPage> createState() =>
@@ -25,6 +32,9 @@ class ImageFavoritesGalleryPage extends StatefulWidget {
 }
 
 class _ImageFavoritesGalleryPageState extends State<ImageFavoritesGalleryPage> {
+  late ImageFavoriteManager _manager =
+      widget.manager ?? HistoryScope.readImages(context);
+
   late ImageFavoritesComic comic;
 
   List<ImageFavorite> get images => comic.images.toList();
@@ -33,7 +43,7 @@ class _ImageFavoritesGalleryPageState extends State<ImageFavoritesGalleryPage> {
   void initState() {
     super.initState();
     comic = widget.comic;
-    ImageFavoriteManager().addListener(_onDataChanged);
+    _manager.addListener(_onDataChanged);
   }
 
   int _refreshGeneration = 0;
@@ -43,10 +53,7 @@ class _ImageFavoritesGalleryPageState extends State<ImageFavoritesGalleryPage> {
   Future<void> _onDataChanged() async {
     final generation = ++_refreshGeneration;
     try {
-      final updated = await ImageFavoriteManager().find(
-        comic.id,
-        comic.sourceKey,
-      );
+      final updated = await _manager.find(comic.id, comic.sourceKey);
       if (!mounted || generation != _refreshGeneration) return;
       if (updated == null && ModalRoute.of(context)?.isCurrent == true) {
         Navigator.of(context).pop();
@@ -99,22 +106,29 @@ class _ImageFavoritesGalleryPageState extends State<ImageFavoritesGalleryPage> {
 
   Future<void> deleteSelected() async {
     if (_deleting || selectedImages.isEmpty) return;
+    final owner = _manager;
+    bool current() => mounted && identical(owner, _manager);
     setState(() => _deleting = true);
     try {
-      await ImageFavoriteManager().deleteImageFavorite(selectedImages.keys);
+      await owner.deleteImageFavorite(selectedImages.keys);
     } catch (error, stack) {
       Log.error('Image Favorites', error, stack);
-      if (mounted) context.showMessage(message: 'Error'.tl);
+      if (mounted && identical(owner, _manager)) {
+        context.showMessage(message: 'Error'.tl);
+      }
     } finally {
-      if (mounted) setState(() => _deleting = false);
+      if (current()) setState(() => _deleting = false);
     }
   }
 
   void goPhotoView(ImageFavorite image) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) =>
-            ImageFavoritesPhotoView(comic: comic, imageFavorite: image),
+        builder: (context) => ImageFavoritesPhotoView(
+          manager: _manager,
+          comic: comic,
+          imageFavorite: image,
+        ),
       ),
     );
   }
@@ -131,8 +145,23 @@ class _ImageFavoritesGalleryPageState extends State<ImageFavoritesGalleryPage> {
   }
 
   @override
+  void didUpdateWidget(ImageFavoritesGalleryPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.manager ?? HistoryScope.readImages(context);
+    if (identical(next, _manager)) return;
+    _manager.removeListener(_onDataChanged);
+    _manager = next;
+    _deleting = false;
+    multiSelectMode = false;
+    selectedImages.clear();
+    comic = widget.comic;
+    _manager.addListener(_onDataChanged);
+    _onDataChanged();
+  }
+
+  @override
   void dispose() {
-    ImageFavoriteManager().removeListener(_onDataChanged);
+    _manager.removeListener(_onDataChanged);
     scrollController.dispose();
     super.dispose();
   }

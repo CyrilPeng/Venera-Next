@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
+import 'package:sqlite3/sqlite3.dart';
+import 'package:venera_next/features/sync/data_sync_ownership.dart';
 import 'package:venera_next/app_runtime/bootstrap_core.dart';
 import 'package:venera_next/app_runtime/headless_bindings.dart';
+import 'package:venera_next/app_runtime/headless_shutdown.dart';
 import 'package:venera_next/app_runtime/webdav_library.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
@@ -44,6 +48,12 @@ void main() {
       });
       configureHeadlessBindings();
       await core.start();
+      final contender = createCoreBootstrap(
+        environment: () async {},
+        onDataChanged: () => fail('A rejected core cannot publish changes'),
+      );
+      await expectLater(contender.start(), throwsA(isA<SqliteException>()));
+      await contender.close();
       final engine = JsEngine();
       final sources = ComicSourceManager();
       final history = HistoryManager();
@@ -97,9 +107,34 @@ void main() {
         Cookie('session', 'after-import'),
       ]);
 
-      final closing = core.close();
-      expect(core.close(), same(closing));
-      await closing;
+      final nextOwnership = SqliteDataSyncOwnership.applicationData(
+        () => root.path,
+      );
+      final flushing = Completer<void>();
+      final releasePersistence = Completer<void>();
+      final closing = finishHeadlessRuntime(
+        prepareCore: core.prepareForClose,
+        disposeBindings: () => configureComicSourceDataSavedHandler(null),
+        flushPersistence: () async {
+          flushing.complete();
+          await releasePersistence.future;
+          await appdata.saveData(false);
+        },
+        closeCore: core.close,
+        emit: (message) => fail('$message'),
+        reportError: (error, stack) => fail('$error\n$stack'),
+      );
+      await flushing.future;
+      try {
+        expect(nextOwnership.acquire, throwsA(isA<SqliteException>()));
+        expect(history.isInitialized, isTrue);
+      } finally {
+        releasePersistence.complete();
+      }
+      expect(await closing, isTrue);
+      expect(core.close(), same(core.close()));
+      nextOwnership.acquire();
+      nextOwnership.release();
       expect(() => engine.runCode('1'), throwsStateError);
       await expectLater(sources.init(), throwsStateError);
       expect(ComicSource.all(), isEmpty);

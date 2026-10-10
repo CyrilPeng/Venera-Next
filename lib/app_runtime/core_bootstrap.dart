@@ -11,6 +11,7 @@ class CoreBootstrap {
     required this.stores,
     required this.finish,
     this.shutdownPreparation,
+    this.releaseOwnership,
     Iterable<CoreStartupCleanup> failureCleanup = const [],
   }) : _failureCleanup = failureCleanup;
   final Future<void> Function() environment;
@@ -20,6 +21,11 @@ class CoreBootstrap {
   final Future<void> Function() stores;
   final Future<void> Function() finish;
   final Future<void> Function()? shutdownPreparation;
+
+  /// Release storage admission only after every producer/store has closed.
+  /// Failed cleanup retains ownership, preventing another process from opening
+  /// the directory while an old native writer may still be alive.
+  final FutureOr<void> Function()? releaseOwnership;
   final Iterable<CoreStartupCleanup> _failureCleanup;
   Future<void>? _startup;
   Future<void>? _shutdown;
@@ -67,6 +73,7 @@ class CoreBootstrap {
     if (!_startedSuccessfully) return;
     final failures = await _releaseCoreResources(_failureCleanup);
     if (failures.isNotEmpty) throw CoreShutdownFailure(failures);
+    await releaseOwnership?.call();
   }
 
   Future<void> _start() async {
@@ -81,6 +88,17 @@ class CoreBootstrap {
       _startedSuccessfully = true;
     } catch (error, stack) {
       await rollbackCoreStartup(_failureCleanup, error, stack);
+      try {
+        await releaseOwnership?.call();
+      } catch (releaseError, releaseStack) {
+        throw CoreStartupRollbackFailure(error, stack, [
+          (
+            store: 'storage ownership',
+            error: releaseError,
+            stack: releaseStack,
+          ),
+        ]);
+      }
       Error.throwWithStackTrace(error, stack);
     }
   }

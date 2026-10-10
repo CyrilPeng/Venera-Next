@@ -111,7 +111,7 @@ void main() {
       try {
         await ImageDownloader.cancelAllLoadingImages();
       } catch (_) {}
-      ImageDownloader.debugResetSourceImageLoading();
+      ImageDownloader.configureSourceImageLoading();
       for (final server in servers) {
         await server.close();
       }

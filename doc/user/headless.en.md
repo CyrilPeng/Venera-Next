@@ -10,6 +10,8 @@ To activate headless mode, use the `--headless` flag when running the VeneraNext
 venera-next --headless <command> [subcommand] [options]
 ```
 
+Only one interactive or headless instance can use an application data directory at a time. Close other instances using that directory before running a command. An occupied directory produces a startup error and a nonzero exit status. Ownership lasts through accepted work and final persistence; different data directories remain independent.
+
 ## Global Options
 
 - **`--ignore-disheadless-log`**: Suppresses log output, providing a cleaner output for scripting.

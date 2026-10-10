@@ -26,7 +26,7 @@ void main() {
     createdAt: DateTime(2024),
   );
   Future<void> initialize() async {
-    LocalManager.debugSkipComicSourceInit = true;
+    LocalManager(initializeSources: () async {});
     manager = LocalManager();
     await manager.init();
   }
@@ -35,12 +35,12 @@ void main() {
     root = Directory.systemTemp.createTempSync('manager-relocation-');
     App.dataPath = root.path;
     App.cachePath = root.path;
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     await initialize();
   });
   tearDown(() async {
     await manager.pendingDownloadTaskWrites;
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     root.deleteSync(recursive: true);
   });
   Directory book(String path, [String content = 'original page']) {
@@ -99,7 +99,7 @@ void main() {
           if (!copied) expect(input.baseDir, p.join(target, 'Book'));
         }
         await manager.pendingDownloadTaskWrites;
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         await initialize();
         expect(manager.path, second.path);
         await readable(manager.find('1', ComicType.local)!, 'original page');
@@ -132,7 +132,7 @@ void main() {
       final previous = manager.find('1', ComicType.local)!;
       final previousPath = previous.baseDir;
       await manager.pendingDownloadTaskWrites;
-      LocalManager.resetForTesting();
+      LocalManager.current?.dispose();
       final nextData = Directory(p.join(root.path, 'next-data'))..createSync();
       App.dataPath = nextData.path;
       App.cachePath = nextData.path;
@@ -215,8 +215,8 @@ void main() {
       expect(manager.path, destination.path);
       destination.deleteSync(recursive: true);
       await manager.pendingDownloadTaskWrites;
-      LocalManager.resetForTesting();
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager.current?.dispose();
+      LocalManager(initializeSources: () async {});
       manager = LocalManager();
       await expectLater(manager.init(), throwsA(isA<FileSystemException>()));
       expect(destination.existsSync(), isFalse);

@@ -551,7 +551,7 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
       },
     );
     try {
-      final result = await ComicBackupManager.backup(
+      final result = await ComicBackupManager.instance.backup(
         comics,
         onProgress: (current, total, title) {
           loadingController.setMessage(

@@ -7,7 +7,6 @@ import 'package:venera_next/features/local_comics/import_export/cbz.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/features/local_comics/local_storage_guard.dart';
 import 'package:venera_next/foundation/app.dart';
-import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/file_system.dart';
 
@@ -19,14 +18,14 @@ void main() {
     root = Directory.systemTemp.createTempSync('cbz-lifecycle-');
     App.dataPath = root.path;
     App.cachePath = (Directory('${root.path}/cache')..createSync()).path;
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     manager = LocalManager();
     await manager.init();
   });
   tearDown(() async {
     await manager.pendingDownloadTaskWrites;
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     root.deleteSync(recursive: true);
   });
 
@@ -58,21 +57,16 @@ void main() {
     () async {
       final gate = Completer<void>();
       final registering = Completer<void>();
-      final oldOps = ComicBackupManager.ops;
-      final oldImporter = ComicBackupManager.importComic;
-      final oldRegister = ComicBackupManager.registerImportedComic;
-      final oldConfig = appdata.settings['backupWebdav'];
-      final oldPath = appdata.settings['backupWebdavPath'];
-      appdata.settings['backupWebdav'] = ['https://example.com/dav', 'u', 'p'];
-      appdata.settings['backupWebdavPath'] = '/backup';
-      ComicBackupManager.ops = _ArchiveDownloadOps(book('Restored'));
-      ComicBackupManager.importComic = null;
-      ComicBackupManager.registerImportedComic = (comic) async {
-        registering.complete();
-        await gate.future;
-        await manager.add(comic, comic.id);
-      };
-      final restoring = ComicBackupManager.restore([
+      final backup = ComicBackupManager(
+        operations: _ArchiveDownloadOps(book('Restored')),
+        readConfig: _backupConfig,
+        registerImportedComic: (comic) async {
+          registering.complete();
+          await gate.future;
+          await manager.add(comic, comic.id);
+        },
+      );
+      final restoring = backup.restore([
         BackupFile(name: 'Restored.cbz', size: 1, modified: DateTime(2024)),
       ]);
       try {
@@ -90,11 +84,6 @@ void main() {
       } finally {
         if (!gate.isCompleted) gate.complete();
         await restoring;
-        ComicBackupManager.ops = oldOps;
-        ComicBackupManager.importComic = oldImporter;
-        ComicBackupManager.registerImportedComic = oldRegister;
-        appdata.settings['backupWebdav'] = oldConfig;
-        appdata.settings['backupWebdavPath'] = oldPath;
       }
     },
   );
@@ -143,51 +132,38 @@ void main() {
   test(
     'backup restore reports a failed acknowledgement without deleting saved pages',
     () async {
-      final oldOps = ComicBackupManager.ops;
-      final oldImporter = ComicBackupManager.importComic;
-      final oldRegister = ComicBackupManager.registerImportedComic;
-      final oldConfig = appdata.settings['backupWebdav'];
-      final oldPath = appdata.settings['backupWebdavPath'];
       final error = StateError('restore acknowledgement failed');
-      appdata.settings['backupWebdav'] = ['https://example.com/dav', 'u', 'p'];
-      appdata.settings['backupWebdavPath'] = '/backup';
-      ComicBackupManager.ops = _ArchiveDownloadOps(book('Restored'));
-      ComicBackupManager.importComic = null;
-      ComicBackupManager.registerImportedComic = (comic) async {
-        await manager.add(comic, comic.id);
-        throw error;
-      };
-      try {
-        final result = await ComicBackupManager.restore([
-          BackupFile(name: 'Restored.cbz', size: 1, modified: DateTime(2024)),
-        ]);
-        expect(result.success, 0);
-        expect(result.failed, 1);
-        expect(
-          result.failures.single.error,
-          isA<PersistenceFailure>()
-              .having(
-                (failure) => failure.commitState,
-                'state',
-                PersistenceCommitState.unknown,
-              )
-              .having((failure) => failure.cause, 'cause', same(error)),
-        );
-        final saved = manager.findByName('Restored')!;
-        expect(
-          File(
-            '${manager.path}/${saved.directory}/${saved.cover}',
-          ).readAsStringSync(),
-          'Restored',
-        );
-        expect(Directory(App.cachePath).listSync(), isEmpty);
-      } finally {
-        ComicBackupManager.ops = oldOps;
-        ComicBackupManager.importComic = oldImporter;
-        ComicBackupManager.registerImportedComic = oldRegister;
-        appdata.settings['backupWebdav'] = oldConfig;
-        appdata.settings['backupWebdavPath'] = oldPath;
-      }
+      final backup = ComicBackupManager(
+        operations: _ArchiveDownloadOps(book('Restored')),
+        readConfig: _backupConfig,
+        registerImportedComic: (comic) async {
+          await manager.add(comic, comic.id);
+          throw error;
+        },
+      );
+      final result = await backup.restore([
+        BackupFile(name: 'Restored.cbz', size: 1, modified: DateTime(2024)),
+      ]);
+      expect(result.success, 0);
+      expect(result.failed, 1);
+      expect(
+        result.failures.single.error,
+        isA<PersistenceFailure>()
+            .having(
+              (failure) => failure.commitState,
+              'state',
+              PersistenceCommitState.unknown,
+            )
+            .having((failure) => failure.cause, 'cause', same(error)),
+      );
+      final saved = manager.findByName('Restored')!;
+      expect(
+        File(
+          '${manager.path}/${saved.directory}/${saved.cover}',
+        ).readAsStringSync(),
+        'Restored',
+      );
+      expect(Directory(App.cachePath).listSync(), isEmpty);
     },
   );
 
@@ -271,6 +247,13 @@ void main() {
     },
   );
 }
+
+BackupConfig _backupConfig() => BackupConfig(
+  url: 'https://backup.example.test',
+  user: 'test',
+  pass: 'test',
+  remotePath: '/backup',
+);
 
 class _ArchiveDownloadOps implements ComicBackupWebDavOps {
   _ArchiveDownloadOps(this.archiveFile);

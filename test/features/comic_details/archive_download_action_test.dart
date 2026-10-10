@@ -88,7 +88,7 @@ void main() {
     final root = Directory.systemTemp.createTempSync('venera-archive-choice-');
     final ownedPath = root.resolveSymbolicLinksSync();
     final tempPath = Directory.systemTemp.resolveSymbolicLinksSync();
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     App.dataPath = root.path;
     App.cachePath = root.path;
     final initialized = App.isInitialized;
@@ -137,7 +137,7 @@ void main() {
     library.addListener(recordPublication);
     addTearDown(() async {
       library.removeListener(recordPublication);
-      LocalManager.resetForTesting();
+      LocalManager.current?.dispose();
       configureComicSourceRegistry(
         all: () => [],
         find: (_) => null,

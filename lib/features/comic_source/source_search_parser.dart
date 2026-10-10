@@ -5,6 +5,7 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
 import 'source.dart';
+import 'models.dart';
 import 'types.dart';
 
 import 'source_parser_context.dart';
@@ -44,27 +45,25 @@ class SourceSearchParser {
     if (context.checkExists('search.load')) {
       loadPage = (keyword, page, searchOption) async {
         try {
-          var res = await context.runReadCode("""
+          return await context.runReadCodeToCompletion<Res<List<Comic>>>("""
           ${context.sourceExpression}.search.load(
             ${jsonEncode(keyword)}, ${jsonEncode(searchOption)}, ${jsonEncode(page)})
-        """);
-          return context.parseComicListResult(res, "maxPage");
+        """, consume: (res) => context.parseComicListResult(res, 'maxPage'));
         } catch (e, s) {
           Log.error("Network", "$e\n$s");
-          return Res.fromException(e, s);
+          return context.failureResult(e, s);
         }
       };
     } else {
       loadNext = (keyword, next, searchOption) async {
         try {
-          var res = await context.runReadCode("""
+          return await context.runReadCodeToCompletion<Res<List<Comic>>>("""
           ${context.sourceExpression}.search.loadNext(
             ${jsonEncode(keyword)}, ${jsonEncode(searchOption)}, ${jsonEncode(next)})
-        """);
-          return context.parseComicListResult(res, "next");
+        """, consume: (res) => context.parseComicListResult(res, 'next'));
         } catch (e, s) {
           Log.error("Network", "$e\n$s");
-          return Res.fromException(e, s);
+          return context.failureResult(e, s);
         }
       };
     }
@@ -77,11 +76,13 @@ class SourceSearchParser {
       return null;
     }
     return (namespace, tag) {
-      var res = context.runCode("""
+      return context.consumeSynchronous(
+        () => context.runOwnedCode("""
           ${context.sourceExpression}.search.onTagSuggestionSelected(
             ${jsonEncode(namespace)}, ${jsonEncode(tag)})
-        """);
-      return res is String ? res : "$namespace:$tag";
+        """),
+        (res) => res is String ? res : "$namespace:$tag",
+      );
     };
   }
 }

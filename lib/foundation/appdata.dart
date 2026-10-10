@@ -1,4 +1,5 @@
 import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/sync_configuration.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -54,7 +55,19 @@ class Appdata with Init {
     // saves keep this true so retrying an already-published value writes again.
     bool persistIfUnchanged = true,
   }) => _edit(
-    (draft, _) => change(draft),
+    (draft, _) {
+      final previousExclusions = jsonEncode(draft['disableSyncFields']);
+      final result = change(draft);
+      _requireSynchronousEdit(result);
+      final exclusions = draft['disableSyncFields'];
+      // Preserve malformed legacy values during unrelated edits, but never
+      // accept a newly malformed filter from an explicit settings mutation.
+      if (exclusions is! String &&
+          jsonEncode(exclusions) != previousExclusions) {
+        throw const FormatException('Sync exclusions must be a string');
+      }
+      return result;
+    },
     sync: sync,
     beforePersist: beforePersist,
     persistIfUnchanged: persistIfUnchanged,
@@ -230,7 +243,7 @@ class Appdata with Init {
         var settings = data['settings'] as Map<String, dynamic>;
 
         List<String> customDisableSync = splitField(
-          draft["disableSyncFields"] as String,
+          SyncConfiguration.readExcludedFields(draft['disableSyncFields']),
         );
 
         final archiveSyncEnabled = draft["backupWebdavSyncEnabled"] == true;
@@ -307,7 +320,9 @@ class Appdata with Init {
   Map<String, String> _appDataContents(String data) {
     final json = jsonDecode(data) as Map<String, dynamic>;
     final contents = {'appdata.json': data};
-    final disableSyncFields = json['settings']['disableSyncFields'] as String;
+    final disableSyncFields = SyncConfiguration.readExcludedFields(
+      json['settings']['disableSyncFields'],
+    );
     if (disableSyncFields.isNotEmpty) {
       for (final field in splitField(disableSyncFields)) {
         json['settings'].remove(field);
@@ -378,7 +393,8 @@ class Appdata with Init {
     var dataPath = App.dataPath;
     return _enqueueWrite(() async {
       await _loadAppData(dataPath);
-      if ((settings["deviceId"] as String).isEmpty) {
+      final deviceId = settings['deviceId'];
+      if (deviceId is! String || deviceId.isEmpty) {
         settings._data["deviceId"] = const Uuid().v4();
         await _writeAppData(dataPath, _appDataContents(jsonEncode(toJson())));
       }
@@ -615,8 +631,6 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
     'webdavComicLibrarySyncIntervalMinutes': 360,
     "disableSyncFields": "", // "field1, field2, ..."
     'dataVersion': 0,
-    'enableCustomImageProcessing': false,
-    'customImageProcessing': defaultCustomImageProcessing,
     'comicSourceListUrl': "",
     'comicSourceRepositories': <Map<String, dynamic>>[],
     'comicSourceOrigins': <String, dynamic>{},
@@ -648,7 +662,7 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
   ) {
     // Freeze the legacy mode's current meaning before changing the switch for
     // other options. Toggling brightness/gesture overrides must not change mode.
-    final values = _data['comicSpecificSettings']["$comicId@$sourceKey"];
+    final values = _scopeRecord('comicSpecificSettings', '$comicId@$sourceKey');
     if (values is Map &&
         values.containsKey('readerMode') &&
         !values.containsKey('readerModeOverride')) {
@@ -665,7 +679,10 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
     if (comicId == null || sourceKey == null) {
       return false;
     }
-    return _data['comicSpecificSettings']["$comicId@$sourceKey"]?["enabled"] ==
+    return _scopeRecord(
+          'comicSpecificSettings',
+          '$comicId@$sourceKey',
+        )?['enabled'] ==
         true;
   }
 
@@ -696,13 +713,15 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
     if (key == 'longPressAction' &&
         isComicSpecificSettingsEnabled(comicId, sourceKey)) {
       final action = _longPressAction(
-        _data['comicSpecificSettings']["$comicId@$sourceKey"],
+        _scopeRecord('comicSpecificSettings', '$comicId@$sourceKey'),
       );
       return action ?? getDeviceReaderSetting(key);
     }
     if (isComicSpecificSettingsEnabled(comicId, sourceKey)) {
-      var comicValue =
-          _data['comicSpecificSettings']["$comicId@$sourceKey"]?[key];
+      var comicValue = _scopeRecord(
+        'comicSpecificSettings',
+        '$comicId@$sourceKey',
+      )?[key];
       if (comicValue != null) {
         return comicValue;
       }
@@ -713,7 +732,7 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
   /// A mode override is independent of the switch for other comic settings.
   /// Legacy per-comic modes remain effective until explicitly changed.
   String? comicReaderModeOverride(String comicId, String sourceKey) {
-    final values = _data['comicSpecificSettings']["$comicId@$sourceKey"];
+    final values = _scopeRecord('comicSpecificSettings', '$comicId@$sourceKey');
     if (values is! Map) return null;
     if (values.containsKey('readerModeOverride')) {
       final mode = values['readerModeOverride'];
@@ -740,7 +759,7 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
   }
 
   ComicLayout comicLayout(String comicId, String sourceKey) {
-    final record = _data['comicLayoutDetections']["$comicId@$sourceKey"];
+    final record = _scopeRecord('comicLayoutDetections', '$comicId@$sourceKey');
     if (record is! Map || record['version'] != ComicLayoutDetection.version) {
       return ComicLayout.unknown;
     }
@@ -752,27 +771,18 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
     String sourceKey,
     ComicLayoutDetection detection,
   ) {
-    _data['comicLayoutDetections']["$comicId@$sourceKey"] = {
+    final records = _copyScopeContainer('comicLayoutDetections');
+    records['$comicId@$sourceKey'] = {
       'layout': detection.layout.name,
       'samples': detection.sampleCount,
       'version': ComicLayoutDetection.version,
     };
+    _data['comicLayoutDetections'] = records;
     notifyListeners();
   }
 
-  String resolveReaderMode(String comicId, String sourceKey) {
-    final override = comicReaderModeOverride(comicId, sourceKey);
-    if (override != null) return override;
-    if (getDeviceReaderSetting('autoReaderMode') == true) {
-      final key = switch (comicLayout(comicId, sourceKey)) {
-        ComicLayout.paged => 'pagedReaderMode',
-        ComicLayout.longStrip => 'longStripReaderMode',
-        ComicLayout.unknown => 'readerMode',
-      };
-      return getDeviceReaderSetting(key) as String;
-    }
-    return getDeviceReaderSetting('readerMode') as String;
-  }
+  String resolveReaderMode(String comicId, String sourceKey) =>
+      readerSettings(comicId, sourceKey).readerMode;
 
   @override
   void setActiveReaderSetting(
@@ -797,15 +807,17 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
     String key,
     dynamic value,
   ) {
-    (_data['comicSpecificSettings'] as Map<String, dynamic>).putIfAbsent(
-      "$comicId@$sourceKey",
-      () => <String, dynamic>{},
-    )[key] = value;
-    notifyListeners();
+    _writeScopeValue(
+      'comicSpecificSettings',
+      '$comicId@$sourceKey',
+      key,
+      value,
+    );
   }
 
   void resetComicReaderSettings(String key) {
-    (_data['comicSpecificSettings'] as Map).remove(key);
+    final records = _copyScopeContainer('comicSpecificSettings')..remove(key);
+    _data['comicSpecificSettings'] = records;
     notifyListeners();
   }
 
@@ -814,11 +826,11 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
   }
 
   bool isDeviceSpecificSettingsEnabled() {
-    var deviceId = _data['deviceId'] as String;
-    if (deviceId.isEmpty) {
+    final deviceId = _data['deviceId'];
+    if (deviceId is! String || deviceId.isEmpty) {
       return false;
     }
-    return _data['deviceSpecificSettings'][deviceId]?["enabled"] == true;
+    return _scopeRecord('deviceSpecificSettings', deviceId)?['enabled'] == true;
   }
 
   static String? _longPressAction(dynamic values) {
@@ -834,7 +846,7 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
     if (key == 'longPressAction') {
       if (isDeviceSpecificSettingsEnabled()) {
         final action = _longPressAction(
-          _data['deviceSpecificSettings'][_data['deviceId']],
+          _scopeRecord('deviceSpecificSettings', _data['deviceId'] as String),
         );
         if (action != null) return action;
       }
@@ -844,31 +856,29 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
       return _data[key];
     }
     var deviceId = _data['deviceId'] as String;
-    return _data['deviceSpecificSettings'][deviceId]?[key] ?? _data[key];
+    return _scopeRecord('deviceSpecificSettings', deviceId)?[key] ?? _data[key];
   }
 
   @override
   void setDeviceReaderSetting(String key, dynamic value) {
     var deviceId = _getOrCreateDeviceId();
-    (_data['deviceSpecificSettings'] as Map<String, dynamic>).putIfAbsent(
-      deviceId,
-      () => <String, dynamic>{},
-    )[key] = value;
-    notifyListeners();
+    _writeScopeValue('deviceSpecificSettings', deviceId, key, value);
   }
 
   void resetDeviceReaderSettings() {
-    var deviceId = _data['deviceId'] as String;
-    if (deviceId.isEmpty) {
+    final deviceId = _data['deviceId'];
+    if (deviceId is! String || deviceId.isEmpty) {
       return;
     }
-    (_data['deviceSpecificSettings'] as Map).remove(deviceId);
+    final records = _copyScopeContainer('deviceSpecificSettings')
+      ..remove(deviceId);
+    _data['deviceSpecificSettings'] = records;
     notifyListeners();
   }
 
   String _getOrCreateDeviceId() {
-    var deviceId = _data['deviceId'] as String;
-    if (deviceId.isNotEmpty) {
+    final deviceId = _data['deviceId'];
+    if (deviceId is String && deviceId.isNotEmpty) {
       return deviceId;
     }
     var id = const Uuid().v4();
@@ -876,26 +886,37 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
     return id;
   }
 
+  Map? _scopeRecord(String container, String identity) {
+    final records = _data[container];
+    final record = records is Map ? records[identity] : null;
+    return record is Map ? record : null;
+  }
+
+  Map<String, dynamic> _copyScopeContainer(String container) =>
+      _copyStringKeys(_data[container]);
+
+  static Map<String, dynamic> _copyStringKeys(Object? value) => {
+    if (value is Map)
+      for (final entry in value.entries)
+        if (entry.key is String) entry.key as String: entry.value,
+  };
+
+  /// Explicit edits repair only their selected record. Reads never normalize
+  /// storage, and unrelated or future records survive an edit and JSON export.
+  void _writeScopeValue(
+    String container,
+    String identity,
+    String key,
+    Object? value,
+  ) {
+    final records = _copyScopeContainer(container);
+    records[identity] = _copyStringKeys(records[identity])..[key] = value;
+    _data[container] = records;
+    notifyListeners();
+  }
+
   @override
   String toString() {
     return _data.toString();
   }
 }
-
-const defaultCustomImageProcessing = '''
-/**
- * Process an image
- * @param image {ArrayBuffer} - The image to process
- * @param cid {string} - The comic ID
- * @param eid {string} - The episode ID
- * @param page {number} - The page number
- * @param sourceKey {string} - The source key
- * @returns {Promise<ArrayBuffer> | {image: Promise<ArrayBuffer>, onCancel: () => void}} - The processed image
- */
-async function processImage(image, cid, eid, page, sourceKey) {
-    let futureImage = new Promise((resolve, reject) => {
-        resolve(image);
-    });
-    return futureImage;
-}
-''';

@@ -8,10 +8,72 @@ import 'package:venera_next/foundation/app.dart';
 void main() {
   late Directory root;
   setUp(() {
+    LocalManager.current?.dispose();
     root = Directory.systemTemp.createTempSync('local-init-');
     App.dataPath = root.path;
   });
-  tearDown(() => root.deleteSync(recursive: true));
+  tearDown(() {
+    LocalManager.current?.dispose();
+    root.deleteSync(recursive: true);
+  });
+
+  test('default dependencies stay bound until successful disposal', () async {
+    final original = LocalManager(initializeSources: () async {});
+    await original.init();
+    expect(LocalManager(), same(original));
+    expect(
+      () => LocalManager(initializeSources: () async {}),
+      throwsStateError,
+    );
+    original.dispose();
+    expect(LocalManager.current, isNull);
+    final replacement = LocalManager(initializeSources: () async {});
+    await replacement.init();
+    original.dispose();
+    expect(LocalManager.current, same(replacement));
+    expect(replacement.count, 0);
+  });
+
+  test(
+    'failed close retains the owner and connection for disposal retry',
+    () async {
+      late _FailCloseDatabase connection;
+      final original = LocalManager(
+        initializeSources: () async {},
+        openDatabase: (path) =>
+            connection = _FailCloseDatabase(sqlite3.open(path)),
+      );
+      await original.init();
+      expect(original.dispose, throwsStateError);
+      expect(LocalManager.current, same(original));
+      expect(connection.actual.select('SELECT 1'), hasLength(1));
+      await expectLater(original.init(), throwsStateError);
+      original.dispose();
+      expect(LocalManager.current, isNull);
+      expect(() => connection.actual.select('SELECT 1'), throwsStateError);
+      expect(connection.closes, 2);
+    },
+  );
+
+  test('failed initialization cannot replace an unclosed connection', () async {
+    late _FailCloseDatabase connection;
+    var opens = 0;
+    final failure = StateError('source failed');
+    final manager = LocalManager(
+      initializeSources: () async => throw failure,
+      openDatabase: (path) {
+        opens++;
+        return connection = _FailCloseDatabase(sqlite3.open(path));
+      },
+    );
+    await expectLater(manager.init(), throwsA(same(failure)));
+    await expectLater(manager.init(), throwsStateError);
+    expect(opens, 1);
+    expect(connection.actual.select('SELECT 1'), hasLength(1));
+    manager.dispose();
+    expect(LocalManager.current, isNull);
+    expect(() => connection.actual.select('SELECT 1'), throwsStateError);
+  });
 
   test(
     'concurrent and completed initialization reuse one connection and future',
@@ -21,7 +83,7 @@ void main() {
       final started = Completer<void>();
       final release = Completer<void>();
       late Database connection;
-      final manager = LocalManager.forTesting(
+      final manager = LocalManager.independent(
         openDatabase: (path) {
           opens++;
           return connection = sqlite3.open(path);
@@ -53,7 +115,7 @@ void main() {
     final connections = <Database>[];
     var fail = true;
     final expected = StateError('source initialization failed');
-    final manager = LocalManager.forTesting(
+    final manager = LocalManager.independent(
       openDatabase: (path) {
         final database = sqlite3.open(path);
         connections.add(database);
@@ -81,7 +143,7 @@ void main() {
       final started = Completer<void>();
       final release = Completer<void>();
       late Database connection;
-      final manager = LocalManager.forTesting(
+      final manager = LocalManager.independent(
         openDatabase: (path) => connection = sqlite3.open(path),
         initializeSources: () {
           started.complete();
@@ -105,7 +167,7 @@ void main() {
     'dispose before initialization is safe and forbids opening resources',
     () async {
       var opens = 0;
-      final manager = LocalManager.forTesting(
+      final manager = LocalManager.independent(
         openDatabase: (path) {
           opens++;
           return sqlite3.open(path);
@@ -118,4 +180,23 @@ void main() {
       expect(opens, 0);
     },
   );
+}
+
+class _FailCloseDatabase extends Fake implements Database {
+  _FailCloseDatabase(this.actual);
+  final Database actual;
+  int closes = 0;
+  @override
+  bool get autocommit => actual.autocommit;
+  @override
+  void execute(String sql, [List<Object?> parameters = const []]) =>
+      actual.execute(sql, parameters);
+  @override
+  ResultSet select(String sql, [List<Object?> parameters = const []]) =>
+      actual.select(sql, parameters);
+  @override
+  void dispose() {
+    if (++closes == 1) throw StateError('close failed');
+    actual.dispose();
+  }
 }

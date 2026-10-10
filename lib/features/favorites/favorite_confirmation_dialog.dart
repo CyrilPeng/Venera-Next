@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -64,10 +65,11 @@ Future<void> _confirmFavoriteMutation({
       .getInheritedWidgetOfExactType<PopupIndicatorWidget>()
       ?.route;
   if (!owner.canPresent || popup?.isCurrent == false) return;
+  final store = FavoritesScope.capture(context);
   final generation = manager.connectionGeneration;
   final path = App.dataPath;
   bool isCurrentDatabase() =>
-      identical(LocalFavoritesManager.cache, manager) &&
+      (store.isCurrent && identical(store.manager, manager)) &&
       manager.connectionGeneration == generation &&
       App.dataPath == path;
   if (!isCurrentDatabase() || !manager.existsFolder(folder)) return;

@@ -1,3 +1,5 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/history/history_scope.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -1433,7 +1435,7 @@ void main() {
           'ALTER TABLE image_favorites RENAME TO unavailable_favorites',
         );
         renamed = true;
-        ImageFavoriteManager().notifyChanges();
+        _imageOwner!.notifyChanges();
         await tester.pumpAndSettle();
         final retry = find.byTooltip('Unable to load image collection. Retry');
         expect(retry, findsOneWidget);
@@ -1445,7 +1447,7 @@ void main() {
         await tester.tap(retry);
         await tester.pumpAndSettle();
         expect(find.byIcon(Icons.favorite_border), findsOneWidget);
-        expect(await ImageFavoriteManager().getAll(), isEmpty);
+        expect(await _imageOwner!.getAll(), isEmpty);
         expect(tester.takeException(), isNull);
       } finally {
         if (renamed) {
@@ -1743,7 +1745,7 @@ void main() {
           barrier = fixture.history.accessImageFavorites(
             (_, _) => release.future,
           );
-          ImageFavoriteManager().notifyChanges();
+          _imageOwner!.notifyChanges();
           await tester.pump();
           expect(find.byTooltip('Loading image collection'), findsOneWidget);
           if (detach) await tester.pumpWidget(const SizedBox());
@@ -1785,13 +1787,13 @@ void main() {
         final reader = fixture.readerKey.currentState!;
         final request = reader.createImageFavoriteRequest()!;
         expect(request.isCurrent(), isTrue);
-        HistoryManager.cache = replacement;
+        await _replaceHistory(tester, replacement);
         expect(request.isCurrent(), isFalse);
         await expectLater(
           Future.sync(() => request.toggle(0, () {})),
           throwsA(isA<ImageWorkTaskCancelled>()),
         );
-        HistoryManager.cache = fixture.history;
+        await _replaceHistory(tester, fixture.history, images: fixture.images);
         final closing = registry.closeAndWait();
         expect(reader.createImageFavoriteRequest(), isNull);
         expect(reader.createImageFavoriteQuery(), isNull);
@@ -1799,7 +1801,8 @@ void main() {
         await tester.pump();
         await closing;
       } finally {
-        HistoryManager.cache = fixture.history;
+        _historyOwner = fixture.history;
+        _imageOwner = fixture.images;
         await fixture.dispose(tester);
       }
     },
@@ -1818,7 +1821,7 @@ void main() {
         expect(reader.pageLayout.imageRange(1, 3), (0, 2));
         expect(await reader.createImageFavoriteQuery()!.read(), isNull);
         expect(find.byTooltip('Select an image to collect'), findsOneWidget);
-        await ImageFavoriteManager().toggle(
+        await _imageOwner!.toggle(
           ImageFavoriteInput(
             id: 'book',
             sourceKey: 'local',
@@ -3006,7 +3009,7 @@ void main() {
         reader.toPage(2, animated: false);
         reader.autoReading.start();
         // A later global manager must not receive this session's final writes.
-        HistoryManager.cache = replacement;
+        await _replaceHistory(tester, replacement);
         if (detach) await tester.pumpWidget(const SizedBox());
         var closed = false;
         final closing = host.close().then((_) => closed = true);
@@ -3041,7 +3044,7 @@ void main() {
       } finally {
         if (!progress.isCompleted) progress.complete();
         if (!duration.isCompleted) duration.complete();
-        HistoryManager.cache = fixture.history;
+        await _replaceHistory(tester, fixture.history, images: fixture.images);
         await fixture.dispose(tester);
         await host.sync.closeAndWait();
       }
@@ -3155,7 +3158,7 @@ void main() {
       var closes = 0;
       final host = await _readerHost(() => closes++);
       final reading = Completer<void>();
-      final favorites = LocalFavoritesManager.cache! as _Favorites;
+      final favorites = _favoritesOwner! as _Favorites;
       favorites.reading = reading.future;
       try {
         await fixture.mount(
@@ -3267,7 +3270,7 @@ void main() {
         expect(reader.controller.isDisposed, isTrue);
         expect(reader.images, isNull);
         expect(reader.imageWork.start(), isNull);
-        expect((LocalFavoritesManager.cache! as _Favorites).reads, 0);
+        expect((_favoritesOwner! as _Favorites).reads, 0);
         expect(fixture.history.progress, isEmpty);
         expect(fixture.history.durations, isEmpty);
         expect(fixture.notifications, 0);
@@ -3454,7 +3457,7 @@ void main() {
       (tester) async {
         final fixture = await _ReaderFixture.create(tester);
         final pending = Completer<void>();
-        final favorites = LocalFavoritesManager.cache! as _Favorites;
+        final favorites = _favoritesOwner! as _Favorites;
         favorites.reading = pending.future;
         try {
           await fixture.mount(tester, pushed: true);
@@ -4559,8 +4562,8 @@ class _ReaderFixture {
     : previousSettings = Map<String, dynamic>.from(
         jsonDecode(jsonEncode(appdata.toJson()['settings'])) as Map,
       ),
-      previousFavorites = LocalFavoritesManager.cache,
-      previousHistory = HistoryManager.cache,
+      previousFavorites = _favoritesOwner,
+      previousHistory = _historyOwner,
       previousLogMuted = Log.isMuted;
 
   final Map<String, dynamic> previousSettings;
@@ -4568,6 +4571,8 @@ class _ReaderFixture {
   final HistoryManager? previousHistory;
   final bool previousLogMuted;
   final history = _ControlledHistory();
+  late final images = ImageFavoriteManager.create(history: history);
+  final previousImages = _imageOwner;
   final readerKey = GlobalKey<_TestReaderState>();
   late final Directory directory;
   late WindowFrameController frame;
@@ -4586,8 +4591,9 @@ class _ReaderFixture {
     App.dataPath = fixture.directory.path;
     App.cachePath = fixture.directory.path;
     Log.isMuted = true;
-    HistoryManager.cache = fixture.history;
-    LocalFavoritesManager.cache = _Favorites();
+    _historyOwner = fixture.history;
+    _imageOwner = fixture.images;
+    _favoritesOwner = _Favorites();
     final settings = appdata.settings;
     settings['comicSpecificSettings'] = <String, dynamic>{};
     settings['deviceSpecificSettings'] = <String, dynamic>{};
@@ -4601,8 +4607,8 @@ class _ReaderFixture {
     settings['showPageNumberInReader'] = false;
     settings['eInkMode'] = false;
     settings['language'] = 'en-US';
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     await tester.runAsync(() async {
       final root = fixture.directory.path;
       Directory('$root/comics').createSync();
@@ -4686,56 +4692,58 @@ class _ReaderFixture {
       appdata.settings['enablePageAnimation'] = false;
     }
     await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData(
-          brightness: brightness,
-          fontFamily: Platform.environment['WINDOW_OWNER_QA_FONT'] == null
-              ? null
-              : 'WindowOwnerQA',
-        ),
-        navigatorKey: appNavigation.rootNavigatorKey,
-        builder: (context, child) {
-          Widget content = ReaderPlatformEffectsScope(
-            child: OverlayWidget(child!),
-          );
-          if (withWindow) {
-            content = WindowFrame(
-              Builder(
-                builder: (context) {
-                  frame = WindowFrame.of(context);
-                  if (!registered) {
-                    registered = true;
-                    beforeReaderMount?.call(frame);
-                  }
-                  return ReaderPlatformEffectsScope(
-                    child: OverlayWidget(child),
-                  );
-                },
+      _libraryView(
+        MaterialApp(
+          theme: ThemeData(
+            brightness: brightness,
+            fontFamily: Platform.environment['WINDOW_OWNER_QA_FONT'] == null
+                ? null
+                : 'WindowOwnerQA',
+          ),
+          navigatorKey: appNavigation.rootNavigatorKey,
+          builder: (context, child) {
+            Widget content = ReaderPlatformEffectsScope(
+              child: OverlayWidget(child!),
+            );
+            if (withWindow) {
+              content = WindowFrame(
+                Builder(
+                  builder: (context) {
+                    frame = WindowFrame.of(context);
+                    if (!registered) {
+                      registered = true;
+                      beforeReaderMount?.call(frame);
+                    }
+                    return ReaderPlatformEffectsScope(
+                      child: OverlayWidget(child),
+                    );
+                  },
+                ),
+                onExit: () => exits++,
+                finalize: finalize,
+              );
+            }
+            content = MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(textScale),
+                disableAnimations: reducedMotion,
               ),
-              onExit: () => exits++,
-              finalize: finalize,
-            );
-          }
-          content = MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.linear(textScale),
-              disableAnimations: reducedMotion,
-            ),
-            child: content,
-          );
-          if (registries != null) {
-            return ValueListenableBuilder<SelectionTaskRegistry>(
-              valueListenable: registries,
               child: content,
-              builder: (_, registry, child) =>
-                  SelectionTasksScope(registry: registry, child: child!),
             );
-          }
-          return registry == null
-              ? content
-              : SelectionTasksScope(registry: registry, child: content);
-        },
-        home: pushed ? const Scaffold(body: Text('Library home')) : reader(),
+            if (registries != null) {
+              return ValueListenableBuilder<SelectionTaskRegistry>(
+                valueListenable: registries,
+                child: content,
+                builder: (_, registry, child) =>
+                    SelectionTasksScope(registry: registry, child: child!),
+              );
+            }
+            return registry == null
+                ? content
+                : SelectionTasksScope(registry: registry, child: content);
+          },
+          home: pushed ? const Scaffold(body: Text('Library home')) : reader(),
+        ),
       ),
     );
     if (pushed) {
@@ -4788,10 +4796,12 @@ class _ReaderFixture {
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
     );
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     history.close();
-    HistoryManager.cache = previousHistory;
-    LocalFavoritesManager.cache = previousFavorites;
+    images.dispose();
+    _imageOwner = previousImages;
+    _historyOwner = previousHistory;
+    _favoritesOwner = previousFavorites;
     Log.isMuted = previousLogMuted;
     previousSettings.forEach((key, value) => appdata.settings[key] = value);
     directory.deleteSync(recursive: true);
@@ -5068,4 +5078,35 @@ class _NativeWindow {
       fullscreen = value;
     },
   );
+}
+
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+HistoryManager? _historyOwner;
+HistoryManager _historyForView() => _historyOwner ??= HistoryManager.create();
+Widget? _libraryChild;
+ImageFavoriteManager? _imageOwner;
+Widget _libraryView(Widget child) {
+  _libraryChild = child;
+  return FavoritesScope(
+    manager: _favoritesForView(),
+    child: HistoryScope(
+      manager: _historyForView(),
+      imageFavorites: _imageOwner,
+      child: child,
+    ),
+  );
+}
+
+Future<void> _replaceHistory(
+  WidgetTester tester,
+  HistoryManager manager, {
+  ImageFavoriteManager? images,
+}) async {
+  _historyOwner = manager;
+  final next = images ?? ImageFavoriteManager.create(history: manager);
+  if (images == null) addTearDown(next.dispose);
+  _imageOwner = next;
+  await tester.pumpWidget(_libraryView(_libraryChild!));
 }

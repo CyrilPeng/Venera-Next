@@ -16,7 +16,9 @@ import 'package:venera_next/foundation/log.dart';
 import 'source_installation_widgets.dart';
 
 class SourceRepositoriesPanel extends StatelessWidget {
-  const SourceRepositoriesPanel({super.key});
+  const SourceRepositoriesPanel({super.key, this.createClient});
+
+  final Dio Function()? createClient;
 
   @override
   Widget build(BuildContext context) {
@@ -105,7 +107,10 @@ class SourceRepositoriesPanel extends StatelessWidget {
                         FilledButton.tonalIcon(
                           onPressed: () => showPopUpWidget(
                             context,
-                            SourceRepositoryCatalogPage(repository: repository),
+                            SourceRepositoryCatalogPage(
+                              repository: repository,
+                              createClient: createClient,
+                            ),
                           ),
                           icon: const Icon(Icons.library_add_outlined),
                           label: Text('Browse sources'.tl),
@@ -135,7 +140,8 @@ class SourceRepositoriesPanel extends StatelessWidget {
   ]) => showDialog<void>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => _RepositoryEditor(repository: repository),
+    builder: (_) =>
+        _RepositoryEditor(repository: repository, createClient: createClient),
   );
 
   Future<void> _removeRepository(
@@ -160,8 +166,9 @@ class SourceRepositoriesPanel extends StatelessWidget {
 }
 
 class _RepositoryEditor extends StatefulWidget {
-  const _RepositoryEditor({this.repository});
+  const _RepositoryEditor({this.repository, this.createClient});
   final SourceRepository? repository;
+  final Dio Function()? createClient;
   @override
   State<_RepositoryEditor> createState() => _RepositoryEditorState();
 }
@@ -185,6 +192,7 @@ class _RepositoryEditorState extends SettingsSaveState<_RepositoryEditor> {
     final id = widget.repository?.id;
     final capturedName = name.text;
     final capturedUrl = url.text;
+    final createClient = widget.createClient;
     SourceRepositorySave? request;
     error = null;
     await saveSetting(
@@ -196,6 +204,7 @@ class _RepositoryEditorState extends SettingsSaveState<_RepositoryEditor> {
             id: id,
             name: capturedName,
             url: capturedUrl,
+            createClient: createClient,
           );
           await request!.validate();
         } catch (failure) {

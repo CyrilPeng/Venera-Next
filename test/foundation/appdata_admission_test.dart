@@ -434,12 +434,27 @@ void main() {
           }),
           hooks,
         ),
-        throwsA(isA<TypeError>()),
+        throwsFormatException,
       );
       await Future<void>.delayed(Duration.zero);
       expect(writes, 0);
       expect(appdata.settings['disableSyncFields'], '');
       expect(File(p.join(root.path, 'appdata.json')).existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'unrelated edits preserve a malformed legacy sync filter on disk',
+    () async {
+      appdata.settings['disableSyncFields'] = 123;
+      await appdata.updateSettings(
+        (settings) => settings['cacheSize'] = 901,
+        sync: false,
+      );
+      expect(appdata.settings['disableSyncFields'], 123);
+      expect(read()['settings']['disableSyncFields'], 123);
+      expect(read()['settings']['cacheSize'], 901);
+      expect(File(p.join(root.path, 'syncdata.json')).existsSync(), isFalse);
     },
   );
 

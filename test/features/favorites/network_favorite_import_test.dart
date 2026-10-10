@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -93,7 +94,7 @@ void main() {
       tester,
     ) async {
       final originalSources = List.of(ComicSource.all());
-      final originalManager = LocalFavoritesManager.cache;
+      final originalManager = _favoritesOwner;
       final manager = _ImportManager();
       final registry = SelectionTaskRegistry();
       final pending = Completer<Res<List<Comic>>>();
@@ -115,12 +116,12 @@ void main() {
         fromIntKey: (key) => key == 'test'.hashCode ? source : null,
         isEmpty: () => false,
       );
-      LocalFavoritesManager.cache = manager;
+      _favoritesOwner = manager;
       addTearDown(() async {
         if (!pending.isCompleted) pending.complete(const Res([]));
         await tester.pumpWidget(const SizedBox());
         await settleSidebarWork(tester, registry.closeAndWait);
-        LocalFavoritesManager.cache = originalManager;
+        _favoritesOwner = originalManager;
         configureComicSourceRegistry(
           all: () => originalSources,
           find: (key) => originalSources.where((s) => s.key == key).firstOrNull,
@@ -131,14 +132,16 @@ void main() {
       });
       late BuildContext context;
       await tester.pumpWidget(
-        MaterialApp(
-          builder: (_, child) =>
-              SelectionTasksScope(registry: registry, child: child!),
-          home: Builder(
-            builder: (value) {
-              context = value;
-              return const Scaffold();
-            },
+        _libraryView(
+          MaterialApp(
+            builder: (_, child) =>
+                SelectionTasksScope(registry: registry, child: child!),
+            home: Builder(
+              builder: (value) {
+                context = value;
+                return const Scaffold();
+              },
+            ),
           ),
         ),
       );
@@ -155,7 +158,7 @@ void main() {
       if (replacement == 'source') {
         source = _ImportSource(data);
       } else {
-        LocalFavoritesManager.cache = _ImportManager();
+        await _replaceFavorites(tester, _ImportManager());
       }
       pending.complete(Res([comic('one')], subData: 5));
       await pumpSidebar(tester);
@@ -178,16 +181,18 @@ void main() {
     final pending = Completer<List<FavoriteItem>>();
     var commits = 0;
     await tester.pumpWidget(
-      MaterialApp(
-        builder: (_, child) =>
-            SelectionTasksScope(registry: registry, child: child!),
-        home: NetworkFavoriteImportDialog(
-          collect: (_, _) => pending.future,
-          commit: (_, _) {
-            commits++;
-            return NetworkFavoriteImportCommit('Target', []);
-          },
-          publish: (_) {},
+      _libraryView(
+        MaterialApp(
+          builder: (_, child) =>
+              SelectionTasksScope(registry: registry, child: child!),
+          home: NetworkFavoriteImportDialog(
+            collect: (_, _) => pending.future,
+            commit: (_, _) {
+              commits++;
+              return NetworkFavoriteImportCommit('Target', []);
+            },
+            publish: (_) {},
+          ),
         ),
       ),
     );
@@ -211,10 +216,12 @@ void main() {
       var oldCommits = 0;
       var newCommits = 0;
       final registry = SelectionTaskRegistry();
-      Widget app(NetworkFavoriteImportDialog child) => MaterialApp(
-        builder: (_, page) =>
-            SelectionTasksScope(registry: registry, child: page!),
-        home: child,
+      Widget app(NetworkFavoriteImportDialog child) => _libraryView(
+        MaterialApp(
+          builder: (_, page) =>
+              SelectionTasksScope(registry: registry, child: page!),
+          home: child,
+        ),
       );
       await tester.pumpWidget(
         app(
@@ -257,13 +264,15 @@ void main() {
       final pending = Completer<NetworkFavoriteImportCommit>();
       var publications = 0;
       await tester.pumpWidget(
-        MaterialApp(
-          home: NetworkFavoriteImportDialog(
-            collect: (_, progress) async => [item('one')],
-            commit: (_, scope) => pending.future,
-            publish: (_) async {
-              publications++;
-            },
+        _libraryView(
+          MaterialApp(
+            home: NetworkFavoriteImportDialog(
+              collect: (_, progress) async => [item('one')],
+              commit: (_, scope) => pending.future,
+              publish: (_) async {
+                publications++;
+              },
+            ),
           ),
         ),
       );
@@ -505,34 +514,36 @@ void main() {
       var commits = 0;
       var publications = 0;
       await tester.pumpWidget(
-        MaterialApp(
-          home: NetworkFavoriteImportDialog(
-            collect: (_, progress) async {
-              collections++;
-              return [item('one')];
-            },
-            commit: (items, scope) {
-              commits++;
-              return NetworkFavoriteImportCommit(
-                'Target',
-                commitNetworkFavorites(
-                  repo,
-                  folder: 'Target',
-                  source: 'test',
-                  folderId: 'remote',
-                  items: items,
-                  append: true,
-                  oldToNew: false,
-                  translateTags: (_) => '',
-                ),
-              );
-            },
-            publish: (result) {
-              publications++;
-              expect(result.count, 1);
-              expect(repo.getFolderComics('Target'), hasLength(1));
-              if (publications < 3) throw StateError('refresh unavailable');
-            },
+        _libraryView(
+          MaterialApp(
+            home: NetworkFavoriteImportDialog(
+              collect: (_, progress) async {
+                collections++;
+                return [item('one')];
+              },
+              commit: (items, scope) {
+                commits++;
+                return NetworkFavoriteImportCommit(
+                  'Target',
+                  commitNetworkFavorites(
+                    repo,
+                    folder: 'Target',
+                    source: 'test',
+                    folderId: 'remote',
+                    items: items,
+                    append: true,
+                    oldToNew: false,
+                    translateTags: (_) => '',
+                  ),
+                );
+              },
+              publish: (result) {
+                publications++;
+                expect(result.count, 1);
+                expect(repo.getFolderComics('Target'), hasLength(1));
+                if (publications < 3) throw StateError('refresh unavailable');
+              },
+            ),
           ),
         ),
       );
@@ -560,13 +571,15 @@ void main() {
   ) async {
     var publications = 0;
     await tester.pumpWidget(
-      MaterialApp(
-        home: NetworkFavoriteImportDialog(
-          collect: (_, progress) async => [item('one')],
-          commit: (_, scope) => throw StateError('SQL failed'),
-          publish: (_) {
-            publications++;
-          },
+      _libraryView(
+        MaterialApp(
+          home: NetworkFavoriteImportDialog(
+            collect: (_, progress) async => [item('one')],
+            commit: (_, scope) => throw StateError('SQL failed'),
+            publish: (_) {
+              publications++;
+            },
+          ),
         ),
       ),
     );
@@ -592,7 +605,9 @@ void main() {
       final navigator = GlobalKey<NavigatorState>();
       var commits = 0;
       await tester.pumpWidget(
-        MaterialApp(navigatorKey: navigator, home: const Scaffold()),
+        _libraryView(
+          MaterialApp(navigatorKey: navigator, home: const Scaffold()),
+        ),
       );
       navigator.currentState!.push(
         MaterialPageRoute<void>(
@@ -624,17 +639,19 @@ void main() {
       var commits = 0;
       late RequestScope scope;
       await tester.pumpWidget(
-        MaterialApp(
-          home: NetworkFavoriteImportDialog(
-            publish: (_) {},
-            collect: (value, progress) {
-              scope = value;
-              return pending.future;
-            },
-            commit: (_, scope) {
-              commits++;
-              return NetworkFavoriteImportCommit('Target', [item('one')]);
-            },
+        _libraryView(
+          MaterialApp(
+            home: NetworkFavoriteImportDialog(
+              publish: (_) {},
+              collect: (value, progress) {
+                scope = value;
+                return pending.future;
+              },
+              commit: (_, scope) {
+                commits++;
+                return NetworkFavoriteImportCommit('Target', [item('one')]);
+              },
+            ),
           ),
         ),
       );
@@ -651,14 +668,16 @@ void main() {
   ) async {
     var commits = 0;
     await tester.pumpWidget(
-      MaterialApp(
-        home: NetworkFavoriteImportDialog(
-          publish: (_) {},
-          collect: (_, progress) async => throw StateError('offline'),
-          commit: (_, scope) {
-            commits++;
-            return NetworkFavoriteImportCommit('Target', [item('one')]);
-          },
+      _libraryView(
+        MaterialApp(
+          home: NetworkFavoriteImportDialog(
+            publish: (_) {},
+            collect: (_, progress) async => throw StateError('offline'),
+            commit: (_, scope) {
+              commits++;
+              return NetworkFavoriteImportCommit('Target', [item('one')]);
+            },
+          ),
         ),
       ),
     );
@@ -668,4 +687,21 @@ void main() {
     expect(find.text('OK'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
+}
+
+Widget? _libraryChild;
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+Widget _libraryView(Widget child) {
+  _libraryChild = child;
+  return FavoritesScope(manager: _favoritesForView(), child: child);
+}
+
+Future<void> _replaceFavorites(
+  WidgetTester tester,
+  LocalFavoritesManager manager,
+) async {
+  _favoritesOwner = manager;
+  await tester.pumpWidget(_libraryView(_libraryChild!));
 }

@@ -16,8 +16,8 @@ void main() {
   late SourceRepositories repositories;
   setUp(() {
     adapter = _Response();
-    repositories = SourceRepositories.forTesting(
-      Dio()..httpClientAdapter = adapter,
+    repositories = SourceRepositories(
+      client: Dio()..httpClientAdapter = adapter,
     );
   });
   tearDown(() => repositories.dispose());

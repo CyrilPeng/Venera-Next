@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:flutter/material.dart';
@@ -57,12 +58,12 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
   var folders = <String>[];
 
   var networkFolders = <String>[];
+  late final FavoriteStoreBinding _store;
   late final LocalFavoritesManager _manager;
   late final int _managerGeneration;
 
   bool get _hasManager =>
-      identical(LocalFavoritesManager.cache, _manager) &&
-      _manager.connectionGeneration == _managerGeneration;
+      _store.isCurrent && _manager.connectionGeneration == _managerGeneration;
 
   void findNetworkFolders() {
     networkFolders.clear();
@@ -82,7 +83,8 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
 
   @override
   void initState() {
-    _manager = LocalFavoritesManager();
+    _store = FavoritesScope.capture(context);
+    _manager = _store.manager;
     _managerGeneration = _manager.connectionGeneration;
     widget.onFolderListReady?.call(this);
     folders = _manager.folderNames;

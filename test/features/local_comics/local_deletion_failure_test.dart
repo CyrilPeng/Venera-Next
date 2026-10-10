@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local.dart';
+import 'package:venera_next/features/local_comics/local_related_data.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
@@ -22,10 +24,8 @@ void main() {
     root = Directory.systemTemp.createTempSync('local-delete-failure-');
     App.dataPath = root.path;
     App.cachePath = root.path;
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
-    LocalFavoritesManager.cache = null;
-    HistoryManager.cache = null;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     local = LocalManager();
     favorites = LocalFavoritesManager();
     history = HistoryManager();
@@ -86,12 +86,10 @@ void main() {
     faultDb.dispose();
     await history.waitForAsyncWrites();
     history.close();
-    HistoryManager.cache = null;
     await favorites.debugWaitForHashedIdsRefresh();
     await favorites.closeAndWait();
-    LocalFavoritesManager.cache = null;
     await local.pendingDownloadTaskWrites;
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     await appdata.saveData(false);
     root.deleteSync(recursive: true);
   });
@@ -131,8 +129,54 @@ void main() {
       expect(favorites.folderComics('first'), 1);
       expect(favorites.folderComics('second'), 1);
       expect(page.readAsStringSync(), 'keep');
-      // The separate local/history/filesystem transaction remains a follow-up;
-      // this assertion covers failure propagation and preserving file contents.
+      // The coordinated SQL rollback leaves staged files available for retry.
+    },
+  );
+
+  test(
+    'queued deletion refuses a favorites connection reopened at the same path',
+    () async {
+      faultDb.execute('DROP TRIGGER reject_delete;');
+      final started = Completer<void>();
+      final release = Completer<void>();
+      final preceding = history.accessImageFavorites((_, _) async {
+        started.complete();
+        await release.future;
+      });
+      await started.future;
+      final database = sqlite3.open('${root.path}/local.db');
+      final related = LocalComicRelatedData.managed(
+        favorites: favorites,
+        history: history,
+      );
+      var commits = 0;
+      final deleting = related.deleteRecords(
+        localDatabase: database,
+        comics: [comic],
+        markCommitted: () => commits++,
+        validate: () {},
+      );
+      final rejected = expectLater(deleting, throwsStateError);
+      try {
+        // The orderly close waits for accepted access. Exercise a direct
+        // connection retirement while the original deletion is still queued.
+        favorites.close();
+        await favorites.init();
+        release.complete();
+        await preceding;
+        await rejected;
+        expect(commits, 0);
+        expect(local.count, 1);
+        expect(history.find(comic.id, comic.comicType), isNotNull);
+        expect(favorites.folderComics('first'), 1);
+        expect(page.readAsStringSync(), 'keep');
+        await local.batchDeleteComics([comic]);
+        expect(local.count, 0);
+      } finally {
+        if (!release.isCompleted) release.complete();
+        await preceding;
+        database.dispose();
+      }
     },
   );
 

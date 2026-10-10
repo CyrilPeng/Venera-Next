@@ -5,6 +5,33 @@ import 'package:venera_next/foundation/appdata.dart';
 
 void main() {
   test(
+    'invalid display timestamps fall back without rewriting stored values',
+    () {
+      final store = createAppSyncPreferences(appdata);
+      final previous = appdata.settings['lastSyncTime'];
+      final previousAttempt = appdata.implicitData['webdavSyncLastAttempt'];
+      addTearDown(() {
+        appdata.settings['lastSyncTime'] = previous;
+        if (previousAttempt == null) {
+          appdata.implicitData.remove('webdavSyncLastAttempt');
+        } else {
+          appdata.implicitData['webdavSyncLastAttempt'] = previousAttempt;
+        }
+      });
+      for (final raw in ['legacy', -1, 1.5, <String>[], 9223372036854775807]) {
+        appdata.settings['lastSyncTime'] = raw;
+        appdata.implicitData['webdavSyncLastAttempt'] = raw;
+        expect(store.lastSyncTime, 0);
+        expect(store.lastAttempt, isNull);
+        expect(appdata.settings['lastSyncTime'], same(raw));
+        expect(appdata.implicitData['webdavSyncLastAttempt'], same(raw));
+      }
+      appdata.settings['lastSyncTime'] = 123;
+      expect(store.lastSyncTime, 123);
+    },
+  );
+
+  test(
     'sync configuration distinguishes empty and malformed legacy connections',
     () {
       expect(SyncConnection.parse([])!.isEmpty, isTrue);

@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -106,7 +108,9 @@ class _AppWebviewState extends State<AppWebview> with ContextMenuOwner {
   late var future = _createWebviewEnvironment();
 
   Future<bool> _createWebviewEnvironment() async {
-    var proxy = appdata.settings['proxy'].toString();
+    var proxy = GlobalPreferenceStore(
+      appdata.settings,
+    ).read(NetworkPreferences.proxy);
     if (proxy != "system" && proxy != "direct") {
       var proxyAvailable = await WebViewFeature.isFeatureSupported(
         WebViewFeature.PROXY_OVERRIDE,

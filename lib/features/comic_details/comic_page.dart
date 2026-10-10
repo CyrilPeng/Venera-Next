@@ -1,3 +1,5 @@
+import 'package:venera_next/features/history/history_scope.dart';
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/components/file_save_task.dart';
 import 'package:venera_next/network/request_scope.dart';
 import 'dart:async';
@@ -26,7 +28,6 @@ import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
@@ -38,7 +39,7 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
-bool _isReadOnlyComicInfoNamespace(String namespace) {
+bool isReadOnlyComicInfoNamespace(String namespace) {
   final key = namespace.trim().toLowerCase();
   const readOnlyNamespaces = {
     'views',
@@ -59,11 +60,6 @@ bool _isReadOnlyComicInfoNamespace(String namespace) {
     'last update',
   };
   return readOnlyNamespaces.contains(key);
-}
-
-@visibleForTesting
-bool isReadOnlyComicInfoNamespaceForTesting(String namespace) {
-  return _isReadOnlyComicInfoNamespace(namespace);
 }
 
 class ComicPage extends StatefulWidget {
@@ -124,10 +120,9 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
 
   @override
   void onReadEnd() {
-    history ??= HistoryManager().find(
-      widget.id,
-      ComicType(widget.sourceKey.hashCode),
-    );
+    history ??= HistoryScope.read(
+      context,
+    ).find(widget.id, ComicType(widget.sourceKey.hashCode));
     update();
   }
 
@@ -271,7 +266,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
       if (localComic == null) {
         return const Res.error('Local comic not found');
       }
-      var history = HistoryManager().find(widget.id, ComicType.local);
+      var history = HistoryScope.read(context).find(widget.id, ComicType.local);
       if (isFirst) {
         final pageContext = context;
         Future.microtask(() {
@@ -304,14 +299,12 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
     if (comicSource == null) {
       return const Res.error('Comic source not found');
     }
-    isAddToLocalFav = LocalFavoritesManager().isExist(
-      widget.id,
-      ComicType(widget.sourceKey.hashCode),
-    );
-    history = HistoryManager().find(
-      widget.id,
-      ComicType(widget.sourceKey.hashCode),
-    );
+    isAddToLocalFav = FavoritesScope.read(
+      context,
+    ).isExist(widget.id, ComicType(widget.sourceKey.hashCode));
+    history = HistoryScope.read(
+      context,
+    ).find(widget.id, ComicType(widget.sourceKey.hashCode));
     return comicSource.loadComicInfo!(widget.id);
   }
 
@@ -415,10 +408,9 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
 
   Widget buildActions() {
     bool hasHistory = history != null && (history!.ep > 1 || history!.page > 1);
-    bool hasUpdate = LocalFavoritesManager().hasNewUpdate(
-      comic.id,
-      comic.comicType,
-    );
+    bool hasUpdate = FavoritesScope.read(
+      context,
+    ).hasNewUpdate(comic.id, comic.comicType);
 
     Widget buildMainButtonChild(IconData icon, String text) {
       return Row(
@@ -745,10 +737,10 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
                             e.key.toLowerCase(),
                           )
                         : tag,
-                    onTap: _isReadOnlyComicInfoNamespace(e.key)
+                    onTap: isReadOnlyComicInfoNamespace(e.key)
                         ? null
                         : () => onTapTag(tag, e.key),
-                    onLongPress: _isReadOnlyComicInfoNamespace(e.key)
+                    onLongPress: isReadOnlyComicInfoNamespace(e.key)
                         ? null
                         : (tagContext) =>
                               onLongPressTag(tag, e.key, tagContext),

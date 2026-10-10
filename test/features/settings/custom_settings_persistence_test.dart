@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -618,6 +619,42 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(TextFormField), findsNothing);
       expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'R2 malformed image processing preferences open without rewriting raw data',
+    (tester) async {
+      final root = _prepare();
+      appdata.settings['customImageProcessing'] = ['invalid'];
+      appdata.settings['enableCustomImageProcessing'] = 'invalid';
+      await tester.pumpWidget(_host(const ReaderSettings()));
+      await tester.scrollUntilVisible(
+        find.text('Custom Image Processing'),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      tester
+          .widget<CallbackSetting>(
+            find.ancestor(
+              of: find.text('Custom Image Processing'),
+              matching: find.byType(CallbackSetting),
+            ),
+          )
+          .callback();
+      await tester.pumpAndSettle();
+      expect(find.byType(CodeEditor), findsOneWidget);
+      expect(appdata.settings['customImageProcessing'], ['invalid']);
+      expect(appdata.settings['enableCustomImageProcessing'], 'invalid');
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Reset'));
+      await _flush(tester, appdata.saveData(false));
+      expect(
+        _saved(root)['customImageProcessing'],
+        defaultCustomImageProcessing,
+      );
+      expect(_saved(root)['enableCustomImageProcessing'], 'invalid');
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

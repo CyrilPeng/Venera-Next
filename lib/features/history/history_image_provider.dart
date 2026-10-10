@@ -1,17 +1,15 @@
 import 'package:venera_next/features/history/history_api.dart';
-import 'dart:async' show Future, Stream;
+import 'dart:async' show Future, Stream, StreamController;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/local_comics/local_comics.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
+import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/image_stream.dart';
 import 'package:venera_next/features/history/history_manager.dart';
 import 'package:venera_next/foundation/image_provider/base_image_provider.dart';
-import 'history_image_provider.dart' as image_provider;
 
-class HistoryImageProvider
-    extends BaseImageProvider<image_provider.HistoryImageProvider> {
+class HistoryImageProvider extends BaseImageProvider<HistoryImageProvider> {
   /// Image provider for normal image.
   ///
   /// [url] is the url of the image. Local file path is also supported.
@@ -27,7 +25,10 @@ class HistoryImageProvider
   ) => ImageDownloader.loadThumbnail(url, sourceKey, id);
 
   @override
-  Future<Uint8List> load(chunkEvents, checkStop) async {
+  Future<Uint8List> load(
+    StreamController<ImageChunkEvent> chunkEvents,
+    void Function() checkStop,
+  ) async {
     checkStop();
     final id = history.id;
     final type = history.type;

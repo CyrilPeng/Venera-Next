@@ -3,11 +3,15 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/res.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
+import 'package:venera_next/network/request_scope.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -69,6 +73,199 @@ void main() {
         );
         manager.add(source);
         return source;
+      }
+
+      for (final read in _R1Read.values) {
+        test('R1 $read releases result and failure references', () async {
+          final source = await parse(_r1ReadScript(read));
+          await source.editData(
+            (draft) => draft['account'] = ['user', 'password'],
+          );
+          final result = await read.call(source);
+          expect(result.success, isTrue);
+          if (read == _R1Read.exploreMixed) {
+            final part = (result.data as List).last as ExplorePagePart;
+            expect(part.viewMore!.page, 'search');
+          }
+          final engine = JsEngine();
+          expect(engine.debugOwnedReferenceCount, 0);
+          engine.runCode(
+            'void (ComicSource.sources.transaction_a.mode = "reject")',
+          );
+          final failed = await read.call(source);
+          expect(failed.failure!.kind, FailureKind.failed);
+          final cause = failed.failure!.cause as Map;
+          expect(cause['marker'], 'synthetic failure');
+          expect(
+            () => (cause['callback'] as JSInvokable)([]),
+            throwsA(isA<JsDisposedError>()),
+          );
+          expect(engine.debugOwnedReferenceCount, 0);
+        });
+
+        test(
+          'R1 $read cancellation drains original Promise and keeps late errors',
+          () async {
+            final source = await parse(_r1ReadScript(read));
+            await source.editData(
+              (draft) => draft['account'] = ['user', 'password'],
+            );
+            final engine = JsEngine();
+            engine.runCode(
+              'void (ComicSource.sources.transaction_a.mode = "pending")',
+            );
+            for (final reject in [false, true]) {
+              final scope = RequestScope();
+              Res<Object?>? observed;
+              Object? operationError;
+              var ended = false;
+              final work = scope
+                  .runToCompletion(() async {
+                    observed = await read.call(source);
+                  })
+                  .then<void>(
+                    (_) => ended = true,
+                    onError: (Object error, StackTrace stack) {
+                      operationError = error;
+                      ended = true;
+                    },
+                  );
+              await pumpEventQueue();
+              scope.cancel();
+              await pumpEventQueue();
+              final endedEarly = ended;
+              engine.runCode(
+                reject
+                    ? 'void failR1Read({marker:"late rejection",callback:()=>42})'
+                    : 'void finishR1Read()',
+              );
+              await work;
+              scope.dispose();
+              expect(endedEarly, isFalse);
+              expect(operationError, isA<RequestCancelled>());
+              if (reject) {
+                expect(observed!.failure!.kind, FailureKind.failed);
+                expect(
+                  (observed!.failure!.cause as Map)['marker'],
+                  'late rejection',
+                );
+              } else {
+                expect(observed!.failure!.kind, FailureKind.cancelled);
+                expect(observed!.failure!.cause, isA<RequestCancelled>());
+              }
+              expect(observed!.failure!.stackTrace, isNotNull);
+              expect(engine.debugOwnedReferenceCount, 0);
+            }
+          },
+        );
+      }
+
+      for (final action in [
+        'status',
+        'tag',
+        'suggestion',
+        'link',
+        'category',
+      ]) {
+        test(
+          'R1 synchronous $action releases native result and rejection graphs',
+          () async {
+            final source = await parse(r'''
+            fail = false;
+            act(value) {
+              if (this.fail) throw {marker:'synchronous failure',callback:()=>42};
+              return value;
+            }
+            account = {loginWithWebview:{url:'login',checkStatus:()=>this.act(true)}};
+            search = {onTagSuggestionSelected:()=>this.act('suggested')};
+            comic = {
+              onClickTag:()=>this.act({page:'search',attributes:{keyword:'word'},extra:()=>42}),
+              link:{domains:['example.invalid'],linkToId:()=>this.act('book')}
+            };
+            category = {title:'Categories',parts:[{name:'Dynamic',type:'dynamic',
+              loader:()=>this.act([{label:'Tag',target:'search:word',extra:()=>42}])}]};
+          ''');
+            Object? invoke() => switch (action) {
+              'status' => source.account!.checkLoginStatus!('url', 'title'),
+              'tag' => source.handleClickTagEvent!('namespace', 'tag'),
+              'suggestion' => source.onTagSuggestionSelected!(
+                'namespace',
+                'tag',
+              ),
+              'link' => source.linkHandler!.linkToId(
+                'https://example.invalid/book',
+              ),
+              _ => source.categoryData!.categories.single.categories,
+            };
+            expect(invoke(), isNotNull);
+            final engine = JsEngine();
+            engine.runCode(
+              'void (ComicSource.sources.transaction_a.fail = true)',
+            );
+            Object? failure;
+            try {
+              invoke();
+            } catch (error) {
+              failure = error;
+            }
+            expect(failure, isA<Map>());
+            final callback = (failure as Map)['callback'] as JSInvokable;
+            expect(() => callback([]), throwsA(anything));
+          },
+        );
+      }
+
+      test(
+        'R1 unsupported synchronous Promise is observed and releases late references',
+        () async {
+          final source = await parse(r'''
+          search = {onTagSuggestionSelected:()=>new Promise(resolve=>{globalThis.finishSuggestion=resolve;})};
+        ''');
+          expect(
+            source.onTagSuggestionSelected!('namespace', 'tag'),
+            'namespace:tag',
+          );
+          final engine = JsEngine();
+          engine.runCode('void finishSuggestion({callback:()=>42})');
+          await pumpEventQueue();
+          expect(engine.debugOwnedReferenceCount, 0);
+        },
+      );
+
+      for (final action in ['login', 'logout', 'webview']) {
+        test(
+          'R1 account $action never retries a potentially applied action',
+          () async {
+            final source = await parse('''
+            calls = 0;
+            act() { ++this.calls; throw 'Connection reset by peer'; }
+            account = {
+              login: () => this.act(), logout: () => this.act(),
+              loginWithWebview: {url:'login',checkStatus:()=>false,onLoginSuccess:()=>this.act()}
+            };
+          ''');
+            Object? failure;
+            try {
+              if (action == 'login') {
+                failure = (await source.account!.login!(
+                  'user',
+                  'password',
+                )).failure;
+              } else if (action == 'logout') {
+                await source.account!.logout();
+              } else {
+                await source.account!.onLoginWithWebviewSuccess!();
+              }
+            } catch (error) {
+              failure = error;
+            }
+            expect(failure, isNotNull);
+            expect(
+              JsEngine().runCode('ComicSource.sources.transaction_a.calls'),
+              1,
+            );
+          },
+        );
       }
 
       test(
@@ -468,6 +665,93 @@ class MatrixSource extends ComicSource {
   $capabilities
 }
 ''';
+
+enum _R1Read {
+  searchPage,
+  searchCursor,
+  favoritesPage,
+  favoritesCursor,
+  folders,
+  categoryOptions,
+  categoryPage,
+  rankingPage,
+  rankingCursor,
+  explorePage,
+  exploreCursor,
+  explorePartsLegacy,
+  exploreParts,
+  exploreMixed;
+
+  Future<Res<Object?>> call(ComicSource source) => switch (this) {
+    searchPage => source.searchPageData!.loadPage!('keyword', 1, []),
+    searchCursor => source.searchPageData!.loadNext!('keyword', null, []),
+    favoritesPage => source.favoriteData!.loadComic!(1, 'folder'),
+    favoritesCursor => source.favoriteData!.loadNext!(null, 'folder'),
+    folders => source.favoriteData!.loadFolders!('comic'),
+    categoryOptions => source.categoryComicsData!.optionsLoader!(
+      'category',
+      null,
+    ),
+    categoryPage => source.categoryComicsData!.load('category', null, [], 1),
+    rankingPage => source.categoryComicsData!.rankingData!.load!('option', 1),
+    rankingCursor => source.categoryComicsData!.rankingData!.loadWithNext!(
+      'option',
+      null,
+    ),
+    explorePage => source.explorePages.single.loadPage!(1),
+    exploreCursor => source.explorePages.single.loadNext!(null),
+    explorePartsLegacy ||
+    exploreParts => source.explorePages.single.loadMultiPart!(),
+    exploreMixed => source.explorePages.single.loadMixed!(1),
+  };
+}
+
+String _r1ReadScript(_R1Read read) {
+  const book = "{id:'one',title:'Book',cover:'',tags:['tag'],unused:()=>42}";
+  const list = "{comics:[$book],maxPage:3,next:'cursor',unused:()=>42}";
+  const part =
+      "{title:'Part',comics:[$book],viewMore:{page:'search',attributes:{keyword:'word'}},unused:()=>42}";
+  final capability = switch (read) {
+    _R1Read.searchPage => "search = {load:()=>this.read($list)};",
+    _R1Read.searchCursor => "search = {loadNext:()=>this.read($list)};",
+    _R1Read.favoritesPage =>
+      "favorites = {multiFolder:false,loadComics:()=>this.read($list)};",
+    _R1Read.favoritesCursor =>
+      "favorites = {multiFolder:false,loadNext:()=>this.read($list)};",
+    _R1Read.folders =>
+      "favorites = {multiFolder:true,loadFolders:()=>this.read({folders:{f:'Folder'},favorited:['f'],unused:()=>42})};",
+    _R1Read.categoryOptions =>
+      "categoryComics = {optionLoader:()=>this.read([{label:'Options',options:['one-First'],unused:()=>42}])};",
+    _R1Read.categoryPage => "categoryComics = {load:()=>this.read($list)};",
+    _R1Read.rankingPage =>
+      "categoryComics = {ranking:{options:['one-First'],load:()=>this.read($list)}};",
+    _R1Read.rankingCursor =>
+      "categoryComics = {ranking:{options:['one-First'],loadWithNext:()=>this.read($list)}};",
+    _R1Read.explorePage =>
+      "explore = [{title:'Explore',type:'multiPageComicList',load:()=>this.read($list)}];",
+    _R1Read.exploreCursor =>
+      "explore = [{title:'Explore',type:'multiPageComicList',loadNext:()=>this.read($list)}];",
+    _R1Read.explorePartsLegacy =>
+      "explore = [{title:'Explore',type:'singlePageWithMultiPart',load:()=>this.read({Part:[$book]})}];",
+    _R1Read.exploreParts =>
+      "explore = [{title:'Explore',type:'multiPartPage',load:()=>this.read([$part])}];",
+    _R1Read.exploreMixed =>
+      "explore = [{title:'Explore',type:'mixed',load:()=>this.read({data:[[$book],$part],maxPage:3})}];",
+  };
+  return '''
+    $accountScript
+    mode = 'success'; reads = 0;
+    read(payload) {
+      ++this.reads;
+      if (this.mode === 'reject') return Promise.reject({marker:'synthetic failure',callback:()=>42});
+      if (this.mode === 'pending') return new Promise((resolve,reject)=>{
+        globalThis.finishR1Read = () => resolve(payload); globalThis.failR1Read = reject;
+      });
+      return payload;
+    }
+    $capability
+  ''';
+}
 
 const accountScript = r'''
   events = [];

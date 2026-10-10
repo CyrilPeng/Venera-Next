@@ -10,13 +10,13 @@ import 'package:venera_next/foundation/comic_type.dart';
 void main() {
   late Directory root;
   setUp(() {
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     root = Directory.systemTemp.createTempSync('download-shutdown-');
     App.dataPath = root.path;
   });
   tearDown(() async {
     await LocalManager().pendingDownloadTaskWrites;
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     root.deleteSync(recursive: true);
   });
 

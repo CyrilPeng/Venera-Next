@@ -14,14 +14,14 @@ void main() {
     root = Directory.systemTemp.createTempSync('storage-coordination-');
     App.dataPath = root.path;
     App.cachePath = root.path;
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     manager = LocalManager();
     await manager.init();
   });
   tearDown(() async {
     await manager.pendingDownloadTaskWrites;
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     root.deleteSync(recursive: true);
   });
 

@@ -48,13 +48,16 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     this.chapters,
     this.comicTitle,
     Stream<ImageDownloadProgress> Function(String, String)? loadThumbnail,
+    ComicImageLoader? loadImage,
     Future<DownloadDirectoryAllocation> Function(String, ComicType, String)?
     allocateDirectory,
   }) : _storage = storage,
        _loadThumbnail = loadThumbnail ?? ImageDownloader.loadThumbnail,
+       _loadImage = loadImage ?? ImageDownloader.loadComicImageUnwrapped,
        _allocateDirectory = allocateDirectory;
 
   final Stream<ImageDownloadProgress> Function(String, String) _loadThumbnail;
+  final ComicImageLoader _loadImage;
   StreamIterator<ImageDownloadProgress>? _thumbnail;
   final Future<DownloadDirectoryAllocation> Function(String, ComicType, String)?
   _allocateDirectory;
@@ -556,8 +559,9 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
 
   static ImagesDownloadTask? fromJson(
     DownloadTaskStorage storage,
-    Map<String, dynamic> json,
-  ) {
+    Map<String, dynamic> json, {
+    ComicImageLoader? loadImage,
+  }) {
     if (json["type"] != "ImagesDownloadTask") {
       return null;
     }
@@ -572,6 +576,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
 
     return ImagesDownloadTask(
         storage: storage,
+        loadImage: loadImage,
         source: ComicSource.find(json["source"])!,
         comicId: json["comicId"],
         comic: json["comic"] == null
@@ -709,12 +714,7 @@ class _ImageDownloadWrapper {
     int lastBytes = 0;
     String? unsupportedMime;
     final imageIterator = StreamIterator(
-      ImageDownloader.loadComicImageUnwrapped(
-        image,
-        task.source.key,
-        task.comicId,
-        chapter,
-      ),
+      task._loadImage(image, task.source.key, task.comicId, chapter),
     );
     _imageIterator = imageIterator;
     try {

@@ -1,3 +1,5 @@
+import 'package:venera_next/features/history/history_scope.dart';
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/components/file_save_task.dart';
@@ -29,7 +31,6 @@ import 'package:venera_next/features/favorites/folder_rename_dialog.dart';
 import 'package:venera_next/features/favorites/favorite_confirmation_dialog.dart';
 import 'package:venera_next/features/favorites/favorite_transfer_dialog.dart';
 import 'package:venera_next/features/favorites/favorite_metadata_dialog.dart';
-import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -97,7 +98,9 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   bool get isAllFolder => widget.folder == localAllFolderLabel;
 
-  LocalFavoritesManager get manager => LocalFavoritesManager();
+  LocalFavoritesManager get manager => _store.manager;
+
+  late final FavoriteStoreBinding _store;
 
   late final LocalFavoritesManager _observedManager;
   late final int _observedGeneration;
@@ -108,7 +111,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   bool get _canReadObservedFolder =>
       mounted &&
       _queryOwner?.active == true &&
-      identical(LocalFavoritesManager.cache, _observedManager) &&
+      _store.isCurrent &&
       _observedManager.connectionGeneration == _observedGeneration &&
       App.dataPath == _observedDataPath;
 
@@ -198,10 +201,9 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   List<FavoriteItem> filterComics(List<FavoriteItem> curComics) {
     return curComics.where((comic) {
-      var history = HistoryManager().find(
-        comic.id,
-        ComicType(comic.sourceKey.hashCode),
-      );
+      var history = HistoryScope.read(
+        context,
+      ).find(comic.id, ComicType(comic.sourceKey.hashCode));
       if (readFilterSelect == "UnCompleted") {
         return history == null || history.page != history.maxPage;
       } else if (readFilterSelect == "Completed") {
@@ -274,7 +276,8 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   @override
   void initState() {
     super.initState();
-    _observedManager = LocalFavoritesManager();
+    _store = FavoritesScope.capture(context);
+    _observedManager = _store.manager;
     _observedGeneration = _observedManager.connectionGeneration;
     _observedDataPath = App.dataPath;
     readFilterSelect =
@@ -884,10 +887,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                           await AppDataOperations.instance.access(() async {
                             // An accepted deletion may outlive its page, but
                             // cannot enter a replacement database after queuing.
-                            if (!identical(
-                                  LocalFavoritesManager.cache,
-                                  _observedManager,
-                                ) ||
+                            if (!_store.isCurrent ||
                                 _observedManager.connectionGeneration !=
                                     _observedGeneration ||
                                 App.dataPath != _observedDataPath ||

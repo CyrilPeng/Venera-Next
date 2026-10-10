@@ -435,6 +435,7 @@ void main() {
         MaterialApp(
           builder: (_, child) => WindowFrame(
             SyncWindowBinding(
+              waitForHistoryWrites: () async {},
               controller: fixture.controller,
               prepareInteractive: runtime.prepareForExit,
               prepareFollowUpdates: () async {

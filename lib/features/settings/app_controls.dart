@@ -1,8 +1,8 @@
+import 'package:venera_next/features/history/history_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/settings_save_state.dart';
-import 'package:venera_next/features/history/history_manager.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
@@ -45,7 +45,7 @@ class _HistoryRetentionSettingState
     if (!acceptsSettingsChanges || savingSettings || hasSettingsSaveError) {
       return;
     }
-    final manager = HistoryManager();
+    final manager = HistoryScope.read(context);
     final request = manager.createRetentionChange(value.round());
     _selection = request;
     await saveSetting(

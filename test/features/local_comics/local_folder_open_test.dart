@@ -13,7 +13,7 @@ import '../../components/sidebar_presentation_test.dart'
     show pumpSidebar, settleSidebarWork;
 
 void main() {
-  tearDown(LocalManager.resetForTesting);
+  tearDown(() => LocalManager.current?.dispose());
   for (final fails in [false, true]) {
     testWidgets('R1 original host drains folder opening, failure=$fails', (
       tester,

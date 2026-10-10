@@ -439,7 +439,9 @@ class _WebdavSettingState extends State<_WebdavSetting> {
     setState(() {
       isTesting = true;
     });
-    final result = await ComicBackupManager.testConnection(currentConfig);
+    final result = await ComicBackupManager.instance.testConnection(
+      currentConfig,
+    );
     if (!mounted) return;
     setState(() {
       isTesting = false;

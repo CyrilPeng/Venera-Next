@@ -25,8 +25,8 @@ void main() {
         );
         App.dataPath = root.path;
         App.cachePath = root.path;
-        LocalManager.resetForTesting();
-        LocalManager.debugSkipComicSourceInit = true;
+        LocalManager.current?.dispose();
+        LocalManager(initializeSources: () async {});
         final manager = LocalManager();
         await tester.runAsync(manager.init);
         await tester.pumpWidget(
@@ -94,7 +94,7 @@ void main() {
         } finally {
           await tester.pumpWidget(const SizedBox());
           await tester.runAsync(() async => manager.pendingDownloadTaskWrites);
-          LocalManager.resetForTesting();
+          LocalManager.current?.dispose();
           root.deleteSync(recursive: true);
         }
       },
@@ -107,8 +107,8 @@ void main() {
       final root = Directory.systemTemp.createTempSync('directory-recovery-');
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.resetForTesting();
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager.current?.dispose();
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await tester.runAsync(manager.init);
       await tester.pumpWidget(
@@ -134,7 +134,7 @@ void main() {
       } finally {
         await tester.pumpWidget(const SizedBox());
         await tester.runAsync(() async => manager.pendingDownloadTaskWrites);
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       }
     },

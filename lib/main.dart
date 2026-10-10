@@ -1,3 +1,8 @@
+import 'package:venera_next/features/history/image_favorites.dart';
+import 'package:venera_next/features/favorites/favorites_manager.dart';
+import 'package:venera_next/features/history/history_scope.dart';
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/history/history_manager.dart';
 import 'package:venera_next/app_runtime/data_sync.dart';
 import 'package:venera_next/app_runtime/bootstrap_core.dart';
 import 'package:venera_next/app_runtime/core_bootstrap.dart';
@@ -415,6 +420,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 );
               }
 
+              widget = FavoritesScope(
+                manager: LocalFavoritesManager(),
+                child: HistoryScope(
+                  manager: HistoryManager(),
+                  imageFavorites: ImageFavoriteManager(),
+                  child: widget,
+                ),
+              );
               widget = ReaderPlatformEffectsScope(child: OverlayWidget(widget));
               if (App.isDesktop) {
                 widget = WindowFrame(
@@ -427,6 +440,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                       onTapDown: appNavigation.pop,
                       child: SyncWindowBinding(
                         controller: _dataSync,
+                        waitForHistoryWrites:
+                            HistoryManager().waitForAsyncWrites,
                         isFinalizing: () => this.widget.host.isClosing,
                         prepareInteractive: _interactiveBindings.prepareForExit,
                         prepareFollowUpdates: () =>

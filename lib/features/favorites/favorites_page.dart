@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:math';
 import 'dart:async';
 
@@ -7,7 +8,6 @@ import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/features/favorites/favorites_constants.dart';
@@ -56,7 +56,7 @@ class _FavoritesPageState extends SettingsSaveState<FavoritesPage> {
     }
     if (folder != null &&
         !isNetwork &&
-        !LocalFavoritesManager().existsFolder(folder!)) {
+        !FavoritesScope.read(context).existsFolder(folder!)) {
       folder = null;
     }
     super.initState();

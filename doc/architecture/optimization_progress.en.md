@@ -1,5 +1,39 @@
 # Architecture Optimization Execution Record
 
+## R4: local evidence and remaining acceptance (2026-10-10)
+
+P8.3 coverage-trend and gate review is complete: **37 I / 14 P / 1 U** across the original 52 items, or **71.2% fully completed items**. This is not a workload estimate or whole-plan completion. R1–R3 technical cleanup is complete; current R4 evidence, removed/retained entries and all 15 remaining items are centralized in the [final candidate report](final_acceptance_2026_10_09.md).
+
+The single full-suite/coverage attempt has **4,951 passes, 2 existing skips and 1 source-initialization five-second timeout**. The unchanged failing test passed alone with the same assertions/deadline; the failed full-run record remains and no additional full suite was run. LCOV is **40,198/50,542 (79.53%)**. Strict analysis, formatting of 1,031 Dart files, 116 Python checks (3 existing platform skips) and the remaining gates pass. Windows/Android builds, complete artifact hashes and synthetic-signing limits are in the same report.
+
+Inventory: **524 libraries / 330 business / 194 UI / 0 pending / 245 entries**, unchanged 57 feature edges and **42 UI/navigation cycle members**. Business code is acyclic and cannot reach UI. Declared SDK, complete CLI, five-platform/performance and historical-recovery acceptance remains in the original items; P8.5 stays P as required by the plan.
+
+## R3 second group: default stores and view dependencies (2026-10-09)
+
+History and favorite defaults are read-only. The 200 default-registry assignments in 45 legacy fixtures have been removed. Favorite views use an explicit store and captured binding; readers retain history/image-favorite owners, while import facades and follow-update jobs receive their actual services/managers. Generation, path, original-view and queued-admission checks remain. Whole-application import fixtures still exercise real default close/reopen behavior without resetting the registry.
+
+P8.1 closes: **36 I / 15 P / 1 U** across the original 52 items. Inventory: **524 libraries / 330 business / 194 UI / 0 pending / 245 business entries**, with unchanged allowed edges. R3 technical cleanup is complete; P8.3 full coverage trends belong to R4. This group used related tests and affected deltas, without a full suite, coverage or release build. Overlapping run counts are not additive. Commands, original failures and input binding are in the [batch report](completion_batches_2026_10_09.md) and [single R3 audit](architecture_compatibility_completion_2026_10_09.md).
+
+The final UI/navigation file cycle has **42 members** after the favorite-settings view leaves the previous 43-member cycle.
+
+## R3 first group: responsibilities and compatibility entries (2026-10-09)
+
+All 28 pending libraries have a full responsibility review. Inventory is **522 files: 330 business / 192 UI / 0 pending, 245 business entries**. The original 46-file SCC becomes 43 individually explained UI/navigation files; business cycles are absent, with all 57 feature edges and previous business protections retained. Local related-data operations have a narrow owner; image, source-repository and backup dependencies are instance-bound. Retired list requests cannot publish, and rendering does not mutate comic tags.
+
+The related-domain run has **2,143 passes**; backup/configuration targeted tests have **48 passes** with partial overlap, not an additional total. Strict analysis and structure/architecture/Python checks are recorded in the [batch report](completion_batches_2026_10_09.md). Close **P0.4/P2.1/P2.5/P6.2/P8.2**, bringing the original 52 items to **35 I / 16 P / 1 U**. Legacy history/favorite UI and integration fixtures still replace production default registries, so **P8.1 stays P** and is next. No early full suite or coverage ran; R4 retains final validation. See the [single R3 audit](architecture_compatibility_completion_2026_10_09.md).
+
+## R2: storage, sync and configuration completion (2026-10-09)
+
+Post-commit favorite publication, malformed configuration round trips, per-directory core ownership and headless final-persistence ordering are implemented. The initial related-domain run had **2,165 passes**, one outdated expectation and one incorrect test path. After local fixes, the **279-test affected delta passes**; unaffected sets were not repeated. Strict analysis, formatting and structure/architecture gates pass, including 45 Python architecture tests.
+
+Close **P3.3/P3.4/P3.5**; the original 52 items now total **30 I / 21 P / 1 U**. Item counts do not translate test/commit counts into effort. P6 narrow interfaces continue in R3; unjournaled historical recovery, SAF/external paths and real native-platform evidence remain open. See the [batch report](completion_batches_2026_10_09.md) and [R2 audit](storage_configuration_completion_2026_10_09.md). Full tests, coverage and release builds remain in R4.
+
+## R1 second group: source capabilities and startup audit (2026-10-09)
+
+Source reads await the actual Promise and release result/rejection references; 31 error boundaries share cancellation classification. Login, logout and WebView-success actions execute once. Mixed discovery pages parse viewMore correctly; synchronous status, tag, link and dynamic-category hooks retain their contract.
+
+There are 37 new native QuickJS regressions. The related-domain run has **745 passes, no skips**, and final strict analysis is clean. Five ensureInit callers, resource owners and compatibility rules have been audited. P4.2/P7.4/P7.6 close; current status is **27 I / 24 P / 1 U**. The [single batch report](completion_batches_2026_10_09.md) records evidence and original open items. Passed behavioral tests are not rerun; R2 proceeds with storage/sync/settings and R4 retains final full verification.
+
 ## R1 first group: favorite entries and atomic bulk addition (2026-10-09)
 
 Quick deletion/export, bulk addition, network import, remote deletion/folder creation and local folder opening now retain their original caller and target. Bulk addition uses one SQLite transaction; post-commit transfer/addition publication attempts both update observers and ordinary views. Existing confirmation, input and window-task components are reused, including migration of real consumers.

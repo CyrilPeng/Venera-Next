@@ -1,3 +1,5 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/history/history_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
@@ -23,8 +25,8 @@ class HomePage extends StatelessWidget {
         const SearchEntry(),
         const SyncStatusSummary(),
         HistorySummary(
-          manager: HistoryManager.cache,
-          favoriteChanges: LocalFavoritesManager.cache,
+          manager: HistoryScope.read(context),
+          favoriteChanges: FavoritesScope.read(context),
         ),
         const ReadLaterSummary(),
         const LocalComicsSummary(),

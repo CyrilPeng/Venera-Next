@@ -1,15 +1,16 @@
 import 'package:flutter/widgets.dart';
 import 'package:venera_next/components/window_frame.dart';
-import 'package:venera_next/features/sync/sync.dart';
-import 'package:venera_next/features/history/history.dart';
-import 'package:venera_next/features/follow_updates/follow_updates.dart';
-import 'package:venera_next/features/local_comics/local_comics.dart';
+import 'package:venera_next/features/sync/data_sync_controller.dart';
+import 'package:venera_next/features/follow_updates/follow_updates_manager.dart';
+import 'package:venera_next/features/local_comics/local.dart';
+import 'package:venera_next/features/local_comics/local_import_lifecycle.dart';
 
 /// Window-close behavior exists only while the interactive window is mounted.
 class SyncWindowBinding extends StatefulWidget {
   const SyncWindowBinding({
     required this.child,
     required this.controller,
+    required this.waitForHistoryWrites,
     this.isFinalizing,
     this.prepareInteractive,
     this.prepareFollowUpdates,
@@ -31,6 +32,7 @@ class SyncWindowBinding extends StatefulWidget {
   final Future<void> Function()? closeStartupUpdates;
   final Widget child;
   final DataSyncController controller;
+  final Future<void> Function() waitForHistoryWrites;
   final bool Function()? isFinalizing;
 
   @override
@@ -67,6 +69,7 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
 
   Future<void> _waitThenClose() async {
     final controller = widget.controller;
+    final waitForHistoryWrites = widget.waitForHistoryWrites;
     _preparing = true;
     try {
       await widget.closeStartupUpdates?.call();
@@ -97,7 +100,7 @@ class _SyncWindowBindingState extends State<SyncWindowBinding> {
         _releaseImages = await prepareImages();
         if (!mounted) return;
       }
-      await HistoryManager().waitForAsyncWrites();
+      await waitForHistoryWrites();
       if (!mounted) return;
       _releaseSync = await controller.prepareForExit();
     } catch (_) {

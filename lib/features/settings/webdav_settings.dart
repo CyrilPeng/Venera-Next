@@ -13,11 +13,8 @@ import 'package:venera_next/foundation/widget_utils.dart';
 import 'webdav_connection_fields.dart';
 
 class BackupWebdavSetting extends StatefulWidget {
-  const BackupWebdavSetting({
-    super.key,
-    this.testConnection = ComicBackupManager.testConnection,
-  });
-  final Future<Res<bool>> Function(BackupConfig) testConnection;
+  const BackupWebdavSetting({super.key, this.testConnection});
+  final Future<Res<bool>> Function(BackupConfig)? testConnection;
 
   @override
   State<BackupWebdavSetting> createState() => _BackupWebdavSettingState();
@@ -156,7 +153,8 @@ class _BackupWebdavSettingState extends SettingsSaveState<BackupWebdavSetting> {
     if (!acceptsSettingsChanges || busy) return;
     final config = currentConfig;
     final sync = syncEnabled;
-    final check = widget.testConnection;
+    final check =
+        widget.testConnection ?? ComicBackupManager.instance.testConnection;
     final request = _request;
     Future<Res<bool>>? checked;
     Res<bool>? result;

@@ -209,6 +209,9 @@ def application_settings_violations(lib):
         'features/settings/app.dart': {'webdav', 'disableSyncFields'},
         'network/app_dio.dart': {'sni', 'ignoreBadCertificate', 'dnsOverrides', 'enableDnsOverrides'},
         'network/proxy.dart': {'proxy'},
+        'routing/webview.dart': {'proxy'},
+        'foundation/image_provider/reader_image.dart': {'enableCustomImageProcessing', 'customImageProcessing'},
+        'features/settings/reader.dart': {'enableCustomImageProcessing', 'customImageProcessing'},
         'features/local_comics/download.dart': {'downloadThreads'},
         'features/settings/network.dart': {'proxy', 'dnsOverrides', 'enableDnsOverrides', 'sni', 'downloadThreads'},
         'features/settings/appearance.dart': {'color', 'theme_mode'},
@@ -257,7 +260,8 @@ def application_settings_violations(lib):
         'features/settings/app_controls.dart', 'features/history/history_manager.dart',
     ):
         watched.setdefault(name, set()).update(behavior_keys)
-    literal_keys = favorite_keys | behavior_keys | {'blockedWords', 'blockedCommentWords'}
+    literal_keys = favorite_keys | behavior_keys | {'blockedWords', 'blockedCommentWords',
+                                                  'enableCustomImageProcessing', 'customImageProcessing'}
     errors = []
     pattern = re.compile(r'''\bappdata\.(?:settings|implicitData)\s*\[\s*['"]([^'"]+)['"]\s*\]''')
     form_pattern = re.compile(r'''\b(?:settingKey|settingsIndex)\s*:\s*['"]([^'"]+)['"]''')
@@ -293,6 +297,36 @@ def startup_violations(lib):
     return errors
 
 
+def retired_dependency_violations(lib):
+    """Do not restore global substitutions retired after consumer migration.
+
+    Instance injection, read-only diagnostics and pure validation helpers remain
+    valid. Match the retired API rather than banning every debug/test name.
+    """
+    retired = re.compile(
+        r'\b(?:debugSkipComicSourceInit|resetForTesting|debugLoadComicImageUnwrapped|'
+        r'debugResetSourceImageLoading|debugCreateDio|resetOps)\b|'
+        r'\b(?:LocalManager|SourceRepositories)\s*\.\s*forTesting\b|'
+        r'\b(?:HistoryManager|LocalFavoritesManager)\s*\.\s*cache\s*=(?!=)|'
+        r'\bstatic\s+(?:HistoryManager|LocalFavoritesManager)\??\s+cache\s*[;=]|'
+        r'\bstatic\s+set\s+cache\s*\('
+    )
+    backup_global = re.compile(
+        r'\bstatic\s+(?!final\b|const\b)[^;{}]*?'
+        r'\b(?:ops|exportComic|importComic|registerImportedComic)\s*[=;]', re.S
+    )
+    errors = []
+    for source in sorted(lib.rglob('*.dart')):
+        # Examples and explanations are not executable API declarations.
+        code = TOKENS.sub(' ', source.read_text(encoding='utf-8'))
+        if retired.search(code) or (
+            source.relative_to(lib).as_posix() == 'features/sync/comic_backup.dart'
+            and backup_global.search(code)
+        ):
+            errors.append(f'Retired global dependency hook: {source.relative_to(lib).as_posix()}')
+    return errors
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", action="store_true")
@@ -306,6 +340,7 @@ def main():
     errors.extend(reader_settings_violations(ROOT / "lib"))
     errors.extend(application_settings_violations(ROOT / "lib"))
     errors.extend(startup_violations(ROOT / "lib"))
+    errors.extend(retired_dependency_violations(ROOT / "lib"))
     if args.report:
         print("Feature strongly connected components (including UI):")
         for component in cycles(feature_edges(graph)):

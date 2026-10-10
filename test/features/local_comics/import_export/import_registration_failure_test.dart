@@ -39,13 +39,12 @@ void main() {
     root = Directory.systemTemp.createTempSync('registration-failure-');
     App.dataPath = root.path;
     App.cachePath = (Directory('${root.path}/cache')..createSync()).path;
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     manager = LocalManager();
     await manager.init();
     oldFollow = appdata.settings['followUpdatesFolder'];
     oldQuick = appdata.settings['quickFavorite'];
-    LocalFavoritesManager.cache = null;
     favorites = LocalFavoritesManager();
     await favorites.init();
     await favorites.createFolder('Imports');
@@ -55,11 +54,10 @@ void main() {
     await favorites.debugWaitForHashedIdsRefresh();
     await appdata.saveData(false);
     favorites.close();
-    LocalFavoritesManager.cache = null;
     appdata.settings['followUpdatesFolder'] = oldFollow;
     appdata.settings['quickFavorite'] = oldQuick;
     await manager.pendingDownloadTaskWrites;
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     root.deleteSync(recursive: true);
   });
 

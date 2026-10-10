@@ -31,15 +31,15 @@ void main() {
     root = Directory.systemTemp.createTempSync('comic-import-service-');
     App.dataPath = root.path;
     App.cachePath = root.path;
-    LocalManager.resetForTesting();
-    LocalManager.debugSkipComicSourceInit = true;
+    LocalManager.current?.dispose();
+    LocalManager(initializeSources: () async {});
     manager = LocalManager();
     await manager.init();
   });
 
   tearDown(() async {
     await manager.pendingDownloadTaskWrites;
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     root.deleteSync(recursive: true);
   });
 
@@ -65,7 +65,6 @@ void main() {
   ) async {
     final oldFollow = appdata.settings['followUpdatesFolder'];
     final oldQuick = appdata.settings['quickFavorite'];
-    LocalFavoritesManager.cache = null;
     final favorites = LocalFavoritesManager();
     try {
       await favorites.init();
@@ -74,7 +73,6 @@ void main() {
       await favorites.debugWaitForHashedIdsRefresh();
       await appdata.saveData(false);
       favorites.close();
-      LocalFavoritesManager.cache = null;
       appdata.settings['followUpdatesFolder'] = oldFollow;
       appdata.settings['quickFavorite'] = oldQuick;
     }

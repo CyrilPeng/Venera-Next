@@ -13,6 +13,7 @@ import 'package:venera_next/foundation/app_data_operations.dart';
 import '../history/image_favorites_repository_test.dart' show comic;
 
 void main() {
+  late ImageFavoriteManager imageManager;
   setUpAll(() {
     App.dataPath = Directory.systemTemp.path;
     App.cachePath = Directory.systemTemp.path;
@@ -20,18 +21,18 @@ void main() {
 
   Future<HistoryManager> prepare() async {
     final root = Directory.systemTemp.createTempSync('image-admission-ui-');
-    final previous = HistoryManager.cache;
     final previousData = App.dataPath;
     final previousCache = App.cachePath;
     App.dataPath = root.path;
     App.cachePath = root.path;
     final history = HistoryManager.create();
-    HistoryManager.cache = history;
+    imageManager = ImageFavoriteManager.create(history: history);
     await history.init();
     addTearDown(() {
       expect(history.hasPendingWrites, isFalse);
       history.close();
-      HistoryManager.cache = previous;
+      imageManager.dispose();
+      history.dispose();
       App.dataPath = previousData;
       App.cachePath = previousCache;
       root.deleteSync(recursive: true);
@@ -46,7 +47,9 @@ void main() {
     final release = Completer<void>();
     final replacement = AppDataOperations.instance.run(() => release.future);
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: ImageFavoritesPage())),
+      MaterialApp(
+        home: Scaffold(body: ImageFavoritesPage(manager: imageManager)),
+      ),
     );
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
     await tester.tap(find.byIcon(Icons.search));
@@ -66,7 +69,9 @@ void main() {
     final history = await prepare();
     history.imageFavoritesDatabase.execute('DROP TABLE image_favorites');
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: ImageFavoritesPage())),
+      MaterialApp(
+        home: Scaffold(body: ImageFavoritesPage(manager: imageManager)),
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.text('Retry'), findsOneWidget);
@@ -88,7 +93,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         navigatorKey: navigator,
-        home: ImageFavoritesGalleryPage(comic: empty),
+        home: ImageFavoritesGalleryPage(manager: imageManager, comic: empty),
       ),
     );
     unawaited(
@@ -99,7 +104,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    ImageFavoriteManager().notifyChanges();
+    imageManager.notifyChanges();
     await tester.pumpAndSettle();
     expect(find.text('Unrelated route'), findsOneWidget);
     navigator.currentState!.pop();
@@ -116,13 +121,15 @@ void main() {
     final release = Completer<void>();
     final replacement = AppDataOperations.instance.run(() => release.future);
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: Scaffold(
-          body: CustomScrollView(slivers: [ImageFavoritesSummary()]),
+          body: CustomScrollView(
+            slivers: [ImageFavoritesSummary(manager: imageManager)],
+          ),
         ),
       ),
     );
-    ImageFavoriteManager().notifyChanges();
+    imageManager.notifyChanges();
     await tester.pumpWidget(const SizedBox());
     release.complete();
     await replacement;

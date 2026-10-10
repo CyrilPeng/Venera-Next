@@ -1,3 +1,5 @@
+import 'package:venera_next/features/local_comics/import_export/comic_import_service.dart';
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -72,13 +74,15 @@ void main() {
   Future<WindowSelectionTask> host(WidgetTester tester) async {
     late BuildContext context;
     await tester.pumpWidget(
-      MaterialApp(
-        navigatorKey: appNavigation.rootNavigatorKey,
-        home: Builder(
-          builder: (owner) {
-            context = owner;
-            return const Scaffold();
-          },
+      _libraryView(
+        MaterialApp(
+          navigatorKey: appNavigation.rootNavigatorKey,
+          home: Builder(
+            builder: (owner) {
+              context = owner;
+              return const Scaffold();
+            },
+          ),
         ),
       ),
     );
@@ -101,11 +105,11 @@ void main() {
         );
         App.dataPath = root.path;
         App.cachePath = root.path;
-        LocalManager.resetForTesting();
-        LocalManager.debugSkipComicSourceInit = true;
+        LocalManager.current?.dispose();
+        LocalManager(initializeSources: () async {});
         final manager = LocalManager();
-        LocalFavoritesManager.cache = null;
-        final favorites = LocalFavoritesManager();
+        _favoritesOwner = null;
+        final favorites = _favoritesForView();
         final oldFollow = appdata.settings['followUpdatesFolder'];
         final oldQuick = appdata.settings['quickFavorite'];
         final messages = <String>[];
@@ -146,6 +150,10 @@ void main() {
           await tester.runAsync(() async {
             result = task.run(
               (_) => ImportComic(
+                service: const ComicImportService(
+                  localManager: LocalManager.new,
+                  favoritesManager: _favoritesForView,
+                ),
                 presentation: ImportComicPresentation.forTask(task),
               ).localDownloads(),
             );
@@ -195,8 +203,8 @@ void main() {
             await favorites.closeAndWait();
             await manager.pendingDownloadTaskWrites;
           }, 'recovery teardown');
-          LocalFavoritesManager.cache = null;
-          LocalManager.resetForTesting();
+          _favoritesOwner = null;
+          LocalManager.current?.dispose();
           appdata.settings['followUpdatesFolder'] = oldFollow;
           appdata.settings['quickFavorite'] = oldQuick;
           registerShowMessageHandler((context, message) {});
@@ -212,8 +220,8 @@ void main() {
       final root = Directory.systemTemp.createTempSync('import-facade-');
       App.dataPath = root.path;
       App.cachePath = root.path;
-      LocalManager.resetForTesting();
-      LocalManager.debugSkipComicSourceInit = true;
+      LocalManager.current?.dispose();
+      LocalManager(initializeSources: () async {});
       final manager = LocalManager();
       await tester.runAsync(manager.init);
       final source = Directory('${root.path}/Picked')..createSync();
@@ -232,6 +240,10 @@ void main() {
         final result = await tester.runAsync(
           () => task.run(
             (operation) => ImportComic(
+              service: const ComicImportService(
+                localManager: LocalManager.new,
+                favoritesManager: _favoritesForView,
+              ),
               presentation: ImportComicPresentation.forTask(task),
             ).directory(true, operation),
           ),
@@ -248,7 +260,7 @@ void main() {
         messenger.setMockMethodCallHandler(channel, null);
         await tester.pumpWidget(const SizedBox());
         await tester.runAsync(() async => manager.pendingDownloadTaskWrites);
-        LocalManager.resetForTesting();
+        LocalManager.current?.dispose();
         root.deleteSync(recursive: true);
       }
     },
@@ -335,4 +347,11 @@ void main() {
       },
     );
   }
+}
+
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+Widget _libraryView(Widget child) {
+  return FavoritesScope(manager: _favoritesForView(), child: child);
 }

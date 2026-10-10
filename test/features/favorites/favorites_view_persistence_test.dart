@@ -1,3 +1,5 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/history/history_scope.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -56,10 +58,10 @@ Future<Directory> _prepare(WidgetTester tester) async {
     'local_favorites_read_filter': 'All',
     'unrelated': 42,
   };
-  LocalFavoritesManager.cache = null;
-  HistoryManager.cache = null;
-  final manager = LocalFavoritesManager();
-  final history = HistoryManager();
+  _favoritesOwner = null;
+  _historyOwner = null;
+  final manager = _favoritesForView();
+  final history = _historyForView();
   await tester.runAsync(() async {
     await manager.init();
     await history.init();
@@ -80,8 +82,8 @@ Future<Directory> _prepare(WidgetTester tester) async {
       await manager.closeAndWait();
       history.close();
     });
-    LocalFavoritesManager.cache = null;
-    HistoryManager.cache = null;
+    _favoritesOwner = null;
+    _historyOwner = null;
     previousSettings.forEach((key, value) => appdata.settings[key] = value);
     appdata.implicitData = previousImplicit;
     App.dataPath = previousPath;
@@ -110,12 +112,14 @@ Widget _local({
   importFolder: importFolder ?? (_, _, _, _, _) async {},
 );
 
-Widget _host(Widget child, {Future<void> Function()? onExit}) => MaterialApp(
-  navigatorKey: appNavigation.rootNavigatorKey,
-  builder: onExit == null
-      ? null
-      : (_, child) => WindowFrame(child!, onExit: onExit),
-  home: Scaffold(body: child),
+Widget _host(Widget child, {Future<void> Function()? onExit}) => _libraryView(
+  MaterialApp(
+    navigatorKey: appNavigation.rootNavigatorKey,
+    builder: onExit == null
+        ? null
+        : (_, child) => WindowFrame(child!, onExit: onExit),
+    home: Scaffold(body: child),
+  ),
 );
 
 void main() {
@@ -317,15 +321,17 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(),
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: const TextScaler.linear(1.8)),
-          child: child!,
+      _libraryView(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.8)),
+            child: child!,
+          ),
+          home: Scaffold(body: _local()),
         ),
-        home: Scaffold(body: _local()),
       ),
     );
     await tester.tap(find.byTooltip('Sync'));
@@ -348,4 +354,16 @@ void main() {
     expect(_saved(root)['local_favorites_update_page_num'], 2);
     expect(layoutError, isNull);
   });
+}
+
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+HistoryManager? _historyOwner;
+HistoryManager _historyForView() => _historyOwner ??= HistoryManager.create();
+Widget _libraryView(Widget child) {
+  return FavoritesScope(
+    manager: _favoritesForView(),
+    child: HistoryScope(manager: _historyForView(), child: child),
+  );
 }

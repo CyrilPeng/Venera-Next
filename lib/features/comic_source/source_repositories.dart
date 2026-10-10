@@ -93,16 +93,11 @@ class SourceUpdateCheck {
 /// Repository preferences live alongside the existing source and app backups.
 /// Catalogs are loaded per operation, so editing a URL never leaves a stale base.
 class SourceRepositories extends ChangeNotifier {
-  SourceRepositories._() : _client = null;
-
-  @visibleForTesting
-  SourceRepositories.forTesting(Dio client) : _client = client;
-
-  @visibleForTesting
-  static Dio Function()? debugCreateDio;
+  /// An injected client is borrowed; per-operation factories own their clients.
+  SourceRepositories({Dio? client}) : _client = client;
 
   final Dio? _client;
-  static final instance = SourceRepositories._();
+  static final instance = SourceRepositories();
   int revision = 0;
 
   @override
@@ -243,7 +238,7 @@ class SourceRepositories extends ChangeNotifier {
     final response = await readSourceText(
       base.toString(),
       client: client ?? _client,
-      createClient: createClient ?? debugCreateDio,
+      createClient: createClient,
       cancelToken: cancelToken,
     );
     if (response.statusCode != 200) {
@@ -323,12 +318,14 @@ class SourceRepositories extends ChangeNotifier {
     required String name,
     required String url,
     String? catalogContents,
+    Dio Function()? createClient,
   }) => SourceRepositorySave._(
     this,
     id: id,
     name: name,
     url: url,
     catalogContents: catalogContents,
+    createClient: createClient,
   );
 
   Future<SourceRepository> save({
@@ -336,11 +333,13 @@ class SourceRepositories extends ChangeNotifier {
     required String name,
     required String url,
     String? catalogContents,
+    Dio Function()? createClient,
   }) async => prepareSave(
     id: id,
     name: name,
     url: url,
     catalogContents: catalogContents,
+    createClient: createClient,
   ).save();
 
   Future<void> remove(SourceRepository repository) => _edit((draft) {
@@ -536,10 +535,12 @@ class SourceRepositorySave {
     required String name,
     required String url,
     String? catalogContents,
+    Dio Function()? createClient,
   }) : _editing = id != null,
        _previous = id == null ? null : _store.find(id),
        _path = App.dataPath,
        _catalogContents = catalogContents,
+       _createClient = createClient,
        repository = SourceRepository(
          id: id ?? const Uuid().v4(),
          name: name.trim(),
@@ -555,6 +556,7 @@ class SourceRepositorySave {
   final SourceRepository? _previous;
   final String _path;
   final String? _catalogContents;
+  final Dio Function()? _createClient;
   final SourceRepository repository;
   Future<void>? _validation;
   bool _published = false;
@@ -592,7 +594,7 @@ class SourceRepositorySave {
       Future<void>.sync(() async {
         _validateTarget(_store.all);
         if (_catalogContents == null) {
-          await _store.load(repository);
+          await _store.load(repository, createClient: _createClient);
         } else {
           SourceRepositories.parseCatalog(
             _catalogContents,

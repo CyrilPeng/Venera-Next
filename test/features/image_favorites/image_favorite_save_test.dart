@@ -48,7 +48,7 @@ void main() {
     );
   });
   tearDown(() {
-    LocalManager.resetForTesting();
+    LocalManager.current?.dispose();
     messenger.setMockMethodCallHandler(_selector, null);
     messenger.setMockMethodCallHandler(
       const MethodChannel('window_manager'),
@@ -67,8 +67,8 @@ void main() {
       final blue = _png(0, 0, 255);
       late Directory pages;
       await tester.runAsync(() async {
-        LocalManager.resetForTesting();
-        LocalManager.debugSkipComicSourceInit = true;
+        LocalManager.current?.dispose();
+        LocalManager(initializeSources: () async {});
         final manager = LocalManager();
         await manager.init();
         pages = Directory(p.join(manager.path, 'book'))

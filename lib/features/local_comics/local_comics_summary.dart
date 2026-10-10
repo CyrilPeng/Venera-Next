@@ -1,3 +1,5 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/local_comics/import_export/comic_import_service.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:venera_next/components/button.dart';
@@ -10,7 +12,7 @@ import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
+import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/routing/app_navigation.dart';
@@ -332,7 +334,12 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
     setState(() {
       loading = true;
     });
+    final favorites = FavoritesScope.read(context);
     var importer = ImportComic(
+      service: ComicImportService(
+        localManager: LocalManager.new,
+        favoritesManager: () => favorites,
+      ),
       selectedFolder: selectedFolder,
       copyToLocal: copyToLocalFolder,
       presentation: ImportComicPresentation.forTask(task),

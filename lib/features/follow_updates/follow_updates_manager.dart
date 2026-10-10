@@ -20,6 +20,7 @@ class ComicUpdateResult {
 Future<ComicUpdateResult> updateComic(
   FavoriteItemWithUpdateInfo comic,
   String folder, {
+  LocalFavoritesManager? manager,
   RequestScope? scope,
   int? generation,
   Duration timeout = const Duration(seconds: 45),
@@ -38,7 +39,7 @@ Future<ComicUpdateResult> updateComic(
     if (source?.loadComicInfo == null) {
       return ComicUpdateResult(false, 'Comic source not found');
     }
-    final favorites = LocalFavoritesManager();
+    final favorites = manager ?? LocalFavoritesManager();
     final sourceGeneration = generation ?? favorites.connectionGeneration;
     if (sourceGeneration != favorites.connectionGeneration) {
       throw StateError('Favorites database changed');
@@ -109,7 +110,11 @@ class UpdateProgress {
 
 /// One application-wide check. Replacing a job cancels its queue and writes.
 class FollowUpdateJob implements FollowUpdateTask {
-  FollowUpdateJob(this.folder, this.ignoreCheckTime) {
+  FollowUpdateJob(
+    this.folder,
+    this.ignoreCheckTime, {
+    LocalFavoritesManager? manager,
+  }) : _favorites = manager ?? LocalFavoritesManager() {
     _controller = StreamController<UpdateProgress>(
       onListen: _start,
       onCancel: cancel,
@@ -123,6 +128,8 @@ class FollowUpdateJob implements FollowUpdateTask {
       cancel();
     }
   }
+  final LocalFavoritesManager _favorites;
+
   static FollowUpdateJob? _active;
   static final _jobs = <FollowUpdateJob>{};
   static final _updates = <RequestScope, Future<void>>{};
@@ -216,7 +223,7 @@ class FollowUpdateJob implements FollowUpdateTask {
     Object? failure;
     StackTrace? failureStack;
     try {
-      final favorites = LocalFavoritesManager();
+      final favorites = _favorites;
       final generation = favorites.connectionGeneration;
       final comics = favorites
           .getComicsWithUpdatesInfo(folder)
@@ -253,6 +260,7 @@ class FollowUpdateJob implements FollowUpdateTask {
               comic,
               folder,
               scope: _scope,
+              manager: _favorites,
               generation: generation,
             );
             if (isCancelled || result.cancelled) return;
@@ -280,7 +288,7 @@ class FollowUpdateJob implements FollowUpdateTask {
         failureStack ??= stack;
       }
       try {
-        if (updated > 0) LocalFavoritesManager().notifyChanges();
+        if (updated > 0) _favorites.notifyChanges();
       } catch (error, stack) {
         failure ??= error;
         failureStack ??= stack;
@@ -291,17 +299,28 @@ class FollowUpdateJob implements FollowUpdateTask {
   }
 }
 
-Stream<UpdateProgress> updateFolder(String folder, bool ignoreCheckTime) =>
-    FollowUpdateJob(folder, ignoreCheckTime).progress;
+Stream<UpdateProgress> updateFolder(
+  String folder,
+  bool ignoreCheckTime, {
+  LocalFavoritesManager? manager,
+}) => FollowUpdateJob(folder, ignoreCheckTime, manager: manager).progress;
 
 /// The preview represents the user's follow-updates folder, while the update
 /// badge and count are separate hints on top of that list.
-List<FavoriteItemWithUpdateInfo> getFollowUpdatesPreviewComics(String folder) {
-  return LocalFavoritesManager().getComicsWithUpdatesInfo(folder);
+List<FavoriteItemWithUpdateInfo> getFollowUpdatesPreviewComics(
+  String folder, {
+  LocalFavoritesManager? manager,
+}) {
+  return (manager ?? LocalFavoritesManager()).getComicsWithUpdatesInfo(folder);
 }
 
-Future<String> getUpdatedComicsAsJson(String folder) async {
-  var comics = LocalFavoritesManager().getComicsWithUpdatesInfo(folder);
+Future<String> getUpdatedComicsAsJson(
+  String folder, {
+  LocalFavoritesManager? manager,
+}) async {
+  var comics = (manager ?? LocalFavoritesManager()).getComicsWithUpdatesInfo(
+    folder,
+  );
   var updatedComics = comics.where((c) => c.hasNewUpdate).toList();
   var jsonList = updatedComics
       .map(

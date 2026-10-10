@@ -232,42 +232,55 @@ class BackupResult {
 
 /// Manager for WebDAV comic archive backup and restore operations.
 class ComicBackupManager {
-  const ComicBackupManager._();
+  ComicBackupManager({
+    ComicBackupWebDavOps? operations,
+    BackupConfig Function() readConfig = BackupConfig.fromSettings,
+    Future<void> Function(LocalComic comic, String outputPath) exportComic =
+        CBZ.export,
+    Future<LocalComic> Function(
+          File file, {
+          Future<void> Function(LocalComic comic)? registerComic,
+        })
+        importComic =
+        CBZ.import,
+    Future<void> Function(LocalComic comic)? registerImportedComic,
+  }) : _operations = operations ?? WebDavComicBackupOps(),
+       _readConfig = readConfig,
+       _exportComic = exportComic,
+       _importComic = importComic,
+       _registerImportedComic = registerImportedComic;
 
-  static ComicBackupWebDavOps ops = WebDavComicBackupOps();
+  static final instance = ComicBackupManager();
 
-  static void resetOps() {
-    ops = WebDavComicBackupOps();
-  }
+  final ComicBackupWebDavOps _operations;
+  final BackupConfig Function() _readConfig;
+  final Future<void> Function(LocalComic comic, String outputPath) _exportComic;
+  final Future<LocalComic> Function(
+    File file, {
+    Future<void> Function(LocalComic comic)? registerComic,
+  })
+  _importComic;
+  final Future<void> Function(LocalComic comic)? _registerImportedComic;
 
-  static Future<void> Function(LocalComic comic, String outputPath)?
-  exportComic;
-
-  static Future<LocalComic> Function(String filePath)? importComic;
-
-  static Future<void> Function(LocalComic comic)? registerImportedComic;
-
-  static BackupConfig get config => BackupConfig.fromSettings();
-
-  static Future<Res<bool>> testConnection(BackupConfig config) async {
+  Future<Res<bool>> testConnection(BackupConfig config) async {
     if (!config.isValid) {
       return const Res.error('Invalid WebDAV archive configuration');
     }
     try {
-      await ops.test(config);
+      await _operations.test(config);
       return const Res(true);
     } catch (error, stack) {
       return Res.fromException(error, stack);
     }
   }
 
-  static Future<Res<List<BackupFile>>> listBackups() async {
-    final config = BackupConfig.fromSettings();
+  Future<Res<List<BackupFile>>> listBackups() async {
+    final config = _readConfig();
     if (!config.isValid) {
       return const Res.error('Invalid WebDAV archive configuration');
     }
     try {
-      final files = await ops.list(config);
+      final files = await _operations.list(config);
       final cbzFiles =
           files
               .where((file) => file.name.toLowerCase().endsWith('.cbz'))
@@ -279,12 +292,13 @@ class ComicBackupManager {
     }
   }
 
-  static Future<BackupResult> backup(
+  Future<BackupResult> backup(
     List<LocalComic> comics, {
     void Function(int current, int total, String currentTitle)? onProgress,
     bool Function()? isCancelled,
   }) async {
-    final config = BackupConfig.fromSettings();
+    final config = _readConfig();
+    final cachePath = App.cachePath;
     if (!config.isValid) {
       return const BackupResult(
         success: 0,
@@ -299,7 +313,7 @@ class ComicBackupManager {
     final errors = <String>[];
     final failures = <BackupFailure>[];
     try {
-      await ops.ensureDirectory(config);
+      await _operations.ensureDirectory(config);
     } catch (e, stack) {
       return BackupResult(
         success: 0,
@@ -313,7 +327,7 @@ class ComicBackupManager {
     final remoteFileNames = <String>{};
     var listSuccess = false;
     try {
-      final remoteFiles = await ops.list(config);
+      final remoteFiles = await _operations.list(config);
       for (final f in remoteFiles) {
         remoteFileNames.add(f.name);
       }
@@ -338,25 +352,20 @@ class ComicBackupManager {
       final fileName = backupFileName(comic);
       final remotePath = config.remoteFilePath(fileName);
       final localPath = FilePath.join(
-        App.cachePath,
+        cachePath,
         'comic_backup_${DateTime.now().microsecondsSinceEpoch}_$fileName',
       );
       final localFile = File(localPath);
       try {
         final exists = listSuccess
             ? remoteFileNames.contains(fileName)
-            : await ops.exists(config, remotePath);
+            : await _operations.exists(config, remotePath);
         if (exists) {
           skipped++;
           continue;
         }
-        final exporter = exportComic;
-        if (exporter != null) {
-          await exporter(comic, localPath);
-        } else {
-          await CBZ.export(comic, localPath);
-        }
-        await ops.uploadFile(config, localPath, remotePath);
+        await _exportComic(comic, localPath);
+        await _operations.uploadFile(config, localPath, remotePath);
         success++;
       } catch (e, stack) {
         failed++;
@@ -375,12 +384,13 @@ class ComicBackupManager {
     );
   }
 
-  static Future<BackupResult> restore(
+  Future<BackupResult> restore(
     List<BackupFile> files, {
     void Function(int current, int total, String currentTitle)? onProgress,
     bool Function()? isCancelled,
   }) async {
-    final config = BackupConfig.fromSettings();
+    final config = _readConfig();
+    final cachePath = App.cachePath;
     if (!config.isValid) {
       return const BackupResult(
         success: 0,
@@ -389,6 +399,9 @@ class ComicBackupManager {
         errors: ['Invalid WebDAV archive configuration'],
       );
     }
+    // A restore keeps the original destination even if the default store is
+    // retired while the download is in flight.
+    final register = _registerImportedComic ?? _localRegistrar();
     var success = 0;
     var failed = 0;
     final errors = <String>[];
@@ -399,30 +412,13 @@ class ComicBackupManager {
       onProgress?.call(i + 1, files.length, backup.name);
       final remotePath = config.remoteFilePath(backup.name);
       final localPath = FilePath.join(
-        App.cachePath,
+        cachePath,
         'comic_restore_${DateTime.now().microsecondsSinceEpoch}_${backup.name}',
       );
       final localFile = File(localPath);
       try {
-        await ops.downloadFile(config, remotePath, localPath);
-        Future<void> register(LocalComic comic) async {
-          final callback = registerImportedComic;
-          if (callback != null) {
-            await callback(comic);
-          } else {
-            await LocalManager().add(
-              comic,
-              LocalManager().findValidId(comic.comicType),
-            );
-          }
-        }
-
-        final importer = importComic;
-        if (importer != null) {
-          await register(await importer(localPath));
-        } else {
-          await CBZ.import(localFile, registerComic: register);
-        }
+        await _operations.downloadFile(config, remotePath, localPath);
+        await _importComic(localFile, registerComic: register);
         success++;
       } catch (e, stack) {
         failed++;
@@ -441,13 +437,18 @@ class ComicBackupManager {
     );
   }
 
-  static Future<Res<bool>> deleteBackup(BackupFile file) async {
-    final config = BackupConfig.fromSettings();
+  static Future<void> Function(LocalComic) _localRegistrar() {
+    final manager = LocalManager();
+    return (comic) => manager.add(comic, manager.findValidId(comic.comicType));
+  }
+
+  Future<Res<bool>> deleteBackup(BackupFile file) async {
+    final config = _readConfig();
     if (!config.isValid) {
       return const Res.error('Invalid WebDAV archive configuration');
     }
     try {
-      await ops.deleteFile(config, config.remoteFilePath(file.name));
+      await _operations.deleteFile(config, config.remoteFilePath(file.name));
       return const Res(true);
     } catch (error, stack) {
       return Res.fromException(error, stack);

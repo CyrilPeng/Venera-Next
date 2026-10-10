@@ -1,5 +1,37 @@
 # Project Structure
 
+## R4 delivery structure and evidence (2026-10-10)
+
+The candidate retains **524 libraries: 330 business / 194 UI / 0 pending, 245 business entries**, unchanged 57 allowed feature edges and **42 UI/navigation cycle members**. Business code is acyclic and cannot reach UI. Production code is based on `5b338ad`; R4 updates acceptance documents and the frozen CHANGELOG, with builds in an independent source copy.
+
+P8.3 gate/coverage-trend review closes: **37 I / 14 P / 1 U** across the original 52 items; P8.5 remains P. Instance/view injection, read-only default entries and purposeful diagnostic/protocol entries retain the actual R3 boundaries. Inputs, artifacts, removed/retained entries and remaining original acceptance are centralized in the [R4 candidate report](final_acceptance_2026_10_09.md); previous documents and numbers keep their historical scope.
+
+## R3 second-group instance composition (2026-10-09)
+
+FavoritesScope supplies each view's explicit store; FavoriteStoreBinding retains the original identity and detects replacement while accepted work drains through its storage owner. HistoryScope supplies history and image-favorite dependencies. Reading sessions retain original owners; summary/image-favorite navigation and import facades pass dependencies through actual call chains. SyncWindowBinding receives its history-drain callback, and FollowUpdateJob retains its favorite store.
+
+HistoryManager/LocalFavoritesManager default cache access is read-only; independent construction does not replace it, and close/reopen retains the normal lifecycle. Non-initializing inspection remains useful for core/import cleanup. The two scopes are UI composition: **524 libraries / 330 business / 194 UI / 0 pending / 245 entries**, with all 57 allowed edges unchanged. P8.1 closes; see the [R3 audit](architecture_compatibility_completion_2026_10_09.md) and [batch report](completion_batches_2026_10_09.md).
+
+The final UI/navigation file cycle has **42 members** after the favorite-settings view leaves the previous 43-member cycle.
+
+## R3 first-group responsibility boundaries (2026-10-09)
+
+LocalComicRelatedData owns migrated-history and related three-store deletion operations; its adapter fixes original history/favorite instances and connection generations. LocalManager binds constructor dependencies once, independent instances do not replace the default owner, and failed closure retains its handle. ComicImageLoader, SourceRepositories clients and ComicBackupManager dependencies use instances or explicit request parameters. ComicList uses typed PageStorage snapshots/request generations; CBZ/detail tests call actual rules without duplicate wrappers.
+
+Inventory is **522 files: 330 business, 192 UI, 0 pending and 245 business entries**. The original SCC retains 43 explained UI/navigation members; business cycles are absent and all 57 feature edges remain. Structure rules no longer redirect business providers/downloads through UI barrels, while UI entry restrictions stay intact. See the [R3 audit](architecture_compatibility_completion_2026_10_09.md), including still-open history/favorite default-registry replacement in tests.
+
+## R2 storage and configuration boundaries (2026-10-09)
+
+Core holds a distinct directory lease through SqliteDataSyncOwnership.applicationData; the sync controller retains its own lease. Headless shutdown separates producer draining, final persistence and store closure without releasing ownership between them. Synchronous LocalComicStorageGuard writes also obey AppDataOperations; downloads retain their original queue-owned commits.
+
+Image processing and WebView proxy use existing preference boundaries. Sync exclusions/versions/timestamps use codecs; raw JSON/recovery adapters preserve unknown fields. Favorite SQL commit and independent publication share one private error aggregator. Inventory remains **520 files: 326 business, 166 UI, 28 pending and 241 business entries**. See the [R2 audit](storage_configuration_completion_2026_10_09.md); R3 continues pending-file and SCC review.
+
+## R1 second-group boundaries (2026-10-09)
+
+SourceParserContext shares owned async-result consumption, synchronous conversion/release and cancellation classification. Capability parsers convert borrowed JS graphs into Dart models; DynamicCategoryPart accepts a typed loader only. The unused parser runReadCode is removed; engine reads, public JS and persisted source formats remain compatible.
+
+Inventory stays at **520 files: 326 business, 166 UI, 28 pending and 241 business entries**. See the [batch report](completion_batches_2026_10_09.md) for R1 audit and evidence. R3 continues complete responsibility/SCC review without relaxing dependency gates.
+
 ## R1 first-group boundaries (2026-10-09)
 
 Favorite entries receive the original BuildContext explicitly. Remote deletion/creation reuse async_confirm_dialog.dart and input_dialog.dart, removing the duplicate creation dialog. Bulk-add transaction/publication stays in manager/repository code; UI does not execute SQL. Network import reuses RequestScope.runToCompletion and window tasks await real completion. Folder opening accepts an injected system operation for isolated tests.

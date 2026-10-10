@@ -1,9 +1,9 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/features/settings/settings_task_presenter.dart';
 import 'package:venera_next/components/scroll.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
@@ -54,7 +54,7 @@ class _LocalFavoritesSettingsState extends State<LocalFavoritesSettings> {
               "Long press on the favorite button to quickly add to this folder"
                   .tl,
           optionTranslation: {
-            for (var e in LocalFavoritesManager().folderNames) e: e,
+            for (var e in FavoritesScope.read(context).folderNames) e: e,
           },
         ).toSliver(),
         CallbackSetting(
@@ -65,7 +65,7 @@ class _LocalFavoritesSettingsState extends State<LocalFavoritesSettings> {
               context,
               task: (_) async {
                 final local = LocalManager();
-                count = await LocalFavoritesManager().removeInvalid(
+                count = await FavoritesScope.read(context).removeInvalid(
                   localComicExists: (id) =>
                       local.find(id, ComicType.local) != null,
                 );

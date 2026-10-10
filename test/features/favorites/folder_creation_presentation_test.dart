@@ -478,11 +478,9 @@ void main() {
       await host.mount(tester);
       addTearDown(visible.dispose);
       final original = LocalFavoritesManager.cache;
-      addTearDown(() => LocalFavoritesManager.cache = original);
-      LocalFavoritesManager.cache = null;
       visible.value = false;
       await pumpSidebar(tester);
-      expect(LocalFavoritesManager.cache, isNull);
+      expect(LocalFavoritesManager.cache, same(original));
       expect(tester.takeException(), isNull);
     },
   );

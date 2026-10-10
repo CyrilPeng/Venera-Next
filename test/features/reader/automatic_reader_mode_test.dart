@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/features/history/history_api.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
 import 'package:venera_next/features/reader/platform_effects.dart'
@@ -38,8 +39,8 @@ void main() {
     App.dataPath = directory.path;
     App.cachePath = directory.path;
     previousSettings = jsonDecode(jsonEncode(appdata.toJson()['settings']));
-    previousFavorites = LocalFavoritesManager.cache;
-    LocalFavoritesManager.cache = _Favorites();
+    previousFavorites = _favoritesOwner;
+    _favoritesOwner = _Favorites();
     settings['autoReaderMode'] = true;
     settings['readerMode'] = 'galleryRightToLeft';
     settings['longStripReaderMode'] = 'continuousTopToBottom';
@@ -55,7 +56,7 @@ void main() {
 
   tearDown(() {
     Log.isMuted = previousLogMuted;
-    LocalFavoritesManager.cache = previousFavorites;
+    _favoritesOwner = previousFavorites;
     previousSettings.forEach((key, value) => settings[key] = value);
     directory.deleteSync(recursive: true);
   });
@@ -80,10 +81,13 @@ void main() {
   }) async {
     final key = GlobalKey<_ReaderHarnessState>();
     await tester.pumpWidget(
-      MaterialApp(
-        builder: (context, child) => ReaderPlatformEffectsScope(child: child!),
-        navigatorKey: appNavigation.rootNavigatorKey,
-        home: OverlayWidget(_ReaderHarness(key: key, onClosed: onClosed)),
+      _libraryView(
+        MaterialApp(
+          builder: (context, child) =>
+              ReaderPlatformEffectsScope(child: child!),
+          navigatorKey: appNavigation.rootNavigatorKey,
+          home: OverlayWidget(_ReaderHarness(key: key, onClosed: onClosed)),
+        ),
       ),
     );
     final reader = key.currentState!;
@@ -944,4 +948,11 @@ class _Favorites extends ChangeNotifier implements LocalFavoritesManager {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+Widget _libraryView(Widget child) {
+  return FavoritesScope(manager: _favoritesForView(), child: child);
 }

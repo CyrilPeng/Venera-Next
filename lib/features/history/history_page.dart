@@ -1,3 +1,5 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/history/history_scope.dart';
 import 'dart:async';
 import 'package:venera_next/foundation/log.dart';
 import 'package:flutter/material.dart';
@@ -15,29 +17,34 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 class HistoryPage extends StatefulWidget {
-  const HistoryPage({super.key});
+  const HistoryPage({super.key, this.manager});
+
+  final HistoryManager? manager;
 
   @override
   State<HistoryPage> createState() => _HistoryPageState();
 }
 
 class _HistoryPageState extends State<HistoryPage> {
+  late final HistoryManager _manager =
+      widget.manager ?? HistoryScope.read(context);
+
   @override
   void initState() {
-    HistoryManager().addListener(onUpdate);
+    _manager.addListener(onUpdate);
     super.initState();
   }
 
   @override
   void dispose() {
-    HistoryManager().removeListener(onUpdate);
+    _manager.removeListener(onUpdate);
     _cancelRefresh?.call();
     super.dispose();
   }
 
   void onUpdate() {
     setState(() {
-      comics = HistoryManager().getAll();
+      comics = _manager.getAll();
       if (multiSelectMode) {
         selectedComics.removeWhere((comic, _) => !comics.contains(comic));
         if (selectedComics.isEmpty) {
@@ -47,7 +54,7 @@ class _HistoryPageState extends State<HistoryPage> {
     });
   }
 
-  var comics = HistoryManager().getAll();
+  late var comics = _manager.getAll();
   var controller = FlyoutController();
 
   bool multiSelectMode = false;
@@ -76,14 +83,14 @@ class _HistoryPageState extends State<HistoryPage> {
 
   void _removeHistory(History comic) {
     if (comic.sourceKey.startsWith("Unknown")) {
-      HistoryManager().remove(
+      _manager.remove(
         comic.id,
         ComicType(int.parse(comic.sourceKey.split(':')[1])),
       );
     } else if (comic.sourceKey == 'local') {
-      HistoryManager().remove(comic.id, ComicType.local);
+      _manager.remove(comic.id, ComicType.local);
     } else {
-      HistoryManager().remove(comic.id, ComicType(comic.sourceKey.hashCode));
+      _manager.remove(comic.id, ComicType(comic.sourceKey.hashCode));
     }
   }
 
@@ -95,7 +102,7 @@ class _HistoryPageState extends State<HistoryPage> {
     final identity = (comic.id, comic.type.value);
     if (_refreshingAll || !_refreshing.add(identity)) return;
     try {
-      final result = await HistoryManager().refreshHistoryInfo(comic);
+      final result = await _manager.refreshHistoryInfo(comic);
       if (mounted) {
         context.showMessage(
           message: result ? 'Refresh Success'.tl : 'Refresh Failed'.tl,
@@ -128,7 +135,7 @@ class _HistoryPageState extends State<HistoryPage> {
       message: 'Refreshing Histories'.tl,
     );
     try {
-      iterator = StreamIterator(HistoryManager().refreshAllHistoriesStream());
+      iterator = StreamIterator(_manager.refreshAllHistoriesStream());
       var success = 0;
       var failed = 0;
       var skipped = 0;
@@ -208,7 +215,7 @@ class _HistoryPageState extends State<HistoryPage> {
       IconButton(
         icon: const Icon(Icons.query_stats),
         tooltip: 'Reading statistics'.tl,
-        onPressed: () => context.to(() => const ReadingStatsPage()),
+        onPressed: () => context.to(() => ReadingStatsPage(manager: _manager)),
       ),
       IconButton(
         icon: const Icon(Icons.refresh),
@@ -235,7 +242,9 @@ class _HistoryPageState extends State<HistoryPage> {
               actions: [
                 Button.outlined(
                   onPressed: () {
-                    HistoryManager().clearUnfavoritedHistory();
+                    _manager.clearUnfavoritedHistory(
+                      manager: FavoritesScope.read(context),
+                    );
                     context.pop();
                   },
                   child: Text('Clear Unfavorited'.tl),
@@ -244,7 +253,7 @@ class _HistoryPageState extends State<HistoryPage> {
                 Button.filled(
                   color: context.colorScheme.error,
                   onPressed: () {
-                    HistoryManager().clearHistory();
+                    _manager.clearHistory();
                     context.pop();
                   },
                   child: Text('Clear'.tl),

@@ -13,6 +13,7 @@ import 'package:venera_next/foundation/app_data_operations.dart';
 
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/sync_configuration.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/comic_source/source_data_storage.dart';
 import 'package:venera_next/features/comic_source/source_transaction_journal.dart';
@@ -62,7 +63,8 @@ Future<File> _exportAppData(
   if (sync) {
     final settings = archiveData['settings'] as Map<String, dynamic>;
     for (final field in appdata.splitField(
-      content?.scope.excludedFields ?? settings['disableSyncFields'] as String,
+      content?.scope.excludedFields ??
+          SyncConfiguration.readExcludedFields(settings['disableSyncFields']),
     )) {
       settings.remove(field);
     }
@@ -183,7 +185,12 @@ Future<DataSyncCommitState> _importAppData(
       var version = importedSettings is Map
           ? importedSettings["dataVersion"]
           : null;
-      if (version is int && version <= appdata.settings["dataVersion"]) {
+      final currentVersion = SyncConfiguration.requireDataVersion(
+        appdata.settings['dataVersion'],
+      );
+      // Archives predating version metadata retain their existing import path.
+      if (version != null &&
+          SyncConfiguration.requireDataVersion(version) <= currentVersion) {
         return DataSyncCommitState.notApplied;
       }
     }
@@ -197,7 +204,9 @@ Future<DataSyncCommitState> _importAppData(
     if (content != null) {
       final currentPolicy = DataSyncContentScope(
         endpoint: content.scope.endpoint,
-        excludedFields: appdata.settings['disableSyncFields'] as String,
+        excludedFields: SyncConfiguration.readExcludedFields(
+          appdata.settings['disableSyncFields'],
+        ),
         archiveSyncEnabled: appdata.settings['backupWebdavSyncEnabled'] == true,
       );
       // Appdata imports apply the live policy. A policy changed during the

@@ -1,3 +1,5 @@
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async' show Future;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -74,8 +76,12 @@ class ReaderImageProvider extends BaseImageProvider<ReaderImageProvider> {
       throw "Error: Empty response body.";
     }
     checkStop();
-    if (appdata.settings['enableCustomImageProcessing']) {
-      var script = appdata.settings['customImageProcessing'].toString();
+    if (GlobalPreferenceStore(
+      appdata.settings,
+    ).read(ImageProcessingPreferences.enabled)) {
+      var script = GlobalPreferenceStore(
+        appdata.settings,
+      ).read(ImageProcessingPreferences.script);
       if (!script.contains('function processImage')) {
         return imageBytes;
       }

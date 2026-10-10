@@ -2,7 +2,7 @@ import 'local_comic_model.dart';
 import 'local_repository.dart';
 import 'local_chapter_storage.dart';
 import 'local_deletion_paths.dart';
-import 'local_deletion_storage.dart';
+import 'local_related_data.dart';
 import 'local_deletion_journal.dart';
 import 'local_registration_storage.dart';
 import 'package:venera_next/features/favorites/favorites_api.dart';
@@ -23,7 +23,6 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/foundation/comic_type.dart';
-import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
 import 'download_task.dart';
@@ -35,7 +34,6 @@ import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/features/history/history_api.dart';
-import 'package:venera_next/features/history/history_manager.dart';
 
 import 'local_storage_guard.dart';
 import 'local_storage_migration.dart';
@@ -83,46 +81,57 @@ String _resolveComicDirectory(String directory, String libraryPath) =>
 class LocalManager with ChangeNotifier implements DownloadTaskStorage {
   static LocalManager? _instance;
 
-  @visibleForTesting
-  static bool debugSkipComicSourceInit = false;
-
-  @visibleForTesting
-  static void resetForTesting() {
-    try {
-      _instance?.dispose();
-    } catch (_) {
-      // ignore cleanup failures in partially initialized tests
-    }
-    _instance = null;
-    debugSkipComicSourceInit = false;
-  }
+  /// The live default owner, without creating a replacement during shutdown.
+  static LocalManager? get current => _instance;
 
   LocalManager._({
     Database Function(String)? openDatabase,
     Future<void> Function()? initializeSources,
+    LocalComicRelatedData? relatedData,
   }) : _openDatabase = openDatabase ?? openSqliteDatabase,
-       _initializeSources = initializeSources;
+       _initializeSources = initializeSources,
+       _providedRelatedData = relatedData;
 
-  @visibleForTesting
-  factory LocalManager.forTesting({
-    required Database Function(String) openDatabase,
-    required Future<void> Function() initializeSources,
+  /// A caller-owned library that does not replace the application's default.
+  factory LocalManager.independent({
+    Database Function(String)? openDatabase,
+    Future<void> Function()? initializeSources,
+    LocalComicRelatedData? relatedData,
   }) => LocalManager._(
     openDatabase: openDatabase,
     initializeSources: initializeSources,
+    relatedData: relatedData,
   );
 
   final Database Function(String) _openDatabase;
   final Future<void> Function()? _initializeSources;
+  final LocalComicRelatedData? _providedRelatedData;
+  late final _relatedData =
+      _providedRelatedData ?? LocalComicRelatedData.managed();
   Future<void>? _initialization;
   Database? _database;
   late File _libraryPathFile;
   final _comicDirectories = <(String, int), _ComicLocation>{};
   final _storageAccess = _ComicStorageAccess();
   bool _disposed = false;
+  bool _notifierDisposed = false;
 
-  factory LocalManager() {
-    return _instance ??= LocalManager._();
+  factory LocalManager({
+    Database Function(String)? openDatabase,
+    Future<void> Function()? initializeSources,
+    LocalComicRelatedData? relatedData,
+  }) {
+    if (_instance != null &&
+        (openDatabase != null ||
+            initializeSources != null ||
+            relatedData != null)) {
+      throw StateError('Local manager dependencies are already bound');
+    }
+    return _instance ??= LocalManager._(
+      openDatabase: openDatabase,
+      initializeSources: initializeSources,
+      relatedData: relatedData,
+    );
   }
 
   Database get _rawDatabase =>
@@ -333,10 +342,13 @@ class LocalManager with ChangeNotifier implements DownloadTaskStorage {
       StackTrace stack,
     ) {
       final database = _database;
-      _database = null;
       try {
         database?.dispose();
+        _database = null;
       } catch (closeError, closeStack) {
+        // A failed close retains the original handle and forbids a second
+        // initialization. The owner can retry dispose before replacing it.
+        _disposed = true;
         Log.error('LocalManager', closeError, closeStack);
       }
       _initialization = null;
@@ -380,7 +392,7 @@ class LocalManager with ChangeNotifier implements DownloadTaskStorage {
     _checkNoMedia();
     if (_initializeSources != null) {
       await _initializeSources();
-    } else if (!debugSkipComicSourceInit) {
+    } else {
       await ComicSourceManager().ensureInit();
     }
     _checkNotDisposed();
@@ -517,13 +529,15 @@ class LocalManager with ChangeNotifier implements DownloadTaskStorage {
 
   @override
   void dispose() {
-    if (_disposed) return;
+    if (_notifierDisposed) return;
     _disposed = true;
-    _comicDirectories.clear();
-    final database = _database;
+    // Do not discard a handle or publish a replacement owner if close fails.
+    _database?.dispose();
     _database = null;
+    _comicDirectories.clear();
     super.dispose();
-    database?.dispose();
+    _notifierDisposed = true;
+    if (identical(_instance, this)) _instance = null;
   }
 
   Future<List<String>> getImages(String id, ComicType type, Object ep) async {
@@ -594,7 +608,7 @@ class LocalManager with ChangeNotifier implements DownloadTaskStorage {
       final convertedPage = migration.newPage!;
       history.page = convertedPage;
       try {
-        await HistoryManager().addHistory(history);
+        await _relatedData.saveMigratedHistory(history);
       } catch (_) {
         // Keep the persisted mapping for retry without leaving this instance
         // looking successfully converted after a failed history write.
@@ -883,26 +897,15 @@ class LocalManager with ChangeNotifier implements DownloadTaskStorage {
       }
       return;
     }
-    final favorites = LocalFavoritesManager();
-    final favoritesPath = favorites.databasePath;
-    var removed = <String, List<(String, int)>>{};
-    // Queue behind accepted reading progress. The synchronous callback commits
-    // all three databases before any later queued history mutation can start.
-    await HistoryManager().importStorage((historyPath) {
-      _checkNotDisposed();
-      if (favorites.databasePath != favoritesPath) {
-        throw StateError('Favorites storage changed during deletion');
-      }
-      removed = deleteLocalComicRecords(
-        localDatabase: _db,
-        favoritesPath: favoritesPath,
-        historyPath: historyPath,
-        favoriteFolders: favorites.folderNames,
-        comics: comics,
-        onCommit: markCommitted,
-        validate: () => _validateDeletionSnapshot(expectedSnapshot),
-      );
-    }, onCommitted: () => favorites.refreshDeletedFavorites(removed));
+    await _relatedData.deleteRecords(
+      localDatabase: _db,
+      comics: comics,
+      markCommitted: markCommitted,
+      validate: () {
+        _checkNotDisposed();
+        _validateDeletionSnapshot(expectedSnapshot);
+      },
+    );
     for (final comic in comics) {
       _comicDirectories.remove((comic.id, comic.comicType.value));
     }

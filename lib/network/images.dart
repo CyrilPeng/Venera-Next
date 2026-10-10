@@ -27,6 +27,14 @@ typedef ComicImageLoadingConfigResolver =
       String eid,
     );
 
+typedef ComicImageLoader =
+    Stream<ImageDownloadProgress> Function(
+      String imageKey,
+      String? sourceKey,
+      String cid,
+      String eid,
+    );
+
 abstract class ImageDownloader {
   static ThumbnailLoadingConfigResolver? _thumbnailLoadingConfigResolver;
 
@@ -43,20 +51,6 @@ abstract class ImageDownloader {
     _thumbnailCoverResolver = thumbnailCover;
     _comicImageLoadingConfigResolver = comicImageLoadingConfig;
   }
-
-  @visibleForTesting
-  static void debugResetSourceImageLoading() {
-    configureSourceImageLoading();
-  }
-
-  @visibleForTesting
-  static Stream<ImageDownloadProgress> Function(
-    String imageKey,
-    String? sourceKey,
-    String cid,
-    String eid,
-  )?
-  debugLoadComicImageUnwrapped;
 
   @visibleForTesting
   static bool debugShouldRetryImageLoad({
@@ -331,11 +325,8 @@ abstract class ImageDownloader {
     String eid,
   ) {
     final cacheKey = "$imageKey@$sourceKey@$cid@$eid";
-    final debugLoader = debugLoadComicImageUnwrapped;
     return _requests.open(
-      (scope) =>
-          debugLoader?.call(imageKey, sourceKey, cid, eid) ??
-          _loadComicImage(imageKey, sourceKey, cid, eid, scope: scope),
+      (scope) => _loadComicImage(imageKey, sourceKey, cid, eid, scope: scope),
       key: cacheKey,
     );
   }
@@ -346,11 +337,8 @@ abstract class ImageDownloader {
     String cid,
     String eid,
   ) {
-    final debugLoader = debugLoadComicImageUnwrapped;
     return _requests.open(
-      (scope) =>
-          debugLoader?.call(imageKey, sourceKey, cid, eid) ??
-          _loadComicImage(imageKey, sourceKey, cid, eid, scope: scope),
+      (scope) => _loadComicImage(imageKey, sourceKey, cid, eid, scope: scope),
     );
   }
 

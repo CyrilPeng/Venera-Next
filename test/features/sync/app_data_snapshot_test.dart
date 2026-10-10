@@ -31,8 +31,6 @@ void main() {
         ])
           key: appdata.settings[key],
       };
-      LocalFavoritesManager.cache = null;
-      HistoryManager.cache = null;
       final favorites = LocalFavoritesManager();
       final history = HistoryManager();
       try {
@@ -201,8 +199,6 @@ void main() {
         if (history.isInitialized) history.close();
         await favorites.closeAndWait();
         await appdata.saveData(false);
-        HistoryManager.cache = null;
-        LocalFavoritesManager.cache = null;
         for (final entry in previous.entries) {
           appdata.settings[entry.key] = entry.value;
         }

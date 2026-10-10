@@ -6,6 +6,7 @@ import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/history/history_manager.dart';
 import 'package:venera_next/features/history/history_model.dart';
 import 'package:venera_next/features/history/history_summary.dart';
+import 'package:venera_next/features/history/history_page.dart';
 import 'package:venera_next/foundation/app.dart';
 
 class _History extends HistoryManager {
@@ -37,18 +38,12 @@ void main() {
     root = Directory.systemTemp.createTempSync('history-summary-');
     App.dataPath = root.path;
     App.cachePath = root.path;
-    final previousHistory = HistoryManager.cache;
-    final previousFavorites = LocalFavoritesManager.cache;
     history = _History();
-    HistoryManager.cache = history;
-    LocalFavoritesManager.cache = null;
-    favorites = LocalFavoritesManager();
+    favorites = LocalFavoritesManager.independent();
     addTearDown(() {
       history.close();
       history.dispose();
       favorites.dispose();
-      HistoryManager.cache = previousHistory;
-      LocalFavoritesManager.cache = previousFavorites;
       root.deleteSync(recursive: true);
     });
     await history.init();
@@ -61,6 +56,18 @@ void main() {
     ),
   );
 
+  testWidgets('summary navigation keeps its explicitly supplied history', (
+    tester,
+  ) async {
+    await tester.pumpWidget(app());
+    await tester.tap(find.text('History'));
+    await tester.pumpAndSettle();
+    expect(find.byType(HistoryPage), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    expect(history.observed, isFalse);
+  });
+
   testWidgets('summary detaches from the originally observed history owner', (
     tester,
   ) async {
@@ -68,7 +75,6 @@ void main() {
     expect(history.observed, isTrue);
     final replacement = _History();
     addTearDown(replacement.dispose);
-    HistoryManager.cache = replacement;
     await tester.pumpWidget(const SizedBox());
     expect(history.observed, isFalse);
   });

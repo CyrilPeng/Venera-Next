@@ -16,8 +16,6 @@ void main() {
       final root = Directory.systemTemp.createTempSync('pica-import-');
       final previousTracking = appdata.settings['followUpdatesFolder'];
       final previousQuick = appdata.settings['quickFavorite'];
-      LocalFavoritesManager.cache = null;
-      HistoryManager.cache = null;
       final favorites = LocalFavoritesManager();
       final history = HistoryManager();
       try {
@@ -143,8 +141,6 @@ void main() {
         if (history.isInitialized) history.close();
         await favorites.closeAndWait();
         await appdata.saveData(false);
-        HistoryManager.cache = null;
-        LocalFavoritesManager.cache = null;
         appdata.settings['followUpdatesFolder'] = previousTracking;
         appdata.settings['quickFavorite'] = previousQuick;
         root.deleteSync(recursive: true);
@@ -155,8 +151,6 @@ void main() {
     final root = Directory.systemTemp.createTempSync('pica-preflight-');
     final previousTracking = appdata.settings['followUpdatesFolder'];
     final previousQuick = appdata.settings['quickFavorite'];
-    LocalFavoritesManager.cache = null;
-    HistoryManager.cache = null;
     final favorites = LocalFavoritesManager();
     final history = HistoryManager();
     var notifications = 0;
@@ -272,8 +266,6 @@ void main() {
       if (history.isInitialized) history.close();
       await favorites.closeAndWait();
       await appdata.saveData(false);
-      HistoryManager.cache = null;
-      LocalFavoritesManager.cache = null;
       appdata.settings['followUpdatesFolder'] = previousTracking;
       appdata.settings['quickFavorite'] = previousQuick;
       root.deleteSync(recursive: true);

@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:venera_next/foundation/js_engine.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
+import 'package:venera_next/network/request_scope.dart';
 import 'models.dart';
 import 'normalization.dart';
 
@@ -71,9 +75,50 @@ class SourceParserContext {
     return _guardResult(engine.runOwnedCode(code));
   }
 
-  Future<dynamic> runReadCode(String code, [String? name]) async {
-    checkCurrent();
-    return _guardValue(await engine.runReadCode(code, name));
+  /// Synchronous capability contracts lend values only for conversion. An
+  /// unsupported Promise result is observed and released under its runtime,
+  /// while the immediate validator/selector retains its synchronous contract.
+  T consumeSynchronous<T>(
+    dynamic Function() evaluate,
+    T Function(dynamic value) consume,
+  ) {
+    Object? result;
+    Object? failure;
+    StackTrace? failureStack;
+    try {
+      checkCurrent();
+      result = evaluate();
+      checkCurrent();
+      return consume(result);
+    } catch (error, stack) {
+      failure = error;
+      failureStack = stack;
+      rethrow;
+    } finally {
+      final graph = [result, failure];
+      try {
+        discardJsResult(graph);
+      } on JsResourceReleaseFailure catch (cleanup) {
+        if (failure == null) rethrow;
+        throw JsResourceReleaseFailure([
+          (
+            resource: 'synchronous source call',
+            error: failure,
+            stack: failureStack!,
+          ),
+          ...cleanup.failures,
+        ]);
+      } finally {
+        unawaited(
+          drainJsResultDescendants(graph).catchError((
+            Object error,
+            StackTrace stack,
+          ) {
+            Log.error('Synchronous source result cleanup', error, stack);
+          }),
+        );
+      }
+    }
   }
 
   Future<T> runCodeToCompletion<T>(
@@ -136,4 +181,17 @@ class SourceParserContext {
     if (data == null || comics == null) throw "Invalid data";
     return Res(comics, subData: data[subDataKey]);
   }
+
+  /// Cancellation retains its original cause/stack at every source boundary.
+  Res<T> failureResult<T>(Object error, StackTrace stack) =>
+      error is RequestCancelled
+      ? Res.failure(
+          OperationFailure(
+            message: error.toString(),
+            kind: FailureKind.cancelled,
+            cause: error,
+            stackTrace: stack,
+          ),
+        )
+      : Res.fromException(error, stack);
 }

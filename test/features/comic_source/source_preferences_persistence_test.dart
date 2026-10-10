@@ -29,7 +29,7 @@ void main() {
     appdata.settings['comicSourceListUrl'] = '';
     adapter = _Catalog();
     client = Dio()..httpClientAdapter = adapter;
-    store = SourceRepositories.forTesting(client);
+    store = SourceRepositories(client: client);
   });
   tearDown(() async {
     appdata.registerSyncDataRequestHandler(null);

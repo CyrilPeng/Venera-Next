@@ -52,9 +52,7 @@ void main() {
   test(
     'independent manager initializes image tables on its own connection',
     () async {
-      final oldCache = HistoryManager.cache;
-      final unrelated = HistoryManager.create();
-      HistoryManager.cache = unrelated;
+      final unrelated = HistoryManager();
       try {
         await manager.init();
         expect(unrelated.isInitialized, isFalse);
@@ -65,7 +63,6 @@ void main() {
           hasLength(1),
         );
       } finally {
-        HistoryManager.cache = oldCache;
         unrelated.close();
       }
     },

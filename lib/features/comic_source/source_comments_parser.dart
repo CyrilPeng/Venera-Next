@@ -33,7 +33,7 @@ class SourceCommentsParser {
       }
       return result;
     } catch (error, stack) {
-      return Res.fromException(error, stack);
+      return context.failureResult(error, stack);
     }
   }
 
@@ -60,7 +60,7 @@ class SourceCommentsParser {
       );
     } catch (error, stack) {
       Log.error('Network', error, stack);
-      return Res.fromException(error, stack);
+      return context.failureResult(error, stack);
     }
   }
 
@@ -76,7 +76,7 @@ class SourceCommentsParser {
           return const Res(true);
         } catch (e, s) {
           Log.error("Network", "$e\n$s");
-          return Res.fromException(e, s);
+          return context.failureResult(e, s);
         }
       }
 
@@ -107,7 +107,7 @@ class SourceCommentsParser {
           return const Res(true);
         } catch (e, s) {
           Log.error("Network", "$e\n$s");
-          return Res.fromException(e, s);
+          return context.failureResult(e, s);
         }
       }
 
@@ -127,7 +127,7 @@ class SourceCommentsParser {
         return Res(count);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
-        return Res.fromException(e, s);
+        return context.failureResult(e, s);
       }
     };
   }
@@ -144,7 +144,7 @@ class SourceCommentsParser {
         return Res(count);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
-        return Res.fromException(e, s);
+        return context.failureResult(e, s);
       }
     };
   }

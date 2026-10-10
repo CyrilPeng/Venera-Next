@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -9,23 +10,19 @@ import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/network/webdav.dart';
 
 void main() {
+  late Directory workspace;
   setUp(() {
     appdata.settings['backupWebdav'] = [];
     appdata.settings['backupWebdavPath'] = '/venera_backup/';
     appdata.settings['backupWebdavSyncEnabled'] = false;
-    App.dataPath = Directory.systemTemp.createTempSync('venera_data').path;
-    App.cachePath = Directory.systemTemp.createTempSync('venera_cache').path;
-    ComicBackupManager.exportComic = null;
-    ComicBackupManager.importComic = null;
-    ComicBackupManager.registerImportedComic = null;
-    ComicBackupManager.ops = _FakeBackupOps();
+    workspace = Directory.systemTemp.createTempSync('venera-backup-r3-');
+    App.dataPath = (Directory('${workspace.path}/data')..createSync()).path;
+    App.cachePath = (Directory('${workspace.path}/cache')..createSync()).path;
   });
 
-  tearDown(() {
-    ComicBackupManager.exportComic = null;
-    ComicBackupManager.importComic = null;
-    ComicBackupManager.registerImportedComic = null;
-    ComicBackupManager.resetOps();
+  tearDown(() async {
+    LocalManager.current?.dispose();
+    await workspace.delete(recursive: true);
   });
 
   group('BackupConfig', () {
@@ -118,7 +115,7 @@ void main() {
       appdata.settings['backupWebdavPath'] = 'archive';
       final older = DateTime(2024, 1, 1);
       final newer = DateTime(2024, 2, 1);
-      ComicBackupManager.ops = _FakeBackupOps(
+      final ops = _FakeBackupOps(
         listResult: [
           BackupFile(name: 'not-a-comic.txt', size: 10, modified: newer),
           BackupFile(name: 'old.cbz', size: 20, modified: older),
@@ -126,34 +123,79 @@ void main() {
         ],
       );
 
-      final result = await ComicBackupManager.listBackups();
+      final result = await ComicBackupManager(operations: ops).listBackups();
 
       expect(result.success, isTrue);
       expect(result.data.map((e) => e.name), ['new.CBZ', 'old.cbz']);
-      expect(
-        (ComicBackupManager.ops as _FakeBackupOps).listedPath,
-        '/archive/',
-      );
+      expect(ops.listedPath, '/archive/');
     });
 
     test('tests connection through configured WebDAV path', () async {
       appdata.settings['backupWebdav'] = ['https://example.com/dav', 'u', 'p'];
       appdata.settings['backupWebdavPath'] = 'archive';
-      ComicBackupManager.ops = _FakeBackupOps();
+      final ops = _FakeBackupOps();
 
-      final result = await ComicBackupManager.testConnection(
-        BackupConfig.fromSettings(),
-      );
+      final result = await ComicBackupManager(
+        operations: ops,
+      ).testConnection(BackupConfig.fromSettings());
 
       expect(result.success, isTrue);
-      expect(
-        (ComicBackupManager.ops as _FakeBackupOps).testedPath,
-        '/archive/',
-      );
+      expect(ops.testedPath, '/archive/');
     });
   });
 
   group('ComicBackupManager.backup', () {
+    test(
+      'concurrent owners keep their original transport and configuration',
+      () async {
+        BackupConfig config(String path) => BackupConfig(
+          url: 'https://backup.example.test',
+          user: 'test',
+          pass: 'test',
+          remotePath: path,
+        );
+        var firstConfig = config('/first/');
+        final entered = Completer<void>();
+        final release = Completer<void>();
+        final firstOps = _FakeBackupOps();
+        final secondOps = _FakeBackupOps();
+        final first = ComicBackupManager(
+          operations: firstOps,
+          readConfig: () => firstConfig,
+          exportComic: (comic, path) async {
+            entered.complete();
+            await release.future;
+            await File(path).writeAsString(comic.title);
+          },
+        );
+        final second = ComicBackupManager(
+          operations: secondOps,
+          readConfig: () => config('/second/'),
+          exportComic: (comic, path) async =>
+              File(path).writeAsString(comic.title),
+        );
+        final pending = first.backup([_comic('First')]);
+        try {
+          await entered.future;
+          firstConfig = config('/replacement/');
+          expect((await second.backup([_comic('Second')])).success, 1);
+          expect(firstOps.uploadedRemotePaths, isEmpty);
+        } finally {
+          release.complete();
+          expect((await pending).success, 1);
+        }
+        expect(
+          firstOps.uploadedRemotePaths.single,
+          startsWith('/first/First_'),
+        );
+        expect(
+          secondOps.uploadedRemotePaths.single,
+          startsWith('/second/Second_'),
+        );
+        expect(Directory(App.cachePath).listSync(), isEmpty);
+      },
+    );
+
     test(
       'counts success and skipped files and deletes temporary exports',
       () async {
@@ -171,12 +213,14 @@ void main() {
             BackupFile(name: dupFileName, size: 0, modified: DateTime(2024)),
           ],
         );
-        ComicBackupManager.ops = fakeOps;
-        ComicBackupManager.exportComic = (comic, path) async {
-          File(path).writeAsStringSync(comic.title);
-        };
+        final manager = ComicBackupManager(
+          operations: fakeOps,
+          exportComic: (comic, path) async {
+            File(path).writeAsStringSync(comic.title);
+          },
+        );
 
-        final result = await ComicBackupManager.backup([
+        final result = await manager.backup([
           dupComic,
           freshComic,
         ], onProgress: (_, _, _) {});
@@ -195,13 +239,15 @@ void main() {
     test('stops before next comic when cancelled', () async {
       appdata.settings['backupWebdav'] = ['https://example.com/dav', 'u', 'p'];
       var exportCount = 0;
-      ComicBackupManager.ops = _FakeBackupOps();
-      ComicBackupManager.exportComic = (comic, path) async {
-        exportCount++;
-        File(path).writeAsStringSync(comic.title);
-      };
+      final manager = ComicBackupManager(
+        operations: _FakeBackupOps(),
+        exportComic: (comic, path) async {
+          exportCount++;
+          File(path).writeAsStringSync(comic.title);
+        },
+      );
 
-      final result = await ComicBackupManager.backup([
+      final result = await manager.backup([
         _comic('One'),
         _comic('Two'),
       ], isCancelled: () => exportCount > 0);
@@ -219,16 +265,20 @@ void main() {
       final importedPaths = <String>[];
       final registeredComics = <LocalComic>[];
       final fakeOps = _FakeBackupOps();
-      ComicBackupManager.ops = fakeOps;
-      ComicBackupManager.importComic = (path) async {
-        importedPaths.add(path);
-        return _comic('Imported');
-      };
-      ComicBackupManager.registerImportedComic = (comic) async {
-        registeredComics.add(comic);
-      };
+      final manager = ComicBackupManager(
+        operations: fakeOps,
+        importComic: (file, {registerComic}) async {
+          importedPaths.add(file.path);
+          final comic = _comic('Imported');
+          await registerComic!(comic);
+          return comic;
+        },
+        registerImportedComic: (comic) async {
+          registeredComics.add(comic);
+        },
+      );
 
-      final result = await ComicBackupManager.restore([
+      final result = await manager.restore([
         BackupFile(name: 'A.cbz', size: 1, modified: DateTime(2024)),
       ]);
 
@@ -243,9 +293,8 @@ void main() {
     test('deletes a backup file through WebDAV', () async {
       appdata.settings['backupWebdav'] = ['https://example.com/dav', 'u', 'p'];
       final fakeOps = _FakeBackupOps();
-      ComicBackupManager.ops = fakeOps;
 
-      final result = await ComicBackupManager.deleteBackup(
+      final result = await ComicBackupManager(operations: fakeOps).deleteBackup(
         BackupFile(name: 'A.cbz', size: 1, modified: DateTime(2024)),
       );
 
@@ -262,17 +311,17 @@ void main() {
       test('$stage preserves the original cause and stack in Res', () async {
         final original = StateError('native request failed');
         final trace = StackTrace.fromString('original-$stage');
-        ComicBackupManager.ops = _FakeBackupOps(
-          failAt: stage,
-          failure: original,
-          failureStack: trace,
+        final manager = ComicBackupManager(
+          operations: _FakeBackupOps(
+            failAt: stage,
+            failure: original,
+            failureStack: trace,
+          ),
         );
         final result = switch (stage) {
-          'test' => await ComicBackupManager.testConnection(
-            BackupConfig.fromSettings(),
-          ),
-          'list' => await ComicBackupManager.listBackups(),
-          _ => await ComicBackupManager.deleteBackup(
+          'test' => await manager.testConnection(BackupConfig.fromSettings()),
+          'list' => await manager.listBackups(),
+          _ => await manager.deleteBackup(
             BackupFile(name: 'A.cbz', size: 1, modified: DateTime(2024)),
           ),
         };
@@ -298,10 +347,11 @@ void main() {
           failure: failure,
           failureStack: trace,
         );
-        ComicBackupManager.ops = ops;
-        ComicBackupManager.exportComic = (_, _) async =>
-            fail('must not export');
-        final result = await ComicBackupManager.backup([_comic('One')]);
+        final manager = ComicBackupManager(
+          operations: ops,
+          exportComic: (_, _) async => fail('must not export'),
+        );
+        final result = await manager.backup([_comic('One')]);
         expect(result.success, 0);
         expect(result.failed, 1);
         expect(result.failures.single.error, same(failure));
@@ -316,10 +366,11 @@ void main() {
         failAt: 'list',
         failure: StateError('offline'),
       );
-      ComicBackupManager.ops = ops;
-      ComicBackupManager.exportComic = (_, path) async =>
-          File(path).writeAsString('archive');
-      final result = await ComicBackupManager.backup([_comic('One')]);
+      final manager = ComicBackupManager(
+        operations: ops,
+        exportComic: (_, path) async => File(path).writeAsString('archive'),
+      );
+      final result = await manager.backup([_comic('One')]);
       expect(result.success, 1);
       expect(result.failed, 0);
       expect(ops.existsCalls, 1);
@@ -330,16 +381,17 @@ void main() {
       test('$stage failure survives batch result translation', () async {
         final original = StateError('native failure');
         final trace = StackTrace.fromString('original-$stage');
-        ComicBackupManager.ops = _FakeBackupOps(
-          failAt: stage,
-          failure: original,
-          failureStack: trace,
+        final manager = ComicBackupManager(
+          operations: _FakeBackupOps(
+            failAt: stage,
+            failure: original,
+            failureStack: trace,
+          ),
+          exportComic: (_, path) async => File(path).writeAsString('archive'),
         );
-        ComicBackupManager.exportComic = (_, path) async =>
-            File(path).writeAsString('archive');
         final result = stage == 'upload'
-            ? await ComicBackupManager.backup([_comic('One')])
-            : await ComicBackupManager.restore([
+            ? await manager.backup([_comic('One')])
+            : await manager.restore([
                 BackupFile(name: 'A.cbz', size: 1, modified: DateTime(2024)),
               ]);
         expect(result.success, 0);

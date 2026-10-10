@@ -35,7 +35,9 @@ typedef HistoryDurationStorageWriter =
     );
 
 class HistoryManager with ChangeNotifier {
-  static HistoryManager? cache;
+  static HistoryManager? _cache;
+
+  static HistoryManager? get cache => _cache;
 
   HistoryManager.create({
     HistoryDurationStorageWriter? writeDuration,
@@ -69,8 +71,7 @@ class HistoryManager with ChangeNotifier {
   /// Notifications from either table must not lend data access to listeners.
   void publishChange(void Function() notify) => _operations.publish(notify);
 
-  factory HistoryManager() =>
-      cache == null ? (cache = HistoryManager.create()) : cache!;
+  factory HistoryManager() => _cache ??= HistoryManager.create();
 
   Database? _database;
   Database get _db =>
@@ -521,10 +522,10 @@ class HistoryManager with ChangeNotifier {
   Future<void> _clearHistoryBefore(int cutoff) =>
       _delete((repository) => repository.clearBefore(cutoff));
 
-  Future<void> clearUnfavoritedHistory() {
+  Future<void> clearUnfavoritedHistory({LocalFavoritesManager? manager}) {
     // The user's deletion decision uses the favorite identities at submission.
     // Do not read a potentially closed/reopened favorites manager in an isolate.
-    final favorites = LocalFavoritesManager()
+    final favorites = (manager ?? LocalFavoritesManager())
         .getAllComics()
         .map((item) => (item.id, item.type.value))
         .toSet();

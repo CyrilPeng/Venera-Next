@@ -59,11 +59,9 @@ void main() {
   test(
     'cancelling a job stops queued checks and prevents late writes',
     () async {
-      final previous = LocalFavoritesManager.cache;
       final favorites = _Favorites(
         List.generate(12, (i) => _item(sourceKey, '$i')),
       );
-      LocalFavoritesManager.cache = favorites;
       final replies = <Completer<Res<ComicDetails>>>[];
       final tokens = <RequestScope>[];
       ComicSourceManager().add(
@@ -78,7 +76,7 @@ void main() {
         ),
       );
       try {
-        final job = FollowUpdateJob('folder', true);
+        final job = FollowUpdateJob('folder', true, manager: favorites);
         final finished = job.progress.toList();
         await pumpEventQueue();
         expect(replies, hasLength(1));
@@ -90,7 +88,8 @@ void main() {
         expect(replies, hasLength(1));
         expect(favorites.writes, 0);
       } finally {
-        LocalFavoritesManager.cache = previous;
+        final resume = await FollowUpdateJob.prepareForExit();
+        resume();
       }
     },
   );
@@ -98,9 +97,7 @@ void main() {
   test(
     'new checks replace old checks and empty jobs complete normally',
     () async {
-      final previous = LocalFavoritesManager.cache;
       final favorites = _Favorites([_item(sourceKey, '1')]);
-      LocalFavoritesManager.cache = favorites;
       ComicSourceManager().add(
         _source(
           sourceKey,
@@ -108,11 +105,11 @@ void main() {
         ),
       );
       try {
-        final first = FollowUpdateJob('folder', true);
+        final first = FollowUpdateJob('folder', true, manager: favorites);
         final old = first.progress.toList();
         await pumpEventQueue();
         favorites.comics = [];
-        final next = FollowUpdateJob('folder', true);
+        final next = FollowUpdateJob('folder', true, manager: favorites);
         final progress = await next.progress.toList();
         await old;
         expect(first.isCancelled, isTrue);
@@ -120,7 +117,8 @@ void main() {
         expect(progress.single.fraction, 1);
         expect(FollowUpdateJob.isChecking, isFalse);
       } finally {
-        LocalFavoritesManager.cache = previous;
+        final resume = await FollowUpdateJob.prepareForExit();
+        resume();
       }
     },
   );

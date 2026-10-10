@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async';
@@ -13,10 +14,12 @@ import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/features/comic_details/archive_download_dialog.dart';
 import 'package:venera_next/features/comic_details/comments_page.dart';
 import 'package:venera_next/features/comic_details/favorite.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/favorites/favorites.dart';
-import 'package:venera_next/features/history/history.dart';
-import 'package:venera_next/features/local_comics/local_comics.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
+import 'package:venera_next/features/favorites/favorites_api.dart';
+import 'package:venera_next/features/favorites/read_later.dart';
+import 'package:venera_next/features/history/history_api.dart';
+import 'package:venera_next/features/local_comics/local.dart';
+import 'package:venera_next/features/local_comics/download.dart';
 import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/features/search/search_shortcut.dart';
 import 'package:venera_next/features/search/search_shortcuts.dart';
@@ -139,7 +142,7 @@ abstract mixin class ComicPageActions {
     final target = comic;
     final item = _toFavoriteItem();
     final updateTime = target.findUpdateTime();
-    final manager = LocalFavoritesManager();
+    final manager = FavoritesScope.read(context);
     final generation = manager.connectionGeneration;
     _addingQuickFavorite = target;
     try {
@@ -169,10 +172,9 @@ abstract mixin class ComicPageActions {
   Widget buildReadLaterAction() => ReadLaterButton(
     comic: _toFavoriteItem(),
     onChanged: () {
-      isAddToLocalFav = LocalFavoritesManager().isExist(
-        comic.id,
-        comic.comicType,
-      );
+      isAddToLocalFav = FavoritesScope.read(
+        context,
+      ).isExist(comic.id, comic.comicType);
       update();
     },
   );

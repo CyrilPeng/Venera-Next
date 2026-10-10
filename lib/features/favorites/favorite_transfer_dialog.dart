@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -62,11 +63,12 @@ Future<void> _showFavoriteTransferDialog({
       .getInheritedWidgetOfExactType<PopupIndicatorWidget>()
       ?.route;
   if (!owner.canPresent || parentPopup?.isCurrent == false) return;
+  final store = FavoritesScope.capture(context);
   final generation = manager.connectionGeneration;
   final path = App.dataPath;
   final items = comics.map((item) => item.detached()).toList();
   bool currentDatabase() =>
-      identical(LocalFavoritesManager.cache, manager) &&
+      (store.isCurrent && identical(store.manager, manager)) &&
       manager.connectionGeneration == generation &&
       App.dataPath == path;
   if (!currentDatabase() || !manager.existsFolder(source)) return;

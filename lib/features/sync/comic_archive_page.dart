@@ -34,7 +34,7 @@ class _ComicArchivePageState extends State<ComicArchivePage> {
       error = null;
       selected.clear();
     });
-    final result = await ComicBackupManager.listBackups();
+    final result = await ComicBackupManager.instance.listBackups();
     if (!mounted) return;
     setState(() {
       isLoading = false;
@@ -145,7 +145,7 @@ class _ComicArchivePageState extends State<ComicArchivePage> {
     final result = await showArchiveProgressDialog(
       title: "Download and Import".tl,
       total: targets.length,
-      task: (onProgress, isCancelled) => ComicBackupManager.restore(
+      task: (onProgress, isCancelled) => ComicBackupManager.instance.restore(
         targets,
         onProgress: onProgress,
         isCancelled: isCancelled,
@@ -197,7 +197,7 @@ class _ComicArchivePageState extends State<ComicArchivePage> {
           if (isCancelled()) break;
           final file = targets[i];
           onProgress(i + 1, targets.length, file.name);
-          final result = await ComicBackupManager.deleteBackup(file);
+          final result = await ComicBackupManager.instance.deleteBackup(file);
           if (result.error) {
             failed++;
             errors.add('${file.name}: ${result.errorMessage}');

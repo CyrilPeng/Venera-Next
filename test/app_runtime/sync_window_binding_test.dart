@@ -19,9 +19,11 @@ import 'package:window_manager/window_manager.dart';
 
 void main() {
   late SyncTestFixture fixture;
+  late _PendingHistory historyOwner;
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() {
     fixture = SyncTestFixture();
+    historyOwner = _PendingHistory(() async {});
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('window_manager'),
@@ -29,7 +31,7 @@ void main() {
         );
   });
   tearDown(() {
-    HistoryManager.cache = null;
+    historyOwner.dispose();
     fixture.disposeController();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
@@ -44,7 +46,7 @@ void main() {
     var isFinalizing = false;
     var releases = 0;
     var exits = 0;
-    HistoryManager.cache = _PendingHistory(() async {});
+    historyOwner = _PendingHistory(() async {});
     Future<VoidCallback> prepare() async =>
         () => releases++;
     await tester.pumpWidget(
@@ -61,6 +63,7 @@ void main() {
           valueListenable: visible,
           builder: (_, show, _) => show
               ? SyncWindowBinding(
+                  waitForHistoryWrites: historyOwner.waitForAsyncWrites,
                   controller: fixture.controller,
                   isFinalizing: () => isFinalizing,
                   prepareInteractive: prepare,
@@ -122,7 +125,7 @@ void main() {
         shares: () => throw StateError('desktop has no Android share binding'),
         heartbeat: () async {},
       )..start();
-      HistoryManager.cache = _PendingHistory(() async {
+      historyOwner = _PendingHistory(() async {
         events.add('history');
       });
       Future<VoidCallback> prepare(String stage) async {
@@ -136,6 +139,7 @@ void main() {
             navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
+                waitForHistoryWrites: historyOwner.waitForAsyncWrites,
                 controller: fixture.controller,
                 prepareInteractive: interactive.prepareForExit,
                 prepareFollowUpdates: () {
@@ -260,6 +264,7 @@ void main() {
           MaterialApp(
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
+                waitForHistoryWrites: historyOwner.waitForAsyncWrites,
                 controller: fixture.controller,
                 prepareInteractive: interactive.prepareForExit,
                 prepareFollowUpdates: () {
@@ -323,7 +328,7 @@ void main() {
         var releases = 0;
         var exits = 0;
         fixture = SyncTestFixture(persistImplicit: () => events.add('sync'));
-        HistoryManager.cache = _PendingHistory(() async {
+        historyOwner = _PendingHistory(() async {
           events.add('history');
         });
         await tester.pumpWidget(
@@ -331,6 +336,7 @@ void main() {
             navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
+                waitForHistoryWrites: historyOwner.waitForAsyncWrites,
                 controller: fixture.controller,
                 prepareFollowUpdates: () {
                   events.add('follow updates');
@@ -387,7 +393,7 @@ void main() {
         final released = <String>[];
         var exits = 0;
         fixture = SyncTestFixture(persistImplicit: () => events.add('sync'));
-        HistoryManager.cache = _PendingHistory(() async {
+        historyOwner = _PendingHistory(() async {
           events.add('history');
         });
         await tester.pumpWidget(
@@ -395,6 +401,7 @@ void main() {
             navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
+                waitForHistoryWrites: historyOwner.waitForAsyncWrites,
                 controller: fixture.controller,
                 prepareFollowUpdates: () {
                   events.add('follow updates');
@@ -472,7 +479,7 @@ void main() {
         var exits = 0;
         fixture.disposeController();
         fixture = SyncTestFixture(persistImplicit: () => events.add('sync'));
-        HistoryManager.cache = _PendingHistory(() async {
+        historyOwner = _PendingHistory(() async {
           events.add('history');
         });
         Future<VoidCallback> prepare(String stage) async {
@@ -485,6 +492,7 @@ void main() {
             navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
+                waitForHistoryWrites: historyOwner.waitForAsyncWrites,
                 controller: fixture.controller,
                 prepareInteractive: () => prepare('interactive'),
                 prepareFollowUpdates: () => prepare('follow'),
@@ -549,7 +557,7 @@ void main() {
       var attempts = 0;
       var historyCalls = 0;
       var exits = 0;
-      HistoryManager.cache = _PendingHistory(() async {
+      historyOwner = _PendingHistory(() async {
         historyCalls++;
       });
       Future<VoidCallback> prepare(String stage) async {
@@ -562,6 +570,7 @@ void main() {
           navigatorKey: appNavigation.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
             SyncWindowBinding(
+              waitForHistoryWrites: historyOwner.waitForAsyncWrites,
               controller: fixture.controller,
               prepareInteractive: () {
                 attempts++;
@@ -629,12 +638,13 @@ void main() {
         var attempts = 0;
         var importCalls = 0;
         var exits = 0;
-        HistoryManager.cache = _PendingHistory(() async {});
+        historyOwner = _PendingHistory(() async {});
         await tester.pumpWidget(
           MaterialApp(
             navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
+                waitForHistoryWrites: historyOwner.waitForAsyncWrites,
                 controller: fixture.controller,
                 prepareFollowUpdates: () async {
                   final attempt = ++attempts;
@@ -715,12 +725,13 @@ void main() {
           if (saves == 1) return firstSave.future;
         },
       );
-      HistoryManager.cache = _PendingHistory(() async {});
+      historyOwner = _PendingHistory(() async {});
       await tester.pumpWidget(
         MaterialApp(
           navigatorKey: appNavigation.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
             SyncWindowBinding(
+              waitForHistoryWrites: historyOwner.waitForAsyncWrites,
               controller: fixture.controller,
               prepareFollowUpdates: () async =>
                   () => followReleases++,
@@ -766,12 +777,13 @@ void main() {
       final download = Completer<Res<bool>>();
       var exits = 0;
       fixture.transfer.onDownload = () => download.future;
-      HistoryManager.cache = _PendingHistory(() async {});
+      historyOwner = _PendingHistory(() async {});
       await tester.pumpWidget(
         MaterialApp(
           navigatorKey: appNavigation.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
             SyncWindowBinding(
+              waitForHistoryWrites: historyOwner.waitForAsyncWrites,
               controller: fixture.controller,
               prepareImports: () async => () {},
               prepareDownloads: () async => () {},
@@ -809,12 +821,13 @@ void main() {
       var importsReleased = 0;
       var downloadsReleased = 0;
       var exits = 0;
-      HistoryManager.cache = _PendingHistory(() async {});
+      historyOwner = _PendingHistory(() async {});
       Widget host(bool bound) => MaterialApp(
         navigatorKey: mode == 'no-root' ? null : appNavigation.rootNavigatorKey,
         builder: (_, child) => WindowFrame(
           bound
               ? SyncWindowBinding(
+                  waitForHistoryWrites: historyOwner.waitForAsyncWrites,
                   controller: sync,
                   prepareImports: () async =>
                       () => importsReleased++,
@@ -882,6 +895,7 @@ void main() {
             navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
+                waitForHistoryWrites: historyOwner.waitForAsyncWrites,
                 controller: fixture.controller,
                 prepareImports: () => imports.future,
                 prepareDownloads: () {
@@ -929,7 +943,7 @@ void main() {
         var releases = 0;
         var exits = 0;
         final events = <String>[];
-        HistoryManager.cache = _PendingHistory(() {
+        historyOwner = _PendingHistory(() {
           events.add('history');
           return history.future;
         });
@@ -938,6 +952,7 @@ void main() {
             navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
               SyncWindowBinding(
+                waitForHistoryWrites: historyOwner.waitForAsyncWrites,
                 controller: fixture.controller,
                 prepareDownloads: () {
                   events.add('downloads');
@@ -989,7 +1004,7 @@ void main() {
         final history = Completer<void>();
         final uploaded = Completer<Res<bool>>();
         final events = <String>[];
-        HistoryManager.cache = _PendingHistory(() {
+        historyOwner = _PendingHistory(() {
           events.add('history');
           return history.future;
         });
@@ -1003,7 +1018,11 @@ void main() {
           MaterialApp(
             navigatorKey: appNavigation.rootNavigatorKey,
             builder: (_, child) => WindowFrame(
-              SyncWindowBinding(controller: fixture.controller, child: child!),
+              SyncWindowBinding(
+                waitForHistoryWrites: historyOwner.waitForAsyncWrites,
+                controller: fixture.controller,
+                child: child!,
+              ),
               onExit: () => exits++,
             ),
             home: Builder(
@@ -1071,7 +1090,11 @@ void main() {
       MaterialApp(
         navigatorKey: appNavigation.rootNavigatorKey,
         builder: (_, child) => WindowFrame(
-          SyncWindowBinding(controller: fixture.controller, child: child!),
+          SyncWindowBinding(
+            waitForHistoryWrites: historyOwner.waitForAsyncWrites,
+            controller: fixture.controller,
+            child: child!,
+          ),
           onExit: () => exits++,
         ),
         home: Builder(
@@ -1115,7 +1138,7 @@ void main() {
         uploads++;
         return const Res(true);
       };
-      HistoryManager.cache = _PendingHistory(() async {});
+      historyOwner = _PendingHistory(() async {});
       Future<VoidCallback> prepare() async =>
           () => releases++;
       await tester.pumpWidget(
@@ -1123,6 +1146,7 @@ void main() {
           navigatorKey: appNavigation.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
             SyncWindowBinding(
+              waitForHistoryWrites: historyOwner.waitForAsyncWrites,
               controller: fixture.controller,
               prepareInteractive: prepare,
               prepareFollowUpdates: prepare,
@@ -1174,7 +1198,11 @@ void main() {
           MaterialApp(
             navigatorKey: appNavigation.rootNavigatorKey,
             builder: (context, child) => WindowFrame(
-              SyncWindowBinding(controller: fixture.controller, child: child!),
+              SyncWindowBinding(
+                waitForHistoryWrites: historyOwner.waitForAsyncWrites,
+                controller: fixture.controller,
+                child: child!,
+              ),
               onExit: () => exits++,
             ),
             home: const Scaffold(body: Text('content')),
@@ -1205,13 +1233,17 @@ void main() {
     (tester) async {
       final baseline = windowManager.listeners.toSet();
       final pending = Completer<void>();
-      HistoryManager.cache = _PendingHistory(() => pending.future);
+      historyOwner = _PendingHistory(() => pending.future);
       var exits = 0;
       await tester.pumpWidget(
         MaterialApp(
           navigatorKey: appNavigation.rootNavigatorKey,
           builder: (_, child) => WindowFrame(
-            SyncWindowBinding(controller: fixture.controller, child: child!),
+            SyncWindowBinding(
+              waitForHistoryWrites: historyOwner.waitForAsyncWrites,
+              controller: fixture.controller,
+              child: child!,
+            ),
             onExit: () => exits++,
           ),
           home: const Scaffold(),

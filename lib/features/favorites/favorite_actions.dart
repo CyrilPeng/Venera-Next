@@ -1,3 +1,5 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'folder_name_validation.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'network_favorite_import.dart';
@@ -13,8 +15,7 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/components/select.dart';
 import 'package:venera_next/components/window_selection_task.dart';
-import 'package:venera_next/features/comic_source/comic_source.dart';
-import 'package:venera_next/features/favorites/favorites_manager.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/network/request_scope.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -55,12 +56,12 @@ Future<void> _newFolder(
       .getInheritedWidgetOfExactType<PopupIndicatorWidget>()
       ?.route;
   if (popup?.isCurrent == false) return;
-  final manager = LocalFavoritesManager.cache;
-  if (manager == null) return;
+  final store = FavoritesScope.capture(context);
+  final manager = store.manager;
   final generation = manager.connectionGeneration;
   final dataPath = App.dataPath;
   bool isCurrent() =>
-      identical(LocalFavoritesManager.cache, manager) &&
+      store.isCurrent &&
       manager.connectionGeneration == generation &&
       App.dataPath == dataPath;
   void checkCurrent() {
@@ -143,18 +144,6 @@ Future<void> _newFolder(
   }
 }
 
-String? validateFolderName(String newFolderName, {List<String>? folders}) {
-  folders ??= LocalFavoritesManager().folderNames;
-  if (newFolderName.isEmpty) {
-    return "Folder name cannot be empty".tl;
-  } else if (newFolderName.length > 50) {
-    return "Folder name is too long".tl;
-  } else if (folders.contains(newFolderName)) {
-    return "Folder already exists".tl;
-  }
-  return null;
-}
-
 Future<void> addFavorite(
   BuildContext context,
   List<Comic> comics, {
@@ -179,8 +168,9 @@ Future<void> _addFavorite(
 }) async {
   if (!context.mounted || isCurrent?.call() == false) return;
   final owner = WindowSelectionTask(context);
-  final manager = LocalFavoritesManager.cache;
-  if (!owner.canPresent || manager == null) return;
+  final store = FavoritesScope.capture(context);
+  final manager = store.manager;
+  if (!owner.canPresent) return;
   final generation = manager.connectionGeneration;
   final dataPath = App.dataPath;
   final folders = List<String>.unmodifiable(manager.folderNames);
@@ -200,7 +190,7 @@ Future<void> _addFavorite(
       )
       .toList();
   bool currentDatabase() =>
-      identical(LocalFavoritesManager.cache, manager) &&
+      store.isCurrent &&
       manager.connectionGeneration == generation &&
       App.dataPath == dataPath;
   String? selectedFolder = GlobalPreferenceStore(
@@ -289,11 +279,9 @@ Future<void> _importNetworkFolder(
   if (!owner.canPresent) return;
   final comicSource = ComicSource.find(source);
   final data = comicSource?.favoriteData;
-  final manager = LocalFavoritesManager.cache;
-  if (comicSource == null ||
-      data == null ||
-      manager == null ||
-      updatePageNum <= 0) {
+  final store = FavoritesScope.capture(context);
+  final manager = store.manager;
+  if (comicSource == null || data == null || updatePageNum <= 0) {
     return;
   }
   final resultName = folder == null || folder.isEmpty
@@ -307,7 +295,7 @@ Future<void> _importNetworkFolder(
   final generation = manager.connectionGeneration;
   final dataPath = App.dataPath;
   bool currentDatabase() =>
-      identical(LocalFavoritesManager.cache, manager) &&
+      store.isCurrent &&
       manager.connectionGeneration == generation &&
       App.dataPath == dataPath;
   bool currentTarget() =>

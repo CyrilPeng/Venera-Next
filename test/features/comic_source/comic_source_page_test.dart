@@ -58,7 +58,6 @@ void main() {
       repositories: SourceRepositories.instance,
       createClient: createDio,
     );
-    SourceRepositories.debugCreateDio = createDio;
     registerShowMessageHandler((context, message) => messages.add(message));
   }
 
@@ -67,7 +66,6 @@ void main() {
     ComicSourceManager().remove('installed_source');
     previousSettings.forEach((key, value) => appdata.settings[key] = value);
     await service.closeAndWait();
-    SourceRepositories.debugCreateDio = null;
     registerShowMessageHandler((context, message) {});
     Log.isMuted = previousLogMuted;
     dataDir.deleteSync(recursive: true);
@@ -277,7 +275,11 @@ void main() {
       await pumpPage(tester);
       SourceRepository? saved;
       final save = SourceRepositories.instance
-          .save(name: 'Repo', url: '  https://example.test/repo/index.json  ')
+          .save(
+            name: 'Repo',
+            url: '  https://example.test/repo/index.json  ',
+            createClient: () => Dio()..httpClientAdapter = requests,
+          )
           .then((value) => saved = value);
       await _pumpUntil(tester, () => requests.items.length == 1);
       expect(SourceRepositories.instance.all, isEmpty);
@@ -296,6 +298,7 @@ void main() {
         id: saved!.id,
         name: 'New',
         url: 'https://new.test/index.json',
+        createClient: () => Dio()..httpClientAdapter = requests,
       );
       final failed = expectLater(edit, throwsA(isA<DioException>()));
       await _pumpUntil(tester, () => requests.items.length == 2);
@@ -307,6 +310,7 @@ void main() {
         id: saved!.id,
         name: 'New',
         url: 'https://new.test/index.json',
+        createClient: () => Dio()..httpClientAdapter = requests,
       );
       await _pumpUntil(tester, () => requests.items.length == 3);
       requests.items.last.reply(catalog());
@@ -327,7 +331,10 @@ void main() {
     (tester) async {
       await pumpPage(
         tester,
-        child: const SourceRepositoryCatalogPage(repository: repository),
+        child: SourceRepositoryCatalogPage(
+          repository: repository,
+          createClient: () => Dio()..httpClientAdapter = requests,
+        ),
       );
       await _pumpUntil(tester, () => requests.items.isNotEmpty);
       final request = requests.items.single;
@@ -346,7 +353,10 @@ void main() {
   ) async {
     await pumpPage(
       tester,
-      child: const SourceRepositoryCatalogPage(repository: repository),
+      child: SourceRepositoryCatalogPage(
+        repository: repository,
+        createClient: () => Dio()..httpClientAdapter = requests,
+      ),
     );
     await _pumpUntil(tester, () => requests.items.isNotEmpty);
     requests.items.single.reply('', status: 503);

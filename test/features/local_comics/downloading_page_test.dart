@@ -8,8 +8,8 @@ import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 
 void main() {
-  setUp(LocalManager.resetForTesting);
-  tearDown(LocalManager.resetForTesting);
+  setUp(() => LocalManager.current?.dispose());
+  tearDown(() => LocalManager.current?.dispose());
 
   Widget page({Brightness brightness = Brightness.light}) => MaterialApp(
     theme: ThemeData(brightness: brightness),

@@ -27,6 +27,7 @@ Future<void> _flushWrites(WidgetTester tester) async {
 }
 
 void main() {
+  late ImageFavoriteManager imageManager;
   setUpAll(() {
     App.dataPath = Directory.systemTemp.path;
     App.cachePath = Directory.systemTemp.path;
@@ -34,7 +35,6 @@ void main() {
 
   Future<Directory> prepare(WidgetTester tester, Object? range) async {
     final root = Directory.systemTemp.createTempSync('time-filter-ui-');
-    final previous = HistoryManager.cache;
     final previousData = App.dataPath;
     final previousCache = App.cachePath;
     final previousImplicit = appdata.implicitData;
@@ -42,14 +42,15 @@ void main() {
     App.cachePath = root.path;
     appdata.implicitData = {_timeKey: range};
     final history = HistoryManager.create();
-    HistoryManager.cache = history;
+    imageManager = ImageFavoriteManager.create(history: history);
     await history.init();
     addTearDown(() async {
       // The dialog uses the existing appdata write queue. Drain before cleanup.
       await _flushWrites(tester);
       expect(history.hasPendingWrites, isFalse);
       history.close();
-      HistoryManager.cache = previous;
+      imageManager.dispose();
+      history.dispose();
       appdata.implicitData = previousImplicit;
       App.dataPath = previousData;
       App.cachePath = previousCache;
@@ -76,7 +77,7 @@ void main() {
           ),
           child: child!,
         ),
-        home: Scaffold(body: body ?? const ImageFavoritesPage()),
+        home: Scaffold(body: body ?? ImageFavoritesPage(manager: imageManager)),
       ),
     );
     await tester.pumpAndSettle();
@@ -254,8 +255,9 @@ void main() {
         tester,
         body: ValueListenableBuilder<bool>(
           valueListenable: visible,
-          builder: (_, show, _) =>
-              show ? const ImageFavoritesPage() : const SizedBox(),
+          builder: (_, show, _) => show
+              ? ImageFavoritesPage(manager: imageManager)
+              : const SizedBox(),
         ),
       );
       await openFilter(tester);

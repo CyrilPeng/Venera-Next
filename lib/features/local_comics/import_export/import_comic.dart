@@ -14,10 +14,7 @@ import 'import_presentation.dart';
 import 'pdf_import_tasks.dart';
 
 class ImportComic {
-  static const _service = ComicImportService(
-    localManager: LocalManager.new,
-    favoritesManager: LocalFavoritesManager.new,
-  );
+  final ComicImportService service;
   final String? selectedFolder;
   final bool copyToLocal;
 
@@ -27,6 +24,10 @@ class ImportComic {
     this.selectedFolder,
     this.copyToLocal = true,
     this.presentation = const ImportComicPresentation(),
+    this.service = const ComicImportService(
+      localManager: LocalManager.new,
+      favoritesManager: LocalFavoritesManager.new,
+    ),
   });
 
   Future<bool> cbz(SelectionOperation operation) async {
@@ -44,7 +45,7 @@ class ImportComic {
         (source) => CBZ.import(
           source,
           registerComic: (comic) =>
-              _service.registerComic(comic, folder: selectedFolder),
+              service.registerComic(comic, folder: selectedFolder),
         ),
       );
       presentation.showMessage(
@@ -71,7 +72,7 @@ class ImportComic {
     final controller = presentation.showLoading(allowCancel: false);
     try {
       return await _showImportResult(
-        () => _service.archives(dir, folder: selectedFolder),
+        () => service.archives(dir, folder: selectedFolder),
       );
     } finally {
       controller?.close();
@@ -100,7 +101,7 @@ class ImportComic {
               onProgress: onProgress,
               cancellation: cancellation,
               registerComic: (comic) =>
-                  _service.registerComic(comic, folder: selectedFolder),
+                  service.registerComic(comic, folder: selectedFolder),
             );
           },
         ),
@@ -128,7 +129,7 @@ class ImportComic {
         (file) => EpubComicImporter.import(
           file,
           registerComic: (comic) =>
-              _service.registerComic(comic, folder: selectedFolder),
+              service.registerComic(comic, folder: selectedFolder),
           onProgress: (current, total) {
             controller
               ?..setProgress(current / total)
@@ -155,7 +156,7 @@ class ImportComic {
     );
     if (directory == null) return false;
     return _showImportResult(
-      () => _service.runImport((importing) async {
+      () => service.runImport((importing) async {
         if (!copyToLocal) await directory.retainAccessForSession();
         operation.checkActive();
         return operation.useDirectory(
@@ -189,7 +190,7 @@ class ImportComic {
     );
     if (selection == null) return false;
     return _showImportResult(
-      () => _service.runImport((importing) async {
+      () => service.runImport((importing) async {
         if (!copyToLocal) await selection.retainAccessForSession();
         operation.checkActive();
         return operation.useDirectory(
@@ -206,7 +207,7 @@ class ImportComic {
   }
 
   Future<bool> localDownloads() => _showImportResult(() async {
-    final scanned = await _service.runRecovery((importing) async {
+    final scanned = await service.runRecovery((importing) async {
       var cancelled = false;
       final controller = presentation.showLoading(
         onCancel: () => cancelled = true,
@@ -226,7 +227,7 @@ class ImportComic {
     final issues = [...scanned.issues];
     final remaining = [...scanned.pendingCopies];
     for (final pending in scanned.pendingCopies) {
-      final favorites = await _service.runRecovery(
+      final favorites = await service.runRecovery(
         (operation) async => operation.copyRecoveryFolders(),
       );
       final choice = await presentation.chooseCopyRecovery(
@@ -238,7 +239,7 @@ class ImportComic {
       final loading = presentation.showLoading(allowCancel: false);
       late ComicImportResult recovered;
       try {
-        recovered = await _service.runRecovery(
+        recovered = await service.runRecovery(
           (operation) => operation.recoverCopy(
             pending.directory,
             folder: choice.folder,

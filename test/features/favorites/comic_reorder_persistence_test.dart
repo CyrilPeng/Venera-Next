@@ -1,3 +1,5 @@
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/history/history_scope.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -83,17 +85,17 @@ void main() {
         );
         final previousData = App.dataPath;
         final previousCache = App.cachePath;
-        final previousManager = LocalFavoritesManager.cache;
-        final previousHistory = HistoryManager.cache;
+        final previousManager = _favoritesOwner;
+        final previousHistory = _historyOwner;
         final checkpoint = appdata.captureImportCheckpoint();
         final muted = Log.isMuted;
         final registry = SelectionTaskRegistry();
         Log.isMuted = true;
         App.dataPath = root.path;
         App.cachePath = root.path;
-        LocalFavoritesManager.cache = null;
-        HistoryManager.cache = _History();
-        final manager = LocalFavoritesManager();
+        _favoritesOwner = null;
+        _historyOwner = _History();
+        final manager = _favoritesForView();
         registerShowMessageHandler((_, _) {});
         addTearDown(() async {
           await tester.pumpWidget(const SizedBox());
@@ -104,8 +106,8 @@ void main() {
             await manager.closeAndWait();
             await appdata.restoreImportCheckpoint(checkpoint, persist: false);
           });
-          LocalFavoritesManager.cache = previousManager;
-          HistoryManager.cache = previousHistory;
+          _favoritesOwner = previousManager;
+          _historyOwner = previousHistory;
           App.dataPath = previousData;
           App.cachePath = previousCache;
           Log.isMuted = muted;
@@ -193,11 +195,13 @@ void main() {
         manager.addListener(notified);
         addTearDown(() => manager.removeListener(notified));
         await tester.pumpWidget(
-          MaterialApp(
-            navigatorKey: appNavigation.rootNavigatorKey,
-            builder: (_, child) =>
-                SelectionTasksScope(registry: registry, child: child!),
-            home: const Scaffold(body: FavoritesPage()),
+          _libraryView(
+            MaterialApp(
+              navigatorKey: appNavigation.rootNavigatorKey,
+              builder: (_, child) =>
+                  SelectionTasksScope(registry: registry, child: child!),
+              home: const Scaffold(body: FavoritesPage()),
+            ),
           ),
         );
         await pumpSidebar(tester);
@@ -315,4 +319,16 @@ void main() {
       },
     );
   }
+}
+
+LocalFavoritesManager? _favoritesOwner;
+LocalFavoritesManager _favoritesForView() =>
+    _favoritesOwner ??= LocalFavoritesManager.independent();
+HistoryManager? _historyOwner;
+HistoryManager _historyForView() => _historyOwner ??= HistoryManager.create();
+Widget _libraryView(Widget child) {
+  return FavoritesScope(
+    manager: _favoritesForView(),
+    child: HistoryScope(manager: _historyForView(), child: child),
+  );
 }

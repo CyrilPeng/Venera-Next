@@ -1,9 +1,7 @@
 import 'dart:convert';
 
 import 'package:venera_next/foundation/log.dart';
-import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/res.dart';
-import 'package:venera_next/network/request_scope.dart';
 
 import 'models.dart';
 import 'normalization.dart';
@@ -38,7 +36,7 @@ class SourceComicParser {
         return Res(details);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
-        return Res.fromException(e, s);
+        return context.failureResult(e, s);
       }
     };
   }
@@ -55,7 +53,7 @@ class SourceComicParser {
         return const Res(true);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
-        return Res.fromException(e, s);
+        return context.failureResult(e, s);
       }
     };
   }
@@ -72,7 +70,7 @@ class SourceComicParser {
         return const Res(true);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");
-        return Res.fromException(e, s);
+        return context.failureResult(e, s);
       }
     };
   }
@@ -117,17 +115,7 @@ class SourceComicParser {
       );
     } catch (error, stack) {
       Log.error('Network', '$error\n$stack');
-      if (error is RequestCancelled) {
-        return Res.failure(
-          OperationFailure(
-            message: error.toString(),
-            kind: FailureKind.cancelled,
-            cause: error,
-            stackTrace: stack,
-          ),
-        );
-      }
-      return Res.fromException(error, stack);
+      return context.failureResult(error, stack);
     }
   }
 }
