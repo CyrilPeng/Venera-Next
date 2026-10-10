@@ -1,12 +1,12 @@
+import 'package:venera_next/foundation/operation_failure.dart';
+
 import 'webdav_library_config.dart';
 import 'webdav_library_entries.dart';
 import 'webdav_library_transport.dart';
 
-class WebDavLibraryCancelled implements Exception {
-  const WebDavLibraryCancelled();
-
-  @override
-  String toString() => 'WebDAV request cancelled';
+class WebDavLibraryCancelled extends OperationFailure {
+  const WebDavLibraryCancelled({super.cause, super.stackTrace})
+    : super(message: 'WebDAV request cancelled', kind: FailureKind.cancelled);
 }
 
 /// Each asynchronous operation retains this session, never the next config.

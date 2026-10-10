@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/shared_image_requests.dart';
 
@@ -86,7 +87,15 @@ void main() {
 
     await expectLater(
       ImageDownloader.debugApplyImageResponseCallback(callback, <int>[1]),
-      throwsA('Error: Invalid onResponse result.'),
+      throwsA(
+        isA<OperationFailure>()
+            .having(
+              (error) => error.message,
+              'message',
+              'Error: Invalid onResponse result.',
+            )
+            .having((error) => error.stackTrace, 'stack', isNotNull),
+      ),
     );
     expect(callback.destroyCount, 1);
   });

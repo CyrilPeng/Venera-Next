@@ -120,12 +120,29 @@ void main() {
       try {
         final source = Directory('${manager.path}/Recovered')..createSync();
         File('${source.path}/1.jpg').writeAsStringSync('page');
-        final result = await tester.runAsync(
+        // No presentation owner means no implicit decision, and must not need
+        // a favorites connection merely to leave this legacy directory pending.
+        final scanned = await tester.runAsync(
           () => const ImportComic().localDownloads().timeout(
             const Duration(seconds: 10),
           ),
         );
-        expect(result, isTrue);
+        expect(scanned, isTrue);
+        expect(manager.findByName('Recovered'), isNull);
+        final result = await tester.runAsync(
+          () => service
+              .runRecovery((operation) async {
+                final scanned = await operation.localDownloads(
+                  isCancelled: () => false,
+                );
+                return operation.recoverCopy(
+                  scanned.pendingCopies.single,
+                  folder: null,
+                );
+              })
+              .timeout(const Duration(seconds: 10)),
+        );
+        expect(result!.importedCount, 1);
         expect(manager.findByName('Recovered'), isNotNull);
         await tester.pumpAndSettle();
         await tester.runAsync(

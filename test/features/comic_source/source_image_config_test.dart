@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:ffi';
 import 'dart:io';
 
@@ -212,7 +213,13 @@ void main() {
                             'ep',
                           ),
                   ),
-                  throwsA('function $hook return invalid data'),
+                  throwsA(
+                    isA<OperationFailure>().having(
+                      (error) => error.message,
+                      'message',
+                      'function $hook return invalid data',
+                    ),
+                  ),
                 );
               }
               // The shared JS function remains valid after its rejected result
@@ -305,7 +312,8 @@ void main() {
               if (valid) {
                 expect(result.data, ['page']);
               } else {
-                expect(result.failure!.cause, 'Invalid data');
+                expect(result.failure!.message, 'Invalid data');
+                expect(result.failure!.stackTrace, isNotNull);
               }
               expect(engine.debugOwnedReferenceCount, 0);
               expect(
@@ -422,7 +430,14 @@ void main() {
             );
             final cause = result.failure!.cause as JsResourceReleaseFailure;
             if (!valid) {
-              expect(cause.failures.first.error, 'Invalid data');
+              expect(
+                cause.failures.first.error,
+                isA<OperationFailure>().having(
+                  (error) => error.message,
+                  'message',
+                  'Invalid data',
+                ),
+              );
             }
             final cleanup =
                 cause.failures.last.error as JsResourceReleaseFailure;
@@ -524,7 +539,13 @@ void main() {
           var completed = false;
           final checked = expectLater(
             pending,
-            throwsA('function onThumbnailLoad return invalid data'),
+            throwsA(
+              isA<OperationFailure>().having(
+                (error) => error.message,
+                'message',
+                'function onThumbnailLoad return invalid data',
+              ),
+            ),
           ).then((_) => completed = true);
           await pumpEventQueue();
           expect(completed, isFalse);
@@ -591,7 +612,11 @@ void main() {
                   .having(
                     (failure) => failure.cause,
                     'parse failure',
-                    'function onThumbnailLoad return invalid data',
+                    isA<OperationFailure>().having(
+                      (error) => error.message,
+                      'message',
+                      'function onThumbnailLoad return invalid data',
+                    ),
                   )
                   .having(
                     (failure) => failure.cleanupFailure.failures.map(

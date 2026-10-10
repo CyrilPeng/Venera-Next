@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_saf/flutter_saf.dart';
 import 'package:path/path.dart' as path;
 import 'package:rhttp/rhttp.dart';
@@ -97,6 +98,19 @@ CoreBootstrap createCoreBootstrap({
       }
     },
     infrastructure: () async {
+      // Restore external-library grants before sources and stores touch them.
+      // An unavailable provider is reported without discarding its bookmark.
+      if (App.isIOS || App.isMacOS) {
+        final failures = await const MethodChannel(
+          'venera/method_channel',
+        ).invokeMapMethod<String, String>('restoreDirectoryAccess');
+        for (final failure in (failures ?? const <String, String>{}).entries) {
+          Log.error(
+            'Directory access',
+            '${failure.key}: ${failure.value}. Select the directory again to renew access.',
+          );
+        }
+      }
       final previousCookies = SingleInstanceCookieJar.instance;
       await initializeCoreInfrastructure(
         directory: App.dataPath,

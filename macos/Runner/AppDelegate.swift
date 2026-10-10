@@ -34,6 +34,8 @@ class AppDelegate: FlutterAppDelegate {
             }
         case "getDirectoryPath":
           self.getDirectoryPath(result: result)
+        case "restoreDirectoryAccess":
+          result(self.directoryAccess.restorePersisted())
         case "releaseDirectoryAccess", "retainDirectoryAccessForSession":
           guard let token = call.arguments as? String else {
             result(FlutterError(code: "invalid_arguments", message: "Missing directory token", details: nil))

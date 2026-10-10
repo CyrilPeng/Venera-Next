@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:async';
 import 'source_failure.dart';
 import 'package:venera_next/components/settings_save_state.dart';
@@ -505,7 +506,9 @@ class _SourceRepositoryCatalogPageState
     try {
       if (SourceRepositories.instance.find(widget.repository.id)?.url !=
           widget.repository.url) {
-        throw 'Repository changed. Refresh the list and try again.'.tl;
+        throw OperationFailure.message(
+          'Repository changed. Refresh the list and try again.'.tl,
+        );
       }
       SourceInstallationsScope.of(
         context,

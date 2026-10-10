@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import "package:flutter/material.dart";
 import "package:venera_next/components/appbar.dart";
 import "package:venera_next/components/select.dart";
@@ -30,7 +31,7 @@ class _RankingPageState extends State<RankingPage> {
         return;
       }
     }
-    throw "${widget.categoryKey} Not found";
+    throw OperationFailure.message("${widget.categoryKey} Not found");
   }
 
   @override

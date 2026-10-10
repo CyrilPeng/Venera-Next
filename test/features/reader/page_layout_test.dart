@@ -105,6 +105,7 @@ void main() {
     expect(single.pageCount(0), 0);
     expect(paired.pageCount(0), 0);
     expect(cover.pageCount(0), 1);
+    expect(cover.imageRange(1, 0), (0, 0));
     expect(paired.remapPage(0, single, imageCount: null), 1);
     expect(paired.remapPage(2, single, imageCount: null), 2);
     expect(paired.historyImage(1, 0), 0);

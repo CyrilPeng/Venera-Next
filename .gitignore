@@ -29,6 +29,7 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/apple/.build/
 
 # 符号化相关
 app.*.symbols

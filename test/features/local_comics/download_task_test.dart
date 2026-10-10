@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/res.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -571,6 +572,36 @@ void main() {
     expect(task.isPaused, isTrue);
     expect(task.isError, isFalse);
   });
+
+  for (final kind in [FailureKind.cancelled, FailureKind.unsupported]) {
+    test('download does not retry a structured $kind source result', () async {
+      final root = Directory.systemTemp.createTempSync('download-failure-');
+      var calls = 0;
+      final task = ImagesDownloadTask(
+        storage: _TaskStorage(root.path),
+        source: _testSource(
+          sourceKey,
+          loadComicInfo: (_) async {
+            calls++;
+            return Res.failure(
+              OperationFailure.message('source stopped', kind: kind),
+            );
+          },
+        ),
+        comicId: 'stopped',
+      );
+      addTearDown(() async {
+        task.pause();
+        await task.pendingCleanup;
+        root.deleteSync(recursive: true);
+      });
+      task.resume();
+      await task.debugResumeFuture;
+      expect(calls, 1);
+      expect(task.isError, isTrue);
+      expect(task.message, contains('source stopped'));
+    });
+  }
 
   test('ImagesDownloadTask rejects unsupported image data', () async {
     final dataDir = Directory.systemTemp.createTempSync(

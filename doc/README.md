@@ -10,7 +10,6 @@ English index: [README.en.md](README.en.md)
 |---|---|---|
 | `api/` | 开发 API、扩展接口、脚本接口 | 中英文双版本 |
 | `examples/` | 配套代码模板 | 中英文指南共用，接口说明在指南中维护 |
-| `architecture/` | 仓库结构、模块边界、架构约定 | 中英文双版本，中文为默认维护入口 |
 | `development/` | 本地开发、构建、测试和开发故障排查 | 中英文双版本，中文为默认维护入口 |
 | `distribution/` | 发布、分发、包管理器和工作流维护 | 中英文双版本，中文为默认维护入口 |
 | `user/` | 用户使用说明、导入格式、命令行用法 | 中英文双版本 |
@@ -22,13 +21,6 @@ English index: [README.en.md](README.en.md)
 
 - [漫画源开发说明](api/comic_source.zh.md) / [Comic Source Guide](api/comic_source.en.md)
 - [JavaScript API](api/js.zh.md) / [JavaScript API](api/js.en.md)
-
-## 架构和结构
-
-- [项目结构约定](architecture/project_structure.zh.md) / [Project Structure](architecture/project_structure.en.md)
-- [架构与可维护性优化方案（待实施）](architecture/optimization_plan.zh.md) / [Architecture Optimization Plan (Proposed)](architecture/optimization_plan.en.md)
-
-- [架构优化执行记录](architecture/optimization_progress.zh.md) / [Optimization Progress](architecture/optimization_progress.en.md)
 
 ## 开发和构建
 

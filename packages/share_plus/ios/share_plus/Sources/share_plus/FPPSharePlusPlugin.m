@@ -449,7 +449,14 @@ activityTypesForStrings(NSArray<NSString *> *activityTypeStrings) {
   activityViewController.completionWithItemsHandler =
       ^(UIActivityType activityType, BOOL completed, NSArray *returnedItems,
         NSError *activityError) {
-        if (completed) {
+        if (activityError != nil) {
+          result([FlutterError errorWithCode:@"share_failed"
+                                     message:activityError.localizedDescription
+                                     details:@{
+                                       @"domain" : activityError.domain,
+                                       @"code" : @(activityError.code)
+                                     }]);
+        } else if (completed) {
           result(activityType);
         } else {
           result(@"");

@@ -13,14 +13,8 @@
   [![Downloads](https://img.shields.io/github/downloads/CyrilPeng/venera-next/total?style=flat-square&color=2ea44f&logo=github)](https://tooomm.github.io/github-release-stats/?user=CyrilPeng&repo=venera-next)
   [![Afdian](https://img.shields.io/badge/Afdian-Sponsor-ff69b4?style=flat-square)](https://ifdian.net/a/cyril)
 
-  <p>
-    <a href="https://trendshift.io/repositories/140830?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-140830" target="_blank" rel="noopener noreferrer">
-      <img src="https://trendshift.io/api/badge/repositories/140830" alt="VeneraNext repository badge on Trendshift" width="250" height="55" />
-    </a>
-    <a href="https://trendshift.io/repositories/140830?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-140830" target="_blank" rel="noopener noreferrer">
-      <img src="https://trendshift.io/api/badge/trendshift/repositories/140830/daily?language=Dart" alt="VeneraNext daily Dart ranking on Trendshift" width="250" height="55" />
-    </a>
-  </p>
+  <a href="https://trendshift.io/repositories/140830?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-140830" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/140830" alt="VeneraNext repository badge on Trendshift" width="250" height="55" /></a>
+  <a href="https://trendshift.io/repositories/140830?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-140830" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/140830/daily?language=Dart" alt="VeneraNext daily Dart ranking on Trendshift" width="250" height="55" /></a>
 
 </div>
 
@@ -255,7 +249,7 @@ Run `winget upgrade --id CyrilPeng.VeneraNext --exact`. Public-source availabili
 ## Developer resources
 
 - [Build and Development](doc/development/build.en.md): Flutter/Rust, locked dependencies, tests, and releases.
-- [Contributing](CONTRIBUTING.en.md) · [Project Structure](doc/architecture/project_structure.en.md) · [Dependency Governance](doc/development/dependencies.en.md).
+- [Contributing](CONTRIBUTING.en.md) · [Dependency Governance](doc/development/dependencies.en.md).
 - [Windows Distribution](doc/distribution/windows.en.md) · [Headless Mode](doc/user/headless.en.md).
 - [Security Policy](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Documentation Index](doc/README.en.md).
 

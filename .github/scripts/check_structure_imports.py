@@ -525,9 +525,6 @@ APP_RUNTIME_ENTRYPOINT_TARGETS = {
 }
 
 FOUNDATION_ENTRYPOINT_TARGETS = {
-    _foundation_path("extensions", "future_extensions.dart"): _foundation_path(
-        "extensions.dart"
-    ),
     _foundation_path("extensions", "list_extensions.dart"): _foundation_path(
         "extensions.dart"
     ),

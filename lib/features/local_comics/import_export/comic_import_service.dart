@@ -31,7 +31,10 @@ void _checkCopyLocation(String directoryPath, String libraryPath) {
   final actualLibrary = library is AndroidDirectory
       ? library.path
       : library.resolveSymbolicLinksSync();
-  if (!path.equals(path.dirname(actualDirectory), actualLibrary)) {
+  if (!path.equals(
+    actualDirectory,
+    path.join(actualLibrary, path.basename(directoryPath)),
+  )) {
     throw StateError('Copy recovery output is outside the original library');
   }
 }
@@ -44,6 +47,46 @@ Future<String> _verifyCopyRecord(
   final record = ComicCopyRecord.read(directory);
   await record.verifyComplete();
   return record.intentDigest;
+});
+
+Future<({String digest, ComicCopyRecoveryKind kind})> _inspectCopyRecord(
+  ({String directory, String library}) request,
+) => overrideIO(() async {
+  _checkCopyLocation(request.directory, request.library);
+  final record = ComicCopyRecord.read(Directory(request.directory));
+  final kind = record.canResume && !record.hasCompletion
+      ? ComicCopyRecoveryKind.resumable
+      : ComicCopyRecoveryKind.complete;
+  if (kind == ComicCopyRecoveryKind.resumable) {
+    await record.verifyResumable();
+  } else {
+    await record.verifyComplete();
+  }
+  _checkCopyLocation(request.directory, request.library);
+  return (digest: record.intentDigest, kind: kind);
+});
+
+Future<String> _unverifiedCopyDigest(
+  ({String directory, String library}) request,
+) => overrideIO(() async {
+  _checkCopyLocation(request.directory, request.library);
+  final digest = await ComicCopyRecord.unverifiedDigest(
+    Directory(request.directory),
+  );
+  _checkCopyLocation(request.directory, request.library);
+  return digest;
+});
+
+Future<void> _resumeCopyRecord(
+  ({String directory, String library, String digest}) request,
+) => overrideIO(() async {
+  _checkCopyLocation(request.directory, request.library);
+  final record = ComicCopyRecord.read(Directory(request.directory));
+  if (record.intentDigest != request.digest) {
+    throw StateError('Copy intent changed after the recovery selection');
+  }
+  await record.resume();
+  _checkCopyLocation(request.directory, request.library);
 });
 
 enum ComicImportIssueKind {
@@ -65,16 +108,21 @@ class ComicImportIssue {
 }
 
 class PendingComicCopy {
-  const PendingComicCopy({
+  PendingComicCopy._(
+    this._owner, {
     required this.directory,
     required this.title,
     required this.folder,
     required this.intentDigest,
-  });
+    this.kind = ComicCopyRecoveryKind.complete,
+  }) : _library = _owner.path;
+  final LocalManager _owner;
+  final String _library;
   final String directory;
   final String title;
-  final String folder;
+  final String? folder;
   final String intentDigest;
+  final ComicCopyRecoveryKind kind;
 }
 
 class ComicCopyRecoveryFolders {
@@ -292,11 +340,11 @@ class ComicImportOperation {
               final record = ComicCopyRecord.read(entry);
               // Recovery performs the expensive payload verification off the UI
               // isolate. The exclusive storage owner stays held until it ends.
-              final verified = await compute(_verifyCopyRecord, (
+              final verified = await compute(_inspectCopyRecord, (
                 directory: entry.path,
                 library: localDir.path,
               ));
-              if (verified != record.intentDigest) {
+              if (verified.digest != record.intentDigest) {
                 throw StateError('Copy intent changed during recovery');
               }
               final metadata = record.metadata;
@@ -306,13 +354,16 @@ class ComicImportOperation {
                 );
               }
               final saved = decodeComicCopyMetadata(metadata, entry.path);
-              if (saved.folder != null) {
+              if (saved.folder != null ||
+                  verified.kind == ComicCopyRecoveryKind.resumable) {
                 pendingCopies.add(
-                  PendingComicCopy(
+                  PendingComicCopy._(
+                    _manager,
                     directory: entry.path,
                     title: saved.comic.title,
-                    folder: saved.folder!,
+                    folder: saved.folder,
                     intentDigest: record.intentDigest,
+                    kind: verified.kind,
                   ),
                 );
                 continue;
@@ -335,13 +386,37 @@ class ComicImportOperation {
             }
             continue;
           }
-          final stat = await entry.stat();
-          final comic = await _checkSingleComic(
-            entry,
-            createTime: stat.modified,
-            useRelativePath: true,
-          );
-          if (comic != null) imported[null]!.add(comic);
+          try {
+            final digest = await compute(_unverifiedCopyDigest, (
+              directory: entry.path,
+              library: localDir.path,
+            ));
+            final comic = await _checkSingleComic(
+              entry,
+              createTime: (await entry.stat()).modified,
+              useRelativePath: true,
+            );
+            if (comic != null) {
+              pendingCopies.add(
+                PendingComicCopy._(
+                  _manager,
+                  directory: entry.path,
+                  title: comic.title,
+                  folder: null,
+                  intentDigest: digest,
+                  kind: ComicCopyRecoveryKind.unverified,
+                ),
+              );
+            }
+          } catch (error, stack) {
+            issues.add(
+              ComicImportIssue(
+                ComicImportIssueKind.copyRecoveryRequired,
+                error,
+                stack,
+              ),
+            );
+          }
         }
       }
       if (!isCancelled() && imported[null]!.isEmpty && pendingCopies.isEmpty) {
@@ -409,9 +484,8 @@ class ComicImportOperation {
   /// An explicit new decision about the current favorites store. Never replay
   /// the old folder merely because a same-path database or name still exists.
   Future<ComicImportResult> recoverCopy(
-    String directory, {
+    PendingComicCopy selection, {
     required String? folder,
-    required String intentDigest,
     ComicCopyRecoveryFolders? favorites,
   }) async {
     _checkActive();
@@ -419,6 +493,13 @@ class ComicImportOperation {
       throw StateError('Copy recovery requires exclusive storage');
     }
     try {
+      if (!identical(selection._owner, _manager) ||
+          selection._library != _manager.path) {
+        throw StateError('Local library changed after the recovery selection');
+      }
+      final directory = selection.directory;
+      final intentDigest = selection.intentDigest;
+      final kind = selection.kind;
       if (folder != null &&
           (favorites == null ||
               !identical(favorites._owner, _favoritesManager()) ||
@@ -438,9 +519,45 @@ class ComicImportOperation {
       )) {
         return ComicImportResult(succeeded: true);
       }
+      if (kind == ComicCopyRecoveryKind.unverified) {
+        final entry = Directory(directory);
+        final comic = await _checkSingleComic(
+          entry,
+          createTime: (await entry.stat()).modified,
+          useRelativePath: true,
+        );
+        final verified = await compute(_unverifiedCopyDigest, (
+          directory: directory,
+          library: _manager.path,
+        ));
+        if (verified != intentDigest || comic == null) {
+          throw StateError(
+            'Available files changed after the recovery selection',
+          );
+        }
+        if (_manager.findByName(comic.title) != null) {
+          throw StateError(
+            'Copy recovery title is already registered: ${comic.title}',
+          );
+        }
+        return _registerComics(
+          {
+            folder: [comic],
+          },
+          false,
+          [],
+        );
+      }
       final record = ComicCopyRecord.read(Directory(directory));
       if (record.intentDigest != intentDigest) {
         throw StateError('Copy intent changed after the recovery selection');
+      }
+      if (kind == ComicCopyRecoveryKind.resumable && !record.hasCompletion) {
+        await compute(_resumeCopyRecord, (
+          directory: directory,
+          library: _manager.path,
+          digest: intentDigest,
+        ));
       }
       final verified = await compute(_verifyCopyRecord, (
         directory: directory,

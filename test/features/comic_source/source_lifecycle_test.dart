@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
@@ -315,7 +316,7 @@ void main() {
           );
           final invalid = await source.loadComicPages!('id', 'ep');
           expect(invalid.errorMessage, 'Invalid data');
-          expect(invalid.failure!.cause, 'Invalid data');
+          expect(invalid.failure!.kind, FailureKind.failed);
           expect(invalid.failure!.stackTrace, isNotNull);
           JsEngine().runCode(
             'void (ComicSource.sources.transaction_a.comic.loadInfo = () => { throw new Error("source failure"); })',

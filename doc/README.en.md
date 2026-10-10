@@ -10,7 +10,6 @@ This is the English companion index for `doc/`. Documents are grouped by type an
 |---|---|---|
 | `api/` | Developer APIs, extension interfaces, script contracts | Chinese and English |
 | `examples/` | Companion code templates | Shared by both languages; contracts documented in the guides |
-| `architecture/` | Repository structure, module boundaries, architecture rules | Chinese and English; Chinese is the default maintenance entry |
 | `development/` | Local development, builds, testing, and developer troubleshooting | Chinese and English; Chinese is the default maintenance entry |
 | `distribution/` | Release, distribution, package manager, and workflow notes | Chinese and English; Chinese is the default maintenance entry |
 | `user/` | User guides, import formats, command-line usage | Chinese and English |
@@ -22,13 +21,6 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 
 - [漫画源开发说明](api/comic_source.zh.md) / [Comic Source Guide](api/comic_source.en.md)
 - [JavaScript API](api/js.zh.md) / [JavaScript API](api/js.en.md)
-
-## Architecture
-
-- [项目结构约定](architecture/project_structure.zh.md) / [Project Structure](architecture/project_structure.en.md)
-- [架构与可维护性优化方案（待实施）](architecture/optimization_plan.zh.md) / [Architecture Optimization Plan (Proposed)](architecture/optimization_plan.en.md)
-
-- [架构优化执行记录](architecture/optimization_progress.zh.md) / [Optimization Progress](architecture/optimization_progress.en.md)
 
 ## Development and Builds
 

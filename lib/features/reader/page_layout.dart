@@ -34,6 +34,9 @@ class ReaderPageLayout {
   }
 
   (int start, int end) imageRange(int page, int imageCount) {
+    // A cover-only empty chapter retains its legacy placeholder page count,
+    // but has no source image for rendering or prefetch to index.
+    if (imageCount == 0) return (0, 0);
     if (singleImageOnFirstPage && page == 1) return (0, 1);
     final start = firstImageOnPage(page) - 1;
     return (start, math.min(start + imagesPerPage, imageCount));

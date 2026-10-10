@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'local_comic_model.dart';
 import 'local_repository.dart';
 import 'local_chapter_storage.dart';
@@ -542,9 +543,10 @@ class LocalManager with ChangeNotifier implements DownloadTaskStorage {
 
   Future<List<String>> getImages(String id, ComicType type, Object ep) async {
     if (ep is! String && ep is! int) {
-      throw "Invalid ep";
+      throw OperationFailure.message("Invalid ep");
     }
-    var comic = find(id, type) ?? (throw "Comic Not Found");
+    var comic =
+        find(id, type) ?? (throw OperationFailure.message("Comic Not Found"));
     var directory = Directory(comic.baseDir);
     if (comic.hasChapters) {
       var cid = ep is int

@@ -1,3 +1,4 @@
+import 'import_export/legacy_copy_fixture.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -379,7 +380,7 @@ void main() {
   Future<void> receipt() async {
     final original = repository.find('1', ComicType.local)!;
     final directory = Directory(original.directory);
-    final record = ComicCopyRecord.prepare(
+    final record = prepareLegacyComicCopy(
       directory,
       source: 'import source',
       metadata: encodeComicCopyMetadata(original, null),

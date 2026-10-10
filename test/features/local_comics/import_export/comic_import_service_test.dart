@@ -1,3 +1,4 @@
+import 'legacy_copy_fixture.dart';
 import 'package:venera_next/foundation/persistence_failure.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -117,11 +118,11 @@ void main() {
   );
 
   test(
-    'incomplete copy is preserved while unrelated legacy comics recover',
+    'incomplete legacy copy is preserved and unmarked comics need confirmation',
     () async {
       final source = comicIn('${root.path}/source', 'Unfinished');
       final partial = Directory('${manager.path}/partial')..createSync();
-      ComicCopyRecord.prepare(
+      prepareLegacyComicCopy(
         partial,
         source: source.directory,
         metadata: encodeComicCopyMetadata(source, null),
@@ -131,18 +132,103 @@ void main() {
       final result = await service.runRecovery(
         (operation) => operation.localDownloads(isCancelled: () => false),
       );
-      expect(result.importedCount, 1);
+      expect(result.importedCount, 0);
       expect(
         result.issues.single.kind,
         ComicImportIssueKind.copyRecoveryRequired,
       );
       expect(manager.findByName('Unfinished'), isNull);
+      expect(manager.findByName('Legacy'), isNull);
+      final pending = result.pendingCopies.single;
+      expect(pending.kind, ComicCopyRecoveryKind.unverified);
+      final recovered = await service.runRecovery(
+        (operation) => operation.recoverCopy(pending, folder: null),
+      );
+      expect(recovered.importedCount, 1);
       expect(manager.findByName('Legacy'), isNotNull);
       expect(
         File('${partial.path}/1.jpg').readAsStringSync(),
         'first of three pages',
       );
       expect(ComicCopyRecord.exists(partial), isTrue);
+    },
+  );
+
+  test(
+    'recovery resumes a version 2 copy before registering its original metadata',
+    () async {
+      final source = comicIn('${root.path}/source', 'Interrupted title');
+      File('${source.directory}/2.jpg').writeAsStringSync('second');
+      final partial = Directory('${manager.path}/partial')..createSync();
+      await ComicCopyRecord.prepare(
+        partial,
+        source: Directory(source.directory),
+        metadata: encodeComicCopyMetadata(source, null),
+      );
+      File('${partial.path}/1.jpg').writeAsStringSync('page');
+      final scanned = await service.runRecovery(
+        (operation) => operation.localDownloads(isCancelled: () => false),
+      );
+      expect(scanned.importedCount, 0);
+      expect(scanned.issues, isEmpty);
+      final pending = scanned.pendingCopies.single;
+      expect(pending.kind, ComicCopyRecoveryKind.resumable);
+      final recovered = await service.runRecovery(
+        (operation) => operation.recoverCopy(pending, folder: null),
+      );
+      expect(recovered.importedCount, 1);
+      expect(manager.findByName('Interrupted title')!.subtitle, 'Author');
+      expect(File('${partial.path}/2.jpg').readAsStringSync(), 'second');
+      expect(ComicCopyRecord.exists(partial), isFalse);
+      expect(
+        (await service.runRecovery(
+          (operation) => operation.recoverCopy(pending, folder: null),
+        )).importedCount,
+        0,
+      );
+      expect(manager.count, 1);
+    },
+  );
+
+  test(
+    'legacy confirmation cannot accept files changed after the scan',
+    () async {
+      final comic = comicIn('${manager.path}/Legacy', 'unused');
+      final scanned = await service.runRecovery(
+        (operation) => operation.localDownloads(isCancelled: () => false),
+      );
+      final pending = scanned.pendingCopies.single;
+      File('${comic.directory}/2.jpg').writeAsStringSync('new page');
+      final result = await service.runRecovery(
+        (operation) => operation.recoverCopy(pending, folder: null),
+      );
+      expect(result.succeeded, isFalse);
+      expect(manager.count, 0);
+      expect(File('${comic.directory}/2.jpg').readAsStringSync(), 'new page');
+    },
+  );
+
+  test(
+    'a library replacement invalidates an earlier recovery decision',
+    () async {
+      comicIn('${manager.path}/Legacy', 'unused');
+      final scanned = await service.runRecovery(
+        (operation) => operation.localDownloads(isCancelled: () => false),
+      );
+      final pending = scanned.pendingCopies.single;
+      manager.dispose();
+      manager = LocalManager(initializeSources: () async {});
+      await manager.init();
+      final result = await service.runRecovery(
+        (operation) => operation.recoverCopy(pending, folder: null),
+      );
+      expect(result.succeeded, isFalse);
+      expect(
+        result.issues.single.error.toString(),
+        contains('Local library changed'),
+      );
+      expect(manager.count, 0);
+      expect(File('${pending.directory}/1.jpg').readAsStringSync(), 'page');
     },
   );
 
@@ -187,9 +273,8 @@ void main() {
           );
           final result = await service.runRecovery(
             (operation) => operation.recoverCopy(
-              record.directory.path,
+              scanned.pendingCopies.single,
               folder: localOnly ? null : 'Current choice',
-              intentDigest: scanned.pendingCopies.single.intentDigest,
               favorites: choices,
             ),
           );
@@ -211,6 +296,9 @@ void main() {
       await withFavorites((favorites) async {
         await favorites.createFolder('Same name');
         final record = await pendingCopy(folder: 'Same name');
+        final scanned = await service.runRecovery(
+          (operation) => operation.localDownloads(isCancelled: () => false),
+        );
         final choices = await service.runRecovery(
           (operation) async => operation.copyRecoveryFolders(),
         );
@@ -221,9 +309,8 @@ void main() {
         await favorites.createFolder('Same name');
         final result = await service.runRecovery(
           (operation) => operation.recoverCopy(
-            record.directory.path,
+            scanned.pendingCopies.single,
             folder: 'Same name',
-            intentDigest: record.intentDigest,
             favorites: choices,
           ),
         );
@@ -244,6 +331,9 @@ void main() {
     'a changed copy intent cannot consume an earlier recovery decision',
     () async {
       final record = await pendingCopy(folder: 'Saved');
+      final scanned = await service.runRecovery(
+        (operation) => operation.localDownloads(isCancelled: () => false),
+      );
       final file = File(
         '${record.directory.path}/${ComicCopyRecord.intentName}',
       );
@@ -251,11 +341,8 @@ void main() {
       value['source'] = 'replacement intent';
       file.writeAsStringSync(jsonEncode(value));
       final result = await service.runRecovery(
-        (operation) => operation.recoverCopy(
-          record.directory.path,
-          folder: null,
-          intentDigest: record.intentDigest,
-        ),
+        (operation) =>
+            operation.recoverCopy(scanned.pendingCopies.single, folder: null),
       );
       expect(result.succeeded, isFalse);
       expect(result.issues.single.error.toString(), contains('intent changed'));
@@ -388,7 +475,13 @@ void main() {
         final result = await service.runRecovery(
           (operation) => operation.localDownloads(isCancelled: () => false),
         );
-        expect(result.importedCount, 1);
+        expect(result.importedCount, 0);
+        expect(manager.count, 1);
+        final restored = await service.runRecovery(
+          (operation) =>
+              operation.recoverCopy(result.pendingCopies.single, folder: null),
+        );
+        expect(restored.importedCount, 1);
         expect(manager.count, 2);
         expect(manager.find('1', ComicType.local)!.title, 'Different title');
         expect(
@@ -575,8 +668,9 @@ void main() {
       final recovered = await service.runRecovery(
         (operation) => operation.localDownloads(isCancelled: () => false),
       );
-      expect(recovered.importedCount, 1);
-      expect(manager.findByName('Book')!.directory, 'Book');
+      expect(recovered.importedCount, 0);
+      expect(recovered.pendingCopies.single.title, 'Book');
+      expect(manager.findByName('Book'), isNull);
     },
   );
 

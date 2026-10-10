@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
@@ -148,6 +149,19 @@ void main() {
     scope.dispose();
   });
 
+  test('a missing source exposes a structured unsupported result', () async {
+    ComicSourceManager().remove(_key);
+    await expectLater(
+      load(),
+      throwsA(
+        isA<OperationFailure>()
+            .having((error) => error.kind, 'kind', FailureKind.unsupported)
+            .having((error) => error.stackTrace, 'stack', isNotNull),
+      ),
+    );
+    expect(onlineCalls, 0);
+  });
+
   test('cancellation waits for source and suppresses late recovery', () async {
     await add(writeImage: false);
     final response = Completer<Res<List<String>>>();
@@ -293,7 +307,13 @@ void main() {
       var notified = false;
       await expectLater(
         load(onOnlineFallback: () => notified = true),
-        throwsA('offline'),
+        throwsA(
+          isA<OperationFailure>().having(
+            (error) => error.message,
+            'message',
+            'offline',
+          ),
+        ),
       );
       expect(notified, false);
       expect(manager.find('book', _type)!.downloadedChapters, ['first']);

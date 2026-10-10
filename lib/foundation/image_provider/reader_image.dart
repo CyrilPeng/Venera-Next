@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async' show Future;
@@ -73,7 +74,7 @@ class ReaderImageProvider extends BaseImageProvider<ReaderImageProvider> {
       );
     }
     if (imageBytes == null) {
-      throw "Error: Empty response body.";
+      throw OperationFailure.message("Error: Empty response body.");
     }
     checkStop();
     if (GlobalPreferenceStore(

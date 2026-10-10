@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -23,7 +24,7 @@ class SourceImagesParser {
         """,
           consume: (raw) {
             final result = normalizeComicSourceStringListResult(raw, 'images');
-            if (result == null) throw 'Invalid data';
+            if (result == null) throw OperationFailure.message('Invalid data');
             return List<String>.of(result.items);
           },
         );
@@ -98,7 +99,7 @@ class SourceImagesParser {
       if (config == null) {
         final message = 'function $hook return invalid data';
         Log.error('Network', message);
-        throw message;
+        throw OperationFailure.message(message);
       }
       return config;
     } catch (error, stack) {
@@ -132,7 +133,7 @@ class SourceImagesParser {
               raw,
               'thumbnails',
             );
-            if (result == null) throw 'Invalid data';
+            if (result == null) throw OperationFailure.message('Invalid data');
             final cursor = result.data['next'];
             if (cursor != null && cursor is! String) {
               throw const FormatException('Invalid thumbnail cursor');

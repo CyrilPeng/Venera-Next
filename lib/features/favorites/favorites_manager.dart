@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'network_favorite_import.dart';
@@ -1008,7 +1009,7 @@ class LocalFavoritesManager with ChangeNotifier {
         }
         name = i.toString();
       } else {
-        throw "name is empty!";
+        throw OperationFailure.message("name is empty!");
       }
     }
     if (existsFolder(name)) {
@@ -1537,10 +1538,10 @@ class LocalFavoritesManager with ChangeNotifier {
 
   Future<void> _rename(String before, String after) async {
     if (existsFolder(after)) {
-      throw "Name already exists!";
+      throw OperationFailure.message("Name already exists!");
     }
     if (after.contains('"')) {
-      throw "Invalid name";
+      throw OperationFailure.message("Invalid name");
     }
     _repository.renameFolder(before, after);
     counts[after] = counts[before] ?? 0;

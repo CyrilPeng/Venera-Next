@@ -44,6 +44,8 @@ import Foundation // 添加此行
         result(nil)
       } else if call.method == "getDirectoryPath" {
         self.getDirectoryPath(result: result)
+      } else if call.method == "restoreDirectoryAccess" {
+        result(self.directoryAccess.restorePersisted())
       } else if call.method == "releaseDirectoryAccess" || call.method == "retainDirectoryAccessForSession" {
         guard let token = call.arguments as? String else {
           result(FlutterError(code: "invalid_arguments", message: "Missing directory token", details: nil))

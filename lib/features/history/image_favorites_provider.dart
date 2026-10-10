@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -231,7 +232,9 @@ class ImageFavoritesProvider extends BaseImageProvider<ImageFavoritesProvider> {
       },
     );
     stop();
-    if (bytes == null) throw "Error: Empty response body.";
+    if (bytes == null) {
+      throw OperationFailure.message("Error: Empty response body.");
+    }
     return bytes;
   }
 
@@ -289,7 +292,7 @@ class ImageFavoritesProvider extends BaseImageProvider<ImageFavoritesProvider> {
         if (stack != null) Error.throwWithStackTrace(cause, stack);
         throw cause;
       }
-      throw res.errorMessage!;
+      res.throwIfError();
     }
     return res.data;
   }

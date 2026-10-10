@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:async' show Completer, Future, FutureOr, StreamController;
 import 'dart:collection';
 import 'package:flutter/foundation.dart';
@@ -101,7 +102,7 @@ class CachedImageProvider extends BaseImageProvider<CachedImageProvider> {
         ),
       );
       if (bytes != null) return bytes;
-      throw "Error: Empty response body.";
+      throw OperationFailure.message("Error: Empty response body.");
     } catch (e) {
       if (BaseImageProvider.isCancellation(e) ||
           BaseImageProvider.isCleanupFailure(e) ||

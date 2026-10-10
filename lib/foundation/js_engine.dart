@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
@@ -486,10 +487,16 @@ class JsEngine with _JSEngineApi, Init {
   }
 
   JsSourceDataBridge get _sourceBridge =>
-      _sourceDataBridge ?? (throw "JS source data bridge is not configured.");
+      _sourceDataBridge ??
+      (throw OperationFailure.message(
+        "JS source data bridge is not configured.",
+      ));
 
   JsUiMessageHandler get _uiMessageBridge =>
-      _uiMessageHandler ?? (throw "JS UI message handler is not configured.");
+      _uiMessageHandler ??
+      (throw OperationFailure.message(
+        "JS UI message handler is not configured.",
+      ));
 
   void resetDio() {
     _checkActive();
@@ -675,7 +682,9 @@ class JsEngine with _JSEngineApi, Init {
             String key = message["key"];
             String dataKey = message["data_key"];
             if (dataKey == 'setting') {
-              throw "setting is not allowed to be saved";
+              throw OperationFailure.message(
+                "setting is not allowed to be saved",
+              );
             }
             var data = message["data"];
             _sourceBridge.saveData(
@@ -742,13 +751,13 @@ class JsEngine with _JSEngineApi, Init {
             final args = message["args"];
             if (func is JSInvokable) {
               func.free();
-              throw "Function must be a string";
+              throw OperationFailure.message("Function must be a string");
             }
             if (func is! String) {
-              throw "Function must be a string";
+              throw OperationFailure.message("Function must be a string");
             }
             if (args != null && args is! List) {
-              throw "Args must be a list";
+              throw OperationFailure.message("Args must be a list");
             }
             return _compute(func, args ?? []);
         }
@@ -1898,7 +1907,10 @@ mixin class _JSEngineApi {
             "sha1" => sha1,
             "sha256" => sha256,
             "sha512" => sha512,
-            _ => throw "Unsupported hash: $hash",
+            _ => throw OperationFailure.message(
+              "Unsupported hash: $hash",
+              kind: FailureKind.unsupported,
+            ),
           }, key);
           if (data['isString'] == true) {
             return hmac.convert(value).toString();

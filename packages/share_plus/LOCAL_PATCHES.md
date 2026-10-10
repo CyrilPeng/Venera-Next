@@ -8,18 +8,17 @@ Archive SHA-256:
 before local edits. The BSD-3-Clause `LICENSE` is retained unchanged.
 VeneraNext maintainers own these local patches; the package version remains 12.0.2.
 
-The original macOS `SharePlusMacosPlugin.swift` trailing whitespace and the
-package `pubspec.yaml` final blank line are retained verbatim. Both staged files
-match their hashes in `UPSTREAM_MANIFEST.json`; local changes pass whitespace
-checks separately. These are upstream source bytes, not local behavior changes.
+The package `pubspec.yaml` final blank line and unchanged macOS lines retain
+their upstream whitespace. `UPSTREAM_MANIFEST.json` describes the original
+source before local patches; edited native files intentionally differ.
 
 The package retains its Dart libraries, native platform sources/configuration,
 manifest, license and upstream README/CHANGELOG. Local ownership primitives,
 native regression tests and these provenance records are added. Native changes
-are limited to Android and Windows. Five of the six Dart library files match
+cover Android, Windows, iOS and macOS. Five of the six Dart library files match
 upstream; `lib/share_plus.dart` changes only two API comments to document Android's
-`share_busy` result for a concurrent native request. Apple native sources are
-unchanged. The other 156 application package lock records and SDK records remain
+`share_busy` result for a concurrent native request. Apple changes are described
+below. The other 156 application package lock records and SDK records remain
 unchanged; `flutter pub get --offline --enforce-lockfile` succeeds with the existing
 cache and the lockfile's `https://pub.dev` host.
 
@@ -87,6 +86,20 @@ engine detach releases waiting with unavailable. An accepted launch without an
 Activity acknowledges only after startActivity succeeds. Native error details
 retain the stack and suppressed cleanup diagnostics.
 
+## Apple result reporting
+
+iOS preserves `activityError` as a `share_failed` FlutterError with its original
+domain and code. A cancelled activity still returns the existing cancellation
+result. macOS validates arguments and the presentation view, owns one callback
+per request, and waits for `didShareItems` or `didFailToShareItems`; selecting a
+service alone no longer reports success. Cancelling the picker and completing
+the service each release the retained delegate through one idempotent result.
+
+These changes have been reviewed as source. Apple compilation, system service
+callbacks and external receiver behavior await the corresponding Actions runner
+and device validation. A service completion is not a universal guarantee that
+an arbitrary recipient will never read a shared file again.
+
 ## Application consumer contract and remaining boundaries
 
 Application-side `withShareFileSource` owns a separate directory under
@@ -101,8 +114,8 @@ startup sweep has been added.
 File and text sharing use one application `PlatformDialogQueue`; saving uses a
 separate instance. Visible origins support iPad popovers. Linux file sharing is
 already unsupported and now fails at the app boundary before staging. Unknown
-Windows dispatch failures conservatively retain input. Apple activity-error
-reporting, external-consumer cleanup and five-platform device behavior remain
+Windows dispatch failures conservatively retain input. Actual Apple activity-error
+delivery, external-consumer cleanup and five-platform device behavior remain
 unverified; these patches do not add a universal receiver-completion protocol.
 
 ## Validation

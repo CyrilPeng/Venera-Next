@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'source_failure.dart';
 import 'dart:convert';
 
@@ -101,7 +102,7 @@ class SourceImportPreview {
       cancelToken: cancelToken,
     );
     if (response.statusCode != 200 || response.data == null) {
-      throw 'Failed to load source'.tl;
+      throw OperationFailure.message('Failed to load source'.tl);
     }
     return parse(response.data!, url: response.realUri.toString());
   }

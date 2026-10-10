@@ -85,7 +85,6 @@ class ReaderChapterCommentsController {
 
   bool get isCurrent => !_disposed && request.isCurrent();
   bool get loading => _loading;
-  bool get loadingMore => _loadingMore;
   bool get sending => _sending;
   bool get hasMore => !_loading && _page < (_maxPage ?? _page + 1);
   List<Comment> get comments => List.unmodifiable(_comments);

@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'local_chapter_storage.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
@@ -335,11 +336,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
       notifyListeners();
       var res = await _runDownloadStepWithRetry(generation, () async {
         var r = await source.loadComicInfo!(comicId);
-        if (r.error) {
-          throw r.errorMessage!;
-        } else {
-          return r.data;
-        }
+        return r.data;
       });
       if (!_isCurrentRun(generation)) {
         return;
@@ -397,7 +394,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
         // Never write those bytes into a canceled or replacement run's path.
         if (!_isCurrentRun(generation)) return null;
         if (data == null) {
-          throw "Failed to download cover";
+          throw OperationFailure.message("Failed to download cover");
         }
         var fileType = detectFileType(data);
         var file = File(FilePath.join(path!, "cover${fileType.ext}"));
@@ -425,11 +422,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
         notifyListeners();
         var res = await _runDownloadStepWithRetry(generation, () async {
           var r = await source.loadComicPages!(comicId, null);
-          if (r.error) {
-            throw r.errorMessage!;
-          } else {
-            return r.data;
-          }
+          return r.data;
         });
         if (!_isCurrentRun(generation)) {
           return;
@@ -459,11 +452,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
           notifyListeners();
           var res = await _runDownloadStepWithRetry(generation, () async {
             var r = await source.loadComicPages!(comicId, i);
-            if (r.error) {
-              throw r.errorMessage!;
-            } else {
-              return r.data;
-            }
+            return r.data;
           });
           if (!_isCurrentRun(generation)) {
             return;
@@ -638,13 +627,18 @@ Future<Res<T>> _runWithRetry<T>(
   final wait = delay ?? Future<void>.delayed;
   for (var i = 0; i < retry; i++) {
     if (shouldContinue?.call() == false) {
-      return Res.error("Canceled");
+      return Res.failure(
+        OperationFailure.message("Canceled", kind: FailureKind.cancelled),
+      );
     }
     try {
       return Res(await task());
-    } catch (e) {
-      if (i == retry - 1 || shouldContinue?.call() == false) {
-        return Res.error(e.toString());
+    } catch (e, stack) {
+      final failure = Res<T>.fromException(e, stack);
+      if (i == retry - 1 ||
+          shouldContinue?.call() == false ||
+          failure.failure!.kind != FailureKind.failed) {
+        return failure;
       }
       await wait(Duration(seconds: i + 1));
     }
@@ -755,9 +749,12 @@ class _ImageDownloadWrapper {
       }
       if (!isComplete && !isCancelled) {
         if (unsupportedMime != null) {
-          throw "Unsupported image data: $unsupportedMime";
+          throw OperationFailure.message(
+            "Unsupported image data: $unsupportedMime",
+            kind: FailureKind.unsupported,
+          );
         }
-        throw "Failed to download image";
+        throw OperationFailure.message("Failed to download image");
       }
     } catch (e, s) {
       if (isCancelled) {

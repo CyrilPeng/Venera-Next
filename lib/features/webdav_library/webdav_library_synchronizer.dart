@@ -234,7 +234,7 @@ class WebDavLibrarySynchronizer {
   Future<Res<bool>> ensureIndex(WebDavLibrarySession session) async {
     if (_disposed) throw StateError('WebDAV synchronizer is disposed');
     if (_exitPreparation != null) {
-      return const Res.error('WebDAV request cancelled');
+      return Res.failure(const WebDavLibraryCancelled());
     }
     session.check();
     final config = session.config;
@@ -248,7 +248,7 @@ class WebDavLibrarySynchronizer {
   Future<Res<bool>> synchronize({bool force = false}) {
     if (_disposed) throw StateError('WebDAV synchronizer is disposed');
     if (_exitPreparation != null) {
-      return Future.value(const Res.error('WebDAV request cancelled'));
+      return Future.value(Res.failure(const WebDavLibraryCancelled()));
     }
     final session = _currentSession();
     final config = session.config;
@@ -447,12 +447,14 @@ class WebDavLibrarySynchronizer {
       return const Res(true);
     } catch (e, s) {
       if (!session.isActive) {
-        const result = Res<bool>.error('WebDAV request cancelled');
+        final result = Res<bool>.failure(
+          WebDavLibraryCancelled(cause: e, stackTrace: s),
+        );
         if (!indexReady.isCompleted) indexReady.complete(result);
         return result;
       }
       Log.error('WebDAV Library Sync', e, s);
-      final result = Res<bool>.error(e.toString());
+      final result = Res<bool>.fromException(e, s);
       if (!indexReady.isCompleted) {
         indexReady.complete(result);
       }

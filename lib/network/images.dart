@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -99,8 +100,8 @@ abstract class ImageDownloader {
     if (result is List<int>) {
       return result;
     }
-    const error = 'Error: Invalid onResponse result.';
-    owner.discard(result, cause: error, stackTrace: StackTrace.current);
+    final error = OperationFailure.message('Error: Invalid onResponse result.');
+    owner.discard(result, cause: error, stackTrace: error.stackTrace);
     throw error;
   }
 
@@ -263,7 +264,9 @@ abstract class ImageDownloader {
           cancelToken: scope.cancelToken,
         );
         scope.check();
-        var stream = req.data?.stream ?? (throw "Error: Empty response body.");
+        var stream =
+            req.data?.stream ??
+            (throw OperationFailure.message("Error: Empty response body."));
         int? expectedBytes = req.data!.contentLength;
         if (expectedBytes == -1) {
           expectedBytes = null;
@@ -409,7 +412,8 @@ abstract class ImageDownloader {
             );
             scope?.check();
             var stream =
-                req.data?.stream ?? (throw "Error: Empty response body.");
+                req.data?.stream ??
+                (throw OperationFailure.message("Error: Empty response body."));
             int? expectedBytes = req.data!.contentLength;
             if (expectedBytes == -1) {
               expectedBytes = null;
@@ -465,7 +469,9 @@ abstract class ImageDownloader {
           // that failure observable even if a fallback download would succeed.
           if (error is ImageLoadingConfigFailure ||
               error is ImageLoadingConfigCleanupFailure ||
-              error is ImageHttpCleanupFailure) {
+              error is ImageHttpCleanupFailure ||
+              error is UnsupportedError ||
+              (error is FailureDetails && error.kind != FailureKind.failed)) {
             rethrow;
           }
           // Keep the original rejected graph until the outer owner can release

@@ -75,8 +75,6 @@ For release-related changes, also run:
 python .github/scripts/release_version.py --check
 ```
 
-See [Project Structure](../architecture/project_structure.en.md) for module boundaries and entry-point rules.
-
 ## Android Build
 
 Place local release signing files at:

@@ -953,7 +953,6 @@
     "foundation/directory_selection.dart",
     "foundation/event_subscription.dart",
     "foundation/extensions.dart",
-    "foundation/extensions/future_extensions.dart",
     "foundation/extensions/list_extensions.dart",
     "foundation/extensions/nullable_collection_converters.dart",
     "foundation/extensions/string_extensions.dart",

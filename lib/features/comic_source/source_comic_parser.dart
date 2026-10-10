@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:convert';
 
 import 'package:venera_next/foundation/log.dart';
@@ -27,7 +28,9 @@ class SourceComicParser {
               context.key,
               id,
             );
-            if (normalized == null) throw 'Invalid data';
+            if (normalized == null) {
+              throw OperationFailure.message('Invalid data');
+            }
             // The model copies its collections and retains only Dart values.
             // Complete conversion before the borrowed JS result is released.
             return ComicDetails.fromJson(normalized);
@@ -87,7 +90,7 @@ class SourceComicParser {
             """,
         (raw) {
           final archives = normalizeComicSourceArchiveList(raw);
-          if (archives == null) throw "Invalid data";
+          if (archives == null) throw OperationFailure.message("Invalid data");
           return archives;
         },
       ),
@@ -98,7 +101,7 @@ class SourceComicParser {
             """,
         (raw) {
           final url = normalizeComicSourceArchiveDownloadUrl(raw);
-          if (url == null) throw "Invalid data";
+          if (url == null) throw OperationFailure.message("Invalid data");
           return url;
         },
       ),

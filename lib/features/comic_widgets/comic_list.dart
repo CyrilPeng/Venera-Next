@@ -589,7 +589,7 @@ class ComicListState extends State<ComicList> {
   ) async {
     var res = await loadNext(_nextUrl);
     if (!_isCurrent(generation)) return;
-    if (res.error) throw res.errorMessage ?? 'Unknown error'.tl;
+    res.throwIfError();
     _data[_data.length + 1] = List<Comic>.from(res.data);
     if (res.subData == null) {
       _maxPage = _data.length;

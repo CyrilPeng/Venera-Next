@@ -26,6 +26,13 @@ class SourceScriptFiles {
 
   Future<void> openEditor(String path) async {
     final process = await Process.run('code', [path], runInShell: true);
-    if (process.exitCode != 0) throw process.stderr.toString();
+    if (process.exitCode != 0) {
+      throw ProcessException(
+        'code',
+        [path],
+        process.stderr.toString(),
+        process.exitCode,
+      );
+    }
   }
 }
