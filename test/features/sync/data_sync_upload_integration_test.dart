@@ -357,6 +357,7 @@ class _Participant implements DataSyncParticipant {
   Future<DataSyncCommitState> importData(
     File file, {
     required RequestScope scope,
+    bool force = false,
     void Function(void Function())? publishImported,
     String? syncOperationId,
   }) => throw StateError('Recovery must not begin a download/import');

@@ -105,7 +105,11 @@ function Start-TestProcess([string]$Path, [string]$Name, [string[]]$Arguments = 
     return $process
 }
 
-function Assert-HeadlessOutput([string]$LogPath, [string]$ExpectedMessage) {
+function Assert-HeadlessOutput(
+    [string]$LogPath,
+    [string]$ExpectedMessage,
+    [string]$ExpectedStatus = 'error'
+) {
     $messages = @(Get-Content -LiteralPath $LogPath | ForEach-Object {
         if ($_.StartsWith('[CLI PRINT] ')) {
             $_.Substring('[CLI PRINT] '.Length) | ConvertFrom-Json -ErrorAction Stop
@@ -113,16 +117,28 @@ function Assert-HeadlessOutput([string]$LogPath, [string]$ExpectedMessage) {
     })
     if ($messages.Count -eq 0) { throw 'Headless command produced no CLI JSON output.' }
     $last = $messages[-1]
-    if ($last.status -ne 'error' -or $last.message -cne $ExpectedMessage) {
+    if ($last.status -cne $ExpectedStatus -or $last.message -cne $ExpectedMessage) {
         throw "Unexpected headless result; expected: $ExpectedMessage"
     }
+    return $last
 }
 
-function Test-HeadlessCommand([string]$Name, [string[]]$Arguments, [string]$ExpectedMessage) {
+function Test-HeadlessCommand(
+    [string]$Name,
+    [string[]]$Arguments,
+    [string]$ExpectedMessage,
+    [int]$ExpectedExitCode = 1,
+    [string]$ExpectedStatus = 'error'
+) {
     $process = Start-TestProcess $appPath $Name $Arguments
-    Wait-ForExit $process 60 1
-    Assert-HeadlessOutput (Join-Path $testRoot "$Name.stdout.log") $ExpectedMessage
-    Write-Output "PASS: $Name returned CLI JSON and exit code 1."
+    Wait-ForExit $process 60 $ExpectedExitCode
+    $result = Assert-HeadlessOutput (Join-Path $testRoot "$Name.stdout.log") `
+        $ExpectedMessage $ExpectedStatus
+    if ($Name -eq 'cli-subscriptions' -and
+        ($result.data -isnot [Array] -or $result.data.Count -ne 0)) {
+        throw 'A fresh profile must have an empty subscribed comics list.'
+    }
+    Write-Output "PASS: $Name returned $ExpectedStatus CLI JSON and exit code $ExpectedExitCode."
 }
 
 function Has-StartupEvent([int]$ProcessId, [string]$Event) {
@@ -180,8 +196,9 @@ try {
         'WebDAV sync is not configured.'
     Test-HeadlessCommand 'cli-webdav-down' @('--headless', 'webdav', 'down', '--ignore-disheadless-log') `
         'WebDAV sync is not configured.'
+    # First initialization creates the default tracking folder with no comics.
     Test-HeadlessCommand 'cli-subscriptions' @('--headless', 'updatesubscribe', '--ignore-disheadless-log') `
-        'Follow updates folder is not configured.'
+        'Updated comics list.' 0 'success'
 
     $primary = Start-TestProcess $appPath 'primary'
     Wait-ForCondition {

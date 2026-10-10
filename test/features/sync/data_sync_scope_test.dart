@@ -99,7 +99,7 @@ class _Controller extends DataSyncController {
   }
 
   @override
-  Future<Res<bool>> downloadData() async {
+  Future<Res<bool>> downloadData({bool force = false}) async {
     downloads++;
     return const Res(true);
   }

@@ -19,6 +19,8 @@
     "Sync mode": "同步模式",
     "Initial sync": "首次同步",
     "Manual sync": "手动同步",
+    "Overwrite local data?": "覆盖本地数据？",
+    "Local changes will be overwritten by the downloaded backup. Continue?": "下载备份会覆盖本地修改，是否继续？",
     "Real-time sync": "实时同步",
     "Scheduled sync": "定时同步",
     "Sync interval": "同步间隔",
@@ -876,6 +878,7 @@
     "Failed to load source": "无法加载来源"
   },
   "zh_TW": {
+    "Overwrite local data?": "覆寫本機資料？",
     "Save is paused after an incomplete source change. Copy your edits before closing.": "上次來源修改未完整完成，已暫停儲存。關閉前請複製保留你的編輯內容。",
     "Wait for local file operations to finish before changing the local library.": "請等待本機檔案操作完成後，再修改漫畫庫位置。",
     "Local library recovery is required. Retry the library move before accessing comics.": "本機漫畫儲存需要復原，請前往應用程式設定重試復原後再存取漫畫。",

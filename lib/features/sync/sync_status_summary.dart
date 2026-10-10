@@ -104,7 +104,30 @@ class SyncStatusSummary extends StatelessWidget {
                   icon: const Icon(Icons.cloud_download_outlined),
                   tooltip: 'Download'.tl,
                   onPressed: () async {
-                    controller.downloadData();
+                    if (controller.hasPendingChanges) {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: Text('Overwrite local data?'.tl),
+                          content: Text(
+                            'Local changes will be overwritten by the downloaded backup. Continue?'
+                                .tl,
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: context.pop,
+                              child: Text('Cancel'.tl),
+                            ),
+                            FilledButton(
+                              onPressed: () => context.pop(true),
+                              child: Text('Download'.tl),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed != true || !context.mounted) return;
+                    }
+                    await controller.downloadData(force: true);
                   },
                 ),
               ],

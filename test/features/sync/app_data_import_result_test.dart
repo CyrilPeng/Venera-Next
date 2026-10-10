@@ -177,6 +177,15 @@ void main() {
     expect(appdata.searchHistory, ['remote']);
   });
 
+  test('forced sync import applies an unchanged embedded version', () async {
+    expect(
+      await importSyncAppData(archive(7), checkActive: () {}, force: true),
+      DataSyncCommitState.applied,
+    );
+    expect(appdata.settings['dataVersion'], 7);
+    expect(appdata.searchHistory, ['remote']);
+  });
+
   test(
     'sync rejects malformed local or remote versions before replacing data',
     () async {
@@ -1002,12 +1011,14 @@ class _ArchiveTransfer implements DataSyncTransfer {
   Future<bool> download(
     WebDavEndpoint connection, {
     required RequestScope scope,
+    bool force = false,
     void Function(void Function())? publishImported,
     String? syncOperationId,
   }) async =>
       await importSyncAppData(
         archive,
         checkActive: scope.check,
+        force: force,
         publishImported: publishImported,
         syncOperationId: syncOperationId,
       ) ==
@@ -1047,6 +1058,7 @@ class _RealParticipant implements DataSyncParticipant {
   Future<DataSyncCommitState> importData(
     File file, {
     required RequestScope scope,
+    bool force = false,
     void Function(void Function())? publishImported,
     String? syncOperationId,
   }) {
@@ -1054,6 +1066,7 @@ class _RealParticipant implements DataSyncParticipant {
     return importSyncAppData(
       file,
       checkActive: scope.check,
+      force: force,
       publishImported: publishImported,
       syncOperationId: syncOperationId,
     );

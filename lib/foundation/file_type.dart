@@ -51,8 +51,13 @@ final _resolver = MimeTypeResolver()
     0x66,
   ], 'image/avif');
 
-FileType detectFileType(List<int> data) {
+FileType detectFileType(List<int> data, {String? fallbackExtension}) {
   var mime = _resolver.lookup('no-file', headerBytes: data);
+  if ((mime == null || mime == 'application/octet-stream') &&
+      fallbackExtension != null) {
+    final fallback = FileType.fromExtension(fallbackExtension);
+    if (fallback.mime.startsWith('image/')) return fallback;
+  }
   var ext = mime == null ? '' : extensionFromMime(mime);
   if (ext == 'jpe') {
     ext = 'jpg';

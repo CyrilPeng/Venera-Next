@@ -13,7 +13,7 @@ PWSH = shutil.which("pwsh")
 
 @unittest.skipUnless(PWSH, "PowerShell is required for the Windows CLI oracle")
 class HeadlessOutputTests(unittest.TestCase):
-    def check_output(self, content):
+    def check_output(self, content, message='WebDAV sync is not configured.', status='error'):
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "stdout.log"
             log.write_text(content, encoding="utf-8")
@@ -31,13 +31,13 @@ $function = $ast.Find({ param($node)
 }, $true)
 if ($null -eq $function) { throw 'Output assertion missing' }
 . ([scriptblock]::Create($function.Extent.Text))
-Assert-HeadlessOutput $args[1] 'WebDAV sync is not configured.'
+Assert-HeadlessOutput $args[1] $args[2] $args[3]
 """
             runner = Path(directory) / "oracle.ps1"
             runner.write_text(command, encoding="utf-8")
             return subprocess.run(
-                [PWSH, "-NoProfile", "-File", str(runner), str(SCRIPT), str(log)],
-                capture_output=True, text=True, timeout=20,
+                [PWSH, "-NoProfile", "-File", str(runner), str(SCRIPT), str(log), message, status],
+                capture_output=True, text=True, encoding="utf-8", timeout=20,
             )
 
     def test_accepts_expected_final_json_with_engine_noise(self):
@@ -63,4 +63,16 @@ Assert-HeadlessOutput $args[1] 'WebDAV sync is not configured.'
         result = self.check_output('[CLI PRINT] ' + json.dumps({
             'status': 'success', 'message': 'WebDAV sync is not configured.',
         }) + '\n')
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_accepts_success_for_empty_default_tracking_folder(self):
+        result = self.check_output('[CLI PRINT] ' + json.dumps({
+            'status': 'success', 'message': 'Updated comics list.', 'data': [],
+        }) + '\n', 'Updated comics list.', 'success')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_rejects_subscription_error_when_success_is_expected(self):
+        result = self.check_output('[CLI PRINT] ' + json.dumps({
+            'status': 'error', 'message': 'Updated comics list.', 'data': [],
+        }) + '\n', 'Updated comics list.', 'success')
         self.assertNotEqual(result.returncode, 0)

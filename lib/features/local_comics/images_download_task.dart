@@ -713,14 +713,22 @@ class _ImageDownloadWrapper {
     _imageIterator = imageIterator;
     try {
       while (await imageIterator.moveNext()) {
-        final p = imageIterator.current;
+        final progress = imageIterator.current;
         if (isCancelled) {
           return;
         }
-        task.onData(p.currentBytes - lastBytes);
-        lastBytes = p.currentBytes;
-        if (p.imageBytes != null) {
-          var fileType = detectFileType(p.imageBytes!);
+        task.onData(progress.currentBytes - lastBytes);
+        lastBytes = progress.currentBytes;
+        if (progress.imageBytes != null) {
+          final uri = Uri.tryParse(image);
+          final imagePath = uri?.path ?? image.split('?').first;
+          final fallbackExtension = p.extension(imagePath);
+          var fileType = detectFileType(
+            progress.imageBytes!,
+            fallbackExtension: fallbackExtension.isEmpty
+                ? null
+                : fallbackExtension,
+          );
           var fileName = "$index${fileType.ext}";
           if (!isComicImageFileName(fileName)) {
             unsupportedMime = fileType.mime;
@@ -728,7 +736,7 @@ class _ImageDownloadWrapper {
           }
           var file = saveTo.joinFile(fileName);
           final activeWrite = file
-              .writeAsBytes(p.imageBytes!)
+              .writeAsBytes(progress.imageBytes!)
               .then<void>((_) {});
           _activeWrite = activeWrite;
           try {

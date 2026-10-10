@@ -769,6 +769,7 @@ class ReaderState extends State<Reader>
   ReaderImageViewController? get imageViewController => viewportBinding.current;
 
   void setPage(int page) => controller.reportPage(page);
+  @override
   void resetPageAnimation() => controller.resetAnimation();
   bool get isPageAnimating => controller.state.isAnimating;
   bool toPage(int page, {bool animated = true}) =>
@@ -1957,6 +1958,11 @@ abstract mixin class ReaderImagePerPageHandler {
     final currentOrientation = isPortrait;
     if (_lastImagesPerPage != currentImagesPerPage ||
         _lastOrientation != currentOrientation) {
+      // A page animation can be interrupted by the platform relayout that
+      // accompanies a rotation. Clear its pending target before remapping the
+      // page, otherwise automatic reading remains blocked by isAnimating until
+      // the user performs another page turn.
+      resetPageAnimation();
       final previousLayout = ReaderPageLayout(
         imagesPerPage: _lastImagesPerPage,
         singleImageOnFirstPage: showSingleImageOnFirstPage(),
@@ -1970,6 +1976,9 @@ abstract mixin class ReaderImagePerPageHandler {
       _lastOrientation = currentOrientation;
     }
   }
+
+  /// Invalidates a navigation animation before a layout remaps the page.
+  void resetPageAnimation();
 }
 
 class _ReaderLayoutAttempt {

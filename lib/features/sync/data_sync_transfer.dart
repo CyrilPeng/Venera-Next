@@ -29,6 +29,7 @@ abstract interface class DataSyncParticipant {
   Future<DataSyncCommitState> importData(
     File file, {
     required RequestScope scope,
+    bool force = false,
     void Function(void Function())? publishImported,
     String? syncOperationId,
   });
@@ -48,6 +49,7 @@ abstract interface class DataSyncTransfer {
   Future<bool> download(
     WebDavEndpoint connection, {
     required RequestScope scope,
+    bool force = false,
     void Function(void Function())? publishImported,
     String? syncOperationId,
   });
@@ -249,6 +251,7 @@ class WebDavDataSyncTransfer
   Future<bool> download(
     WebDavEndpoint connection, {
     required RequestScope scope,
+    bool force = false,
     void Function(void Function())? publishImported,
     String? syncOperationId,
   }) async {
@@ -277,7 +280,7 @@ class WebDavDataSyncTransfer
           ? int.tryParse(parts[1].split('.').first)
           : null;
       final current = _participant.version;
-      if (version == null || current == null || version > current) {
+      if (force || version == null || current == null || version > current) {
         final temporary = pending.temporary = await Directory(
           _participant.cachePath,
         ).createTemp('data-sync-');
@@ -289,6 +292,7 @@ class WebDavDataSyncTransfer
           pending.state = await _participant.importData(
             archive,
             scope: scope,
+            force: force,
             publishImported: publishImported,
             syncOperationId: syncOperationId,
           );

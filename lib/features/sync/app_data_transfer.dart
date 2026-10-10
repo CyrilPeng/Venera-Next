@@ -135,12 +135,14 @@ Future<DataSyncCommitState> importAppData(
 Future<DataSyncCommitState> importSyncAppData(
   File file, {
   required void Function() checkActive,
+  bool force = false,
   void Function(void Function())? publishImported,
   String? syncOperationId,
 }) => AppDataOperations.instance.run(
   () => _importAppData(
     file,
     true,
+    force: force,
     checkActive: checkActive,
     publishImported: publishImported,
     syncOperationId: syncOperationId,
@@ -150,6 +152,7 @@ Future<DataSyncCommitState> importSyncAppData(
 Future<DataSyncCommitState> _importAppData(
   File file,
   bool checkVersion, {
+  bool force = false,
   void Function()? checkActive,
   void Function(void Function())? publishImported,
   String? syncOperationId,
@@ -180,7 +183,7 @@ Future<DataSyncCommitState> _importAppData(
     if (appdataFile.existsSync()) {
       importedAppdata = _decodeImportAppdata(await appdataFile.readAsString());
     }
-    if (checkVersion && importedAppdata != null) {
+    if (checkVersion && !force && importedAppdata != null) {
       var importedSettings = importedAppdata["settings"];
       var version = importedSettings is Map
           ? importedSettings["dataVersion"]
@@ -216,14 +219,16 @@ Future<DataSyncCommitState> _importAppData(
       }
       final contents = DataSyncContentJournal.open(App.dataPath);
       try {
-        contents.verifyBeforeImport(
-          content.id,
-          await _captureSyncContent(
-            App.dataPath,
-            content.scope,
-            importGuard: true,
-          ),
-        );
+        if (!force) {
+          contents.verifyBeforeImport(
+            content.id,
+            await _captureSyncContent(
+              App.dataPath,
+              content.scope,
+              importGuard: true,
+            ),
+          );
+        }
       } finally {
         contents.close();
       }

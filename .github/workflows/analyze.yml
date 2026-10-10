@@ -32,6 +32,16 @@ jobs:
         env:
           RUSTFLAGS: --cfg reqwest_unstable
         run: cargo test --locked --manifest-path packages/rhttp/rust/Cargo.toml --lib
+      - name: 编译 Flutter 测试使用的 Rhttp 库
+        env:
+          RUSTFLAGS: --cfg reqwest_unstable
+        run: cargo build --locked --manifest-path packages/rhttp/rust/Cargo.toml --lib
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-rhttp-test-library
+          path: packages/rhttp/rust/target/debug/librhttp.so
+          if-no-files-found: error
+          retention-days: 1
 
   analyze:
     runs-on: ubuntu-24.04
@@ -75,7 +85,33 @@ jobs:
           fi
           dart format --output=none --set-exit-if-changed "${dart_files[@]}"
       - run: flutter analyze --fatal-infos --fatal-warnings
+
+  flutter-tests:
+    name: Flutter 测试与覆盖率
+    needs: rhttp-native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          flutter-version-file: pubspec.yaml
+          architecture: x64
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux-rhttp-test-library
+          path: build/test-native/lib
+      - name: 准备 Linux 原生测试库
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake ninja-build g++ libsqlite3-dev
+          python3 .github/scripts/prepare_linux_test_libraries.py
       - run: flutter test --coverage
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/build/test-native/lib
       - name: 汇总 Dart 覆盖率
         run: python3 .github/scripts/report_dart_coverage.py coverage/lcov.info --github-summary
       - name: 上传 Dart 覆盖率报告

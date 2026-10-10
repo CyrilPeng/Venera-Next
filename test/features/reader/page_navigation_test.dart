@@ -39,6 +39,22 @@ void main() {
     },
   );
 
+  test('resetAnimation releases an interrupted viewport animation', () async {
+    final controller = _Controller();
+    final reader = _navigation(controller);
+    reader.toPage(150);
+    expect(reader.state.isAnimating, isTrue);
+
+    reader.resetAnimation();
+    expect(reader.state.isAnimating, isFalse);
+
+    controller.animations.single.complete();
+    await pumpEventQueue();
+    expect(reader.state.isAnimating, isFalse);
+    expect(reader.state.page, 1);
+    reader.dispose();
+  });
+
   for (final synchronous in [false, true]) {
     test(
       'failed animation releases input (synchronous=$synchronous)',

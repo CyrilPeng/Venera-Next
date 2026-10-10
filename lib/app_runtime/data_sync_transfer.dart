@@ -109,11 +109,13 @@ class _ApplicationSyncParticipant implements DataSyncParticipant {
   Future<DataSyncCommitState> importData(
     File file, {
     required RequestScope scope,
+    bool force = false,
     void Function(void Function())? publishImported,
     String? syncOperationId,
   }) => importSyncAppData(
     file,
     checkActive: scope.check,
+    force: force,
     publishImported: publishImported,
     syncOperationId: syncOperationId,
   );

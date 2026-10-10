@@ -750,6 +750,10 @@ void main() {
     testWidgets('progress dispatches image endpoints in ${mode.key}', (
       tester,
     ) async {
+      // Leave enough horizontal content after page 2 to align its leading edge.
+      // The last-page clamp below must not also clamp this intermediate page.
+      await tester.binding.setSurfaceSize(const Size(700, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final fixture = await _ReaderFixture.create(tester);
       try {
         appdata.settings['readerMode'] = mode.key;

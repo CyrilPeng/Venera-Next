@@ -94,7 +94,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final nativeAvailable = _quickJsAvailable();
   setUpAll(() async {
-    if (Platform.isWindows) await rhttp.Rhttp.init();
+    if (Platform.isWindows || Platform.isLinux) await rhttp.Rhttp.init();
   });
 
   late Directory directory;

@@ -401,6 +401,16 @@ void main() {
     },
   );
 
+  test('forced download applies an unchanged remote version', () async {
+    remote.names = ['20-7.venera'];
+    expect(
+      await transfer.download(connection, scope: scope, force: true),
+      isTrue,
+    );
+    expect(remote.readName, '20-7.venera');
+    expect(participant.imports, 1);
+  });
+
   test('import no-op is distinct from an applied snapshot', () async {
     remote.names = ['20-8.venera'];
     participant.applied = false;
@@ -1179,6 +1189,7 @@ class _Participant implements DataSyncParticipant {
   Future<DataSyncCommitState> importData(
     File file, {
     required RequestScope scope,
+    bool force = false,
     void Function(void Function())? publishImported,
     String? syncOperationId,
   }) async {

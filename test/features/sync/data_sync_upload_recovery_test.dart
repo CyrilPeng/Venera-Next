@@ -534,6 +534,7 @@ class _Transfer implements DataSyncTransfer {
   Future<bool> download(
     WebDavEndpoint connection, {
     required RequestScope scope,
+    bool force = false,
     String? syncOperationId,
     void Function(void Function())? publishImported,
   }) async {

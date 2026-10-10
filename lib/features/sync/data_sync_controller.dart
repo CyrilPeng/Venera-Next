@@ -301,7 +301,7 @@ class DataSyncController with ChangeNotifier {
       unawaited(
         _startTask(
           upload ? _DataSyncTask.upload : _DataSyncTask.download,
-          upload ? _uploadNow : _downloadNow,
+          upload ? _uploadNow : () => _downloadNow(),
         ),
       );
     } else if (_content == null) {
@@ -352,7 +352,7 @@ class DataSyncController with ChangeNotifier {
       unawaited(
         _startTask(
           hasPendingChanges ? _DataSyncTask.upload : _DataSyncTask.download,
-          hasPendingChanges ? _uploadNow : _downloadNow,
+          hasPendingChanges ? _uploadNow : () => _downloadNow(),
           automatic: true,
         ),
       );
@@ -423,7 +423,7 @@ class DataSyncController with ChangeNotifier {
                   : _DataSyncTask.download,
               operation.direction == DataSyncDirection.upload
                   ? _uploadNow
-                  : _downloadNow,
+                  : () => _downloadNow(),
             );
           }
         } else {
@@ -448,7 +448,7 @@ class DataSyncController with ChangeNotifier {
                   )
                 : await _startTask(
                     _DataSyncTask.download,
-                    _downloadNow,
+                    () => _downloadNow(),
                     saveConfiguration: true,
                     previousConfiguration: previous,
                   );
@@ -687,7 +687,7 @@ class DataSyncController with ChangeNotifier {
     return _startTask(_DataSyncTask.upload, _uploadNow);
   }
 
-  Future<Res<bool>> downloadData() async {
+  Future<Res<bool>> downloadData({bool force = false}) async {
     if (_disposed) return const Res.error('Sync service is disposed');
     if (_exitHeld) return const Res.error('Sync service is preparing to exit');
     if (_configuring) return const Res.error('Sync configuration is busy');
@@ -700,9 +700,12 @@ class DataSyncController with ChangeNotifier {
     if (_recoveryGuard() case final failure?) return Res.failure(failure);
     if (_completion != null && _activeTask != null) return _activeTask!;
     if (_activeTask != null) {
-      return _schedulePendingTask(_DataSyncTask.download, _downloadNow);
+      return _schedulePendingTask(
+        _DataSyncTask.download,
+        () => _downloadNow(force: force),
+      );
     }
-    return _startTask(_DataSyncTask.download, _downloadNow);
+    return _startTask(_DataSyncTask.download, () => _downloadNow(force: force));
   }
 
   Future<Res<bool>> _schedulePendingTask(
@@ -1603,7 +1606,7 @@ class DataSyncController with ChangeNotifier {
     }
   }
 
-  Future<Res<bool>> _downloadNow() async {
+  Future<Res<bool>> _downloadNow({bool force = false}) async {
     var config = _validateConfig();
     if (config == null) {
       _lastError = 'Invalid WebDAV configuration';
@@ -1617,6 +1620,7 @@ class DataSyncController with ChangeNotifier {
     try {
       final applied = await _dataTransfer.download(
         config,
+        force: force,
         scope: scope,
         syncOperationId: _ownedOperation?.id,
         publishImported: _publishImported,
