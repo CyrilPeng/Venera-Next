@@ -13,28 +13,19 @@
   [![Downloads](https://img.shields.io/github/downloads/CyrilPeng/venera-next/total?style=flat-square&color=2ea44f&logo=github)](https://tooomm.github.io/github-release-stats/?user=CyrilPeng&repo=venera-next)
   [![爱发电](https://img.shields.io/badge/爱发电-支持我-ff69b4?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyMS4zNWwtMS40NS0xLjMyQzUuNCAxNS4zNiAyIDEyLjI4IDIgOC41IDIgNS40MiA0LjQyIDMgNy41IDNjMS43NCAwIDMuNDEuODEgNC41IDIuMDlDMTMuMDkgMy44MSAxNC43NiAzIDE2LjUgMyAxOS41OCAzIDIyIDUuNDIgMjIgOC41YzAgMy43OC0zLjQgNi44Ni04LjU1IDExLjU0TDEyIDIxLjM1eiIvPjwvc3ZnPg==)](https://ifdian.net/a/cyril)
 
+  <p>
+    <a href="https://trendshift.io/repositories/140830?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-140830" target="_blank" rel="noopener noreferrer">
+      <img src="https://trendshift.io/api/badge/repositories/140830" alt="VeneraNext 的 Trendshift 项目徽章" width="250" height="55" />
+    </a>
+    <a href="https://trendshift.io/repositories/140830?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-140830" target="_blank" rel="noopener noreferrer">
+      <img src="https://trendshift.io/api/badge/trendshift/repositories/140830/daily?language=Dart" alt="VeneraNext 的 Trendshift Dart 每日趋势排名" width="250" height="55" />
+    </a>
+  </p>
+
 </div>
 
 <!-- featured-sponsors:start -->
 <!-- featured-sponsors:end -->
-
----
-
-## 目录
-
-- [项目介绍](#项目介绍)
-- [软件截图](#软件截图)
-- [功能亮点](#功能亮点)
-- [下载安装](#下载安装)
-- [快速上手](#快速上手)
-- [使用说明](#使用说明)
-- [漫画源开发](#漫画源开发)
-- [FAQ](#faq)
-- [开发者入口](#开发者入口)
-- [声明](#声明)
-- [赞助](#赞助)
-- [致谢](#致谢)
-- [许可](#许可)
 
 ---
 
@@ -97,8 +88,6 @@
 ---
 
 ## 下载安装
-
-当前稳定版为 [v1.17.0](https://github.com/CyrilPeng/Venera-Next/releases/tag/v1.17.0)。下方下载入口默认指向最新稳定版。
 
 ### Android
 

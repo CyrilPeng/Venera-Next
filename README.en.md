@@ -13,28 +13,19 @@
   [![Downloads](https://img.shields.io/github/downloads/CyrilPeng/venera-next/total?style=flat-square&color=2ea44f&logo=github)](https://tooomm.github.io/github-release-stats/?user=CyrilPeng&repo=venera-next)
   [![Afdian](https://img.shields.io/badge/Afdian-Sponsor-ff69b4?style=flat-square)](https://ifdian.net/a/cyril)
 
+  <p>
+    <a href="https://trendshift.io/repositories/140830?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-140830" target="_blank" rel="noopener noreferrer">
+      <img src="https://trendshift.io/api/badge/repositories/140830" alt="VeneraNext repository badge on Trendshift" width="250" height="55" />
+    </a>
+    <a href="https://trendshift.io/repositories/140830?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-140830" target="_blank" rel="noopener noreferrer">
+      <img src="https://trendshift.io/api/badge/trendshift/repositories/140830/daily?language=Dart" alt="VeneraNext daily Dart ranking on Trendshift" width="250" height="55" />
+    </a>
+  </p>
+
 </div>
 
 <!-- featured-sponsors:start -->
 <!-- featured-sponsors:end -->
-
----
-
-## Contents
-
-- [Introduction](#introduction)
-- [Screenshots](#screenshots)
-- [Highlights](#highlights)
-- [Download and installation](#download-and-installation)
-- [Quick start](#quick-start)
-- [Usage guide](#usage-guide)
-- [Developing comic sources](#developing-comic-sources)
-- [FAQ](#faq)
-- [Developer resources](#developer-resources)
-- [Statement](#statement)
-- [Sponsors](#sponsors)
-- [Acknowledgements](#acknowledgements)
-- [License](#license)
 
 ---
 
@@ -99,8 +90,6 @@ Venera's JavaScript extensions, local reading, search and categories, favorites,
 ---
 
 ## Download and installation
-
-The current stable release is [v1.17.0](https://github.com/CyrilPeng/Venera-Next/releases/tag/v1.17.0). The download links below point to the latest stable release.
 
 ### Android
 
