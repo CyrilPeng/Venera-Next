@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:async' show Future;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -33,17 +34,17 @@ class LocalComicImageProvider
       final directoryExists = await dir.exists();
       checkStop();
       if (!directoryExists) {
-        throw "Error: Comic not found.";
+        throw OperationFailure.message("Error: Comic not found.");
       }
       file = await _inferCover(dir, checkStop);
     }
     if (file == null) {
-      throw "Error: Cover not found.";
+      throw OperationFailure.message("Error: Cover not found.");
     }
     checkStop();
     var data = await file.readAsBytes();
     if (data.isEmpty) {
-      throw "Exception: Empty file(${file.path}).";
+      throw OperationFailure.message("Exception: Empty file(${file.path}).");
     }
     checkStop();
     return data;

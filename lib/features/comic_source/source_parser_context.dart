@@ -178,7 +178,9 @@ class SourceParserContext {
   Res<List<Comic>> parseComicListResult(dynamic value, String subDataKey) {
     final data = normalizeComicSourceStringKeyedMap(value);
     final comics = normalizeComicSourceComicList(data?["comics"], key);
-    if (data == null || comics == null) throw "Invalid data";
+    if (data == null || comics == null) {
+      throw OperationFailure.message("Invalid data");
+    }
     return Res(comics, subData: data[subDataKey]);
   }
 

@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -16,7 +17,9 @@ class FlyoutController {
 
   void show() {
     if (_show == null) {
-      throw "FlyoutController is not attached to a Flyout";
+      throw OperationFailure.message(
+        "FlyoutController is not attached to a Flyout",
+      );
     }
     _show!();
   }

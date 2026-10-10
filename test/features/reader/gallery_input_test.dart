@@ -18,6 +18,82 @@ import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
 
 void main() {
+  for (final imagesPerPage in [2, 3]) {
+    for (final commentsAtEnd in [false, true]) {
+      testWidgets(
+        'empty cover chapter has no render or preload image: $imagesPerPage/$commentsAtEnd',
+        (tester) async {
+          final work = ImageWork();
+          final viewport = ReaderViewportBinding();
+          final data = ReaderGalleryData(
+            content: const ReaderContentState(images: []),
+            layout: ReaderPageLayout(
+              imagesPerPage: imagesPerPage,
+              singleImageOnFirstPage: true,
+            ),
+            vertical: false,
+            reverse: false,
+            commentsAtEnd: commentsAtEnd,
+            firstChapter: true,
+            lastChapter: true,
+            preloadCount: 2,
+            doubleTapCollect: false,
+            centerLongPressZoom: false,
+            pageAnimation: false,
+            sourceKey: null,
+            comicId: 'empty',
+            chapterId: 'chapter',
+          );
+          final navigation = ReaderController(
+            pageCount: () => data.totalPages,
+            chapterCount: () => 1,
+            animationEnabled: () => false,
+            viewport: () => viewport.current,
+            onChanged: () {},
+            onPageChanged: () {},
+            onError: (error, stack) => fail('$error'),
+          );
+          try {
+            await tester.pumpWidget(
+              MaterialApp(
+                home: ReaderGalleryView(
+                  data: data,
+                  imageWork: work,
+                  navigation: navigation,
+                  onViewportChanged: viewport.update,
+                  onReady: () {},
+                  onPageReported: (_, _) {},
+                  onChapterChanged: () {},
+                  onCollectImage: () => fail('No image to collect'),
+                  readerSize: () => const Size(800, 600),
+                  readImage: (_) async => throw StateError('No image to read'),
+                  commentsBuilder: (_) => const Text('Empty chapter comments'),
+                ),
+              ),
+            );
+            expect(tester.takeException(), isNull);
+            final state = tester.state<GalleryModeState>(
+              find.byType(ReaderGalleryView),
+            );
+            state.cache(1);
+            expect(state.currentImageRange, isNull);
+            expect(state.autoReadingReady, isFalse);
+            if (commentsAtEnd) {
+              state.toPage(2);
+              await tester.pumpAndSettle();
+              expect(find.text('Empty chapter comments'), findsOneWidget);
+            }
+            expect(tester.takeException(), isNull);
+          } finally {
+            await tester.pumpWidget(const SizedBox());
+            await work.dispose();
+            navigation.dispose();
+          }
+        },
+      );
+    }
+  }
+
   for (final direction in ['ltr', 'rtl', 'vertical']) {
     testWidgets(
       'standalone gallery uses injected inputs and actions ($direction)',

@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -173,7 +174,13 @@ void main() {
         ..imageFavoritesEp = [ImageFavoritesEp('', 0, [], '', 1)];
       expect(
         () => repository.saveAll([comic('rollback'), invalid]),
-        throwsA('Error: No ImageFavoritesEp'),
+        throwsA(
+          isA<OperationFailure>().having(
+            (error) => error.message,
+            'message',
+            'Error: No ImageFavoritesEp',
+          ),
+        ),
       );
       expect(repository.find('rollback', 'source'), isNull);
     },

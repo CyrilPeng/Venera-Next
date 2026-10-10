@@ -24,5 +24,6 @@ candidates. Public-name members of private owners are included.
 
 The self-check covers declaration kinds, local/private exclusions, annotations,
 string evidence and duplicate visits. CI prepares this package before repository
-analysis. Raw output does not replace the reviewed classifications in
-`doc/architecture/public_symbol_candidates.json`.
+analysis. Raw output is diagnostic evidence only; it is not a committed dead-code
+decision and does not replace manual review of framework, native, JavaScript, or
+test entry points.

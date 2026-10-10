@@ -1,3 +1,4 @@
+import 'legacy_copy_fixture.dart';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -12,7 +13,7 @@ void main() {
   setUp(() {
     root = Directory.systemTemp.createTempSync('copy-record-');
     output = Directory('${root.path}/output')..createSync();
-    record = ComicCopyRecord.prepare(
+    record = prepareLegacyComicCopy(
       output,
       source: '${root.path}/source',
       metadata: 'original metadata',
@@ -27,6 +28,94 @@ void main() {
       '${output.path}/chapter/2.jpg',
     ).writeAsStringSync('second page', flush: true);
     Directory('${output.path}/empty').createSync();
+  }
+
+  Future<ComicCopyRecord> resumable() async {
+    final source = Directory('${root.path}/source')..createSync();
+    File('${source.path}/1.jpg').writeAsStringSync('first page');
+    Directory('${source.path}/chapter').createSync();
+    File('${source.path}/chapter/2.jpg').writeAsStringSync('second page');
+    Directory('${source.path}/empty').createSync();
+    final destination = Directory('${root.path}/resumable')..createSync();
+    return ComicCopyRecord.prepare(destination, source: source);
+  }
+
+  test(
+    'resumes missing files and a torn staging write after reopening',
+    () async {
+      final pending = await resumable();
+      final directory = pending.directory;
+      File('${directory.path}/1.jpg').writeAsStringSync('first page');
+      File(
+        '${directory.path}/${ComicCopyRecord.stagingName}',
+      ).writeAsStringSync('sec');
+      await ComicCopyRecord.read(directory).resume();
+      await ComicCopyRecord.read(directory).verifyComplete();
+      expect(
+        File('${directory.path}/chapter/2.jpg').readAsStringSync(),
+        'second page',
+      );
+      expect(Directory('${directory.path}/empty').existsSync(), isTrue);
+      expect(
+        File('${directory.path}/${ComicCopyRecord.stagingName}').existsSync(),
+        isFalse,
+      );
+    },
+  );
+
+  for (final edit in ['source', 'output', 'extra']) {
+    test(
+      'resume preserves conflicts and never certifies changed $edit',
+      () async {
+        final pending = await resumable();
+        final location = edit == 'source'
+            ? '${root.path}/source'
+            : pending.directory.path;
+        final file = File(
+          '$location/${edit == 'extra' ? 'extra.jpg' : '1.jpg'}',
+        );
+        file.writeAsStringSync('changed');
+        await expectLater(
+          ComicCopyRecord.read(pending.directory).resume,
+          throwsStateError,
+        );
+        expect(file.readAsStringSync(), 'changed');
+        expect(pending.hasCompletion, isFalse);
+        expect(
+          File('${pending.directory.path}/chapter/2.jpg').existsSync(),
+          isFalse,
+        );
+      },
+    );
+  }
+
+  test('version 2 cannot complete a partial payload', () async {
+    final pending = await resumable();
+    File('${pending.directory.path}/1.jpg').writeAsStringSync('first page');
+    await expectLater(pending.complete, throwsStateError);
+    expect(pending.hasCompletion, isFalse);
+  });
+
+  for (final key in [
+    '["..","escape.jpg"]',
+    '["chapter/escape.jpg"]',
+    '["chapter","2.jpg"]',
+    '[".venera-copy-staging"]',
+  ]) {
+    test('manifest refuses unsafe or parentless path $key', () async {
+      final pending = await resumable();
+      final file = File(
+        '${pending.directory.path}/${ComicCopyRecord.intentName}',
+      );
+      final value = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      value['tree'] = {key: 'a' * 64};
+      file.writeAsStringSync(jsonEncode(value));
+      expect(
+        () => ComicCopyRecord.read(pending.directory),
+        throwsFormatException,
+      );
+      expect(file.existsSync(), isTrue);
+    });
   }
 
   test(

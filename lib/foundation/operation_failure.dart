@@ -9,6 +9,12 @@ abstract interface class FailureDetails implements Exception {
 }
 
 class OperationFailure implements FailureDetails {
+  /// Capture a locally detected failure without losing its original display
+  /// message when it crosses a result, parser, or platform boundary.
+  OperationFailure.message(this.message, {this.kind = FailureKind.failed})
+    : cause = null,
+      stackTrace = StackTrace.current;
+
   const OperationFailure({
     required this.message,
     this.kind = FailureKind.failed,

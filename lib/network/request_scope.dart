@@ -1,11 +1,11 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
 
-class RequestCancelled implements Exception {
-  const RequestCancelled();
-  @override
-  String toString() => 'Request cancelled';
+class RequestCancelled extends OperationFailure {
+  const RequestCancelled()
+    : super(message: 'Request cancelled', kind: FailureKind.cancelled);
 }
 
 /// Cooperative lifetime for a source call, its retries and HTTP requests.

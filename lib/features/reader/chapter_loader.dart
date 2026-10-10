@@ -2,6 +2,7 @@ import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/network/request_scope.dart';
 
@@ -64,7 +65,7 @@ Future<List<String>> loadReaderChapterImages({
                 if (stack != null) Error.throwWithStackTrace(cause, stack);
                 throw cause;
               }
-              throw result.errorMessage!;
+              result.throwIfError();
             }
             return result.data;
           },
@@ -78,6 +79,9 @@ Future<List<String>> loadReaderChapterImages({
       'error': error.toString(),
     }, stack),
     localUnavailable: LocalComicFilesUnavailable.new,
-    sourceUnavailable: 'Comic source is unavailable'.tl,
+    sourceUnavailable: OperationFailure.message(
+      'Comic source is unavailable'.tl,
+      kind: FailureKind.unsupported,
+    ),
   ).load(scope: scope, onOnlineFallback: onOnlineFallback);
 }

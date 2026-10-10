@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import "package:flutter/material.dart";
 import "package:venera_next/components/appbar.dart";
 import "package:venera_next/components/loading.dart";
@@ -41,7 +42,10 @@ class _CategoryComicsPageState extends State<CategoryComicsPage> {
     for (final source in ComicSource.all()) {
       if (source.categoryData?.key == widget.categoryKey) {
         if (source.categoryComicsData == null) {
-          throw "The comic source ${source.name} does not support category comics";
+          throw OperationFailure.message(
+            "The comic source ${source.name} does not support category comics",
+            kind: FailureKind.unsupported,
+          );
         }
         data = source.categoryComicsData!;
         if (data.options != null) {
@@ -65,7 +69,7 @@ class _CategoryComicsPageState extends State<CategoryComicsPage> {
         return;
       }
     }
-    throw "${widget.categoryKey} Not found";
+    throw OperationFailure.message("${widget.categoryKey} Not found");
   }
 
   void resetOptionsValue() {

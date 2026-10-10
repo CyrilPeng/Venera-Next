@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:math' as math;
 
 import 'models.dart';
@@ -121,5 +122,5 @@ CategoryData getCategoryDataWithKey(String key) {
   if (resolver != null) {
     return resolver(key);
   }
-  throw "Category data resolver is not configured";
+  throw OperationFailure.message("Category data resolver is not configured");
 }

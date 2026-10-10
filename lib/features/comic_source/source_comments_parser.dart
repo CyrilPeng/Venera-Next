@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -54,7 +55,7 @@ class SourceCommentsParser {
         code(),
         consume: (raw) {
           final result = normalizeComicSourceCommentsResult(raw);
-          if (result == null) throw 'Invalid data';
+          if (result == null) throw OperationFailure.message('Invalid data');
           return Res(result.comments, subData: result.data['maxPage'] as int?);
         },
       );

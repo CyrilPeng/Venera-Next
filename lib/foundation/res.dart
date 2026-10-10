@@ -17,7 +17,24 @@ class Res<T> {
   bool get success => !error;
 
   /// data
-  T get data => _data ?? (throw Exception(errorMessage));
+  T get data {
+    throwIfError();
+    return _data ?? (throw Exception(errorMessage));
+  }
+
+  /// Consumers must preserve structured cancellation, unsupported results,
+  /// original causes and stacks instead of throwing only [errorMessage].
+  void throwIfError() {
+    if (!error) return;
+    final details = failure;
+    if (details != null) {
+      Error.throwWithStackTrace(
+        details,
+        details.stackTrace ?? StackTrace.current,
+      );
+    }
+    throw OperationFailure.message(errorMessage!);
+  }
 
   /// get data, or null if there is an error
   T? get dataOrNull => _data;
@@ -48,11 +65,13 @@ class Res<T> {
       errorMessage = details.message;
 
   factory Res.fromException(Object error, StackTrace stack) => Res.failure(
-    error is FailureDetails
+    error is FailureDetails && error.stackTrace != null
         ? error
         : OperationFailure(
-            message: error.toString(),
-            kind: error is UnsupportedError
+            message: error is FailureDetails ? error.message : error.toString(),
+            kind: error is FailureDetails
+                ? error.kind
+                : error is UnsupportedError
                 ? FailureKind.unsupported
                 : FailureKind.failed,
             cause: error,

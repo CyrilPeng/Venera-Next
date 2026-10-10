@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/features/local_comics/import_export/import_presentation.dart';
+import 'package:venera_next/features/local_comics/import_export/comic_copy_record.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/translations.dart';
 
@@ -112,6 +113,41 @@ void main() {
     expect(await decision, isNull);
     expect(tester.takeException(), isNull);
   });
+
+  for (final kind in [
+    ComicCopyRecoveryKind.resumable,
+    ComicCopyRecoveryKind.unverified,
+  ]) {
+    testWidgets('recovery explains $kind and keeps the decision explicit', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(667, 375);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      appdata.settings['language'] = 'zh-CN';
+      final presentation = await host(tester, scale: 3.2);
+      final choice = presentation.chooseCopyRecovery(
+        title: '待恢复漫画',
+        previousFolder: null,
+        folders: [],
+        kind: kind,
+      );
+      await tester.pumpAndSettle();
+      final message = kind == ComicCopyRecoveryKind.resumable
+          ? 'This copy was interrupted. Restore will copy the missing files from the unchanged source, then add the comic to your library.'
+          : 'This directory has no completion record. Pages may be missing. Restore will add only the files currently available; check them before continuing.';
+      expect(find.text(message.tl), findsOneWidget);
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNull,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(await choice, isNull);
+    });
+  }
 
   testWidgets(
     'unmounted owner releases the dialog and cannot adopt a new root',

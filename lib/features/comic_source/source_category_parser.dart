@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -61,7 +62,9 @@ class SourceCategoryParser {
           } else if (type == "dynamic" && categories == null) {
             var loader = c["loader"];
             if (loader is! JSInvokable) {
-              throw "DynamicCategoryPart loader must be a function";
+              throw OperationFailure.message(
+                "DynamicCategoryPart loader must be a function",
+              );
             }
             final invoke = context.retainCallback(loader);
             categoryParts.add(
@@ -69,15 +72,21 @@ class SourceCategoryParser {
                 name,
                 () => context.consumeSynchronous(() => invoke([]), (data) {
                   if (data is! List) {
-                    throw 'DynamicCategoryPart loader must return a List';
+                    throw OperationFailure.message(
+                      'DynamicCategoryPart loader must return a List',
+                    );
                   }
                   return data.map((item) {
                     if (item is! Map) {
-                      throw 'DynamicCategoryPart loader must return a List of Map';
+                      throw OperationFailure.message(
+                        'DynamicCategoryPart loader must return a List of Map',
+                      );
                     }
                     final label = item['label'];
                     if (label is! String) {
-                      throw 'Category label must be a String';
+                      throw OperationFailure.message(
+                        'Category label must be a String',
+                      );
                     }
                     return CategoryItem(
                       label,

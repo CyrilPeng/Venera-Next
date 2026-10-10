@@ -287,8 +287,8 @@ class WebDavLibrarySource {
           _checkAvailable();
           if (generation != _generation) throw const WebDavLibraryCancelled();
           return const Res(true);
-        } catch (e) {
-          return Res.error(e.toString());
+        } catch (e, stack) {
+          return Res.fromException(e, stack);
         }
       });
 
@@ -302,7 +302,7 @@ class WebDavLibrarySource {
       if (page < 1) return const Res([], subData: 1);
       final indexResult = await synchronizer.ensureIndex(session);
       if (indexResult.error) {
-        return Res.error(indexResult.errorMessage!);
+        return Res.fromErrorRes(indexResult);
       }
       session.check();
       final count = _cache.count(config.cacheKey);
@@ -326,8 +326,8 @@ class WebDavLibrarySource {
           .toList();
       synchronizer.checkForAutomaticSync();
       return Res(comics, subData: maxPage);
-    } catch (e) {
-      return Res.error(e.toString());
+    } catch (e, stack) {
+      return Res.fromException(e, stack);
     }
   });
 
@@ -368,8 +368,8 @@ class WebDavLibrarySource {
           'maxPage': null,
         }),
       );
-    } catch (e) {
-      return Res.error(e.toString());
+    } catch (e, stack) {
+      return Res.fromException(e, stack);
     }
   });
 
@@ -425,8 +425,8 @@ class WebDavLibrarySource {
             return Res(files);
           }
           return const Res.error('No images found in the WebDAV chapter');
-        } catch (e) {
-          return Res.error(e.toString());
+        } catch (e, stack) {
+          return Res.fromException(e, stack);
         }
       });
 

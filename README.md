@@ -253,7 +253,7 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 ## 开发者入口
 
 - [构建与开发](doc/development/build.zh.md)：Flutter/Rust 环境、依赖锁定、测试和发布。
-- [贡献指南](CONTRIBUTING.md) · [项目结构约定](doc/architecture/project_structure.zh.md) · [依赖治理](doc/development/dependencies.zh.md)。
+- [贡献指南](CONTRIBUTING.md) · [依赖治理](doc/development/dependencies.zh.md)。
 - [Windows 分发维护](doc/distribution/windows.zh.md) · [无头命令模式](doc/user/headless.zh.md)。
 - [安全政策](SECURITY.md) · [行为准则](CODE_OF_CONDUCT.md) · [完整文档索引](doc/README.md)。
 

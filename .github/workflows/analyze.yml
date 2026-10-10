@@ -14,6 +14,14 @@ permissions:
   contents: read
 
 jobs:
+  apple-directory-access:
+    name: Apple 目录授权与跨会话恢复
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - run: swift test --package-path apple
+
   rhttp-native:
     name: Rhttp 原生回调生命周期
     runs-on: ubuntu-24.04

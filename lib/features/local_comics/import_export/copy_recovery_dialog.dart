@@ -4,13 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/foundation/translations.dart';
 
+import 'comic_copy_record.dart';
+
 typedef ComicCopyRecoveryChoice = ({String? folder});
 
 Future<ComicCopyRecoveryChoice?> showComicCopyRecoveryDialog({
   required BuildContext context,
   required String title,
-  required String previousFolder,
+  required String? previousFolder,
   required List<String> folders,
+  ComicCopyRecoveryKind kind = ComicCopyRecoveryKind.complete,
   required VoidCallback Function(VoidCallback close, bool Function() isCurrent)
   retainPresentation,
 }) async {
@@ -29,6 +32,7 @@ Future<ComicCopyRecoveryChoice?> showComicCopyRecoveryDialog({
         title: title,
         previousFolder: previousFolder,
         folders: folders,
+        kind: kind,
       ),
     ),
   );
@@ -49,10 +53,12 @@ class ComicCopyRecoveryDialog extends StatefulWidget {
     required this.title,
     required this.previousFolder,
     required this.folders,
+    this.kind = ComicCopyRecoveryKind.complete,
   });
   final String title;
-  final String previousFolder;
+  final String? previousFolder;
   final List<String> folders;
+  final ComicCopyRecoveryKind kind;
   @override
   State<ComicCopyRecoveryDialog> createState() =>
       _ComicCopyRecoveryDialogState();
@@ -80,10 +86,19 @@ class _ComicCopyRecoveryDialogState extends State<ComicCopyRecoveryDialog> {
         children: [
           Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
-          Text(
-            'The copy is complete. Choose where to restore it. Its previous favorite folder was @a.'
-                .tlParams({'a': widget.previousFolder}),
-          ),
+          Text(switch (widget.kind) {
+            ComicCopyRecoveryKind.complete =>
+              'The copy is complete. Choose where to restore it. Its previous favorite folder was @a.'
+                  .tlParams({
+                    'a': widget.previousFolder ?? 'Local library only'.tl,
+                  }),
+            ComicCopyRecoveryKind.resumable =>
+              'This copy was interrupted. Restore will copy the missing files from the unchanged source, then add the comic to your library.'
+                  .tl,
+            ComicCopyRecoveryKind.unverified =>
+              'This directory has no completion record. Pages may be missing. Restore will add only the files currently available; check them before continuing.'
+                  .tl,
+          }),
           const SizedBox(height: 12),
           RadioGroup<int>(
             groupValue: _selected,

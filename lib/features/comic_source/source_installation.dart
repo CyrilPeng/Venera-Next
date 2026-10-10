@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -180,7 +181,7 @@ class SourceInstallations implements Listenable {
     final existing = taskFor(sourceKey: entry.key, url: entry.url);
     if (existing?.active == true) return existing!;
     if (manager.find(entry.key) != null) {
-      throw 'This source is already installed.'.tl;
+      throw OperationFailure.message('This source is already installed.'.tl);
     }
     return _enqueue(
       name: entry.name,
@@ -234,7 +235,7 @@ class SourceInstallations implements Listenable {
     final existing = taskFor(sourceKey: entry.key, url: entry.url);
     if (existing?.active == true) return existing!;
     if (manager.find(entry.key) != null) {
-      throw 'This source is already installed.'.tl;
+      throw OperationFailure.message('This source is already installed.'.tl);
     }
     return _enqueue(name: entry.name, url: entry.url, sourceKey: entry.key);
   }
@@ -520,7 +521,9 @@ class SourceInstallations implements Listenable {
           ? manager.find(task.sourceKey!)
           : null;
       if (task.replaceExisting) {
-        if (existing == null) throw 'The source is no longer installed.';
+        if (existing == null) {
+          throw OperationFailure.message('The source is no longer installed.');
+        }
         await manager.replaceScript(
           existing,
           js,
@@ -557,7 +560,9 @@ class SourceInstallations implements Listenable {
           }
           if (repository != null &&
               repositories.find(repository.id)?.url != repository.url) {
-            throw 'Repository changed. Refresh the list and try again.'.tl;
+            throw OperationFailure.message(
+              'Repository changed. Refresh the list and try again.'.tl,
+            );
           }
           task.phase = SourceInstallPhase.installing;
           _publish();

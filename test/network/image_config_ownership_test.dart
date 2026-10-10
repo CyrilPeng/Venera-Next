@@ -13,6 +13,7 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/js_engine.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/network/image_loading_config.dart';
 import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/request_scope.dart';
@@ -418,7 +419,11 @@ void main() {
               .having(
                 (failure) => failure.cause,
                 'invalid result',
-                'Error: Invalid onResponse result.',
+                isA<OperationFailure>().having(
+                  (error) => error.message,
+                  'message',
+                  'Error: Invalid onResponse result.',
+                ),
               )
               .having(
                 (failure) =>
@@ -608,12 +613,49 @@ void main() {
           'onResponse': response,
           'onLoadFailed': retry,
         }),
-        throwsA('Error: Invalid onResponse result.'),
+        throwsA(
+          isA<OperationFailure>()
+              .having(
+                (error) => error.message,
+                'message',
+                'Error: Invalid onResponse result.',
+              )
+              .having((error) => error.stackTrace, 'stack', isNotNull),
+        ),
       );
       expect([response.calls, retry.calls, orphan.calls], [1, 1, 0]);
       expect([response.releases, retry.releases, orphan.releases], [1, 1, 1]);
     },
   );
+
+  for (final failure in <Object>[
+    const RequestCancelled(),
+    UnsupportedError('image operation unavailable'),
+    const OperationFailure(
+      message: 'source cancelled image processing',
+      kind: FailureKind.cancelled,
+    ),
+    const OperationFailure(
+      message: 'source cannot process this image',
+      kind: FailureKind.unsupported,
+    ),
+  ]) {
+    test('terminal image failure does not retry: $failure', () async {
+      final response = _Callback((_) => throw failure);
+      final retry = _Callback((_) => {'url': url('/ok')});
+      await expectLater(
+        comic({
+          'url': url('/ok'),
+          'onResponse': response,
+          'onLoadFailed': retry,
+        }),
+        throwsA(same(failure)),
+      );
+      expect(requests, ['/ok']);
+      expect([response.calls, retry.calls], [1, 0]);
+      expect([response.releases, retry.releases], [1, 1]);
+    });
+  }
 
   test(
     'invalid retry results free nested refs and preserve the network failure',

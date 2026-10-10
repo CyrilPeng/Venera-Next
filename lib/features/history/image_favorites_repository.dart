@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/sqlite_transaction.dart';
 import 'dart:convert';
 import 'package:sqlite3/sqlite3.dart';
@@ -82,7 +83,7 @@ class ImageFavoritesRepository {
         finalImageFavoritesEp[epIndex]["imageFavorites"] = finalImageFavorites;
       }
       if (tempImageFavoritesEp.isEmpty) {
-        throw "Error: No ImageFavoritesEp";
+        throw OperationFailure.message("Error: No ImageFavoritesEp");
       }
       db.execute(
         """

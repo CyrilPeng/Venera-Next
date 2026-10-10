@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/webdav_library/webdav_library.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
 
 void main() {
   late _FakeWebDavLibraryOps ops;
@@ -31,6 +32,19 @@ void main() {
     await source.closeAndWait();
     dataDir.deleteSync(recursive: true);
   });
+
+  test(
+    'index failure retains its original cause through the source adapter',
+    () async {
+      final failure = StateError('directory read failed');
+      ops.errors['/manga/'] = failure;
+      final result = await source.loadComics(1);
+      expect(result.failure!.kind, FailureKind.failed);
+      expect(result.failure!.cause, same(failure));
+      expect(result.failure!.stackTrace, isNotNull);
+      expect(() => result.data, throwsA(same(result.failure)));
+    },
+  );
 
   test('loadComics lists directories and ignores archives', () async {
     ops.dirs['/manga/'] = const [

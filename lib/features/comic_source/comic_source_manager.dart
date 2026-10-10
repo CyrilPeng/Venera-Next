@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:convert';
 import 'dart:async';
 
@@ -254,7 +255,7 @@ class ComicSourceManager with ChangeNotifier, Init {
         return source.categoryData!;
       }
     }
-    throw "Unknown category key $key";
+    throw OperationFailure.message("Unknown category key $key");
   }
 
   FavoriteData? _findFavoriteDataByKey(String key) {

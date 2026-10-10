@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
@@ -382,7 +383,13 @@ void main() {
       source((_, _) async => const Res.error('offline'));
       await expectLater(
         read(_Provider(_image(imageKey: ''))),
-        throwsA('offline'),
+        throwsA(
+          isA<OperationFailure>().having(
+            (error) => error.message,
+            'message',
+            'offline',
+          ),
+        ),
       );
     },
   );

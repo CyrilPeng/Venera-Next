@@ -75,8 +75,6 @@ PR 还会运行 `依赖安全审查` 和 `PR 平台冒烟构建`。依赖审查�
 python .github/scripts/release_version.py --check
 ```
 
-仓库模块边界和入口约定见[项目结构约定](../architecture/project_structure.zh.md)。
-
 ## Android 构建
 
 本地 release 签名文件放置在：

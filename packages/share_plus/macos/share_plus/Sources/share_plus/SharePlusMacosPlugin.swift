@@ -1,8 +1,7 @@
 import Cocoa
 import FlutterMacOS
 
-public class SharePlusMacosPlugin: NSObject, FlutterPlugin, NSSharingServicePickerDelegate {
-  private var subject: String?
+public class SharePlusMacosPlugin: NSObject, FlutterPlugin {
   private var registrar: FlutterPluginRegistrar
 
   public static func register(with registrar: FlutterPluginRegistrar) {
@@ -16,7 +15,14 @@ public class SharePlusMacosPlugin: NSObject, FlutterPlugin, NSSharingServicePick
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    let args = call.arguments as! [String: Any]
+    guard call.method == "share" else {
+      result(FlutterMethodNotImplemented)
+      return
+    }
+    guard let args = call.arguments as? [String: Any], let view = registrar.view else {
+      result(FlutterError(code: "share_unavailable", message: "No available sharing view or arguments", details: nil))
+      return
+    }
     let origin = originRect(args)
 
     switch call.method {
@@ -32,23 +38,18 @@ public class SharePlusMacosPlugin: NSObject, FlutterPlugin, NSSharingServicePick
       let subject = title ?? args["subject"] as? String
         
       if let uri = uri {
-        shareItems([uri], subject: subject, origin: origin, view: registrar.view!, callback: result)
+        shareItems([uri], subject: subject, origin: origin, view: view, callback: result)
       } else if let paths = paths {
         let urls = paths.map { NSURL.fileURL(withPath: $0) }
-        shareItems(urls, subject: subject, origin: origin, view: registrar.view!, callback: result)
+        shareItems(urls, subject: subject, origin: origin, view: view, callback: result)
       } else if let text = text {
-        shareItems([text], subject: subject, origin: origin, view: registrar.view!, callback: result)
+        shareItems([text], subject: subject, origin: origin, view: view, callback: result)
       } else {
         result(FlutterError.init(code: "error", message: "No content to share", details: nil))
       }
     default:
       result(FlutterMethodNotImplemented)
     }
-  }
-
-  public func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, delegateFor sharingService: NSSharingService) -> NSSharingServiceDelegate? {
-    sharingService.subject = subject
-    return sharingService.delegate
   }
 
   private func shareItems(_ items: [Any], subject: String? = nil, origin: NSRect, view: NSView, callback: @escaping FlutterResult) {
@@ -68,13 +69,11 @@ public class SharePlusMacosPlugin: NSObject, FlutterPlugin, NSSharingServicePick
   }
 }
 
-/// We need to be able to distinguish between withResult and normal shares.
-///
-/// With each share having its own delegate, we can assure the correct result
-/// is returned to each method call.
-class SharePlusMacosSuccessDelegate: NSObject, NSSharingServicePickerDelegate {
+/// Each request owns its callback through service completion. Choosing a
+/// service does not mean it has finished consuming the shared files.
+class SharePlusMacosSuccessDelegate: NSObject, NSSharingServicePickerDelegate, NSSharingServiceDelegate {
   private var subject: String?
-  private var callback: FlutterResult
+  private var callback: FlutterResult?
   private var keepSelf: (() -> Void)?
 
   init(subject: String?, callback: @escaping FlutterResult) {
@@ -86,7 +85,7 @@ class SharePlusMacosSuccessDelegate: NSObject, NSSharingServicePickerDelegate {
   ///
   /// The delegate on `NSSharingServicePicker` only keeps us as a weak reference
   /// -> we would go out of scope instantly.
-  /// Deinit is called after `didChoose` sets `keepSelf` to nil!
+  /// Completion or cancellation releases the request.
   ///
   /// Has to be an extra method as we may not use `self` in a closure in `init`
   public func keep() -> Self {
@@ -96,12 +95,27 @@ class SharePlusMacosSuccessDelegate: NSObject, NSSharingServicePickerDelegate {
 
   public func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, delegateFor sharingService: NSSharingService) -> NSSharingServiceDelegate? {
     sharingService.subject = subject
-    return sharingService.delegate
+    return self
   }
 
   public func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, didChoose service: NSSharingService?) {
-    callback(service != nil ? service!.title : "")
-    // Break self referencing cycle -> deinit
+    if service == nil { finish("") }
+  }
+
+  public func sharingService(_ sharingService: NSSharingService, didShareItems items: [Any]) {
+    finish(sharingService.title)
+  }
+
+  public func sharingService(_ sharingService: NSSharingService, didFailToShareItems items: [Any], error: Error) {
+    let failure = error as NSError
+    finish(FlutterError(code: "share_failed", message: failure.localizedDescription,
+                        details: ["domain": failure.domain, "code": failure.code]))
+  }
+
+  private func finish(_ value: Any) {
+    guard let result = callback else { return }
+    callback = nil
     self.keepSelf = nil
+    result(value)
   }
 }

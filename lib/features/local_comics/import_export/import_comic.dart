@@ -227,6 +227,7 @@ class ImportComic {
     final issues = [...scanned.issues];
     final remaining = [...scanned.pendingCopies];
     for (final pending in scanned.pendingCopies) {
+      if (!presentation.canPresent) break;
       final favorites = await service.runRecovery(
         (operation) async => operation.copyRecoveryFolders(),
       );
@@ -234,6 +235,7 @@ class ImportComic {
         title: pending.title,
         previousFolder: pending.folder,
         folders: favorites.folders,
+        kind: pending.kind,
       );
       if (choice == null) continue;
       final loading = presentation.showLoading(allowCancel: false);
@@ -241,9 +243,8 @@ class ImportComic {
       try {
         recovered = await service.runRecovery(
           (operation) => operation.recoverCopy(
-            pending.directory,
+            pending,
             folder: choice.folder,
-            intentDigest: pending.intentDigest,
             favorites: favorites,
           ),
         );

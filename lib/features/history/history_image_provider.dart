@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/features/history/history_api.dart';
 import 'dart:async' show Future, Stream, StreamController;
 import 'package:flutter/foundation.dart';
@@ -40,7 +41,9 @@ class HistoryImageProvider extends BaseImageProvider<HistoryImageProvider> {
         checkStop();
         return bytes;
       }
-      var comicSource = type.comicSource ?? (throw "Comic source not found.");
+      var comicSource =
+          type.comicSource ??
+          (throw OperationFailure.message("Comic source not found."));
       final updateMetadata = HistoryManager().metadataUpdaterFor(history);
       var comic = await comicSource.loadComicInfo!(id);
       checkStop();
@@ -64,7 +67,9 @@ class HistoryImageProvider extends BaseImageProvider<HistoryImageProvider> {
       ),
     );
     checkStop();
-    if (bytes == null) throw "Error: Empty response body.";
+    if (bytes == null) {
+      throw OperationFailure.message("Error: Empty response body.");
+    }
     return bytes;
   }
 

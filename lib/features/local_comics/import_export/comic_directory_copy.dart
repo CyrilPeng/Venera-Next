@@ -1,7 +1,6 @@
 import 'package:flutter_saf/flutter_saf.dart';
 import 'package:path/path.dart' as path;
 import 'package:uuid/uuid.dart';
-import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/operation_failure.dart';
 
@@ -92,17 +91,12 @@ class ComicDirectoryCopier {
           );
         }
         output = _reserveDirectory(root, source.name);
-        final record = ComicCopyRecord.prepare(
+        final record = await ComicCopyRecord.prepare(
           output,
-          source: sourcePath,
+          source: source,
           metadata: metadata[sourcePath],
         );
-        await copyDirectory(
-          source,
-          output,
-          requireNonEmpty: (file) => isComicImageFileName(file.name),
-        );
-        await record.complete();
+        await record.resume();
         copies[sourcePath] = output.path;
       } catch (error, stack) {
         Object? cleanupError;

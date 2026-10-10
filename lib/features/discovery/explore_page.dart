@@ -1,3 +1,4 @@
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'dart:async';
@@ -292,7 +293,7 @@ class _SingleExplorePageState extends AutomaticGlobalState<_SingleExplorePage>
         }
       }
     }
-    throw "Explore Page ${widget.title} Not Found!";
+    throw OperationFailure.message("Explore Page ${widget.title} Not Found!");
   }
 
   @override

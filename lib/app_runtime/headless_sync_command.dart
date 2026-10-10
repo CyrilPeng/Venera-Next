@@ -30,8 +30,8 @@ Future<int> runHeadlessSyncCommand(
   Res<bool> result;
   try {
     result = await (uploading ? upload() : download());
-  } catch (error) {
-    result = Res.error(error.toString());
+  } catch (error, stack) {
+    result = Res.fromException(error, stack);
   }
   final operation = uploading ? 'Upload' : 'Download';
   emit({

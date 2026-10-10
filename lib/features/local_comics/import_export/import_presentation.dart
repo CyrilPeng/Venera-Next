@@ -6,6 +6,7 @@ import 'package:venera_next/foundation/context.dart';
 import 'pdf_import_dialog.dart';
 import 'pdf_import_tasks.dart';
 import 'copy_recovery_dialog.dart';
+import 'comic_copy_record.dart';
 
 /// Headless imports have no presentation. Interactive imports keep the original
 /// window/task; an old operation never adopts a replacement root navigator.
@@ -15,10 +16,13 @@ class ImportComicPresentation {
     : _owner = owner;
   final WindowSelectionTask? _owner;
 
+  bool get canPresent => _owner?.presentationContext != null;
+
   Future<ComicCopyRecoveryChoice?> chooseCopyRecovery({
     required String title,
-    required String previousFolder,
+    required String? previousFolder,
     required List<String> folders,
+    ComicCopyRecoveryKind kind = ComicCopyRecoveryKind.complete,
   }) async {
     final context = _owner?.presentationContext;
     if (context == null) return null;
@@ -27,6 +31,7 @@ class ImportComicPresentation {
       title: title,
       previousFolder: previousFolder,
       folders: folders,
+      kind: kind,
       retainPresentation: (close, isCurrent) =>
           _owner!.retainPresentation(close, isCurrent: isCurrent),
     );
