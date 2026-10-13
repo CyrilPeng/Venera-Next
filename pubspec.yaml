@@ -21,10 +21,10 @@ dependencies:
       url: https://github.com/CyrilPeng/flutter_qjs
       ref: 8feae95df7fb00455df129ad7a0dfec1d0e8d8e4
   crypto: ^3.0.7
-  dio: ^5.11.0
+  dio: ^5.11.1
   html: ^0.15.7
   pointycastle: ^4.0.0
-  url_launcher: ^6.3.2
+  url_launcher: ^6.3.3
   path: ^1.9.0
   photo_view:
     path: packages/photo_view
@@ -59,12 +59,12 @@ dependencies:
       ref: ac7d05dde32e8d728102a9ff66e6b55f05d94ba1
   rhttp:
     path: packages/rhttp
-  flutter_rust_bridge: 2.11.1
+  flutter_rust_bridge: 2.13.0
   webdav_client:
     git:
       url: https://github.com/CyrilPeng/webdav_client
       ref: 2f669c98fb81cff1c64fee93466a1475c77e4273
-  battery_plus: ^7.1.1
+  battery_plus: ^7.1.2
   local_auth: ^3.0.2
   flutter_saf:
     git:
@@ -82,7 +82,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   yaml: ^3.1.4
-  enough_convert: ^1.6.0
+  enough_convert: ^1.7.1
   display_mode: ^0.0.2
   flutter_staggered_grid_view: ^0.7.0
   archive: ^4.2.0
