@@ -112,6 +112,16 @@ to 0.22.1 in the same lockfile. HTTP settings, streaming cancellation and
 callback acknowledgment handling remain unchanged. The two routine updates
 are combined without reverting any of the security fixes listed above.
 
+The combined six-platform build exposed the upstream libc 0.2.190 iOS
+regression: its dyld declarations are now macOS-only, so backtrace 0.3.76
+cannot compile for iOS (https://github.com/rust-lang/libc/issues/5601).
+PR #103 adds an exact libc 0.2.189 manifest pin and lockfile update, and
+Dependabot ignores only the known-broken 0.2.190 release. The direct pin
+also prevents transitive dependency updates from selecting that release.
+A dedicated macOS-hosted CI job checks the locked Rhttp library against
+the aarch64-apple-ios target before future dependency updates are merged.
+The pin can advance when an upstream fixed release passes this gate.
+
 ## Building the patched source
 
 Windows/Linux CMake, Android Gradle and iOS/macOS pod scripts all invoke the

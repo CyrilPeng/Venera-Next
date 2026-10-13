@@ -43,6 +43,22 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  rhttp-ios:
+    name: iOS Rhttp 原生依赖兼容性
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo xcode-select --switch /Applications/Xcode_16.4.app
+      - name: 准备 iOS Rust 工具链
+        run: python3 .github/scripts/prepare_rust_toolchain.py --target aarch64-apple-ios
+      - name: 验证锁定原生依赖可用于 iOS
+        env:
+          RUSTFLAGS: --cfg reqwest_unstable
+        run: |
+          export SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
+          cargo check --locked --manifest-path packages/rhttp/rust/Cargo.toml --target aarch64-apple-ios --lib
+
   analyze:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

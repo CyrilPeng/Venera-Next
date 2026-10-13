@@ -36,6 +36,9 @@ updates:
       # The Rust crate and generated Dart bridge must be upgraded together.
       - dependency-name: flutter_rust_bridge
         versions: ["> 2.11.1"]
+      # This release breaks backtrace on iOS (rust-lang/libc#5601).
+      - dependency-name: libc
+        versions: ["0.2.190"]
 
   - package-ecosystem: github-actions
     directory: /
