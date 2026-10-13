@@ -6,6 +6,12 @@
 
 ### 变更
 
+- 更新 battery_plus、Dio、enough_convert 和 url_launcher 四项 Dart 依赖；撤回未生效的 Flutter Rust Bridge 升级，统一保持 2.11.1，并在 Pub 侧增加忽略规则，等待 Dart、Rust 和生成桥接代码协调升级（#103）。
+
+- 更新 Rhttp 的 Reqwest 至 0.12.28、cookie_store 至 0.22.1，保留原生流式请求取消与回调收尾补丁，并继续锁定现有安全修复版本（#102）。
+
+- 更新 Rhttp 的 Chrono、Futures、Tokio 和 Tokio-util 常规依赖及相关锁定依赖，保留 Flutter Rust Bridge 2.11.1、取消回调补丁及现有安全修复（#101）。
+
 - 定向升级 Rhttp 的 Rust 依赖，修复 10 条 GitHub 告警及全量扫描发现的 HTTP/2、QUIC 和内存安全问题；工具链更新至 1.92.0，补齐 Cargo 每周更新和完整锁文件审计，漏洞及 unsound 告警均阻断 CI，保留现有 Dart 桥接和取消回调补丁。
 
 - 阅读模式自动识别的集成回归等待新视图实际绘制首帧，保留图片展示断言，避免异步解码尚未完成时误报图片缺失。

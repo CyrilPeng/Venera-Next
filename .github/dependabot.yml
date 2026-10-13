@@ -13,6 +13,9 @@ updates:
         dependency-type: development
         update-types: ["minor", "patch"]
     ignore:
+      # Keep Dart, Rust and generated bridge code on the same pinned version.
+      - dependency-name: flutter_rust_bridge
+        versions: ["> 2.11.1"]
       # rhttp 0.18+ requires a newer flutter_rust_bridge than this project pins.
       - dependency-name: rhttp
         versions: [">= 0.18.0"]

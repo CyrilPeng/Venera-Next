@@ -50,7 +50,7 @@ not modified. No formatting exclusions or changes to the check were added.
 Application-specific Rust source changes remain in `rust/src/api/http.rs`,
 including its callback-drain tests and Rust formatting normalization. Other
 local additions are this document, `.gitignore`, and `rust/cargokit.yaml`.
-Apart from the Cargo.lock security updates below, all remaining retained
+Apart from the Cargo.lock dependency updates below, all remaining retained
 upstream files are byte-for-byte unchanged, including licenses, generated
 bridge code and platform build entry points.
 
@@ -96,6 +96,21 @@ runs cargo-audit 0.22.2 against the complete lockfile on pull requests, pushes t
 main, manual dispatch and a weekly schedule. It fetches current RustSec
 advisories and fails on known vulnerabilities and unsoundness warnings without
 advisory exclusions.
+
+## Routine Rust dependency updates (2026-10-13)
+
+Dependabot PR #101 updates Chrono 0.4.42 to 0.4.45, Futures crates 0.3.31
+to 0.3.34, Tokio 1.48.0 to 1.53.2, and Tokio-util 0.7.17 to 0.7.20. Their
+transitive lockfile changes update libc, Mio, socket2 and Tokio macros, and
+add Syn 3 alongside the retained Syn 2 dependency graph. These are compatible
+with the existing manifest constraints and Rust 1.92.0 toolchain. Generated
+bridge code, the exact Flutter Rust Bridge 2.11.1 pin, callback-drain patch,
+and the security-fixed crate entries above remain unchanged.
+
+Dependabot PR #102 updates Reqwest 0.12.25 to 0.12.28 and cookie_store 0.21.1
+to 0.22.1 in the same lockfile. HTTP settings, streaming cancellation and
+callback acknowledgment handling remain unchanged. The two routine updates
+are combined without reverting any of the security fixes listed above.
 
 ## Building the patched source
 
