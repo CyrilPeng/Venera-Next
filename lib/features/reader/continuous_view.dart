@@ -1020,11 +1020,6 @@ class ContinuousModeState extends State<ReaderContinuousView>
           });
         }
       },
-      onPointerPanZoomUpdate: (event) {
-        if (event.scale == 1.0) {
-          smoothTo(0 - event.panDelta.dy);
-        }
-      },
       onPointerMove: (event) {
         Offset value = event.delta;
         if (photoViewController.scale == 1 || fingers != 1) {
@@ -1049,7 +1044,6 @@ class ContinuousModeState extends State<ReaderContinuousView>
           position: photoViewController.position + offset,
         );
       },
-      onPointerSignal: onPointerSignal,
       child: widget,
     );
 
@@ -1120,15 +1114,26 @@ class ContinuousModeState extends State<ReaderContinuousView>
       width *= 1 - percent * 2 / 100;
     }
 
-    return PhotoView.customChild(
-      backgroundDecoration: BoxDecoration(color: context.colorScheme.surface),
-      childSize: Size(width, height),
-      minScale: 1.0,
-      maxScale: 2.5,
-      strictScale: true,
-      controller: photoViewController,
-      onScaleUpdate: onScaleUpdate,
-      child: SizedBox(width: width, height: height, child: widget),
+    // Keep wheel and trackpad scrolling active across the full viewport,
+    // including the blank margins around the narrowed image flow.
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerSignal: onPointerSignal,
+      onPointerPanZoomUpdate: (event) {
+        if (event.scale == 1.0) {
+          smoothTo(0 - event.panDelta.dy);
+        }
+      },
+      child: PhotoView.customChild(
+        backgroundDecoration: BoxDecoration(color: context.colorScheme.surface),
+        childSize: Size(width, height),
+        minScale: 1.0,
+        maxScale: 2.5,
+        strictScale: true,
+        controller: photoViewController,
+        onScaleUpdate: onScaleUpdate,
+        child: SizedBox(width: width, height: height, child: widget),
+      ),
     );
   }
 
