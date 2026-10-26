@@ -4,6 +4,7 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 import 'menu.dart';
+import 'tv_navigation.dart';
 
 class HoverBox extends StatefulWidget {
   const HoverBox({
@@ -157,6 +158,21 @@ class _ButtonState extends State<Button> {
   bool isLoading = false;
 
   @override
+  void initState() {
+    super.initState();
+    isLoading = widget.isLoading;
+  }
+
+  void _activate() {
+    if (isLoading) return;
+    widget.onPressed();
+    if (widget.onPressedAt != null) {
+      final renderBox = context.findRenderObject() as RenderBox;
+      widget.onPressedAt!(renderBox.localToGlobal(Offset.zero));
+    }
+  }
+
+  @override
   void didUpdateWidget(covariant Button oldWidget) {
     if (oldWidget.isLoading != widget.isLoading) {
       setState(() => isLoading = widget.isLoading);
@@ -192,55 +208,51 @@ class _ButtonState extends State<Button> {
     if (width != null || height != null) {
       child = child.toCenter();
     }
-    return MouseRegion(
-      onEnter: (_) => setState(() => isHover = true),
-      onExit: (_) => setState(() => isHover = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () {
-          if (isLoading) return;
-          widget.onPressed();
-          if (widget.onPressedAt != null) {
-            var renderBox = context.findRenderObject() as RenderBox;
-            var offset = renderBox.localToGlobal(Offset.zero);
-            widget.onPressedAt!(offset);
-          }
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: padding,
-          constraints: const BoxConstraints(minWidth: 76, minHeight: 32),
-          decoration: BoxDecoration(
-            color: buttonColor,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow:
-                (isHover &&
-                    !isLoading &&
-                    (widget.type == ButtonType.filled ||
-                        widget.type == ButtonType.normal))
-                ? [
-                    BoxShadow(
-                      color: Colors.black.toOpacity(0.1),
-                      blurRadius: 2,
-                      offset: const Offset(0, 1),
-                    ),
-                  ]
-                : null,
-            border: widget.type == ButtonType.outlined
-                ? Border.all(
-                    color:
-                        widget.color ??
-                        Theme.of(context).colorScheme.outlineVariant,
-                    width: 0.6,
-                  )
-                : null,
-          ),
-          child: AnimatedSize(
+    return TvFocusable(
+      onPressed: isLoading ? null : _activate,
+      borderRadius: BorderRadius.circular(16),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => isHover = true),
+        onExit: (_) => setState(() => isHover = false),
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: _activate,
+          child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
-            child: SizedBox(
-              width: width,
-              height: height,
-              child: Center(widthFactor: 1, child: child),
+            padding: padding,
+            constraints: const BoxConstraints(minWidth: 76, minHeight: 32),
+            decoration: BoxDecoration(
+              color: buttonColor,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow:
+                  (isHover &&
+                      !isLoading &&
+                      (widget.type == ButtonType.filled ||
+                          widget.type == ButtonType.normal))
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.toOpacity(0.1),
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                    ]
+                  : null,
+              border: widget.type == ButtonType.outlined
+                  ? Border.all(
+                      color:
+                          widget.color ??
+                          Theme.of(context).colorScheme.outlineVariant,
+                      width: 0.6,
+                    )
+                  : null,
+            ),
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 160),
+              child: SizedBox(
+                width: width,
+                height: height,
+                child: Center(widthFactor: 1, child: child),
+              ),
             ),
           ),
         ),
@@ -331,27 +343,33 @@ class _IconButtonState extends State<_IconButton> {
         strokeWidth: 1.5,
       ).paddingAll(2).fixWidth(iconSize).fixHeight(iconSize);
     }
-    return MouseRegion(
-      onEnter: (_) => setState(() => isHover = true),
-      onExit: (_) => setState(() => isHover = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: widget.behavior,
-        onTap: () {
-          if (widget.isLoading) return;
-          widget.onPressed();
-        },
-        child: Tooltip(
-          message: widget.tooltip ?? "",
-          child: Container(
-            decoration: BoxDecoration(
-              color: isHover
-                  ? Theme.of(context).colorScheme.outlineVariant.toOpacity(0.4)
-                  : null,
-              borderRadius: BorderRadius.circular((iconSize + 12) / 2),
+    return TvFocusable(
+      onPressed: widget.isLoading ? null : widget.onPressed,
+      borderRadius: BorderRadius.circular((iconSize + 12) / 2),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => isHover = true),
+        onExit: (_) => setState(() => isHover = false),
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: widget.behavior,
+          onTap: () {
+            if (widget.isLoading) return;
+            widget.onPressed();
+          },
+          child: Tooltip(
+            message: widget.tooltip ?? "",
+            child: Container(
+              decoration: BoxDecoration(
+                color: isHover
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.toOpacity(0.4)
+                    : null,
+                borderRadius: BorderRadius.circular((iconSize + 12) / 2),
+              ),
+              padding: const EdgeInsets.all(6),
+              child: icon,
             ),
-            padding: const EdgeInsets.all(6),
-            child: icon,
           ),
         ),
       ),
