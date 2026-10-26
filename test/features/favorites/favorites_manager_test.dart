@@ -1744,7 +1744,11 @@ void main() {
         late Map<String, Object?> internalBefore;
         try {
           seedAnalyzedLegacyFavorites(seed);
-          internalBefore = sqliteInternalTableSnapshot(seed);
+          // Rebuilding hierarchy metadata invalidates only its old statistics.
+          internalBefore = sqliteInternalTableSnapshot(
+            seed,
+            excludeStatisticsFor: {'folder_order'},
+          );
         } finally {
           seed.dispose();
         }

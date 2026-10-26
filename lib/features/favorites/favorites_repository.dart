@@ -51,12 +51,28 @@ class FavoritesRepository {
         [name, index, const Uuid().v4()],
       );
     }
-    db.execute(
-      'CREATE UNIQUE INDEX favorite_folder_identity ON folder_order(folder_id);',
-    );
-    db.execute(
-      'CREATE UNIQUE INDEX favorite_folder_name ON folder_order(folder_name);',
-    );
+    // Table constraints use SQLite's reserved autoindex namespace, so indexes
+    // cannot claim a legitimate legacy or future comic-folder name.
+    String migratedOrder;
+    do {
+      migratedOrder = '_favorite_hierarchy_${const Uuid().v4()}';
+    } while (db.select(
+      'SELECT 1 FROM sqlite_master WHERE name = ? COLLATE NOCASE;',
+      [migratedOrder],
+    ).isNotEmpty);
+    db.execute('''
+      CREATE TABLE ${_table(migratedOrder)} (
+        folder_name TEXT PRIMARY KEY, order_value INT,
+        folder_id TEXT NOT NULL UNIQUE, parent_id TEXT
+      );
+    ''');
+    db.execute('''
+      INSERT INTO ${_table(migratedOrder)}
+        (folder_name, order_value, folder_id, parent_id)
+      SELECT folder_name, order_value, folder_id, parent_id FROM folder_order;
+    ''');
+    db.execute('DROP TABLE folder_order;');
+    db.execute('ALTER TABLE ${_table(migratedOrder)} RENAME TO folder_order;');
     db.execute('PRAGMA user_version = 1;');
     folderTree();
   });

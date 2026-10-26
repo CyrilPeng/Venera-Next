@@ -19,6 +19,8 @@ import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/comic_source/source_data_storage.dart';
 import 'package:venera_next/features/comic_source/source_transaction_journal.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
+import 'package:venera_next/features/favorites/favorites_repository.dart';
+import 'package:venera_next/foundation/sqlite_connection.dart';
 import 'package:venera_next/features/history/history_manager.dart';
 import 'package:venera_next/network/cookie_jar.dart';
 import 'package:venera_next/foundation/file_system.dart';
@@ -203,6 +205,17 @@ Future<DataSyncCommitState> _importAppData(
       if (version != null &&
           SyncConfiguration.requireDataVersion(version) <= currentVersion) {
         return DataSyncCommitState.notApplied;
+      }
+    }
+
+    if (await localFavoriteFile.exists()) {
+      final stagedFavorites = openSqliteDatabase(localFavoriteFile.path);
+      try {
+        final repository = FavoritesRepository(stagedFavorites);
+        repository.initializeMetadata();
+        repository.initializeHierarchy();
+      } finally {
+        stagedFavorites.dispose();
       }
     }
 

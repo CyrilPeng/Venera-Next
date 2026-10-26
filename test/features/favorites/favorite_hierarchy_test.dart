@@ -93,6 +93,38 @@ void main() {
     expect(repository.folderTree().roots, hasLength(2));
   });
 
+  test('legacy folder names cannot collide with hierarchy index names', () {
+    const names = ['favorite_folder_identity', 'favorite_folder_name'];
+    for (final name in names) {
+      repository.createFolder(name);
+      repository.addComic(name, comic(name), translatedTags: '', append: true);
+    }
+    repository.updateOrder(names.reversed.toList());
+    repository.initializeHierarchy();
+    expect(repository.folderNames(), names.reversed);
+    for (final name in names) {
+      expect(repository.folderTree().named(name)!.parentId, isNull);
+      expect(repository.getFolderComics(name).single.id, name);
+    }
+  });
+
+  test('hierarchy indexes do not reserve additional folder names', () {
+    repository.initializeHierarchy();
+    repository.createFolder('favorite_folder_identity');
+    repository.createFolder('favorite_folder_name');
+    final tree = repository.folderTree();
+    expect(tree.roots, hasLength(2));
+    expect(
+      () => db.execute(
+        'UPDATE folder_order SET folder_id = ? WHERE folder_name = ?;',
+        [tree.named('favorite_folder_identity')!.id, 'favorite_folder_name'],
+      ),
+      throwsA(isA<SqliteException>()),
+    );
+    repository.initializeHierarchy();
+    expect(repository.folderTree().roots, hasLength(2));
+  });
+
   test('failed migration rolls back schema, version and order', () {
     repository.createFolder('A');
     repository.updateOrder(['A']);
