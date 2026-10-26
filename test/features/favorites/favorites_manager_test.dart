@@ -1235,6 +1235,7 @@ void main() {
         final path = '${App.dataPath}/local_favorite.db';
         final db = sqlite3.open(path);
         db.execute('DROP TABLE folder_order;');
+        db.execute('PRAGMA user_version = 0;');
         db.execute('CREATE TABLE folder_order (invalid TEXT);');
         db.dispose();
         final first = manager.init();

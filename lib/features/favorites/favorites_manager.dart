@@ -12,6 +12,8 @@ import 'favorite_identity_index.dart';
 import 'package:venera_next/foundation/file_replacement.dart';
 import 'favorites_repository.dart';
 import 'favorite_models.dart';
+import 'favorite_folder.dart';
+import 'package:venera_next/foundation/sqlite_snapshot.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
@@ -106,6 +108,14 @@ class LocalFavoritesManager with ChangeNotifier {
     String name, [
     bool renameWhenInvalidName = false,
   ]) => _mutate(() => _createFolder(name, renameWhenInvalidName));
+
+  Future<String> createChildFolder(String name, String? parentId) =>
+      _mutate(() => _createFolder(name, false, parentId));
+
+  Future<void> moveFolder(String name, String? parentId) => _mutate(() {
+    _commitFavoriteTransaction(() => _repository.moveFolder(name, parentId));
+    notifyListeners();
+  });
 
   Future<void> linkFolderToNetwork(
     String folder,
@@ -612,7 +622,15 @@ class LocalFavoritesManager with ChangeNotifier {
       final databaseExisted = File(path).existsSync();
       database = openSqliteDatabase(path);
       final repository = FavoritesRepository(database);
+      if (databaseExisted && repository.needsHierarchyMigration) {
+        final backup = await File(
+          path,
+        ).parent.createTemp('.favorite_hierarchy_backup_');
+        await createSqliteSnapshot(path, '${backup.path}/local_favorite.db');
+        _checkInitialization(generation);
+      }
       repository.initializeMetadata();
+      repository.initializeHierarchy();
       final folders = repository.folderNames();
       repository.migrateTranslatedTags(folders, _translateTags);
       if (!databaseExisted && folders.isEmpty) {
@@ -916,6 +934,8 @@ class LocalFavoritesManager with ChangeNotifier {
 
   List<String> get folderNames => _repository.folderNames();
 
+  FavoriteFolderTree get folderTree => _repository.folderTree();
+
   int maxValue(String folder) => _repository.maxValue(folder);
 
   int minValue(String folder) => _repository.minValue(folder);
@@ -1000,7 +1020,11 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   /// create a folder
-  String _createFolder(String name, [bool renameWhenInvalidName = false]) {
+  String _createFolder(
+    String name, [
+    bool renameWhenInvalidName = false,
+    String? parentId,
+  ]) {
     if (name.isEmpty) {
       if (renameWhenInvalidName) {
         int i = 0;
@@ -1024,7 +1048,9 @@ class LocalFavoritesManager with ChangeNotifier {
         throw Exception("Folder is existing");
       }
     }
-    _repository.createFolder(name);
+    _commitFavoriteTransaction(
+      () => _repository.createFolder(name, parentId: parentId),
+    );
     counts[name] = 0;
     notifyListeners();
     return name;

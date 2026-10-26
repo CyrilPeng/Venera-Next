@@ -2,6 +2,8 @@ import 'package:venera_next/foundation/sqlite_transaction.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'favorite_models.dart';
 import 'favorite_row.dart';
+import 'favorite_folder.dart';
+import 'package:uuid/uuid.dart';
 
 /// Favorite persistence on a caller-owned connection; no cache or notifications.
 class FavoritesRepository {
@@ -14,6 +16,96 @@ class FavoritesRepository {
     );
     db.execute(
       'CREATE TABLE IF NOT EXISTS folder_sync (folder_name TEXT PRIMARY KEY, source_key TEXT, source_folder TEXT);',
+    );
+  });
+
+  bool get needsHierarchyMigration =>
+      db.select('PRAGMA user_version;').single.values.single == 0;
+
+  bool get _hasHierarchy => _columns('folder_order').contains('folder_id');
+
+  void initializeHierarchy() => _transaction(() {
+    final version = db.select('PRAGMA user_version;').single.values.single;
+    if (version != 0 && version != 1) {
+      throw const FormatException('Unsupported favorite hierarchy version');
+    }
+    if (version == 1) {
+      if (!_columns('folder_order').containsAll(['folder_id', 'parent_id'])) {
+        throw const FormatException('Missing favorite hierarchy metadata');
+      }
+      folderTree();
+      return;
+    }
+    if (_hasHierarchy) {
+      throw const FormatException('Incomplete favorite hierarchy migration');
+    }
+    final folders = folderNames();
+    db.execute('ALTER TABLE folder_order ADD COLUMN folder_id TEXT;');
+    db.execute('ALTER TABLE folder_order ADD COLUMN parent_id TEXT;');
+    // Legacy metadata can contain duplicates and stale entries. Preserve its
+    // effective order without moving or rewriting any comic table.
+    db.execute('DELETE FROM folder_order;');
+    for (final (index, name) in folders.indexed) {
+      db.execute(
+        'INSERT INTO folder_order (folder_name, order_value, folder_id, parent_id) VALUES (?, ?, ?, NULL);',
+        [name, index, const Uuid().v4()],
+      );
+    }
+    db.execute(
+      'CREATE UNIQUE INDEX favorite_folder_identity ON folder_order(folder_id);',
+    );
+    db.execute(
+      'CREATE UNIQUE INDEX favorite_folder_name ON folder_order(folder_name);',
+    );
+    db.execute('PRAGMA user_version = 1;');
+    folderTree();
+  });
+
+  FavoriteFolderTree folderTree() {
+    final names = _storedFolderNames();
+    if (!_hasHierarchy) return FavoriteFolderTree.flat(folderNames());
+    final rows = db.select(
+      'SELECT folder_name, order_value, folder_id, parent_id FROM folder_order;',
+    );
+    if (rows.length != names.length ||
+        rows.any((row) => !names.contains(row['folder_name']))) {
+      throw const FormatException('Favorite hierarchy does not match folders');
+    }
+    return FavoriteFolderTree([
+      for (final row in rows)
+        if (row['folder_id'] is String &&
+            row['folder_name'] is String &&
+            row['order_value'] is int &&
+            (row['parent_id'] == null || row['parent_id'] is String))
+          FavoriteFolder(
+            id: row['folder_id'] as String,
+            name: row['folder_name'] as String,
+            parentId: row['parent_id'] as String?,
+            order: row['order_value'] as int,
+          )
+        else
+          throw const FormatException('Invalid favorite hierarchy metadata'),
+    ]);
+  }
+
+  void moveFolder(String name, String? parentId) => _transaction(() {
+    final tree = folderTree();
+    final folder = tree.named(name);
+    if (folder == null) throw StateError('Favorite folder no longer exists');
+    if (folder.parentId == parentId) return;
+    if (parentId != null) {
+      final parent = tree.identified(parentId);
+      if (parent == null ||
+          parent.parentId != null ||
+          parent.id == folder.id ||
+          tree.childrenOf(folder.id).isNotEmpty) {
+        throw StateError('A favorite folder can have at most two levels');
+      }
+    }
+    final siblings = tree.childrenOf(parentId);
+    db.execute(
+      'UPDATE folder_order SET parent_id = ?, order_value = ? WHERE folder_id = ?;',
+      [parentId, siblings.isEmpty ? 0 : siblings.last.order + 1, folder.id],
     );
   });
 
@@ -61,7 +153,20 @@ class FavoritesRepository {
         }
       });
 
-  void createFolder(String folder) {
+  void createFolder(String folder, {String? parentId}) => _transaction(() {
+    if (folder.isEmpty ||
+        folder == 'folder_order' ||
+        folder == 'folder_sync' ||
+        folder.toLowerCase().startsWith('sqlite_')) {
+      throw const FormatException('Invalid favorite folder name');
+    }
+    final hierarchical = _hasHierarchy;
+    if (parentId != null &&
+        (!hierarchical ||
+            folderTree().identified(parentId) == null ||
+            folderTree().identified(parentId)!.parentId != null)) {
+      throw StateError('Parent must be a first-level favorite folder');
+    }
     db.execute('''
       CREATE TABLE ${_table(folder)} (
         id TEXT, name TEXT, author TEXT, type INT, tags TEXT, cover_path TEXT,
@@ -69,7 +174,22 @@ class FavoritesRepository {
         PRIMARY KEY (id, type)
       );
     ''');
-  }
+    if (hierarchical) {
+      final siblings = db.select(
+        'SELECT MAX(order_value) AS value FROM folder_order WHERE parent_id IS ?;',
+        [parentId],
+      );
+      db.execute(
+        'INSERT INTO folder_order (folder_name, order_value, folder_id, parent_id) VALUES (?, ?, ?, ?);',
+        [
+          folder,
+          (siblings.single['value'] as int? ?? -1) + 1,
+          const Uuid().v4(),
+          parentId,
+        ],
+      );
+    }
+  });
 
   void renameFolder(String before, String after) => _transaction(() {
     db.execute('ALTER TABLE ${_table(before)} RENAME TO ${_table(after)};');
@@ -126,6 +246,14 @@ class FavoritesRepository {
   });
 
   void deleteFolder(String folder) => _transaction(() {
+    if (_hasHierarchy) {
+      final tree = folderTree();
+      final target = tree.named(folder);
+      if (target == null) throw StateError('Favorite folder no longer exists');
+      if (tree.childrenOf(target.id).isNotEmpty) {
+        throw StateError('Move subfolders before deleting this folder');
+      }
+    }
     db.execute('DROP TABLE ${_table(folder)};');
     db.execute('DELETE FROM folder_order WHERE folder_name = ?;', [folder]);
     db.execute('DELETE FROM folder_sync WHERE folder_name = ?;', [folder]);
@@ -181,6 +309,27 @@ class FavoritesRepository {
   });
 
   void updateOrder(List<String> folders) => _transaction(() {
+    if (_hasHierarchy) {
+      final tree = folderTree();
+      if (folders.toSet().length != folders.length ||
+          folders.any((name) => tree.named(name) == null)) {
+        throw StateError('Favorite folder order is stale');
+      }
+      final positions = <String?, int>{};
+      for (final name in folders) {
+        final folder = tree.named(name)!;
+        final order = positions.update(
+          folder.parentId,
+          (value) => value + 1,
+          ifAbsent: () => 0,
+        );
+        db.execute(
+          'UPDATE folder_order SET order_value = ? WHERE folder_id = ?;',
+          [order, folder.id],
+        );
+      }
+      return;
+    }
     for (var i = 0; i < folders.length; i++) {
       db.execute(
         'INSERT OR REPLACE INTO folder_order (folder_name, order_value) VALUES (?, ?);',
@@ -329,18 +478,20 @@ class FavoritesRepository {
   static String _qualifiedTable(String folder, String? schema) =>
       schema == null ? _table(folder) : '${_table(schema)}.${_table(folder)}';
 
+  List<String> _storedFolderNames() => db
+      .select(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*';",
+      )
+      .map((row) => row['name'] as String)
+      .where((name) => name != 'folder_sync' && name != 'folder_order')
+      .toList();
+
   List<String> folderNames() {
+    if (_hasHierarchy) {
+      return folderTree().flattened.map((folder) => folder.name).toList();
+    }
     // SQLite-owned statistics and sequence tables are not favorite folders.
-    final folders =
-        db
-            .select(
-              "SELECT name FROM sqlite_master WHERE type='table' "
-              "AND name NOT GLOB 'sqlite_*';",
-            )
-            .map((row) => row['name'] as String)
-            .toList()
-          ..remove('folder_sync')
-          ..remove('folder_order');
+    final folders = _storedFolderNames();
     final knownFolders = folders.toSet();
     final orders = <String, int>{};
     for (final row in db.select(
