@@ -5,7 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/message.dart';
-import 'package:venera_next/components/select.dart';
+import 'package:venera_next/features/favorites/favorite_folder_browser.dart';
 import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/features/favorites/favorites.dart';
@@ -40,6 +40,7 @@ class _FollowUpdatesFolderDialogState
   late final LocalFavoritesManager _manager;
   late final int _generation;
   late final List<String> _folders;
+  late final FavoriteFolderTree _tree;
   String? _selected;
   Object? _preparationError;
   Future<void>? _preparation;
@@ -55,6 +56,7 @@ class _FollowUpdatesFolderDialogState
     _manager = FavoritesScope.read(context);
     _generation = _manager.connectionGeneration;
     _folders = List<String>.unmodifiable(_manager.folderNames);
+    _tree = _manager.folderTree;
   }
 
   @override
@@ -208,21 +210,19 @@ class _FollowUpdatesFolderDialogState
               const SizedBox(height: 8),
               AbsorbPointer(
                 absorbing: busy,
-                child: Select(
-                  minWidth: 120,
+                child: FavoriteFolderSelect(
+                  tree: _tree,
                   current: _selected,
-                  values: _folders,
-                  onTap: (index) {
+                  onChanged: (name) {
                     if (!mounted ||
                         !acceptsSettingsChanges ||
                         _preparation != null ||
                         savingSettings ||
                         hasSettingsSaveError ||
-                        index < 0 ||
-                        index >= _folders.length) {
+                        !_folders.contains(name)) {
                       return;
                     }
-                    setState(() => _selected = _folders[index]);
+                    setState(() => _selected = name);
                   },
                 ),
               ),

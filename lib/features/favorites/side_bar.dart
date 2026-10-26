@@ -12,6 +12,8 @@ import 'package:venera_next/features/favorites/favorite_actions.dart';
 import 'package:venera_next/features/favorites/favorites_constants.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/favorites/folder_order_dialog.dart';
+import 'favorite_folder_browser.dart';
+import 'favorite_folder.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -56,6 +58,7 @@ class FavoritesFolderSidebar extends StatefulWidget {
 class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
     implements FolderList {
   var folders = <String>[];
+  late FavoriteFolderTree _tree;
 
   var networkFolders = <String>[];
   late final FavoriteStoreBinding _store;
@@ -88,6 +91,7 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
     _managerGeneration = _manager.connectionGeneration;
     widget.onFolderListReady?.call(this);
     folders = _manager.folderNames;
+    _tree = _manager.folderTree;
     findNetworkFolders();
     appdata.settings.addListener(updateFolders);
     _manager.addListener(updateFolders);
@@ -129,30 +133,30 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
               ),
             ).paddingTop(context.padding.top),
           Expanded(
-            child: ListView.builder(
+            child: FavoriteFolderBrowser(
+              tree: _tree,
+              enabled: _hasManager,
+              selected: {
+                if (!widget.isNetworkSelected && widget.selectedFolder != null)
+                  widget.selectedFolder!,
+              },
+              countFor: (name) => _hasManager ? _manager.folderComics(name) : 0,
+              onSelected: (name) {
+                if (!_hasManager) return;
+                widget.onFolderSelected(false, name);
+                widget.onSelected?.call();
+              },
               padding: widget.withAppbar
                   ? EdgeInsets.zero
                   : EdgeInsets.only(top: context.padding.top),
-              itemCount: folders.length + networkFolders.length + 3,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return buildLocalTitle();
-                }
-                index--;
-                if (index == 0) {
-                  return buildLocalFolder(localAllFolderLabel);
-                }
-                index--;
-                if (index < folders.length) {
-                  return buildLocalFolder(folders[index]);
-                }
-                index -= folders.length;
-                if (index == 0) {
-                  return buildNetworkTitle();
-                }
-                index--;
-                return buildNetworkFolder(networkFolders[index]);
-              },
+              headers: [
+                buildLocalTitle(),
+                buildLocalFolder(localAllFolderLabel),
+              ],
+              footers: [
+                buildNetworkTitle(),
+                for (final folder in networkFolders) buildNetworkFolder(folder),
+              ],
             ),
           ),
         ],
@@ -180,7 +184,7 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
                     context,
                     onChanged: (next) {
                       if (!mounted || !_hasManager) return;
-                      setState(() => folders = next);
+                      updateFolders();
                     },
                   );
                 },
@@ -343,6 +347,7 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
     if (!mounted || !_hasManager) return;
     setState(() {
       folders = _manager.folderNames;
+      _tree = _manager.folderTree;
       findNetworkFolders();
     });
   }

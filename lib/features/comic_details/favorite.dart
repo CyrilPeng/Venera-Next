@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorite_folder_browser.dart';
 import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
@@ -499,23 +500,37 @@ class _LocalSection extends StatefulWidget {
 }
 
 class _LocalSectionState extends State<_LocalSection> {
-  late List<String> localFolders;
   late Set<String> localAdded;
+  late final FavoriteStoreBinding _store;
+  late final LocalFavoritesManager _manager;
+  late final int _generation;
+  late FavoriteFolderTree _tree;
   bool saving = false;
 
+  bool get _current =>
+      _store.isCurrent && _manager.connectionGeneration == _generation;
+
+  void _refreshFolders() {
+    if (!mounted || !_current) return;
+    setState(() {
+      _tree = _manager.folderTree;
+      localAdded = _manager.find(widget.cid, widget.type).toSet();
+    });
+  }
+
   Future<void> changeFavorite(String folder, bool remove) async {
-    if (saving) return;
+    if (saving || !_current) return;
     final target = widget;
     bool sameTarget() => widget.cid == target.cid && widget.type == target.type;
     final owner = context;
     final route = ModalRoute.of(owner);
-    final manager = FavoritesScope.read(context);
-    final generation = manager.connectionGeneration;
+    final manager = _manager;
+    final generation = _generation;
     setState(() => saving = true);
     try {
       await AppDataOperations.instance.access(() async {
         if (!mounted || !sameTarget()) return;
-        if (manager.connectionGeneration != generation) {
+        if (!_store.isCurrent || manager.connectionGeneration != generation) {
           throw StateError('Favorites database changed. Try again.');
         }
         if (remove) {
@@ -554,7 +569,10 @@ class _LocalSectionState extends State<_LocalSection> {
   @override
   void initState() {
     super.initState();
-    localFolders = widget.localFolders;
+    _store = FavoritesScope.capture(context);
+    _manager = _store.manager;
+    _generation = _manager.connectionGeneration;
+    _tree = _manager.folderTree;
     localAdded = widget.added.toSet();
   }
 
@@ -573,35 +591,24 @@ class _LocalSectionState extends State<_LocalSection> {
             ),
           ),
         ),
-        ...localFolders.map((folder) {
-          var isAdded = localAdded.contains(folder);
-
-          return ListTile(
-            title: Row(
-              children: [
-                Text(folder),
-                const SizedBox(width: 8),
-                if (isAdded)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: context.colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text("Added".tl, style: ts.s12),
-                  ),
-              ],
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: math.min(360, MediaQuery.sizeOf(context).height * 0.5),
+          ),
+          child: FavoriteFolderBrowser(
+            tree: _tree,
+            shrinkWrap: true,
+            selected: Set.of(localAdded),
+            enabled: !saving && _current,
+            onSelected: (folder) =>
+                changeFavorite(folder, localAdded.contains(folder)),
+            trailingBuilder: (folder) => _HoverButton(
+              isFavorite: localAdded.contains(folder),
+              enabled: !saving && _current,
+              onTap: () => changeFavorite(folder, localAdded.contains(folder)),
             ),
-            trailing: _HoverButton(
-              isFavorite: isAdded,
-              enabled: !saving,
-              onTap: () => changeFavorite(folder, isAdded),
-            ),
-          );
-        }),
+          ),
+        ),
         // New folder button
         ListTile(
           title: Row(
@@ -622,7 +629,7 @@ class _LocalSectionState extends State<_LocalSection> {
                     widget.type != target.type) {
                   return;
                 }
-                setState(() => localFolders = folders);
+                _refreshFolders();
               },
             );
           },

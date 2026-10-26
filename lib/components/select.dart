@@ -5,6 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
+import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/navigation_admission.dart';
+import 'window_selection_task.dart';
+import 'message.dart';
 
 import 'consts.dart';
 import 'gesture.dart';
@@ -16,6 +21,9 @@ class Select extends StatelessWidget {
     required this.values,
     this.onTap,
     this.minWidth,
+    this.labels,
+    this.menuBuilder,
+    this.menuOwnerContext,
   });
 
   final String? current;
@@ -26,6 +34,83 @@ class Select extends StatelessWidget {
 
   final double? minWidth;
 
+  final Map<String, String>? labels;
+  final Widget Function(BuildContext, ValueChanged<String>)? menuBuilder;
+  // A dialog can own a nested menu above its own current-route admission gate.
+  final BuildContext? menuOwnerContext;
+
+  Future<void> _openCustomMenu(BuildContext context) async {
+    if (!NavigationAdmission.allows(context)) return;
+    final owner = WindowSelectionTask(menuOwnerContext ?? context);
+    if (!owner.canPresent) return;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final disposed = Completer<String?>();
+    final removalFailed = Completer<String?>();
+    removalFailed.future.ignore();
+    String? selected;
+    try {
+      await owner.run<void>((operation) async {
+        operation.checkActive();
+        late final ResourceDialogRoute<String> route;
+        route = ResourceDialogRoute<String>(
+          context: context,
+          themes: InheritedTheme.capture(from: context, to: navigator.context),
+          barrierColor: Colors.black54,
+          onDispose: () {
+            if (!disposed.isCompleted) disposed.complete();
+          },
+          builder: (dialogContext) => AlertDialog(
+            contentPadding: const EdgeInsets.all(8),
+            content: SizedBox(
+              width: 360,
+              height: math.min(
+                480,
+                MediaQuery.sizeOf(dialogContext).height * 0.6,
+              ),
+              child: menuBuilder!(dialogContext, (value) {
+                if (context.mounted &&
+                    owner.active &&
+                    route.isCurrent &&
+                    values.contains(value)) {
+                  navigator.pop(value);
+                }
+              }),
+            ),
+          ),
+        );
+        final release = owner.retainPresentation(() {
+          try {
+            if (navigator.mounted && route.isActive) {
+              navigator.removeRoute(route);
+            }
+          } catch (error, stack) {
+            if (!removalFailed.isCompleted) {
+              removalFailed.completeError(error, stack);
+            }
+            rethrow;
+          }
+        }, isCurrent: () => route.isCurrent);
+        selected = await Future.any([
+          navigator.push(route),
+          disposed.future,
+          removalFailed.future,
+        ]);
+        release();
+      });
+      if (context.mounted &&
+          owner.canPresent &&
+          NavigationAdmission.allows(context) &&
+          selected != null &&
+          values.contains(selected)) {
+        onTap?.call(values.indexOf(selected!));
+      }
+    } on SelectionCancelled {
+      // The choice belongs to the original field, never its replacement.
+    } catch (error, stack) {
+      Log.error('Select custom menu', error, stack);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -34,42 +119,48 @@ class Select extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: ClickInkWell(
-        onTap: () {
-          var renderBox = context.findRenderObject() as RenderBox;
-          var offset = renderBox.localToGlobal(Offset.zero);
-          var size = renderBox.size;
-          showMenu(
-            elevation: 3,
-            color: context.brightness == Brightness.light
-                ? const Color(0xFFF6F6F6)
-                : const Color(0xFF1E1E1E),
-            context: context,
-            useRootNavigator: true,
-            constraints: BoxConstraints(
-              minWidth: size.width,
-              maxWidth: size.width,
-            ),
-            position: RelativeRect.fromLTRB(
-              offset.dx,
-              offset.dy + size.height + 2,
-              offset.dx + size.height + 2,
-              offset.dy,
-            ),
-            items: values
-                .map(
-                  (e) => PopupMenuItem(
-                    height: App.isMobile ? 46 : 40,
-                    value: e,
-                    child: Text(e),
+        onTap: onTap == null
+            ? null
+            : () {
+                if (menuBuilder != null) {
+                  unawaited(_openCustomMenu(context));
+                  return;
+                }
+                var renderBox = context.findRenderObject() as RenderBox;
+                var offset = renderBox.localToGlobal(Offset.zero);
+                var size = renderBox.size;
+                showMenu(
+                  elevation: 3,
+                  color: context.brightness == Brightness.light
+                      ? const Color(0xFFF6F6F6)
+                      : const Color(0xFF1E1E1E),
+                  context: context,
+                  useRootNavigator: true,
+                  constraints: BoxConstraints(
+                    minWidth: size.width,
+                    maxWidth: size.width,
                   ),
-                )
-                .toList(),
-          ).then((value) {
-            if (value != null) {
-              onTap?.call(values.indexOf(value));
-            }
-          });
-        },
+                  position: RelativeRect.fromLTRB(
+                    offset.dx,
+                    offset.dy + size.height + 2,
+                    offset.dx + size.height + 2,
+                    offset.dy,
+                  ),
+                  items: values
+                      .map(
+                        (e) => PopupMenuItem(
+                          height: App.isMobile ? 46 : 40,
+                          value: e,
+                          child: Text(labels?[e] ?? e),
+                        ),
+                      )
+                      .toList(),
+                ).then((value) {
+                  if (value != null) {
+                    onTap?.call(values.indexOf(value));
+                  }
+                });
+              },
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -77,7 +168,19 @@ class Select extends StatelessWidget {
               constraints: BoxConstraints(
                 minWidth: minWidth != null ? (minWidth! - 32) : 0,
               ),
-              child: Text(current ?? ' ', style: ts.s14),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: menuBuilder == null
+                      ? MediaQuery.sizeOf(context).width * 0.45
+                      : math.min(240, MediaQuery.sizeOf(context).width * 0.45),
+                ),
+                child: Text(
+                  labels?[current] ?? current ?? ' ',
+                  style: ts.s14,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ),
             const SizedBox(width: 8),
             Icon(Icons.arrow_drop_down, color: context.colorScheme.primary),
