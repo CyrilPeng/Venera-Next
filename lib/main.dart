@@ -152,13 +152,18 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Future<void> _tvBack() async {
     if (!mounted || widget.host.isClosing) return;
-    if (await appNavigation.rootNavigatorKey.currentState?.maybePop() ?? false)
+    if (await appNavigation.rootNavigatorKey.currentState?.maybePop() ??
+        false) {
       return;
+    }
     if (!mounted || widget.host.isClosing) return;
-    if (await appNavigation.mainNavigatorKey?.currentState?.maybePop() ?? false)
+    if (await appNavigation.mainNavigatorKey?.currentState?.maybePop() ??
+        false) {
       return;
-    if (mounted && !widget.host.isClosing && App.isAndroid)
+    }
+    if (mounted && !widget.host.isClosing && App.isAndroid) {
       await SystemNavigator.pop();
+    }
   }
 
   late final _library = webDavLibrary;
@@ -395,7 +400,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       ),
       listTileTheme: ListTileThemeData(),
       focusColor: AppProfile.current.isTv
-          ? primary?.withValues(alpha: 0.25)
+          ? primary.withValues(alpha: 0.25)
           : null,
     );
   }

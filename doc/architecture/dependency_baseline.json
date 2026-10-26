@@ -704,6 +704,7 @@
     "features/local_comics/archive_download_task.dart"
   ],
   "business_files": [
+    "foundation/tv_reader_policy.dart",
     "app_runtime/application_host.dart",
     "app_runtime/application_updates.dart",
     "app_runtime/background_sync.dart",

@@ -50,6 +50,7 @@ import 'package:venera_next/features/reader/window_controller.dart';
 import 'package:venera_next/features/reader/platform_effects.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_profile.dart';
+import 'package:venera_next/foundation/tv_reader_policy.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/reader_settings.dart';
 import 'package:venera_next/foundation/reader_preferences.dart';
@@ -475,6 +476,7 @@ class ReaderState extends State<Reader>
       applyReaderEffect: (effect) {
         switch (effect) {
           case ReaderSettingEffect.applyMode:
+            if (AppProfile.current.isTv) setImageCacheSize();
             applyReadingMode(ReaderMode.fromKey(preferences.readerMode));
           case ReaderSettingEffect.detectLayout:
             unawaited(detectLayout());
@@ -1464,6 +1466,8 @@ class ReaderState extends State<Reader>
   }
 
   late final _imageCachePolicy = ReaderImageCachePolicy(
+    maximumBytes: () =>
+        appdata.settings.tvLowMemoryEnabled ? TvReaderPolicy.cacheBytes : null,
     readAvailableMemory: MemoryInfo.getFreePhysicalMemorySize,
     setLimit: (bytes) =>
         PaintingBinding.instance.imageCache.maximumSizeBytes = bytes,

@@ -78,6 +78,7 @@ class GalleryModeState extends State<ReaderGalleryView>
     data.comicId,
     data.chapterId,
     page,
+    decodePixelBudget: data.decodePixelBudget,
   );
 
   ReaderDisplayImageProvider _displayImage(String key) =>

@@ -6,6 +6,7 @@ class ReaderImageCachePolicy {
     required this.setLimit,
     required this.onError,
     this.onConfigured,
+    this.maximumBytes,
   });
 
   static const defaultLimit = 100 << 20;
@@ -21,6 +22,7 @@ class ReaderImageCachePolicy {
   final void Function(int bytes) setLimit;
   final void Function(Object, StackTrace) onError;
   final void Function(int availableBytes, int limit)? onConfigured;
+  final int? Function()? maximumBytes;
   var _generation = 0;
   var _disposed = false;
 
@@ -28,9 +30,12 @@ class ReaderImageCachePolicy {
     if (_disposed) return;
     final generation = ++_generation;
     try {
+      final ceiling = maximumBytes?.call();
+      if (ceiling != null) setLimit(ceiling);
       final memory = await readAvailableMemory();
       if (_disposed || generation != _generation || memory == null) return;
-      final limit = limitForMemory(memory);
+      final detected = limitForMemory(memory);
+      final limit = ceiling != null && ceiling < detected ? ceiling : detected;
       setLimit(limit);
       onConfigured?.call(memory, limit);
     } catch (error, stack) {
