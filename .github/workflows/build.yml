@@ -4,6 +4,10 @@ run-name: 构建 ${{ github.ref_name }}
 on:
   workflow_call:
     inputs:
+      android_flavor:
+        required: false
+        type: string
+        default: mobile
       build_android:
         required: false
         type: boolean
@@ -35,6 +39,14 @@ on:
         required: false
   workflow_dispatch:
     inputs:
+      android_flavor:
+        description: 'Android 变体（TV 仅限 android-tv 分支手动测试）'
+        required: true
+        type: choice
+        options:
+          - mobile
+          - tv
+        default: mobile
       build_android:
         description: '构建 Android'
         required: true
@@ -74,12 +86,34 @@ permissions:
   contents: read
 
 jobs:
-  Build_Android:
+  Android_Profile:
     if: ${{ inputs.build_android }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: 校验 Android 构建渠道与分支
+        env:
+          ANDROID_FLAVOR: ${{ inputs.android_flavor }}
+        run: python3 .github/scripts/android_tv_build.py metadata --flavor "$ANDROID_FLAVOR"
+
+  TV_Quality:
+    needs: Android_Profile
+    if: ${{ inputs.build_android && inputs.android_flavor == 'tv' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/android-tv' }}
+    uses: ./.github/workflows/analyze.yml
+
+  Build_Android:
+    needs: [Android_Profile, TV_Quality]
+    if: ${{ !cancelled() && inputs.build_android && needs.Android_Profile.result == 'success' && (inputs.android_flavor == 'mobile' || needs.TV_Quality.result == 'success') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+      - name: 生成并复核 Android 构建身份
+        id: profile
+        env:
+          ANDROID_FLAVOR: ${{ inputs.android_flavor }}
+        run: python3 .github/scripts/android_tv_build.py metadata --flavor "$ANDROID_FLAVOR" --github-output "$GITHUB_OUTPUT"
       - name: 释放 Android 构建所需磁盘空间
         run: rm -rf /opt/hostedtoolcache
       - uses: subosito/flutter-action@v2
@@ -125,41 +159,66 @@ jobs:
       - name: 检查 rust-toolchain.toml
         run: rustup show
       - run: flutter pub get --enforce-lockfile
-      - run: flutter build apk --release --flavor mobile
+      - name: 构建隔离的 Android 安装包
+        env:
+          ANDROID_FLAVOR: ${{ steps.profile.outputs.flavor }}
+          TV_BUILD_NUMBER: ${{ steps.profile.outputs.build_number }}
+          TV_BUILD_LABEL: ${{ steps.profile.outputs.build_label }}
+          TV_REVISION: ${{ github.sha }}
+        run: |
+          if [[ "$ANDROID_FLAVOR" == "tv" ]]; then
+            flutter build apk --release --flavor tv \
+              --build-number "$TV_BUILD_NUMBER" \
+              --dart-define="TV_BUILD=$TV_BUILD_LABEL" \
+              --dart-define="TV_REVISION=$TV_REVISION"
+          else
+            flutter build apk --release --flavor mobile
+          fi
       - name: 验证 Android 分享文件与回调归属
         working-directory: android
         run: ./gradlew :share_plus:testShareOwnership
+      - name: 检查 APK 渠道、电视入口、版本码、签名与 ABI
+        id: apks
+        run: python3 .github/scripts/android_tv_build.py verify --github-output "$GITHUB_OUTPUT"
       - name: 上传 APK (armeabi-v7a)
         uses: actions/upload-artifact@v7
         with:
-          name: apk-armeabi-v7a
-          path: build/app/outputs/apk/mobile/release/*armeabi-v7a*.apk
+          name: ${{ inputs.android_flavor == 'tv' && format('tv-apk-armeabi-v7a-{0}', steps.profile.outputs.revision) || 'apk-armeabi-v7a' }}
+          path: ${{ steps.apks.outputs.apk_armeabi_v7a }}
           if-no-files-found: error
-          retention-days: 7
+          retention-days: ${{ inputs.android_flavor == 'tv' && 14 || 7 }}
       - name: 上传 APK (arm64-v8a)
         uses: actions/upload-artifact@v7
         with:
-          name: apk-arm64-v8a
-          path: build/app/outputs/apk/mobile/release/*arm64-v8a*.apk
+          name: ${{ inputs.android_flavor == 'tv' && format('tv-apk-arm64-v8a-{0}', steps.profile.outputs.revision) || 'apk-arm64-v8a' }}
+          path: ${{ steps.apks.outputs.apk_arm64_v8a }}
           if-no-files-found: error
-          retention-days: 7
+          retention-days: ${{ inputs.android_flavor == 'tv' && 14 || 7 }}
       - name: 上传 APK (x86_64)
         uses: actions/upload-artifact@v7
         with:
-          name: apk-x86_64
-          path: build/app/outputs/apk/mobile/release/*x86_64*.apk
+          name: ${{ inputs.android_flavor == 'tv' && format('tv-apk-x86_64-{0}', steps.profile.outputs.revision) || 'apk-x86_64' }}
+          path: ${{ steps.apks.outputs.apk_x86_64 }}
           if-no-files-found: error
-          retention-days: 7
+          retention-days: ${{ inputs.android_flavor == 'tv' && 14 || 7 }}
       - name: 上传 APK (universal)
         uses: actions/upload-artifact@v7
         with:
-          name: apk-universal
-          path: build/app/outputs/apk/mobile/release/*-android.apk
+          name: ${{ inputs.android_flavor == 'tv' && format('tv-apk-universal-{0}', steps.profile.outputs.revision) || 'apk-universal' }}
+          path: ${{ steps.apks.outputs.apk_universal }}
           if-no-files-found: error
-          retention-days: 7
+          retention-days: ${{ inputs.android_flavor == 'tv' && 14 || 7 }}
+      - name: 上传 TV 构建来源与校验清单
+        if: ${{ inputs.android_flavor == 'tv' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: tv-build-manifest-${{ steps.profile.outputs.revision }}
+          path: ${{ steps.apks.outputs.manifest }}
+          if-no-files-found: error
+          retention-days: 14
 
   Build_Windows:
-    if: ${{ inputs.build_windows }}
+    if: ${{ inputs.build_windows && inputs.android_flavor != 'tv' }}
     runs-on: windows-2025
     timeout-minutes: 45
     steps:
@@ -247,7 +306,7 @@ jobs:
           retention-days: 7
 
   Build_MacOS:
-    if: ${{ inputs.build_macos }}
+    if: ${{ inputs.build_macos && inputs.android_flavor != 'tv' }}
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -298,7 +357,7 @@ jobs:
           retention-days: 7
 
   Build_IOS:
-    if: ${{ inputs.build_ios }}
+    if: ${{ inputs.build_ios && inputs.android_flavor != 'tv' }}
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -367,7 +426,7 @@ jobs:
           retention-days: 7
 
   Build_Linux_x64:
-    if: ${{ inputs.build_linux_x64 }}
+    if: ${{ inputs.build_linux_x64 && inputs.android_flavor != 'tv' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
@@ -416,7 +475,7 @@ jobs:
           retention-days: 7
 
   Build_Linux_ARM64:
-    if: ${{ inputs.build_linux_arm64 }}
+    if: ${{ inputs.build_linux_arm64 && inputs.android_flavor != 'tv' }}
     runs-on: ubuntu-22.04-arm
     timeout-minutes: 45
     steps:

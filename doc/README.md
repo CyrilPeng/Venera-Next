@@ -46,6 +46,7 @@ English index: [README.en.md](README.en.md)
 
 ## 实验和任务跟踪
 
+- [Android TV Alpha 实验与验收](experiments/android_tv.zh.md)
 - [漫画源安装任务交互设计](experiments/source_installation_tasks.zh.md)
 - [漫画源与源仓库管理设计](experiments/source_repositories.zh.md)
 - [图片增强实验](experiments/image_enhancement.zh.md)
