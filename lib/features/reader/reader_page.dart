@@ -49,6 +49,7 @@ import 'package:venera_next/features/reader/volume_controller.dart';
 import 'package:venera_next/features/reader/window_controller.dart';
 import 'package:venera_next/features/reader/platform_effects.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_profile.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/reader_settings.dart';
 import 'package:venera_next/foundation/reader_preferences.dart';
@@ -1296,6 +1297,7 @@ class ReaderState extends State<Reader>
   bool get isLoading => controller.content.isLoading;
 
   late final focusNode = FocusNode()..addListener(_keyboardFocusChanged);
+  final scaffoldKey = GlobalKey<ReaderScaffoldState>();
 
   void _keyboardFocusChanged() {
     if (!_stateDisposed && !focusNode.hasPrimaryFocus) {
@@ -1838,6 +1840,12 @@ class ReaderState extends State<Reader>
     _checkImagesPerPageChange();
     return ReaderExitGuard(
       key: _exitGuardKey,
+      onBackRequested: () {
+        final shell = scaffoldKey.currentState;
+        if (!AppProfile.current.isTv || shell?.isOpen != true) return false;
+        shell!.openOrClose();
+        return true;
+      },
       prepare: _prepareReaderExit,
       holdForLeave: _session.holdForExit,
       onError: (error, stack) {
@@ -1881,11 +1889,23 @@ class ReaderState extends State<Reader>
   }
 
   void onKeyEvent(KeyEvent event) {
+    if (AppProfile.current.isTv) return;
     if (_sessionFrozen) return;
     if (event.logicalKey == LogicalKeyboardKey.f12 && event is KeyUpEvent) {
       fullscreen();
     }
     if (!focusNode.hasPrimaryFocus) return;
+    imageViewController?.handleKeyEvent(event);
+  }
+
+  void onTvKeyEvent(KeyEvent event) {
+    if (!mounted ||
+        _stateDisposed ||
+        _sessionFrozen ||
+        _session.isHeld ||
+        ModalRoute.of(context)?.isCurrent == false) {
+      return;
+    }
     imageViewController?.handleKeyEvent(event);
   }
 
