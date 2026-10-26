@@ -951,6 +951,7 @@
     "foundation/app_data_operations.dart",
     "foundation/app_data_sync_fields.dart",
     "foundation/app_locale.dart",
+    "foundation/app_profile.dart",
     "foundation/app_sync_preferences.dart",
     "foundation/appdata.dart",
     "foundation/application_configuration.dart",

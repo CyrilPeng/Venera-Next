@@ -85,7 +85,7 @@ jobs:
             > android/key.properties
       - run: flutter pub get --enforce-lockfile
       - name: 构建 Android Debug APK
-        run: flutter build apk --debug --target-platform android-arm64
+        run: flutter build apk --debug --flavor mobile --target-platform android-arm64
 
   windows:
     name: Windows 冒烟构建

@@ -99,6 +99,7 @@ dependency_overrides:
   flutter_rust_bridge: 2.11.1
 
 flutter:
+  default-flavor: mobile
   uses-material-design: true
   assets:
     - pubspec.yaml

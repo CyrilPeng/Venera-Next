@@ -93,6 +93,13 @@ class ApplicationUpdatePrompt {
     final context = _context;
     try {
       if (!context.mounted || !_active) return;
+      if (!service.enabled) {
+        onChecked?.call();
+        if (!silent) {
+          context.showMessage(message: 'TV Alpha uses manual test builds.'.tl);
+        }
+        return;
+      }
       final version = await service
           .check(scope: _scope)
           .whenComplete(() => onChecked?.call());

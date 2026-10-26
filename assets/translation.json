@@ -1,5 +1,7 @@
 {
   "zh_CN": {
+    "TV Alpha uses manual test builds.": "TV 实验版请手动安装测试构建，不使用手机版更新渠道。",
+    "Experimental build. Install updates manually from the android-tv branch. Source updates remain available. Real-device compatibility is not yet verified.": "实验构建，请从 android-tv 分支手动安装更新。漫画源仍可更新，真机兼容性尚待验证。",
     "Hidden by keyword filters: @a comics": "关键词屏蔽隐藏了 @a 本漫画",
     "Hidden by reading-status filter: @a comics": "阅读状态筛选隐藏了 @a 本漫画",
     "Continue past unavailable images": "继续下载其余可用图片",
@@ -918,6 +920,8 @@
     "The global shortcut is unavailable. Re-enable it or choose another shortcut in settings.": "全局快捷键不可用，请在设置中重新启用或更换组合。"
   },
   "zh_TW": {
+    "TV Alpha uses manual test builds.": "TV 實驗版請手動安裝測試建置，不使用手機版更新管道。",
+    "Experimental build. Install updates manually from the android-tv branch. Source updates remain available. Real-device compatibility is not yet verified.": "實驗建置，請從 android-tv 分支手動安裝更新。漫畫源仍可更新，真機相容性尚待驗證。",
     "Hidden by keyword filters: @a comics": "關鍵詞封鎖隱藏了 @a 本漫畫",
     "Hidden by reading-status filter: @a comics": "閱讀狀態篩選隱藏了 @a 本漫畫",
     "Continue past unavailable images": "繼續下載其餘可用圖片",

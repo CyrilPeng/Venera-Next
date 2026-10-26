@@ -42,6 +42,7 @@ import 'components/message.dart';
 import 'components/window_frame.dart';
 import 'components/window_selection_task.dart';
 import 'foundation/app.dart';
+import 'foundation/app_profile.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'foundation/app_locale.dart';
 import 'foundation/appdata.dart';
@@ -422,7 +423,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           tertiary = light.tertiary;
         }
         return MaterialApp(
-          title: "VeneraNext",
+          title: AppProfile.current.applicationTitle,
           home: home,
           debugShowCheckedModeBanner: false,
           theme: getTheme(primary, secondary, tertiary, Brightness.light),
@@ -463,7 +464,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   MediaQuery.of(context).viewPadding.top <= 0 ||
                   MediaQuery.of(context).viewPadding.top > 200;
 
-              if (isPaddingCheckError && Platform.isAndroid) {
+              if (isPaddingCheckError &&
+                  Platform.isAndroid &&
+                  !AppProfile.current.isTv) {
                 widget = MediaQuery(
                   data: MediaQuery.of(context).copyWith(
                     viewPadding: const EdgeInsets.only(top: 15, bottom: 15),

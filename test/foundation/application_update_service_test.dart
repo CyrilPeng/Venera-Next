@@ -8,6 +8,21 @@ import '../support/application_update_adapter.dart';
 
 void main() {
   test(
+    'disabled application channel does not create a network client',
+    () async {
+      final service = ApplicationUpdateService(
+        enabled: false,
+        createClient: () =>
+            throw StateError('TV must not query mobile releases'),
+        currentVersion: () => throw StateError('disabled version lookup'),
+      );
+      expect(await service.check(), isNull);
+      await service.closeAndWait();
+      await expectLater(service.check(), throwsStateError);
+    },
+  );
+
+  test(
     'stable and preview requests preserve channel selection and wait for cleanup',
     () async {
       for (final current in ['1.10.0', '1.11.0-rc.1']) {

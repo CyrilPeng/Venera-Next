@@ -125,7 +125,7 @@ jobs:
       - name: 检查 rust-toolchain.toml
         run: rustup show
       - run: flutter pub get --enforce-lockfile
-      - run: flutter build apk --release
+      - run: flutter build apk --release --flavor mobile
       - name: 验证 Android 分享文件与回调归属
         working-directory: android
         run: ./gradlew :share_plus:testShareOwnership
@@ -133,28 +133,28 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: apk-armeabi-v7a
-          path: build/app/outputs/apk/release/*armeabi-v7a*.apk
+          path: build/app/outputs/apk/mobile/release/*armeabi-v7a*.apk
           if-no-files-found: error
           retention-days: 7
       - name: 上传 APK (arm64-v8a)
         uses: actions/upload-artifact@v7
         with:
           name: apk-arm64-v8a
-          path: build/app/outputs/apk/release/*arm64-v8a*.apk
+          path: build/app/outputs/apk/mobile/release/*arm64-v8a*.apk
           if-no-files-found: error
           retention-days: 7
       - name: 上传 APK (x86_64)
         uses: actions/upload-artifact@v7
         with:
           name: apk-x86_64
-          path: build/app/outputs/apk/release/*x86_64*.apk
+          path: build/app/outputs/apk/mobile/release/*x86_64*.apk
           if-no-files-found: error
           retention-days: 7
       - name: 上传 APK (universal)
         uses: actions/upload-artifact@v7
         with:
           name: apk-universal
-          path: build/app/outputs/apk/release/*-android.apk
+          path: build/app/outputs/apk/mobile/release/*-android.apk
           if-no-files-found: error
           retention-days: 7
 
