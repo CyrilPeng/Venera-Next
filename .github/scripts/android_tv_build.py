@@ -105,7 +105,8 @@ def validate_manifest(xml, metadata, abi):
             raise ValueError("TV banner is missing")
         if application.get(ANDROID + "label") != "VeneraNext TV Alpha":
             raise ValueError("TV launcher identity is missing")
-        if main.get(ANDROID + "screenOrientation") != "landscape":
+        # apkanalyzer decodes the compiled orientation enum as integer 0.
+        if main.get(ANDROID + "screenOrientation") not in ("landscape", "0", "0x0"):
             raise ValueError("TV must remain in landscape orientation")
     elif tv_entries or application.get(ANDROID + "banner"):
         raise ValueError("Mobile APK contains TV-only manifest entries")
@@ -146,6 +147,17 @@ def run_tool(*command):
     return subprocess.run(command, check=True, text=True, capture_output=True).stdout
 
 
+def signer_fingerprints(output):
+    fingerprints = re.findall(
+        r"^(?:Signer #\d+|V[1-4](?:\.\d+)? Signer(?: #\d+)?):? certificate SHA-256 digest: ([0-9a-fA-F]{64})\s*$",
+        output,
+        re.MULTILINE,
+    )
+    if not fingerprints:
+        raise ValueError("Missing verified signer certificate")
+    return sorted(set(value.lower() for value in fingerprints))
+
+
 def write_outputs(path, values):
     if path:
         with Path(path).open("a", encoding="utf-8") as stream:
@@ -170,10 +182,7 @@ def verify_apks(metadata, sdk, github_output=None):
         validate_manifest(run_tool(analyzer, "manifest", "print", str(apk)), metadata, abi)
         validate_contents(apk, metadata, abi)
         certificate = run_tool(signer, "verify", "--verbose", "--print-certs", str(apk))
-        fingerprints = re.findall(r"Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]+)", certificate)
-        if not fingerprints:
-            raise ValueError(f"Missing verified signer certificate for {apk}")
-        records.append((abi, apk, sorted(set(value.lower() for value in fingerprints))))
+        records.append((abi, apk, signer_fingerprints(certificate)))
     if len({tuple(item[2]) for item in records}) != 1:
         raise ValueError("APK variants have different signing certificates")
 

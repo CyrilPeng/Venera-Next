@@ -121,6 +121,15 @@ class AndroidTvBuildTest(unittest.TestCase):
             with self.subTest(old=old), self.assertRaises(ValueError):
                 MODULE.validate_manifest(xml.replace(old, new), metadata, "universal")
 
+    def test_compiled_landscape_enum_is_accepted_but_other_values_are_rejected(self):
+        metadata = self.metadata()
+        xml = manifest(metadata)
+        for value in ("0", "0x0"):
+            MODULE.validate_manifest(xml.replace('screenOrientation="landscape"', f'screenOrientation="{value}"'), metadata, "universal")
+        for value in ("1", "portrait", "-1", "sensorLandscape"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                MODULE.validate_manifest(xml.replace('screenOrientation="landscape"', f'screenOrientation="{value}"'), metadata, "universal")
+
     def test_mobile_manifest_rejects_tv_launcher_and_banner(self):
         metadata = self.metadata("mobile")
         tv = self.metadata()
@@ -139,6 +148,23 @@ class AndroidTvBuildTest(unittest.TestCase):
             write_apk(apk, pubspec=PUBSPEC.replace("+237", "+100012"))
             with self.assertRaises(ValueError):
                 MODULE.validate_contents(apk, self.metadata(), "universal")
+
+    def test_old_and_current_sdk_certificate_formats_are_checked(self):
+        fingerprint = "b" * 64
+        for prefix in ("Signer #1", "V2 Signer:", "V3 Signer:", "V3.1 Signer:"):
+            with self.subTest(prefix=prefix):
+                self.assertEqual(
+                    MODULE.signer_fingerprints(f"{prefix} certificate SHA-256 digest: {fingerprint}\n"),
+                    [fingerprint],
+                )
+        for output in (
+            "Verifies\n",
+            f"Source Stamp Signer certificate SHA-256 digest: {fingerprint}\n",
+            f"Signer #1 public key SHA-256 digest: {fingerprint}\n",
+            "Signer #1 certificate SHA-256 digest: abcd\n",
+        ):
+            with self.subTest(output=output), self.assertRaises(ValueError):
+                MODULE.signer_fingerprints(output)
 
     def verify_fixture(self, flavor="tv", fail_last=False):
         metadata = self.metadata(flavor)
