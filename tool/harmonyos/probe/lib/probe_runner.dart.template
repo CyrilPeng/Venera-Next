@@ -10,7 +10,7 @@ const unverified = [
   'HTTPS certificates / DNS / HTTP2 / HTTP3',
   'Existing IsolateQjs wrapper lifecycle',
   'Reader / source / downloads / WebView / system plugins',
-  'HarmonyOS SDK21 native rebuild and device ABI validation',
+  'HarmonyOS device ABI and native library loading',
 ];
 
 Future<void> probeWorker(List<Object> arguments) async {

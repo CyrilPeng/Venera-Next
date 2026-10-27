@@ -27,7 +27,7 @@
 
 本机没有 DevEco / 商业 HarmonyOS SDK、ohpm、hvigor，也没有连接鸿蒙真机。公开 Native SDK 足以做本次交叉编译，但当前固定 Flutter OH 的工程生成/打包阶段需要 Hmos SDK，不能用改名目录、伪造组件元数据或改工具源码来代替。
 
-新增仅运行于 `HarmonyOS` 的 GitHub Actions 云端尝试，先空白 HAP、再核心库 API 21 重编译与探针 HAP；不要求本机安装完整 SDK。CLI 来自 Cocos 自身 CI 使用的第三方公开镜像，分卷大小和 GitHub 资产 SHA-256 固定在 `toolchain.json`，不是华为官方分发或官方校验值；真实组件元数据与各阶段结果由构建证据保存。流程不使用签名凭证、不生成 Release，未签名包不能视作可安装阅读器。详见[云端说明](../../tool/harmonyos/README.md#github-actions-云端尝试)。
+新增仅运行于 `HarmonyOS` 的 GitHub Actions 云端尝试，先空白 HAP、再核心库商业 SDK 重编译与探针 HAP；不要求本机安装完整 SDK。首个 Cocos API 21 CLI 已通过下载校验和安装，但空白工程因 Flutter 嵌入层所需接口不存在而失败，不能通过修改目录、删减接口或关闭检查来绕过。根据 HAR 的实际编译元数据，现改用 SDL 自身 CI 使用的第三方 `6.1.1.280` / API 24 镜像；云端只读采集的大小和 SHA-256 已固定在 `toolchain.json`，不是华为官方分发或官方校验值。真实组件元数据与各阶段结果由构建证据保存。流程不使用签名凭证、不生成 Release，未签名包不能视作可安装阅读器。详见[云端说明](../../tool/harmonyos/README.md#github-actions-云端尝试)。
 
 本机开发签名、安装和真机测试仍需完整 DevEco 工具链及设备；若官方渠道下载或模拟器需要登录，应由维护者完成账号流程。本轮不读取浏览器凭据、不申请或生成维护者的签名凭证。API 20 原生库只作为初步可行性证据，需结合商业 SDK 重新编译和实际设备 ABI 验证，再考虑交付。
 

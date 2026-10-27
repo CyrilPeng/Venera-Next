@@ -6,7 +6,7 @@
 
 `.github/workflows/harmonyos-experiment.yml` 仅在 `HarmonyOS` 分支的相关构建文件更新或手动触发时运行，使用临时 Ubuntu runner，不依赖维护者本机 SDK、不访问签名密钥、不创建 Release、不更新应用版本。
 
-首次使用 Cocos CI 的 API 21 CLI 已完成下载校验、安装和空白工程尝试，但当前固定 Flutter OH 嵌入层引用了旧 SDK 缺少的接口，ArkTS 编译失败。现按 HAR 中 `6.1.1.125` 编译元数据，改查 SDL 自身 CI 使用的[公开镜像](https://libsdl.org/harmonyos-devtools/) CLI `6.1.1.280`。它不是华为官方分发地址，也不提供华为发布的校验值。新候选包必须先由云端只读计算摘要、人工核对并固定到 `toolchain.json`，未固定 SHA-256 的包不得解压或执行。固定后先校验再解压，保留来源及真实 Native 元数据，不伪造 SDK 目录或组件描述。商业云端基线与下文公开 API 20 本机基线严格分开。
+首次使用 Cocos CI 的 API 21 CLI 已完成下载校验、安装和空白工程尝试，但当前固定 Flutter OH 嵌入层引用了旧 SDK 缺少的接口，ArkTS 编译失败。现按 HAR 中 `6.1.1.125` 编译元数据，使用 SDL 自身 CI 的[公开镜像](https://libsdl.org/harmonyos-devtools/) CLI `6.1.1.280` / API 24。它不是华为官方分发地址，也不提供华为发布的校验值。[只读摘要采集任务](https://github.com/CyrilPeng/Venera-Next/actions/runs/40476080189) 已取得文件大小和 SHA-256，并固定到 `toolchain.json`；该任务按预期在未固定校验值处停止，没有解压／执行 SDK。后续运行先校验再解压，保留来源及真实 Native 元数据，不伪造 SDK 目录或组件描述。商业 API 24 云端基线与下文公开 API 20 本机基线严格分开。
 
 云端依次构建空白 ARM64 未签名 HAP，再以同一商业 SDK 重编译四个核心库，生成并分析／回归测试隔离探针，最后构建探针 HAP。打包检查会核对 AArch64 ELF、四个库是否真正入包及其精确哈希，拒绝缺库、内容变化和空包。证据与日志保留 14 天；仅全流程成功才上传 `harmonyos-unsigned-lab-haps-*` 测试产物。
 
@@ -18,7 +18,7 @@ Actions 的 `packaging_pass` 只表示未签名打包及静态审计通过，不
 - OpenHarmony 6.0 公开 SDK 的 Native 组件（API 20，组件内部版本 `6.0.0.47-Beta1`）。校验完整下载包 SHA-256 后解压，不把它冒充商业 HarmonyOS SDK。
 - QuickJS 使用主工程 `pubspec.lock` 固定的 `CyrilPeng/flutter_qjs` 提交；可用 `flutter pub get` 已下载的 Git 缓存，也可单独克隆该提交。脚本不改写缓存中的源码。
 - SQLite 使用 `toolchain.json` 指定的官方源码和 `sqlite3.c` 校验值；主工程 Windows 构建已有的同一份 amalgamation 也可复用。
-- HAP 还需要从官方渠道安装 DevEco / HarmonyOS SDK（实验工程默认 API 21）、配套 ohpm、hvigor、Node、JDK；签名和设备账号由开发者本机配置，不提交私钥、证书、UDID 或账号数据。
+- 本机 HAP 构建仍需完整 DevEco / HarmonyOS SDK（当前实验工程默认 API 24）、配套 ohpm、hvigor、Node、JDK；也可仅使用上述云端流程。签名和设备账号由开发者本机配置，不提交私钥、证书、UDID 或账号数据。
 
 安装 Flutter OH 时不要覆盖主工程原有 SDK。也不要运行全局 `flutter upgrade` 或修改全局 Flutter 配置：
 
@@ -55,7 +55,7 @@ python -m unittest discover -s tool/harmonyos -p 'test_*.py' -v
 
 输出位于 `build/harmonyos/native/arm64-v8a/`；报告位于 `build/harmonyos/native/native-build.json`。检查 AArch64 ELF、所需动态库、关键 FFI 导出和文件 SHA-256。只有全量构建和检查均通过才记为 `cross_compile_pass`，部分构建不能用来准备探针。
 
-该报告永远不会因为编译成功就把 `runtime_verified` 或 `hap_built` 置为 true。OpenHarmony API 20 交叉编译通过不等于 HarmonyOS API 21 的 ABI、加载或运行通过。
+该报告永远不会因为编译成功就把 `runtime_verified` 或 `hap_built` 置为 true。OpenHarmony API 20 交叉编译通过不等于商业 HarmonyOS 的 ABI、加载或运行通过；云端 HAP 需要以选定商业 SDK 重新全量编译核心库，不能直接使用这些 API 20 产物。
 
 ## 准备与检查测试工程
 
@@ -79,7 +79,7 @@ try {
 
 1. 安装完整 DevEco 工具链，使用当前终端的 `DEVECO_SDK_HOME` / `HOS_SDK_HOME`、`NODE_HOME` / PATH 指向安装路径及 ohpm、hvigor、JDK；先确认 `flutter doctor -v` 能识别它们。不要伪造 SDK 元数据绕过检查。
 2. **先用 `flutter create --platforms ohos` 在另一独立目录创建空白工程，完成空白 HAP 构建、开发签名及真机启动。** 这样能区分工具链问题和本项目依赖问题。
-3. 重新执行 `prepare_probe.py`，去掉 `--dart-only`；默认产品的目标及兼容版本是 `6.0.1(21)`，可用 `--target-sdk` 为新生成工程指定已安装版本。已有工程的本机 SDK/签名选择不会被脚本反复覆盖；调整时在 DevEco 检查 `ohos/build-profile.json5`，不能把最低系统版本设得低于原生库编译所需 API。
+3. 重新执行 `prepare_probe.py`，去掉 `--dart-only`；默认产品的目标及兼容版本由 `toolchain.json` 决定（当前 `6.1.1(24)`），可用 `--target-sdk` 为新生成工程指定已安装且支持当前嵌入层的版本。已有工程的本机 SDK/签名选择不会被脚本反复覆盖；调整时在 DevEco 检查 `ohos/build-profile.json5`，不能把最低系统版本设得低于原生库编译所需 API。
 4. 在 DevEco 打开 `build/harmonyos/probe/ohos`，按官方流程配置本机开发签名。未签名构建命令为 `flutter build hap --release --no-codesign --target-platform ohos-arm64`；构建成功不等于可安装，实际安装/运行使用 DevEco 或 `flutter run -d <设备>` 的已签名流程。
 5. 点击 `Run core checks`，保存第一次报告；强制停止进程，不清数据，重新启动后再运行，保存第二次报告。相同进程不提供重跑按钮；不得把数据库关闭重开当作杀进程恢复通过。不要导入个人收藏、账号或漫画源，只使用探针自建的沙箱测试数据。
 

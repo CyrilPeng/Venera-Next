@@ -59,7 +59,8 @@ class PrepareProbeTests(unittest.TestCase):
         for key, value in (("status", "partial_compile_pass"), ("status", "failed"),
                            ("rhttp_source_sha256", "stale"),
                            ("build_fingerprint", "stale"), ("libraries", []),
-                           ("sdk_version", "wrong"), ("quickjs_revision", "wrong")):
+                           ("sdk_version", "wrong"), ("sdk_profile", "unknown"),
+                           ("sdk_api", 0), ("quickjs_revision", "wrong")):
             with self.subTest(key=key, value=value), tempfile.TemporaryDirectory() as temporary:
                 directory = Path(temporary)
                 report, path = self.make_report(directory)

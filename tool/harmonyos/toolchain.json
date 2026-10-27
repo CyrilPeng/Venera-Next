@@ -18,13 +18,13 @@
     "targetSdk": "6.1.1(24)",
     "source": "https://libsdl.org/harmonyos-devtools/",
     "reference": "https://github.com/libsdl-org/SDL/blob/c314de7ce9a48c4b3a2ead40ddb53153c02c1ec6/.github/actions/setup-harmonyos-toolchain/action.yml",
-    "checksumSource": "Pending metadata-only runner inspection; SDK execution is forbidden until SHA-256 is pinned",
+    "checksumSource": "Observed in https://github.com/CyrilPeng/Venera-Next/actions/runs/40476080189; pinned SDL mirror bytes, not a Huawei-published checksum",
     "archives": [
       {
         "name": "commandline-tools-linux-x64-6.1.1.280.zip",
         "url": "https://libsdl.org/harmonyos-devtools/commandline-tools-linux-x64-6.1.1.280.zip",
         "bytes": 2141466303,
-        "sha256": null
+        "sha256": "b9caf7b73c541b90e6c8f3c7c3de7f2bea9b35e41e80cd3525f2f759ebf16cf4"
       }
     ]
   },
