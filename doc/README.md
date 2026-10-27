@@ -46,7 +46,7 @@ English index: [README.en.md](README.en.md)
 
 ## 实验和任务跟踪
 
-- [HarmonyOS 独立分支实验](experiments/harmonyos.zh.md)：Flutter OH 核心依赖验证、当前阻碍和分阶段验收，不代表正式平台支持。
+- [HarmonyOS 独立分支实验](experiments/harmonyos.zh.md)：云端未签名 HAP 构建、核心依赖验证及后续真机验收，尚未接入完整阅读器，不代表正式平台支持。
 
 - [漫画源安装任务交互设计](experiments/source_installation_tasks.zh.md)
 - [漫画源与源仓库管理设计](experiments/source_repositories.zh.md)
