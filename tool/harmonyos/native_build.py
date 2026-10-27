@@ -12,6 +12,8 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ci_sdk import check_native_sdk
+
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = json.loads(Path(__file__).with_name("toolchain.json").read_text())
@@ -72,7 +74,9 @@ def source_fingerprint():
 
 
 def build_fingerprint():
-    return digest(__file__) + ":" + digest(Path(__file__).with_name("toolchain.json"))
+    return ":".join(digest(path) for path in (
+        Path(__file__), Path(__file__).with_name("toolchain.json"),
+        Path(__file__).with_name("ci_sdk.py")))
 
 
 def check_qjs_source(source):
@@ -178,17 +182,24 @@ def main():
     parser.add_argument("--qjs-source", type=Path, required=True)
     parser.add_argument("--sqlite-source", type=Path, required=True)
     parser.add_argument("--component", choices=("all", "qjs", "sqlite", "rust"), default="all")
+    parser.add_argument("--sdk-profile", choices=("public", "harmony-ci"), default="public")
+    parser.add_argument("--sdk-receipt", type=Path,
+                        help="Verified archive receipt required for the HarmonyOS CI profile")
     args = parser.parse_args()
     native = args.sdk_native.resolve()
     sdk = json.loads((native / "oh-uni-package.json").read_text(encoding="utf-8-sig"))
-    if sdk["version"] != CONFIG["nativeSdk"]["version"]:
-        raise ValueError("Unexpected native SDK; update the pinned baseline deliberately")
+    receipt = (json.loads(args.sdk_receipt.read_text(encoding="utf-8"))
+               if args.sdk_receipt else None)
+    check_native_sdk(sdk, args.sdk_profile, CONFIG, receipt)
     output = require_within(OUTPUT, ROOT / "build/harmonyos")
     output.mkdir(parents=True, exist_ok=True)
     report_path = output.parent / "native-build.json"
     report = {"status": "building", "component": args.component,
               "target": TARGET, "sdk_version": sdk["version"],
+              "sdk_api": int(sdk["apiVersion"]), "sdk_profile": args.sdk_profile,
               "runtime_verified": False, "hap_built": False}
+    if receipt:
+        report["sdk_receipt"] = receipt
     report_path.write_text(json.dumps(report, indent=2) + "\n")
     builders = {"qjs": lambda: build_qjs(native, args.qjs_source.resolve(), output),
                 "sqlite": lambda: build_sqlite(native, args.sqlite_source.resolve(), output),

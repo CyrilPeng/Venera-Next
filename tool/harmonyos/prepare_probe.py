@@ -8,6 +8,7 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+from ci_sdk import check_report_sdk
 from native_build import (CONFIG, ROOT, build_fingerprint, check_qjs_source, digest,
                           require_within, source_fingerprint, validate_elf)
 
@@ -43,8 +44,8 @@ def verify_native_report(report_path, library_dir):
         raise ValueError("rhttp sources changed; rebuild native libraries first")
     if report.get("build_fingerprint") != build_fingerprint():
         raise ValueError("Native build script/baseline changed; rebuild libraries first")
-    for key, value in (("sdk_version", CONFIG["nativeSdk"]["version"]),
-                       ("target", CONFIG["rust"]["target"]),
+    check_report_sdk(report, CONFIG)
+    for key, value in (("target", CONFIG["rust"]["target"]),
                        ("quickjs_revision", CONFIG["quickjs"]["revision"]),
                        ("sqlite_source_sha256", CONFIG["sqlite"]["amalgamationSha256"])):
         if report.get(key) != value:

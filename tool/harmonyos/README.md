@@ -1,6 +1,16 @@
 # HarmonyOS 核心依赖探针
 
-仅用于 `HarmonyOS` 实验分支。复用主工程固定的 Dart / Rust / QuickJS / SQLite 依赖，不是 ArkTS 重写，也不是可安装的阅读器版本。当前结果及后续门槛见[实验记录](../../doc/experiments/harmonyos.zh.md)。
+仅用于 `HarmonyOS` 实验分支。复用主工程固定的 Dart / Rust / QuickJS / SQLite 依赖，不是 ArkTS 重写，也不是完整阅读器版本。当前结果及后续门槛见[实验记录](../../doc/experiments/harmonyos.zh.md)。
+
+## GitHub Actions 云端尝试
+
+`.github/workflows/harmonyos-experiment.yml` 仅在 `HarmonyOS` 分支的相关构建文件更新或手动触发时运行，使用临时 Ubuntu runner，不依赖维护者本机 SDK、不访问签名密钥、不创建 Release、不更新应用版本。
+
+商业 HarmonyOS CLI 使用 Cocos 自身 CI 引用的[公开镜像](https://github.com/cocos/oh-sdk-for-ci/releases/tag/api-21)，不是华为官方分发地址。`toolchain.json` 固定两个分卷的文件大小和 GitHub Release 资产 SHA-256；这不是华为发布的校验值。先逐个校验、再解压，保留来源及真实 Native 元数据，不伪造 SDK 目录或组件描述。首次运行记录实际组件版本，后续基于实际结果收紧固定版本；API 21 云端基线与下文公开 API 20 本机基线严格分开。
+
+云端依次构建空白 ARM64 未签名 HAP，再以同一商业 SDK 重编译四个核心库，生成并分析／回归测试隔离探针，最后构建探针 HAP。打包检查会核对 AArch64 ELF、四个库是否真正入包及其精确哈希，拒绝缺库、内容变化和空包。证据与日志保留 14 天；仅全流程成功才上传 `harmonyos-unsigned-lab-haps-*` 测试产物。
+
+Actions 的 `packaging_pass` 只表示未签名打包及静态审计通过，不是完整阅读器、不代表可直接安装，也不代表原生库真机加载、运行或数据恢复通过。下载安装与签名仍需按后文 DevEco／真机阶段完成；不要将 CI 编译成功作为关闭 #77 的依据。
 
 ## 准备
 

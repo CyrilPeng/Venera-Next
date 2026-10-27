@@ -37,6 +37,7 @@ class PrepareProbeTests(unittest.TestCase):
         report = {"status": "cross_compile_pass", "libraries": records,
                   "target": probe.CONFIG["rust"]["target"],
                   "sdk_version": probe.CONFIG["nativeSdk"]["version"],
+                  "sdk_profile": "public", "sdk_api": probe.CONFIG["nativeSdk"]["api"],
                   "rhttp_source_sha256": probe.source_fingerprint(),
                   "build_fingerprint": probe.build_fingerprint(),
                   "quickjs_revision": probe.CONFIG["quickjs"]["revision"],

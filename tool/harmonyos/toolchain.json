@@ -12,6 +12,28 @@
     "windowsLinuxArchive": "https://repo.huaweicloud.com/openharmony/os/6.0-Release/ohos-sdk-windows_linux-public.tar.gz",
     "sha256": "a315834ac133625efc912bd078f3e2b2550868d04aef1b5aa4f9679c8b3c9d8e"
   },
+  "harmonyCiSdk": {
+    "version": "6.0.1.246",
+    "api": 21,
+    "targetSdk": "6.0.1(21)",
+    "source": "https://github.com/cocos/oh-sdk-for-ci/releases/tag/api-21",
+    "reference": "https://github.com/cocos/cocos-engine/blob/90ad7072a332760b4930c15bc78ccec5f908c944/.github/workflows/generate-oh-sdk-cache.yml",
+    "checksumSource": "GitHub release asset digests; not Huawei-published checksums",
+    "archives": [
+      {
+        "name": "commandline-tools-linux-x64-6.0.1.246.zip.001",
+        "url": "https://github.com/cocos/oh-sdk-for-ci/releases/download/api-21/commandline-tools-linux-x64-6.0.1.246.zip.001",
+        "bytes": 1053882610,
+        "sha256": "f641e816c64c9a6b5ead8b33b39cf1f0079abaa09ef767ea9b9125c667aa4688"
+      },
+      {
+        "name": "commandline-tools-linux-x64-6.0.1.246.zip.002",
+        "url": "https://github.com/cocos/oh-sdk-for-ci/releases/download/api-21/commandline-tools-linux-x64-6.0.1.246.zip.002",
+        "bytes": 1053882609,
+        "sha256": "62f15abfe06eb0822f63d0213177441feeedfb68fb28c2e1c181a8ae9849cfc7"
+      }
+    ]
+  },
   "rust": {
     "version": "1.92.0",
     "target": "aarch64-unknown-linux-ohos",
