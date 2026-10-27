@@ -73,7 +73,14 @@ def install(destination, downloads, report_path, config):
         root = destination / "command-line-tools"
         native = root / "sdk/default/openharmony/native"
         metadata = json.loads((native / "oh-uni-package.json").read_text(encoding="utf-8-sig"))
-        for path in (root / "sdk/default/sdk-pkg.json", root / "sdk/default/hmscore",
+        report["native"] = metadata
+        report["sdk_directories"] = sorted(path.name for path in (root / "sdk/default").iterdir())
+        report["sdk_package"] = (root / "sdk/default/sdk-pkg.json").read_text(encoding="utf-8-sig")
+        print(json.dumps(report, indent=2), flush=True)
+        # The genuine CLI uses sdk-pkg.json; an hmscore directory is not required.
+        for path in (root / "sdk/default/sdk-pkg.json",
+                     root / "sdk/default/openharmony/ets/oh-uni-package.json",
+                     root / "sdk/default/openharmony/toolchains/hdc",
                      native / "llvm/bin/clang", root / "tool/node/bin/node"):
             if not path.exists():
                 raise ValueError(f"Missing genuine command-line SDK component: {path.name}")

@@ -6,6 +6,7 @@
 
 ### 实验性适配
 
+- 根据首次 Actions 的实际解压结果修正 CLI 布局检查：以原始 `sdk-pkg.json`、ETS／Native／工具链组件为准，不强制要求该发行包没有的旧 `hmscore` 目录；失败时也保留真实组件版本和 SDK 描述，继续拒绝篡改或校验失败的下载包。
 - `HarmonyOS` 分支新增独立 GitHub Actions 云端构建尝试：固定并校验 Cocos 公开 CI 镜像中的 HarmonyOS API 21 CLI，先构建空白未签名 HAP，再重编译核心原生库并分析／测试／打包隔离探针，检查实际入包的 ARM64 库及哈希，保留短期构建证据。与公开 API 20 基线分离，不要求本机 SDK、不使用签名密钥、不发布 Release，打包通过不代表完整阅读器或真机验收（#77）。
 - 在独立 `HarmonyOS` 分支启动 Flutter OH 鸿蒙验证（#77），固定独立 SDK 和现有依赖，新增 rhttp／FRB、QuickJS、SQLite ARM64 原生交叉编译、动态依赖／FFI 导出审计及隔离测试工程。准备阶段校验源码与产物指纹，不修改原有 SDK 配置、Pub 缓存源码或主工程依赖锁；补充失败／超时防误报和窄屏大字号回归。
 - 本轮仅确认公开 OpenHarmony API 20 SDK 的原生编译与宿主回归，尚缺完整 DevEco／HarmonyOS SDK、签名和设备验证；未生成可安装 HAP，未接入完整阅读器，不表示 #77 已交付，不影响现有平台或 `android-tv` 分支。补充实验记录、可复现命令和后续验收门槛。
