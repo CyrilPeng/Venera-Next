@@ -1,0 +1,78 @@
+# HarmonyOS 核心依赖探针
+
+仅用于 `HarmonyOS` 实验分支。复用主工程固定的 Dart / Rust / QuickJS / SQLite 依赖，不是 ArkTS 重写，也不是可安装的阅读器版本。当前结果及后续门槛见[实验记录](../../doc/experiments/harmonyos.zh.md)。
+
+## 准备
+
+- Python 3.12+、Git、Rust 1.92.0，以及独立安装的 Flutter OH SDK；固定版本见 `toolchain.json`。
+- OpenHarmony 6.0 公开 SDK 的 Native 组件（API 20，组件内部版本 `6.0.0.47-Beta1`）。校验完整下载包 SHA-256 后解压，不把它冒充商业 HarmonyOS SDK。
+- QuickJS 使用主工程 `pubspec.lock` 固定的 `CyrilPeng/flutter_qjs` 提交；可用 `flutter pub get` 已下载的 Git 缓存，也可单独克隆该提交。脚本不改写缓存中的源码。
+- SQLite 使用 `toolchain.json` 指定的官方源码和 `sqlite3.c` 校验值；主工程 Windows 构建已有的同一份 amalgamation 也可复用。
+- HAP 还需要从官方渠道安装 DevEco / HarmonyOS SDK（实验工程默认 API 21）、配套 ohpm、hvigor、Node、JDK；签名和设备账号由开发者本机配置，不提交私钥、证书、UDID 或账号数据。
+
+安装 Flutter OH 时不要覆盖主工程原有 SDK。也不要运行全局 `flutter upgrade` 或修改全局 Flutter 配置：
+
+```powershell
+# 示例路径按本机安装位置调整；在仓库根目录执行。
+$flutterOh = 'D:/soft/flutter_ohos'
+git clone --filter=blob:none --sparse --depth 1 --branch '3.41.9+ohos-1.0.2' `
+  https://gitcode.com/CPF-Flutter/flutter_flutter.git $flutterOh
+git -C $flutterOh sparse-checkout set bin packages dev examples
+
+# 仅影响当前 PowerShell 进程。网络不通时再启用本地代理。
+$env:PUB_HOSTED_URL = 'https://pub.dev'
+$env:FLUTTER_STORAGE_BASE_URL = 'https://storage.flutter-io.cn'
+$env:FLUTTER_OHOS_STORAGE_BASE_URL = 'https://flutter-ohos.obs.cn-south-1.myhuaweicloud.com'
+$env:FLUTTER_GIT_URL = 'https://gitcode.com/CPF-Flutter/flutter_flutter.git'
+# $env:HTTPS_PROXY = 'http://127.0.0.1:7897'
+# $env:HTTP_PROXY = $env:HTTPS_PROXY
+
+rustup target add aarch64-unknown-linux-ohos --toolchain 1.92.0-x86_64-pc-windows-msvc
+& "$flutterOh/bin/flutter.bat" --version
+```
+
+普通 Flutter 引擎资源和 OHOS 引擎资源使用两个不同的存储地址，不能都设为 OHOS OBS 地址。公开 SDK 下载地址和哈希保存在 `toolchain.json`，解压后 `--sdk-native` 应指向包含 `oh-uni-package.json`、`llvm/`、`sysroot/` 的 Native 目录。
+
+## 构建原生库
+
+```powershell
+$native = 'D:/soft/ohos_sdk_public/20/native'
+$qjs = '<固定提交的 flutter_qjs 源码目录>'
+$sqlite = '<固定版本的 sqlite3.c>'
+python tool/harmonyos/native_build.py --sdk-native $native --qjs-source $qjs --sqlite-source $sqlite
+python -m unittest discover -s tool/harmonyos -p 'test_*.py' -v
+```
+
+输出位于 `build/harmonyos/native/arm64-v8a/`；报告位于 `build/harmonyos/native/native-build.json`。检查 AArch64 ELF、所需动态库、关键 FFI 导出和文件 SHA-256。只有全量构建和检查均通过才记为 `cross_compile_pass`，部分构建不能用来准备探针。
+
+该报告永远不会因为编译成功就把 `runtime_verified` 或 `hap_built` 置为 true。OpenHarmony API 20 交叉编译通过不等于 HarmonyOS API 21 的 ABI、加载或运行通过。
+
+## 准备与检查测试工程
+
+```powershell
+# 缺少 DevEco 时只做 Dart 依赖解析，不生成 OHOS 插件注册，不宣称可构建 HAP。
+python tool/harmonyos/prepare_probe.py --flutter-sdk $flutterOh --qjs-source $qjs --dart-only
+Push-Location build/harmonyos/probe
+try {
+  & "$flutterOh/bin/flutter.bat" analyze --no-pub
+  & "$flutterOh/bin/flutter.bat" test --no-pub --reporter expanded
+} finally { Pop-Location }
+```
+
+`prepare_probe.py` 会校验 SDK 提交、构建脚本/基线指纹、rhttp 当前源码和每个原生库的哈希，拒绝过期或失败的构建。QuickJS 只在 `build/harmonyos/deps/` 下导出固定提交，增加一个 OHOS `DynamicLibrary.open('libqjs.so')` 加载分支；补丁锚点变化时失败，不静默猜测。FRB 使用既有的显式库加载入口，不编辑生成代码。SQLite 使用包本身提供的 loader override。
+
+默认 Flutter 回归运行 6 项、跳过 3 项原生宿主逻辑测试。在 Windows 上已有主工程编译产物时，可将当前终端的 `HARMONYOS_PROBE_HOST_LIBDIR` 指向含 `rhttp.dll`、`sqlite3.dll`、`flutter_qjs_plugin.dll` 的构建目录，并将该目录加到本进程 PATH，再执行同一测试命令。这样共运行 9 项，可检查探针逻辑本身；加载的是 Windows DLL，绝不计为 OHOS ELF 运行通过。原生宿主测试会在系统临时目录保留一份很小的合成 SQLite fixture，便于诊断，不读取应用数据。
+
+测试源码以 `.template` 保存，避免被主工程的 Dart 分析当成已接入的平台代码；生成工程、库、日志和签名信息都不进版本控制。脚本会覆盖生成工程中的探针源码；签名、SDK 等本机配置不要放进模板。Dart 依赖使用独立锁文件，不修改主工程 `pubspec.yaml` / `pubspec.lock`。
+
+## DevEco / 真机阶段
+
+1. 安装完整 DevEco 工具链，使用当前终端的 `DEVECO_SDK_HOME` / `HOS_SDK_HOME`、`NODE_HOME` / PATH 指向安装路径及 ohpm、hvigor、JDK；先确认 `flutter doctor -v` 能识别它们。不要伪造 SDK 元数据绕过检查。
+2. **先用 `flutter create --platforms ohos` 在另一独立目录创建空白工程，完成空白 HAP 构建、开发签名及真机启动。** 这样能区分工具链问题和本项目依赖问题。
+3. 重新执行 `prepare_probe.py`，去掉 `--dart-only`；默认产品的目标及兼容版本是 `6.0.1(21)`，可用 `--target-sdk` 为新生成工程指定已安装版本。已有工程的本机 SDK/签名选择不会被脚本反复覆盖；调整时在 DevEco 检查 `ohos/build-profile.json5`，不能把最低系统版本设得低于原生库编译所需 API。
+4. 在 DevEco 打开 `build/harmonyos/probe/ohos`，按官方流程配置本机开发签名。未签名构建命令为 `flutter build hap --release --no-codesign --target-platform ohos-arm64`；构建成功不等于可安装，实际安装/运行使用 DevEco 或 `flutter run -d <设备>` 的已签名流程。
+5. 点击 `Run core checks`，保存第一次报告；强制停止进程，不清数据，重新启动后再运行，保存第二次报告。相同进程不提供重跑按钮；不得把数据库关闭重开当作杀进程恢复通过。不要导入个人收藏、账号或漫画源，只使用探针自建的沙箱测试数据。
+
+探针检查 QuickJS 运算 / Promise / Dart 回调 / ArrayBuffer / 异常 / 反复创建释放；rhttp / FRB 的本机 HTTP/1.1 字节、流、重定向、取消；SQLite 的提交、回滚、FTS5、关闭重开与跨进程标记。整个原生检查在独立 isolate 中执行，崩溃、提前退出或超时不能转为成功；超时会停止 worker，本进程不再重试。卡住的原生线程不保证能被 Dart 立即中断，仍需强制停止进程并检查设备日志。
+
+复制的 JSON 不主动包含个人路径、凭据或设备标识，失败只记录类型及受控检查名称。分享设备诊断日志前仍需人工脱敏。即使探针全部通过，HTTPS 证书 / DNS / HTTP2 / HTTP3、现有 `IsolateQjs` 包装层、内存长期回收、WebView、系统插件以及真实阅读/下载流程仍未验证。

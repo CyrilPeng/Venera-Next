@@ -1,0 +1,29 @@
+{
+  "branch": "HarmonyOS",
+  "flutter": {
+    "repository": "https://gitcode.com/CPF-Flutter/flutter_flutter.git",
+    "tag": "3.41.9+ohos-1.0.2",
+    "revision": "62357a93d653bf844f730bb1f4b7cc9e2139d14e",
+    "dart": "3.11.5"
+  },
+  "nativeSdk": {
+    "version": "6.0.0.47",
+    "api": 20,
+    "windowsLinuxArchive": "https://repo.huaweicloud.com/openharmony/os/6.0-Release/ohos-sdk-windows_linux-public.tar.gz",
+    "sha256": "a315834ac133625efc912bd078f3e2b2550868d04aef1b5aa4f9679c8b3c9d8e"
+  },
+  "rust": {
+    "version": "1.92.0",
+    "target": "aarch64-unknown-linux-ohos",
+    "flutterRustBridge": "2.11.1"
+  },
+  "quickjs": {
+    "repository": "https://github.com/CyrilPeng/flutter_qjs.git",
+    "revision": "8feae95df7fb00455df129ad7a0dfec1d0e8d8e4"
+  },
+  "sqlite": {
+    "version": "3.52.0",
+    "archive": "https://sqlite.org/2026/sqlite-autoconf-3520000.tar.gz",
+    "amalgamationSha256": "a503acc9fe98f628eed36eb2aa2116a26f2541270d757f9b7cdbc2f19eb72b8f"
+  }
+}

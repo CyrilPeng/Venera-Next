@@ -1,0 +1,79 @@
+{
+  "status": "cross_compile_pass",
+  "component": "all",
+  "target": "aarch64-unknown-linux-ohos",
+  "sdk_version": "6.0.0.47",
+  "runtime_verified": false,
+  "hap_built": false,
+  "libraries": [
+    {
+      "name": "librhttp.so",
+      "bytes": 4165480,
+      "sha256": "146fb7c6d69361fafde81040d5668f5f7ef04955e12516547466529596e576ad",
+      "needed": [
+        "libc.so"
+      ],
+      "checked_exports": [
+        "frb_get_rust_content_hash",
+        "frb_init_frb_dart_api_dl",
+        "frb_pde_ffi_dispatcher_primary",
+        "frb_pde_ffi_dispatcher_sync"
+      ]
+    },
+    {
+      "name": "libqjs.so",
+      "bytes": 1056288,
+      "sha256": "46d10ffa0e14d1c3580151792e50851bc86a1d6ad0536fe6390b4ff7dc2f53b8",
+      "needed": [
+        "libc++_shared.so",
+        "libc.so"
+      ],
+      "checked_exports": [
+        "jsNewRuntime",
+        "jsEval",
+        "jsFreeRuntime"
+      ]
+    },
+    {
+      "name": "libsqlite3.so",
+      "bytes": 1499712,
+      "sha256": "41d10a30196b8da8a3efe5f403532180eed78994c66d342cca7cdb2846e86855",
+      "needed": [
+        "libc.so"
+      ],
+      "checked_exports": [
+        "sqlite3_open_v2",
+        "sqlite3_close_v2",
+        "sqlite3session_create"
+      ]
+    },
+    {
+      "name": "libc++_shared.so",
+      "bytes": 1262248,
+      "sha256": "b0455e6756bc102afa17b6bbfc934d941bbfb7db4d7d5e74ef453fb770274230",
+      "needed": [
+        "libc.so"
+      ],
+      "checked_exports": []
+    }
+  ],
+  "rhttp_source_sha256": "945bedce234da672b088e76ee7d8012ff6578bd0127789cb7a70a5a9307818d3",
+  "build_fingerprint": "18e7f3fe8e4bb09f32a88d5f067451771e7b9395ed559507f421f2d9aa88fbb1:f9782a8dec37a937cc439324e191339283866b8c876117fc9ed248ea876ed1a8",
+  "quickjs_revision": "8feae95df7fb00455df129ad7a0dfec1d0e8d8e4",
+  "sqlite_source_sha256": "a503acc9fe98f628eed36eb2aa2116a26f2541270d757f9b7cdbc2f19eb72b8f",
+  "finished_at_utc": "2026-10-27T07:50:35.862957+00:00",
+  "verification": {
+    "date_asia_shanghai": "2026-10-27",
+    "flutter_oh": "3.41.9+ohos-1.0.2",
+    "python_tests_passed": 10,
+    "flutter_analyze": "no_issues",
+    "flutter_host_tests_passed": 9,
+    "flutter_host_native_semantics_tests": 3,
+    "host_native_platform": "windows-x64",
+    "ohos_device_tests_run": 0,
+    "hap_build": "blocked_missing_complete_hmos_sdk",
+    "blank_template_created": true,
+    "blank_hap_signed_or_run": false,
+    "reader_ported": false
+  }
+}

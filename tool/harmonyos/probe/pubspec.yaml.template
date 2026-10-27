@@ -1,0 +1,23 @@
+name: harmonyos_probe
+description: Isolated Venera-Next core-library compatibility probe, not a reader release.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: '>=3.11.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_qjs:
+    path: ../deps/flutter_qjs
+  flutter_rust_bridge: 2.11.1
+  rhttp:
+    path: '{{RHTTP_PATH}}'
+  sqlite3: 2.7.4
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/native-build.json

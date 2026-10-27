@@ -1,0 +1,105 @@
+import 'dart:async';
+import 'dart:isolate';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:harmonyos_probe/main.dart';
+import 'package:harmonyos_probe/probe_runner.dart';
+
+void completeWorker(List<Object> args) {
+  (args.first as SendPort).send(<String, Object?>{
+    'type': 'done',
+    'status': 'fake_test_only',
+  });
+}
+
+void crashWorker(List<Object> _) => throw StateError('synthetic crash');
+void exitWorker(List<Object> _) {}
+void hungWorker(List<Object> args) => ReceivePort().listen((_) {});
+
+void main() {
+  test('worker completion is delivered', () async {
+    final events = <ProbeEvent>[];
+    await runProbeWorker(
+      directory: 'unused',
+      launchId: 'test',
+      onEvent: events.add,
+      worker: completeWorker,
+    );
+    expect(events.single['status'], 'fake_test_only');
+  });
+
+  test('crash cannot become a passing result', () async {
+    await expectLater(
+      runProbeWorker(
+        directory: 'unused',
+        launchId: 'test',
+        onEvent: (_) {},
+        worker: crashWorker,
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('exit without completion is a failure', () async {
+    await expectLater(
+      runProbeWorker(
+        directory: 'unused',
+        launchId: 'test',
+        onEvent: (_) {},
+        worker: exitWorker,
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('deadline kills worker and never reports a pass', () async {
+    final events = <ProbeEvent>[];
+    await expectLater(
+      runProbeWorker(
+        directory: 'unused',
+        launchId: 'test',
+        onEvent: events.add,
+        worker: hungWorker,
+        deadline: const Duration(milliseconds: 100),
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
+    expect(events, isEmpty);
+  });
+
+  test('host cannot be mistaken for OHOS runtime', () async {
+    await expectLater(
+      runProbeWorker(directory: 'unused', launchId: 'test', onEvent: (_) {}),
+      throwsStateError,
+    );
+  });
+
+  testWidgets('narrow screen and large text retain actions and scope', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(const ProbeApp());
+    await tester.scrollUntilVisible(find.text('Run core checks'), 180);
+    await tester.pumpAndSettle();
+    expect(find.text('Run core checks'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Run core checks'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Incomplete / failed'), -180);
+    await tester.pumpAndSettle();
+    expect(find.text('Incomplete / failed'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Run core checks'), 180);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+}

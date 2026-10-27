@@ -1,0 +1,136 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:isolate';
+
+import 'core_checks.dart';
+
+typedef ProbeEvent = Map<String, Object?>;
+
+const unverified = [
+  'HTTPS certificates / DNS / HTTP2 / HTTP3',
+  'Existing IsolateQjs wrapper lifecycle',
+  'Reader / source / downloads / WebView / system plugins',
+  'HarmonyOS SDK21 native rebuild and device ABI validation',
+];
+
+Future<void> probeWorker(List<Object> arguments) async {
+  final port = arguments[0] as SendPort;
+  final directory = arguments[1] as String;
+  final launchId = arguments[2] as String;
+  if (Platform.operatingSystem != 'ohos') {
+    throw UnsupportedError(
+      'This native probe must run on OHOS, not a host fallback',
+    );
+  }
+  var failures = 0;
+  var restartVerified = false;
+  for (final id in ['quickjs', 'rhttp', 'sqlite']) {
+    port.send(<String, Object?>{'type': 'running', 'id': id});
+    final timer = Stopwatch()..start();
+    try {
+      String detail;
+      switch (id) {
+        case 'quickjs':
+          detail = await checkQuickJs();
+        case 'rhttp':
+          detail = await checkRhttp();
+        default:
+          restartVerified = await checkSqlite(directory, launchId);
+          detail = 'SQLite commit, rollback, FTS5, file close/reopen';
+      }
+      port.send(<String, Object?>{
+        'type': 'result',
+        'id': id,
+        'status': 'pass',
+        'detail': detail,
+        'elapsed_ms': timer.elapsedMilliseconds,
+      });
+    } catch (error) {
+      failures++;
+      // Probe inputs are synthetic; still omit paths and arbitrary exception text.
+      port.send(<String, Object?>{
+        'type': 'result',
+        'id': id,
+        'status': 'fail',
+        'error_type': error.runtimeType.toString(),
+        'detail': error is ProbeFailure
+            ? error.check
+            : 'Native call failed; inspect device diagnostics',
+        'elapsed_ms': timer.elapsedMilliseconds,
+      });
+    }
+  }
+  port.send(<String, Object?>{
+    'type': 'result',
+    'id': 'process_restart',
+    'status': restartVerified ? 'pass' : 'pending',
+    'detail': restartVerified
+        ? 'Marker from an earlier process launch survived'
+        : 'Force-stop and relaunch this probe without clearing data; rerunning alone does not count',
+  });
+  port.send(<String, Object?>{
+    'type': 'done',
+    'status': failures == 0
+        ? (restartVerified ? 'core_checks_pass' : 'core_pass_restart_pending')
+        : 'failed',
+    'runtime_platform': Platform.operatingSystem,
+    'not_verified': unverified,
+  });
+}
+
+// A worker crash or deadline must not become a silent spinner or a false pass.
+Future<void> runProbeWorker({
+  required String directory,
+  required String launchId,
+  required void Function(ProbeEvent) onEvent,
+  Duration deadline = const Duration(seconds: 60),
+  void Function(List<Object>) worker = probeWorker,
+}) async {
+  final events = ReceivePort();
+  final errors = ReceivePort();
+  final exits = ReceivePort();
+  final complete = Completer<void>();
+  // Native loading may fail before the spawn future returns to its awaiter.
+  complete.future.ignore();
+  var receivedDone = false;
+  final eventSub = events.listen((dynamic value) {
+    final event = Map<String, Object?>.from(value as Map);
+    onEvent(event);
+    if (event['type'] == 'done') {
+      receivedDone = true;
+      if (!complete.isCompleted) complete.complete();
+    }
+  });
+  final errorSub = errors.listen((_) {
+    if (!complete.isCompleted) {
+      complete.completeError(StateError('Native probe worker crashed'));
+    }
+  });
+  // Port ordering across different ports is unspecified; allow queued done events to drain.
+  final exitSub = exits.listen((_) {
+    Timer(const Duration(milliseconds: 100), () {
+      if (!complete.isCompleted && !receivedDone) {
+        complete.completeError(
+          StateError('Probe exited without a completion record'),
+        );
+      }
+    });
+  });
+  Isolate? isolate;
+  try {
+    isolate = await Isolate.spawn(
+      worker,
+      [events.sendPort, directory, launchId],
+      onError: errors.sendPort,
+      onExit: exits.sendPort,
+      errorsAreFatal: true,
+    );
+    await complete.future.timeout(deadline);
+  } finally {
+    isolate?.kill(priority: Isolate.immediate);
+    events.close();
+    errors.close();
+    exits.close();
+    await Future.wait([eventSub.cancel(), errorSub.cancel(), exitSub.cancel()]);
+  }
+}

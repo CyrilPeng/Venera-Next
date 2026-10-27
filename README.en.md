@@ -253,6 +253,7 @@ Run `winget upgrade --id CyrilPeng.VeneraNext --exact`. Public-source availabili
 ## Developer resources
 
 - [Build and Development](doc/development/build.en.md): Flutter/Rust, locked dependencies, tests, and releases.
+- [HarmonyOS branch experiment (Chinese)](doc/experiments/harmonyos.zh.md): isolated Flutter OH/core-library validation on `HarmonyOS`; no installable HAP or supported-platform claim yet.
 - [Contributing](CONTRIBUTING.en.md) · [Dependency Governance](doc/development/dependencies.en.md).
 - [Windows Distribution](doc/distribution/windows.en.md) · [Headless Mode](doc/user/headless.en.md).
 - [Security Policy](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Documentation Index](doc/README.en.md).

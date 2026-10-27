@@ -1,0 +1,197 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'probe_runner.dart';
+
+void main() => runApp(const ProbeApp());
+
+class ProbeApp extends StatelessWidget {
+  const ProbeApp({super.key});
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Venera / HarmonyOS Lab',
+    theme: ThemeData(
+      colorSchemeSeed: const Color(0xff16655b),
+      useMaterial3: true,
+    ),
+    home: const ProbePage(),
+  );
+}
+
+class ProbePage extends StatefulWidget {
+  const ProbePage({super.key});
+
+  @override
+  State<ProbePage> createState() => _ProbePageState();
+}
+
+class _ProbePageState extends State<ProbePage> {
+  final _launchId = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
+  final _events = <ProbeEvent>[];
+  bool _running = false;
+  bool _attempted = false;
+  String _status = 'Not run';
+  Map<String, dynamic>? _nativeBuild;
+
+  String get _json => const JsonEncoder.withIndent('  ').convert({
+    'probe_schema': 1,
+    'status': _status,
+    'runtime_platform': Platform.operatingSystem,
+    'dart': Platform.version.split(' ').first,
+    'native_build': _nativeBuild,
+    'events': _events,
+    'not_verified': unverified,
+  });
+
+  Future<void> _run() async {
+    setState(() {
+      _running = true;
+      _attempted = true;
+      _status = 'Running';
+    });
+    try {
+      if (Platform.operatingSystem != 'ohos') {
+        throw UnsupportedError('OHOS device required');
+      }
+      _nativeBuild = jsonDecode(
+        await rootBundle.loadString('assets/native-build.json'),
+      );
+      const channel = MethodChannel('venera/harmonyos_probe');
+      final directory = await channel
+          .invokeMethod<String>('filesDir')
+          .timeout(const Duration(seconds: 5));
+      if (directory == null || !directory.startsWith('/')) {
+        throw StateError('Missing application sandbox');
+      }
+      await runProbeWorker(
+        directory: directory,
+        launchId: _launchId,
+        onEvent: (event) {
+          if (!mounted) return;
+          setState(() {
+            _events.add(event);
+            _status = event['type'] == 'done'
+                ? event['status'] as String
+                : 'Running: ${event['id']}';
+          });
+        },
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _status = 'Incomplete / failed';
+        _events.add({
+          'type': 'fatal',
+          'error_type': error.runtimeType.toString(),
+          'detail':
+              'Worker stopped. Check device diagnostics; restart before another attempt.',
+        });
+      });
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Venera / HarmonyOS Lab')),
+    body: SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              Text(
+                'Core compatibility probe',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Experimental branch: HarmonyOS. This is not a reader release and does not open your Venera data.',
+              ),
+              const SizedBox(height: 24),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  _status,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_running) const LinearProgressIndicator(),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _attempted ? null : _run,
+                    icon: const Icon(Icons.science_outlined),
+                    label: const Text('Run core checks'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _running || !_attempted
+                        ? null
+                        : () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            await Clipboard.setData(ClipboardData(text: _json));
+                            if (mounted) {
+                              messenger.showSnackBar(
+                                const SnackBar(content: Text('Report copied')),
+                              );
+                            }
+                          },
+                    icon: const Icon(Icons.copy_outlined),
+                    label: const Text('Copy report'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Restart check: after the first run, force-stop and relaunch without clearing data. Each process permits one attempt.',
+              ),
+              const SizedBox(height: 24),
+              for (final event in _events.where(
+                (event) => event['type'] != 'running',
+              ))
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${event['id'] ?? event['type']} / ${event['status'] ?? event['error_type'] ?? ''}',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          '${event['detail'] ?? event['error_type'] ?? event['status']}',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 24),
+              Text(
+                'Outside this result',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              for (final item in unverified)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('- $item'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
