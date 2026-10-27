@@ -12,6 +12,28 @@ from native_build import CONFIG
 
 
 class CiSdkTests(unittest.TestCase):
+    def test_joined_archive_checksum_cannot_be_ignored(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            part = directory / "sdk.part"
+            part.write_bytes(b"archive")
+            baseline = {"archives": [{"name": part.name, "bytes": 7,
+                                      "sha256": hashlib.sha256(b"archive").hexdigest()}],
+                        "joinedArchive": "sdk.zip", "joinedSha256": "0" * 64}
+            with self.assertRaises(ValueError):
+                ci_sdk.prepare_archive(directory, baseline)
+            self.assertTrue(part.exists())
+
+    def test_ci_component_version_cannot_be_substituted(self):
+        config = copy.deepcopy(CONFIG)
+        config["harmonyCiSdk"]["nativeVersion"] = "pinned-component"
+        metadata = {"apiVersion": str(config["harmonyCiSdk"]["api"]),
+                    "version": "substituted-component"}
+        receipt = {"status": "verified", "native": metadata,
+                   "archives": ci_sdk.archive_records(config)}
+        with self.assertRaises(ValueError):
+            ci_sdk.check_native_sdk(metadata, "harmony-ci", config, receipt)
+
     def test_raw_split_archive_is_joined_in_order_only_after_verification(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

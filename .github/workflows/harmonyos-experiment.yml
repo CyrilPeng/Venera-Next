@@ -118,8 +118,9 @@ jobs:
           from pathlib import Path
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write('## HarmonyOS experimental build\n\n')
-              for name in ('sdk', 'blank-build', 'probe-build'):
-                  path = Path(f'build/harmonyos/ci/{name}.json')
+              for name, filename in (('sdk', 'ci/sdk'), ('blank-build', 'ci/blank-build'),
+                                     ('native-build', 'native/native-build'), ('probe-build', 'ci/probe-build')):
+                  path = Path(f'build/harmonyos/{filename}.json')
                   status = json.loads(path.read_text())['status'] if path.exists() else 'not completed'
                   summary.write(f'- {name}: `{status}`\n')
               summary.write('\nUnsigned lab artifacts only. No signing, installation, device runtime, '

@@ -39,6 +39,9 @@ def prepare_archive(downloads, baseline):
         for asset in baseline["archives"]:
             with (downloads / asset["name"]).open("rb") as source:
                 shutil.copyfileobj(source, output, length=1024 * 1024)
+    expected = baseline.get("joinedSha256")
+    if expected is not None and file_digest(joined) != expected:
+        raise ValueError("Joined SDK archive checksum mismatch")
     for asset in baseline["archives"]:
         (downloads / asset["name"]).unlink()
     return joined

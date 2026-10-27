@@ -14,12 +14,14 @@
   },
   "harmonyCiSdk": {
     "version": "26.0.0.851",
+    "nativeVersion": "26.0.0.105",
     "api": 26,
     "targetSdk": "26.0.0",
     "source": "https://github.com/zhongdaiqi/command-line-tools-for-hmos/releases/tag/clt-26.0.0.851",
     "reference": "https://github.com/zhongdaiqi/flutter-ohos-builder/blob/57bedeac638fe8b517cfa16dd6b10a1209104f69/Dockerfile",
     "checksumSource": "GitHub release asset digests; community CI mirror, not Huawei-published checksums",
     "joinedArchive": "commandline-tools-linux-x64-26.0.0.851.zip",
+    "joinedSha256": "ab604bd92721d5cbcafd154e6461d46b9f1b105e7b89eab04a9d046681198082",
     "archives": [
       {
         "name": "commandline-tools-linux-x64-26.0.0.851.part_aa",

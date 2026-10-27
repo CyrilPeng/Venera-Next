@@ -1,0 +1,15 @@
+{
+  "apiType": "stageMode",
+  "buildOption": {
+    "nativeLib": {
+      "debugSymbol": {
+        "strip": false,
+        "exclude": []
+      }
+    }
+  },
+  "targets": [
+    { "name": "default", "runtimeOS": "HarmonyOS" },
+    { "name": "ohosTest" }
+  ]
+}
