@@ -8,7 +8,7 @@ on:
     paths:
       - .github/workflows/harmonyos-experiment.yml
       - tool/harmonyos/**
-      - packages/rhttp/rust/**
+      - packages/rhttp/**
       - rust-toolchain.toml
 
 permissions:

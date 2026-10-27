@@ -13,18 +13,25 @@
     "sha256": "a315834ac133625efc912bd078f3e2b2550868d04aef1b5aa4f9679c8b3c9d8e"
   },
   "harmonyCiSdk": {
-    "version": "6.1.1.280",
-    "api": 24,
-    "targetSdk": "6.1.1(24)",
-    "source": "https://libsdl.org/harmonyos-devtools/",
-    "reference": "https://github.com/libsdl-org/SDL/blob/c314de7ce9a48c4b3a2ead40ddb53153c02c1ec6/.github/actions/setup-harmonyos-toolchain/action.yml",
-    "checksumSource": "Observed in https://github.com/CyrilPeng/Venera-Next/actions/runs/40476080189; pinned SDL mirror bytes, not a Huawei-published checksum",
+    "version": "26.0.0.851",
+    "api": 26,
+    "targetSdk": "26.0.0",
+    "source": "https://github.com/zhongdaiqi/command-line-tools-for-hmos/releases/tag/clt-26.0.0.851",
+    "reference": "https://github.com/zhongdaiqi/flutter-ohos-builder/blob/57bedeac638fe8b517cfa16dd6b10a1209104f69/Dockerfile",
+    "checksumSource": "GitHub release asset digests; community CI mirror, not Huawei-published checksums",
+    "joinedArchive": "commandline-tools-linux-x64-26.0.0.851.zip",
     "archives": [
       {
-        "name": "commandline-tools-linux-x64-6.1.1.280.zip",
-        "url": "https://libsdl.org/harmonyos-devtools/commandline-tools-linux-x64-6.1.1.280.zip",
-        "bytes": 2141466303,
-        "sha256": "b9caf7b73c541b90e6c8f3c7c3de7f2bea9b35e41e80cd3525f2f759ebf16cf4"
+        "name": "commandline-tools-linux-x64-26.0.0.851.part_aa",
+        "url": "https://github.com/zhongdaiqi/command-line-tools-for-hmos/releases/download/clt-26.0.0.851/commandline-tools-linux-x64-26.0.0.851.part_aa",
+        "bytes": 1610612736,
+        "sha256": "58cf09ea8882785fba6f7156a6be426b27390ad113cc1506c86bd25616fdb805"
+      },
+      {
+        "name": "commandline-tools-linux-x64-26.0.0.851.part_ab",
+        "url": "https://github.com/zhongdaiqi/command-line-tools-for-hmos/releases/download/clt-26.0.0.851/commandline-tools-linux-x64-26.0.0.851.part_ab",
+        "bytes": 737450573,
+        "sha256": "c454ffa7ebb318dbf70dff8b7a1281de565cec3751c5b498f40f7f9500872fe6"
       }
     ]
   },

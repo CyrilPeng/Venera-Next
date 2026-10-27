@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -24,6 +25,23 @@ def verify_archive(path, asset):
 def archive_records(config):
     return [{key: asset[key] for key in ("name", "bytes", "sha256")}
             for asset in config["harmonyCiSdk"]["archives"]]
+
+
+def prepare_archive(downloads, baseline):
+    for asset in baseline["archives"]:
+        verify_archive(downloads / asset["name"], asset)
+    if "joinedArchive" not in baseline:
+        return downloads / baseline["archives"][0]["name"]
+    joined = downloads / baseline["joinedArchive"]
+    if joined.name in {asset["name"] for asset in baseline["archives"]}:
+        raise ValueError("Joined archive must not overwrite a source part")
+    with joined.open("xb") as output:
+        for asset in baseline["archives"]:
+            with (downloads / asset["name"]).open("rb") as source:
+                shutil.copyfileobj(source, output, length=1024 * 1024)
+    for asset in baseline["archives"]:
+        (downloads / asset["name"]).unlink()
+    return joined
 
 
 def check_native_sdk(metadata, profile, config, receipt=None):
@@ -78,7 +96,10 @@ def install(destination, downloads, report_path, config):
             print("Observed archive: " + json.dumps(observed), flush=True)
             verify_archive(archive, asset)
             print(f"Verified {asset['name']}: {asset['sha256']}", flush=True)
-        subprocess.run(["7z", "x", str(downloads / report["archives"][0]["name"]),
+        archive = prepare_archive(downloads, config["harmonyCiSdk"])
+        report["assembled_archive"] = {"name": archive.name, "bytes": archive.stat().st_size,
+                                       "sha256": file_digest(archive)}
+        subprocess.run(["7z", "x", str(archive),
                         f"-o{destination}", "-y", "-bsp0"], check=True)
         root = destination / "command-line-tools"
         native = root / "sdk/default/openharmony/native"
@@ -108,7 +129,8 @@ def install(destination, downloads, report_path, config):
         with Path(os.environ["GITHUB_PATH"]).open("a", encoding="utf-8") as env_path:
             env_path.writelines(f"{path}\n" for path in paths if path.is_dir())
         for asset in config["harmonyCiSdk"]["archives"]:
-            (downloads / asset["name"]).unlink()
+            (downloads / asset["name"]).unlink(missing_ok=True)
+        archive.unlink(missing_ok=True)
     except Exception as error:
         report.update(status="failed", error_type=type(error).__name__)
         raise

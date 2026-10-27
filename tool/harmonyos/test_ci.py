@@ -12,6 +12,24 @@ from native_build import CONFIG
 
 
 class CiSdkTests(unittest.TestCase):
+    def test_raw_split_archive_is_joined_in_order_only_after_verification(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            assets = []
+            for name, data in (("sdk.part_aa", b"first"), ("sdk.part_ab", b"second")):
+                (directory / name).write_bytes(data)
+                assets.append({"name": name, "bytes": len(data),
+                               "sha256": hashlib.sha256(data).hexdigest()})
+            baseline = {"archives": assets, "joinedArchive": "sdk.zip"}
+            (directory / "sdk.part_ab").write_bytes(b"tampered")
+            with self.assertRaises(ValueError):
+                ci_sdk.prepare_archive(directory, baseline)
+            self.assertFalse((directory / "sdk.zip").exists())
+            (directory / "sdk.part_ab").write_bytes(b"second")
+            joined = ci_sdk.prepare_archive(directory, baseline)
+            self.assertEqual(joined.read_bytes(), b"firstsecond")
+            self.assertFalse((directory / "sdk.part_aa").exists())
+
     def test_archive_requires_both_size_and_checksum(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "sdk.zip.001"
