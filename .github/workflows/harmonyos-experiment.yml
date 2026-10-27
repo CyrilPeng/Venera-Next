@@ -44,11 +44,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Linux build dependencies and run script tests
+      - name: Run script tests and check the hosted archive tool
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y p7zip-full libgtk-3-0 libglu1-mesa ninja-build cmake pkg-config
           python3 -m unittest discover -s tool/harmonyos -p 'test_*.py' -v
+          command -v 7z
           df -h .
 
       - name: Install checksum-pinned HarmonyOS CLI from a public upstream CI mirror
@@ -57,6 +56,13 @@ jobs:
             --destination "$RUNNER_TEMP/harmony-sdk" \
             --downloads "$RUNNER_TEMP/harmony-downloads" \
             --report build/harmonyos/ci/sdk.json
+
+      - name: Install Linux host test dependencies with a bounded network wait
+        timeout-minutes: 4
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 \
+            -o Acquire::https::Timeout=20 install -y --no-install-recommends \
+            libgtk-3-0 libglu1-mesa ninja-build cmake pkg-config
 
       - name: Install the pinned independent Flutter OH SDK
         run: |
