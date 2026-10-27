@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -14,6 +15,8 @@ def file_digest(path):
 
 
 def verify_archive(path, asset):
+    if not asset["sha256"]:
+        raise ValueError("Unpinned SDK archive: record the observed digest before extracting or executing it")
     if path.stat().st_size != asset["bytes"] or file_digest(path) != asset["sha256"]:
         raise ValueError(f"SDK archive size/checksum mismatch: {asset['name']}")
 
@@ -36,6 +39,9 @@ def check_native_sdk(metadata, profile, config, receipt=None):
     if expected_version is not None and version != expected_version:
         raise ValueError("Native SDK component version does not match the pinned baseline")
     if profile == "harmony-ci":
+        if any(not re.fullmatch(r"[a-f0-9]{64}", asset.get("sha256") or "")
+               for asset in baseline["archives"]):
+            raise ValueError("An unpinned CI SDK cannot be used for native builds")
         if not receipt or receipt.get("status") != "verified":
             raise ValueError("The CI SDK requires a successful archive verification receipt")
         if receipt.get("archives") != archive_records(config):
@@ -66,6 +72,10 @@ def install(destination, downloads, report_path, config):
             subprocess.run(["curl", "--fail", "--location", "--retry", "4",
                             "--retry-all-errors", "--silent", "--show-error",
                             "--output", str(archive), asset["url"]], check=True)
+            observed = {"name": archive.name, "bytes": archive.stat().st_size,
+                        "sha256": file_digest(archive)}
+            report.setdefault("observed_archives", []).append(observed)
+            print("Observed archive: " + json.dumps(observed), flush=True)
             verify_archive(archive, asset)
             print(f"Verified {asset['name']}: {asset['sha256']}", flush=True)
         subprocess.run(["7z", "x", str(downloads / report["archives"][0]["name"]),

@@ -6,7 +6,7 @@
 
 `.github/workflows/harmonyos-experiment.yml` 仅在 `HarmonyOS` 分支的相关构建文件更新或手动触发时运行，使用临时 Ubuntu runner，不依赖维护者本机 SDK、不访问签名密钥、不创建 Release、不更新应用版本。
 
-商业 HarmonyOS CLI 使用 Cocos 自身 CI 引用的[公开镜像](https://github.com/cocos/oh-sdk-for-ci/releases/tag/api-21)，不是华为官方分发地址。`toolchain.json` 固定两个分卷的文件大小和 GitHub Release 资产 SHA-256；这不是华为发布的校验值。先逐个校验、再解压，保留来源及真实 Native 元数据，不伪造 SDK 目录或组件描述。首次运行记录实际组件版本，后续基于实际结果收紧固定版本；API 21 云端基线与下文公开 API 20 本机基线严格分开。
+首次使用 Cocos CI 的 API 21 CLI 已完成下载校验、安装和空白工程尝试，但当前固定 Flutter OH 嵌入层引用了旧 SDK 缺少的接口，ArkTS 编译失败。现按 HAR 中 `6.1.1.125` 编译元数据，改查 SDL 自身 CI 使用的[公开镜像](https://libsdl.org/harmonyos-devtools/) CLI `6.1.1.280`。它不是华为官方分发地址，也不提供华为发布的校验值。新候选包必须先由云端只读计算摘要、人工核对并固定到 `toolchain.json`，未固定 SHA-256 的包不得解压或执行。固定后先校验再解压，保留来源及真实 Native 元数据，不伪造 SDK 目录或组件描述。商业云端基线与下文公开 API 20 本机基线严格分开。
 
 云端依次构建空白 ARM64 未签名 HAP，再以同一商业 SDK 重编译四个核心库，生成并分析／回归测试隔离探针，最后构建探针 HAP。打包检查会核对 AArch64 ELF、四个库是否真正入包及其精确哈希，拒绝缺库、内容变化和空包。证据与日志保留 14 天；仅全流程成功才上传 `harmonyos-unsigned-lab-haps-*` 测试产物。
 

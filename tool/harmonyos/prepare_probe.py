@@ -87,7 +87,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--flutter-sdk", type=Path, required=True)
     parser.add_argument("--qjs-source", type=Path, required=True)
-    parser.add_argument("--target-sdk", default="6.0.1(21)",
+    parser.add_argument("--target-sdk", default=CONFIG["harmonyCiSdk"]["targetSdk"],
                         help="HarmonyOS SDK installed in DevEco, not the public native SDK")
     parser.add_argument("--dart-only", action="store_true",
                         help="Resolve Dart dependencies only, without OHOS plugin generation")

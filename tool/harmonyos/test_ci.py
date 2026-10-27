@@ -1,4 +1,5 @@
 import hashlib
+import copy
 import struct
 import tempfile
 import unittest
@@ -18,28 +19,34 @@ class CiSdkTests(unittest.TestCase):
             asset = {"name": path.name, "bytes": path.stat().st_size,
                      "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
             ci_sdk.verify_archive(path, asset)
-            for update in ({"bytes": 0}, {"sha256": "0" * 64}):
+            for update in ({"bytes": 0}, {"sha256": "0" * 64}, {"sha256": None}):
                 with self.assertRaises(ValueError):
                     ci_sdk.verify_archive(path, asset | update)
 
     def test_public_and_ci_sdks_cannot_be_confused(self):
+        config = copy.deepcopy(CONFIG)
+        for asset in config["harmonyCiSdk"]["archives"]:
+            asset["sha256"] = asset["sha256"] or "1" * 64
         public = {"apiVersion": "20", "version": CONFIG["nativeSdk"]["version"]}
         ci_sdk.check_native_sdk(public, "public", CONFIG)
         with self.assertRaises(ValueError):
             ci_sdk.check_native_sdk(public | {"apiVersion": "21"}, "public", CONFIG)
-        metadata = {"apiVersion": "21",
+        metadata = {"apiVersion": str(CONFIG["harmonyCiSdk"]["api"]),
                     "version": CONFIG["harmonyCiSdk"].get("nativeVersion", "observed-component")}
         receipt = {"status": "verified", "native": metadata,
-                   "archives": ci_sdk.archive_records(CONFIG)}
-        ci_sdk.check_native_sdk(metadata, "harmony-ci", CONFIG, receipt)
+                   "archives": ci_sdk.archive_records(config)}
+        ci_sdk.check_native_sdk(metadata, "harmony-ci", config, receipt)
         for broken in (None, receipt | {"status": "failed"}, receipt | {"archives": []},
                        receipt | {"native": metadata | {"version": "other"}}):
             with self.assertRaises(ValueError):
-                ci_sdk.check_native_sdk(metadata, "harmony-ci", CONFIG, broken)
+                ci_sdk.check_native_sdk(metadata, "harmony-ci", config, broken)
         with self.assertRaises(ValueError):
-            ci_sdk.check_native_sdk(public, "harmony-ci", CONFIG, receipt)
+            ci_sdk.check_native_sdk(public, "harmony-ci", config, receipt)
         with self.assertRaises(ValueError):
-            ci_sdk.check_native_sdk(metadata, "unknown-profile", CONFIG, receipt)
+            ci_sdk.check_native_sdk(metadata, "unknown-profile", config, receipt)
+        config["harmonyCiSdk"]["archives"][0]["sha256"] = None
+        with self.assertRaises(ValueError):
+            ci_sdk.check_native_sdk(metadata, "harmony-ci", config, receipt)
 
 
 class HapAuditTests(unittest.TestCase):

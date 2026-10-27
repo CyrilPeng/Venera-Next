@@ -51,7 +51,7 @@ jobs:
           python3 -m unittest discover -s tool/harmonyos -p 'test_*.py' -v
           df -h .
 
-      - name: Install checksum-pinned HarmonyOS CLI from the Cocos public CI mirror
+      - name: Install checksum-pinned HarmonyOS CLI from a public upstream CI mirror
         run: |
           python3 tool/harmonyos/ci_sdk.py \
             --destination "$RUNNER_TEMP/harmony-sdk" \
@@ -89,7 +89,7 @@ jobs:
           mkdir "$RUNNER_TEMP/sqlite"
           tar -xzf "$RUNNER_TEMP/sqlite.tar.gz" -C "$RUNNER_TEMP/sqlite" --strip-components=1
 
-      - name: Rebuild and audit all core libraries using the HarmonyOS API 21 SDK
+      - name: Rebuild and audit all core libraries using the selected HarmonyOS SDK
         run: |
           set -o pipefail
           python3 tool/harmonyos/native_build.py \
