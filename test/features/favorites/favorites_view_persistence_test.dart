@@ -10,6 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/select.dart';
 import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/components/window_frame.dart';
+import 'package:venera_next/features/favorites/favorite_models.dart';
+import 'package:venera_next/features/favorites/favorites_constants.dart';
 import 'package:venera_next/features/favorites/favorites_page.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/favorites/local_favorites_page.dart';
@@ -19,6 +21,7 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -122,9 +125,153 @@ Widget _host(Widget child, {Future<void> Function()? onExit}) => _libraryView(
   ),
 );
 
+Future<void> _saveFolderSelection(WidgetTester tester, String folder) async {
+  tester
+      .widget<FavoritesFolderSidebar>(find.byType(FavoritesFolderSidebar))
+      .onFolderSelected(false, folder);
+  await tester.pump();
+  final owner = tester.state<SettingsSaveState>(find.byType(FavoritesPage));
+  await _flush(tester, owner.waitForSettingsSave());
+}
+
+Future<void> _reopenSavedView(WidgetTester tester, Directory root) async {
+  await tester.pumpWidget(const SizedBox());
+  await tester.pump();
+  await tester.runAsync(() async {
+    final manager = _favoritesForView();
+    await manager.closeAndWait();
+    await manager.init();
+  });
+  appdata.implicitData = Map<String, dynamic>.from(_saved(root));
+  await tester.pumpWidget(_host(const FavoritesPage()));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   App.dataPath = Directory.systemTemp.path;
+
+  for (final size in [const Size(375, 800), const Size(1024, 600)]) {
+    for (final folder in [localAllFolderLabel, 'A']) {
+      final label = folder == localAllFolderLabel ? 'All' : 'real folder';
+      testWidgets(
+        '$label selection survives storage reopen at width ${size.width}',
+        (tester) async {
+          final root = await _prepare(tester);
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final manager = _favoritesForView();
+          await tester.runAsync(
+            () => manager.addComic(
+              'A',
+              FavoriteItem(
+                id: 'persisted-comic',
+                name: 'Persisted comic',
+                coverPath: '',
+                author: '',
+                type: ComicType.local,
+                tags: const [],
+              ),
+            ),
+          );
+          await tester.pumpWidget(_host(const FavoritesPage()));
+          await _saveFolderSelection(tester, folder);
+          expect(_saved(root)['favoriteFolder'], {
+            'name': folder,
+            'isNetwork': false,
+          });
+          await _reopenSavedView(tester, root);
+          expect(find.text('Unselected'), findsNothing);
+          expect(
+            tester
+                .widget<LocalFavoritesPage>(find.byType(LocalFavoritesPage))
+                .folder,
+            folder,
+          );
+          expect(
+            tester
+                .widget<FavoritesFolderSidebar>(
+                  find.byType(FavoritesFolderSidebar),
+                )
+                .selectedFolder,
+            folder,
+          );
+          expect(manager.getFolderComics('A').single.id, 'persisted-comic');
+          expect(manager.findLinked('A'), ('test-source', 'remote-A'));
+          expect(manager.existsFolder(localAllFolderLabel), isFalse);
+          expect(_saved(root)['unrelated'], 42);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets('All selection survives restart without real folders', (
+    tester,
+  ) async {
+    final root = await _prepare(tester);
+    final manager = _favoritesForView();
+    await tester.runAsync(() async {
+      for (final folder in manager.folderNames) {
+        await manager.deleteFolder(folder);
+      }
+    });
+    await tester.pumpWidget(_host(const FavoritesPage()));
+    await _saveFolderSelection(tester, localAllFolderLabel);
+    await _reopenSavedView(tester, root);
+    expect(
+      tester.widget<LocalFavoritesPage>(find.byType(LocalFavoritesPage)).folder,
+      localAllFolderLabel,
+    );
+    expect(manager.folderNames, isEmpty);
+    expect(find.text('Unselected'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('deleted real folder is not restored after restart', (
+    tester,
+  ) async {
+    final root = await _prepare(tester);
+    final manager = _favoritesForView();
+    final remainingFolders = manager.folderNames
+        .where((folder) => folder != 'A')
+        .toList();
+    await tester.pumpWidget(_host(const FavoritesPage()));
+    await _saveFolderSelection(tester, 'A');
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    await tester.runAsync(() => manager.deleteFolder('A'));
+    await _reopenSavedView(tester, root);
+    expect(find.byType(LocalFavoritesPage), findsNothing);
+    expect(find.text('Unselected'), findsOneWidget);
+    expect(manager.folderNames, remainingFolders);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('missing saved selection remains unselected', (tester) async {
+    await _prepare(tester);
+    await tester.pumpWidget(_host(const FavoritesPage()));
+    expect(find.byType(LocalFavoritesPage), findsNothing);
+    expect(find.text('Unselected'), findsOneWidget);
+    expect(appdata.implicitData['favoriteFolder'], isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('unavailable network selection does not open local All', (
+    tester,
+  ) async {
+    await _prepare(tester);
+    appdata.implicitData['favoriteFolder'] = {
+      'name': localAllFolderLabel,
+      'isNetwork': true,
+    };
+    await tester.pumpWidget(_host(const FavoritesPage()));
+    expect(find.byType(LocalFavoritesPage), findsNothing);
+    expect(find.text('Unselected'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'folder selection previews latest folder and detached window waits for saves',

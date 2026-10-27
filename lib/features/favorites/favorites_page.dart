@@ -56,6 +56,7 @@ class _FavoritesPageState extends SettingsSaveState<FavoritesPage> {
     }
     if (folder != null &&
         !isNetwork &&
+        folder != localAllFolderLabel &&
         !FavoritesScope.read(context).existsFolder(folder!)) {
       folder = null;
     }
