@@ -90,7 +90,7 @@ try {
 
 `prepare_probe.py` 会校验 SDK 提交、构建脚本/基线指纹、rhttp 当前源码和每个原生库的哈希，拒绝过期或失败的构建。QuickJS 只在 `build/harmonyos/deps/` 下导出固定提交，增加一个 OHOS `DynamicLibrary.open('libqjs.so')` 加载分支；补丁锚点变化时失败，不静默猜测。FRB 使用既有的显式库加载入口，不编辑生成代码。SQLite 使用包本身提供的 loader override。
 
-默认 Flutter 回归运行 6 项、跳过 3 项原生宿主逻辑测试。在 Windows 上已有主工程编译产物时，可将当前终端的 `HARMONYOS_PROBE_HOST_LIBDIR` 指向含 `rhttp.dll`、`sqlite3.dll`、`flutter_qjs_plugin.dll` 的构建目录，并将该目录加到本进程 PATH，再执行同一测试命令。这样共运行 9 项，可检查探针逻辑本身；加载的是 Windows DLL，绝不计为 OHOS ELF 运行通过。原生宿主测试会在系统临时目录保留一份很小的合成 SQLite fixture，便于诊断，不读取应用数据。
+默认 Flutter 回归运行 13 项、跳过 3 项原生宿主逻辑测试，包含小白签装合成状态与升级回归。在 Windows 上已有主工程编译产物时，可将当前终端的 `HARMONYOS_PROBE_HOST_LIBDIR` 指向含 `rhttp.dll`、`sqlite3.dll`、`flutter_qjs_plugin.dll` 的构建目录，并将该目录加到本进程 PATH，再执行同一测试命令。这样共运行 16 项，可检查探针逻辑本身；加载的是 Windows DLL，绝不计为 OHOS ELF 运行通过。原生宿主测试会在系统临时目录保留一份很小的合成 SQLite fixture，便于诊断，不读取应用数据。
 
 测试源码以 `.template` 保存，避免被主工程的 Dart 分析当成已接入的平台代码；生成工程、库、日志和签名信息都不进版本控制。脚本会覆盖生成工程中的探针源码；签名、SDK 等本机配置不要放进模板。Dart 依赖使用独立锁文件，不修改主工程 `pubspec.yaml` / `pubspec.lock`。
 

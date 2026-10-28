@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:venera_next/foundation/image_provider/base_image_provider.dart';
 import 'package:venera_next/foundation/image_provider/image_provider_lifecycle.dart';
@@ -11,8 +10,7 @@ import 'package:venera_next/foundation/image_work.dart';
 /// A reader's visible consumers share this forwarding stream. The underlying
 /// provider retains its original cache key and Flutter's animation scheduling.
 /// Only the underlying subscription is suspended during reversible exit holds.
-class ReaderDisplayImageProvider
-    extends ImageProvider<ReaderDisplayImageProvider> {
+class ReaderDisplayImageProvider extends ImageProvider<ReaderImageProvider> {
   ReaderDisplayImageProvider(this.image, this.work);
 
   final ReaderImageProvider image;
@@ -21,16 +19,17 @@ class ReaderDisplayImageProvider
 
   String get imageKey => image.imageKey;
 
+  // ScrollAwareImageProvider must see the source's pending/decoded cache entry,
+  // not this uncached relay, before deciding to defer a fast-scrolling image.
   @override
-  Future<ReaderDisplayImageProvider> obtainKey(
-    ImageConfiguration configuration,
-  ) => SynchronousFuture(this);
+  Future<ReaderImageProvider> obtainKey(ImageConfiguration configuration) =>
+      image.obtainKey(configuration);
 
   @override
   void resolveStreamForKey(
     ImageConfiguration configuration,
     ImageStream stream,
-    ReaderDisplayImageProvider key,
+    ReaderImageProvider key,
     ImageErrorListener handleError,
   ) {
     var owned = _stream;
