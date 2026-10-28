@@ -51,6 +51,26 @@
 
 详细步骤见[中文签装指南](../distribution/harmonyos.zh.md) / [English guide](../distribution/harmonyos.en.md)。本轮先完成测试套件和云端打包验证；真机结果到位后再进入现有阅读器接入。
 
+## 2026-10-28 主线同步后的签装套件云端验证
+
+合并提交 `6f212fdeec47d32f99c3251b81c3d4f2374653e5` 完整包含 `main` 的 `ce57c66`。[Actions 运行 40696828912](https://github.com/CyrilPeng/Venera-Next/actions/runs/40696828912) 于北京时间 21:38 完成，结论为 `success`；不是以合并前的运行替代本轮验证。
+
+| 检查 | 实际结果 | 验证边界 |
+|---|---|---|
+| 工具链与原生库 | 固定 CLI `26.0.0.851` / Native `26.0.0.105`，重新编译并审计四个 ARM64 核心库 | 第三方镜像未作官方来源认证；未在设备加载 |
+| 脚本与探针回归 | Python 23 项通过；baseline、upgrade 各分析无问题、Flutter 宿主 13 项通过、3 项跳过 | Linux 宿主回归不是 OHOS 真机运行 |
+| 主线修复本地回归 | 定向图片代理／滚动 25 项及相关阅读器集成 199 项通过，变更 Dart 分析无问题 | 集成测试使用已有 Windows DLL；不代表 #125 原 Android 设备已复测 |
+| 空白 unsigned HAP | `harmonyos-blank-arm64-unsigned.hap`，20,627,191 字节 | 仅签装排查对照，不是 baseline |
+| baseline unsigned HAP | `harmonyos-probe-baseline-arm64-unsigned.hap`，30,113,126 字节，`0.2.0+2` | 未签名、未安装／启动 |
+| upgrade unsigned HAP | `harmonyos-probe-upgrade-arm64-unsigned.hap`，30,113,125 字节，`0.2.1+3` | 未验证同签名覆盖升级或数据保留 |
+| 下载后独立复核 | 三包大小／SHA-256、实际包名／版本／API、配对／源码指纹、原生报告及库字节、清单／SHA256SUMS／中英文指南均一致 | 静态检查不证明签名身份、设备行为或证书续签 |
+
+两份探针实际包名为 `com.github.cyrilpeng.harmonyos_probe`，共享配对标识 `b467df52dcc545d76bfb0e7a003dc369b1b3712270234bff477087ada7800f13`。三包实际 `deviceTypes` 均仅为 `phone`，最低／目标 SDK 均为 `26.0.0`，不承诺平板、PC 或旧系统兼容。
+
+精简证据与完整校验值归档于 [harmonyos-sideload-ci-20261028.json](data/harmonyos-sideload-ci-20261028.json)。本地原始证据、日志及测试套件保存在忽略的 `build/harmonyos-sideload-20261028/run-40696828912/`；Actions 产物 `harmonyos-unsigned-lab-haps-40696828912` 保留 14 天，包含三份 HAP、配对清单、摘要和离线指南。结果记录提交仅更新文档；本节实际核验的构建源提交是 `6f212fd`。
+
+下一步仍由测试者按指南亲自完成小白账号授权、空白包签装、baseline 首次运行、强制停止重启和同签名覆盖 upgrade，提供三份最小合成报告后再复核。当前没有签名、真机或续签结果，没有接入完整阅读器，也未创建 Release 或关闭 #77。
+
 ## 待完成的真机验证
 
 云端已解决完整工具链及未签名 HAP 构建问题。本机仍没有 DevEco、开发签名环境或连接的鸿蒙真机，尚未完成安装、进程启动、原生库加载及探针运行。当前实验包的编译、目标与最低系统版本均为 `26.0.0`；核心库也以 API 26 构建，不承诺上游引擎单独标注的旧系统最低兼容范围。
