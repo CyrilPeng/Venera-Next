@@ -52,6 +52,7 @@ English index: [README.en.md](README.en.md)
 - [漫画源与源仓库管理设计](experiments/source_repositories.zh.md)
 - [图片增强实验](experiments/image_enhancement.zh.md)
 - [去混淆像素复制优化](experiments/image_descrambling.zh.md)
+- [WebDAV 阅读卡顿分阶段排查](experiments/webdav_reader_performance.zh.md)
 - [AVIF 格式识别与解码评估](experiments/avif_decoder.zh.md)
 
 ## 维护原则

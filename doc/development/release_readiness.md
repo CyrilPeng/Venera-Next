@@ -4,6 +4,55 @@ This checklist tracks release preparation following v1.18.0. A release does
 not mark unresolved reports as fixed. Dated verification records and the
 original device acceptance checklist remain below.
 
+## Second patch candidate preparation (2026-10-28)
+
+The next candidate is v1.18.2-rc.2, build 238. It retains rc.1 and first
+delivers the #110 local-All selection restoration and #117 Windows global
+hide/restore hotkey. Stable distribution stays at v1.18.1; do not update
+AltStore or Winget. The hierarchy, Android TV and HarmonyOS branches are not
+merged into this release.
+
+- #110: test local All and a concrete folder after ending the Android process
+  and restarting. Deleted folders must still be rejected. This fix does not
+  establish that every original missing-favorites report has been resolved.
+- #117: test the default-off shortcut from another application and across
+  normal, maximized, fullscreen and minimized states. Verify key-repeat,
+  conflicts, saving, restart, disable/clear, native dialogs and relaunch recovery.
+  The binding is device-local and only hides the main window; it is not a
+  privacy feature and does not pause downloads.
+- #125: requested the actual version/build and installation origin because the
+  report names rc2 before an official rc.2 exists. Image format, device and the
+  difference between delayed image arrival and UI stalls remain unconfirmed.
+  The new synthetic local-reader decode probe passed all 20 measurements with
+  Flutter 3.41.4 on Windows. It is not an Android frame-pacing test, a decoded
+  image-cache test, or a runtime fix. See the
+  [diagnostic record](../experiments/webdav_reader_performance.zh.md).
+- #107/#115 still need original-environment confirmation; do not repeat the
+  existing retest notices early. #111 has a reporter response that v1.18.1
+  starts normally; keep the agreed observation window without a no-response
+  reminder. Already-closed #96/#100/#112/#118/#119 remain closed. The #100
+  closure followed the reporter's request to defer unstable-site follow-up,
+  not acceptance of an expanded page/body HTTP/3 strategy.
+
+Local preparation passed 168 targeted favorites, hotkey, synchronization,
+image-provider, WebDAV and changelog tests, the decode probe's 20 measurements,
+strict analysis and architecture/import checks with Flutter 3.41.4. All 139
+Python script tests completed with four intentional skips. These are scoped
+host checks, not a new full-suite result or Android device acceptance.
+
+The runtime commits already passed full cloud quality and dependency checks
+at e634d887e14a7c3daaa5fbb2bc439ce5115d9192. These older results do not replace
+the exact release commit's checks. Before tagging, confirm its metadata and
+dependency audit. The tag workflow must pass full quality gates and fresh
+six-platform builds before publishing all installation assets. Verify the tag,
+release notes, prerelease flag, asset inventory and unchanged stable channel
+before notifying #110 and #117 once with version-specific retest steps.
+
+Back up before upgrading; no data reset or archive renaming is required. Keep
+the original comics and pre-upgrade application-data export for rollback.
+The host measurements do not establish #91 energy savings or #125 device
+performance, and publishing a candidate does not close these reports.
+
 ## Next patch candidate preparation (2026-10-25)
 
 The next candidate is v1.18.2-rc.1, build 237, based on the released
