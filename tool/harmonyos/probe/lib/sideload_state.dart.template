@@ -10,8 +10,11 @@ Future<Map<String, Object?>> checkSideloadState({
 }) async {
   final stage = build['stage'];
   final pairId = build['pair_id'];
+  final baselineVersionCode = build['baseline_version_code'];
   if (build['schema'] != 1 ||
       build['purpose'] != 'xiaobai_sideload_lab' ||
+      baselineVersionCode is! int ||
+      baselineVersionCode <= 0 ||
       !['baseline', 'upgrade'].contains(stage) ||
       pairId is! String ||
       !RegExp(r'^[0-9a-f]{64}$').hasMatch(pairId)) {
@@ -31,7 +34,7 @@ Future<Map<String, Object?>> checkSideloadState({
       return {'status': 'invalid_state'};
     }
     if (state['schema'] != 1 ||
-        state['baseline_version_code'] != 2 ||
+        state['baseline_version_code'] != baselineVersionCode ||
         state['first_launch_id'] is! String ||
         state['marker'] is! String ||
         !RegExp(r'^[0-9a-f]{32}$').hasMatch(state['marker'] as String)) {
@@ -46,7 +49,7 @@ Future<Map<String, Object?>> checkSideloadState({
     state = {
       'schema': 1,
       'pair_id': pairId,
-      'baseline_version_code': 2,
+      'baseline_version_code': baselineVersionCode,
       'first_launch_id': launchId,
       'marker': List.generate(
         16,
@@ -59,7 +62,7 @@ Future<Map<String, Object?>> checkSideloadState({
   return {
     'status': stage == 'baseline' ? 'baseline_ready' : 'upgrade_data_present',
     'pair_id': pairId,
-    'baseline_version_code': 2,
+    'baseline_version_code': baselineVersionCode,
     'marker': state['marker'],
     'first_launch_id': state['first_launch_id'],
     'earlier_launch': state['first_launch_id'] != launchId,

@@ -25,6 +25,7 @@ def build_report(stage):
             "packaged_app": {"bundle_name": sideload.BUNDLE_NAME,
                              "version_name": build["version_name"],
                              "version_code": build["version_code"],
+                             "device_types": list(sideload.DEVICE_TYPES),
                              "minimum_api": 260000026, "target_api": 260000026}}
 
 
@@ -38,7 +39,8 @@ def device_reports(manifest):
             "sideload_state": {
                 "status": "upgrade_data_present" if index == 2 else "baseline_ready",
                 "marker": "d" * 32, "pair_id": manifest["pair_id"],
-                "baseline_version_code": 2, "first_launch_id": "launch-0",
+                "baseline_version_code": sideload.STAGES["baseline"]["version_code"],
+                "first_launch_id": "launch-0",
                 "earlier_launch": bool(index),
             },
             "events": [{"type": "result", "id": name, "status": "pass"}
@@ -74,15 +76,27 @@ class SideloadBuildTests(unittest.TestCase):
                 path = Path(temporary) / "probe-unsigned.hap"
                 with zipfile.ZipFile(path, "w") as archive:
                     archive.writestr(sideload.ASSET, json.dumps(expected))
-                    archive.writestr("module.json", json.dumps({"app": app | update}))
+                    archive.writestr("module.json", json.dumps({"app": app | update,
+                        "module": {"deviceTypes": list(sideload.DEVICE_TYPES)}}))
                 with zipfile.ZipFile(path) as archive:
                     if update:
                         with self.assertRaises(ValueError):
                             sideload.audit_metadata(archive, expected)
                     else:
-                        self.assertEqual(sideload.audit_metadata(archive, expected)["version_code"], 2)
+                        self.assertEqual(sideload.audit_metadata(archive, expected)["version_code"],
+                                         sideload.STAGES["baseline"]["version_code"])
                         with self.assertRaises(ValueError):
                             sideload.audit_metadata(archive, metadata("upgrade"))
+
+    def test_actual_hap_device_types_cannot_be_missing_phone_only_or_broadened(self):
+        for devices in (None, [], ["phone"], ["tablet"], ["phone", "tablet", "2in1"],
+                        ["phone", "tablet", "tablet"], "tablet"):
+            with self.subTest(devices=devices), tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "probe-unsigned.hap"
+                with zipfile.ZipFile(path, "w") as archive:
+                    archive.writestr("module.json", json.dumps({"module": {"deviceTypes": devices}}))
+                with zipfile.ZipFile(path) as archive, self.assertRaises(ValueError):
+                    sideload.audit_device_types(archive)
 
     def test_pair_rejects_incomplete_failed_signed_or_mixed_builds(self):
         reports = [build_report(stage) for stage in sideload.STAGES]
@@ -98,11 +112,16 @@ class SideloadBuildTests(unittest.TestCase):
                 sideload.pair_manifest(broken)
         for key, value in (("pair_id", "e" * 64), ("source_commit", "f" * 40),
                            ("stage", "baseline"), ("version_code", 2),
-                           ("bundle_name", "another.app")):
+                           ("bundle_name", "another.app"), ("device_types", ["phone"]),
+                           ("baseline_version_code", 2)):
             broken = copy.deepcopy(reports)
             broken[1]["sideload_build"][key] = value
             with self.assertRaises(ValueError):
                 sideload.pair_manifest(broken)
+        broken = copy.deepcopy(reports)
+        broken[1]["packaged_app"]["device_types"] = ["phone"]
+        with self.assertRaises(ValueError):
+            sideload.pair_manifest(broken)
 
 
 class SideloadReviewTests(unittest.TestCase):
@@ -144,6 +163,8 @@ class SideloadReviewTests(unittest.TestCase):
             review_sideload.review(self.manifest, self.reports[:2])
         with self.assertRaises(ValueError):
             review_sideload.review(self.manifest | {"runtime_verified": True}, self.reports)
+        with self.assertRaises(ValueError):
+            review_sideload.review(self.manifest | {"device_types": ["phone"]}, self.reports)
 
 
 if __name__ == "__main__":

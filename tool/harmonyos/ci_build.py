@@ -11,8 +11,8 @@ import zipfile
 from pathlib import Path
 
 from native_build import CONFIG, ROOT, digest, require_within, validate_elf
-from prepare_probe import LIBRARIES, configure_profile, verify_native_report
-from sideload import audit_metadata, pair_manifest
+from prepare_probe import LIBRARIES, configure_device_types, configure_profile, verify_native_report
+from sideload import audit_device_types, audit_metadata, pair_manifest
 
 
 BASE = ROOT / "build/harmonyos"
@@ -43,6 +43,7 @@ def audit_hap(hap, expected=None, metadata=None):
         names = archive.namelist()
         if len(set(names)) != len(names) or archive.testzip() is not None:
             raise ValueError("Duplicated or corrupt HAP members")
+        audit_device_types(archive)
         if metadata is not None:
             audit_metadata(archive, metadata)
         required = {"libflutter.so", "libapp.so"} | (set(LIBRARIES) if expected else set())
@@ -78,6 +79,9 @@ def build(stage, flutter_sdk, qjs_source=None):
             profile = project / "ohos/build-profile.json5"
             profile.write_text(configure_profile(profile.read_text(),
                                CONFIG["harmonyCiSdk"]["targetSdk"]), encoding="utf-8")
+            module = project / "ohos/entry/src/main/module.json5"
+            module.write_text(configure_device_types(module.read_text(encoding="utf-8")),
+                              encoding="utf-8")
             run_logged([flutter, "pub", "get"], "blank-pub", project)
         else:
             if qjs_source is None:
@@ -107,6 +111,8 @@ def build(stage, flutter_sdk, qjs_source=None):
         shutil.copy2(haps[0], exported)
         report.update(status="packaging_pass", hap=exported.name,
                       bytes=exported.stat().st_size, sha256=digest(exported), libraries=libraries)
+        with zipfile.ZipFile(haps[0]) as archive:
+            report["device_types"] = audit_device_types(archive)
         if metadata is not None:
             with zipfile.ZipFile(haps[0]) as archive:
                 report.update(sideload_build=metadata, packaged_app=audit_metadata(archive, metadata))

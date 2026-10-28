@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 
-from sideload import BUNDLE_NAME, STAGES
+from sideload import BUNDLE_NAME, DEVICE_TYPES, STAGES
 
 
 def require(condition, message):
@@ -18,6 +18,7 @@ def review(manifest, reports):
             "Unknown sideload manifest")
     require(manifest.get("signed") is False and manifest.get("runtime_verified") is False
             and manifest.get("reader_integrated") is False, "Unexpected manifest scope")
+    require(manifest.get("device_types") == list(DEVICE_TYPES), "Unexpected device targets")
     pair_id = manifest.get("pair_id")
     require(isinstance(pair_id, str) and re.fullmatch(r"[0-9a-f]{64}", pair_id),
             "Missing pair identity")
@@ -27,6 +28,8 @@ def review(manifest, reports):
     for build, stage in zip(builds, STAGES):
         require(build.get("stage") == stage and build.get("bundle_name") == BUNDLE_NAME
                 and build.get("pair_id") == pair_id
+                and build.get("device_types") == manifest["device_types"]
+                and build.get("baseline_version_code") == STAGES["baseline"]["version_code"]
                 and all(build.get(key) == value for key, value in STAGES[stage].items()),
                 "Unexpected manifest build identity")
     for report, expected in zip(reports, (builds[0], builds[0], builds[1])):

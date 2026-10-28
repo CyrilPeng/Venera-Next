@@ -7,9 +7,10 @@ from pathlib import Path
 
 
 BUNDLE_NAME = "com.github.cyrilpeng.harmonyos_probe"
+DEVICE_TYPES = ("phone", "tablet")
 STAGES = {
-    "baseline": {"version_name": "0.2.0", "version_code": 2},
-    "upgrade": {"version_name": "0.2.1", "version_code": 3},
+    "baseline": {"version_name": "0.3.0", "version_code": 4},
+    "upgrade": {"version_name": "0.3.1", "version_code": 5},
 }
 ASSET = "resources/rawfile/flutter_assets/assets/sideload-build.json"
 
@@ -41,14 +42,29 @@ def build_metadata(stage, commit, native_report):
         "bundle_name": BUNDLE_NAME, "stage": stage, **STAGES[stage],
         "pair_id": pair_id, "source_commit": commit,
         "probe_source_sha256": identity["probe_source_sha256"],
+        "baseline_version_code": STAGES["baseline"]["version_code"],
+        "device_types": list(DEVICE_TYPES),
         "minimum_sdk": "26.0.0", "reader_integrated": False,
     }
+
+
+def audit_device_types(archive):
+    try:
+        declared = json.loads(archive.read("module.json"))["module"]["deviceTypes"]
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("Missing or invalid actual HAP device types") from error
+    if declared != list(DEVICE_TYPES):
+        raise ValueError("Actual HAP must declare exactly the reviewed phone/tablet targets")
+    return declared
 
 
 def audit_metadata(archive, expected):
     metadata = json.loads(archive.read(ASSET))
     if metadata != expected:
         raise ValueError("Packaged sideload metadata differs from the prepared build")
+    device_types = audit_device_types(archive)
+    if metadata.get("device_types") != device_types:
+        raise ValueError("Embedded device targets differ from the actual HAP")
     app = json.loads(archive.read("module.json"))["app"]
     for packed, declared in (("bundleName", "bundle_name"), ("versionName", "version_name"),
                              ("versionCode", "version_code")):
@@ -59,7 +75,7 @@ def audit_metadata(archive, expected):
         raise ValueError("Unexpected actual HAP minimum/target API; review compatibility first")
     return {"bundle_name": app["bundleName"], "version_name": app["versionName"],
             "version_code": app["versionCode"], "minimum_api": app["minAPIVersion"],
-            "target_api": app["targetAPIVersion"]}
+            "target_api": app["targetAPIVersion"], "device_types": device_types}
 
 
 def pair_manifest(reports):
@@ -74,13 +90,15 @@ def pair_manifest(reports):
                 or metadata.get("schema") != 1
                 or metadata.get("purpose") != "xiaobai_sideload_lab"
                 or metadata.get("stage") != stage or metadata.get("bundle_name") != BUNDLE_NAME
+                or metadata.get("device_types") != list(DEVICE_TYPES)
+                or metadata.get("baseline_version_code") != STAGES["baseline"]["version_code"]
                 or any(metadata.get(key) != value for key, value in STAGES[stage].items())):
             raise ValueError("Incomplete, signed or mismatched sideload build")
         if not re.fullmatch(r"[0-9a-f]{64}", metadata.get("pair_id", "")):
             raise ValueError("Missing sideload pair identity")
         packaged = report.get("packaged_app", {})
         if any(packaged.get(key) != metadata[key]
-               for key in ("bundle_name", "version_name", "version_code")):
+               for key in ("bundle_name", "version_name", "version_code", "device_types")):
             raise ValueError("HAP metadata audit is missing")
         if packaged.get("minimum_api") != 260000026 or packaged.get("target_api") != 260000026:
             raise ValueError("HAP API audit is missing")
@@ -88,12 +106,14 @@ def pair_manifest(reports):
                 or type(report.get("bytes")) is not int or report["bytes"] <= 0):
             raise ValueError("Missing original HAP digest or size")
     first, second = baseline["sideload_build"], upgrade["sideload_build"]
-    common = ("pair_id", "source_commit", "probe_source_sha256", "minimum_sdk", "bundle_name")
+    common = ("pair_id", "source_commit", "probe_source_sha256", "minimum_sdk", "bundle_name",
+              "device_types", "baseline_version_code")
     if any(first[key] != second[key] for key in common):
         raise ValueError("The HAPs were not built from the same probe/native baseline")
     return {
         "schema": 1, "purpose": "xiaobai_sideload_lab", "pair_id": first["pair_id"],
         "source_commit": first["source_commit"], "bundle_name": BUNDLE_NAME,
+        "device_types": list(DEVICE_TYPES),
         "minimum_sdk": first["minimum_sdk"], "signed": False,
         "runtime_verified": False, "reader_integrated": False,
         "artifacts": [{"name": report["hap"], "bytes": report["bytes"],

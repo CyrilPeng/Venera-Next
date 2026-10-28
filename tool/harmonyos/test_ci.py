@@ -1,5 +1,6 @@
 import hashlib
 import copy
+import json
 import struct
 import tempfile
 import unittest
@@ -97,6 +98,7 @@ class HapAuditTests(unittest.TestCase):
         names = {"libflutter.so", "libapp.so", *ci_build.LIBRARIES}
         expected = {name: hashlib.sha256(data).hexdigest() for name in ci_build.LIBRARIES}
         with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("module.json", json.dumps({"module": {"deviceTypes": ["phone", "tablet"]}}))
             for name in names - {missing}:
                 archive.writestr(f"libs/arm64-v8a/{name}", data + (b"changed" if name == changed else b""))
         return expected

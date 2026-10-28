@@ -8,6 +8,19 @@ import prepare_probe as probe
 
 
 class PrepareProbeTests(unittest.TestCase):
+    def test_device_targets_extend_only_the_reviewed_template_and_are_idempotent(self):
+        original = json.dumps({"module": {"deviceTypes": ["phone"],
+                                         "requestPermissions": [{"name": "ohos.permission.INTERNET"}]}})
+        configured = probe.configure_device_types(original)
+        self.assertEqual(json.loads(configured)["module"]["deviceTypes"], ["phone", "tablet"])
+        self.assertEqual(probe.configure_device_types(configured), configured)
+        self.assertEqual(json.loads(configured)["module"]["requestPermissions"],
+                         json.loads(original)["module"]["requestPermissions"])
+        for text in ('{}', '{"deviceTypes": ["tablet"]}', '{"deviceTypes": ["tv"]}',
+                     '{"deviceTypes": ["phone", "tablet", "2in1"]}', original + original):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                probe.configure_device_types(text)
+
     def test_profile_replaces_template_defaults_but_preserves_local_choices(self):
         profile = json.dumps({"targetSdkVersion": "26.0.0",
                               "compatibleSdkVersion": "5.0.5(17)",

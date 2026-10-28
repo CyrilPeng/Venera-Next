@@ -153,7 +153,7 @@ class _ProbePageState extends State<ProbePage> {
                   final build = snapshot.data!;
                   return SelectableText(
                     'Sideload stage: ${build['stage']} / ${build['version_name']}+${build['version_code']}\n'
-                    'Minimum SDK: ${build['minimum_sdk']} / ARM64 phone\n'
+                    'Minimum SDK: ${build['minimum_sdk']} / ARM64 ${(build['device_types'] as List<dynamic>).join(' / ')}\n'
                     'Pair: ${build['pair_id']}',
                   );
                 },

@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:isolate';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:harmonyos_probe/main.dart';
 import 'package:harmonyos_probe/probe_runner.dart';
@@ -20,9 +22,10 @@ void hungWorker(List<Object> args) => ReceivePort().listen((_) {});
 ProbeApp uiFixture() => ProbeApp(
   buildIdentity: Future.value({
     'stage': 'baseline',
-    'version_name': '0.2.0',
-    'version_code': 2,
+    'version_name': '0.3.0',
+    'version_code': 4,
     'minimum_sdk': '26.0.0',
+    'device_types': ['phone', 'tablet'],
     'pair_id': List.filled(64, 'a').join(),
   }),
 );
@@ -167,4 +170,101 @@ void main() {
     expect(find.text('Outside this result'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  for (final scenario in {
+    'tablet portrait': const Size(1024, 1366),
+    'tablet landscape': const Size(1366, 1024),
+    'tablet split pane': const Size(600, 900),
+  }.entries) {
+    testWidgets('${scenario.key} retains report copy and state after resize', (
+      tester,
+    ) async {
+      tester.view.physicalSize = scenario.value;
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      String? copied;
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      await tester.pumpWidget(uiFixture());
+      await tester.pumpAndSettle();
+      final scrollable = find.byType(Scrollable).first;
+      expect(
+        tester.getSize(find.byType(ListView)).width,
+        lessThanOrEqualTo(760),
+      );
+      final identity = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableText &&
+            (widget.data ?? '').contains('ARM64 phone / tablet'),
+      );
+      await tester.scrollUntilVisible(identity, 180, scrollable: scrollable);
+      expect(identity, findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Run core checks'),
+        180,
+        scrollable: scrollable,
+      );
+      // A host attempt deliberately fails: this exercises report export, not OHOS.
+      await tester.tap(find.text('Run core checks'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Copy report'),
+        180,
+        scrollable: scrollable,
+      );
+      await tester.pumpAndSettle();
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Copy report')),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Copy report').hitTestable(), findsOneWidget);
+      await tester.tap(find.text('Copy report'));
+      await tester.pumpAndSettle();
+      final first = jsonDecode(copied!) as Map<String, dynamic>;
+      expect(first['status'], 'Incomplete / failed');
+      expect(first['runtime_platform'], isNot('ohos'));
+      tester.view.physicalSize = Size(
+        scenario.value.height,
+        scenario.value.width,
+      );
+      await tester.pumpAndSettle();
+      // Reflow can move controls above the retained viewport offset.
+      tester.state<ScrollableState>(scrollable).position.jumpTo(0);
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Copy report'),
+        180,
+        scrollable: scrollable,
+      );
+      await tester.pumpAndSettle();
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Copy report')),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Copy report').hitTestable(), findsOneWidget);
+      copied = null;
+      await tester.tap(find.text('Copy report'));
+      await tester.pumpAndSettle();
+      expect(copied, isNotNull);
+      expect((jsonDecode(copied!) as Map)['launch_id'], first['launch_id']);
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNull,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

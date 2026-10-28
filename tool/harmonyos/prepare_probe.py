@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -11,7 +12,7 @@ from pathlib import Path
 from ci_sdk import check_report_sdk
 from native_build import (CONFIG, ROOT, build_fingerprint, check_qjs_source, digest,
                           require_within, source_fingerprint, validate_elf)
-from sideload import STAGES, build_metadata
+from sideload import DEVICE_TYPES, STAGES, build_metadata
 
 
 BASE = ROOT / "build/harmonyos"
@@ -35,6 +36,17 @@ def configure_profile(text, target_sdk):
         text = text.replace(f'"{key}": "{default}"',
                             f'"{key}": ' + json.dumps(target_sdk))
     return text
+
+
+def configure_device_types(text):
+    pattern = r'("deviceTypes"\s*:\s*)(\[[^\]]*\])'
+    matches = list(re.finditer(pattern, text))
+    if len(matches) != 1:
+        raise ValueError("Expected one reviewed module deviceTypes declaration")
+    declared = json.loads(matches[0].group(2))
+    if declared not in (["phone"], list(DEVICE_TYPES)):
+        raise ValueError("Unexpected template targets; review instead of broadening them silently")
+    return re.sub(pattern, lambda match: match.group(1) + json.dumps(list(DEVICE_TYPES)), text)
 
 
 def verify_native_report(report_path, library_dir):
@@ -126,6 +138,8 @@ def main():
     profile = probe / "ohos/build-profile.json5"
     text = profile.read_text(encoding="utf-8")
     profile.write_text(configure_profile(text, args.target_sdk), encoding="utf-8")
+    module = probe / "ohos/entry/src/main/module.json5"
+    module.write_text(configure_device_types(module.read_text(encoding="utf-8")), encoding="utf-8")
     native_dest = probe / "ohos/entry/libs/arm64-v8a"
     native_dest.mkdir(parents=True, exist_ok=True)
     for name in LIBRARIES:

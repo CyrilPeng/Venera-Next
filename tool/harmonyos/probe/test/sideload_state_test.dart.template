@@ -8,6 +8,7 @@ Map<String, dynamic> build(String stage, {String? pair}) => {
   'schema': 1,
   'purpose': 'xiaobai_sideload_lab',
   'stage': stage,
+  'baseline_version_code': 4,
   'pair_id': pair ?? List.filled(64, 'a').join(),
 };
 
@@ -45,6 +46,7 @@ void main() {
         build: build('upgrade'),
       );
       expect(first['status'], 'baseline_ready');
+      expect(first['baseline_version_code'], 4);
       expect(first['earlier_launch'], isFalse);
       expect(restart['earlier_launch'], isTrue);
       expect(upgrade['status'], 'upgrade_data_present');
@@ -131,4 +133,20 @@ void main() {
     );
     expect(await file.exists(), isFalse);
   });
+
+  test(
+    'missing baseline version cannot create or replace synthetic state',
+    () async {
+      final incomplete = build('baseline')..remove('baseline_version_code');
+      await expectLater(
+        checkSideloadState(
+          directory: directory.path,
+          launchId: 'first',
+          build: incomplete,
+        ),
+        throwsFormatException,
+      );
+      expect(await file.exists(), isFalse);
+    },
+  );
 }

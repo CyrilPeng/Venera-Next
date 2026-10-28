@@ -20,7 +20,7 @@ Actions 的 `packaging_pass` 只表示未签名打包及静态审计通过，不
 
 社区实验采用 Kazumi 的“unsigned HAP + 用户本地小白调试助手”路线；先验证现有探针，尚不接入完整阅读器。用户操作、账号与安全边界、失败处理见[中文签装指南](../../doc/distribution/harmonyos.zh.md) / [English guide](../../doc/distribution/harmonyos.en.md)。不要求普通测试者安装 DevEco，不在 CI 保存签名材料，也不声称免开发者账号或永久免续签。
 
-云端在 baseline `0.2.0+2` 之后构建 upgrade `0.2.1+3`，保持探针包名不变。两包携带相同源/原生库配对标识，导出前核对真实 `module.json`、嵌入标识、API 26 与原生库哈希，生成 `sideload-manifest.json`、`SHA256SUMS` 及离线安装指南。只有整条流程成功才提供测试包，仍不创建 Release。宿主测试生成的合成数据不属于真机验收。
+云端在 baseline `0.3.0+4` 之后构建 upgrade `0.3.1+5`，保持探针包名不变。空白包与两份探针均只声明 `phone`／`tablet`，审计实际入包设备类型，拒绝遗漏平板或扩大到 PC／TV；不混用旧 `0.2.x` 配对。两包携带相同源/原生库配对标识，导出前核对真实 `module.json`、嵌入标识、API 26 与原生库哈希，生成 `sideload-manifest.json`、`SHA256SUMS` 及离线安装指南。只有整条流程成功才提供测试包，仍不创建 Release。宿主测试生成的合成数据不属于真机验收。
 
 ```powershell
 # prepare_probe 默认准备 baseline；生成 upgrade 时额外传 --sideload-stage upgrade。
@@ -90,7 +90,7 @@ try {
 
 `prepare_probe.py` 会校验 SDK 提交、构建脚本/基线指纹、rhttp 当前源码和每个原生库的哈希，拒绝过期或失败的构建。QuickJS 只在 `build/harmonyos/deps/` 下导出固定提交，增加一个 OHOS `DynamicLibrary.open('libqjs.so')` 加载分支；补丁锚点变化时失败，不静默猜测。FRB 使用既有的显式库加载入口，不编辑生成代码。SQLite 使用包本身提供的 loader override。
 
-默认 Flutter 回归运行 13 项、跳过 3 项原生宿主逻辑测试，包含小白签装合成状态与升级回归。在 Windows 上已有主工程编译产物时，可将当前终端的 `HARMONYOS_PROBE_HOST_LIBDIR` 指向含 `rhttp.dll`、`sqlite3.dll`、`flutter_qjs_plugin.dll` 的构建目录，并将该目录加到本进程 PATH，再执行同一测试命令。这样共运行 16 项，可检查探针逻辑本身；加载的是 Windows DLL，绝不计为 OHOS ELF 运行通过。原生宿主测试会在系统临时目录保留一份很小的合成 SQLite fixture，便于诊断，不读取应用数据。
+默认 Flutter 回归运行 17 项、跳过 3 项原生宿主逻辑测试，包含小白签装合成状态、升级和平板横竖屏／分屏报告复制及旋转状态回归。在 Windows 上已有主工程编译产物时，可将当前终端的 `HARMONYOS_PROBE_HOST_LIBDIR` 指向含 `rhttp.dll`、`sqlite3.dll`、`flutter_qjs_plugin.dll` 的构建目录，并将该目录加到本进程 PATH，再执行同一测试命令。这样共运行 20 项，可检查探针逻辑本身；加载的是 Windows DLL，绝不计为 OHOS ELF 运行通过。原生宿主测试会在系统临时目录保留一份很小的合成 SQLite fixture，便于诊断，不读取应用数据。
 
 测试源码以 `.template` 保存，避免被主工程的 Dart 分析当成已接入的平台代码；生成工程、库、日志和签名信息都不进版本控制。脚本会覆盖生成工程中的探针源码；签名、SDK 等本机配置不要放进模板。Dart 依赖使用独立锁文件，不修改主工程 `pubspec.yaml` / `pubspec.lock`。
 
