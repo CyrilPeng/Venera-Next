@@ -14,7 +14,22 @@
 
 云端依次构建空白 ARM64 未签名 HAP，再以同一商业 SDK 重编译四个核心库，生成并分析／回归测试隔离探针，最后构建探针 HAP。探针模块关闭打包阶段的自动 strip，保留已审计原生库的原始字节；打包检查会核对 AArch64 ELF、四个库是否真正入包及其精确哈希，拒绝缺库、内容变化和空包。证据与日志保留 14 天；仅全流程成功才上传 `harmonyos-unsigned-lab-haps-*` 测试产物。
 
-Actions 的 `packaging_pass` 只表示未签名打包及静态审计通过，不是完整阅读器、不代表可直接安装，也不代表原生库真机加载、运行或数据恢复通过。下载安装与签名仍需按后文 DevEco／真机阶段完成；不要将 CI 编译成功作为关闭 #77 的依据。
+Actions 的 `packaging_pass` 只表示未签名打包及静态审计通过，不是完整阅读器、不代表可直接安装，也不代表原生库真机加载、运行或数据恢复通过。社区测试按下文小白签装指南完成；DevEco 保留为开发者本机调试备选，不要求普通测试者安装完整 SDK。不要将 CI 编译成功作为关闭 #77 的依据。
+
+## 小白签装与升级探针
+
+社区实验采用 Kazumi 的“unsigned HAP + 用户本地小白调试助手”路线；先验证现有探针，尚不接入完整阅读器。用户操作、账号与安全边界、失败处理见[中文签装指南](../../doc/distribution/harmonyos.zh.md) / [English guide](../../doc/distribution/harmonyos.en.md)。不要求普通测试者安装 DevEco，不在 CI 保存签名材料，也不声称免开发者账号或永久免续签。
+
+云端在 baseline `0.2.0+2` 之后构建 upgrade `0.2.1+3`，保持探针包名不变。两包携带相同源/原生库配对标识，导出前核对真实 `module.json`、嵌入标识、API 26 与原生库哈希，生成 `sideload-manifest.json`、`SHA256SUMS` 及离线安装指南。只有整条流程成功才提供测试包，仍不创建 Release。宿主测试生成的合成数据不属于真机验收。
+
+```powershell
+# prepare_probe 默认准备 baseline；生成 upgrade 时额外传 --sideload-stage upgrade。
+# 可用 --native-dir 指定已经通过 verify_native_report 的独立原生报告/arm64-v8a 目录。
+# 依赖已缓存时可用 --dart-only --offline 完成不依赖 SDK/网络的宿主准备。
+python tool/harmonyos/review_sideload.py --manifest <manifest.json> --baseline <baseline.json> --restart <restart.json> --upgrade <upgrade.json>
+```
+
+探针只在 baseline 首次启动创建独立合成标记，upgrade 不补写缺失标记。三份设备报告必须来自同一配对、三个启动且数据一致；复核工具仅检查报告，不证明签名密钥、续签或阅读器已可用。当前最低 SDK 仍为 `26.0.0`；先确认测试设备满足要求，不通过改低字段掩盖兼容问题。
 
 ## 准备
 

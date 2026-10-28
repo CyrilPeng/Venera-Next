@@ -17,6 +17,16 @@ void crashWorker(List<Object> _) => throw StateError('synthetic crash');
 void exitWorker(List<Object> _) {}
 void hungWorker(List<Object> args) => ReceivePort().listen((_) {});
 
+ProbeApp uiFixture() => ProbeApp(
+  buildIdentity: Future.value({
+    'stage': 'baseline',
+    'version_name': '0.2.0',
+    'version_code': 2,
+    'minimum_sdk': '26.0.0',
+    'pair_id': List.filled(64, 'a').join(),
+  }),
+);
+
 void main() {
   test('worker completion is delivered', () async {
     final events = <ProbeEvent>[];
@@ -84,22 +94,77 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-    await tester.pumpWidget(const ProbeApp());
-    await tester.scrollUntilVisible(find.text('Run core checks'), 180);
+    await tester.pumpWidget(uiFixture());
+    await tester.pumpAndSettle();
+    final identity = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableText &&
+          (widget.data ?? '').contains('Sideload stage:'),
+    );
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(identity, 150, scrollable: scrollable);
+    expect(identity, findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Run core checks'),
+      180,
+      scrollable: scrollable,
+    );
     await tester.pumpAndSettle();
     expect(find.text('Run core checks'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.tap(find.text('Run core checks'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Incomplete / failed'), -180);
+    await tester.scrollUntilVisible(
+      find.text('Incomplete / failed'),
+      -180,
+      scrollable: scrollable,
+    );
     await tester.pumpAndSettle();
     expect(find.text('Incomplete / failed'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Run core checks'), 180);
+    await tester.scrollUntilVisible(
+      find.text('Run core checks'),
+      180,
+      scrollable: scrollable,
+    );
     await tester.pumpAndSettle();
     expect(
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
       isNull,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('landscape retains scrollable build identity and scope', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 360);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(uiFixture());
+    await tester.pumpAndSettle();
+    final identity = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableText &&
+          (widget.data ?? '').contains('Sideload stage:'),
+    );
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(identity, 150, scrollable: scrollable);
+    expect(identity, findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Run core checks'),
+      150,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(
+      find.text('Outside this result'),
+      150,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Outside this result'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

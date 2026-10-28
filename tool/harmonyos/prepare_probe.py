@@ -11,6 +11,7 @@ from pathlib import Path
 from ci_sdk import check_report_sdk
 from native_build import (CONFIG, ROOT, build_fingerprint, check_qjs_source, digest,
                           require_within, source_fingerprint, validate_elf)
+from sideload import STAGES, build_metadata
 
 
 BASE = ROOT / "build/harmonyos"
@@ -87,17 +88,23 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--flutter-sdk", type=Path, required=True)
     parser.add_argument("--qjs-source", type=Path, required=True)
+    parser.add_argument("--native-dir", type=Path, default=BASE / "native",
+                        help="Audited report/native library directory; defaults to the local build")
+    parser.add_argument("--sideload-stage", choices=STAGES, default="baseline")
     parser.add_argument("--target-sdk", default=CONFIG["harmonyCiSdk"]["targetSdk"],
                         help="HarmonyOS SDK installed in DevEco, not the public native SDK")
     parser.add_argument("--dart-only", action="store_true",
                         help="Resolve Dart dependencies only, without OHOS plugin generation")
+    parser.add_argument("--offline", action="store_true", help="Resolve only cached Pub dependencies")
     args = parser.parse_args()
     sdk = args.flutter_sdk.resolve()
     head = subprocess.check_output(["git", "-C", sdk, "rev-parse", "HEAD"], text=True).strip()
     if head != CONFIG["flutter"]["revision"]:
         raise ValueError("Flutter OH SDK does not match toolchain.json")
-    libraries = BASE / "native/arm64-v8a"
-    report = verify_native_report(BASE / "native/native-build.json", libraries)
+    libraries = args.native_dir / "arm64-v8a"
+    report = verify_native_report(args.native_dir / "native-build.json", libraries)
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    metadata = build_metadata(args.sideload_stage, commit, report)
     probe = require_within(PROBE, BASE)
     flutter = sdk / ("bin/flutter.bat" if os.name == "nt" else "bin/flutter")
     if not (probe / ".metadata").exists():
@@ -113,6 +120,8 @@ def main():
         destination.parent.mkdir(parents=True, exist_ok=True)
         text = template.read_text(encoding="utf-8").replace(
             "{{RHTTP_PATH}}", os.path.relpath(ROOT / "packages/rhttp", probe).replace("\\", "/"))
+        text = text.replace("{{PROBE_VERSION}}",
+                            f"{metadata['version_name']}+{metadata['version_code']}")
         destination.write_text(text, encoding="utf-8")
     profile = probe / "ohos/build-profile.json5"
     text = profile.read_text(encoding="utf-8")
@@ -125,15 +134,17 @@ def main():
     assets.mkdir(exist_ok=True)
     # No account, signing material, device identifier or machine path is exported.
     (assets / "native-build.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    (assets / "sideload-build.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    pub_args = ["pub", "get", "--enforce-lockfile"] + (["--offline"] if args.offline else [])
     if args.dart_only:
         env = os.environ.copy()
         env["FLUTTER_ROOT"] = str(sdk)
         dart = sdk / ("bin/cache/dart-sdk/bin/dart.exe" if os.name == "nt"
                       else "bin/cache/dart-sdk/bin/dart")
-        command([dart, "pub", "get", "--enforce-lockfile"], cwd=probe, env=env)
+        command([dart, *pub_args], cwd=probe, env=env)
         print("Dart-only mode: OHOS plugin registration and HAP build are NOT verified.")
     else:
-        command([flutter, "pub", "get", "--enforce-lockfile"], cwd=probe)
+        command([flutter, *pub_args], cwd=probe)
     print(f"Prepared {probe}; this does not claim a HAP build or device verification.")
 
 

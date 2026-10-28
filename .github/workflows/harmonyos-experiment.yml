@@ -8,6 +8,7 @@ on:
     paths:
       - .github/workflows/harmonyos-experiment.yml
       - tool/harmonyos/**
+      - doc/distribution/harmonyos.*.md
       - packages/rhttp/**
       - rust-toolchain.toml
 
@@ -110,6 +111,11 @@ jobs:
           python3 tool/harmonyos/ci_build.py probe \
             --flutter-sdk "$FLUTTER_OH_SDK" --qjs-source "$RUNNER_TEMP/flutter-qjs"
 
+      - name: Build the matching upgrade HAP and export the sideload test kit
+        run: |
+          python3 tool/harmonyos/ci_build.py upgrade \
+            --flutter-sdk "$FLUTTER_OH_SDK" --qjs-source "$RUNNER_TEMP/flutter-qjs"
+
       - name: Record the actual outcome
         if: always()
         run: |
@@ -119,12 +125,16 @@ jobs:
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write('## HarmonyOS experimental build\n\n')
               for name, filename in (('sdk', 'ci/sdk'), ('blank-build', 'ci/blank-build'),
-                                     ('native-build', 'native/native-build'), ('probe-build', 'ci/probe-build')):
+                                     ('native-build', 'native/native-build'), ('probe-build', 'ci/probe-build'),
+                                     ('upgrade-build', 'ci/upgrade-build')):
                   path = Path(f'build/harmonyos/{filename}.json')
                   status = json.loads(path.read_text())['status'] if path.exists() else 'not completed'
                   summary.write(f'- {name}: `{status}`\n')
               summary.write('\nUnsigned lab artifacts only. No signing, installation, device runtime, '
                             'full reader integration or Release publication is verified by this workflow.\n')
+              summary.write('\nThe sideload kit includes a same-bundle baseline/upgrade pair, SHA256SUMS '
+                            'and installation guides. Its current minimum SDK is 26.0.0; '
+                            'do not claim older systems or certificate renewal are verified.\n')
           PY
 
       - name: Upload build evidence (no SDK or signing material)
@@ -144,6 +154,10 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: harmonyos-unsigned-lab-haps-${{ github.run_id }}
-          path: build/harmonyos/ci/artifacts/*-unsigned.hap
+          path: |
+            build/harmonyos/ci/artifacts/*-unsigned.hap
+            build/harmonyos/ci/artifacts/sideload-manifest.json
+            build/harmonyos/ci/artifacts/SHA256SUMS
+            build/harmonyos/ci/artifacts/install.*.md
           if-no-files-found: error
           retention-days: 14

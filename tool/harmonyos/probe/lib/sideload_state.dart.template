@@ -1,0 +1,67 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+
+/// Synthetic sandbox data only. An upgrade never creates a missing baseline.
+Future<Map<String, Object?>> checkSideloadState({
+  required String directory,
+  required String launchId,
+  required Map<String, dynamic> build,
+}) async {
+  final stage = build['stage'];
+  final pairId = build['pair_id'];
+  if (build['schema'] != 1 ||
+      build['purpose'] != 'xiaobai_sideload_lab' ||
+      !['baseline', 'upgrade'].contains(stage) ||
+      pairId is! String ||
+      !RegExp(r'^[0-9a-f]{64}$').hasMatch(pairId)) {
+    throw const FormatException('Invalid sideload build identity');
+  }
+  final file = File('$directory/venera-sideload-probe/state.json');
+  Map<String, dynamic> state;
+  if (await file.exists()) {
+    try {
+      if (await file.length() > 4096) {
+        return {'status': 'invalid_state'};
+      }
+      state = Map<String, dynamic>.from(jsonDecode(await file.readAsString()));
+    } on FormatException {
+      return {'status': 'invalid_state'};
+    } on TypeError {
+      return {'status': 'invalid_state'};
+    }
+    if (state['schema'] != 1 ||
+        state['baseline_version_code'] != 2 ||
+        state['first_launch_id'] is! String ||
+        state['marker'] is! String ||
+        !RegExp(r'^[0-9a-f]{32}$').hasMatch(state['marker'] as String)) {
+      return {'status': 'invalid_state'};
+    }
+    if (state['pair_id'] != pairId) {
+      return {'status': 'pair_mismatch'};
+    }
+  } else {
+    if (stage == 'upgrade') return {'status': 'missing_baseline'};
+    final random = Random.secure();
+    state = {
+      'schema': 1,
+      'pair_id': pairId,
+      'baseline_version_code': 2,
+      'first_launch_id': launchId,
+      'marker': List.generate(
+        16,
+        (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+      ).join(),
+    };
+    await file.parent.create(recursive: true);
+    await file.writeAsString(jsonEncode(state), flush: true);
+  }
+  return {
+    'status': stage == 'baseline' ? 'baseline_ready' : 'upgrade_data_present',
+    'pair_id': pairId,
+    'baseline_version_code': 2,
+    'marker': state['marker'],
+    'first_launch_id': state['first_launch_id'],
+    'earlier_launch': state['first_launch_id'] != launchId,
+  };
+}

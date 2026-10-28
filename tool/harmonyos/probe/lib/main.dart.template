@@ -5,11 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'probe_runner.dart';
+import 'sideload_state.dart';
 
 void main() => runApp(const ProbeApp());
 
 class ProbeApp extends StatelessWidget {
-  const ProbeApp({super.key});
+  const ProbeApp({super.key, this.buildIdentity});
+
+  final Future<Map<String, dynamic>>? buildIdentity;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -18,12 +21,14 @@ class ProbeApp extends StatelessWidget {
       colorSchemeSeed: const Color(0xff16655b),
       useMaterial3: true,
     ),
-    home: const ProbePage(),
+    home: ProbePage(buildIdentity: buildIdentity),
   );
 }
 
 class ProbePage extends StatefulWidget {
-  const ProbePage({super.key});
+  const ProbePage({super.key, this.buildIdentity});
+
+  final Future<Map<String, dynamic>>? buildIdentity;
 
   @override
   State<ProbePage> createState() => _ProbePageState();
@@ -36,13 +41,24 @@ class _ProbePageState extends State<ProbePage> {
   bool _attempted = false;
   String _status = 'Not run';
   Map<String, dynamic>? _nativeBuild;
+  Map<String, dynamic>? _sideloadBuild;
+  Map<String, Object?>? _sideloadState;
+  late final _buildIdentity = widget.buildIdentity ?? _loadBuildIdentity();
+
+  Future<Map<String, dynamic>> _loadBuildIdentity() async =>
+      Map<String, dynamic>.from(
+        jsonDecode(await rootBundle.loadString('assets/sideload-build.json')),
+      );
 
   String get _json => const JsonEncoder.withIndent('  ').convert({
-    'probe_schema': 1,
+    'probe_schema': 2,
+    'launch_id': _launchId,
     'status': _status,
     'runtime_platform': Platform.operatingSystem,
     'dart': Platform.version.split(' ').first,
     'native_build': _nativeBuild,
+    'sideload_build': _sideloadBuild,
+    'sideload_state': _sideloadState,
     'events': _events,
     'not_verified': unverified,
   });
@@ -60,6 +76,7 @@ class _ProbePageState extends State<ProbePage> {
       _nativeBuild = jsonDecode(
         await rootBundle.loadString('assets/native-build.json'),
       );
+      _sideloadBuild = await _buildIdentity;
       const channel = MethodChannel('venera/harmonyos_probe');
       final directory = await channel
           .invokeMethod<String>('filesDir')
@@ -67,6 +84,13 @@ class _ProbePageState extends State<ProbePage> {
       if (directory == null || !directory.startsWith('/')) {
         throw StateError('Missing application sandbox');
       }
+      final sideloadState = await checkSideloadState(
+        directory: directory,
+        launchId: _launchId,
+        build: _sideloadBuild!,
+      );
+      if (!mounted) return;
+      setState(() => _sideloadState = sideloadState);
       await runProbeWorker(
         directory: directory,
         launchId: _launchId,
@@ -114,6 +138,26 @@ class _ProbePageState extends State<ProbePage> {
               const Text(
                 'Experimental branch: HarmonyOS. This is not a reader release and does not open your Venera data.',
               ),
+              const SizedBox(height: 12),
+              FutureBuilder<Map<String, dynamic>>(
+                future: _buildIdentity,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const Text(
+                      'Build identity unavailable. Do not use this package for upgrade verification.',
+                    );
+                  }
+                  if (!snapshot.hasData) {
+                    return const Text('Loading build identity...');
+                  }
+                  final build = snapshot.data!;
+                  return SelectableText(
+                    'Sideload stage: ${build['stage']} / ${build['version_name']}+${build['version_code']}\n'
+                    'Minimum SDK: ${build['minimum_sdk']} / ARM64 phone\n'
+                    'Pair: ${build['pair_id']}',
+                  );
+                },
+              ),
               const SizedBox(height: 24),
               Semantics(
                 liveRegion: true,
@@ -124,6 +168,27 @@ class _ProbePageState extends State<ProbePage> {
               ),
               const SizedBox(height: 12),
               if (_running) const LinearProgressIndicator(),
+              if (_sideloadState != null) ...[
+                const SizedBox(height: 12),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    'Sideload data: ${_sideloadState!['status']}',
+                    style: TextStyle(
+                      color:
+                          [
+                            'baseline_ready',
+                            'upgrade_data_present',
+                          ].contains(_sideloadState!['status'])
+                          ? Theme.of(context).colorScheme.onSurface
+                          : Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+                const Text(
+                  'Core checks alone do not verify upgrade data, signing identity or certificate renewal.',
+                ),
+              ],
               const SizedBox(height: 12),
               Wrap(
                 spacing: 12,
@@ -154,6 +219,13 @@ class _ProbePageState extends State<ProbePage> {
               const SizedBox(height: 24),
               const Text(
                 'Restart check: after the first run, force-stop and relaunch without clearing data. Each process permits one attempt.',
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Save three reports: baseline, baseline after force-stop, and upgrade. '
+                'Use the matching upgrade HAP through the same signing identity. '
+                'Do not uninstall or clear data between these steps. '
+                'Missing or mismatched baseline data is not an upgrade pass.',
               ),
               const SizedBox(height: 24),
               for (final event in _events.where(

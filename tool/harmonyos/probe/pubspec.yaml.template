@@ -1,7 +1,7 @@
 name: harmonyos_probe
 description: Isolated Venera-Next core-library compatibility probe, not a reader release.
 publish_to: none
-version: 0.1.0+1
+version: '{{PROBE_VERSION}}'
 environment:
   sdk: '>=3.11.0 <4.0.0'
 dependencies:
@@ -21,3 +21,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/native-build.json
+    - assets/sideload-build.json

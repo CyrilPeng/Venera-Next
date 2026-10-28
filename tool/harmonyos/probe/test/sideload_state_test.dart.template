@@ -1,0 +1,134 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:harmonyos_probe/sideload_state.dart';
+
+Map<String, dynamic> build(String stage, {String? pair}) => {
+  'schema': 1,
+  'purpose': 'xiaobai_sideload_lab',
+  'stage': stage,
+  'pair_id': pair ?? List.filled(64, 'a').join(),
+};
+
+void main() {
+  late Directory directory;
+  late File file;
+  setUp(() async {
+    directory = await Directory.systemTemp.createTemp('venera-sideload-test-');
+    file = File('${directory.path}/venera-sideload-probe/state.json');
+  });
+  tearDown(() async {
+    // Remove only known synthetic files, never a recursively computed directory.
+    if (await file.exists()) await file.delete();
+    if (await file.parent.exists()) await file.parent.delete();
+    await directory.delete();
+  });
+
+  test(
+    'baseline, restart and upgrade retain the original synthetic marker',
+    () async {
+      final first = await checkSideloadState(
+        directory: directory.path,
+        launchId: 'first',
+        build: build('baseline'),
+      );
+      final saved = await file.readAsString();
+      final restart = await checkSideloadState(
+        directory: directory.path,
+        launchId: 'second',
+        build: build('baseline'),
+      );
+      final upgrade = await checkSideloadState(
+        directory: directory.path,
+        launchId: 'third',
+        build: build('upgrade'),
+      );
+      expect(first['status'], 'baseline_ready');
+      expect(first['earlier_launch'], isFalse);
+      expect(restart['earlier_launch'], isTrue);
+      expect(upgrade['status'], 'upgrade_data_present');
+      expect(upgrade['marker'], first['marker']);
+      expect(restart['marker'], first['marker']);
+      expect(upgrade['first_launch_id'], 'first');
+      expect(await file.readAsString(), saved);
+    },
+  );
+
+  test(
+    'installing upgrade first cannot seed a baseline or report a pass',
+    () async {
+      final result = await checkSideloadState(
+        directory: directory.path,
+        launchId: 'first',
+        build: build('upgrade'),
+      );
+      expect(result['status'], 'missing_baseline');
+      expect(await file.exists(), isFalse);
+    },
+  );
+
+  test('another pair is rejected without overwriting its data', () async {
+    await checkSideloadState(
+      directory: directory.path,
+      launchId: 'first',
+      build: build('baseline'),
+    );
+    final saved = await file.readAsString();
+    for (final stage in ['baseline', 'upgrade']) {
+      final result = await checkSideloadState(
+        directory: directory.path,
+        launchId: 'second',
+        build: build(stage, pair: List.filled(64, 'b').join()),
+      );
+      expect(result['status'], 'pair_mismatch');
+      expect(await file.readAsString(), saved);
+    }
+  });
+
+  test(
+    'corrupt, wrong-schema or oversized state is preserved and rejected',
+    () async {
+      await file.parent.create(recursive: true);
+      for (final text in [
+        'not json',
+        'null',
+        '{}',
+        jsonEncode({'schema': 99}),
+        List.filled(4097, 'a').join(),
+      ]) {
+        await file.writeAsString(text);
+        final result = await checkSideloadState(
+          directory: directory.path,
+          launchId: 'first',
+          build: build('baseline'),
+        );
+        expect(result['status'], 'invalid_state');
+        expect(await file.readAsString(), text);
+      }
+    },
+  );
+
+  test('same launch does not become restart evidence', () async {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final result = await checkSideloadState(
+        directory: directory.path,
+        launchId: 'same',
+        build: build('baseline'),
+      );
+      expect(result['earlier_launch'], isFalse);
+    }
+  });
+
+  test('invalid build identity cannot create state', () async {
+    await expectLater(
+      checkSideloadState(
+        directory: directory.path,
+        launchId: 'first',
+        build: build('unknown'),
+      ),
+      throwsFormatException,
+    );
+    expect(await file.exists(), isFalse);
+  });
+}

@@ -11,6 +11,7 @@ const unverified = [
   'Existing IsolateQjs wrapper lifecycle',
   'Reader / source / downloads / WebView / system plugins',
   'HarmonyOS device ABI and native library loading',
+  'Signing identity / certificate renewal / real reader data migration',
 ];
 
 Future<void> probeWorker(List<Object> arguments) async {

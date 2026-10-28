@@ -33,6 +33,7 @@ English index: [README.en.md](README.en.md)
 
 - [Windows 分发](distribution/windows.zh.md) / [Windows Distribution](distribution/windows.en.md)
 - [Linux 安装与分发](distribution/linux.zh.md) / [Linux Installation and Distribution](distribution/linux.en.md)
+- [HarmonyOS 实验签装与升级验证](distribution/harmonyos.zh.md) / [HarmonyOS Experimental Sideload Checks](distribution/harmonyos.en.md)：仅诊断探针，不是阅读器发行版。
 
 ## 用户和命令行
 
