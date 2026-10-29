@@ -251,7 +251,7 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 ## 开发者入口
 
 - [构建与开发](doc/development/build.zh.md)：Flutter/Rust 环境、依赖锁定、测试和发布。
-- [HarmonyOS 独立分支实验](doc/experiments/harmonyos.zh.md)：首台平板的核心探针反馈已复核；`HarmonyOS` 分支现推进[完整应用实验包](doc/distribution/harmonyos-reader.zh.md)，复用现有阅读器而非要求反复验证探针。完整应用、文件／备份及续签仍待实际使用反馈，不属于正式支持平台。
+- [HarmonyOS 独立分支实验](doc/experiments/harmonyos.zh.md)：`HarmonyOS` 分支已产出并复核首个[完整应用实验包](doc/distribution/harmonyos-reader.zh.md)，复用现有阅读器，提供小白调试助手签装与日常使用，不再要求重复探针验证。完整应用的真机功能、文件／备份及续签仍待实际使用反馈，不属于正式支持平台。
 - [贡献指南](CONTRIBUTING.md) · [依赖治理](doc/development/dependencies.zh.md)。
 - [Windows 分发维护](doc/distribution/windows.zh.md) · [无头命令模式](doc/user/headless.zh.md)。
 - [安全政策](SECURITY.md) · [行为准则](CODE_OF_CONDUCT.md) · [完整文档索引](doc/README.md)。

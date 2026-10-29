@@ -11,6 +11,25 @@
 
 日常使用/签装说明见[中文指南](../distribution/harmonyos-reader.zh.md) / [English guide](../distribution/harmonyos-reader.en.md)。仍只在 `HarmonyOS` 分支，不创建稳定 Release、不关闭 #77，不要求账号、证书或私人数据。
 
+## 2026-10-29 首个完整阅读器实验包交付
+
+源码 `8b6f79690d9cd6f18e07dd547798b42b85375f4c` 完整包含 `main` 的 `ce57c66`。[Actions 运行 40825892150](https://github.com/CyrilPeng/Venera-Next/actions/runs/40825892150) 于北京时间 14:07 完成，全流程 `success`。这是实际编译现有 `lib/main.dart` 的阅读器，不是此前探针；只提供独立实验包，不发布稳定 Release。
+
+| 检查 | 实际结果 | 边界 |
+|---|---|---|
+| 依赖与工具链 | 固定 Flutter OH、CPF WebView 与 API 26 CLI／Native 组件，隔离依赖锁通过 | 不修改主工程依赖锁或版本 |
+| 分析与回归 | Python 34 项通过；完整应用分析无问题；Linux 宿主 256 项通过／32 项按既有平台条件跳过；另有 Windows 宿主 288 项通过 | 宿主回归不等于 OHOS 真机功能验收；Windows 使用现有真实宿主 DLL |
+| 原生库 | 四个核心库、PNG／ZIP／7Z 及 WebView N-API 辅助库以 API 26 重新编译，精确核对入包哈希 | 不用 Android／Linux 二进制替代 OHOS 库 |
+| 完整 HAP | `venera-next-1.18.2-harmony.1-arm64-unsigned.hap`，44,575,167 字节 | 未签名，签装由用户自己的小白环境完成 |
+| 实际元数据 | 包名 `com.github.cyrilpeng.veneranext.harmony`，原生 `1.18.2.1+1`，最低／目标 API `260000026`，设备类型精确为 `phone`／`tablet` | 应用内 Dart 版本 `1.18.2-harmony.1+1`；不承诺其他系统／设备兼容 |
+| 下载后独立复核 | 清单与 CI 证据一致；549 个源文件摘要与构建提交一致，十个 ARM64 ELF、八个自建库的系统依赖／必要导出及哈希、声明资产和离线指南均通过 | 没有设备安装、运行、真实数据恢复或续签证明 |
+
+原始 unsigned HAP 的 SHA-256 为 `ea4c8cd088bdd460010c0ab84829912befc1ed1b6d4631aa77fe4ef96035a0bd`。[完整阅读器下载](https://github.com/CyrilPeng/Venera-Next/actions/runs/40825892150/artifacts/12877310791)需登录 GitHub，保留至北京时间 **2026-11-12 14:06:47**；内含 HAP、清单、`SHA256SUMS` 及双语指南，勿与旁边的诊断套件混用。永久校验记录见 [harmonyos-full-reader-ci-20261029.json](data/harmonyos-full-reader-ci-20261029.json)；本地完整证据与包保存在忽略的 `build/harmonyos-full-app-20261029/run-40825892150/`。
+
+构建收尾中修正了 ArkTS 命名参数／异常兼容及原生数字版本。包体审计还发现当前 Flutter OH 将 OHOS hook 输入标为 Linux，曾误带 Linux PDFium；现由隔离工程显式 hook 配置阻止，应用 PDF 导入保持明确拒绝，成功 HAP 已确认没有 PDFium。WebView 的真实 N-API 辅助源码纳入同批原生编译，不通过扩大未审库名单或降低哈希要求放行。应用更新入口也与主线安装包隔离，不把 APK Release 误提示为 HAP 更新。
+
+已在 [#77 完整包交接回复](https://github.com/CyrilPeng/Venera-Next/issues/77#issuecomment-6489394128)按反馈者意愿提供下载和小白安装说明，正常使用、出现问题再反馈，**不再要求四步探针、JSON 报告或私人附件**。独立沙箱不会自动继承安卓版或探针数据，迁移前保留原备份／漫画；PDF 导入、外部长期目录、自定义存储、系统分享、生物认证与 Android 专属能力仍未交付。#77 保持开放，不将云端成功、旧平板探针结果或本轮交接当作完整应用真机验收。
+
 ## 范围与决策
 
 - 分支精确命名为 `HarmonyOS`，从 `e634d887e14a7c3daaa5fbb2bc439ce5115d9192` 开始；鸿蒙改动不合入 `main` 或 `android-tv`。
