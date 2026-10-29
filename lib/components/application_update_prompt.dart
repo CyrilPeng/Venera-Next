@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/application_update_service.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -93,6 +94,17 @@ class ApplicationUpdatePrompt {
     final context = _context;
     try {
       if (!context.mounted || !_active) return;
+      if (App.isHarmonyOS) {
+        onChecked?.call();
+        if (!silent) {
+          context.showMessage(
+            message:
+                'HarmonyOS experiment updates are provided in issue #77. Main release packages cannot update this HAP.'
+                    .tl,
+          );
+        }
+        return;
+      }
       final version = await service
           .check(scope: _scope)
           .whenComplete(() => onChecked?.call());

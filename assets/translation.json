@@ -1,5 +1,6 @@
 {
   "zh_CN": {
+    "HarmonyOS experiment updates are provided in issue #77. Main release packages cannot update this HAP.": "鸿蒙实验版更新请查看 GitHub issue #77；主线 Release 的安装包不能用于更新此 HAP。",
     "Biometric app lock is not supported in this HarmonyOS experiment. Continue without app authentication, or exit. You can turn off the imported app-lock setting in Settings.": "此鸿蒙实验版不支持生物识别应用锁。你可以在不进行应用认证的情况下继续，或退出应用；进入后可在设置中关闭导入的应用锁选项。",
     "Hidden by keyword filters: @a comics": "关键词屏蔽隐藏了 @a 本漫画",
     "Hidden by reading-status filter: @a comics": "阅读状态筛选隐藏了 @a 本漫画",
@@ -919,6 +920,7 @@
     "The global shortcut is unavailable. Re-enable it or choose another shortcut in settings.": "全局快捷键不可用，请在设置中重新启用或更换组合。"
   },
   "zh_TW": {
+    "HarmonyOS experiment updates are provided in issue #77. Main release packages cannot update this HAP.": "鴻蒙實驗版更新請查看 GitHub issue #77；主線 Release 的安裝套件不能用於更新此 HAP。",
     "Biometric app lock is not supported in this HarmonyOS experiment. Continue without app authentication, or exit. You can turn off the imported app-lock setting in Settings.": "此鴻蒙實驗版不支援生物辨識應用程式鎖。你可以在不進行應用程式認證的情況下繼續，或退出應用程式；進入後可在設定中關閉匯入的應用程式鎖選項。",
     "Hidden by keyword filters: @a comics": "關鍵詞封鎖隱藏了 @a 本漫畫",
     "Hidden by reading-status filter: @a comics": "閱讀狀態篩選隱藏了 @a 本漫畫",

@@ -20,6 +20,7 @@ The build declares ARM64 `phone` and `tablet` targets, with minimum/target SDK `
 - App settings retain `data.venera` backup import/export and WebDAV sync. Keep independent original backups and comic files before migration. Configuration import does not automatically move external libraries or restore Android SAF / Windows paths.
 - Exports use the system save picker. Success is returned only after the native copy and file closing finish. Confirm the saved file yourself before removing old copies; do not use the experiment as your only data backup.
 - Existing reading-session and asynchronous shutdown ownership remains in place. Downloads run only while the application lifecycle permits; HarmonyOS background restrictions are not bypassed.
+- Updates to this experiment are provided in issue #77. The app does not advertise mainline APK/other-platform releases as HAP updates; manual update checks explain the separate channel.
 
 ## Explicit Initial Limitations
 

@@ -19,6 +19,7 @@ from sideload import audit_device_types
 ASSET_PREFIX = "resources/rawfile/flutter_assets/"
 METADATA_ASSET = ASSET_PREFIX + "assets/harmonyos-app-build.json"
 TESTS = (
+    "test/components/application_update_prompt_test.dart",
     "test/foundation/harmonyos_test.dart",
     "test/foundation/file_selection_test.dart",
     "test/foundation/file_selection_lifecycle_test.dart",
