@@ -21,7 +21,7 @@ DEPS = BASE / "full-deps"
 PROJECT = BASE / "full-app"
 WEBVIEW_PACKAGES = tuple("flutter_inappwebview" + suffix for suffix in (
     "", "_platform_interface", "_ohos", "_android", "_ios", "_macos", "_web", "_windows"))
-EXTRA_LIBRARIES = ("liblodepng_flutter.so", "libzip_flutter.so", "libflutter_7zip.so")
+EXTRA_LIBRARIES = ("liblodepng_flutter.so", "libzip_flutter.so", "libflutter_7zip.so", "libinappwebview.so")
 
 
 def tree_digest(root):
@@ -61,12 +61,25 @@ def patch_sqlite_loader(text):
 
 
 def patch_pdfium_hook(text):
-    # Explicitly unsupported feature: do not fetch an Android/Linux PDFium binary.
+    # This SDK deliberately labels OHOS hook inputs as Linux. An explicit,
+    # isolated-project define prevents silently bundling Linux PDFium for OHOS.
     if "OS.ohos" in text:
         raise ValueError("PDFium's unsupported OHOS boundary must only be applied once")
     return patch_once(text, "if (!input.config.buildCodeAssets) return;",
                       "if (!input.config.buildCodeAssets) return;\n"
+                      "    if (input.userDefines['venera_harmonyos_experiment'] == true) return;\n"
                       "    if (input.config.code.targetOS == OS.ohos) return;")
+
+
+def patch_webview_native_profile(text):
+    # The same pinned helper is compiled and hash-audited with the reader libs.
+    return patch_once(text, '''  "buildOption": {
+    "externalNativeOptions": {
+      "path": "./src/main/cpp/CMakeLists.txt",
+      "arguments": "",
+      "cppFlags": "",
+    }
+  },''', '  "buildOption": {},')
 
 
 def extract_checked(archive, destination):
@@ -147,6 +160,8 @@ def prepare_dependencies(qjs_source):
     path.write_text(patch_sqlite_loader(path.read_text(encoding="utf-8")), encoding="utf-8")
     path = DEPS / "pdfium_dart/hook/build.dart"
     path.write_text(patch_pdfium_hook(path.read_text(encoding="utf-8")), encoding="utf-8")
+    path = DEPS / "webview/flutter_inappwebview_ohos/ohos/build-profile.json5"
+    path.write_text(patch_webview_native_profile(path.read_text(encoding="utf-8")), encoding="utf-8")
     for path in [DEPS / "pdfium_dart/pubspec.yaml", DEPS / "code_assets/pkgs/code_assets/pubspec.yaml"]:
         path.write_text(patch_once(path.read_text(encoding="utf-8"), "resolution: workspace\n", ""),
                         encoding="utf-8")
@@ -182,6 +197,10 @@ def configure_pubspec(text):
     text = patch_once(text, "dependency_overrides:\n", "dependency_overrides:\n" + lines)
     text = patch_once(text, "    - assets/translation.json\n",
                       "    - assets/translation.json\n    - assets/harmonyos-app-build.json\n")
+    if re.search(r"^hooks:", text, re.M):
+        raise ValueError("Main hook configuration changed; review the experiment")
+    text += ("\nhooks:\n  user_defines:\n    pdfium_dart:\n"
+             "      venera_harmonyos_experiment: true\n")
     return text
 
 

@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from native_build import CONFIG, digest, inspect_library, require_within, run
+from native_build import CONFIG, digest, inspect_library, require_within, run, validate_elf
 from prepare_full_app import DEPS, EXTRA_LIBRARIES, verify_dependencies
 from prepare_probe import BASE, verify_native_report
 from ci_sdk import check_native_sdk
@@ -17,6 +17,7 @@ EXPORTS = {
     "liblodepng_flutter.so": ("lodepng_encode32", "lodepng_decode32", "freePtr"),
     "libzip_flutter.so": ("zip_open", "zip_close", "zip_entry_open", "zip_entry_fwrite", "zip_entry_read", "zip_extract"),
     "libflutter_7zip.so": ("openArchive", "closeArchive", "getArchiveFileCount", "getArchiveFile", "readArchiveFile", "extractArchiveToFile", "freeReadData"),
+    "libinappwebview.so": ("RegisterEntryModule",),
 }
 
 
@@ -45,11 +46,23 @@ def compile_libraries(native, output):
     run([cxx, *flags, "-std=c++20", "-I", c_source, *link,
          "-Wl,-soname,libflutter_7zip.so", source / "flutter_7zip.cpp", *compiled,
          "-o", output / "libflutter_7zip.so"])
+    run([cxx, *flags, "-std=c++17", *link, "-Wl,-soname,libinappwebview.so",
+         DEPS / "webview/flutter_inappwebview_ohos/ohos/src/main/cpp/napi_init.cpp",
+         "-lace_napi.z", "-luv", "-o", output / "libinappwebview.so"])
 
 
 def inspect_reader_library(native, path):
-    record = inspect_library(native, path)
     suffix = ".exe" if os.name == "nt" else ""
+    if path.name == "libinappwebview.so":
+        validate_elf(path.read_bytes())
+        info = run([native / f"llvm/bin/llvm-readelf{suffix}", "--dynamic", path], capture=True)
+        needed = re.findall(r"\(NEEDED\).*?\[(.*?)\]", info)
+        if set(needed) - {"libc.so", "libc++_shared.so", "libace_napi.z.so", "libuv.so"}:
+            raise ValueError("Unreviewed WebView helper linkage")
+        record = {"name": path.name, "bytes": path.stat().st_size,
+                  "sha256": digest(path), "needed": needed}
+    else:
+        record = inspect_library(native, path)
     symbols = run([native / f"llvm/bin/llvm-nm{suffix}", "-D", "--defined-only", path], capture=True)
     defined = {line.split()[-1] for line in symbols.splitlines() if line.strip()}
     if not set(EXPORTS[path.name]).issubset(defined):
