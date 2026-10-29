@@ -52,9 +52,14 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.23.4'
+
       - name: Run script tests and check the hosted archive tool
         run: |
           python3 -m unittest discover -s tool/harmonyos -p 'test_*.py' -v
+          node --test tool/harmonyos/test_directory_bridge.mjs
           command -v 7z
           df -h .
 

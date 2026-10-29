@@ -25,7 +25,7 @@ class FullAppTests(unittest.TestCase):
         original = (ROOT / 'pubspec.yaml').read_text(encoding='utf-8')
         prepared = configure_pubspec(original)
         self.assertIn('name: venera_next\n', prepared)
-        self.assertIn('version: 1.18.2-harmony.1+1\n', prepared)
+        self.assertIn(f"version: {FULL_CONFIG['version_name']}+{FULL_CONFIG['version_code']}\n", prepared)
         for name in ('photo_view', 'share_plus', 'rhttp'):
             self.assertIn(f'path: ../../../packages/{name}', prepared)
         self.assertIn('    path: ../full-deps/sqlite3', prepared)
@@ -112,7 +112,7 @@ class FullAppTests(unittest.TestCase):
         self.assertRegex(FULL_CONFIG['hap_version_name'], r'^\d+\.\d+\.\d+\.\d+$')
         self.assertIn('-harmony.', FULL_CONFIG['version_name'])
         with tempfile.TemporaryDirectory() as temporary:
-            for name in (FULL_CONFIG['version_name'], '1.18.2.2', '1.18.2'):
+            for name in (FULL_CONFIG['version_name'], '1.18.2.1', '1.18.2'):
                 path, metadata, assets = self.make_hap(Path(temporary), app_change={'versionName': name})
                 with self.assertRaisesRegex(ValueError, 'versionName'):
                     audit_full_hap(path, metadata, assets)

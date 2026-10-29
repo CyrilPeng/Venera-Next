@@ -1,5 +1,9 @@
 {
   "zh_CN": {
+    "Select multiple archive files (cbz, zip, 7z, cb7).": "可同时选择多个归档文件（cbz、zip、7z、cb7），每个文件导入为一本漫画。",
+    "On HarmonyOS, folders are copied into the app. Originals are not changed. If folder selection is unavailable, use multiple archive files.": "鸿蒙版会将文件夹复制到应用内，不修改原文件。若设备不支持选择文件夹，可改用「多个归档文件」批量导入。",
+    "Folder selection is unavailable on this device. Use Multiple archive files to import several comics at once.": "当前设备不提供文件夹选择。可改用「多个归档文件」，一次选择多本漫画批量导入。",
+    "Could not read or copy the selected folder. Check file access and free space, or use Multiple archive files.": "无法读取或复制所选文件夹。请检查文件访问权限和剩余空间，或改用「多个归档文件」批量导入。",
     "HarmonyOS experiment updates are provided in issue #77. Main release packages cannot update this HAP.": "鸿蒙实验版更新请查看 GitHub issue #77；主线 Release 的安装包不能用于更新此 HAP。",
     "Biometric app lock is not supported in this HarmonyOS experiment. Continue without app authentication, or exit. You can turn off the imported app-lock setting in Settings.": "此鸿蒙实验版不支持生物识别应用锁。你可以在不进行应用认证的情况下继续，或退出应用；进入后可在设置中关闭导入的应用锁选项。",
     "Hidden by keyword filters: @a comics": "关键词屏蔽隐藏了 @a 本漫画",
@@ -920,6 +924,10 @@
     "The global shortcut is unavailable. Re-enable it or choose another shortcut in settings.": "全局快捷键不可用，请在设置中重新启用或更换组合。"
   },
   "zh_TW": {
+    "Select multiple archive files (cbz, zip, 7z, cb7).": "可同時選擇多個封存檔（cbz、zip、7z、cb7），每個檔案匯入為一本漫畫。",
+    "On HarmonyOS, folders are copied into the app. Originals are not changed. If folder selection is unavailable, use multiple archive files.": "鴻蒙版會將資料夾複製到應用程式內，不修改原檔案。若裝置不支援選擇資料夾，可改用「多個封存檔」批次匯入。",
+    "Folder selection is unavailable on this device. Use Multiple archive files to import several comics at once.": "目前裝置不提供資料夾選擇。可改用「多個封存檔」，一次選擇多本漫畫批次匯入。",
+    "Could not read or copy the selected folder. Check file access and free space, or use Multiple archive files.": "無法讀取或複製所選資料夾。請檢查檔案存取權限和剩餘空間，或改用「多個封存檔」批次匯入。",
     "HarmonyOS experiment updates are provided in issue #77. Main release packages cannot update this HAP.": "鴻蒙實驗版更新請查看 GitHub issue #77；主線 Release 的安裝套件不能用於更新此 HAP。",
     "Biometric app lock is not supported in this HarmonyOS experiment. Continue without app authentication, or exit. You can turn off the imported app-lock setting in Settings.": "此鴻蒙實驗版不支援生物辨識應用程式鎖。你可以在不進行應用程式認證的情況下繼續，或退出應用程式；進入後可在設定中關閉匯入的應用程式鎖選項。",
     "Hidden by keyword filters: @a comics": "關鍵詞封鎖隱藏了 @a 本漫畫",

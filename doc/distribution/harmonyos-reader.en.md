@@ -7,26 +7,29 @@ Following the volunteer's preference in #77, this stage provides the application
 ## Download and Install
 
 1. Use the successful Actions run linked by the maintainer in #77 and download `harmonyos-reader-experiment-RUN_ID`. Do not install probes from `harmonyos-unsigned-lab-haps` expecting a reader. Artifacts require a GitHub login and expire after 14 days; request a fresh build rather than using an unknown re-signed download.
-2. The archive contains `venera-next-1.18.2-harmony.1-arm64-unsigned.hap`, `full-app-manifest.json`, `SHA256SUMS`, and both guides. Verify the original HAP digest. Signing changes the bytes, so that digest cannot validate a re-signed package.
+2. The archive contains `venera-next-1.18.2-harmony.2-arm64-unsigned.hap`, `full-app-manifest.json`, `SHA256SUMS`, and both guides. Verify the original HAP digest. Signing changes the bytes, so that digest cannot validate a re-signed package.
 3. Users with Xiaobai Debug Assistant on HarmonyOS can reuse their existing environment. Import the unsigned HAP and personally complete account login, device authorization, signing and installation. The maintainer does not collect accounts, device identifiers, authorization, certificates or private keys, bundle signing keys, bypass security controls, or promise automatic certificate renewal.
-4. The app label is `VeneraNext (HarmonyOS Lab)`, the separate bundle name is `com.github.cyrilpeng.veneranext.harmony`, and the version is `1.18.2-harmony.1+1`. It does not overwrite the diagnostic probe or share the Android app's sandbox in an Android compatibility environment. Import desired data explicitly.
+4. The app label is `VeneraNext (HarmonyOS Lab)`, the separate bundle name is `com.github.cyrilpeng.veneranext.harmony`, and the version is `1.18.2-harmony.2+2`. It does not overwrite the diagnostic probe or share the Android app's sandbox in an Android compatibility environment. Import desired data explicitly.
 
-HarmonyOS displays numeric native `versionName=1.18.2.1` and `versionCode=1`, as required by Flutter OH. This is the same experiment as the in-app Dart version `1.18.2-harmony.1+1`, not a mainline stable release.
+HarmonyOS displays numeric native `versionName=1.18.2.2` and `versionCode=2`, as required by Flutter OH. This is the same experiment as the in-app Dart version `1.18.2-harmony.2+2`, not a mainline stable release.
 
-The build declares ARM64 `phone` and `tablet` targets, with minimum/target SDK `26.0.0`. One earlier MatePad / HarmonyOS 7.0 volunteer reported successful **core probe** use. This does not establish full-app acceptance on that device or compatibility with other systems. Do not repeatedly authorize or weaken security settings if an unsupported device cannot install it.
+Before upgrading the initial reader build, export a separate backup. Keep the same bundle and signing identity/key for an in-place upgrade; do not uninstall or clear data. The same assistant/account does not guarantee the same key. Stop and report a signature mismatch or an uninstall requirement rather than treating reinstallation as an upgrade. App-owned copies need local free space; keep your original comics.
+
+The build declares ARM64 `phone` and `tablet` targets, with minimum/target SDK `26.0.0`. One MatePad / HarmonyOS 7.0 volunteer completed the core probe and reported no other problems during ordinary use of the initial full reader beyond missing folder import. This records only that person's usage, not full-feature, other-device/system, real-data migration or certificate-renewal acceptance. Do not repeatedly authorize or weaken security settings if an unsupported device cannot install it.
 
 ## Ordinary Use
 
 - Add/install comic sources through the existing source page, then use search, favorites, reading, downloads and history. Embedded browsing uses a pinned CPF Flutter OHOS WebView implementation; individual source login, challenges and compatibility may still fail.
-- Prefer local CBZ / ZIP / EPUB imports or selected image files. Native APIs copy a picker-granted URI into the app sandbox before the original import workflow consumes it; a URI is not treated as an already authorized filesystem path.
+- Single Comic selects an image folder; Multiple Comics selects a parent containing several comic folders, when the system provides folder selection. The granted directory URI is copied into an exclusive temporary sandbox with its original name and chapter structure, then the existing import workflow creates durable library copies. Originals are unchanged; temporary paths never become long-term comic references.
+- Multiple archive files now directly multi-selects CBZ / ZIP / 7Z / CB7, one comic per archive, without selecting a directory. Missing folder selection, denied access or copy failure explains this alternative. Partial archive failures list the affected files and success/failure counts while retaining successful imports. EPUB retains its separate import entry.
 - App settings retain `data.venera` backup import/export and WebDAV sync. Keep independent original backups and comic files before migration. Configuration import does not automatically move external libraries or restore Android SAF / Windows paths.
 - Exports use the system save picker. Success is returned only after the native copy and file closing finish. Confirm the saved file yourself before removing old copies; do not use the experiment as your only data backup.
 - Existing reading-session and asynchronous shutdown ownership remains in place. Downloads run only while the application lifecycle permits; HarmonyOS background restrictions are not bypassed.
 - Updates to this experiment are provided in issue #77. The app does not advertise mainline APK/other-platform releases as HAP updates; manual update checks explain the separate channel.
 
-## Explicit Initial Limitations
+## Explicit Experimental Limitations
 
-- Persistent external directories, custom storage locations, system sharing, biometric app lock, and Android volume keys / SAF / foreground services are not integrated. Directory operations explain the archive-import alternative; save files and share through Files, or copy text. Unimplemented actions do not report success.
+- Folders support copy import only, not persistent external references or custom storage locations. Actual device folder-selection support still needs ordinary-use feedback; declaring phone/tablet targets is not device acceptance. System sharing, biometric app lock, and Android volume keys / SAF / foreground services remain unimplemented; save files and share through Files, or copy text. Unimplemented actions do not report success.
 - **PDF import is unavailable** because PDFium has no OHOS build. Existing Dart PDF export remains. The build does not substitute Android/Linux PDFium binaries. PNG, ZIP and 7Z use real OHOS cross-compiles of the application's locked sources.
 - Imported app-lock settings display an explicit warning and let the user continue without app authentication or exit; they do not silently pass biometric authentication. Turn off the imported app-lock setting if desired.
 - WebView proxy override, platform image codecs, full-app network/TLS/login, large-file migration, device frame times/power use, full-app upgrades and certificate renewal remain unverified. Do not count #91 power savings as measured.

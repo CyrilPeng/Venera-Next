@@ -12,6 +12,13 @@ interface Receipt {
   token: string;
 }
 
+interface DirectoryReceipt extends Receipt {
+  source: string;
+  root: string;
+  inode: bigint;
+  preparing: Promise<void> | null;
+}
+
 class BrowserHandler implements MethodCallHandler {
   private ability: EntryAbility;
   constructor(ability: EntryAbility) {
@@ -36,6 +43,7 @@ export default class EntryAbility extends FlutterAbility implements MethodCallHa
   private appChannel: MethodChannel | null = null;
   private browserChannel: MethodChannel | null = null;
   private receipts: Map<string, Receipt> = new Map();
+  private directoryReceipts: Map<string, DirectoryReceipt> = new Map();
   private selecting: boolean = false;
 
   configureFlutterEngine(engine: FlutterEngine): void {
@@ -58,6 +66,21 @@ export default class EntryAbility extends FlutterAbility implements MethodCallHa
           break;
         case 'selectFiles':
           result.success(await this.selectFiles(call));
+          break;
+        case 'selectDirectory':
+          if (!canIUse('SystemCapability.FileManagement.UserFileService.FolderSelection')) {
+            result.error('directory_selection_unavailable', 'This device does not provide folder selection. Select multiple archive files instead.', null);
+            break;
+          }
+          result.success(await this.selectDirectory());
+          break;
+        case 'prepareDirectory':
+          await this.prepareDirectory(call.argument('path') as string, call.argument('token') as string);
+          result.success(null);
+          break;
+        case 'releaseDirectory':
+          await this.releaseDirectory(call.argument('path') as string, call.argument('token') as string);
+          result.success(null);
           break;
         case 'releaseFile':
           this.releaseFile(call.argument('path') as string, call.argument('token') as string);
@@ -152,6 +175,110 @@ export default class EntryAbility extends FlutterAbility implements MethodCallHa
     if (fileIo.accessSync(path)) fileIo.unlinkSync(path);
     fileIo.rmdirSync(this.context.cacheDir + '/venera_next/selected_files/' + token);
     this.receipts.delete(token);
+  }
+
+  private async selectDirectory(): Promise<Map<string, string> | null> {
+    if (this.selecting) throw new Error('A file dialog is already active');
+    this.selecting = true;
+    try {
+      const options = new picker.DocumentSelectOptions();
+      options.maxSelectNumber = 1;
+      options.selectMode = picker.DocumentSelectMode.FOLDER;
+      const uris = await new picker.DocumentViewPicker(this.context).select(options);
+      if (uris.length === 0) return null;
+      if (uris.length !== 1 || !uris[0].startsWith('file://')) throw new Error('Invalid selected directory');
+      const name = this.safeName(new fileUri.FileUri(uris[0]).name);
+      const parent = this.context.cacheDir + '/venera_next/selected_directories';
+      if (!fileIo.accessSync(parent)) fileIo.mkdirSync(parent, true);
+      const token = util.generateRandomUUID(true);
+      const root = parent + '/' + token;
+      fileIo.mkdirSync(root);
+      const receipt: DirectoryReceipt = {
+        path: root + '/contents/' + name, name: name, token: token,
+        source: uris[0], root: root, inode: fileIo.lstatSync(root).ino, preparing: null
+      };
+      this.directoryReceipts.set(token, receipt);
+      // Copying starts only after Dart has registered ownership of this receipt.
+      return new Map<string, string>([['path', receipt.path], ['name', name], ['token', token]]);
+    } finally {
+      this.selecting = false;
+    }
+  }
+
+  private ownedDirectory(path: string, token: string): DirectoryReceipt {
+    const receipt = this.directoryReceipts.get(token);
+    if (receipt === undefined || receipt.path !== path) throw new Error('Unknown owned directory receipt');
+    return receipt;
+  }
+
+  private checkDirectoryRoot(receipt: DirectoryReceipt): void {
+    if (receipt.root !== this.context.cacheDir + '/venera_next/selected_directories/' + receipt.token ||
+        receipt.path !== receipt.root + '/contents/' + this.safeName(receipt.name)) {
+      throw new Error('Selected directory receipt changed');
+    }
+    const stat = fileIo.lstatSync(receipt.root);
+    if (!stat.isDirectory() || stat.ino !== receipt.inode) throw new Error('Selected directory ownership changed');
+    const entries = fileIo.listFileSync(receipt.root);
+    if (entries.some((name: string) => name !== 'contents')) throw new Error('Unknown owned directory contents');
+  }
+
+  private async prepareDirectory(path: string, token: string): Promise<void> {
+    const receipt = this.ownedDirectory(path, token);
+    if (receipt.preparing === null) receipt.preparing = this.copySelectedDirectory(receipt);
+    await receipt.preparing;
+  }
+
+  private async copySelectedDirectory(receipt: DirectoryReceipt): Promise<void> {
+    this.checkDirectoryRoot(receipt);
+    const contents = receipt.root + '/contents';
+    fileIo.mkdirSync(contents);
+    // copy() accepts the picker grant itself and copies the named source folder
+    // into an existing destination. Only the destination URI comes from a path.
+    await fileIo.copy(receipt.source, fileUri.getUriFromPath(contents));
+    this.checkDirectoryRoot(receipt);
+    const entries = fileIo.listFileSync(contents);
+    if (entries.length !== 1 || entries[0] !== receipt.name || !fileIo.lstatSync(receipt.path).isDirectory()) {
+      throw new Error('Selected directory copy did not preserve its root');
+    }
+    await this.checkCopiedTree(receipt.path, 0);
+  }
+
+  private async checkCopiedTree(path: string, depth: number): Promise<void> {
+    if (depth > 32) throw new Error('Selected directory nesting is too deep');
+    const names = await fileIo.listFile(path);
+    for (const name of names) {
+      const child = path + '/' + this.safeName(name);
+      const stat = fileIo.lstatSync(child);
+      if (stat.isDirectory()) {
+        await this.checkCopiedTree(child, depth + 1);
+      } else if (!stat.isFile()) {
+        throw new Error('Selected directory contains a link or special file');
+      }
+    }
+  }
+
+  private async removeOwnedTree(path: string): Promise<void> {
+    const stat = fileIo.lstatSync(path);
+    if (!stat.isDirectory()) {
+      fileIo.unlinkSync(path);
+      return;
+    }
+    for (const name of await fileIo.listFile(path)) await this.removeOwnedTree(path + '/' + this.safeName(name));
+    fileIo.rmdirSync(path);
+  }
+
+  private async releaseDirectory(path: string, token: string): Promise<void> {
+    const receipt = this.ownedDirectory(path, token);
+    try {
+      await receipt.preparing;
+    } catch (_) {
+      // A failed copy is still owned and must drain before cleanup.
+    }
+    this.checkDirectoryRoot(receipt);
+    const contents = receipt.root + '/contents';
+    if (fileIo.accessSync(contents)) await this.removeOwnedTree(contents);
+    fileIo.rmdirSync(receipt.root);
+    this.directoryReceipts.delete(token);
   }
 
   private async saveFile(path: string, name: string): Promise<boolean> {

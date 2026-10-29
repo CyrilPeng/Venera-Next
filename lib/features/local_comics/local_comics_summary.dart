@@ -1,6 +1,7 @@
 import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/features/local_comics/import_export/comic_import_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/gesture.dart';
@@ -216,7 +217,9 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
       "Select a directory which contains the comic files.".tl,
       "Select a directory which contains the comic directories.".tl,
       "Select an archive file (cbz, zip, 7z, cb7)".tl,
-      "Select a directory which contains multiple archive files.".tl,
+      App.isHarmonyOS
+          ? "Select multiple archive files (cbz, zip, 7z, cb7).".tl
+          : "Select a directory which contains multiple archive files.".tl,
       "Select PDF comic files. Pages are imported as local images.".tl,
       "Select an image-based EPUB file. Text-based EPUB files are not supported."
           .tl,
@@ -262,6 +265,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
                     return RadioListTile<int>(
                       title: Text(importMethods[index]),
                       value: index,
+                      enabled: !(App.isHarmonyOS && index == 4),
                     );
                   }),
                   if (type != 6 && type != 7)
@@ -280,6 +284,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
                     ).paddingHorizontal(8),
                   if (!App.isIOS &&
                       !App.isMacOS &&
+                      !App.isHarmonyOS &&
                       ![2, 3, 4, 5, 7].contains(type))
                     CheckboxListTile(
                       enabled: true,
@@ -291,6 +296,11 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
                         });
                       },
                     ).paddingHorizontal(8),
+                  if (App.isHarmonyOS && [0, 1, 6].contains(type))
+                    Text(
+                      "On HarmonyOS, folders are copied into the app. Originals are not changed. If folder selection is unavailable, use multiple archive files."
+                          .tl,
+                    ).paddingHorizontal(24),
                   const SizedBox(height: 8),
                   Text(info).paddingHorizontal(24),
                 ],
@@ -299,6 +309,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
       actions: [
         Button.text(
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 Icons.help_outline,
@@ -314,7 +325,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
               "https://github.com/CyrilPeng/venera-next/blob/main/doc/user/import_comic.zh.md",
             );
           },
-        ).fixWidth(90).paddingRight(8),
+        ).paddingRight(8),
         Button.filled(
           isLoading: loading,
           onPressed: selectAndImport,
@@ -341,7 +352,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
         favoritesManager: () => favorites,
       ),
       selectedFolder: selectedFolder,
-      copyToLocal: copyToLocalFolder,
+      copyToLocal: App.isHarmonyOS || copyToLocalFolder,
       presentation: ImportComicPresentation.forTask(task),
     );
     final selectedType = type;
@@ -365,7 +376,17 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
     } catch (error, stack) {
       Log.error('Import Comic', error, stack);
       if (mounted && task.canPresent) {
-        context.showMessage(message: error.toString());
+        final message =
+            error is PlatformException &&
+                App.isHarmonyOS &&
+                [0, 1, 6].contains(selectedType)
+            ? (error.code == 'directory_selection_unavailable'
+                  ? "Folder selection is unavailable on this device. Use Multiple archive files to import several comics at once."
+                        .tl
+                  : "Could not read or copy the selected folder. Check file access and free space, or use Multiple archive files."
+                        .tl)
+            : error.toString();
+        context.showMessage(message: message);
       }
     } finally {
       if (mounted) setState(() => loading = false);

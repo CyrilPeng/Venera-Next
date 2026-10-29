@@ -1,0 +1,427 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:ui' as ui;
+
+import 'package:archive/archive_io.dart' as archive;
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
+import 'package:venera_next/features/favorites/favorites_manager.dart';
+import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/local_comics/import_export/comic_import_service.dart';
+import 'package:venera_next/features/local_comics/import_export/import_comic.dart';
+import 'package:venera_next/features/local_comics/import_export/import_presentation.dart';
+import 'package:venera_next/features/local_comics/local.dart';
+import 'package:venera_next/features/local_comics/local_comics_summary.dart';
+import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/comic_type.dart';
+import 'package:venera_next/foundation/file_system.dart';
+import 'package:venera_next/foundation/harmonyos.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
+import 'package:venera_next/foundation/translations.dart';
+import 'package:venera_next/routing/app_navigation.dart';
+
+class _Messages extends ImportComicPresentation {
+  final messages = <String>[];
+  @override
+  void showMessage({required String message}) => messages.add(message);
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const token = '12345678-1234-4234-8234-123456789abc';
+  final png = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9ZkAAAAASUVORK5CYII=',
+  );
+  late Directory root;
+  late LocalManager manager;
+  late LocalFavoritesManager favorites;
+  late ComicImportService service;
+  final calls = <MethodCall>[];
+  Object? oldLanguage;
+
+  setUpAll(() async {
+    for (final entry in {
+      'HarmonyImportPreview':
+          Platform.environment['HARMONYOS_IMPORT_TEST_FONT'],
+      'MaterialIcons': Platform.environment['HARMONYOS_IMPORT_TEST_ICONS'],
+    }.entries) {
+      if (entry.value == null) continue;
+      await (FontLoader(entry.key)..addFont(
+            File(
+              entry.value!,
+            ).readAsBytes().then((bytes) => ByteData.sublistView(bytes)),
+          ))
+          .load();
+    }
+  });
+
+  setUp(() async {
+    root = Directory.systemTemp.createTempSync('harmonyos-import-');
+    App.dataPath = root.path;
+    App.cachePath = p.join(root.path, 'cache');
+    Directory(App.cachePath).createSync();
+    HarmonyOS.debugIsCurrent = true;
+    calls.clear();
+    oldLanguage = appdata.settings['language'];
+    appdata.settings['language'] = 'en-US';
+    await AppTranslation.init();
+    LocalManager.current?.dispose();
+    manager = LocalManager(initializeSources: () async {});
+    await manager.init();
+    favorites = LocalFavoritesManager();
+    await favorites.init();
+    service = ComicImportService(
+      localManager: () => manager,
+      favoritesManager: () => favorites,
+    );
+  });
+  tearDown(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(HarmonyOS.channel, null);
+    await manager.pendingDownloadTaskWrites;
+    manager.dispose();
+    await favorites.debugWaitForHashedIdsRefresh();
+    await appdata.saveData(false);
+    favorites.close();
+    HarmonyOS.debugIsCurrent = null;
+    appdata.settings['language'] = oldLanguage;
+    root.deleteSync(recursive: true);
+  });
+
+  void mock(Future<Object?> Function(MethodCall) handler) {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(HarmonyOS.channel, (call) async {
+          calls.add(call);
+          return handler(call);
+        });
+  }
+
+  Map<String, String> selectedDirectory(Directory source) => {
+    'path': p.join(
+      App.cachePath,
+      'selected_directories',
+      token,
+      'contents',
+      p.basename(source.path),
+    ),
+    'name': p.basename(source.path),
+    'token': token,
+  };
+
+  void mockDirectory(Directory source) {
+    final receipt = selectedDirectory(source);
+    mock((call) async {
+      if (call.method == 'selectDirectory') return receipt;
+      final target = Directory(receipt['path']!);
+      if (call.method == 'prepareDirectory') {
+        await target.create(recursive: true);
+        await copyDirectory(source, target);
+      }
+      if (call.method == 'releaseDirectory') {
+        final owner = target.parent.parent;
+        expect(p.isWithin(App.cachePath, owner.path), isTrue);
+        await owner.delete(recursive: true);
+      }
+      return null;
+    });
+  }
+
+  for (final single in [true, false]) {
+    test(
+      'folder import forces durable app copies and survives restart; single=$single',
+      () async {
+        final source = Directory(
+          p.join(root.path, 'original', single ? 'Book' : 'Collection'),
+        )..createSync(recursive: true);
+        final titles = single ? ['Book'] : ['Book A', 'Book B'];
+        for (final title in titles) {
+          final dir = single ? source : Directory(p.join(source.path, title))
+            ..createSync();
+          File(p.join(dir.path, '1.png')).writeAsBytesSync(png);
+        }
+        mockDirectory(source);
+        final messages = _Messages();
+        final operation = SelectionOperation();
+        expect(
+          await operation.run(
+            (op) => ImportComic(
+              service: service,
+              copyToLocal: false,
+              presentation: messages,
+            ).directory(single, op),
+          ),
+          isTrue,
+        );
+        expect(operation.hasPendingCleanup, isFalse);
+        expect(calls.map((call) => call.method), [
+          'selectDirectory',
+          'prepareDirectory',
+          'releaseDirectory',
+        ]);
+        expect(
+          Directory(selectedDirectory(source)['path']!).existsSync(),
+          isFalse,
+        );
+        for (final title in titles) {
+          final comic = manager.findByName(title)!;
+          expect(p.isWithin(manager.path, comic.baseDir), isTrue);
+          expect(File(p.join(comic.baseDir, '1.png')).readAsBytesSync(), png);
+        }
+        await manager.pendingDownloadTaskWrites;
+        manager.dispose();
+        manager = LocalManager(initializeSources: () async {});
+        await manager.init();
+        expect(manager.count, titles.length);
+        for (final title in titles) {
+          final comic = manager.findByName(title)!;
+          final pages = await manager.getImages(comic.id, ComicType.local, 0);
+          expect(pages, hasLength(1));
+          expect(
+            File(pages.single.replaceFirst('file://', '')).readAsBytesSync(),
+            png,
+          );
+          expect(
+            File(
+              p.join(
+                single ? source.path : p.join(source.path, title),
+                '1.png',
+              ),
+            ).readAsBytesSync(),
+            png,
+          );
+        }
+      },
+    );
+  }
+
+  test(
+    'cancelled folder selection releases a late receipt without copying',
+    () async {
+      final response = Completer<Object?>();
+      final entered = Completer<void>();
+      final source = Directory(p.join(root.path, 'Book'))..createSync();
+      mock((call) async {
+        if (call.method == 'selectDirectory') {
+          entered.complete();
+          return response.future;
+        }
+        return null;
+      });
+      final operation = SelectionOperation();
+      final importing = operation.run(
+        (op) => ImportComic(service: service).directory(true, op),
+      );
+      final rejected = expectLater(
+        importing,
+        throwsA(isA<SelectionCancelled>()),
+      );
+      await entered.future;
+      operation.cancel();
+      response.complete(selectedDirectory(source));
+      await rejected;
+      expect(calls.map((call) => call.method), [
+        'selectDirectory',
+        'releaseDirectory',
+      ]);
+      expect(manager.count, 0);
+    },
+  );
+
+  for (final broken in [false, true]) {
+    test(
+      'archive multi-select uses files, keeps partial results and releases all; broken=$broken',
+      () async {
+        final archiveContents = archive.Archive()
+          ..addFile(archive.ArchiveFile('1.png', png.length, png));
+        final zip = archive.ZipEncoder().encodeBytes(archiveContents);
+        final names = broken
+            ? ['First.cbz', 'Broken.zip', 'Second.zip']
+            : ['First.cbz', 'Second.zip'];
+        final receipts = <Map<String, String>>[];
+        final released = <String>[];
+        mock((call) async {
+          if (call.method == 'selectFiles') {
+            expect((call.arguments as Map)['multiple'], isTrue);
+            for (var i = 0; i < names.length; i++) {
+              final id = token.replaceFirst('12345678', '1234567$i');
+              final file = File(
+                p.join(App.cachePath, 'selected_files', id, names[i]),
+              )..createSync(recursive: true);
+              file.writeAsBytesSync(names[i] == 'Broken.zip' ? [1, 2, 3] : zip);
+              receipts.add({'path': file.path, 'name': names[i], 'token': id});
+            }
+            return receipts;
+          }
+          if (call.method == 'releaseFile') {
+            final actual = call.arguments as Map;
+            released.add(actual['token'] as String);
+            await File(actual['path'] as String).parent.delete(recursive: true);
+          }
+          return null;
+        });
+        final messages = _Messages();
+        final operation = SelectionOperation();
+        expect(
+          await operation.run(
+            (op) => ImportComic(
+              service: service,
+              presentation: messages,
+            ).multipleCbz(op),
+          ),
+          isTrue,
+        );
+        expect(manager.count, 2);
+        expect(manager.findByName('First'), isNotNull);
+        expect(manager.findByName('Second'), isNotNull);
+        expect(released.toSet(), receipts.map((r) => r['token']).toSet());
+        expect(
+          calls.where((call) => call.method == 'selectDirectory'),
+          isEmpty,
+        );
+        expect(operation.hasPendingCleanup, isFalse);
+        if (broken) {
+          expect(
+            messages.messages.any((message) => message.contains('Broken.zip')),
+            isTrue,
+          );
+          expect(messages.messages, contains('Success: 2, Failed: 1'));
+        }
+      },
+    );
+  }
+
+  test(
+    'empty or entirely invalid archive selections never report success',
+    () async {
+      mock((_) async => []);
+      expect(
+        await SelectionOperation().run(
+          (op) => ImportComic(service: service).multipleCbz(op),
+        ),
+        isFalse,
+      );
+      expect(manager.count, 0);
+      final file = File(
+        p.join(App.cachePath, 'selected_files', token, 'Broken.cbz'),
+      )..createSync(recursive: true);
+      file.writeAsStringSync('invalid');
+      mock((call) async {
+        if (call.method == 'selectFiles') {
+          return [
+            {'path': file.path, 'name': 'Broken.cbz', 'token': token},
+          ];
+        }
+        if (call.method == 'releaseFile') {
+          await file.parent.delete(recursive: true);
+        }
+        return null;
+      });
+      expect(
+        await SelectionOperation().run(
+          (op) => ImportComic(service: service).multipleCbz(op),
+        ),
+        isFalse,
+      );
+      expect(manager.count, 0);
+      expect(file.existsSync(), isFalse);
+    },
+  );
+
+  for (final layout in [
+    (const Size(375, 812), 1.0, Brightness.light),
+    (const Size(1200, 800), 1.0, Brightness.dark),
+    (const Size(812, 375), 1.8, Brightness.light),
+  ]) {
+    testWidgets(
+      'import UI describes copy/multi-select without a reference toggle; $layout',
+      (tester) async {
+        appdata.settings['language'] = 'zh-CN';
+        tester.view.physicalSize = layout.$1;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final capture = GlobalKey();
+        await tester.pumpWidget(
+          RepaintBoundary(
+            key: capture,
+            child: FavoritesScope(
+              manager: favorites,
+              child: MaterialApp(
+                navigatorKey: appNavigation.rootNavigatorKey,
+                theme: ThemeData(
+                  brightness: layout.$3,
+                  fontFamily:
+                      Platform.environment.containsKey(
+                        'HARMONYOS_IMPORT_TEST_FONT',
+                      )
+                      ? 'HarmonyImportPreview'
+                      : null,
+                ),
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    textScaler: TextScaler.linear(layout.$2),
+                    disableAnimations: true,
+                  ),
+                  child: child!,
+                ),
+                home: const Scaffold(
+                  body: CustomScrollView(slivers: [LocalComicsSummary()]),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Import'.tl));
+        await tester.pumpAndSettle();
+        expect(find.byType(CheckboxListTile), findsNothing);
+        expect(
+          find.text(
+            'On HarmonyOS, folders are copied into the app. Originals are not changed. If folder selection is unavailable, use multiple archive files.'
+                .tl,
+          ),
+          findsOneWidget,
+        );
+        final pdf = tester.widget<RadioListTile<int>>(
+          find.widgetWithText(RadioListTile<int>, 'PDF comic files'.tl),
+        );
+        expect(pdf.enabled, isFalse);
+        await tester.ensureVisible(find.text('Multiple archive files'.tl));
+        await tester.tap(find.text('Multiple archive files'.tl));
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Select multiple archive files (cbz, zip, 7z, cb7).'.tl),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        final output = Platform.environment['HARMONYOS_IMPORT_SCREENSHOT_DIR'];
+        if (output != null) {
+          await tester.ensureVisible(
+            find.text('Select multiple archive files (cbz, zip, 7z, cb7).'.tl),
+          );
+          await tester.pumpAndSettle();
+          await tester.runAsync(() async {
+            final boundary =
+                capture.currentContext!.findRenderObject()!
+                    as RenderRepaintBoundary;
+            final image = await boundary.toImage();
+            final data = await image.toByteData(format: ui.ImageByteFormat.png);
+            final file = File(
+              p.join(
+                output,
+                'import-${layout.$1.width.toInt()}-${layout.$2}.png',
+              ),
+            );
+            await file.parent.create(recursive: true);
+            await file.writeAsBytes(data!.buffer.asUint8List());
+            image.dispose();
+          });
+        }
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+}

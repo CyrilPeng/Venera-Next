@@ -4,6 +4,7 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
+import 'package:venera_next/foundation/app.dart';
 import '../local_storage_guard.dart';
 import 'cbz.dart';
 import 'comic_import_service.dart';
@@ -58,6 +59,27 @@ class ImportComic {
   }
 
   Future<bool> multipleCbz(SelectionOperation operation) async {
+    if (App.isHarmonyOS) {
+      final files = await operation.pickFiles(
+        () => selectFiles(
+          ext: ['cbz', 'zip', '7z', 'cb7'],
+          checkStop: operation.checkActive,
+        ),
+      );
+      if (files.isEmpty) return false;
+      final controller = presentation.showLoading(allowCancel: false);
+      try {
+        return await _showImportResult(
+          () => service.selectedArchives(
+            files,
+            folder: selectedFolder,
+            checkStop: operation.checkActive,
+          ),
+        );
+      } finally {
+        controller?.close();
+      }
+    }
     final selection = await operation.pickDirectory(
       () => DirectoryPicker().pickDirectory(
         directAccess: true,
@@ -152,12 +174,17 @@ class ImportComic {
     );
     if (dbFile == null) return false;
     final directory = await operation.pickDirectory(
-      () => DirectoryPicker().pickDirectory(checkStop: operation.checkActive),
+      () => DirectoryPicker().pickDirectory(
+        copyForImport: true,
+        checkStop: operation.checkActive,
+      ),
     );
     if (directory == null) return false;
     return _showImportResult(
       () => service.runImport((importing) async {
-        if (!copyToLocal) await directory.retainAccessForSession();
+        if (!copyToLocal && !App.isHarmonyOS) {
+          await directory.retainAccessForSession();
+        }
         operation.checkActive();
         return operation.useDirectory(
           directory,
@@ -171,7 +198,7 @@ class ImportComic {
                 file,
                 comicSource,
                 defaultFolder: '(EhViewer)Default'.tl,
-                copy: copyToLocal,
+                copy: copyToLocal || App.isHarmonyOS,
                 isCancelled: () => cancelled,
                 onScanComplete: controller?.close,
               );
@@ -186,19 +213,24 @@ class ImportComic {
 
   Future<bool> directory(bool single, SelectionOperation operation) async {
     final selection = await operation.pickDirectory(
-      () => DirectoryPicker().pickDirectory(checkStop: operation.checkActive),
+      () => DirectoryPicker().pickDirectory(
+        copyForImport: true,
+        checkStop: operation.checkActive,
+      ),
     );
     if (selection == null) return false;
     return _showImportResult(
       () => service.runImport((importing) async {
-        if (!copyToLocal) await selection.retainAccessForSession();
+        if (!copyToLocal && !App.isHarmonyOS) {
+          await selection.retainAccessForSession();
+        }
         operation.checkActive();
         return operation.useDirectory(
           selection,
           (directory) => importing.directory(
             directory,
             single: single,
-            copy: copyToLocal,
+            copy: copyToLocal || App.isHarmonyOS,
             folder: selectedFolder,
           ),
         );

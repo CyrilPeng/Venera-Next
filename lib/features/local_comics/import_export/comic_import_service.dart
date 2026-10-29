@@ -174,13 +174,29 @@ class ComicImportService {
     final files = (await directory.list().toList()).whereType<File>().where(
       (file) => isComicArchiveFileName(file.name),
     );
+    final selections = files.map((file) => FileSelection(file.path)).toList();
+    try {
+      return await selectedArchives(selections, folder: folder);
+    } finally {
+      await Future.wait(selections.map((selection) => selection.dispose()));
+    }
+  }
+
+  Future<ComicImportResult> selectedArchives(
+    Iterable<FileSelection> files, {
+    String? folder,
+    void Function()? checkStop,
+  }) async {
     final issues = <ComicImportIssue>[];
     var count = 0;
     for (final file in files) {
+      checkStop?.call();
       try {
-        await CBZ.import(
-          file,
-          registerComic: (comic) => registerComic(comic, folder: folder),
+        await file.withFile(
+          (source) => CBZ.import(
+            source,
+            registerComic: (comic) => registerComic(comic, folder: folder),
+          ),
         );
         count++;
       } catch (error, stack) {

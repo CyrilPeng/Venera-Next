@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     show ExternalLibrary;
@@ -7,10 +8,22 @@ import 'package:path/path.dart' as p;
 import 'package:rhttp/rhttp.dart';
 
 import 'file_selection.dart';
+import 'directory_selection.dart';
 
 /// The experimental HAP owns this channel; other platforms never call it.
 abstract final class HarmonyOS {
-  static bool get isCurrent => Platform.operatingSystem == 'ohos';
+  @visibleForTesting
+  static bool? debugIsCurrent;
+
+  static bool get isCurrent {
+    var current = Platform.operatingSystem == 'ohos';
+    assert(() {
+      current = debugIsCurrent ?? current;
+      return true;
+    }());
+    return current;
+  }
+
   static const channel = MethodChannel('venera/harmonyos');
 
   static Future<({String data, String cache})> directories() async {
@@ -34,6 +47,41 @@ abstract final class HarmonyOS {
   static Future<void> initializeHttp() => isCurrent
       ? Rhttp.init(externalLibrary: ExternalLibrary.open('librhttp.so'))
       : Rhttp.init();
+
+  static Future<DirectorySelection?> selectDirectory({
+    required String cachePath,
+  }) async {
+    final result = await channel.invokeMapMethod<String, Object?>(
+      'selectDirectory',
+    );
+    if (result == null) return null;
+    final path = result['path'];
+    final token = result['token'];
+    final name = result['name'];
+    if (path is! String ||
+        token is! String ||
+        name is! String ||
+        !RegExp(r'^[0-9a-f-]{36}$').hasMatch(token) ||
+        name.isEmpty ||
+        name == '.' ||
+        name == '..' ||
+        name.contains(RegExp(r'[\\/\x00]')) ||
+        !_localPath(path) ||
+        !p.equals(
+          path,
+          p.join(cachePath, 'selected_directories', token, 'contents', name),
+        )) {
+      throw StateError('Invalid HarmonyOS owned directory receipt');
+    }
+    return DirectorySelection.ownedCopy(
+      directory: Directory(path),
+      token: token,
+      prepare: (receipt) =>
+          channel.invokeMethod<void>('prepareDirectory', receipt),
+      release: (receipt) =>
+          channel.invokeMethod<void>('releaseDirectory', receipt),
+    );
+  }
 
   static Future<List<FileSelection>> selectFiles({
     required List<String> extensions,

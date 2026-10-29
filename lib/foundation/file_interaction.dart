@@ -62,6 +62,8 @@ class DirectoryPicker {
 
   Future<DirectorySelection?> pickDirectory({
     bool directAccess = false,
+    // OHOS import copies cannot become persistent storage locations.
+    bool copyForImport = false,
     void Function()? checkStop,
   }) async {
     checkStop?.call();
@@ -70,9 +72,12 @@ class DirectoryPicker {
       return await _directoryDialogs.run(() async {
         checkStop?.call();
         if (App.isHarmonyOS) {
+          if (copyForImport) {
+            return HarmonyOS.selectDirectory(cachePath: App.cachePath);
+          }
           throw UnsupportedError(
-            'External directories are not supported in this HarmonyOS experiment. '
-            'Import a CBZ/ZIP/EPUB file into the app instead.',
+            'Persistent external directories are not supported in this HarmonyOS experiment. '
+            'Use directory copy import or select archive files instead.',
           );
         }
         if (App.isAndroid) {

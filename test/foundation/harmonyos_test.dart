@@ -20,6 +20,7 @@ void main() {
     calls.clear();
   });
   tearDown(() async {
+    HarmonyOS.debugIsCurrent = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(HarmonyOS.channel, null);
     await root.delete(recursive: true);
@@ -38,6 +39,138 @@ void main() {
     'name': name,
     'token': token,
   };
+
+  Map<String, String> directoryReceipt({String name = 'Book'}) => {
+    'path': p.join(cache, 'selected_directories', token, 'contents', name),
+    'name': name,
+    'token': token,
+  };
+
+  test(
+    'directory cancellation and unavailable capability do not create copies',
+    () async {
+      mock((_) async => null);
+      expect(await HarmonyOS.selectDirectory(cachePath: cache), isNull);
+      mock(
+        (_) async =>
+            throw PlatformException(code: 'directory_selection_unavailable'),
+      );
+      await expectLater(
+        HarmonyOS.selectDirectory(cachePath: cache),
+        throwsA(isA<PlatformException>()),
+      );
+      expect(calls.every((call) => call.method == 'selectDirectory'), isTrue);
+    },
+  );
+
+  test(
+    'directory receipt is owned before copying and cannot be retained',
+    () async {
+      final selected = directoryReceipt();
+      final copied = Directory(selected['path']!);
+      final entered = Completer<void>();
+      final finish = Completer<void>();
+      mock((call) async {
+        if (call.method == 'selectDirectory') return selected;
+        expect(call.arguments, {'path': selected['path'], 'token': token});
+        if (call.method == 'prepareDirectory') {
+          await copied.create(recursive: true);
+          File(p.join(copied.path, '1.png')).writeAsStringSync('page');
+        }
+        if (call.method == 'releaseDirectory') {
+          await copied.parent.parent.delete(recursive: true);
+        }
+        return null;
+      });
+      final selection = (await HarmonyOS.selectDirectory(cachePath: cache))!;
+      expect(calls.map((call) => call.method), ['selectDirectory']);
+      await expectLater(selection.retainAccessForSession(), throwsStateError);
+      final reading = selection.withDirectory((dir) async {
+        entered.complete();
+        await finish.future;
+        expect(File(p.join(dir.path, '1.png')).readAsStringSync(), 'page');
+      });
+      await entered.future;
+      final closing = selection.dispose();
+      await Future<void>.delayed(Duration.zero);
+      expect(copied.existsSync(), isTrue);
+      finish.complete();
+      await reading;
+      await closing;
+      await selection.dispose();
+      expect(calls.map((call) => call.method), [
+        'selectDirectory',
+        'prepareDirectory',
+        'releaseDirectory',
+      ]);
+      expect(copied.existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'failed directory preparation still releases exactly its owned receipt',
+    () async {
+      final selected = directoryReceipt();
+      var releases = 0;
+      mock((call) async {
+        if (call.method == 'selectDirectory') return selected;
+        if (call.method == 'prepareDirectory') {
+          throw PlatformException(code: 'copy_failed');
+        }
+        if (call.method == 'releaseDirectory' && ++releases == 1) {
+          throw PlatformException(code: 'busy');
+        }
+        return null;
+      });
+      final selection = (await HarmonyOS.selectDirectory(cachePath: cache))!;
+      await expectLater(
+        selection.withDirectory((_) async => fail('must not consume')),
+        throwsA(isA<PlatformException>()),
+      );
+      await expectLater(selection.dispose(), throwsA(isA<PlatformException>()));
+      await selection.dispose();
+      expect(releases, 2);
+      expect(
+        calls.where((call) => call.method == 'prepareDirectory'),
+        hasLength(1),
+      );
+    },
+  );
+
+  test('unconsumed selection closes without beginning a copy', () async {
+    mock(
+      (call) async =>
+          call.method == 'selectDirectory' ? directoryReceipt() : null,
+    );
+    final selection = (await HarmonyOS.selectDirectory(cachePath: cache))!;
+    await selection.dispose();
+    expect(calls.map((call) => call.method), [
+      'selectDirectory',
+      'releaseDirectory',
+    ]);
+  });
+
+  test(
+    'untrusted directory receipts are never consumed or recursively released',
+    () async {
+      for (final selected in [
+        {...directoryReceipt(), 'path': p.join('$cache-other', 'Book')},
+        {...directoryReceipt(), 'path': 'file://docs/Book'},
+        directoryReceipt(name: '..'),
+        directoryReceipt(name: '../Book'),
+        directoryReceipt(name: r'..\Book'),
+        {...directoryReceipt(), 'token': 'untrusted'},
+      ]) {
+        calls.clear();
+        mock((_) async => selected);
+        await expectLater(
+          HarmonyOS.selectDirectory(cachePath: cache),
+          throwsStateError,
+        );
+        expect(calls.map((call) => call.method), ['selectDirectory']);
+      }
+    },
+  );
 
   test('sandbox directories must be local absolute paths', () async {
     mock((_) async => {'data': p.join(root.path, 'data'), 'cache': cache});
