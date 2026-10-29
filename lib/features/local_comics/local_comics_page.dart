@@ -48,16 +48,35 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
 
   Map<LocalComic, bool> selectedComics = {};
 
+  List<LocalComic> get visibleComics =>
+      comics.where((comic) => isBlocked(comic) == null).toList();
+
+  void reconcileSelection() {
+    // Queries create new LocalComic instances; retain only visible identities
+    // and bind selection to the current rows used by the cards and actions.
+    final selected = {
+      for (final entry in selectedComics.entries)
+        if (entry.value) (entry.key.id, entry.key.comicType.value),
+    };
+    selectedComics = {
+      for (final comic in visibleComics)
+        if (selected.contains((comic.id, comic.comicType.value))) comic: true,
+    };
+    if (selectedComics.isEmpty) multiSelectMode = false;
+  }
+
+  void onSettingsChanged() {
+    if (mounted) setState(reconcileSelection);
+  }
+
   void update() {
-    if (keyword.isEmpty) {
-      setState(() {
-        comics = LocalManager().getComics(sortType);
-      });
-    } else {
-      setState(() {
-        comics = LocalManager().search(keyword);
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      comics = keyword.isEmpty
+          ? LocalManager().getComics(sortType)
+          : LocalManager().search(keyword);
+      reconcileSelection();
+    });
   }
 
   @override
@@ -66,12 +85,14 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
     sortType = LocalSortType.fromString(sort);
     comics = LocalManager().getComics(sortType);
     LocalManager().addListener(update);
+    appdata.settings.addListener(onSettingsChanged);
     super.initState();
   }
 
   @override
   void dispose() {
     LocalManager().removeListener(update);
+    appdata.settings.removeListener(onSettingsChanged);
     super.dispose();
   }
 
@@ -137,8 +158,9 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
           icon: Icons.delete_outline,
           text: "Delete".tl,
           onClick: () {
-            deleteComics(selectedComics.keys.toList()).then((value) {
-              if (value) {
+            if (!currentSelection()) return;
+            deleteComics(selection, isCurrent: currentSelection).then((value) {
+              if (value && currentSelection()) {
                 setState(() {
                   multiSelectMode = false;
                   selectedComics.clear();
@@ -169,10 +191,11 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
             icon: Icons.chrome_reader_mode_outlined,
             text: "View Detail".tl,
             onClick: () {
+              if (!currentSelection()) return;
               context.to(
                 () => ComicPage(
-                  id: selectedComics.keys.first.id,
-                  sourceKey: selectedComics.keys.first.sourceKey,
+                  id: selection.single.id,
+                  sourceKey: selection.single.sourceKey,
                 ),
               );
             },
@@ -182,8 +205,9 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
             icon: Icons.cloud_upload_outlined,
             text: "Archive to WebDAV".tl,
             onClick: () {
-              archiveComics(selectedComics.keys.toList()).then((value) {
-                if (value) {
+              if (!currentSelection()) return;
+              archiveComics(selection).then((value) {
+                if (value && currentSelection()) {
                   setState(() {
                     multiSelectMode = false;
                     selectedComics.clear();
@@ -193,14 +217,14 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
             },
           ),
         if (selectedComics.isNotEmpty)
-          ...exportActions(selectedComics.keys.toList()),
+          ...exportActions(selection, isCurrent: currentSelection),
       ],
     );
   }
 
   void selectAll() {
     setState(() {
-      selectedComics = comics.asMap().map((k, v) => MapEntry(v, true));
+      selectedComics = {for (final comic in visibleComics) comic: true};
     });
   }
 
@@ -212,10 +236,10 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
 
   void invertSelection() {
     setState(() {
-      comics.asMap().forEach((k, v) {
-        selectedComics[v] = !selectedComics.putIfAbsent(v, () => false);
-      });
-      selectedComics.removeWhere((k, v) => !v);
+      selectedComics = {
+        for (final comic in visibleComics)
+          if (selectedComics[comic] != true) comic: true,
+      };
     });
   }
 
@@ -464,7 +488,11 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
     );
   }
 
-  Future<bool> deleteComics(List<LocalComic> comics) async {
+  Future<bool> deleteComics(
+    List<LocalComic> comics, {
+    bool Function()? isCurrent,
+  }) async {
+    if (isCurrent?.call() == false) return false;
     bool isDeleted = false;
     await showDialog(
       context: appNavigation.rootContext,
@@ -502,12 +530,20 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
                   TextButton(
                     child: Text("Delete Chapters".tl),
                     onPressed: () {
+                      if (isCurrent?.call() == false) {
+                        context.pop();
+                        return;
+                      }
                       context.pop();
                       showDeleteChaptersPopWindow(context, comics.first);
                     },
                   ),
                 FilledButton(
                   onPressed: () async {
+                    if (isCurrent?.call() == false) {
+                      context.pop();
+                      return;
+                    }
                     try {
                       await LocalManager().batchDeleteComics(
                         comics,
@@ -585,12 +621,16 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
     }
   }
 
-  List<MenuEntry> exportActions(List<LocalComic> comics) {
+  List<MenuEntry> exportActions(
+    List<LocalComic> comics, {
+    bool Function()? isCurrent,
+  }) {
     return [
       MenuEntry(
         icon: Icons.outbox_outlined,
         text: "Export as cbz".tl,
         onClick: () async {
+          if (isCurrent?.call() == false) return;
           await exportComics(comics, CBZ.export, ".cbz");
         },
       ),
@@ -598,6 +638,7 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
         icon: Icons.picture_as_pdf_outlined,
         text: "Export as pdf".tl,
         onClick: () async {
+          if (isCurrent?.call() == false) return;
           await exportComics(comics, createPdfFromComicIsolate, ".pdf");
         },
       ),
@@ -605,6 +646,7 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
         icon: Icons.import_contacts_outlined,
         text: "Export as epub".tl,
         onClick: () async {
+          if (isCurrent?.call() == false) return;
           await exportComics(comics, createEpubWithLocalComic, ".epub");
         },
       ),
