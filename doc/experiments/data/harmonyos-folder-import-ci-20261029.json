@@ -1,0 +1,370 @@
+{
+  "schema": 1,
+  "purpose": "full_reader_folder_import_delivery",
+  "branch": "HarmonyOS",
+  "source_commit": "ab22243c26b25973d223675991b3daa72ed069d1",
+  "included_main_commit": "9201bcc03d1122d17d406c950d5846c507af62ae",
+  "implementation_commit": "54873739a4b2f55474598a856bd9511ffd1f9ddd",
+  "run": {
+    "id": 40894820743,
+    "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/40894820743",
+    "conclusion": "success",
+    "completed_at_shanghai": "2026-10-29T22:59:57+08:00",
+    "all_job_steps_succeeded": true
+  },
+  "artifact": {
+    "id": 12906499747,
+    "name": "harmonyos-reader-experiment-40894820743",
+    "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/40894820743/artifacts/12906499747",
+    "archive_size_bytes": 20283084,
+    "archive_digest": "sha256:658e569d60fe61e0749e26e986aa68b836d0097b36674d330ace4e241539ca4f",
+    "expires_at_shanghai": "2026-11-12T22:59:42+08:00",
+    "github_login_required": true
+  },
+  "application": {
+    "entrypoint": "lib/main.dart",
+    "reader_integrated": true,
+    "dart_version": "1.18.2-harmony.2+2",
+    "bundle_name": "com.github.cyrilpeng.veneranext.harmony",
+    "version_name": "1.18.2.2",
+    "version_code": 2,
+    "minimum_api": 260000026,
+    "target_api": 260000026,
+    "device_types": [
+      "phone",
+      "tablet"
+    ],
+    "libraries": [
+      {
+        "name": "libapp.so",
+        "bytes": 14877616,
+        "sha256": "af8c3685f412ea3cea4c6d5b087b669f2a9639b7203048ebe2993ca4e9a7cca3"
+      },
+      {
+        "name": "libc++_shared.so",
+        "bytes": 1262504,
+        "sha256": "965803c3fe53e02452e4c0479ad13c88f166c04207d27e3c531161a7c75a6c17"
+      },
+      {
+        "name": "libflutter.so",
+        "bytes": 16416376,
+        "sha256": "78385c78e1f79e30475d12f99d6bb402c01c8199d39b2c94f709deb5e3cbb83f"
+      },
+      {
+        "name": "libflutter_7zip.so",
+        "bytes": 90520,
+        "sha256": "c0c1b3944f52af27513184b3de1fa28ba38ab3784a21580591b4b90c1ea85a96"
+      },
+      {
+        "name": "libinappwebview.so",
+        "bytes": 13680,
+        "sha256": "80b8504e4aadbab7f78eaa9162626f534051048ad8df9805af64c00957cb4431"
+      },
+      {
+        "name": "liblodepng_flutter.so",
+        "bytes": 115280,
+        "sha256": "a92bff9ba4a8708b097b126f9012e298e1f8b09cdddfbeb23f0b96123d4230f6"
+      },
+      {
+        "name": "libqjs.so",
+        "bytes": 1056024,
+        "sha256": "5db7b42b1797e5915efa5a9943cdf094caacf0538ee54092a07f59fb278fce3d"
+      },
+      {
+        "name": "librhttp.so",
+        "bytes": 4165480,
+        "sha256": "5f07255477227d68fbae7ec54b94caed7d512321679c8b8428e0b3ac5043bd64"
+      },
+      {
+        "name": "libsqlite3.so",
+        "bytes": 1499688,
+        "sha256": "72d5f39b3a493b451093b2f6ec71587f93e14a549fa851c746da1f9cf5e3474b"
+      },
+      {
+        "name": "libzip_flutter.so",
+        "bytes": 172280,
+        "sha256": "130c62a4d312f532ef81333a99054cd0640ac4236c80fb9083c0f57db21d54e2"
+      }
+    ],
+    "asset_count": 8,
+    "permissions": [
+      {
+        "name": "ohos.permission.INTERNET"
+      }
+    ]
+  },
+  "unsigned_hap": {
+    "hap": "venera-next-1.18.2-harmony.2-arm64-unsigned.hap",
+    "bytes": 44625421,
+    "sha256": "8ac5446fe72a75dcc0d52331b59d2cc94a6e3fd500ab35af5b1a58a508f83c9b"
+  },
+  "toolchain": {
+    "flutter_revision": "62357a93d653bf844f730bb1f4b7cc9e2139d14e",
+    "flutter_tag": "3.41.9+ohos-1.0.2",
+    "native_sdk": "26.0.0.105",
+    "cli_sdk": "26.0.0.851",
+    "sdk_profile": "harmony-ci"
+  },
+  "tests": {
+    "python_tool_tests": {
+      "passed": 34
+    },
+    "directory_bridge_node_host": {
+      "passed": 11,
+      "skipped": 0,
+      "execution": "Real ArkTS bridge class executed with host picker/filesystem adapters; not an OHOS device."
+    },
+    "full_reader_linux_host": {
+      "passed": 437,
+      "skipped": 32,
+      "skip_reason": "Existing platform-specific regression guards; not OHOS device tests."
+    },
+    "full_reader_windows_host": {
+      "passed": 469,
+      "skipped": 0,
+      "native_libraries": "Existing Windows reader FFI libraries; not OHOS binaries."
+    },
+    "merged_main_targeted_windows_host": {
+      "passed": 103,
+      "included_in_full_reader_suite": true
+    },
+    "import_layout_regressions": {
+      "passed": 3,
+      "included_in_full_reader_suite": true,
+      "cases": [
+        "375px portrait light",
+        "1200px tablet dark",
+        "812px landscape 1.8x text scale"
+      ]
+    },
+    "full_reader_analysis": "No issues found"
+  },
+  "download_review": {
+    "status": "download_review_pass",
+    "source_files_checked": 551,
+    "checks": [
+      "successful_exact_source_run",
+      "downloaded_bytes_and_SHA256SUMS",
+      "artifact_and_evidence_manifests_match",
+      "all_source_hashes_match_git_commit",
+      "actual_bundle_version_api_phone_tablet",
+      "ten_exact_arm64_ELF_libraries",
+      "eight_native_library_hashes_match_fresh_API26_builds",
+      "declared_assets_match_source",
+      "no_PDFium_library",
+      "guides_match_source",
+      "eight_native_ELF_dependencies_and_exports_rechecked_from_download"
+    ],
+    "manifest_sha256": "253a8a7823a33e3ac77e2416c46788192779e0d881ca3482989c945ed25c1a8f",
+    "native_libraries": [
+      {
+        "name": "librhttp.so",
+        "bytes": 4165480,
+        "sha256": "5f07255477227d68fbae7ec54b94caed7d512321679c8b8428e0b3ac5043bd64",
+        "needed": [
+          "libc.so"
+        ],
+        "checked_exports": [
+          "frb_get_rust_content_hash",
+          "frb_init_frb_dart_api_dl",
+          "frb_pde_ffi_dispatcher_primary",
+          "frb_pde_ffi_dispatcher_sync"
+        ]
+      },
+      {
+        "name": "libqjs.so",
+        "bytes": 1056024,
+        "sha256": "5db7b42b1797e5915efa5a9943cdf094caacf0538ee54092a07f59fb278fce3d",
+        "needed": [
+          "libc++_shared.so",
+          "libc.so"
+        ],
+        "checked_exports": [
+          "jsNewRuntime",
+          "jsEval",
+          "jsFreeRuntime"
+        ]
+      },
+      {
+        "name": "libsqlite3.so",
+        "bytes": 1499688,
+        "sha256": "72d5f39b3a493b451093b2f6ec71587f93e14a549fa851c746da1f9cf5e3474b",
+        "needed": [
+          "libc.so"
+        ],
+        "checked_exports": [
+          "sqlite3_open_v2",
+          "sqlite3_close_v2",
+          "sqlite3session_create"
+        ]
+      },
+      {
+        "name": "libc++_shared.so",
+        "bytes": 1262504,
+        "sha256": "965803c3fe53e02452e4c0479ad13c88f166c04207d27e3c531161a7c75a6c17",
+        "needed": [
+          "libc.so"
+        ],
+        "checked_exports": []
+      },
+      {
+        "name": "liblodepng_flutter.so",
+        "bytes": 115280,
+        "sha256": "a92bff9ba4a8708b097b126f9012e298e1f8b09cdddfbeb23f0b96123d4230f6",
+        "needed": [
+          "libc.so"
+        ],
+        "checked_exports": [
+          "lodepng_encode32",
+          "lodepng_decode32",
+          "freePtr"
+        ]
+      },
+      {
+        "name": "libzip_flutter.so",
+        "bytes": 172280,
+        "sha256": "130c62a4d312f532ef81333a99054cd0640ac4236c80fb9083c0f57db21d54e2",
+        "needed": [
+          "libc++_shared.so",
+          "libc.so"
+        ],
+        "checked_exports": [
+          "zip_open",
+          "zip_close",
+          "zip_entry_open",
+          "zip_entry_fwrite",
+          "zip_entry_read",
+          "zip_extract"
+        ]
+      },
+      {
+        "name": "libflutter_7zip.so",
+        "bytes": 90520,
+        "sha256": "c0c1b3944f52af27513184b3de1fa28ba38ab3784a21580591b4b90c1ea85a96",
+        "needed": [
+          "libc++_shared.so",
+          "libc.so"
+        ],
+        "checked_exports": [
+          "openArchive",
+          "closeArchive",
+          "getArchiveFileCount",
+          "getArchiveFile",
+          "readArchiveFile",
+          "extractArchiveToFile",
+          "freeReadData"
+        ]
+      },
+      {
+        "name": "libinappwebview.so",
+        "bytes": 13680,
+        "sha256": "80b8504e4aadbab7f78eaa9162626f534051048ad8df9805af64c00957cb4431",
+        "needed": [
+          "libace_napi.z.so",
+          "libuv.so",
+          "libc++_shared.so",
+          "libc.so"
+        ],
+        "checked_exports": [
+          "RegisterEntryModule"
+        ]
+      }
+    ]
+  },
+  "dependency_overlays": {
+    "webview": {
+      "revision": "a281ae3272a9218760d52b95014a71a41866bd6c",
+      "original_sha256": "c570afed2d18638d3465824215bfbab3de9e5acacde59713649b51b80a3ff2f5",
+      "prepared_sha256": "55ee61072d396dd7ef0ce3112552faeed2dee5392655482d2cd21b5ede80b0d5"
+    },
+    "code_assets": {
+      "revision": "9d2eaf45940e5042637b3387b18292ed39223a4a",
+      "original_sha256": "218c4be5b68282fe858f8aa4bb73cea27dd28d17482c9e8ff1e93af8c61eca93",
+      "prepared_sha256": "5505be8b3be9aed4d7ad0eb738062a70aa61a5e85315b16eb8e99461acad0177"
+    },
+    "lodepng_flutter": {
+      "revision": "ac7d05dde32e8d728102a9ff66e6b55f05d94ba1",
+      "original_sha256": "4ed122e86949d1637aaefb04fba8b300f0ceb7f6f25c2eb239edcd8d60fd3a6c",
+      "prepared_sha256": "c3972f3ffa518bb549d4e04973f035f71934c6c0369571dc7fc2a87de4036cbe"
+    },
+    "flutter_7zip": {
+      "revision": "b33344797f1d2469339e0e1b75f5f954f1da224c",
+      "original_sha256": "92c74c37f50c576c26488bb026642735194938b79f67d5a1aceed55d64b388d3",
+      "prepared_sha256": "1f4280dadde2842986ed3f4e01aeacf9ae8e77744adcf321339b53e0380fc2d2"
+    },
+    "sqlite3": {
+      "version": "2.7.4",
+      "sha256": "32b632dda27d664f85520093ed6f735ae5c49b5b75345afb8b19411bc59bb53d",
+      "original_sha256": "c66610459769423419c045c705dd22ca270f454eb313a912d255794ca0c9fa9e",
+      "prepared_sha256": "c04999554b7540843509b75f174a81f3e8f3faddd5781ce69fa8822418e9b6bb"
+    },
+    "zip_flutter": {
+      "version": "0.0.13",
+      "sha256": "baecf8deb6bf53a50e5ab513707ab56cc0c25f5b43333aa56ef562e8e7057357",
+      "original_sha256": "a97155057289064dd1391f20c286a8bd5d9582bde15629bf84a594f946dae67c",
+      "prepared_sha256": "85ae02f2adc0084a697a7c2cceb98d225f3000bbb5dee54c3141ac5b18358392"
+    },
+    "pdfium_dart": {
+      "version": "0.2.5",
+      "sha256": "86e95c66b09f3245b95c4924f2edce8d4f7c9786876e5c5ee8e36b104a94bbb0",
+      "original_sha256": "5938b77670f6459bc20519810225dd7dbeaadc62c673201f104b4ac9e8469a55",
+      "prepared_sha256": "ecc247fc64898f75cb73af7d00c56614c6dde1fada622c41a806affe12048b71"
+    },
+    "flutter_qjs": {
+      "revision": "8feae95df7fb00455df129ad7a0dfec1d0e8d8e4",
+      "prepared_sha256": "0694106b1ebb0c8c002e9796e777c5e4cd516fa11dc796f50d19ee20c041e4b2"
+    }
+  },
+  "previous_package_feedback": {
+    "comment": "https://github.com/CyrilPeng/Venera-Next/issues/77#issuecomment-6497355819",
+    "version": "1.18.2-harmony.1+1",
+    "device": "MatePad Pro 13.2 (2024)",
+    "system": "HarmonyOS 7.0.0.111 SP12",
+    "finding": "Folder import explicitly unsupported; selecting archives one by one was inefficient.",
+    "other_functions": "No other issue found within this volunteer user's own use; not full acceptance."
+  },
+  "delivered_changes": [
+    "System-capability-gated directory copy import, preserving selected root name and chapter structure.",
+    "Single-comic image directory or a parent containing multiple comic directories; no persistent external references.",
+    "Direct multi-selection of CBZ/ZIP/7Z/CB7 archives independent of folder-selection capability, with per-file outcomes.",
+    "Native ownership receipt before copying, joined cancellation/cleanup, retry without duplicate import and no-follow cleanup guards.",
+    "Copy-only UI, actionable folder failure fallback and disabled unsupported PDF import.",
+    "Main rc.3 and latest archive result/safe retry changes are included."
+  ],
+  "delivery": {
+    "issue": "https://github.com/CyrilPeng/Venera-Next/issues/77",
+    "comment": "https://github.com/CyrilPeng/Venera-Next/issues/77#issuecomment-6500300557",
+    "comment_created_at_shanghai": "2026-10-29T23:03:15+08:00",
+    "request": "Use normally; no repeated probe, four-step report or private logs requested.",
+    "upgrade": "Export and retain independent backups; preserve comic originals; overwrite with the same bundle and signing key; stop on mismatch rather than uninstalling.",
+    "issue_closed": false,
+    "release_created": false
+  },
+  "intermediate_build_not_distributed": {
+    "source_commit": "54873739a4b2f55474598a856bd9511ffd1f9ddd",
+    "run_id": 40891008790,
+    "reason": "A newer main commit was found during final review; merged and rebuilt before issue delivery.",
+    "version_reused_before_first_delivery": true
+  },
+  "unavailable": [
+    "PDF import (PDFium); existing Dart PDF export is retained",
+    "persistent external directory references and custom storage locations (copy import requires device folder-selection support)",
+    "system sharing (use Save/Files or copy text instead)",
+    "biometric app lock",
+    "Android volume keys, SAF, foreground-service/background guarantees",
+    "verified WebView proxy override and platform-specific image codecs"
+  ],
+  "signed": false,
+  "device_runtime_verified": false,
+  "device_folder_selection_verified": false,
+  "full_app_upgrade_verified": false,
+  "certificate_renewal_verified": false,
+  "boundaries": [
+    "FolderSelection capability and URI copy must work on the actual device; compilation and host adapters do not prove device availability.",
+    "Direct multi-archive selection is the fallback when the system cannot offer a folder picker.",
+    "Prior probe and first-reader feedback do not certify this new package, full-reader use, real data migration or signing identity.",
+    "New package installation, directory import, real data retention and certificate renewal remain unverified on a device.",
+    "Separate sandbox from Android and probes; retain independent original backups and comic files.",
+    "No signing material or private device logs are distributed; no stable release or main/android-tv merge."
+  ]
+}
