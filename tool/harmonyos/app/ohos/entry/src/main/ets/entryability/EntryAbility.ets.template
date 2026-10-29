@@ -68,7 +68,7 @@ export default class EntryAbility extends FlutterAbility implements MethodCallHa
           break;
         case 'setScreenAwake':
           const currentWindow = await window.getLastWindow(this.context);
-          await currentWindow.setWindowKeepScreenOn(call.arguments as boolean);
+          await currentWindow.setWindowKeepScreenOn(call.argument('awake') as boolean);
           result.success(null);
           break;
         default:
@@ -140,7 +140,7 @@ export default class EntryAbility extends FlutterAbility implements MethodCallHa
       ]));
     } catch (error) {
       for (const receipt of selected) this.releaseFile(receipt.path, receipt.token);
-      throw error;
+      throw new Error((error as Error).message);
     } finally {
       this.selecting = false;
     }

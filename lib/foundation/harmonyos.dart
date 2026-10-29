@@ -99,5 +99,5 @@ abstract final class HarmonyOS {
       false;
 
   static Future<void> setScreenAwake(bool value) =>
-      channel.invokeMethod<void>('setScreenAwake', value);
+      channel.invokeMethod<void>('setScreenAwake', {'awake': value});
 }

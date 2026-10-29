@@ -165,4 +165,26 @@ void main() {
       expect(source.readAsStringSync(), 'source');
     },
   );
+
+  test(
+    'screen awake uses a named field understood by the native bridge',
+    () async {
+      mock((_) async => null);
+      await HarmonyOS.setScreenAwake(true);
+      await HarmonyOS.setScreenAwake(false);
+      expect(calls.map((call) => call.method), [
+        'setScreenAwake',
+        'setScreenAwake',
+      ]);
+      expect(calls.map((call) => call.arguments), [
+        {'awake': true},
+        {'awake': false},
+      ]);
+      mock((_) async => throw PlatformException(code: 'window_unavailable'));
+      await expectLater(
+        HarmonyOS.setScreenAwake(true),
+        throwsA(isA<PlatformException>()),
+      );
+    },
+  );
 }
