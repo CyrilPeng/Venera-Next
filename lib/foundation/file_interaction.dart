@@ -15,6 +15,7 @@ import 'platform_dialog_queue.dart';
 import 'share_file_operation.dart';
 import 'file_selection.dart';
 import 'directory_selection.dart';
+import 'harmonyos.dart';
 export 'directory_selection.dart';
 export 'file_selection.dart';
 
@@ -68,6 +69,12 @@ class DirectoryPicker {
     try {
       return await _directoryDialogs.run(() async {
         checkStop?.call();
+        if (App.isHarmonyOS) {
+          throw UnsupportedError(
+            'External directories are not supported in this HarmonyOS experiment. '
+            'Import a CBZ/ZIP/EPUB file into the app instead.',
+          );
+        }
         if (App.isAndroid) {
           final directory = await AndroidDirectory.pickDirectory();
           if (directory == null) return null;
@@ -125,7 +132,14 @@ Future<FileSelection?> selectFile({
         extensions: extensions,
       );
       FileSelection? file;
-      if (App.isAndroid) {
+      if (App.isHarmonyOS) {
+        final files = await HarmonyOS.selectFiles(
+          extensions: ext,
+          cachePath: App.cachePath,
+        );
+        if (files.isEmpty) return null;
+        file = files.single;
+      } else if (App.isAndroid) {
         const selectFileChannel = MethodChannel("venera/select_file");
         String mimeType = "*/*";
         if (ext.length == 1) {
@@ -173,6 +187,13 @@ Future<List<FileSelection>> selectFiles({
   try {
     return await _fileDialogs.run(() async {
       checkStop?.call();
+      if (App.isHarmonyOS) {
+        return HarmonyOS.selectFiles(
+          extensions: ext,
+          cachePath: App.cachePath,
+          multiple: true,
+        );
+      }
       if (App.isAndroid) {
         final mimeType = ext.length == 1
             ? FileType.fromExtension(ext.single).mime
@@ -239,6 +260,7 @@ Future<bool> saveFile({
         return _mobileFileSaves.run(() async {
           operation.checkActive();
           checkStop?.call();
+          if (App.isHarmonyOS) return HarmonyOS.saveFile(source);
           final result = await FlutterFileDialog.saveFile(
             params: SaveFileDialogParams(sourceFilePath: source.path),
           );
@@ -324,6 +346,11 @@ class Share {
     if (App.isLinux) {
       throw UnsupportedError('File sharing is unavailable on Linux');
     }
+    if (App.isHarmonyOS) {
+      throw UnsupportedError(
+        'HarmonyOS system sharing is not integrated. Save the file and share it from Files.',
+      );
+    }
     Rect? actualOrigin;
     await withShareFileSource(
       data: data,
@@ -353,6 +380,11 @@ class Share {
     bool Function()? canShare,
   }) => _dialogs.run(() async {
     if (canShare?.call() == false) return;
+    if (App.isHarmonyOS) {
+      throw UnsupportedError(
+        'HarmonyOS system sharing is not integrated. Copy the text instead.',
+      );
+    }
     await s.SharePlus.instance.share(
       s.ShareParams(
         text: text,

@@ -406,7 +406,7 @@ class _ReaderSettingsState extends SettingsSaveState<ReaderSettings> {
                   : null,
               useDeviceSettings: useDeviceSpecificSettings,
             ).toSliver(),
-          if (App.isAndroid || App.isIOS)
+          if (App.isMobile)
             SwitchSetting.reader(
               title: 'Keep screen on during automatic reading'.tl,
               preference: ReaderPreferences.autoReadingKeepScreenOn,

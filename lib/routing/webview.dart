@@ -112,6 +112,12 @@ class _AppWebviewState extends State<AppWebview> with ContextMenuOwner {
       appdata.settings,
     ).read(NetworkPreferences.proxy);
     if (proxy != "system" && proxy != "direct") {
+      if (App.isHarmonyOS) {
+        throw UnsupportedError(
+          'Custom WebView proxy override is not integrated in this HarmonyOS experiment. '
+          'Choose system/direct proxy in Settings before opening the embedded browser.',
+        );
+      }
       var proxyAvailable = await WebViewFeature.isFeatureSupported(
         WebViewFeature.PROXY_OVERRIDE,
       );
@@ -196,20 +202,22 @@ class _AppWebviewState extends State<AppWebview> with ContextMenuOwner {
           return Center(child: Text('${"Error".tl}: ${e.error}'));
         }
         if (!e.hasData) {
-          return const SizedBox();
+          return const Center(child: CircularProgressIndicator());
         }
-        return createWebviewWithEnvironment(AppWebview.webViewEnvironment);
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: createWebviewWithEnvironment(
+                AppWebview.webViewEnvironment,
+              ),
+            ),
+            if (_progress < 1.0)
+              const Positioned.fill(
+                child: Center(child: CircularProgressIndicator()),
+              ),
+          ],
+        );
       },
-    );
-
-    body = Stack(
-      children: [
-        Positioned.fill(child: body),
-        if (_progress < 1.0)
-          const Positioned.fill(
-            child: Center(child: CircularProgressIndicator()),
-          ),
-      ],
     );
 
     return Scaffold(

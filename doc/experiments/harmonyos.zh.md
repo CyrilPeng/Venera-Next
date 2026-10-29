@@ -1,5 +1,16 @@
 # HarmonyOS 独立分支实验
 
+## 2026-10-29 改为完整应用日常试用
+
+#77 反馈者明确表示不希望反复验证探针，维护者决定直接推进完整应用实验包，遇到实际使用问题再反馈。本轮不再请求四步报告，先前合成数据复核的边界不变，也不将其作为完整阅读器已验收的证据。
+
+- 构建目录为忽略的 `build/harmonyos/full-app`，入口直接复制现有 `lib/main.dart` 和全部阅读器/源/收藏/下载/同步代码、资产，依赖路径保留项目中的包；没有另写精简阅读器，也不替换主工程依赖锁或版本。
+- 完整应用使用独立包名 `com.github.cyrilpeng.veneranext.harmony` 与 `1.18.2-harmony.1+1`，采用原工具链 API 26。SQLite 默认加载器的隔离覆盖适用于后台 isolate；rhttp 明确加载 OHOS 核心库；PNG、ZIP、7Z 重编译锁定原生源码，内嵌网页固定 CPF OHOS WebView 提交。
+- 增加真实沙箱路径、系统文件 URI 到应用临时副本、消费结束后的收尾、系统保存与保持亮屏。保留备份导入/导出、CBZ/ZIP/EPUB 和下载后的沙箱漫画；外部长期目录/自定义存储、系统分享、生物认证、PDFium 导入与 Android 专属能力明确未支持。PDF 的既有 Dart 导出保留。
+- Actions 在原空白/核心流程后增加完整应用分析、选定宿主回归、全库重编译与完整 HAP 审计，单独导出 `harmonyos-reader-experiment-运行号`。成功后方可交付该产物，失败产物不分发；本段是实施范围，具体成功运行与摘要后续单独归档，不以旧探针构建代替。
+
+日常使用/签装说明见[中文指南](../distribution/harmonyos-reader.zh.md) / [English guide](../distribution/harmonyos-reader.en.md)。仍只在 `HarmonyOS` 分支，不创建稳定 Release、不关闭 #77，不要求账号、证书或私人数据。
+
 ## 范围与决策
 
 - 分支精确命名为 `HarmonyOS`，从 `e634d887e14a7c3daaa5fbb2bc439ce5115d9192` 开始；鸿蒙改动不合入 `main` 或 `android-tv`。

@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_saf/flutter_saf.dart';
 import 'package:path/path.dart' as path;
-import 'package:rhttp/rhttp.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/comic_source/source_data_storage.dart';
 import 'package:venera_next/features/comic_source/source_transaction_journal.dart';
@@ -17,6 +16,7 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/js_engine.dart';
+import 'package:venera_next/foundation/harmonyos.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/opencc.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -133,8 +133,9 @@ CoreBootstrap createCoreBootstrap({
       await initializeCoreInfrastructure(
         directory: App.dataPath,
         services: [
-          Rhttp.init,
-          () => _optional('SAF worker', () => SAFTaskWorker().init()),
+          HarmonyOS.initializeHttp,
+          if (!App.isHarmonyOS)
+            () => _optional('SAF worker', () => SAFTaskWorker().init()),
           () => _optional('App translations', AppTranslation.init),
           () => _optional('Tag translations', TagsTranslation.readData),
           OpenCC.init,

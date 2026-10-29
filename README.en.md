@@ -253,7 +253,7 @@ Run `winget upgrade --id CyrilPeng.VeneraNext --exact`. Public-source availabili
 ## Developer resources
 
 - [Build and Development](doc/development/build.en.md): Flutter/Rust, locked dependencies, tests, and releases.
-- [HarmonyOS branch experiment (Chinese)](doc/experiments/harmonyos.zh.md): unsigned ARM64 HAPs build in Actions on `HarmonyOS`, and one volunteer tablet's core, restart and synthetic upgrade-data reports pass review; the reader, files/backup and certificate renewal remain unverified. This is not a supported platform yet.
+- [HarmonyOS branch experiment (Chinese)](doc/experiments/harmonyos.zh.md): one tablet's core probe reports pass review. `HarmonyOS` now targets a [full-app experiment](doc/distribution/harmonyos-reader.en.md) using the existing reader, without requesting repeated probe tests. Full-app device use, files/backups and certificate renewal remain unverified; this is not a supported platform yet.
 - [Contributing](CONTRIBUTING.en.md) · [Dependency Governance](doc/development/dependencies.en.md).
 - [Windows Distribution](doc/distribution/windows.en.md) · [Headless Mode](doc/user/headless.en.md).
 - [Security Policy](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Documentation Index](doc/README.en.md).

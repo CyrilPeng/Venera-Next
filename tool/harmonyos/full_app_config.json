@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "bundle_name": "com.github.cyrilpeng.veneranext.harmony",
+  "version_name": "1.18.2-harmony.1",
+  "version_code": 1,
+  "webview": {
+    "repository": "https://gitcode.com/CPF-Flutter/flutter_inappwebview.git",
+    "ref": "6.1.5-ohos-1.0.1",
+    "revision": "a281ae3272a9218760d52b95014a71a41866bd6c"
+  },
+  "code_assets": {
+    "repository": "https://gitcode.com/openharmony-sig/fluttertpc_dart_native.git",
+    "ref": "flutter_3.41.9_deps",
+    "revision": "9d2eaf45940e5042637b3387b18292ed39223a4a"
+  },
+  "lodepng_flutter": {
+    "repository": "https://github.com/venera-app/lodepng_flutter.git",
+    "ref": "ac7d05dde32e8d728102a9ff66e6b55f05d94ba1",
+    "revision": "ac7d05dde32e8d728102a9ff66e6b55f05d94ba1"
+  },
+  "flutter_7zip": {
+    "repository": "https://github.com/venera-app/flutter_7zip.git",
+    "ref": "b33344797f1d2469339e0e1b75f5f954f1da224c",
+    "revision": "b33344797f1d2469339e0e1b75f5f954f1da224c"
+  },
+  "hosted": {
+    "sqlite3": {"version": "2.7.4", "sha256": "32b632dda27d664f85520093ed6f735ae5c49b5b75345afb8b19411bc59bb53d"},
+    "zip_flutter": {"version": "0.0.13", "sha256": "baecf8deb6bf53a50e5ab513707ab56cc0c25f5b43333aa56ef562e8e7057357"},
+    "pdfium_dart": {"version": "0.2.5", "sha256": "86e95c66b09f3245b95c4924f2edce8d4f7c9786876e5c5ee8e36b104a94bbb0"}
+  },
+  "unavailable": [
+    "PDF import (PDFium); existing Dart PDF export is retained",
+    "external/persistent directories and custom storage locations",
+    "system sharing (use Save/Files or copy text instead)",
+    "biometric app lock",
+    "Android volume keys, SAF, foreground-service/background guarantees",
+    "verified WebView proxy override and platform-specific image codecs"
+  ]
+}

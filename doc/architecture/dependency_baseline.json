@@ -976,6 +976,7 @@
     "foundation/file_system.dart",
     "foundation/file_type.dart",
     "foundation/global_preference_store.dart",
+    "foundation/harmonyos.dart",
     "foundation/history_contract.dart",
     "foundation/image_processing.dart",
     "foundation/image_provider/base_image_provider.dart",

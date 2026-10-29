@@ -6,6 +6,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:yaml/yaml.dart';
 
+import 'harmonyos.dart';
+
 class _App {
   String version = "0.0.0";
 
@@ -19,10 +21,12 @@ class _App {
 
   bool get isMacOS => Platform.isMacOS;
 
+  bool get isHarmonyOS => HarmonyOS.isCurrent;
+
   bool get isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
-  bool get isMobile => Platform.isAndroid || Platform.isIOS;
+  bool get isMobile => Platform.isAndroid || Platform.isIOS || isHarmonyOS;
 
   // Whether the app has been initialized.
   // If current Isolate is main Isolate, this value is always true.
@@ -42,8 +46,14 @@ class _App {
 
   Future<void> init() async {
     await _initVersion();
-    cachePath = (await getApplicationCacheDirectory()).path;
-    dataPath = (await getApplicationSupportDirectory()).path;
+    if (isHarmonyOS) {
+      final directories = await HarmonyOS.directories();
+      cachePath = directories.cache;
+      dataPath = directories.data;
+    } else {
+      cachePath = (await getApplicationCacheDirectory()).path;
+      dataPath = (await getApplicationSupportDirectory()).path;
+    }
     if (isWindows) {
       await _migrateLegacyWindowsPath(cachePath);
       await _migrateLegacyWindowsPath(dataPath);

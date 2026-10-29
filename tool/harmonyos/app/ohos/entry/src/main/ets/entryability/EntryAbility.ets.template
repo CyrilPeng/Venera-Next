@@ -1,0 +1,188 @@
+import {
+  FlutterAbility, FlutterEngine, MethodCall, MethodCallHandler, MethodChannel, MethodResult
+} from '@ohos/flutter_ohos';
+import { picker, fileIo, fileUri } from '@kit.CoreFileKit';
+import { util } from '@kit.ArkTS';
+import { window } from '@kit.ArkUI';
+import { GeneratedPluginRegistrant } from '../plugins/GeneratedPluginRegistrant';
+
+interface Receipt {
+  path: string;
+  name: string;
+  token: string;
+}
+
+class BrowserHandler implements MethodCallHandler {
+  private ability: EntryAbility;
+  constructor(ability: EntryAbility) {
+    this.ability = ability;
+  }
+
+  onMethodCall(call: MethodCall, result: MethodResult): void {
+    const url = call.argument('url') as string;
+    if (call.method === 'canLaunch') {
+      result.success(typeof url === 'string' && /^https?:\/\//.test(url));
+    } else if (call.method === 'launch') {
+      this.ability.openBrowser(url).then(() => result.success(true)).catch((error: Error) => {
+        result.error('browser_failed', error.message, null);
+      });
+    } else {
+      result.notImplemented();
+    }
+  }
+}
+
+export default class EntryAbility extends FlutterAbility implements MethodCallHandler {
+  private appChannel: MethodChannel | null = null;
+  private browserChannel: MethodChannel | null = null;
+  private receipts: Map<string, Receipt> = new Map();
+  private selecting: boolean = false;
+
+  configureFlutterEngine(engine: FlutterEngine): void {
+    super.configureFlutterEngine(engine);
+    GeneratedPluginRegistrant.registerWith(engine);
+    this.appChannel = new MethodChannel(engine.getDartExecutor(), 'venera/harmonyos');
+    this.appChannel.setMethodCallHandler(this);
+    this.browserChannel = new MethodChannel(engine.getDartExecutor(), 'plugins.flutter.io/url_launcher');
+    this.browserChannel.setMethodCallHandler(new BrowserHandler(this));
+  }
+
+  async onMethodCall(call: MethodCall, result: MethodResult): Promise<void> {
+    try {
+      switch (call.method) {
+        case 'directories':
+          result.success(new Map<string, string>([
+            ['data', this.context.filesDir + '/venera_next'],
+            ['cache', this.context.cacheDir + '/venera_next']
+          ]));
+          break;
+        case 'selectFiles':
+          result.success(await this.selectFiles(call));
+          break;
+        case 'releaseFile':
+          this.releaseFile(call.argument('path') as string, call.argument('token') as string);
+          result.success(null);
+          break;
+        case 'saveFile':
+          result.success(await this.saveFile(call.argument('path') as string, call.argument('name') as string));
+          break;
+        case 'setScreenAwake':
+          const currentWindow = await window.getLastWindow(this.context);
+          await currentWindow.setWindowKeepScreenOn(call.arguments as boolean);
+          result.success(null);
+          break;
+        default:
+          result.notImplemented();
+      }
+    } catch (error) {
+      const failure = error as Error;
+      result.error('harmonyos_operation_failed', failure.message, null);
+    }
+  }
+
+  private safeName(name: string): string {
+    if (!name || name === '.' || name === '..' || /[\\/\u0000]/.test(name)) {
+      throw new Error('Invalid filename');
+    }
+    return name;
+  }
+
+  // Open selected URIs by grant, never reinterpret them as arbitrary File paths.
+  private async copyFile(source: string, destination: string): Promise<void> {
+    let input: fileIo.File | null = null;
+    let output: fileIo.File | null = null;
+    try {
+      input = fileIo.openSync(source, fileIo.OpenMode.READ_ONLY);
+      output = fileIo.openSync(destination, fileIo.OpenMode.WRITE_ONLY | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+      const size = fileIo.statSync(input.fd).size;
+      await fileIo.copyFile(input.fd, output.fd);
+      fileIo.fsyncSync(output.fd);
+      if (fileIo.statSync(output.fd).size !== size) {
+        throw new Error('Incomplete selected file copy');
+      }
+    } finally {
+      try {
+        if (input !== null) fileIo.closeSync(input);
+      } finally {
+        if (output !== null) fileIo.closeSync(output);
+      }
+    }
+  }
+
+  private async selectFiles(call: MethodCall): Promise<Map<string, string>[]> {
+    if (this.selecting) throw new Error('A file dialog is already active');
+    this.selecting = true;
+    const selected: Receipt[] = [];
+    try {
+      const extensions = call.argument('extensions') as string[];
+      if (!extensions || extensions.length === 0 || extensions.some((ext: string) => !/^[a-zA-Z0-9]+$/.test(ext))) {
+        throw new Error('Invalid file suffix filter');
+      }
+      const options = new picker.DocumentSelectOptions();
+      options.maxSelectNumber = call.argument('multiple') as boolean ? 100 : 1;
+      options.selectMode = picker.DocumentSelectMode.FILE;
+      options.fileSuffixFilters = ['Files|' + extensions.map((ext: string) => '.' + ext).join(',')];
+      const uris = await new picker.DocumentViewPicker(this.context).select(options);
+      const root = this.context.cacheDir + '/venera_next/selected_files';
+      if (!fileIo.accessSync(root)) fileIo.mkdirSync(root, true);
+      for (const uri of uris) {
+        const name = this.safeName(new fileUri.FileUri(uri).name);
+        const token = util.generateRandomUUID(true);
+        const directory = root + '/' + token;
+        fileIo.mkdirSync(directory);
+        const receipt: Receipt = { path: directory + '/' + name, name: name, token: token };
+        this.receipts.set(token, receipt);
+        selected.push(receipt);
+        await this.copyFile(uri, receipt.path);
+      }
+      return selected.map((receipt: Receipt) => new Map<string, string>([
+        ['path', receipt.path], ['name', receipt.name], ['token', receipt.token]
+      ]));
+    } catch (error) {
+      for (const receipt of selected) this.releaseFile(receipt.path, receipt.token);
+      throw error;
+    } finally {
+      this.selecting = false;
+    }
+  }
+
+  private releaseFile(path: string, token: string): void {
+    const receipt = this.receipts.get(token);
+    if (receipt === undefined || receipt.path !== path) throw new Error('Unknown owned file receipt');
+    if (fileIo.accessSync(path)) fileIo.unlinkSync(path);
+    fileIo.rmdirSync(this.context.cacheDir + '/venera_next/selected_files/' + token);
+    this.receipts.delete(token);
+  }
+
+  private async saveFile(path: string, name: string): Promise<boolean> {
+    if (!path.startsWith(this.context.cacheDir + '/venera_next/') || /\/\.\.?($|\/)/.test(path)) {
+      throw new Error('Only an owned export source can be saved');
+    }
+    if (this.selecting) throw new Error('A file dialog is already active');
+    this.selecting = true;
+    try {
+      const options = new picker.DocumentSaveOptions();
+      options.newFileNames = [this.safeName(name)];
+      const uris = await new picker.DocumentViewPicker(this.context).save(options);
+      if (uris.length === 0) return false;
+      if (uris.length !== 1) throw new Error('Invalid save destination');
+      await this.copyFile(path, uris[0]);
+      return true;
+    } finally {
+      this.selecting = false;
+    }
+  }
+
+  async openBrowser(url: string): Promise<void> {
+    if (typeof url !== 'string' || !/^https?:\/\//.test(url)) throw new Error('Unsupported browser URL');
+    await this.context.openLink(url);
+  }
+
+  cleanUpFlutterEngine(engine: FlutterEngine): void {
+    this.appChannel?.setMethodCallHandler(null);
+    this.browserChannel?.setMethodCallHandler(null);
+    this.appChannel = null;
+    this.browserChannel = null;
+    super.cleanUpFlutterEngine(engine);
+  }
+}

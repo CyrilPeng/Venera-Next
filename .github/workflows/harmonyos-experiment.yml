@@ -9,7 +9,14 @@ on:
       - .github/workflows/harmonyos-experiment.yml
       - tool/harmonyos/**
       - doc/distribution/harmonyos.*.md
-      - packages/rhttp/**
+      - doc/distribution/harmonyos-reader.*.md
+      - lib/**
+      - assets/**
+      - test/**
+      - pubspec.yaml
+      - pubspec.lock
+      - CHANGELOG.md
+      - packages/**
       - rust-toolchain.toml
 
 permissions:
@@ -64,6 +71,9 @@ jobs:
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 \
             -o Acquire::https::Timeout=20 install -y --no-install-recommends \
             libgtk-3-0 libglu1-mesa ninja-build cmake pkg-config
+            # Existing FFI test sources run on Linux, not against OHOS binaries.
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 \
+            -o Acquire::https::Timeout=20 install -y --no-install-recommends libsqlite3-dev g++
 
       - name: Install the pinned independent Flutter OH SDK
         run: |
@@ -116,6 +126,19 @@ jobs:
           python3 tool/harmonyos/ci_build.py upgrade \
             --flutter-sdk "$FLUTTER_OH_SDK" --qjs-source "$RUNNER_TEMP/flutter-qjs"
 
+      - name: Prepare the locked full reader dependency overlays
+        run: |
+          python3 tool/harmonyos/prepare_full_app.py deps --qjs-source "$RUNNER_TEMP/flutter-qjs"
+
+      - name: Rebuild and audit the reader PNG ZIP and 7Z libraries
+        run: |
+          set -o pipefail
+          python3 tool/harmonyos/full_native_build.py --sdk-native "$HARMONY_NATIVE_SDK" \
+            2>&1 | tee build/harmonyos/ci/logs/full-native-build.txt
+
+      - name: Analyze test build and audit the real full reader unsigned HAP
+        run: python3 tool/harmonyos/ci_full_app.py --flutter-sdk "$FLUTTER_OH_SDK"
+
       - name: Record the actual outcome
         if: always()
         run: |
@@ -126,12 +149,16 @@ jobs:
               summary.write('## HarmonyOS experimental build\n\n')
               for name, filename in (('sdk', 'ci/sdk'), ('blank-build', 'ci/blank-build'),
                                      ('native-build', 'native/native-build'), ('probe-build', 'ci/probe-build'),
-                                     ('upgrade-build', 'ci/upgrade-build')):
+                                     ('upgrade-build', 'ci/upgrade-build'),
+                                     ('reader-native', 'full-native/extra-native-build'),
+                                     ('full-reader', 'ci/full-app-build')):
                   path = Path(f'build/harmonyos/{filename}.json')
                   status = json.loads(path.read_text())['status'] if path.exists() else 'not completed'
                   summary.write(f'- {name}: `{status}`\n')
               summary.write('\nUnsigned lab artifacts only. No signing, installation, device runtime, '
-                            'full reader integration or Release publication is verified by this workflow.\n')
+                            'feature acceptance or Release publication is verified by this workflow. '
+                            'Only full-reader packaging_pass means the existing lib/main.dart reader '
+                            'source and its reviewed platform adapters were actually built.\n')
               summary.write('\nThe sideload kit includes a same-bundle baseline/upgrade pair, SHA256SUMS '
                             'and installation guides. Its current minimum SDK is 26.0.0; '
                             'do not claim older systems or certificate renewal are verified.\n')
@@ -146,7 +173,21 @@ jobs:
             build/harmonyos/ci/*.json
             build/harmonyos/ci/logs/*.txt
             build/harmonyos/native/native-build.json
+            build/harmonyos/full-native/extra-native-build.json
           if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload the independently audited full reader experiment
+        if: success()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: harmonyos-reader-experiment-${{ github.run_id }}
+          path: |
+            build/harmonyos/ci/full-app-artifacts/*-unsigned.hap
+            build/harmonyos/ci/full-app-artifacts/full-app-manifest.json
+            build/harmonyos/ci/full-app-artifacts/SHA256SUMS
+            build/harmonyos/ci/full-app-artifacts/install.*.md
+          if-no-files-found: error
           retention-days: 14
 
       - name: Upload audited unsigned HAPs only
