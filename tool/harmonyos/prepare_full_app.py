@@ -247,7 +247,7 @@ def prepare_project(args):
     module.write_text(configure_device_types(module.read_text(encoding="utf-8")), encoding="utf-8")
     app_json = project / "ohos/AppScope/app.json5"
     app = json.loads(app_json.read_text(encoding="utf-8"))
-    app["app"].update(bundleName=FULL_CONFIG["bundle_name"], versionName=FULL_CONFIG["version_name"],
+    app["app"].update(bundleName=FULL_CONFIG["bundle_name"], versionName=FULL_CONFIG["hap_version_name"],
                        versionCode=FULL_CONFIG["version_code"], vendor="CyrilPeng")
     app_json.write_text(json.dumps(app, indent=2) + "\n", encoding="utf-8")
     entry_profile = project / "ohos/entry/build-profile.json5"
@@ -287,6 +287,7 @@ def prepare_project(args):
         "schema": 1, "purpose": "full_reader_experiment", "branch": "HarmonyOS",
         "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "bundle_name": FULL_CONFIG["bundle_name"], "version_name": FULL_CONFIG["version_name"],
+        "hap_version_name": FULL_CONFIG["hap_version_name"],
         "version_code": FULL_CONFIG["version_code"], "device_types": ["phone", "tablet"],
         "minimum_sdk": "26.0.0", "entrypoint": "lib/main.dart", "reader_integrated": True,
         "runtime_verified": False, "signed": False, "unavailable": FULL_CONFIG["unavailable"],

@@ -56,17 +56,19 @@ class FullAppTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 check_hosted_baseline(name, {**spec, 'sha256': '0' * 64}, lock)
 
-    def make_hap(self, root, *, metadata_change=None, omit=None, corrupt_library=False):
+    def make_hap(self, root, *, metadata_change=None, app_change=None, omit=None, corrupt_library=False):
         data = elf()
         checksum = hashlib.sha256(data).hexdigest()
         metadata = {'purpose': 'full_reader_experiment', 'reader_integrated': True,
                     'runtime_verified': False, 'signed': False, 'entrypoint': 'lib/main.dart',
                     'bundle_name': FULL_CONFIG['bundle_name'], 'version_name': FULL_CONFIG['version_name'],
+                    'hap_version_name': FULL_CONFIG['hap_version_name'],
                     'version_code': FULL_CONFIG['version_code'], 'device_types': ['phone', 'tablet'],
                     'native_libraries': {name: checksum for name in (*LIBRARIES, *EXTRA_LIBRARIES)}}
         packed = {**metadata, **(metadata_change or {})}
-        app = {'bundleName': metadata['bundle_name'], 'versionName': metadata['version_name'],
+        app = {'bundleName': metadata['bundle_name'], 'versionName': metadata['hap_version_name'],
                'versionCode': metadata['version_code'], 'minAPIVersion': 260000026, 'targetAPIVersion': 260000026}
+        app.update(app_change or {})
         path = root / 'reader-unsigned.hap'
         with zipfile.ZipFile(path, 'w') as archive:
             archive.writestr('module.json', json.dumps({'app': app, 'module': {'deviceTypes': ['phone', 'tablet']}}))
@@ -82,10 +84,20 @@ class FullAppTests(unittest.TestCase):
             path, metadata, assets = self.make_hap(Path(temporary))
             result = audit_full_hap(path, metadata, assets)
             self.assertEqual(result['bundle_name'], FULL_CONFIG['bundle_name'])
+            self.assertEqual(result['version_name'], FULL_CONFIG['hap_version_name'])
             self.assertEqual(len(result['libraries']), 9)
             for name in EXTRA_LIBRARIES:
                 path, metadata, assets = self.make_hap(Path(temporary), omit=name)
                 with self.assertRaises(ValueError):
+                    audit_full_hap(path, metadata, assets)
+
+    def test_native_numeric_version_is_exact_and_separate_from_dart_prerelease(self):
+        self.assertRegex(FULL_CONFIG['hap_version_name'], r'^\d+\.\d+\.\d+\.\d+$')
+        self.assertIn('-harmony.', FULL_CONFIG['version_name'])
+        with tempfile.TemporaryDirectory() as temporary:
+            for name in (FULL_CONFIG['version_name'], '1.18.2.2', '1.18.2'):
+                path, metadata, assets = self.make_hap(Path(temporary), app_change={'versionName': name})
+                with self.assertRaisesRegex(ValueError, 'versionName'):
                     audit_full_hap(path, metadata, assets)
 
     def test_audit_rejects_probe_metadata_rewritten_assets_and_bad_elf(self):

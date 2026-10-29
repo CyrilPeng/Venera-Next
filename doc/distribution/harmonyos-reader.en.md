@@ -11,6 +11,8 @@ Following the volunteer's preference in #77, this stage provides the application
 3. Users with Xiaobai Debug Assistant on HarmonyOS can reuse their existing environment. Import the unsigned HAP and personally complete account login, device authorization, signing and installation. The maintainer does not collect accounts, device identifiers, authorization, certificates or private keys, bundle signing keys, bypass security controls, or promise automatic certificate renewal.
 4. The app label is `VeneraNext (HarmonyOS Lab)`, the separate bundle name is `com.github.cyrilpeng.veneranext.harmony`, and the version is `1.18.2-harmony.1+1`. It does not overwrite the diagnostic probe or share the Android app's sandbox in an Android compatibility environment. Import desired data explicitly.
 
+HarmonyOS displays numeric native `versionName=1.18.2.1` and `versionCode=1`, as required by Flutter OH. This is the same experiment as the in-app Dart version `1.18.2-harmony.1+1`, not a mainline stable release.
+
 The build declares ARM64 `phone` and `tablet` targets, with minimum/target SDK `26.0.0`. One earlier MatePad / HarmonyOS 7.0 volunteer reported successful **core probe** use. This does not establish full-app acceptance on that device or compatibility with other systems. Do not repeatedly authorize or weaken security settings if an unsupported device cannot install it.
 
 ## Ordinary Use

@@ -57,9 +57,9 @@ def audit_full_hap(hap, metadata, expected_assets):
         if audit_device_types(archive) != metadata["device_types"]:
             raise ValueError("Unexpected reader device targets")
         app = json.loads(archive.read("module.json"))["app"]
-        for packed, declared in (("bundleName", "bundle_name"), ("versionName", "version_name"), ("versionCode", "version_code")):
+        for packed, declared in (("bundleName", "bundle_name"), ("versionName", "hap_version_name"), ("versionCode", "version_code")):
             if app.get(packed) != metadata[declared]:
-                raise ValueError(f"Unexpected actual full reader {packed}")
+                raise ValueError(f"Unexpected actual full reader {packed}: {app.get(packed)!r} != {metadata[declared]!r}")
         if app.get("minAPIVersion") != 260000026 or app.get("targetAPIVersion") != 260000026:
             raise ValueError("Unexpected full reader API baseline")
         required = set(expected) | {"libflutter.so", "libapp.so"}
@@ -124,7 +124,8 @@ def build(flutter_sdk):
                 os.environ["LD_LIBRARY_PATH"] = previous_path
             else:
                 os.environ.pop("LD_LIBRARY_PATH", None)
-        run_logged([flutter, "build", "hap", "--release", "--no-codesign", "--target-platform", "ohos-arm64", "--no-pub", "--target", "lib/main.dart"], "full-app-build", PROJECT)
+        run_logged([flutter, "build", "hap", "--release", "--no-codesign", "--target-platform", "ohos-arm64", "--no-pub", "--target", "lib/main.dart",
+                    "--build-name", FULL_CONFIG["hap_version_name"], "--build-number", str(FULL_CONFIG["version_code"])], "full-app-build", PROJECT)
         check_real_source(metadata)
         haps = list((PROJECT / "build/ohos/hap").glob("*-unsigned.hap"))
         if len(haps) != 1:
