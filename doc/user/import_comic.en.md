@@ -147,6 +147,35 @@ EPUB, PDF, or CBZ before importing.
 
 Document import never overwrites an existing comic with the same title.
 
+## WebDAV CBZ Archive Results and Retries
+
+New on main (unreleased, #126): archiving local comics to WebDAV and downloading
+archives for import keep a result dialog open with each title, remote filename,
+status and selectable error details instead of a brief count-only message.
+
+- Retry one failed item or all failed items without replaying successful uploads
+  or imports. Cancellation waits for active work to finish safely, keeps completed
+  items and leaves unstarted items available to continue in the same dialog.
+- An initially existing remote name is skipped as unverified, not counted as a
+  successful archive. Uploads send `If-None-Match: *` and never fall back to an
+  unconditional overwrite to bypass a conflict. Real-service support for this
+  condition still needs validation.
+- If an upload failed but a same-name file appeared remotely, retry downloads it
+  and compares SHA-256 with the bytes actually uploaded by that item. Only a match
+  confirms success; a mismatch or missing original digest stays a conflict without
+  deleting remote files. Verification needs extra bandwidth and temporary space.
+- If import registration was committed or its outcome is uncertain, direct retry
+  is disabled. Check the local entry, cover, pages and visibility after restarting
+  before importing again; do not clear data or delete potentially saved files.
+- Results and retry records last only until this dialog closes. There is no
+  background or cross-restart queue. Record errors before closing and check for
+  credentials, private links and personal paths before sharing; default redaction
+  is not a complete anonymization guarantee.
+
+This improves result visibility and recovery, not the unconfirmed root cause of
+123 Cloud failures. App-data synchronization and online WebDAV reading are
+unchanged.
+
 ## WebDAV Online Library
 
 The WebDAV comic library is an online reading channel. It is separate from local import/export and WebDAV CBZ archive backup.

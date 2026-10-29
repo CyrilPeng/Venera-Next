@@ -577,48 +577,12 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
       return false;
     }
 
-    var canceled = false;
-    var loadingController = showLoadingDialog(
+    final result = await showComicArchiveTransferDialog(
       context,
-      allowCancel: true,
-      message: "${"Archive to WebDAV".tl} 0/${comics.length}",
-      withProgress: true,
-      onCancel: () {
-        canceled = true;
-      },
+      title: 'Archive to WebDAV'.tl,
+      batch: ComicBackupManager.instance.createBackupBatch(comics),
     );
-    try {
-      final result = await ComicBackupManager.instance.backup(
-        comics,
-        onProgress: (current, total, title) {
-          loadingController.setMessage(
-            "${"Archive to WebDAV".tl} $current/$total\n$title",
-          );
-          loadingController.setProgress(current / total);
-        },
-        isCancelled: () => canceled,
-      );
-      if (canceled) return false;
-      if (result.errors.isNotEmpty) {
-        Log.error("Archive Comics", result.errors.join('\n'));
-      }
-      if (mounted) {
-        context.showMessage(
-          message: 'Success: @a, Skipped: @b, Failed: @c'.tlParams({
-            'a': result.success,
-            'b': result.skipped,
-            'c': result.failed,
-          }),
-        );
-      }
-      return result.success > 0 || result.skipped > 0;
-    } catch (e, s) {
-      Log.error("Archive Comics", e, s);
-      if (mounted) context.showMessage(message: e.toString());
-      return false;
-    } finally {
-      loadingController.close();
-    }
+    return result.success > 0;
   }
 
   List<MenuEntry> exportActions(

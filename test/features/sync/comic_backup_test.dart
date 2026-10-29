@@ -236,7 +236,7 @@ void main() {
       },
     );
 
-    test('stops before next comic when cancelled', () async {
+    test('cancellation after export does not start an upload', () async {
       appdata.settings['backupWebdav'] = ['https://example.com/dav', 'u', 'p'];
       var exportCount = 0;
       final manager = ComicBackupManager(
@@ -252,9 +252,11 @@ void main() {
         _comic('Two'),
       ], isCancelled: () => exportCount > 0);
 
-      expect(result.success, 1);
+      expect(result.success, 0);
       expect(result.skipped, 0);
       expect(result.failed, 0);
+      expect(result.cancelled, 1);
+      expect(result.notStarted, 1);
       expect(exportCount, 1);
     });
   });
