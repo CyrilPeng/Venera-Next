@@ -2,7 +2,7 @@
 
 中文：[HarmonyOS 实验签装与升级验证](harmonyos.zh.md)
 
-> For diagnostic probes on the `HarmonyOS` branch only, not a Venera-Next reader release. Installation through the helper, device execution, in-place upgrades and certificate renewal are not yet verified. CI success does not establish these results. Mainline and Android TV remain unchanged; #77 is not delivered.
+> For diagnostic probes on the `HarmonyOS` branch only, not a Venera-Next reader release. One volunteer tablet's feedback and three reports pass review for this pair's core, process restart and synthetic upgrade-data checks only. Signing identity, certificate renewal, real data migration and the full reader remain unverified. See the [scoped review reply on #77 (Chinese)](https://github.com/CyrilPeng/Venera-Next/issues/77#issuecomment-6486795892) for the device scope and evidence; neither CI nor one device's reports establish general support. Mainline and Android TV remain unchanged; #77 is not delivered.
 
 ## Approach And Scope
 
@@ -13,7 +13,7 @@ Following the [Kazumi guide](https://kazumi.app/docs/misc/how-to-install-in-ohos
 - **The current lab minimum SDK is `26.0.0`; the HAP encodes minimum/target API as `260000026`.** This is this experiment's restriction, not a universal Flutter OHOS limit. Do not copy Kazumi's compatibility claims or infer compatibility from a marketing OS name. Report incompatible devices before evaluating a lower baseline; do not edit metadata to force installation.
 - Continue reusing Flutter/Dart on `HarmonyOS`. The helper does not port plugins, background tasks, files or the reader. DroiTong remains an alternative for running the Android app, a different test route.
 
-[Huawei's upgrade guide](https://developer.huawei.com/consumer/en/doc/harmonyos-releases/upgrade-adaptation) maps HarmonyOS 7.0 to API `26.0.0`. The [suite overview](https://developer.huawei.com/consumer/cn/doc/harmonyos-releases/overview-2600) explains checking the API in Settings / About device. Individual patches and device execution remain unverified. Stop on compatibility errors; do not upgrade or flash the OS for this test.
+[Huawei's upgrade guide](https://developer.huawei.com/consumer/en/doc/harmonyos-releases/upgrade-adaptation) maps HarmonyOS 7.0 to API `26.0.0`. The [suite overview](https://developer.huawei.com/consumer/cn/doc/harmonyos-releases/overview-2600) explains checking the API in Settings / About device. Existing feedback covers only the recorded device/patch and probe pair; other devices and patches need their own execution checks. Stop on compatibility errors; do not upgrade or flash the OS for this test.
 
 ## Obtain The Test Kit
 

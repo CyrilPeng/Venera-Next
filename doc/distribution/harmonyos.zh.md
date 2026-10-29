@@ -2,7 +2,7 @@
 
 English: [HarmonyOS Experimental Sideload Checks](harmonyos.en.md)
 
-> 仅适用于 `HarmonyOS` 分支的诊断探针，不是 Venera-Next 阅读器发行版。当前未完成小白签装、真机运行、覆盖升级或证书续签验收；不要用 CI 成功代替这些结果。主线正式版和 Android TV 不受影响，#77 仍保持未交付。
+> 仅适用于 `HarmonyOS` 分支的诊断探针，不是 Venera-Next 阅读器发行版。已有首台平板的自愿反馈及三份报告复核通过，只覆盖本轮核心、进程重启和合成升级数据；签名身份、证书续签、真实数据迁移和完整阅读器仍未验收。设备范围与证据见[#77 本轮复核回复](https://github.com/CyrilPeng/Venera-Next/issues/77#issuecomment-6486795892)，不能以 CI 或单台报告推断通用支持。主线正式版和 Android TV 不受影响，#77 仍保持未交付。
 
 ## 方案与当前范围
 
@@ -13,7 +13,7 @@ English: [HarmonyOS Experimental Sideload Checks](harmonyos.en.md)
 - **当前探针最低 SDK 为 `26.0.0`，HAP 中最低/目标 API 编码为 `260000026`。** 这是现有实验包的限制，不是所有 Flutter 鸿蒙应用的普遍下限；不能仅凭设备的营销系统名称推断可安装，也不能照抄 Kazumi 的兼容范围。若设备不满足要求，应先反馈并评估降低运行基线，不改元数据强装。
 - 保持 Flutter/Dart 业务实现，后续在 `HarmonyOS` 分支接入现有阅读器；小白只解决分发签装，不解决插件、后台、文件或阅读器适配。卓易通仍可作为 Android 兼容运行的备用路径，两者不是同一测试。
 
-[华为官方升级指南](https://developer.huawei.com/consumer/en/doc/harmonyos-releases/upgrade-adaptation)说明 HarmonyOS 7.0 对应 API `26.0.0`；[版本配套说明](https://developer.huawei.com/consumer/cn/doc/harmonyos-releases/overview-2600)建议在「设置 → 关于本机」查看 API 版本。具体补丁版及本机能否运行仍需实测，安装提示不兼容时停止，不为测试刷机或升级系统。
+[华为官方升级指南](https://developer.huawei.com/consumer/en/doc/harmonyos-releases/upgrade-adaptation)说明 HarmonyOS 7.0 对应 API `26.0.0`；[版本配套说明](https://developer.huawei.com/consumer/cn/doc/harmonyos-releases/overview-2600)建议在「设置 → 关于本机」查看 API 版本。已有反馈仅覆盖实验记录中对应的设备／补丁和探针配对，其他设备及本机能否运行仍需实测；安装提示不兼容时停止，不为测试刷机或升级系统。
 
 ## 获取测试包
 

@@ -20,6 +20,8 @@ Actions 的 `packaging_pass` 只表示未签名打包及静态审计通过，不
 
 社区实验采用 Kazumi 的“unsigned HAP + 用户本地小白调试助手”路线；先验证现有探针，尚不接入完整阅读器。用户操作、账号与安全边界、失败处理见[中文签装指南](../../doc/distribution/harmonyos.zh.md) / [English guide](../../doc/distribution/harmonyos.en.md)。不要求普通测试者安装 DevEco，不在 CI 保存签名材料，也不声称免开发者账号或永久免续签。
 
+2026-10-29 已将 #77 自愿测试者的三份平板报告与 `ef2904f` 构建配对及原生记录核对，结果为 `reported_checks_pass`；空白包成功按本人反馈单独记录。结论仅覆盖该设备／版本的核心探针、进程重启和合成升级数据，不认证硬件／签名身份，不验证续签、文件导入或完整阅读器。脱敏结论及摘要见[设备复核记录](../../doc/experiments/data/harmonyos-tablet-device-review-20261029.json)，原始 JSON 不进版本控制。后续文档更新触发的新构建不替代这次设备报告所对应的旧配对，也无需测试者重复相同四步。
+
 云端在 baseline `0.3.0+4` 之后构建 upgrade `0.3.1+5`，保持探针包名不变。空白包与两份探针均只声明 `phone`／`tablet`，审计实际入包设备类型，拒绝遗漏平板或扩大到 PC／TV；不混用旧 `0.2.x` 配对。两包携带相同源/原生库配对标识，导出前核对真实 `module.json`、嵌入标识、API 26 与原生库哈希，生成 `sideload-manifest.json`、`SHA256SUMS` 及离线安装指南。只有整条流程成功才提供测试包，仍不创建 Release。宿主测试生成的合成数据不属于真机验收。
 
 ```powershell
