@@ -4,6 +4,40 @@ This checklist tracks release preparation following v1.18.0. A release does
 not mark unresolved reports as fixed. Dated verification records and the
 original device acceptance checklist remain below.
 
+## Sixth patch candidate preparation (2026-10-30)
+
+The next candidate is v1.18.2-rc.6, build 242, after rc.5 did not publish due
+to the Apple runner's missing Rustup wrapper directory. The CI fix creates
+`~/.cargo/bin`, exposes the wrapper through the subsequent steps' PATH and
+preserves the original rustup binary, cargo/rustc proxy links and install lock.
+The source includes regression checks for absent directories and existing
+hard-linked proxies; POSIX cases require cloud execution, not Windows mocks.
+Keep the failed rc.5 tag unchanged and rebuild every platform on the new tag.
+
+This candidate first delivers #107's new-task default policy, non-blocking
+missing-page queue and incomplete local reading/retry, plus #125's bounded
+manual diagnostics. It does not claim a new Android stutter fix, mobile power
+benefit or acceptance of the new download workflow. Earlier RC fixes remain
+included. Stable distribution stays at v1.18.1; no experimental branch or
+stable distribution metadata is changed.
+
+Retest #107 only for the new policy, subsequent queue progression, original
+page positions/placeholders, missing-only retry and paused restart recovery.
+Its background/skip acceptance on earlier releases is already recorded.
+For #125, use the reporter's existing local images and unchanged settings,
+capture separate reading modes, then preview/copy the report before exiting.
+Do not request private attachments, repeat supplied device details, equate
+asynchronous waits with CPU/UI blocking, or interpret frame samples as FPS.
+
+Validate the exact release commit's metadata, local script/diagnostic/changelog
+regressions and cloud quality/security checks before tagging. The tag workflow
+must pass fresh full quality gates and all six platform builds before
+publication. Verify all 15 uploaded installation assets, package versions,
+release notes, prerelease flag and unchanged stable channel before posting
+one version-specific notice to each of #107 and #125. Keep both issues open.
+Back up separately, preserve original comics and use the pre-upgrade backup
+for rollback; do not require data resets, task deletion or full re-downloads.
+
 ## Fifth patch candidate preparation (2026-10-30)
 
 The tag build did not publish a release: both Apple builds failed while

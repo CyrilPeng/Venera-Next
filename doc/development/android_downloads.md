@@ -42,11 +42,11 @@ snapshots without a waiting marker remain paused until manually started.
 
 The #107 reporter confirmed screen-off/background download on v1.18.1+236 and
 per-task skipping on v1.18.2-rc.1+237 (2026-10-29). The queue/local-reading
-extension above remains unreleased after the failed v1.18.2-rc.5 tag build and
-is not in rc.4 or earlier. It still requires device acceptance; the reporter's
-confirmation must not be extended to these new changes. After a later candidate
-ships, existing incomplete tasks can be started manually once after upgrading
-without deleting their successful pages or saved checkpoints.
+extension above first ships in v1.18.2-rc.6+242; the rc.5 tag build failed to
+publish, and rc.4 or earlier do not contain it. It still requires device
+acceptance; the reporter's confirmation must not be extended to these changes.
+Existing incomplete tasks can be started manually once after upgrading without
+deleting their successful pages or saved checkpoints.
 
 - Start a service while the activity is visible, as a consequence of starting a
   download. Advancing the queue in the background reuses the same service.
