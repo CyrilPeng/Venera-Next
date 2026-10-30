@@ -6,6 +6,14 @@ original device acceptance checklist remain below.
 
 ## Fifth patch candidate preparation (2026-10-30)
 
+The tag build did not publish a release: both Apple builds failed while
+installing the Rustup wrapper because Homebrew-backed runners did not have
+`~/.cargo/bin`. Main and tag quality/dependency checks passed, but that is not
+a successful six-platform release. Keep this tag at its original commit,
+record the CI fix and prepare a later candidate with fresh builds. Do not
+notify reporters to install rc.5 or move the tag to another commit. The
+following paragraphs retain the failed candidate's planned scope.
+
 The next candidate is v1.18.2-rc.5, build 241. It first delivers #107's
 default-off policy for new image tasks, non-blocking waiting-for-missing-pages
 state, and explicit incomplete local reading/retry flow. It also delivers
