@@ -30,6 +30,7 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/reader/image_export.dart';
 import 'package:venera_next/features/reader/image_export_binding.dart';
 import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/foundation/reader_diagnostics.dart';
 import 'package:venera_next/features/reader/settings_effects.dart';
 import 'package:venera_next/features/reader/settings_panel.dart';
 import 'package:venera_next/features/reader/image_selection.dart';
@@ -61,6 +62,7 @@ class ReaderScaffold extends StatefulWidget {
     required this.createChapterComments,
     required this.chapterNavigation,
     required this.child,
+    this.onDiagnostics,
   });
 
   final ReaderShellData data;
@@ -83,6 +85,7 @@ class ReaderScaffold extends StatefulWidget {
   final ReaderChapterCommentsRequest? Function() createChapterComments;
   final ReaderChapterNavigationAction? chapterNavigation;
   final Widget child;
+  final VoidCallback? onDiagnostics;
 
   @override
   State<ReaderScaffold> createState() => ReaderScaffoldState();
@@ -299,6 +302,26 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
     chapterTitle: widget.data.chapterTitle,
     onBack: () => unawaited(widget.onExit()),
     actions: [
+      if (widget.onDiagnostics != null && widget.imageWork.diagnostics != null)
+        ListenableBuilder(
+          listenable: widget.imageWork.diagnostics!,
+          builder: (context, _) => Tooltip(
+            message: widget.imageWork.diagnostics!.isRecording
+                ? 'Stop and review'.tl
+                : 'Reading diagnostics'.tl,
+            child: IconButton(
+              icon: Icon(
+                widget.imageWork.diagnostics!.isRecording
+                    ? Icons.stop_circle_outlined
+                    : Icons.speed,
+              ),
+              onPressed: () {
+                if (_isOpen) openOrClose();
+                widget.onDiagnostics!();
+              },
+            ),
+          ),
+        ),
       if (shouldShowChapterComments())
         Tooltip(
           message: "Chapter Comments".tl,
@@ -519,6 +542,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   void share() => unawaited(_imageExporter.export(sharing: true));
 
   void openSetting() {
+    widget.imageWork.diagnostics?.stop(ReaderDiagnosticStop.interrupted);
     final request = widget.createSettings();
     if (request == null || !request.isCurrent()) return;
     final work = widget.imageWork;

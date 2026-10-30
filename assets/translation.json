@@ -938,7 +938,18 @@
     "Remove task and keep local pages": "移除任务并保留本地页面",
     "Incomplete: @a missing pages": "未完整：缺 @a 页",
     "This page is missing. Retry missing pages in Downloads.": "此页尚未下载，请在下载任务中补下载缺页。",
-    "Complete missing pages before exporting or archiving this comic.": "请先补齐缺页，再导出或归档此漫画。"
+    "Complete missing pages before exporting or archiving this comic.": "请先补齐缺页，再导出或归档此漫画。",
+    "Reading diagnostics": "阅读诊断",
+    "Manual capture only, up to 45 seconds. Browse existing local pages, then quickly revisit them. Open this dialog again to stop and review.": "仅手动采集，最长 45 秒。请浏览现有本地页面，再快速回看；再次打开此窗口可提前结束并查看。",
+    "Only numeric timings, anonymous image numbers and basic reader options are included. No comic content, titles, paths, URLs, accounts, scripts or error text. Nothing is uploaded.": "仅包含数值耗时、匿名图片编号和基本阅读配置，不包含漫画内容、标题、路径、网址、账号、脚本或错误正文，不会上传。",
+    "Elapsed image waits do not prove UI blocking. Frame samples are not measured FPS. Captures are cleared when the reader closes.": "图片等待耗时不等于界面阻塞，帧样本不是实测 FPS。关闭阅读器后会清除报告。",
+    "Capturing...": "正在采集…",
+    "Report preview": "报告预览",
+    "Clear report": "清除报告",
+    "Copy report": "复制报告",
+    "Stop and review": "结束并查看",
+    "Start new 45-second capture": "开始新的 45 秒采集",
+    "Unable to copy report.": "无法复制报告，请重试。"
   },
   "zh_TW": {
     "Not started": "未執行",
@@ -1878,6 +1889,17 @@
     "Remove task and keep local pages": "移除任務並保留本機頁面",
     "Incomplete: @a missing pages": "未完整：缺 @a 頁",
     "This page is missing. Retry missing pages in Downloads.": "此頁尚未下載，請在下載任務中補下載缺頁。",
-    "Complete missing pages before exporting or archiving this comic.": "請先補齊缺頁，再匯出或封存此漫畫。"
+    "Complete missing pages before exporting or archiving this comic.": "請先補齊缺頁，再匯出或封存此漫畫。",
+    "Reading diagnostics": "閱讀診斷",
+    "Manual capture only, up to 45 seconds. Browse existing local pages, then quickly revisit them. Open this dialog again to stop and review.": "僅手動採集，最長 45 秒。請瀏覽現有本機頁面，再快速回看；再次開啟此視窗可提前結束並查看。",
+    "Only numeric timings, anonymous image numbers and basic reader options are included. No comic content, titles, paths, URLs, accounts, scripts or error text. Nothing is uploaded.": "僅包含數值耗時、匿名圖片編號和基本閱讀設定，不包含漫畫內容、標題、路徑、網址、帳號、腳本或錯誤正文，不會上傳。",
+    "Elapsed image waits do not prove UI blocking. Frame samples are not measured FPS. Captures are cleared when the reader closes.": "圖片等待耗時不等於介面阻塞，畫面樣本不是實測 FPS。關閉閱讀器後會清除報告。",
+    "Capturing...": "正在採集…",
+    "Report preview": "報告預覽",
+    "Clear report": "清除報告",
+    "Copy report": "複製報告",
+    "Stop and review": "結束並查看",
+    "Start new 45-second capture": "開始新的 45 秒採集",
+    "Unable to copy report.": "無法複製報告，請重試。"
   }
 }

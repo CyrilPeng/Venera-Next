@@ -1013,6 +1013,74 @@ void main() {
     },
   );
 
+  testWidgets(
+    'diagnostics confirms after benign reader updates and stops in background',
+    (tester) async {
+      final fixture = await _ReaderFixture.create(tester);
+      try {
+        await fixture.mount(tester, pushed: false, withWindow: false);
+        final reader = fixture.readerKey.currentState!;
+        final scaffold = tester.state<ReaderScaffoldState>(
+          find.byType(ReaderScaffold),
+        );
+        scaffold.openOrClose();
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Reading diagnostics'));
+        await tester.pumpAndSettle();
+        expect(reader.readerDiagnostics.isRecording, isFalse);
+        reader.update();
+        await tester.pump();
+        await tester.tap(find.text('Start new 45-second capture'));
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(reader.readerDiagnostics.isRecording, isTrue);
+        expect(find.byTooltip('Stop and review'), findsOneWidget);
+        reader.didChangeAppLifecycleState(AppLifecycleState.inactive);
+        reader.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await tester.pump();
+        expect(reader.readerDiagnostics.isRecording, isFalse);
+        expect(
+          jsonDecode(reader.readerDiagnostics.exportJson())['stopReason'],
+          'background',
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        await fixture.dispose(tester);
+      }
+    },
+  );
+
+  for (final interruption in ['background', 'mode']) {
+    testWidgets(
+      'diagnostics confirmation cannot restart after $interruption interruption',
+      (tester) async {
+        final fixture = await _ReaderFixture.create(tester);
+        try {
+          await fixture.mount(tester, pushed: false, withWindow: false);
+          final reader = fixture.readerKey.currentState!;
+          final opening = reader.openDiagnostics();
+          await tester.pumpAndSettle();
+          if (interruption == 'background') {
+            reader.didChangeAppLifecycleState(AppLifecycleState.inactive);
+            reader.didChangeAppLifecycleState(AppLifecycleState.resumed);
+          } else {
+            reader.applyReadingMode(ReaderMode.galleryRightToLeft);
+            reader.applyReadingMode(ReaderMode.galleryLeftToRight);
+          }
+          await tester.tap(find.text('Start new 45-second capture'));
+          await tester.pumpAndSettle();
+          await tester.pump(const Duration(milliseconds: 400));
+          await opening;
+          expect(reader.readerDiagnostics.isRecording, isFalse);
+          expect(reader.readerDiagnostics.hasCapture, isFalse);
+          expect(tester.takeException(), isNull);
+        } finally {
+          await fixture.dispose(tester);
+        }
+      },
+    );
+  }
+
   for (final mode in ReaderMode.values) {
     testWidgets('progress dispatches image endpoints in ${mode.key}', (
       tester,

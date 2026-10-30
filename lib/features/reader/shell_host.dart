@@ -36,6 +36,7 @@ class ReaderShellHost extends StatelessWidget {
       ),
       progress: reader.createProgressRequest(),
       onExit: reader.requestExit,
+      onDiagnostics: () => reader.openDiagnostics(),
       onFullscreen: App.isDesktop ? reader.fullscreen : null,
       onToggleAutomaticReading: reader.toggleAutomaticReading,
       acquireSidebarPause: reader.acquireAutomaticReadingPause,

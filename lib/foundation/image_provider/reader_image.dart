@@ -12,6 +12,7 @@ import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/image_stream.dart';
 import 'base_image_provider.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/reader_diagnostics.dart';
 
 class ReaderImageProvider extends BaseImageProvider<ReaderImageProvider> {
   /// Image provider for normal image.
@@ -22,6 +23,7 @@ class ReaderImageProvider extends BaseImageProvider<ReaderImageProvider> {
     this.eid,
     this.page, {
     this.enableResize = false,
+    this.diagnostics,
   });
 
   final String imageKey;
@@ -36,6 +38,9 @@ class ReaderImageProvider extends BaseImageProvider<ReaderImageProvider> {
 
   @override
   final bool enableResize;
+
+  @override
+  final ReaderDiagnostics? diagnostics;
 
   @protected
   File createLocalFile(String path) => File(path);
@@ -54,38 +59,50 @@ class ReaderImageProvider extends BaseImageProvider<ReaderImageProvider> {
       );
     }
     Uint8List? imageBytes;
-    if (imageKey.startsWith('file://')) {
-      final file = createLocalFile(imageKey.substring(7));
-      final exists = await file.exists();
-      checkStop();
-      if (exists) {
-        imageBytes = await readFileBytesChecked(
-          file,
-          requireNonEmpty: true,
-          checkStop: checkStop,
-          cancelSignal: BaseImageProvider.cancelSignalOf(checkStop),
-          canRetry: () => BaseImageProvider.canRetryAfterFailure(checkStop),
-        );
+    final readDiagnostic = diagnostics?.beginImageSpan(
+      hashCode,
+      imageKey.startsWith('file://')
+          ? ReaderDiagnosticStage.localRead
+          : ReaderDiagnosticStage.sourceRead,
+    );
+    try {
+      if (imageKey.startsWith('file://')) {
+        final file = createLocalFile(imageKey.substring(7));
+        final exists = await file.exists();
+        checkStop();
+        if (exists) {
+          imageBytes = await readFileBytesChecked(
+            file,
+            requireNonEmpty: true,
+            checkStop: checkStop,
+            cancelSignal: BaseImageProvider.cancelSignalOf(checkStop),
+            canRetry: () => BaseImageProvider.canRetryAfterFailure(checkStop),
+          );
+        } else {
+          throw FileSystemException('File not found', file.path);
+        }
       } else {
-        throw FileSystemException('File not found', file.path);
-      }
-    } else {
-      imageBytes = await readImageStream(
-        ImageDownloader.loadComicImage(imageKey, sourceKey, cid, eid),
-        cancelSignal: BaseImageProvider.cancelSignalOf(checkStop),
-        checkStop: checkStop,
-        onProgress: (event) => chunkEvents.add(
-          ImageChunkEvent(
-            cumulativeBytesLoaded: event.currentBytes,
-            expectedTotalBytes: event.totalBytes,
+        imageBytes = await readImageStream(
+          ImageDownloader.loadComicImage(imageKey, sourceKey, cid, eid),
+          cancelSignal: BaseImageProvider.cancelSignalOf(checkStop),
+          checkStop: checkStop,
+          onProgress: (event) => chunkEvents.add(
+            ImageChunkEvent(
+              cumulativeBytesLoaded: event.currentBytes,
+              expectedTotalBytes: event.totalBytes,
+            ),
           ),
-        ),
-      );
+        );
+      }
+      if (imageBytes == null) {
+        throw OperationFailure.message("Error: Empty response body.");
+      }
+      checkStop();
+      readDiagnostic?.finish(bytes: imageBytes.length);
+    } catch (_) {
+      readDiagnostic?.finish(success: false);
+      rethrow;
     }
-    if (imageBytes == null) {
-      throw OperationFailure.message("Error: Empty response body.");
-    }
-    checkStop();
     if (GlobalPreferenceStore(
       appdata.settings,
     ).read(ImageProcessingPreferences.enabled)) {
@@ -95,16 +112,26 @@ class ReaderImageProvider extends BaseImageProvider<ReaderImageProvider> {
       if (!script.contains('function processImage')) {
         return imageBytes;
       }
-      imageBytes = await processReaderImageBytes(
-        imageBytes,
-        script: script,
-        comicId: cid,
-        episodeId: eid,
-        page: page,
-        sourceKey: sourceKey,
-        checkStop: checkStop,
-        cancelSignal: BaseImageProvider.cancelSignalOf(checkStop),
+      final processingDiagnostic = diagnostics?.beginImageSpan(
+        hashCode,
+        ReaderDiagnosticStage.processingWait,
       );
+      try {
+        imageBytes = await processReaderImageBytes(
+          imageBytes,
+          script: script,
+          comicId: cid,
+          episodeId: eid,
+          page: page,
+          sourceKey: sourceKey,
+          checkStop: checkStop,
+          cancelSignal: BaseImageProvider.cancelSignalOf(checkStop),
+        );
+        processingDiagnostic?.finish(bytes: imageBytes.length);
+      } catch (_) {
+        processingDiagnostic?.finish(success: false);
+        rethrow;
+      }
     }
     return imageBytes;
   }

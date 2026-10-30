@@ -951,6 +951,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
           imageRef.position.chapterId,
           imageRef.position.imageNumber,
           enableResize: true,
+          diagnostics: this.widget.imageWork.diagnostics,
         );
 
         var comicImage = SizeChangedLayoutNotifier(

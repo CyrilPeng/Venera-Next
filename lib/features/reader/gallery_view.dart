@@ -78,6 +78,7 @@ class GalleryModeState extends State<ReaderGalleryView>
     data.comicId,
     data.chapterId,
     page,
+    diagnostics: widget.imageWork.diagnostics,
   );
 
   ReaderDisplayImageProvider _displayImage(String key) =>
