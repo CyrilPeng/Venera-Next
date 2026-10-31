@@ -7,6 +7,7 @@ import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_profile.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 
 import 'platform_effects_controller.dart';
@@ -59,7 +60,9 @@ class ReaderPlatformEffectsBinding {
        _frame = context.getInheritedWidgetOfExactType<WindowFrameController>() {
     handle = coordinator.createOwner(
       orientationEnabled:
-          orientationEnabled ?? defaultTargetPlatform == TargetPlatform.android,
+          orientationEnabled ??
+          (defaultTargetPlatform == TargetPlatform.android &&
+              !AppProfile.current.isTv),
       systemBarsVisible: systemBarsVisible,
     );
     if (_registry?.isClosing == true || _frame?.isClosing == true) {

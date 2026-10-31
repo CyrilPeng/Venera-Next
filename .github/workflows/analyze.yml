@@ -128,6 +128,19 @@ jobs:
       - run: flutter test --coverage
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/build/test-native/lib
+      - name: 验证 TV 编译身份、遥控器与低内存策略
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/build/test-native/lib
+        run: |
+          flutter test --no-pub --flavor tv \
+            --dart-define=EXPECT_TV=true \
+            --dart-define=TV_BUILD=ci-test --dart-define=TV_REVISION=tv-test \
+            test/app_runtime/tv_build_profile_test.dart \
+            test/components/tv_navigation_test.dart \
+            test/components/application_update_prompt_test.dart \
+            test/features/reader/tv_input_test.dart \
+            test/foundation/tv_reader_policy_test.dart \
+            test/foundation/application_update_service_test.dart
       - name: 汇总 Dart 覆盖率
         run: python3 .github/scripts/report_dart_coverage.py coverage/lcov.info --github-summary
       - name: 上传 Dart 覆盖率报告

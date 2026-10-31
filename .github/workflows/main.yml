@@ -35,6 +35,7 @@ jobs:
     needs: [Release_Metadata, Quality]
     uses: ./.github/workflows/build.yml
     with:
+      quality_checked: true
       build_android: true
       build_windows: true
       build_macos: true
@@ -67,6 +68,18 @@ jobs:
           pattern: apk-*
           path: outputs
           merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: tv-apk-*
+          path: outputs
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: android-*-manifest
+          path: outputs
+          merge-multiple: true
+      - name: 核验手机版与 TV 版完整性、签名及构建来源
+        run: python3 .github/scripts/android_tv_build.py verify-release
       - uses: actions/download-artifact@v8
         with:
           name: windows_build
@@ -114,6 +127,7 @@ jobs:
             outputs/*.ipa
             outputs/*.dmg
             outputs/*.apk
+            outputs/android-*-manifest.json
             outputs/*.zip
             outputs/*.exe
             outputs/*.deb

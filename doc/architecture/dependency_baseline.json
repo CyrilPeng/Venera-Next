@@ -486,6 +486,8 @@
     "network/shared_request_stream.dart"
   ],
   "ui_files": [
+    "features/reader/tv_input.dart",
+    "components/tv_navigation.dart",
     "app_runtime/android_downloads.dart",
     "app_runtime/app_runtime.dart",
     "app_runtime/init.dart",
@@ -708,6 +710,7 @@
     "features/local_comics/archive_download_task.dart"
   ],
   "business_files": [
+    "foundation/tv_reader_policy.dart",
     "app_runtime/application_host.dart",
     "app_runtime/application_updates.dart",
     "app_runtime/background_sync.dart",
@@ -959,6 +962,7 @@
     "foundation/app_data_operations.dart",
     "foundation/app_data_sync_fields.dart",
     "foundation/app_locale.dart",
+    "foundation/app_profile.dart",
     "foundation/app_sync_preferences.dart",
     "foundation/appdata.dart",
     "foundation/application_configuration.dart",

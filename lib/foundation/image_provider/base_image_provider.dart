@@ -105,6 +105,11 @@ abstract class BaseImageProvider<T extends BaseImageProvider<T>>
 
   static const int maxImagePixel = 2560 * 1440;
 
+  @protected
+  TargetImageSize targetSizeForImage(int width, int height) => enableResize
+      ? _getTargetSize(width, height)
+      : TargetImageSize(width: width, height: height);
+
   static TargetImageSize _getTargetSize(int width, int height) {
     // ignore invalid size
     if (width <= 0 || height <= 0) {
@@ -305,9 +310,7 @@ abstract class BaseImageProvider<T extends BaseImageProvider<T>>
         buffer,
         getTargetSize: (width, height) {
           dimensions.size = Size(width.toDouble(), height.toDouble());
-          return enableResize
-              ? _getTargetSize(width, height)
-              : TargetImageSize(width: width, height: height);
+          return targetSizeForImage(width, height);
         },
       );
       diagnostic?.finish(bytes: bytes.length);
