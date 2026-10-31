@@ -21,5 +21,7 @@ abstract interface class DownloadTaskStorage {
 
   void completeTask(DownloadTask task);
 
+  void retainIncompleteTask(DownloadTask task);
+
   void removeTask(DownloadTask task);
 }

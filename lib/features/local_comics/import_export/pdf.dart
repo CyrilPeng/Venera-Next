@@ -7,6 +7,7 @@ import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/image_processing.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:zip_flutter/zip_flutter.dart';
+import 'comic_export_service.dart';
 
 typedef DecodeImage = Future<Image> Function(Uint8List data);
 
@@ -122,6 +123,7 @@ Future<File> createPdfFromComicIsolate(
   LocalComic comic,
   String savePath,
 ) async {
+  requireCompleteComicForExport(comic);
   var receivePort = ReceivePort();
   SendPort? sendPort;
   Isolate? isolate;

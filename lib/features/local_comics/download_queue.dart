@@ -26,6 +26,8 @@ class DownloadQueue {
 
   final List<DownloadTask> _tasks = [];
   late final List<DownloadTask> tasks = UnmodifiableListView(_tasks);
+  DownloadTask? get currentTask =>
+      tasks.where((task) => !task.isAwaitingMissingPages).firstOrNull;
   final _completing = Set<DownloadTask>.identity();
   final _canceling = Set<DownloadTask>.identity();
   int _revision = 0;
@@ -93,13 +95,50 @@ class DownloadQueue {
     }
   }
 
+  void retainIncomplete(DownloadTask task) {
+    if (_suspension != null || _indexOf(task) < 0) return;
+    if (!task.isPaused || !task.isAwaitingMissingPages) {
+      throw StateError('Only settled incomplete downloads may be retained');
+    }
+    if (!_completing.add(task)) return;
+    try {
+      commitComic(task.toLocalComic());
+      if (_indexOf(task) < 0) return;
+      _stopBeforeScheduling(task, () {});
+      final revision = ++_revision;
+      _publish();
+      _resumeIfUnchanged(revision);
+    } finally {
+      _completing.remove(task);
+    }
+  }
+
+  Future<void> retryIncomplete(DownloadTask task) {
+    if (_suspension != null) return _suspension!.future;
+    if (_indexOf(task) < 0 || !task.isAwaitingMissingPages) {
+      return Future.value();
+    }
+    final first = currentTask;
+    final beforePause = _revision;
+    final stopped = _stopBeforeScheduling(task, () {});
+    if (first != null) _stopBeforeScheduling(first, first.pause);
+    if (beforePause != _revision || _indexOf(task) < 0) return stopped;
+    task.prepareMissingPageRetry();
+    _tasks.removeAt(_indexOf(task));
+    _tasks.insert(0, task);
+    final revision = ++_revision;
+    _publish();
+    _resumeIfUnchanged(revision);
+    return _pendingStop ?? stopped;
+  }
+
   void _resumeIfUnchanged(int revision) {
     // A nested queue operation owns the final scheduling decision.
     if (_suspension != null || revision != _revision) return;
     final stop = _pendingStop;
     if (stop == null) {
       _scheduledResumeRevision = null;
-      tasks.firstOrNull?.resume();
+      currentTask?.resume();
     } else {
       _scheduledResumeRevision = revision;
       unawaited(
@@ -119,7 +158,7 @@ class DownloadQueue {
 
   void resume(DownloadTask task) {
     if (_suspension != null ||
-        !identical(tasks.firstOrNull, task) ||
+        !identical(currentTask, task) ||
         !task.isPaused ||
         isResumePending) {
       return;
@@ -132,7 +171,7 @@ class DownloadQueue {
 
   Future<void> pause(DownloadTask task) {
     if (_suspension != null) return _suspension!.future;
-    if (!identical(tasks.firstOrNull, task)) return Future.value();
+    if (!identical(currentTask, task)) return Future.value();
     _revision++;
     _scheduledResumeRevision = null;
     final stopped = _stopBeforeScheduling(task, task.pause);
@@ -144,8 +183,7 @@ class DownloadQueue {
     if (_suspension != null) return _suspension!.future;
     if (_indexOf(task) < 0 || !_canceling.add(task)) return Future.value();
     final before = _revision;
-    final keepPendingStart =
-        isResumePending && !identical(tasks.firstOrNull, task);
+    final keepPendingStart = isResumePending && !identical(currentTask, task);
     final stopped = _stopBeforeScheduling(task, () {
       try {
         task.cancel();
@@ -173,13 +211,16 @@ class DownloadQueue {
 
   Future<void> moveToFirst(DownloadTask task) {
     if (_suspension != null) return _suspension!.future;
-    if (_indexOf(task) <= 0) return Future.value();
-    final first = tasks.first;
+    if (_indexOf(task) < 0 || task.isAwaitingMissingPages) {
+      return Future.value();
+    }
+    final first = currentTask;
+    if (first == null || identical(first, task)) return Future.value();
     final shouldResume =
         !first.isPaused || _scheduledResumeRevision == _revision;
     final beforePause = _revision;
     final stopped = _stopBeforeScheduling(first, first.pause);
-    if (beforePause != _revision || !identical(tasks.firstOrNull, first)) {
+    if (beforePause != _revision || !identical(currentTask, first)) {
       return stopped;
     }
     final index = _indexOf(task);

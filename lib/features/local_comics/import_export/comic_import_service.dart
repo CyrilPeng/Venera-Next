@@ -936,6 +936,7 @@ class ComicImportOperation {
       comicType: comic.comicType,
       downloadedChapters: List<String>.of(comic.downloadedChapters),
       createdAt: comic.createdAt,
+      incompleteChapters: Map.unmodifiable(comic.incompleteChapters),
     );
     var startedWrite = false;
     var committed = false;

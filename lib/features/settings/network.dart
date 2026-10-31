@@ -40,6 +40,13 @@ class _NetworkSettingsState extends State<NetworkSettings> {
           title: "Download Threads".tl,
           preference: NetworkPreferences.downloadThreads,
         ).toSliver(),
+        SwitchSetting.preference(
+          title: 'Continue past unavailable images by default'.tl,
+          subtitle:
+              'Applies only to new image download tasks. Existing tasks keep their own setting.'
+                  .tl,
+          preference: NetworkPreferences.skipUnavailableDownloadImages,
+        ).toSliver(),
       ],
     );
   }

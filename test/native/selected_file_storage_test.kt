@@ -29,6 +29,24 @@ fun main() {
             storage.release(second.file.absolutePath, second.token)
             storage.release(second.file.absolutePath, second.token)
         }
+        scenario("archive display names survive preparation and reopened cleanup") { directory, storage ->
+            val names = listOf(
+                "Sample24.zip",
+                "[Sample Artist \u2013 V.24 black and white part01 (53p).zip].zip"
+            )
+            val copies = names.map { name ->
+                storage.create(name).also { copy ->
+                    check(copy.file.name == name)
+                    copy.file.writeBytes(byteArrayOf(0x50, 0x4b, 0x03, 0x04))
+                }
+            }
+            check(copies.map { it.file.parentFile }.distinct().size == 2)
+            val reopened = SelectedFileStorage(directory)
+            reopened.release(copies.first().file.absolutePath, copies.first().token)
+            check(copies.last().file.readBytes().contentEquals(byteArrayOf(0x50, 0x4b, 0x03, 0x04)))
+            reopened.release(copies.last().file.absolutePath, copies.last().token)
+            check(directory.listFiles()?.isEmpty() == true)
+        }
         scenario("wrong token and external path preserve files") { directory, storage ->
             val copy = storage.create("book.pdf")
             copy.file.writeText("kept")

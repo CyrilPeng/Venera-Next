@@ -10,6 +10,18 @@ void main() {
     );
     const keys = [
       'Comic Archive',
+      'Not started',
+      'In progress',
+      'Failed',
+      'Skipped (not verified)',
+      'Retry this item',
+      'Retry all failed items',
+      'Continue unstarted items',
+      'Results and retries are available until this dialog is closed. No background or restart queue.',
+      'Cancellation requested. Waiting for the current operation to finish safely.',
+      'Remote name already exists. Contents were not verified or overwritten.',
+      'Remote archive conflicts with this transfer. No file was overwritten.',
+      'Import may already be saved. Check the local library before retrying; automatic retry is disabled.',
       'Comic Archive Backup',
       'Archive to WebDAV',
       'Backup Complete',

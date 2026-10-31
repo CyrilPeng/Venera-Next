@@ -1,18 +1,17 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:venera_next/foundation/image_provider/base_image_provider.dart';
 import 'package:venera_next/foundation/image_provider/image_provider_lifecycle.dart';
 import 'package:venera_next/foundation/image_provider/reader_image.dart';
 
 import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/foundation/reader_diagnostics.dart';
 
 /// A reader's visible consumers share this forwarding stream. The underlying
 /// provider retains its original cache key and Flutter's animation scheduling.
 /// Only the underlying subscription is suspended during reversible exit holds.
-class ReaderDisplayImageProvider
-    extends ImageProvider<ReaderDisplayImageProvider> {
+class ReaderDisplayImageProvider extends ImageProvider<ReaderImageProvider> {
   ReaderDisplayImageProvider(this.image, this.work);
 
   final ReaderImageProvider image;
@@ -21,16 +20,28 @@ class ReaderDisplayImageProvider
 
   String get imageKey => image.imageKey;
 
+  // ScrollAwareImageProvider must see the source's pending/decoded cache entry,
+  // not this uncached relay, before deciding to defer a fast-scrolling image.
   @override
-  Future<ReaderDisplayImageProvider> obtainKey(
-    ImageConfiguration configuration,
-  ) => SynchronousFuture(this);
+  Future<ReaderImageProvider> obtainKey(ImageConfiguration configuration) {
+    final diagnostics = work.diagnostics;
+    if (diagnostics?.isRecording == true) {
+      final status = PaintingBinding.instance.imageCache.statusForKey(image);
+      diagnostics!.recordCache(
+        image.hashCode,
+        pending: status.pending,
+        keepAlive: status.keepAlive,
+        live: status.live,
+      );
+    }
+    return image.obtainKey(configuration);
+  }
 
   @override
   void resolveStreamForKey(
     ImageConfiguration configuration,
     ImageStream stream,
-    ReaderDisplayImageProvider key,
+    ReaderImageProvider key,
     ImageErrorListener handleError,
   ) {
     var owned = _stream;
@@ -123,6 +134,7 @@ class _DisplayImageAttempt {
   ImageStreamListener? _listener;
   bool _initializing = true;
   bool _released = false;
+  ReaderDiagnosticSpan? _diagnostic;
 
   void _record(Object error, StackTrace stack) {
     if (BaseImageProvider.isCancellation(error) || !_reported.add(error)) {
@@ -138,6 +150,10 @@ class _DisplayImageAttempt {
   }
 
   void resolve() {
+    _diagnostic = owner.work.diagnostics?.beginImageSpan(
+      owner.image.hashCode,
+      ReaderDiagnosticStage.displayWait,
+    );
     try {
       final stream = _stream = owner.image.resolve(owner.configuration);
       final listener = _listener = ImageStreamListener(
@@ -149,6 +165,10 @@ class _DisplayImageAttempt {
           owner.originalImageSize = stream.completer is OriginalImageSize
               ? (stream.completer as OriginalImageSize).originalImageSize
               : null;
+          _diagnostic?.finish(
+            width: info.image.width,
+            height: info.image.height,
+          );
           owner.receiveImage(info);
         },
         onChunk: (event) {
@@ -170,6 +190,7 @@ class _DisplayImageAttempt {
   }
 
   void _fail(Object error, StackTrace stack) {
+    _diagnostic?.finish(success: false);
     if (task.isCancelled || BaseImageProvider.isCleanupFailure(error)) {
       _record(error, stack);
     }
@@ -185,6 +206,7 @@ class _DisplayImageAttempt {
 
   void release() {
     if (_released) return;
+    _diagnostic?.finish(success: false);
     _released = true;
     if (!_initializing) _releaseNow();
   }

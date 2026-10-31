@@ -150,6 +150,7 @@ void main() {
             expect(outcome.value, isTrue);
           case _Entry.upload:
             expect(native.uploadBytes, bytes);
+            expect(options.headers['If-None-Match'], '*');
             expect(
               options.headers[HttpHeaders.contentLengthHeader],
               bytes.length,
@@ -169,6 +170,29 @@ void main() {
       },
     );
   }
+
+  test(
+    'create-only upload reports a destination race instead of overwriting',
+    () async {
+      final native = _HeldCall();
+      final adapter = _Adapter(native.start);
+      _retire(native, adapter);
+      final ops = WebDavComicBackupOps(
+        createClient: (received) =>
+            received.endpoint.createClient(adapter: adapter),
+      );
+      final result = _Observed(ops.uploadFile(config, source.path, remote));
+      final request = await native.started.future;
+      expect(request.method, 'PUT');
+      expect(request.headers['If-None-Match'], '*');
+      native.respond(412, const []);
+      await native.body.close();
+      native.finished.complete();
+      expect((await result.done).error, isNotNull);
+      expect(adapter.closes, 1);
+      expect(await source.readAsBytes(), bytes);
+    },
+  );
 
   test(
     'a failed upload keeps the borrowed file until upload and native cleanup end',

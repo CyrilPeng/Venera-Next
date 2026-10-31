@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_profile.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'reader_page.dart';
 import 'scaffold.dart';
@@ -17,6 +18,10 @@ class ReaderShellHost extends StatelessWidget {
     listenable: reader.shellChanges,
     child: child,
     builder: (context, child) => ReaderScaffold(
+      key: reader.scaffoldKey,
+      onRemoteKey: reader.onTvKeyEvent,
+      onCancelRemoteKeys: () =>
+          reader.imageViewController?.cancelKeyboardInput(),
       data: ReaderShellData(
         comicId: reader.cid,
         sourceKey: reader.type.sourceKey,
@@ -36,6 +41,7 @@ class ReaderShellHost extends StatelessWidget {
       ),
       progress: reader.createProgressRequest(),
       onExit: reader.requestExit,
+      onDiagnostics: () => reader.openDiagnostics(),
       onFullscreen: App.isDesktop ? reader.fullscreen : null,
       onToggleAutomaticReading: reader.toggleAutomaticReading,
       acquireSidebarPause: reader.acquireAutomaticReadingPause,
@@ -43,7 +49,9 @@ class ReaderShellHost extends StatelessWidget {
       chapterNavigation: reader.chapterNavigation.action,
       imageWork: reader.imageWork,
       orientation: reader.readerOrientation,
-      onRotate: App.isAndroid ? reader.cycleReaderOrientation : null,
+      onRotate: App.isAndroid && !AppProfile.current.isTv
+          ? reader.cycleReaderOrientation
+          : null,
       onSystemUiChanged: reader.updateSystemUi,
       createChapterMenu: reader.createChapterMenu,
       favoriteChanges: reader.imageFavorites,

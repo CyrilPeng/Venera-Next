@@ -1,9 +1,20 @@
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/file_system.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
+import 'package:venera_next/foundation/translations.dart';
 import '../local_comic_model.dart';
 
 typedef ExportComicFunc =
     Future<File> Function(LocalComic comic, String outFilePath);
+
+void requireCompleteComicForExport(LocalComic comic) {
+  if (comic.isIncomplete) {
+    throw OperationFailure.message(
+      'Complete missing pages before exporting or archiving this comic.'.tl,
+      kind: FailureKind.unsupported,
+    );
+  }
+}
 
 /// Owns staging files through the save operation; presentation supplies ports.
 Future<void> exportLocalComics(
@@ -20,6 +31,9 @@ Future<void> exportLocalComics(
 }) async {
   if (comics.isEmpty || isCancelled()) return;
   final selected = List<LocalComic>.of(comics);
+  for (final comic in selected) {
+    requireCompleteComicForExport(comic);
+  }
   await operation.useTemporaryDirectory(
     cacheDirectory: Directory(cachePath),
     consume: (workspace) async {

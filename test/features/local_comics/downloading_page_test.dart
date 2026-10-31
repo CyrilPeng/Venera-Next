@@ -18,6 +18,25 @@ void main() {
   );
 
   testWidgets(
+    'missing-only queue shows waiting status and explicit retry instead of Start',
+    (tester) async {
+      final task = _Task('missing')..awaitingMissing = true;
+      LocalManager().restorePausedDownloads([task]);
+      await tester.pumpWidget(page());
+      expect(find.text('Waiting for missing pages'), findsOneWidget);
+      expect(find.text('Start'), findsNothing);
+      await tester.tap(find.byIcon(Icons.more_horiz).first);
+      await tester.pumpAndSettle();
+      expect(find.text('Retry missing pages'), findsOneWidget);
+      expect(find.text('Read downloaded pages'), findsOneWidget);
+      expect(find.text('Remove task and keep local pages'), findsOneWidget);
+      expect(task.resumes, 0);
+      await tester.pumpWidget(const SizedBox());
+      expect(task.listenerCount, 0);
+    },
+  );
+
+  testWidgets(
     'theme changes do not duplicate subscriptions and unmount removes all',
     (tester) async {
       final task = _Task('a');
@@ -166,6 +185,9 @@ class _Task extends DownloadTask {
   int get listenerCount => _listeners.length;
   String label = 'Task';
   bool paused = true;
+  bool awaitingMissing = false;
+  @override
+  bool get isAwaitingMissingPages => awaitingMissing;
   bool error = false;
   String status = 'Downloading';
   int resumes = 0;

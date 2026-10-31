@@ -18,6 +18,11 @@ String encodeComicCopyMetadata(LocalComic comic, String? folder) => jsonEncode({
   'downloadedChapters': comic.downloadedChapters,
   'createdAt': comic.createdAt.toIso8601String(),
   'folder': folder,
+  if (comic.isIncomplete)
+    'incompletePages': {
+      for (final entry in comic.incompleteChapters.entries)
+        entry.key: entry.value.toJson(),
+    },
 });
 
 // SQLite persists milliseconds, while the source may carry microseconds or a
@@ -31,6 +36,11 @@ String _storedMetadata(LocalComic comic) => jsonEncode({
   'type': comic.comicType.value,
   'downloadedChapters': comic.downloadedChapters,
   'createdAt': comic.createdAt.millisecondsSinceEpoch,
+  if (comic.isIncomplete)
+    'incompletePages': {
+      for (final entry in comic.incompleteChapters.entries)
+        entry.key: entry.value.toJson(),
+    },
 });
 
 bool matchesComicCopyMetadata(LocalComic intended, LocalComic registered) =>
@@ -98,6 +108,12 @@ String comicCopyRegistration(LocalComic comic) => jsonEncode({
       comicType: ComicType(data['type'] as int),
       downloadedChapters: downloaded,
       createdAt: DateTime.parse(data['createdAt'] as String),
+      incompleteChapters: Map.unmodifiable({
+        for (final entry in (data['incompletePages'] as Map? ?? {}).entries)
+          entry.key as String: IncompleteChapter.fromJson(
+            Map<String, dynamic>.from(entry.value as Map),
+          ),
+      }),
     ),
     folder: data['folder'] as String?,
   );

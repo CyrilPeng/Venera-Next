@@ -3,6 +3,7 @@ import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/features/sync/comic_backup.dart';
+import 'package:venera_next/features/sync/comic_archive_transfer_dialog.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -141,26 +142,18 @@ class _ComicArchivePageState extends State<ComicArchivePage> {
 
   Future<void> restoreSelected() async {
     final targets = selected.toList();
-    if (targets.isEmpty) return;
-    final result = await showArchiveProgressDialog(
-      title: "Download and Import".tl,
-      total: targets.length,
-      task: (onProgress, isCancelled) => ComicBackupManager.instance.restore(
-        targets,
-        onProgress: onProgress,
-        isCancelled: isCancelled,
-      ),
-    );
-    if (!mounted || result == null) return;
-    setState(() {
-      selected.clear();
-    });
-    context.showMessage(
-      message: 'Success: @a, Failed: @b'.tlParams({
-        'a': result.success,
-        'b': result.failed,
-      }),
-    );
+    if (targets.isEmpty || isWorking) return;
+    setState(() => isWorking = true);
+    try {
+      await showComicArchiveTransferDialog(
+        context,
+        title: 'Download and Import'.tl,
+        batch: ComicBackupManager.instance.createRestoreBatch(targets),
+      );
+      if (mounted) setState(selected.clear);
+    } finally {
+      if (mounted) setState(() => isWorking = false);
+    }
   }
 
   Future<void> deleteSelected() async {

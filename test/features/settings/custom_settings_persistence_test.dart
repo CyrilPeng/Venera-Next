@@ -515,6 +515,32 @@ void main() {
     },
   );
 
+  testWidgets('download skip default persists without changing existing tasks', (
+    tester,
+  ) async {
+    final root = _prepare();
+    appdata.settings['skipUnavailableDownloadImages'] = false;
+    await tester.pumpWidget(_host(const NetworkSettings()));
+    final toggle = find.byWidgetPredicate(
+      (widget) =>
+          widget is SwitchSetting &&
+          widget.settingKey == 'skipUnavailableDownloadImages',
+    );
+    await tester.ensureVisible(toggle);
+    await tester.tap(
+      find.descendant(of: toggle, matching: find.byType(Switch)),
+    );
+    await _flush(tester, appdata.saveData(false));
+    expect(_saved(root)['skipUnavailableDownloadImages'], isTrue);
+    expect(
+      find.text(
+        'Applies only to new image download tasks. Existing tasks keep their own setting.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets(
     'DNS edits persist before disposal and removing a row preserves the other controllers',
     (tester) async {

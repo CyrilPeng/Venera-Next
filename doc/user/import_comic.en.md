@@ -17,6 +17,15 @@ brackets and double extensions do not by themselves make a filename invalid.
 Check the actual success/failure counts and named errors for batch imports;
 do not rename all archives or delete data as a first step.
 
+The number at the top left in multi-select mode is the selection count, not the
+import success count. Starting with v1.18.2-rc.3, local-list bulk selection no
+longer includes hidden entries or keeps stale selection after refresh; v1.18.1
+and the earlier rc.1/rc.2 do not contain this fix. This does not resolve every
+reported Android archive-visibility scenario. Distinguish
+import results, visible/hidden entries and selection counts when reporting, and
+include the full version and whether single or batch archive import was used;
+there is no need to clear data or upload private archives again.
+
 ## Restore Local Downloads
 
 If you migrated the app and kept the local download folder but lost `local.db`,
@@ -137,6 +146,37 @@ MOBI, AZW, and AZW3 are not supported. Convert them externally to an image-based
 EPUB, PDF, or CBZ before importing.
 
 Document import never overwrites an existing comic with the same title.
+
+## WebDAV CBZ Archive Results and Retries
+
+Starting with v1.18.2-rc.4 (#126), archiving local comics to WebDAV and downloading
+archives for import keep a result dialog open with each title, remote filename,
+status and selectable error details instead of a brief count-only message.
+v1.18.1 and earlier release candidates do not include these result and retry
+improvements.
+
+- Retry one failed item or all failed items without replaying successful uploads
+  or imports. Cancellation waits for active work to finish safely, keeps completed
+  items and leaves unstarted items available to continue in the same dialog.
+- An initially existing remote name is skipped as unverified, not counted as a
+  successful archive. Uploads send `If-None-Match: *` and never fall back to an
+  unconditional overwrite to bypass a conflict. Real-service support for this
+  condition still needs validation.
+- If an upload failed but a same-name file appeared remotely, retry downloads it
+  and compares SHA-256 with the bytes actually uploaded by that item. Only a match
+  confirms success; a mismatch or missing original digest stays a conflict without
+  deleting remote files. Verification needs extra bandwidth and temporary space.
+- If import registration was committed or its outcome is uncertain, direct retry
+  is disabled. Check the local entry, cover, pages and visibility after restarting
+  before importing again; do not clear data or delete potentially saved files.
+- Results and retry records last only until this dialog closes. There is no
+  background or cross-restart queue. Record errors before closing and check for
+  credentials, private links and personal paths before sharing; default redaction
+  is not a complete anonymization guarantee.
+
+This improves result visibility and recovery, not the unconfirmed root cause of
+123 Cloud failures. App-data synchronization and online WebDAV reading are
+unchanged.
 
 ## WebDAV Online Library
 

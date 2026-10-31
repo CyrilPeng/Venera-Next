@@ -11,6 +11,7 @@ import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
+import 'package:venera_next/routing/local_reading.dart';
 
 class DownloadingPage extends StatefulWidget {
   const DownloadingPage({super.key});
@@ -39,7 +40,7 @@ class _DownloadingPageState extends State<DownloadingPage> {
   }
 
   void _syncFirstTask() {
-    final currentFirstTask = manager.downloadingTasks.firstOrNull;
+    final currentFirstTask = manager.currentDownloadingTask;
     if (!identical(currentFirstTask, firstTask)) {
       firstTask?.removeListener(update);
       firstTask = currentFirstTask;
@@ -77,11 +78,8 @@ class _DownloadingPageState extends State<DownloadingPage> {
   }
 
   Widget buildTop() {
-    int speed = 0;
-    if (manager.downloadingTasks.isNotEmpty) {
-      speed = manager.downloadingTasks.first.speed;
-    }
-    var first = manager.downloadingTasks.firstOrNull;
+    var first = manager.currentDownloadingTask;
+    final speed = first?.speed ?? 0;
     final resumePending = manager.isDownloadResumePending;
     return Container(
       constraints: const BoxConstraints(minHeight: 48),
@@ -100,7 +98,9 @@ class _DownloadingPageState extends State<DownloadingPage> {
         spacing: 12,
         runSpacing: 8,
         children: [
-          if (first?.isError == true)
+          if (first == null && manager.downloadingTasks.isNotEmpty)
+            Text('Waiting for missing pages'.tl, style: ts.s18.bold)
+          else if (first?.isError == true)
             Text("Error".tl, style: ts.s18.bold)
           else if (first?.isPaused == true && !resumePending)
             Text("Paused".tl, style: ts.s18.bold)
@@ -190,7 +190,11 @@ class _DownloadTaskTileState extends State<_DownloadTaskTile> {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Download error'.tl),
+        title: Text(
+          widget.task.isAwaitingMissingPages
+              ? 'Missing page details'.tl
+              : 'Download error'.tl,
+        ),
         scrollable: true,
         content: SelectableText(message),
         actions: [
@@ -251,6 +255,25 @@ class _DownloadTaskTileState extends State<_DownloadTaskTile> {
                     ),
                     MenuButton(
                       entries: [
+                        if (widget.task.isAwaitingMissingPages) ...[
+                          MenuEntry(
+                            icon: Icons.menu_book_outlined,
+                            text: 'Read downloaded pages'.tl,
+                            onClick: () {
+                              final comic = widget.manager.find(
+                                widget.task.id,
+                                widget.task.comicType,
+                              );
+                              if (comic != null) openLocalComic(comic);
+                            },
+                          ),
+                          MenuEntry(
+                            icon: Icons.refresh,
+                            text: 'Retry missing pages'.tl,
+                            onClick: () =>
+                                widget.manager.retryMissingPages(widget.task),
+                          ),
+                        ],
                         if (widget.task case ImagesDownloadTask imageTask)
                           MenuEntry(
                             icon: imageTask.skipUnavailableImages
@@ -274,32 +297,40 @@ class _DownloadTaskTileState extends State<_DownloadTaskTile> {
                               }
                             },
                           ),
-                        if (widget.task.isError)
+                        if (widget.task.isError ||
+                            widget.task.isAwaitingMissingPages)
                           MenuEntry(
                             icon: Icons.error_outline,
-                            text: 'Error details'.tl,
+                            text: widget.task.isAwaitingMissingPages
+                                ? 'Missing page details'.tl
+                                : 'Error details'.tl,
                             onClick: _showErrorDetails,
                           ),
                         MenuEntry(
                           icon: Icons.close,
-                          text: "Cancel".tl,
+                          text: widget.task.isAwaitingMissingPages
+                              ? 'Remove task and keep local pages'.tl
+                              : "Cancel".tl,
                           onClick: () {
                             widget.manager.cancelDownload(widget.task);
                           },
                         ),
-                        MenuEntry(
-                          icon: Icons.vertical_align_top,
-                          text: "Move To First".tl,
-                          onClick: () {
-                            widget.manager.moveToFirst(widget.task);
-                          },
-                        ),
+                        if (!widget.task.isAwaitingMissingPages)
+                          MenuEntry(
+                            icon: Icons.vertical_align_top,
+                            text: "Move To First".tl,
+                            onClick: () {
+                              widget.manager.moveToFirst(widget.task);
+                            },
+                          ),
                       ],
                     ),
                   ],
                 ),
                 const Spacer(),
-                if (!widget.task.isPaused || widget.task.isError)
+                if (!widget.task.isPaused ||
+                    widget.task.isError ||
+                    widget.task.isAwaitingMissingPages)
                   Text(widget.task.message, style: ts.s12, maxLines: 3),
                 const SizedBox(height: 4),
                 LinearProgressIndicator(value: widget.task.progress),

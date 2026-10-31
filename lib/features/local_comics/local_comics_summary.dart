@@ -134,7 +134,8 @@ class _LocalComicsSummaryState extends State<LocalComicsSummary> {
                     Button.outlined(
                       child: Row(
                         children: [
-                          if (LocalManager().downloadingTasks.first.isPaused)
+                          if (LocalManager().currentDownloadingTask?.isPaused !=
+                              false)
                             const Icon(Icons.pause_circle_outline, size: 18)
                           else
                             const _AnimatedDownloadingIcon(),

@@ -32,9 +32,17 @@ class LocalRepository {
         comic_type INTEGER NOT NULL,
         downloadedChapters TEXT NOT NULL,
         created_at INTEGER,
+        incomplete_pages TEXT NOT NULL DEFAULT '{}',
         PRIMARY KEY (id, comic_type)
       );
     ''');
+    if (!db
+        .select('PRAGMA table_info(comics)')
+        .any((row) => row['name'] == 'incomplete_pages')) {
+      db.execute(
+        "ALTER TABLE comics ADD COLUMN incomplete_pages TEXT NOT NULL DEFAULT '{}'",
+      );
+    }
     db.execute('''
       CREATE TABLE IF NOT EXISTS natural_sort_migration (
         id TEXT NOT NULL,
@@ -109,8 +117,14 @@ class LocalRepository {
       ...comic.downloadedChapters,
       ...?old?.downloadedChapters,
     ];
+    final incomplete = {...?old?.incompleteChapters};
+    for (final chapter
+        in comic.chapters == null ? [''] : comic.downloadedChapters) {
+      incomplete.remove(chapter);
+    }
+    incomplete.addAll(comic.incompleteChapters);
     db.execute(
-      'INSERT OR REPLACE INTO comics (id, title, subtitle, tags, directory, chapters, cover, comic_type, downloadedChapters, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
+      'INSERT OR REPLACE INTO comics (id, title, subtitle, tags, directory, chapters, cover, comic_type, downloadedChapters, created_at, incomplete_pages) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
       [
         targetId,
         comic.title,
@@ -122,6 +136,10 @@ class LocalRepository {
         comic.comicType.value,
         jsonEncode(downloaded),
         comic.createdAt.millisecondsSinceEpoch,
+        jsonEncode({
+          for (final entry in incomplete.entries)
+            entry.key: entry.value.toJson(),
+        }),
       ],
     );
   });
@@ -150,8 +168,17 @@ class LocalRepository {
         _remove(id, type);
       } else {
         db.execute(
-          'UPDATE comics SET downloadedChapters = ? WHERE id = ? AND comic_type = ?',
-          [jsonEncode(remaining), id, type.value],
+          'UPDATE comics SET downloadedChapters = ?, incomplete_pages = ? WHERE id = ? AND comic_type = ?',
+          [
+            jsonEncode(remaining),
+            jsonEncode({
+              for (final entry in comic.incompleteChapters.entries)
+                if (!selected.contains(entry.key))
+                  entry.key: entry.value.toJson(),
+            }),
+            id,
+            type.value,
+          ],
         );
       }
     });
@@ -172,7 +199,7 @@ class LocalRepository {
   String deletionSnapshot() => jsonEncode(
     db
         .select(
-          'SELECT id, comic_type, directory, downloadedChapters FROM comics ORDER BY id, comic_type',
+          'SELECT id, comic_type, directory, downloadedChapters, incomplete_pages FROM comics ORDER BY id, comic_type',
         )
         .map(
           (row) => [
@@ -180,6 +207,7 @@ class LocalRepository {
             row['comic_type'],
             row['directory'],
             row['downloadedChapters'],
+            row['incomplete_pages'],
           ],
         )
         .toList(),

@@ -13,6 +13,7 @@ import 'package:venera_next/foundation/file_system.dart';
 import 'package:zip_flutter/zip_flutter.dart';
 import '../local_storage_guard.dart';
 import 'comic_import_output.dart';
+import 'comic_export_service.dart';
 
 /// Comic Book Archive. Currently supports CBZ, ZIP and 7Z formats.
 abstract class CBZ {
@@ -329,6 +330,7 @@ abstract class CBZ {
   }
 
   static Future<File> export(LocalComic comic, String outFilePath) async {
+    requireCompleteComicForExport(comic);
     var cache = Directory(FilePath.join(App.cachePath, 'cbz_export'));
     if (cache.existsSync()) cache.deleteSync(recursive: true);
     cache.createSync();

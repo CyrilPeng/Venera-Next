@@ -181,19 +181,29 @@ void main() {
     'backup restore reports a failed acknowledgement without deleting saved pages',
     () async {
       final error = StateError('restore acknowledgement failed');
+      var registrations = 0;
       final backup = ComicBackupManager(
         operations: _ArchiveDownloadOps(book('Restored')),
         readConfig: _backupConfig,
         registerImportedComic: (comic) async {
+          registrations++;
           await manager.add(comic, comic.id);
           throw error;
         },
       );
-      final result = await backup.restore([
+      final batch = backup.createRestoreBatch([
         BackupFile(name: 'Restored.cbz', size: 1, modified: DateTime(2024)),
       ]);
+      addTearDown(batch.dispose);
+      await batch.run();
+      final result = BackupResult.fromBatch(batch);
       expect(result.success, 0);
       expect(result.failed, 1);
+      expect(batch.items.single.canRetry, isFalse);
+      await batch.run(retryFailed: true);
+      await batch.run();
+      expect(registrations, 1);
+      expect(manager.getComics(LocalSortType.name), hasLength(1));
       expect(
         result.failures.single.error,
         isA<PersistenceFailure>()

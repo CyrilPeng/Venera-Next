@@ -23,6 +23,10 @@ import 'package:venera_next/features/reader/reader_mode_labels.dart';
 import 'package:venera_next/features/reader/reading_session.dart';
 import 'package:venera_next/features/reader/reader_session.dart';
 import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/foundation/reader_diagnostics.dart';
+import 'package:venera_next/foundation/global_preference_store.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'diagnostics_dialog.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/features/reader/history_writer.dart';
 import 'package:venera_next/features/reader/exit_guard.dart';
@@ -49,6 +53,8 @@ import 'package:venera_next/features/reader/volume_controller.dart';
 import 'package:venera_next/features/reader/window_controller.dart';
 import 'package:venera_next/features/reader/platform_effects.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_profile.dart';
+import 'package:venera_next/foundation/tv_reader_policy.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/reader_settings.dart';
 import 'package:venera_next/foundation/reader_preferences.dart';
@@ -133,11 +139,60 @@ class Reader extends StatefulWidget {
 
 class ReaderState extends State<Reader>
     with ReaderImagePerPageHandler, WidgetsBindingObserver {
-  final imageWork = ImageWork();
+  final readerDiagnostics = ReaderDiagnostics();
+  late final imageWork = ImageWork(diagnostics: readerDiagnostics);
   late final imageFavorites = HistoryScope.readImages(context);
   final _targetValidity = ValueNotifier(0);
   final _shellChanges = ValueNotifier(0);
+  int _diagnosticsRequest = 0;
   Listenable get shellChanges => _shellChanges;
+
+  Future<void> openDiagnostics() async {
+    if (_stateDisposed || _sessionFrozen || _session.isHeld) return;
+    final request = ++_diagnosticsRequest;
+    readerDiagnostics.stop(ReaderDiagnosticStop.review);
+    final comic = cid, comicType = type, currentMode = mode, ep = chapter;
+    final source = ComicSource.find(comicType.sourceKey);
+    final release = acquireAutomaticReadingPause();
+    bool? start;
+    try {
+      start = await showDialog<bool>(
+        context: context,
+        builder: (_) => ReaderDiagnosticsDialog(diagnostics: readerDiagnostics),
+      );
+    } finally {
+      release();
+    }
+    if (start != true) return;
+    // Let the dialog/menu transition settle before registering frame sampling.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted ||
+        _stateDisposed ||
+        _sessionFrozen ||
+        _session.isHeld ||
+        request != _diagnosticsRequest ||
+        cid != comic ||
+        type != comicType ||
+        chapter != ep ||
+        mode != currentMode ||
+        !identical(ComicSource.find(comicType.sourceKey), source) ||
+        !_volumeForeground ||
+        ModalRoute.of(context)?.isCurrent == false) {
+      return;
+    }
+    readerDiagnostics.start(
+      mode: mode.isGallery
+          ? ReaderDiagnosticMode.paged
+          : mode.isWaterfall
+          ? ReaderDiagnosticMode.waterfall
+          : ReaderDiagnosticMode.continuous,
+      processingEnabled: GlobalPreferenceStore(
+        appdata.settings,
+      ).read(ImageProcessingPreferences.enabled),
+      appVersion: App.buildVersion,
+      refreshRate: View.of(context).display.refreshRate,
+    );
+  }
 
   void updateShell() {
     if (!_stateDisposed && mounted) _shellChanges.value++;
@@ -382,6 +437,10 @@ class ReaderState extends State<Reader>
   @override
   void didUpdateWidget(covariant Reader oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _diagnosticsRequest++;
+    if (oldWidget.cid != widget.cid || oldWidget.type != widget.type) {
+      readerDiagnostics.stop(ReaderDiagnosticStop.interrupted);
+    }
     _targetValidity.value++;
   }
 
@@ -474,6 +533,7 @@ class ReaderState extends State<Reader>
       applyReaderEffect: (effect) {
         switch (effect) {
           case ReaderSettingEffect.applyMode:
+            if (AppProfile.current.isTv) setImageCacheSize();
             applyReadingMode(ReaderMode.fromKey(preferences.readerMode));
           case ReaderSettingEffect.detectLayout:
             unawaited(detectLayout());
@@ -1285,6 +1345,8 @@ class ReaderState extends State<Reader>
 
   void applyReadingMode(ReaderMode next) {
     if (!mounted || _sessionFrozen || mode == next) return;
+    _diagnosticsRequest++;
+    readerDiagnostics.stop(ReaderDiagnosticStop.interrupted);
     resetPageAnimation();
     mode = next;
     // Convert the old display page to its source image before rebuilding.
@@ -1296,6 +1358,7 @@ class ReaderState extends State<Reader>
   bool get isLoading => controller.content.isLoading;
 
   late final focusNode = FocusNode()..addListener(_keyboardFocusChanged);
+  final scaffoldKey = GlobalKey<ReaderScaffoldState>();
 
   void _keyboardFocusChanged() {
     if (!_stateDisposed && !focusNode.hasPrimaryFocus) {
@@ -1450,6 +1513,9 @@ class ReaderState extends State<Reader>
     }
     _volumeRoute = ModalRoute.of(context);
     _volumeCurrent = _volumeRoute?.isCurrent ?? true;
+    if (!_volumeCurrent) {
+      readerDiagnostics.stop(ReaderDiagnosticStop.interrupted);
+    }
     _observeVolume(_updateVolume());
     if (!_isInitialized) {
       initImagesPerPage(widget.initialPage ?? 1);
@@ -1462,6 +1528,8 @@ class ReaderState extends State<Reader>
   }
 
   late final _imageCachePolicy = ReaderImageCachePolicy(
+    maximumBytes: () =>
+        appdata.settings.tvLowMemoryEnabled ? TvReaderPolicy.cacheBytes : null,
     readAvailableMemory: MemoryInfo.getFreePhysicalMemorySize,
     setLimit: (bytes) =>
         PaintingBinding.instance.imageCache.maximumSizeBytes = bytes,
@@ -1800,6 +1868,7 @@ class ReaderState extends State<Reader>
   @override
   void dispose() {
     _stateDisposed = true;
+    readerDiagnostics.dispose();
     _targetValidity.value++;
     viewportBinding.dispose();
     controller.dispose();
@@ -1828,6 +1897,10 @@ class ReaderState extends State<Reader>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      _diagnosticsRequest++;
+      readerDiagnostics.stop(ReaderDiagnosticStop.background);
+    }
     _volumeForeground = state == AppLifecycleState.resumed;
     _session.setForeground(state == AppLifecycleState.resumed);
     _observeVolume(_updateVolume());
@@ -1838,6 +1911,12 @@ class ReaderState extends State<Reader>
     _checkImagesPerPageChange();
     return ReaderExitGuard(
       key: _exitGuardKey,
+      onBackRequested: () {
+        final shell = scaffoldKey.currentState;
+        if (!AppProfile.current.isTv || shell?.isOpen != true) return false;
+        shell!.openOrClose();
+        return true;
+      },
       prepare: _prepareReaderExit,
       holdForLeave: _session.holdForExit,
       onError: (error, stack) {
@@ -1881,11 +1960,23 @@ class ReaderState extends State<Reader>
   }
 
   void onKeyEvent(KeyEvent event) {
+    if (AppProfile.current.isTv) return;
     if (_sessionFrozen) return;
     if (event.logicalKey == LogicalKeyboardKey.f12 && event is KeyUpEvent) {
       fullscreen();
     }
     if (!focusNode.hasPrimaryFocus) return;
+    imageViewController?.handleKeyEvent(event);
+  }
+
+  void onTvKeyEvent(KeyEvent event) {
+    if (!mounted ||
+        _stateDisposed ||
+        _sessionFrozen ||
+        _session.isHeld ||
+        ModalRoute.of(context)?.isCurrent == false) {
+      return;
+    }
     imageViewController?.handleKeyEvent(event);
   }
 

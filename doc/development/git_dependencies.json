@@ -4,9 +4,9 @@
     {
       "dependency": "flutter_qjs",
       "url": "https://github.com/CyrilPeng/flutter_qjs",
-      "commit": "8feae95df7fb00455df129ad7a0dfec1d0e8d8e4",
+      "commit": "295f77421eedff356a02e92987181b525970c780",
       "status": "maintained-fork",
-      "reason": "QuickJS-NG migration, JS numeric conversion and native platform patches; validate runtime lifetimes before replacement.",
+      "reason": "QuickJS-NG migration, JS numeric conversion, native platform patches and the 2026-10-31 TypedData reference-walk fix; validate runtime lifetimes before replacement.",
       "packages": {
         "flutter_qjs": "."
       }

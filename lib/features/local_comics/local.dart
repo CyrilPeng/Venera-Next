@@ -1,4 +1,5 @@
 import 'package:venera_next/foundation/operation_failure.dart';
+import 'package:venera_next/foundation/missing_download_page.dart';
 import 'local_comic_model.dart';
 import 'local_repository.dart';
 import 'local_chapter_storage.dart';
@@ -548,10 +549,12 @@ class LocalManager with ChangeNotifier implements DownloadTaskStorage {
     var comic =
         find(id, type) ?? (throw OperationFailure.message("Comic Not Found"));
     var directory = Directory(comic.baseDir);
+    var chapterId = '';
     if (comic.hasChapters) {
       var cid = ep is int
           ? comic.chapters!.ids.elementAt(ep - 1)
           : (ep as String);
+      chapterId = cid;
       cid = localChapterDirectoryName(cid);
       directory = Directory(FilePath.join(directory.path, cid));
     }
@@ -567,6 +570,20 @@ class LocalManager with ChangeNotifier implements DownloadTaskStorage {
       }
     }
     files.sort((a, b) => compareComicFileNames(a.name, b.name));
+    final incomplete = comic.incompleteChapters[chapterId];
+    if (incomplete != null) {
+      final byIndex = <int, File>{};
+      for (final file in files) {
+        final index = int.tryParse(p.basenameWithoutExtension(file.name));
+        if (index != null) byIndex.putIfAbsent(index, () => file);
+      }
+      return [
+        for (var index = 0; index < incomplete.pageCount; index++)
+          byIndex[index] == null
+              ? '$missingDownloadPagePrefix${index + 1}'
+              : 'file://${byIndex[index]!.path}',
+      ];
+    }
     return files.map((e) => "file://${e.path}").toList();
   }
 
@@ -626,10 +643,10 @@ class LocalManager with ChangeNotifier implements DownloadTaskStorage {
   bool isDownloaded(String id, ComicType type, [int? ep]) {
     final comic = find(id, type);
     if (comic == null) return false;
-    if (comic.chapters == null || ep == null) return true;
-    return comic.downloadedChapters.contains(
-      comic.chapters!.ids.elementAtOrNull(ep - 1),
-    );
+    if (comic.chapters == null || ep == null) return !comic.isIncomplete;
+    final chapterId = comic.chapters!.ids.elementAtOrNull(ep - 1);
+    return comic.downloadedChapters.contains(chapterId) &&
+        !comic.incompleteChapters.containsKey(chapterId);
   }
 
   late final _downloadQueue = DownloadQueue(
@@ -640,6 +657,8 @@ class LocalManager with ChangeNotifier implements DownloadTaskStorage {
   );
 
   List<DownloadTask> get downloadingTasks => _downloadQueue.tasks;
+
+  DownloadTask? get currentDownloadingTask => _downloadQueue.currentTask;
 
   bool isDownloading(String id, ComicType type) =>
       _downloadQueue.contains(id, type);
@@ -670,6 +689,17 @@ class LocalManager with ChangeNotifier implements DownloadTaskStorage {
   void completeTask(DownloadTask task) {
     _storageAccess.check();
     _downloadQueue.complete(task);
+  }
+
+  @override
+  void retainIncompleteTask(DownloadTask task) {
+    _storageAccess.check();
+    _downloadQueue.retainIncomplete(task);
+  }
+
+  Future<void> retryMissingPages(DownloadTask task) {
+    _storageAccess.check();
+    return _downloadQueue.retryIncomplete(task);
   }
 
   @override

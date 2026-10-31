@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:venera_next/components/select.dart';
+import 'package:venera_next/components/tv_navigation.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 import 'favorite_folder.dart';
@@ -79,6 +81,47 @@ class _FavoriteFolderBrowserState extends State<FavoriteFolderBrowser> {
     super.dispose();
   }
 
+  Widget _buildSearch(BuildContext context) {
+    final field = TextField(
+      key: const ValueKey('favorite-folder-search'),
+      controller: _search,
+      enabled: widget.enabled,
+      decoration: InputDecoration(
+        labelText: 'Search local folders'.tl,
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: _query.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Clear'.tl,
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(() {
+                  _search.clear();
+                  _query = '';
+                }),
+              ),
+      ),
+      onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+    );
+    if (!TvNavigation.enabledOf(context)) return field;
+    // EditableText ignores ordinary directional focus intents. Keep horizontal
+    // keys for editing, but let a TV remote leave this single-line search.
+    return DefaultTextEditingShortcuts(
+      child: Shortcuts(
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.arrowUp): DirectionalFocusIntent(
+            TraversalDirection.up,
+            ignoreTextFields: false,
+          ),
+          SingleActivator(LogicalKeyboardKey.arrowDown): DirectionalFocusIntent(
+            TraversalDirection.down,
+            ignoreTextFields: false,
+          ),
+        },
+        child: field,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final rows = <FavoriteFolder>[];
@@ -118,27 +161,7 @@ class _FavoriteFolderBrowserState extends State<FavoriteFolderBrowser> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                  child: TextField(
-                    key: const ValueKey('favorite-folder-search'),
-                    controller: _search,
-                    enabled: widget.enabled,
-                    decoration: InputDecoration(
-                      labelText: 'Search local folders'.tl,
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _query.isEmpty
-                          ? null
-                          : IconButton(
-                              tooltip: 'Clear'.tl,
-                              icon: const Icon(Icons.close),
-                              onPressed: () => setState(() {
-                                _search.clear();
-                                _query = '';
-                              }),
-                            ),
-                    ),
-                    onChanged: (value) =>
-                        setState(() => _query = value.trim().toLowerCase()),
-                  ),
+                  child: _buildSearch(context),
                 ),
               ),
               if (rows.isEmpty)

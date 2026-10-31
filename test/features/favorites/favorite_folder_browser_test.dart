@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/select.dart';
 import 'package:venera_next/features/favorites/favorite_folder.dart';
 import 'package:venera_next/features/favorites/favorite_folder_browser.dart';
+import 'package:venera_next/foundation/app_profile.dart';
 
 FavoriteFolderTree _tree() => FavoriteFolderTree(const [
   FavoriteFolder(id: 'reading', name: 'Reading', order: 0),
@@ -98,6 +99,33 @@ void main() {
       expect(parent.onChanged, isNull);
       await tester.tap(find.text('Paused'));
       expect(selected, ['Paused']);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'search keeps editing keys and uses build-specific TV traversal',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: FavoriteFolderBrowser(tree: _tree(), onSelected: (_) {}),
+          ),
+        ),
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('favorite-folder-search')),
+        'week',
+      );
+      await tester.pumpAndSettle();
+      final field = tester.widget<EditableText>(find.byType(EditableText));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      expect(field.controller.selection.baseOffset, 3);
+      expect(field.focusNode.hasFocus, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      expect(field.focusNode.hasFocus, !AppProfile.current.isTv);
+      expect(field.controller.text, 'week');
       expect(tester.takeException(), isNull);
     },
   );

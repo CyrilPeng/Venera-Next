@@ -4,8 +4,91 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/local_comics/local_repository.dart';
 import 'package:venera_next/features/local_comics/local_sort_type.dart';
 import 'package:venera_next/foundation/comic_type.dart';
+import 'package:venera_next/features/comic_source/comic_source_api.dart';
 
 void main() {
+  test('legacy schema upgrades without changing complete records', () {
+    final db = sqlite3.openInMemory();
+    try {
+      db.execute(
+        'CREATE TABLE comics (id TEXT, title TEXT, subtitle TEXT, tags TEXT, directory TEXT, chapters TEXT, cover TEXT, comic_type INT, downloadedChapters TEXT, created_at INT, PRIMARY KEY(id, comic_type))',
+      );
+      db.execute(
+        "INSERT INTO comics VALUES ('1', 'Old', '', '[]', 'book', 'null', '', 17, '[]', 0)",
+      );
+      final repository = LocalRepository(db)..initialize();
+      repository.initialize();
+      expect(repository.find('1', const ComicType(17))!.isIncomplete, isFalse);
+      expect(
+        db
+            .select('PRAGMA table_info(comics)')
+            .where((row) => row['name'] == 'incomplete_pages'),
+        hasLength(1),
+      );
+    } finally {
+      db.dispose();
+    }
+  });
+
+  test(
+    'chapter updates preserve other missing pages and clear only repaired chapters',
+    () {
+      final db = sqlite3.openInMemory();
+      final repository = LocalRepository(db)..initialize();
+      LocalComic comic(
+        List<String> chapters,
+        Map<String, IncompleteChapter> missing,
+      ) => LocalComic(
+        id: '1',
+        title: 'Book',
+        subtitle: '',
+        tags: [],
+        directory: 'book',
+        chapters: const ComicChapters({'a': 'A', 'b': 'B'}),
+        cover: 'cover.jpg',
+        comicType: const ComicType(17),
+        downloadedChapters: chapters,
+        createdAt: DateTime(2026),
+        incompleteChapters: missing,
+      );
+      try {
+        repository.add(
+          comic(
+            ['a'],
+            {
+              'a': IncompleteChapter(pageCount: 3, missing: [2, 0, 2]),
+            },
+          ),
+        );
+        repository.add(
+          comic(
+            ['b'],
+            {
+              'b': IncompleteChapter(pageCount: 2, missing: [1]),
+            },
+          ),
+        );
+        var saved = repository.find('1', const ComicType(17))!;
+        expect(saved.missingImageCount, 3);
+        expect(saved.incompleteChapters['a']!.missing, [0, 2]);
+        repository.add(comic(['a'], {}));
+        saved = repository.find('1', const ComicType(17))!;
+        expect(saved.incompleteChapters.keys, ['b']);
+        repository.removeChapters('1', const ComicType(17), ['b']);
+        expect(
+          repository.find('1', const ComicType(17))!.isIncomplete,
+          isFalse,
+        );
+        expect(
+          () => IncompleteChapter(pageCount: 2, missing: [2]),
+          throwsFormatException,
+        );
+      } finally {
+        db.dispose();
+      }
+    },
+  );
+
   test(
     'directory references exclude exact identity without decoding other metadata',
     () {

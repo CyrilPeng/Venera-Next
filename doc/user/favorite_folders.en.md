@@ -1,6 +1,6 @@
 # Two-Level Local Favorite Folders
 
-> In development for #123. This guide applies to builds containing this feature; v1.18.1 and v1.18.2-rc.1 do not include it.
+> Mainline feature, not released yet, for #123. This guide applies to builds containing this feature; the published v1.18.1 and v1.18.2-rc.6 do not include it.
 
 Local favorites support at most two levels. Both root folders and child folders can contain comics directly. Network favorites remain managed by their comic sources. Folder names must still be globally unique, even under different parents.
 
@@ -20,6 +20,8 @@ In the favorites sidebar, select a folder name to open it. Use the separate arro
 A root folder page provides links to its children, but its comic list and count show **direct favorites only**, not an aggregate of child contents. Comic search, reading-status filters, and blocked keywords continue to apply to the current comic list. All includes favorites from both levels and deduplicates comic identities. A comic can still belong to multiple folders.
 
 Comic-detail favorites, bulk add/transfer, Quick Favorite settings, and update-tracking selection share a searchable folder picker. It displays paths while retaining the original folder reference. Parents and children can be selected separately. Quick Favorite also supports None.
+
+On TV, use direction keys to move focus and Select to activate a folder or its separate expansion arrow. Back closes the picker and returns focus to its opening control. In folder search, Up/Down leave text input while Left/Right still edit the caret. Sorting offers Move up/Move down buttons without dragging. These controls do not change TV's separate data or low-memory policy; an actual device's input method may still require a companion input device.
 
 ## Creating, Moving And Sorting
 

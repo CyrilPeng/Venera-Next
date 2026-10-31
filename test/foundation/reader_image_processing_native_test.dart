@@ -9,8 +9,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/image_provider/reader_image.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'package:flutter/painting.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -68,10 +71,11 @@ void main() {
 
       Future<Uint8List> process(
         String script, {
+        Uint8List? bytes,
         Future<void>? cancelSignal,
         void Function()? checkStop,
       }) => processReaderImageBytes(
-        Uint8List.fromList([1, 2]),
+        bytes ?? Uint8List.fromList([1, 2]),
         script: script,
         comicId: 'comic',
         episodeId: 'episode',
@@ -79,6 +83,75 @@ void main() {
         sourceKey: 'source',
         checkStop: checkStop ?? () {},
         cancelSignal: cancelSignal ?? Completer<void>().future,
+      );
+      for (final length in [256 * 1024, 2 * 1024 * 1024]) {
+        test('default script preserves a $length-byte buffer view', () async {
+          final backing = Uint8List(length + 16);
+          for (var index = 0; index < backing.length; index++) {
+            backing[index] = (index * 31 + 7) & 255;
+          }
+          final original = Uint8List.fromList(backing);
+          final bytes = Uint8List.sublistView(backing, 8, length + 8);
+          final result = await process(
+            defaultCustomImageProcessing,
+            bytes: bytes,
+          );
+          expect(result, orderedEquals(original.sublist(8, length + 8)));
+          expect(backing, orderedEquals(original));
+          expect(JsEngine().debugOwnedReferenceCount, 0);
+        });
+      }
+      test(
+        'default-script burst keeps each result and releases references',
+        () async {
+          final inputs = [
+            for (var page = 0; page < 8; page++)
+              Uint8List(256 * 1024)..fillRange(0, 256 * 1024, page + 1),
+          ];
+          final results = await Future.wait([
+            for (final bytes in inputs)
+              process(defaultCustomImageProcessing, bytes: bytes),
+          ]);
+          for (var page = 0; page < inputs.length; page++) {
+            expect(results[page], orderedEquals(inputs[page]));
+            expect(inputs[page].every((byte) => byte == page + 1), isTrue);
+          }
+          expect(JsEngine().debugOwnedReferenceCount, 0);
+        },
+      );
+      test(
+        'local provider honors disabled and default processing settings',
+        () async {
+          final bytes = Uint8List.fromList([1, 2, 3, 4]);
+          final file = File('${directory.path}/synthetic.bin').absolute;
+          await file.writeAsBytes(bytes);
+          final provider = ReaderImageProvider(
+            'file://${file.path}',
+            null,
+            'synthetic',
+            'chapter',
+            1,
+          );
+          final chunks = StreamController<ImageChunkEvent>.broadcast();
+          try {
+            appdata.settings[ImageProcessingPreferences.enabled.key] = false;
+            appdata.settings[ImageProcessingPreferences.script.key] =
+                'function processImage() { throw new Error("must not run"); }';
+            expect(await provider.load(chunks, () {}), orderedEquals(bytes));
+            appdata.settings[ImageProcessingPreferences.enabled.key] = true;
+            await expectLater(
+              provider.load(chunks, () {}),
+              throwsA(
+                predicate((error) => error.toString().contains('must not run')),
+              ),
+            );
+            appdata.settings[ImageProcessingPreferences.script.key] =
+                defaultCustomImageProcessing;
+            expect(await provider.load(chunks, () {}), orderedEquals(bytes));
+          } finally {
+            await chunks.close();
+          }
+        },
       );
       for (final expression in [
         'new Uint8Array([3, 4]).buffer',
