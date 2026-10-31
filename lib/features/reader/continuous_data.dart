@@ -19,6 +19,7 @@ class ReaderContinuousData {
     required this.sourceKey,
     required this.comicId,
     this.showImageDimensions = false,
+    this.decodePixelBudget,
   });
 
   final bool vertical;
@@ -38,4 +39,5 @@ class ReaderContinuousData {
   final String? sourceKey;
   final String comicId;
   final bool showImageDimensions;
+  final int? decodePixelBudget;
 }

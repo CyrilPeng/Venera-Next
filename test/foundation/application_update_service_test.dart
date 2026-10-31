@@ -7,6 +7,105 @@ import 'package:venera_next/network/request_scope.dart';
 import '../support/application_update_adapter.dart';
 
 void main() {
+  for (final tv in [false, true]) {
+    test('only TV checks require an uploaded TV package; TV=$tv', () async {
+      final adapter = ApplicationUpdateAdapter()..released.complete();
+      final service = ApplicationUpdateService(
+        forAndroidTv: tv,
+        createClient: () => Dio()..httpClientAdapter = adapter,
+        currentVersion: () => '1.0.0',
+      );
+      final checked = service.check();
+      await adapter.entered.future;
+      adapter.complete({
+        'tag_name': 'v2.0.0',
+        'assets': [
+          {
+            'name': 'VeneraNext-2.0.0-android.apk',
+            'state': 'uploaded',
+            'size': 20,
+          },
+        ],
+      });
+      expect(await checked, tv ? isNull : '2.0.0');
+      await service.closeAndWait();
+      await expectLater(service.check(), throwsStateError);
+    });
+  }
+
+  test(
+    'TV previews skip mobile-only releases and preserve channel ordering',
+    () async {
+      final adapter = ApplicationUpdateAdapter()..released.complete();
+      final service = ApplicationUpdateService(
+        forAndroidTv: true,
+        createClient: () => Dio()..httpClientAdapter = adapter,
+        currentVersion: () => '1.18.2-rc.1',
+      );
+      final checked = service.check();
+      await adapter.entered.future;
+      Map<String, Object> release(String version, {bool draft = false}) => {
+        'tag_name': 'v$version',
+        'draft': draft,
+        'prerelease': true,
+        'assets': [
+          {
+            'name': 'VeneraNext-$version-android-tv.apk',
+            'state': 'uploaded',
+            'size': 20,
+          },
+        ],
+      };
+      adapter.complete([
+        {'tag_name': 'v1.18.2-rc.9', 'prerelease': true},
+        release('1.18.2-rc.8', draft: true),
+        release('1.18.2-rc.7'),
+        release('1.18.2-rc.2'),
+      ]);
+      expect(adapter.paths.single, endsWith('releases?per_page=20'));
+      expect(await checked, '1.18.2-rc.7');
+      await service.closeAndWait();
+    },
+  );
+
+  for (final asset in <Object?>[
+    null,
+    {
+      'name': 'VeneraNext-TV-2.0.0-alpha.19.2-abcdef-universal.apk',
+      'state': 'uploaded',
+      'size': 20,
+    },
+    {
+      'name': 'VeneraNext-2.0.0-android-tv-arm64-v8a.apk',
+      'state': 'uploaded',
+      'size': 20,
+    },
+    {
+      'name': 'VeneraNext-1.0.0-android-tv.apk',
+      'state': 'uploaded',
+      'size': 20,
+    },
+    {'name': 'VeneraNext-2.0.0-android-tv.apk', 'state': 'starter', 'size': 20},
+    {'name': 'VeneraNext-2.0.0-android-tv.apk', 'state': 'uploaded', 'size': 0},
+  ]) {
+    test('TV rejects incompatible or incomplete packages: $asset', () async {
+      final adapter = ApplicationUpdateAdapter()..released.complete();
+      final service = ApplicationUpdateService(
+        forAndroidTv: true,
+        createClient: () => Dio()..httpClientAdapter = adapter,
+        currentVersion: () => '1.0.0',
+      );
+      final checked = service.check();
+      await adapter.entered.future;
+      adapter.complete({
+        'tag_name': 'v2.0.0',
+        'assets': [asset],
+      });
+      expect(await checked, isNull);
+      await service.closeAndWait();
+    });
+  }
+
   test(
     'stable and preview requests preserve channel selection and wait for cleanup',
     () async {

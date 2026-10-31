@@ -2,7 +2,7 @@ name: venera_next
 description: "A comic app."
 publish_to: 'none'
 homepage: https://github.com/CyrilPeng/venera-next
-version: 1.18.2-rc.4+240
+version: 1.18.2-rc.6+242
 
 environment:
   sdk: '>=3.8.0 <4.0.0'
@@ -19,7 +19,7 @@ dependencies:
   flutter_qjs:
     git:
       url: https://github.com/CyrilPeng/flutter_qjs
-      ref: 8feae95df7fb00455df129ad7a0dfec1d0e8d8e4
+      ref: 295f77421eedff356a02e92987181b525970c780
   crypto: ^3.0.7
   dio: ^5.11.1
   html: ^0.15.7

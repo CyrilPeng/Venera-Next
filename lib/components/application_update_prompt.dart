@@ -110,8 +110,11 @@ class ApplicationUpdatePrompt {
         builder: (context) => AlertDialog(
           title: Text('New version available'.tl),
           content: Text(
-            'A new version @v is available. Do you want to update now?'
-                .tlParams({'v': version}),
+            service.forAndroidTv
+                ? 'TV version @v is available. Open the release page and choose an android-tv APK.'
+                      .tlParams({'v': version})
+                : 'A new version @v is available. Do you want to update now?'
+                      .tlParams({'v': version}),
           ),
           actions: [
             TextButton(
@@ -134,7 +137,7 @@ class ApplicationUpdatePrompt {
                 Navigator.of(context).pop();
                 try {
                   await launchUrlString(
-                    'https://github.com/CyrilPeng/venera-next/releases',
+                    'https://github.com/CyrilPeng/venera-next/releases/tag/v${Uri.encodeComponent(version)}',
                   );
                 } catch (error, stack) {
                   Log.error('Open application release', error, stack);

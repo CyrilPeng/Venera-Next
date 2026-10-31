@@ -464,6 +464,7 @@
     "foundation/operation_failure.dart",
     "foundation/platform_dialog_queue.dart",
     "foundation/proxy_configuration.dart",
+    "foundation/reader_diagnostics.dart",
     "foundation/reader_preference_settings.dart",
     "foundation/reader_preference_store.dart",
     "foundation/release_version.dart",
@@ -485,6 +486,8 @@
     "network/shared_request_stream.dart"
   ],
   "ui_files": [
+    "features/reader/tv_input.dart",
+    "components/tv_navigation.dart",
     "app_runtime/android_downloads.dart",
     "app_runtime/app_runtime.dart",
     "app_runtime/init.dart",
@@ -610,6 +613,7 @@
     "features/reader/comic_image.dart",
     "features/reader/continuous_view.dart",
     "features/reader/current_image.dart",
+    "features/reader/diagnostics_dialog.dart",
     "features/reader/eink_refresh.dart",
     "features/reader/exit_guard.dart",
     "features/reader/gallery_view.dart",
@@ -685,7 +689,8 @@
     "routing/page_jump_target.dart",
     "routing/page_replacement.dart",
     "routing/settings.dart",
-    "routing/webview.dart"
+    "routing/webview.dart",
+    "routing/windows_webview_environment.dart"
   ],
   "acyclic_business_files": [
     "foundation/app.dart",
@@ -706,6 +711,7 @@
     "features/local_comics/archive_download_task.dart"
   ],
   "business_files": [
+    "foundation/tv_reader_policy.dart",
     "app_runtime/application_host.dart",
     "app_runtime/application_updates.dart",
     "app_runtime/background_sync.dart",
@@ -957,6 +963,7 @@
     "foundation/app_data_operations.dart",
     "foundation/app_data_sync_fields.dart",
     "foundation/app_locale.dart",
+    "foundation/app_profile.dart",
     "foundation/app_sync_preferences.dart",
     "foundation/appdata.dart",
     "foundation/application_configuration.dart",
@@ -1008,6 +1015,7 @@
     "foundation/platform_dialog_queue.dart",
     "foundation/preferences.dart",
     "foundation/proxy_configuration.dart",
+    "foundation/reader_diagnostics.dart",
     "foundation/reader_preference_settings.dart",
     "foundation/reader_preference_store.dart",
     "foundation/reader_preferences.dart",

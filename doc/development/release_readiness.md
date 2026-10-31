@@ -4,6 +4,90 @@ This checklist tracks release preparation following v1.18.0. A release does
 not mark unresolved reports as fixed. Dated verification records and the
 original device acceptance checklist remain below.
 
+## Sixth patch candidate preparation (2026-10-30)
+
+The next candidate is v1.18.2-rc.6, build 242, after rc.5 did not publish due
+to the Apple runner's missing Rustup wrapper directory. The CI fix creates
+`~/.cargo/bin`, exposes the wrapper through the subsequent steps' PATH and
+preserves the original rustup binary, cargo/rustc proxy links and install lock.
+The source includes regression checks for absent directories and existing
+hard-linked proxies; POSIX cases require cloud execution, not Windows mocks.
+Keep the failed rc.5 tag unchanged and rebuild every platform on the new tag.
+
+This candidate first delivers #107's new-task default policy, non-blocking
+missing-page queue and incomplete local reading/retry, plus #125's bounded
+manual diagnostics. It does not claim a new Android stutter fix, mobile power
+benefit or acceptance of the new download workflow. Earlier RC fixes remain
+included. Stable distribution stays at v1.18.1; no experimental branch or
+stable distribution metadata is changed.
+
+Retest #107 only for the new policy, subsequent queue progression, original
+page positions/placeholders, missing-only retry and paused restart recovery.
+Its background/skip acceptance on earlier releases is already recorded.
+For #125, use the reporter's existing local images and unchanged settings,
+capture separate reading modes, then preview/copy the report before exiting.
+Do not request private attachments, repeat supplied device details, equate
+asynchronous waits with CPU/UI blocking, or interpret frame samples as FPS.
+
+Validate the exact release commit's metadata, local script/diagnostic/changelog
+regressions and cloud quality/security checks before tagging. The tag workflow
+must pass fresh full quality gates and all six platform builds before
+publication. Verify all 15 uploaded installation assets, package versions,
+release notes, prerelease flag and unchanged stable channel before posting
+one version-specific notice to each of #107 and #125. Keep both issues open.
+Back up separately, preserve original comics and use the pre-upgrade backup
+for rollback; do not require data resets, task deletion or full re-downloads.
+
+## Fifth patch candidate preparation (2026-10-30)
+
+The tag build did not publish a release: both Apple builds failed while
+installing the Rustup wrapper because Homebrew-backed runners did not have
+`~/.cargo/bin`. Main and tag quality/dependency checks passed, but that is not
+a successful six-platform release. Keep this tag at its original commit,
+record the CI fix and prepare a later candidate with fresh builds. Do not
+notify reporters to install rc.5 or move the tag to another commit. The
+following paragraphs retain the failed candidate's planned scope.
+
+The next candidate is v1.18.2-rc.5, build 241. It first delivers #107's
+default-off policy for new image tasks, non-blocking waiting-for-missing-pages
+state, and explicit incomplete local reading/retry flow. It also delivers
+#125's opt-in, bounded 45-second reading diagnostics. The diagnostic tool is
+not a new stutter fix; the original Android report remains unresolved. Earlier
+RC changes remain included. Stable distribution stays at v1.18.1; do not update
+AltStore or Winget, merge experimental branches, or close these issues.
+
+- #107: the reporter accepted background downloads on v1.18.1+236 and per-task
+  skipping on v1.18.2-rc.1+237. Retest only the new default policy, queue advance,
+  local missing-page placeholders/original page numbers, explicit missing-only
+  retry and paused restart recovery. Existing checkpoints/pages need not be
+  deleted; manually start an old incomplete task once after upgrading.
+- #125: use the same already-downloaded local pages, then capture first browse
+  and quick revisits in separate reading modes with unchanged settings. Review
+  and explicitly copy the in-memory report before leaving the reader. Do not
+  request private comics, full backups, credentials or private log attachments,
+  or repeat the device/format information already supplied. Asynchronous waits
+  are not CPU/UI blocking measurements, and frame samples are not whole-run FPS.
+- #115/#126 and earlier fixes retain their own outstanding device acceptance.
+  No new SAF recovery or mobile power-use result is claimed. Favorites hierarchy,
+  Android TV, HarmonyOS, a general AVIF decoder and split-CBZ export remain out
+  of scope for this candidate.
+
+The two runtime commits passed full cloud quality and dependency checks at
+729c9cc3784cd0dc69458fedabc2489d77e290e6; its Android release build also passed.
+These results do not replace the exact release metadata commit's checks or
+original-device acceptance. Before tagging, validate synchronized metadata,
+script tests and changelog/diagnostic regressions, then confirm the exact
+commit's quality and dependency runs. The tag workflow must pass metadata,
+full quality gates and fresh six-platform builds before publishing all assets.
+Verify the annotated tag target, notes, prerelease flag, complete uploaded
+asset inventory and unchanged stable channel before posting one version-specific
+notice to #107 and #125. Do not publish empty releases or relabel old artifacts.
+
+Back up application data separately before upgrading and preserve original
+comic files. No data reset, task deletion or complete re-download is required.
+Use the pre-upgrade backup when rolling back; do not promise old versions can
+read data modified by the new incomplete-page flow.
+
 ## Second patch candidate preparation (2026-10-28)
 
 The next candidate is v1.18.2-rc.2, build 238. It retains rc.1 and first

@@ -4,6 +4,11 @@ run-name: 构建 ${{ github.ref_name }}
 on:
   workflow_call:
     inputs:
+      quality_checked:
+        description: '调用方已经通过同一质量检查，仅供复用工作流使用'
+        required: false
+        type: boolean
+        default: false
       build_android:
         required: false
         type: boolean
@@ -36,7 +41,7 @@ on:
   workflow_dispatch:
     inputs:
       build_android:
-        description: '构建 Android'
+        description: '构建 Android 手机版和 TV 版'
         required: true
         type: boolean
         default: true
@@ -74,12 +79,26 @@ permissions:
   contents: read
 
 jobs:
+  Manual_Quality:
+    if: ${{ inputs.build_android && !inputs.quality_checked }}
+    uses: ./.github/workflows/analyze.yml
+
   Build_Android:
-    if: ${{ inputs.build_android }}
+    needs: Manual_Quality
+    if: ${{ !cancelled() && inputs.build_android && (needs.Manual_Quality.result == 'success' || needs.Manual_Quality.result == 'skipped') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [mobile, tv]
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+      - name: 生成并复核 Android 构建身份
+        id: profile
+        env:
+          ANDROID_FLAVOR: ${{ matrix.flavor }}
+        run: python3 .github/scripts/android_tv_build.py metadata --flavor "$ANDROID_FLAVOR" --github-output "$GITHUB_OUTPUT"
       - name: 释放 Android 构建所需磁盘空间
         run: rm -rf /opt/hostedtoolcache
       - uses: subosito/flutter-action@v2
@@ -125,36 +144,58 @@ jobs:
       - name: 检查 rust-toolchain.toml
         run: rustup show
       - run: flutter pub get --enforce-lockfile
-      - run: flutter build apk --release
+      - name: 构建隔离的 Android 安装包
+        env:
+          ANDROID_FLAVOR: ${{ steps.profile.outputs.flavor }}
+          TV_BUILD_LABEL: ${{ steps.profile.outputs.build_label }}
+          TV_REVISION: ${{ github.sha }}
+        run: |
+          if [[ "$ANDROID_FLAVOR" == "tv" ]]; then
+            flutter build apk --release --flavor tv \
+              --dart-define="TV_BUILD=$TV_BUILD_LABEL" \
+              --dart-define="TV_REVISION=$TV_REVISION"
+          else
+            flutter build apk --release --flavor mobile
+          fi
       - name: 验证 Android 分享文件与回调归属
         working-directory: android
         run: ./gradlew :share_plus:testShareOwnership
+      - name: 检查 APK 渠道、电视入口、版本码、签名与 ABI
+        id: apks
+        run: python3 .github/scripts/android_tv_build.py verify --github-output "$GITHUB_OUTPUT"
       - name: 上传 APK (armeabi-v7a)
         uses: actions/upload-artifact@v7
         with:
-          name: apk-armeabi-v7a
-          path: build/app/outputs/apk/release/*armeabi-v7a*.apk
+          name: ${{ matrix.flavor == 'tv' && 'tv-apk-armeabi-v7a' || 'apk-armeabi-v7a' }}
+          path: ${{ steps.apks.outputs.apk_armeabi_v7a }}
           if-no-files-found: error
           retention-days: 7
       - name: 上传 APK (arm64-v8a)
         uses: actions/upload-artifact@v7
         with:
-          name: apk-arm64-v8a
-          path: build/app/outputs/apk/release/*arm64-v8a*.apk
+          name: ${{ matrix.flavor == 'tv' && 'tv-apk-arm64-v8a' || 'apk-arm64-v8a' }}
+          path: ${{ steps.apks.outputs.apk_arm64_v8a }}
           if-no-files-found: error
           retention-days: 7
       - name: 上传 APK (x86_64)
         uses: actions/upload-artifact@v7
         with:
-          name: apk-x86_64
-          path: build/app/outputs/apk/release/*x86_64*.apk
+          name: ${{ matrix.flavor == 'tv' && 'tv-apk-x86_64' || 'apk-x86_64' }}
+          path: ${{ steps.apks.outputs.apk_x86_64 }}
           if-no-files-found: error
           retention-days: 7
       - name: 上传 APK (universal)
         uses: actions/upload-artifact@v7
         with:
-          name: apk-universal
-          path: build/app/outputs/apk/release/*-android.apk
+          name: ${{ matrix.flavor == 'tv' && 'tv-apk-universal' || 'apk-universal' }}
+          path: ${{ steps.apks.outputs.apk_universal }}
+          if-no-files-found: error
+          retention-days: 7
+      - name: 上传 Android 构建来源与校验清单
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-${{ matrix.flavor }}-manifest
+          path: ${{ steps.apks.outputs.manifest }}
           if-no-files-found: error
           retention-days: 7
 
@@ -267,11 +308,13 @@ jobs:
       - name: 串行化 Rustup 安装操作
         run: |
           install "$(command -v rustup)" "$RUNNER_TEMP/rustup"
+          mkdir -p "$HOME/.cargo/bin"
           rm -f "$HOME/.cargo/bin/rustup"
           install .github/scripts/serialized_rustup.py "$HOME/.cargo/bin/rustup"
           chmod +x "$HOME/.cargo/bin/rustup"
           echo "RUSTUP_REAL_BINARY=$RUNNER_TEMP/rustup" >> "$GITHUB_ENV"
           echo "RUSTUP_LOCK_FILE=$RUNNER_TEMP/venera-rustup.lock" >> "$GITHUB_ENV"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - run: flutter pub get --enforce-lockfile
       - name: 检查 rust-toolchain.toml
         run: rustup show
@@ -319,11 +362,13 @@ jobs:
       - name: 串行化 Rustup 安装操作
         run: |
           install "$(command -v rustup)" "$RUNNER_TEMP/rustup"
+          mkdir -p "$HOME/.cargo/bin"
           rm -f "$HOME/.cargo/bin/rustup"
           install .github/scripts/serialized_rustup.py "$HOME/.cargo/bin/rustup"
           chmod +x "$HOME/.cargo/bin/rustup"
           echo "RUSTUP_REAL_BINARY=$RUNNER_TEMP/rustup" >> "$GITHUB_ENV"
           echo "RUSTUP_LOCK_FILE=$RUNNER_TEMP/venera-rustup.lock" >> "$GITHUB_ENV"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - run: flutter pub get --enforce-lockfile
       - name: 构建 iOS 应用
         run: |
