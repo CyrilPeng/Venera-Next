@@ -14,6 +14,8 @@ import 'package:venera_next/features/settings/reader_mode.dart';
 import 'package:venera_next/features/settings/reader_brightness.dart';
 import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_profile.dart';
+import 'package:venera_next/foundation/tv_reader_policy.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
@@ -119,17 +121,26 @@ class _ReaderSettingsState extends SettingsSaveState<ReaderSettings> {
     );
   }
 
-  Widget _modeSettings() => ReaderModeSettings(
-    comicId: widget.comicId,
-    sourceKey: widget.comicSource,
-    currentMode: widget.currentReaderMode,
-    isDetecting: widget.isDetectingLayout,
-    onDetect: widget.onDetectLayout,
-    onChanged: () {
-      widget.onChanged?.call('readerMode');
-      _refresh();
-    },
-  ).toSliver();
+  Widget _modeSettings() => appdata.settings.tvLowMemoryEnabled
+      ? ListTile(
+          leading: const Icon(Icons.tv),
+          title: Text('TV low-memory mode'.tl),
+          subtitle: Text(
+            'Single-page reading is active. Turn off TV low-memory mode to use other reading modes.'
+                .tl,
+          ),
+        ).toSliver()
+      : ReaderModeSettings(
+          comicId: widget.comicId,
+          sourceKey: widget.comicSource,
+          currentMode: widget.currentReaderMode,
+          isDetecting: widget.isDetectingLayout,
+          onDetect: widget.onDetectLayout,
+          onChanged: () {
+            widget.onChanged?.call('readerMode');
+            _refresh();
+          },
+        ).toSliver();
 
   @override
   Widget build(BuildContext context) {
@@ -149,6 +160,15 @@ class _ReaderSettingsState extends SettingsSaveState<ReaderSettings> {
         slivers: [
           SliverAppbar(title: Text("Reading".tl)),
           settingsSaveStatus.toSliver(),
+          if (AppProfile.current.isTv)
+            SwitchSetting.preference(
+              title: 'TV low-memory mode'.tl,
+              subtitle:
+                  'Device-only: single page, one-page preloading, 64 MiB image cache and limited image decoding. Long strips and zoom may lose detail. Original files are not changed.'
+                      .tl,
+              preference: TvReaderPolicy.lowMemory,
+              onChanged: () => widget.onChanged?.call('readerMode'),
+            ).toSliver(),
           if (comicId != null) _modeSettings(),
           if (comicId != null && sourceKey != null)
             SliverMainAxisGroup(

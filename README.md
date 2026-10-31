@@ -25,7 +25,7 @@
 
 ## 项目介绍
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) 是基于 [Venera](https://github.com/venera-app/venera) 持续开发的 Flutter 漫画阅读器，支持 **Android、iOS、Windows、Linux 和 macOS**。
+[VeneraNext](https://github.com/CyrilPeng/venera-next) 是基于 [Venera](https://github.com/venera-app/venera) 持续开发的 Flutter 漫画阅读器，支持 **Android、Android TV、iOS、Windows、Linux 和 macOS**。
 
 本分支围绕“少一点打断，多一点阅读”打磨日常体验：瀑布流跨章连读不用退出，长按收藏省去选择收藏夹的步骤，夜间和墨水屏设备各有阅读设置。本地导入、离线下载、阅读统计与多设备同步，让找书、看漫画和追连载更方便。
 
@@ -63,7 +63,8 @@
 
 ### 阅读体验
 
-- **瀑布流跨章阅读（默认模式）**：看完整章不用退出再选下一章——接近章末自动接上下一章，往上滚也能回到已加载的上一章，进度记录在你实际看到的位置。
+- **瀑布流跨章阅读（非 TV 默认模式）**：看完整章不用退出再选下一章——接近章末自动接上下一章，往上滚也能回到已加载的上一章，进度记录在你实际看到的位置。
+- **Android TV 与盒子**：独立电视安装包、横屏启动入口、遥控器方向键导航与可见焦点；默认启用单页低内存阅读，可与手机版共存。
 - **纵向拆分双页**：横向双页图在手机上会被压得很小？在纵向连续/瀑布流模式里开启“拆分双页”，把左右两半上下排列着看，顺序不合适还可以交换。
 - **夜间调光**：在阅读器内把画面调暗，方便夜间阅读，不改动系统亮度。
 - **电子墨水屏刷新**：画廊模式按翻页间隔闪屏，帮助减少残影，间隔和样式可调。
@@ -89,7 +90,7 @@
 
 ## 下载安装
 
-### Android
+### Android 手机与平板
 
 从 [最新稳定版](https://github.com/CyrilPeng/venera-next/releases/latest) 下载 APK 安装包：
 
@@ -98,8 +99,26 @@
 | `VeneraNext-xxx-android.apk` | 通用版 | 适用于大多数 Android 设备 |
 | `VeneraNext-xxx-android-arm64-v8a.apk` | ARM64 版 | 支持 ARM64 应用的 Android 设备 |
 | `VeneraNext-xxx-android-armeabi-v7a.apk` | ARM32 版 | 较老的 32 位设备 |
+| `VeneraNext-xxx-android-x86_64.apk` | x86_64 版 | x86_64 设备或模拟器 |
 
 **推荐**：如果不确定应该下载哪个，选择通用版 `VeneraNext-xxx-android.apk`。
+
+### Android TV
+
+TV 版已完成小范围测试并纳入主线，后续构建和版本发布会同时提供手机与 TV 安装包。在 [Releases](https://github.com/CyrilPeng/venera-next/releases) 中选择含 TV 资产的版本：
+
+| 文件名 | 说明 |
+|---|---|
+| `VeneraNext-xxx-android-tv.apk` | TV 通用版，不确定设备架构时优先选用 |
+| `VeneraNext-xxx-android-tv-arm64-v8a.apk` | TV ARM64 版，要求系统支持 ARM64 应用 |
+| `VeneraNext-xxx-android-tv-armeabi-v7a.apk` | TV ARM32 版，适合 32 位系统的电视或盒子 |
+| `VeneraNext-xxx-android-tv-x86_64.apk` | TV x86_64 版，适合对应设备或模拟器 |
+
+将 APK 传到电视后侧载，启动器名称为 **VeneraNext TV**。TV 版使用独立 `.tv` 包名和数据目录，不会覆盖手机版；已有官方 TV Alpha 测试版可使用新 TV 包覆盖升级，升级前先另存数据备份，无需卸载或清空数据。
+
+> TV 包从本次主线集成后的新构建开始提供；已发布的 `v1.18.1`、`v1.18.2-rc.6` 不包含 TV 包，不会回填旧 Release。应用更新提示会打开相应发布页，请选择文件名含 `android-tv` 的 APK，而不是手机版包。
+
+遥控器操作与默认阅读策略见[TV 遥控器与低内存阅读](#tv-遥控器与低内存阅读)，构建、升级规则和兼容边界见 [Android TV 分发说明](doc/distribution/android_tv.zh.md)。
 
 ### iOS
 
@@ -141,9 +160,9 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 
 ## 快速上手
 
-1. **安装**：从[最新稳定版](https://github.com/CyrilPeng/venera-next/releases/latest)安装当前平台的版本。
+1. **安装**：从[最新稳定版](https://github.com/CyrilPeng/venera-next/releases/latest)安装当前平台的版本；电视按 [Android TV](#android-tv) 说明选择独立 TV 包。
 2. **添加内容**（三选一即可开始）：已有漫画文件 → “本地 → 导入”；网络连载 → 在漫画源管理页安装扩展；NAS 目录 → “设置 → 应用 → WebDAV 漫画库”。
-3. **开始阅读**：默认的瀑布流模式可以直接跨章连读；遇到想追的连载，试试在详情页长按“收藏”按钮。阅读模式、拆分双页、夜间调光等可在“设置 → 阅读器”或阅读器内随时调整。
+3. **开始阅读**：手机与桌面默认的瀑布流模式可以直接跨章连读，TV 默认采用单页低内存阅读；遇到想追的连载，试试在详情页长按“收藏”按钮。阅读模式、拆分双页、夜间调光等可在“设置 → 阅读器”或阅读器内随时调整。
 
 ## 使用说明
 
@@ -151,7 +170,7 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 
 | 模式 | 方向 | 适合 |
 |---|---|---|
-| 瀑布流（默认） | 从上到下 | 跨章节连续阅读，接近章末自动加载相邻章节 |
+| 瀑布流（非 TV 默认） | 从上到下 | 跨章节连续阅读，接近章末自动加载相邻章节 |
 | 画廊 | 左→右 / 右→左 / 上→下 | 逐页翻看，可按阅读习惯设置多图布局 |
 | 连续 | 左→右 / 右→左 / 上→下 | 当前章节内滚动，保留章节切换边界 |
 
@@ -162,6 +181,13 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 | 单页阅读模式 | 拆分双页模式 |
 |---|---|
 | <a href="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Single%20Page%20View.jpg"><img src="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Single%20Page%20View.jpg" alt="未拆分的单页阅读画面" width="100%" /></a> | <a href="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Double%20Page%20View.jpg"><img src="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Double%20Page%20View.jpg" alt="开启拆分双页后的阅读画面" width="100%" /></a> |
+
+### TV 遥控器与低内存阅读
+
+- **主界面**：方向键移动焦点，确定键／手柄 A 激活；返回键／手柄 B 返回。支持菜单键的遥控器可打开部分控件的上下文菜单。
+- **阅读画面**：方向键翻页或滚动，确定键打开阅读菜单；菜单打开后方向键只选择菜单控件，不会在背景翻页。返回先收起菜单，再保存进度并退出阅读器。
+- **默认低内存模式**：单页阅读、预加载 1 页、64 MiB 解码图片缓存和约 207 万像素解码预算。可在“设置 → 阅读器 → TV 低内存模式”关闭，恢复原有阅读配置并使用瀑布流等模式；这个开关仅保存在当前设备，不参与备份或同步。
+- **兼容边界**：低内存模式不修改原文件，但长条图和放大细节可能变糊；缓存上限不是应用总内存上限。网页登录、验证码、文件选择器等仍可能需要输入法或配套输入设备，小范围测试不代表所有电视和盒子均已验证。
 
 ### 夜间与墨水屏阅读
 

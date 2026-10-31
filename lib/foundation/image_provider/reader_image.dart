@@ -4,6 +4,7 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'dart:async' show Future;
+import 'dart:ui' show TargetImageSize;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/file_system.dart';
@@ -13,6 +14,7 @@ import 'package:venera_next/network/image_stream.dart';
 import 'base_image_provider.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/reader_diagnostics.dart';
+import 'package:venera_next/foundation/tv_reader_policy.dart';
 
 class ReaderImageProvider extends BaseImageProvider<ReaderImageProvider> {
   /// Image provider for normal image.
@@ -24,7 +26,8 @@ class ReaderImageProvider extends BaseImageProvider<ReaderImageProvider> {
     this.page, {
     this.enableResize = false,
     this.diagnostics,
-  });
+    this.decodePixelBudget,
+  }) : assert(decodePixelBudget == null || decodePixelBudget > 0);
 
   final String imageKey;
 
@@ -38,6 +41,15 @@ class ReaderImageProvider extends BaseImageProvider<ReaderImageProvider> {
 
   @override
   final bool enableResize;
+  final int? decodePixelBudget;
+
+  @override
+  TargetImageSize targetSizeForImage(int width, int height) {
+    final budget = decodePixelBudget;
+    if (budget == null) return super.targetSizeForImage(width, height);
+    final size = TvReaderPolicy.decodeSize(width, height, pixelBudget: budget);
+    return TargetImageSize(width: size.width, height: size.height);
+  }
 
   @override
   final ReaderDiagnostics? diagnostics;
@@ -142,5 +154,6 @@ class ReaderImageProvider extends BaseImageProvider<ReaderImageProvider> {
   }
 
   @override
-  String get key => "$imageKey@$sourceKey@$cid@$eid@$enableResize";
+  String get key =>
+      "$imageKey@$sourceKey@$cid@$eid@$enableResize${decodePixelBudget == null ? '' : '@tv:$decodePixelBudget'}";
 }
