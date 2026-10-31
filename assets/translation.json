@@ -1,5 +1,10 @@
 {
   "zh_CN": {
+    "Invalid Windows webview proxy. Use host:port or a supported proxy URL without paths or options.": "Windows 内置网页的代理地址无效。请使用主机:端口，或 http、https、socks4、socks5 代理地址，不要附加路径或其他参数。",
+    "Authenticated manual proxies are not supported by the Windows webview. Use an unauthenticated local proxy or the system proxy.": "Windows 内置网页暂不支持含用户名和密码的手动代理。请使用无需认证的本地代理，或配置并选择系统代理。",
+    "Close other in-app web pages before changing the proxy, then retry. If the browser is still busy, restart the app. Login data will be kept.": "请关闭其他内置网页后重试，让新的代理配置生效；若浏览器仍被占用，请重启应用。登录数据会保留。",
+    "Unable to initialize the webview. Check that WebView2 Runtime is installed and that the proxy settings are valid, then retry.": "无法初始化内置网页。请确认已安装 WebView2 Runtime、代理设置有效，然后重试。",
+    "This webview is closed.": "此内置网页已关闭。",
     "Not started": "未执行",
     "In progress": "进行中",
     "Failed": "失败",
@@ -957,6 +962,11 @@
     "Unable to copy report.": "无法复制报告，请重试。"
   },
   "zh_TW": {
+    "Invalid Windows webview proxy. Use host:port or a supported proxy URL without paths or options.": "Windows 內建網頁的代理位址無效。請使用主機:連接埠，或 http、https、socks4、socks5 代理位址，不要附加路徑或其他參數。",
+    "Authenticated manual proxies are not supported by the Windows webview. Use an unauthenticated local proxy or the system proxy.": "Windows 內建網頁暫不支援含使用者名稱和密碼的手動代理。請使用無需驗證的本機代理，或設定並選擇系統代理。",
+    "Close other in-app web pages before changing the proxy, then retry. If the browser is still busy, restart the app. Login data will be kept.": "請關閉其他內建網頁後重試，讓新的代理設定生效；若瀏覽器仍被占用，請重新啟動應用程式。登入資料會保留。",
+    "Unable to initialize the webview. Check that WebView2 Runtime is installed and that the proxy settings are valid, then retry.": "無法初始化內建網頁。請確認已安裝 WebView2 Runtime、代理設定有效，然後重試。",
+    "This webview is closed.": "此內建網頁已關閉。",
     "Not started": "未執行",
     "In progress": "進行中",
     "Failed": "失敗",

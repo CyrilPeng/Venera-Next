@@ -18,10 +18,14 @@ import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/network/proxy.dart';
 import 'package:venera_next/foundation/extensions.dart';
 import 'package:venera_next/foundation/translations.dart';
+import 'package:venera_next/routing/windows_webview_environment.dart';
 import 'dart:io' as io;
 
 export 'package:flutter_inappwebview/flutter_inappwebview.dart'
     show WebUri, URLRequest;
+
+final _windowsEnvironments = WindowsWebviewEnvironmentPool();
+final _controllerEnvironments = Expando<WindowsWebviewEnvironmentLease>();
 
 extension WebviewExtension on InAppWebViewController {
   Future<List<io.Cookie>?> getCookies(String url) async {
@@ -31,13 +35,15 @@ extension WebviewExtension on InAppWebViewController {
     if (url[url.length - 1] == '/') {
       url = url.substring(0, url.length - 1);
     }
-    CookieManager cookieManager = CookieManager.instance(
-      webViewEnvironment: AppWebview.webViewEnvironment,
-    );
-    final cookies = await cookieManager.getCookies(
-      url: WebUri(url),
-      webViewController: this,
-    );
+    Future<List<Cookie>> read(WebViewEnvironment? environment) =>
+        CookieManager.instance(
+          webViewEnvironment: environment,
+        ).getCookies(url: WebUri(url), webViewController: this);
+    final lease = _controllerEnvironments[platform];
+    if (App.isWindows && lease == null) {
+      throw const WebviewEnvironmentException('This webview is closed.');
+    }
+    final cookies = await (lease == null ? read(null) : lease.use(read));
     var res = <io.Cookie>[];
     for (var cookie in cookies) {
       var c = io.Cookie(cookie.name, cookie.value);
@@ -83,8 +89,6 @@ class AppWebview extends StatefulWidget {
 
   final bool singlePage;
 
-  static WebViewEnvironment? webViewEnvironment;
-
   @override
   State<AppWebview> createState() => _AppWebviewState();
 }
@@ -94,6 +98,8 @@ class _AppWebviewState extends State<AppWebview> with ContextMenuOwner {
   Object? get contextMenuIdentity => controller;
   InAppWebViewController? controller;
   int _menuActionGeneration = 0;
+  WindowsWebviewEnvironmentLease? _environment;
+  bool _retryAllowed = false;
 
   @override
   void deactivate() {
@@ -105,13 +111,37 @@ class _AppWebviewState extends State<AppWebview> with ContextMenuOwner {
 
   double _progress = 0;
 
-  late var future = _createWebviewEnvironment();
+  late var future = _startInitialization();
 
-  Future<bool> _createWebviewEnvironment() async {
+  Future<void> _startInitialization() {
+    _retryAllowed = false;
+    final operation = _createWebviewEnvironment();
+    // A retry can fail before the next frame subscribes its FutureBuilder.
+    unawaited(
+      operation.catchError((Object _, StackTrace _) {
+        _retryAllowed = mounted;
+      }),
+    );
+    return operation;
+  }
+
+  Future<void> _createWebviewEnvironment() async {
     var proxy = GlobalPreferenceStore(
       appdata.settings,
     ).read(NetworkPreferences.proxy);
-    if (proxy != "system" && proxy != "direct") {
+    if (App.isWindows) {
+      final environment = await _windowsEnvironments.acquire(
+        userDataFolder: "${App.dataPath}\\webview",
+        proxy: proxy,
+      );
+      if (!mounted) {
+        environment.release();
+        return;
+      }
+      _environment = environment;
+      return;
+    }
+    if (App.isAndroid && proxy != "system" && proxy != "direct") {
       var proxyAvailable = await WebViewFeature.isFeatureSupported(
         WebViewFeature.PROXY_OVERRIDE,
       );
@@ -126,15 +156,12 @@ class _AppWebviewState extends State<AppWebview> with ContextMenuOwner {
         );
       }
     }
-    if (!App.isWindows) {
-      return true;
-    }
-    AppWebview.webViewEnvironment = await WebViewEnvironment.create(
-      settings: WebViewEnvironmentSettings(
-        userDataFolder: "${App.dataPath}\\webview",
-      ),
-    );
-    return true;
+  }
+
+  @override
+  void dispose() {
+    _environment?.release();
+    super.dispose();
   }
 
   @override
@@ -189,27 +216,52 @@ class _AppWebviewState extends State<AppWebview> with ContextMenuOwner {
       ),
     ];
 
-    Widget body = FutureBuilder(
+    final body = FutureBuilder<void>(
       future: future,
       builder: (context, e) {
-        if (e.error != null) {
-          return Center(child: Text('${"Error".tl}: ${e.error}'));
+        if (e.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
         }
-        if (!e.hasData) {
-          return const SizedBox();
+        if (e.hasError) {
+          final error = e.error;
+          final message = error is WebviewEnvironmentException
+              ? error.message.tl
+              : App.isWindows
+              ? 'Unable to initialize the webview. Check that WebView2 Runtime is installed and that the proxy settings are valid, then retry.'
+                    .tl
+              : '$error';
+          return Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('${"Error".tl}: $message', textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () {
+                      if (!_retryAllowed) return;
+                      setState(() {
+                        future = _startInitialization();
+                      });
+                    },
+                    child: Text('Retry'.tl),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
-        return createWebviewWithEnvironment(AppWebview.webViewEnvironment);
+        return Stack(
+          children: [
+            Positioned.fill(child: createWebviewWithEnvironment(_environment)),
+            if (_progress < 1.0)
+              const Positioned.fill(
+                child: Center(child: CircularProgressIndicator()),
+              ),
+          ],
+        );
       },
-    );
-
-    body = Stack(
-      children: [
-        Positioned.fill(child: body),
-        if (_progress < 1.0)
-          const Positioned.fill(
-            child: Center(child: CircularProgressIndicator()),
-          ),
-      ],
     );
 
     return Scaffold(
@@ -225,20 +277,23 @@ class _AppWebviewState extends State<AppWebview> with ContextMenuOwner {
     );
   }
 
-  Widget createWebviewWithEnvironment(WebViewEnvironment? e) {
+  Widget createWebviewWithEnvironment(WindowsWebviewEnvironmentLease? lease) {
+    lease?.viewRequested();
+    bool owns(InAppWebViewController c) =>
+        mounted &&
+        identical(_environment, lease) &&
+        identical(controller?.platform, c.platform);
     return InAppWebView(
-      webViewEnvironment: e,
+      webViewEnvironment: lease?.environment,
       initialSettings: InAppWebViewSettings(isInspectable: true),
       initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
       onTitleChanged: (c, t) {
-        if (mounted) {
-          setState(() {
-            title = t ?? "Webview";
-          });
-        }
-        widget.onTitleChange?.call(title, controller!);
+        if (!owns(c)) return;
+        setState(() => title = t ?? "Webview");
+        widget.onTitleChange?.call(title, c);
       },
       shouldOverrideUrlLoading: (c, r) async {
+        if (!owns(c)) return NavigationActionPolicy.CANCEL;
         var res =
             widget.onNavigation?.call(r.request.url?.toString() ?? "", c) ??
             false;
@@ -249,16 +304,18 @@ class _AppWebviewState extends State<AppWebview> with ContextMenuOwner {
         }
       },
       onWebViewCreated: (c) {
-        if (!mounted) return;
+        if (!mounted || !identical(_environment, lease)) return;
         controller = c;
+        if (lease != null) _controllerEnvironments[c.platform] = lease;
         contextMenus.revalidate();
         widget.onStarted?.call(c);
       },
       onLoadStop: (c, r) {
+        if (!owns(c)) return;
         widget.onLoadStop?.call(c);
       },
       onProgressChanged: (c, p) {
-        if (mounted) {
+        if (owns(c)) {
           setState(() {
             _progress = p / 100;
           });
