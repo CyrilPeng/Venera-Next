@@ -689,7 +689,8 @@
     "routing/page_jump_target.dart",
     "routing/page_replacement.dart",
     "routing/settings.dart",
-    "routing/webview.dart"
+    "routing/webview.dart",
+    "routing/windows_webview_environment.dart"
   ],
   "acyclic_business_files": [
     "foundation/app.dart",

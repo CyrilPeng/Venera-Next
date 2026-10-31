@@ -110,6 +110,17 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - name: 构建 Windows Debug 应用
         run: flutter build windows --debug
+      - name: 验证 Windows 网页代理与登录生命周期
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $env:PATH = (Join-Path $PWD 'build/windows/x64/runner/Debug') + ';' + $env:PATH
+          flutter test --no-pub --reporter expanded `
+            test/routing/windows_webview_environment_test.dart `
+            test/routing/windows_webview_proxy_test.dart `
+            test/routing/webview_menu_test.dart `
+            test/features/comic_source/source_web_login_test.dart
       - name: 编译并运行 Windows 原生启动测试
         shell: pwsh
         run: |

@@ -137,6 +137,8 @@ class _Environment extends PlatformWebViewEnvironment {
   }) async => this;
   @override
   String get id => 'test-environment';
+  @override
+  Future<void> dispose() async {}
 }
 
 class _View extends PlatformInAppWebViewWidget {
@@ -147,7 +149,9 @@ class _View extends PlatformInAppWebViewWidget {
   T controllerFromPlatform<T>(PlatformInAppWebViewController controller) =>
       params.controllerFromPlatform!(controller) as T;
   @override
-  void dispose() {}
+  void dispose() {
+    params.webViewEnvironment?.onBrowserProcessExited?.call(_BrowserExit());
+  }
 }
 
 class _Controller extends PlatformInAppWebViewController {
@@ -163,3 +167,5 @@ class _Controller extends PlatformInAppWebViewController {
     return url;
   }
 }
+
+class _BrowserExit extends Fake implements BrowserProcessExitedDetail {}
