@@ -9,6 +9,7 @@ import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/features/settings/sponsors.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_profile.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -87,7 +88,11 @@ class _AboutSettingsState extends State<AboutSettings> {
         Column(
           children: [
             const SizedBox(height: 8),
-            Text("V${App.version}", style: const TextStyle(fontSize: 16)),
+            Text(
+              'V${AppProfile.current.displayVersion(App.version)}',
+              style: const TextStyle(fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
             Text(
               "VeneraNext is a free and open-source app for comic reading.".tl,
             ),
@@ -120,6 +125,15 @@ class _AboutSettingsState extends State<AboutSettings> {
           title: "Check for updates on startup".tl,
           preference: AppPreferences.checkUpdateOnStart,
         ).toSliver(),
+        if (AppProfile.current.isTv)
+          ListTile(
+            leading: const Icon(Icons.tv),
+            title: const Text('Android TV'),
+            subtitle: Text(
+              'TV updates are published alongside mobile releases. Choose an android-tv APK; mobile and TV apps keep separate data.'
+                  .tl,
+            ),
+          ).toSliver(),
         ListTile(
           title: const Text("Github"),
           trailing: const Icon(Icons.open_in_new),

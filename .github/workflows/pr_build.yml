@@ -38,9 +38,13 @@ jobs:
           fi
 
   android:
-    name: Android 冒烟构建
+    name: ${{ matrix.flavor == 'tv' && 'Android TV 冒烟构建' || 'Android 冒烟构建' }}
     needs: changes
     if: ${{ needs.changes.outputs.platform == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [mobile, tv]
     runs-on: ubuntu-22.04
     timeout-minutes: 35
     steps:
@@ -85,7 +89,9 @@ jobs:
             > android/key.properties
       - run: flutter pub get --enforce-lockfile
       - name: 构建 Android Debug APK
-        run: flutter build apk --debug --target-platform android-arm64
+        env:
+          ANDROID_FLAVOR: ${{ matrix.flavor }}
+        run: flutter build apk --debug --flavor "$ANDROID_FLAVOR" --target-platform android-arm64
 
   windows:
     name: Windows 冒烟构建
@@ -143,4 +149,4 @@ jobs:
             echo "平台冒烟构建未通过：changes=$CHANGES_RESULT android=$ANDROID_RESULT windows=$WINDOWS_RESULT"
             exit 1
           fi
-          echo "平台冒烟构建通过：Android=$ANDROID_RESULT Windows=$WINDOWS_RESULT"
+          echo "平台冒烟构建通过：Android 手机版与 TV 版=$ANDROID_RESULT Windows=$WINDOWS_RESULT"
