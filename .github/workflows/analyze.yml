@@ -16,7 +16,7 @@ permissions:
 jobs:
   apple-directory-access:
     name: Apple 目录授权与跨会话恢复
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
