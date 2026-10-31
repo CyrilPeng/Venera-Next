@@ -16,7 +16,7 @@ permissions:
 jobs:
   apple-directory-access:
     name: Apple 目录授权与跨会话恢复
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -138,6 +138,9 @@ jobs:
             test/app_runtime/tv_build_profile_test.dart \
             test/components/tv_navigation_test.dart \
             test/components/application_update_prompt_test.dart \
+            test/features/favorites/favorite_folder_browser_test.dart \
+            test/features/favorites/favorite_hierarchy_tv_test.dart \
+            test/features/favorites/favorite_hierarchy_management_test.dart \
             test/features/reader/tv_input_test.dart \
             test/foundation/tv_reader_policy_test.dart \
             test/foundation/application_update_service_test.dart

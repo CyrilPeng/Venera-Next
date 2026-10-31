@@ -170,7 +170,11 @@ void main() {
         late Map<String, Object?> internalBefore;
         try {
           seedAnalyzedLegacyFavorites(incoming);
-          internalBefore = sqliteInternalTableSnapshot(incoming);
+          // Other SQLite internals must survive hierarchy metadata replacement.
+          internalBefore = sqliteInternalTableSnapshot(
+            incoming,
+            excludeStatisticsFor: {'folder_order'},
+          );
         } finally {
           incoming.dispose();
         }
@@ -242,7 +246,7 @@ void main() {
 
   for (final corrupt in [false, true]) {
     test(
-      'favorite database import replaces or rolls back with readers; corrupt=$corrupt',
+      'favorite database import replaces or rejects before mutation with readers; corrupt=$corrupt',
       () async {
         final root = Directory.systemTemp.createTempSync('favorites-import-');
         final previousTracking = appdata.settings['followUpdatesFolder'];
@@ -287,22 +291,16 @@ void main() {
               ),
           ];
           if (corrupt) {
+            final generation = manager.connectionGeneration;
+            final bytes = File(manager.databasePath).readAsBytesSync();
+            final settings = jsonEncode(appdata.toJson());
             await expectLater(
               importAppData(File(archivePath)),
-              throwsA(
-                isA<DataSyncImportFailure>()
-                    .having(
-                      (error) => error.commitState,
-                      'rollback outcome',
-                      DataSyncCommitState.notApplied,
-                    )
-                    .having(
-                      (error) => error.cause,
-                      'original SQL error',
-                      isA<SqliteException>(),
-                    ),
-              ),
+              throwsA(isA<SqliteException>()),
             );
+            expect(manager.connectionGeneration, generation);
+            expect(File(manager.databasePath).readAsBytesSync(), bytes);
+            expect(jsonEncode(appdata.toJson()), settings);
             expect(manager.getFolderComics('original').single.id, 'old');
           } else {
             await importAppData(File(archivePath));

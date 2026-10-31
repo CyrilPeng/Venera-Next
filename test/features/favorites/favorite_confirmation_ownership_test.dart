@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorite_folder.dart';
 import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/features/history/history_scope.dart';
 import 'dart:async';
@@ -54,6 +55,8 @@ class _History extends Fake implements HistoryManager {
 }
 
 class _Manager extends Fake implements LocalFavoritesManager {
+  @override
+  FavoriteFolderTree get folderTree => FavoriteFolderTree.flat(folderNames);
   @override
   int connectionGeneration = 1;
   final contents = {

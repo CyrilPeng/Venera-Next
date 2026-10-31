@@ -920,9 +920,14 @@ class CacheAliasSource extends ComicSource {
         final incoming = Directory('${directory.path}/incoming')..createSync();
         _writeMarker('${incoming.path}/history.db', 'new-history');
         _writeMarker('${incoming.path}/cookie.db', 'new-cookie');
-        File(
-          '${incoming.path}/local_favorite.db',
-        ).writeAsBytesSync(List.filled(4096, 42));
+        final malformed = sqlite3.open('${incoming.path}/local_favorite.db');
+        try {
+          // Hierarchy validation passes; comic schema reopening must still
+          // exercise rollback and retain failed restore resources.
+          malformed.execute('CREATE TABLE broken (id TEXT);');
+        } finally {
+          malformed.dispose();
+        }
         final source = archive(8);
         final zip = ZipFile.open(source.path);
         for (final name in ['history.db', 'local_favorite.db', 'cookie.db']) {

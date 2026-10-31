@@ -187,6 +187,7 @@ class SelectSetting extends StatelessWidget {
     this.comicId,
     this.comicSource,
     this.useDeviceSettings = false,
+    this.selectorBuilder,
   });
 
   factory SelectSetting.preference({
@@ -196,6 +197,8 @@ class SelectSetting extends StatelessWidget {
     VoidCallback? onChanged,
     required Map<String, String> optionTranslation,
     String? help,
+    Widget Function(BuildContext, String?, ValueChanged<String?>?)?
+    selectorBuilder,
   }) => SelectSetting(
     key: key,
     title: title,
@@ -204,6 +207,7 @@ class SelectSetting extends StatelessWidget {
     onChanged: onChanged,
     optionTranslation: optionTranslation,
     help: help,
+    selectorBuilder: selectorBuilder,
   );
 
   factory SelectSetting.reader({
@@ -216,6 +220,8 @@ class SelectSetting extends StatelessWidget {
     bool useDeviceSettings = false,
     required Map<String, String> optionTranslation,
     String? help,
+    Widget Function(BuildContext, String?, ValueChanged<String?>?)?
+    selectorBuilder,
   }) => SelectSetting(
     key: key,
     title: title,
@@ -227,6 +233,7 @@ class SelectSetting extends StatelessWidget {
     useDeviceSettings: useDeviceSettings,
     optionTranslation: optionTranslation,
     help: help,
+    selectorBuilder: selectorBuilder,
   );
 
   final Preference<String?>? preference;
@@ -247,6 +254,9 @@ class SelectSetting extends StatelessWidget {
 
   final bool useDeviceSettings;
 
+  final Widget Function(BuildContext, String?, ValueChanged<String?>?)?
+  selectorBuilder;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -261,6 +271,7 @@ class SelectSetting extends StatelessWidget {
               optionTranslation: optionTranslation,
               onChanged: onChanged,
               help: help,
+              selectorBuilder: selectorBuilder,
               comicId: comicId,
               comicSource: comicSource,
               useDeviceSettings: useDeviceSettings,
@@ -273,6 +284,7 @@ class SelectSetting extends StatelessWidget {
               optionTranslation: optionTranslation,
               onChanged: onChanged,
               help: help,
+              selectorBuilder: selectorBuilder,
               comicId: comicId,
               comicSource: comicSource,
               useDeviceSettings: useDeviceSettings,
@@ -295,6 +307,7 @@ class _DoubleLineSelectSettings extends StatefulWidget {
     this.comicId,
     this.comicSource,
     this.useDeviceSettings = false,
+    this.selectorBuilder,
   });
 
   final Preference<String?>? preference;
@@ -314,6 +327,9 @@ class _DoubleLineSelectSettings extends StatefulWidget {
   final String? comicSource;
 
   final bool useDeviceSettings;
+
+  final Widget Function(BuildContext, String?, ValueChanged<String?>?)?
+  selectorBuilder;
 
   @override
   State<_DoubleLineSelectSettings> createState() =>
@@ -335,6 +351,7 @@ class _DoubleLineSelectSettingsState
 
   @override
   Widget build(BuildContext context) {
+    final target = field;
     final value = currentValue;
     return withSaveStatus(
       ListTile(
@@ -368,9 +385,28 @@ class _DoubleLineSelectSettingsState
               ),
           ],
         ),
-        subtitle: Text(widget.optionTranslation[value] ?? "None"),
-        trailing: saving ? _savingIndicator : const Icon(Icons.arrow_drop_down),
-        onTap: saving
+        subtitle:
+            widget.selectorBuilder?.call(
+              context,
+              value,
+              saving
+                  ? null
+                  : (selected) {
+                      if (mounted &&
+                          target.matches(field) &&
+                          (selected == null ||
+                              widget.optionTranslation.containsKey(selected))) {
+                        unawaited(change(selected));
+                      }
+                    },
+            ) ??
+            Text(widget.optionTranslation[value] ?? "None"),
+        trailing: saving
+            ? _savingIndicator
+            : widget.selectorBuilder == null
+            ? const Icon(Icons.arrow_drop_down)
+            : null,
+        onTap: saving || widget.selectorBuilder != null
             ? null
             : () {
                 var renderBox = context.findRenderObject() as RenderBox;
@@ -422,6 +458,7 @@ class _EndSelectorSelectSetting extends StatefulWidget {
     this.comicId,
     this.comicSource,
     this.useDeviceSettings = false,
+    this.selectorBuilder,
   });
 
   final Preference<String?>? preference;
@@ -441,6 +478,9 @@ class _EndSelectorSelectSetting extends StatefulWidget {
   final String? comicSource;
 
   final bool useDeviceSettings;
+
+  final Widget Function(BuildContext, String?, ValueChanged<String?>?)?
+  selectorBuilder;
 
   @override
   State<_EndSelectorSelectSetting> createState() =>
@@ -499,22 +539,30 @@ class _EndSelectorSelectSettingState
         ),
         trailing: saving
             ? _savingIndicator
-            : Select(
-                current: options[value],
-                values: options.values.toList(),
-                minWidth: 64,
-                onTap: (index) {
-                  if (mounted &&
-                      target.matches(field) &&
-                      index >= 0 &&
-                      index < options.length) {
-                    final selected = options.keys.elementAt(index);
-                    if (widget.optionTranslation.containsKey(selected)) {
+            : widget.selectorBuilder?.call(context, value, (selected) {
+                    if (mounted &&
+                        target.matches(field) &&
+                        (selected == null ||
+                            widget.optionTranslation.containsKey(selected))) {
                       unawaited(change(selected));
                     }
-                  }
-                },
-              ),
+                  }) ??
+                  Select(
+                    current: options[value],
+                    values: options.values.toList(),
+                    minWidth: 64,
+                    onTap: (index) {
+                      if (mounted &&
+                          target.matches(field) &&
+                          index >= 0 &&
+                          index < options.length) {
+                        final selected = options.keys.elementAt(index);
+                        if (widget.optionTranslation.containsKey(selected)) {
+                          unawaited(change(selected));
+                        }
+                      }
+                    },
+                  ),
       ),
     );
   }

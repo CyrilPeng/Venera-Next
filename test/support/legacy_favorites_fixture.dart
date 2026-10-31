@@ -12,7 +12,10 @@ void addSqliteInternalTables(Database db) {
   db.execute('DROP TABLE sequence_fixture;');
 }
 
-Map<String, Object?> sqliteInternalTableSnapshot(Database db) => {
+Map<String, Object?> sqliteInternalTableSnapshot(
+  Database db, {
+  Set<String> excludeStatisticsFor = const {},
+}) => {
   for (final row in db.select(
     "SELECT name, sql FROM sqlite_master WHERE type = 'table' "
     "AND name GLOB 'sqlite_*' ORDER BY name;",
@@ -21,6 +24,11 @@ Map<String, Object?> sqliteInternalTableSnapshot(Database db) => {
       'schema': row['sql'],
       'rows': db
           .select('SELECT * FROM "${row['name']}";')
+          .where(
+            (entry) =>
+                !const {'sqlite_stat1', 'sqlite_stat4'}.contains(row['name']) ||
+                !excludeStatisticsFor.contains(entry['tbl']),
+          )
           .map((entry) => Map<String, Object?>.from(entry))
           .toList(),
     },

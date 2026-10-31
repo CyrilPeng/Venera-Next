@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorite_folder.dart';
 import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 import 'dart:io';
@@ -29,6 +30,8 @@ import '../../components/sidebar_presentation_test.dart'
     show pumpSidebar, settleSidebarWork, sidebarCauses;
 
 class _Manager extends Fake implements LocalFavoritesManager {
+  @override
+  FavoriteFolderTree get folderTree => FavoriteFolderTree.flat(folderNames);
   @override
   int connectionGeneration = 1;
   List<String> order = ['A', 'B', 'C'];
@@ -839,7 +842,7 @@ void main() {
           raw
               .select('PRAGMA table_info(folder_order)')
               .map((row) => row['name']),
-          ['folder_name', 'order_value'],
+          ['folder_name', 'order_value', 'folder_id', 'parent_id'],
         );
         expect(
           raw

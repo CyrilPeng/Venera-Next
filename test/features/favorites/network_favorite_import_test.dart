@@ -476,7 +476,7 @@ void main() {
           oldToNew: false,
           translateTags: (_) => '',
         ),
-        throwsA(isA<SqliteException>()),
+        throwsFormatException,
       );
       expect(repo.findLinked('folder_sync'), (null, null));
     },

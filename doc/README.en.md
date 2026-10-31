@@ -38,6 +38,7 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 ## User And CLI
 
 - [应用数据同步](user/data_sync.zh.md) / [App-data synchronization](user/data_sync.en.md)
+- [两级本地收藏目录](user/favorite_folders.zh.md) / [Two-Level Local Favorite Folders (unreleased)](user/favorite_folders.en.md)
 - [自动选择阅读模式](user/automatic_reader_mode.zh.md) / [Automatic Reader Mode](user/automatic_reader_mode.en.md)
 - [Automatic reading and unavailable images](user/automatic_reading.en.md)
 - [条漫左右边距](user/reader_width.zh.md) / [Reader side margins](user/reader_width.en.md)

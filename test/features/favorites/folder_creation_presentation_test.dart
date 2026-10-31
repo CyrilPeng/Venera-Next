@@ -149,7 +149,10 @@ class _FolderCreationHost {
 }
 
 Future<void> _create(WidgetTester tester, String name) async {
-  await tester.enterText(find.byType(TextField), name);
+  await tester.enterText(
+    find.byKey(const ValueKey('favorite-folder-name')),
+    name,
+  );
   final action = tester
       .widget<FilledButton>(find.widgetWithText(FilledButton, 'Create'))
       .onPressed!;
@@ -275,7 +278,10 @@ void main() {
     await host.mount(tester);
     host.open().ignore();
     await pumpSidebar(tester);
-    await tester.enterText(find.byType(TextField), 'Original creation');
+    await tester.enterText(
+      find.byKey(const ValueKey('favorite-folder-name')),
+      'Original creation',
+    );
     final retained = tester
         .widget<FilledButton>(find.byType(FilledButton))
         .onPressed!;
@@ -403,7 +409,10 @@ void main() {
     await host.mount(tester);
     final create = host.open();
     await pumpSidebar(tester);
-    await tester.enterText(find.byType(TextField), 'Created');
+    await tester.enterText(
+      find.byKey(const ValueKey('favorite-folder-name')),
+      'Created',
+    );
     await tester.tap(find.text('Create'));
     await settleSidebarWork(tester, () => create);
     expect(host.manager.folderNames, contains('Created'));
@@ -500,7 +509,10 @@ void main() {
             );
         host.open().ignore();
         await pumpSidebar(tester);
-        await tester.enterText(find.byType(TextField), name);
+        await tester.enterText(
+          find.byKey(const ValueKey('favorite-folder-name')),
+          name,
+        );
         final release = Completer<void>();
         final replacement = AppDataOperations.instance.run(() async {
           await release.future;
@@ -576,7 +588,10 @@ void main() {
           .route!;
       await tester.tap(find.widgetWithText(TextButton, 'New Folder'));
       await pumpSidebar(tester);
-      await tester.enterText(find.byType(TextField), 'Accepted creation');
+      await tester.enterText(
+        find.byKey(const ValueKey('favorite-folder-name')),
+        'Accepted creation',
+      );
       final release = Completer<void>();
       final exclusive = AppDataOperations.instance.run(() => release.future);
       addTearDown(() {
@@ -636,7 +651,10 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'New Folder'));
     await pumpSidebar(tester);
     final creation = host.route(tester);
-    await tester.enterText(find.byType(TextField), 'Background destination');
+    await tester.enterText(
+      find.byKey(const ValueKey('favorite-folder-name')),
+      'Background destination',
+    );
     final release = Completer<void>();
     final exclusive = AppDataOperations.instance.run(() => release.future);
     addTearDown(() {
@@ -709,7 +727,10 @@ void main() {
         await host.mount(tester);
         await tester.tap(find.widgetWithText(ListTile, 'New Folder'));
         await pumpSidebar(tester);
-        await tester.enterText(find.byType(TextField), 'Created for original');
+        await tester.enterText(
+          find.byKey(const ValueKey('favorite-folder-name')),
+          'Created for original',
+        );
         final release = Completer<void>();
         final exclusive = AppDataOperations.instance.run(() => release.future);
         addTearDown(() {

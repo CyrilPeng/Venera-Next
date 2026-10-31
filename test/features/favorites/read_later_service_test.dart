@@ -93,8 +93,8 @@ void main() {
 class _FailingInsertRepository extends FavoritesRepository {
   _FailingInsertRepository(super.db);
   @override
-  void createFolder(String folder) {
-    super.createFolder(folder);
+  void createFolder(String folder, {String? parentId}) {
+    super.createFolder(folder, parentId: parentId);
     db.execute('''CREATE TRIGGER fail_insert BEFORE INSERT ON "$folder"
       BEGIN SELECT RAISE(ABORT, 'insertion failed'); END;''');
   }

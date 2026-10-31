@@ -17,12 +17,14 @@ class CreateFavoriteFolderDialog extends StatefulWidget {
     required this.selectImport,
     required this.importJson,
     this.isCurrent,
+    this.parentSelector,
   });
   final String? Function(String) validate;
   final FutureOr<void> Function(String) create;
   final Future<String?> Function(SelectionOperation) selectImport;
   final FutureOr<void> Function(String) importJson;
   final bool Function()? isCurrent;
+  final Widget Function(BuildContext context, bool enabled)? parentSelector;
 
   @override
   State<CreateFavoriteFolderDialog> createState() =>
@@ -148,17 +150,35 @@ class _CreateFavoriteFolderDialogState
     allowsNavigation: () => _canAct,
     child: ContentDialog(
       title: "New Folder".tl,
-      content: TextField(
-        controller: controller,
-        enabled: !importing && !_completed && _canAct,
-        decoration: InputDecoration(
-          hintText: "Folder Name".tl,
-          errorText: error,
-        ),
-        onChanged: (_) {
-          if (importing || _completed || !_canAct) return;
-          if (error != null) setState(() => error = null);
-        },
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            key: const ValueKey('favorite-folder-name'),
+            controller: controller,
+            enabled: !importing && !_completed && _canAct,
+            decoration: InputDecoration(
+              labelText: "Folder Name".tl,
+              errorText: error,
+            ),
+            onChanged: (_) {
+              if (importing || _completed || !_canAct) return;
+              if (error != null) setState(() => error = null);
+            },
+          ),
+          if (widget.parentSelector != null) ...[
+            const SizedBox(height: 16),
+            Text('Parent folder'.tl),
+            const SizedBox(height: 8),
+            widget.parentSelector!(
+              context,
+              !importing && !_completed && _canAct,
+            ),
+            const SizedBox(height: 8),
+            Text('Imported legacy folders are created at the first level.'.tl),
+          ],
+        ],
       ).paddingHorizontal(16),
       actions: [
         Flexible(
