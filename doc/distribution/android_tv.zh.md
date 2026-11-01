@@ -2,11 +2,11 @@
 
 English version: [android_tv.en.md](android_tv.en.md)
 
-Android TV 已完成维护者确认的小范围测试，功能从独立 `android-tv` 测试分支进入 `main`。后续 Android 构建同时生成手机版和 TV 版；新版本发布时两者进入同一个 GitHub Release。本次集成本身不提高版本号、不创建标签，也不向已发布的 `v1.18.1` 或 `v1.18.2-rc.6` 回填 TV 安装包。
+Android TV 使用独立安装包，与手机版一起构建并在同一个 GitHub Release 分发。
 
 ## 安装与更新
 
-在 [Releases](https://github.com/CyrilPeng/venera-next/releases) 中选择含 TV 资产的版本，文件名为：
+从 [最新稳定版](https://github.com/CyrilPeng/venera-next/releases/latest) 下载 TV 安装包，文件名为：
 
 - 通用版：`VeneraNext-<版本>-android-tv.apk`
 - ARM64：`VeneraNext-<版本>-android-tv-arm64-v8a.apk`
@@ -42,7 +42,7 @@ Android TV 已完成维护者确认的小范围测试，功能从独立 `android
 
 手机版保留 `基础构建号 × 10 + ABI 标识`。TV 使用 `(200000 + 基础构建号) × 10 + ABI 标识`，ABI 标识为通用版 `0`、ARM32 `1`、ARM64 `2`、x86_64 `3`。Gradle 自动添加偏移，本地和 CI 使用同一规则，**不要再传入 Alpha 的大构建号**。
 
-最后一轮已交付 Alpha 构建 `alpha.19.2`（提交 `a4ba52463380`）的最高版本码为 `1000193`。主线基础构建号 `242` 对应 TV 版本码 `2002420`–`2002423`，均高于旧测试包。今后提升 `release.json` 的构建号即可使各 ABI 递增；重跑同一版本构建不增加版本码，同版本切换到较低 ABI 标识的包可能被拒绝，建议沿用原 ABI。
+最后一轮已交付 Alpha 构建 `alpha.19.2`（提交 `a4ba52463380`）的最高版本码为 `1000193`。`v1.18.2` 的基础构建号 `243` 对应 TV 版本码 `2002430`–`2002433`，均高于旧测试包。今后提升 `release.json` 的构建号即可使各 ABI 递增；重跑同一版本构建不增加版本码，同版本切换到较低 ABI 标识的包可能被拒绝，建议沿用原 ABI。
 
 `pubspec.yaml` 与漫画源读取的基础版本不变；About 另显示 TV 构建标识和提交号。两种 APK 使用原发布签名，校验脚本固定检查既有公开证书 SHA-256：
 

@@ -2,11 +2,11 @@
 
 Default Chinese version: [android_tv.zh.md](android_tv.zh.md)
 
-Android TV has completed maintainer-confirmed small-scale testing and joins `main` from the separate `android-tv` test branch. Future Android builds produce mobile and TV packages together; new versions publish both in the same GitHub Release. This integration does not bump the version, create a tag, or backfill TV packages into published `v1.18.1` or `v1.18.2-rc.6` releases.
+Android TV uses a separate package, built alongside mobile and distributed in the same GitHub Release.
 
 ## Installation and Updates
 
-Choose a version with TV assets on [Releases](https://github.com/CyrilPeng/venera-next/releases):
+Download a TV package from the [latest stable release](https://github.com/CyrilPeng/venera-next/releases/latest):
 
 - Universal: `VeneraNext-<version>-android-tv.apk`
 - ARM64: `VeneraNext-<version>-android-tv-arm64-v8a.apk`
@@ -42,7 +42,7 @@ This adapts the existing UI to a remote, rather than redesigning every screen fo
 
 Mobile keeps `base build * 10 + ABI ID`. TV uses `(200000 + base build) * 10 + ABI ID`; the IDs are universal `0`, ARM32 `1`, ARM64 `2`, and x86_64 `3`. Gradle adds the offset for both local and CI builds. **Do not pass an old Alpha-style large build number.**
 
-The last delivered Alpha, `alpha.19.2` at `a4ba52463380`, had a maximum versionCode of `1000193`. Mainline base build `242` produces TV codes `2002420` through `2002423`, all higher than those test APKs. Increase the build in `release.json` for future versions. Rebuilding the same version does not increment its code; changing to a lower ABI ID at the same version may be rejected, so keep the installed ABI where possible.
+The last delivered Alpha, `alpha.19.2` at `a4ba52463380`, had a maximum versionCode of `1000193`. The `v1.18.2` base build `243` produces TV codes `2002430` through `2002433`, all higher than those test APKs. Increase the build in `release.json` for future versions. Rebuilding the same version does not increment its code; changing to a lower ABI ID at the same version may be rejected, so keep the installed ABI where possible.
 
 The `pubspec.yaml` version seen by source scripts remains unchanged. About additionally displays TV build and revision information. Both flavors retain the published signing identity; verification requires this public certificate SHA-256:
 
