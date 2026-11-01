@@ -1,0 +1,144 @@
+{
+  "schema": 1,
+  "purpose": "full_reader_import_results_delivery",
+  "branch": "HarmonyOS",
+  "source_commit": "4c4bb547f086fde72b9f44f248db82666d2fd63a",
+  "run": {
+    "id": 41316472431,
+    "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/41316472431",
+    "conclusion": "success",
+    "completed_at_shanghai": "2026-11-01T22:44:36+08:00",
+    "all_job_steps_succeeded": true
+  },
+  "artifact": {
+    "id": 13088300909,
+    "name": "harmonyos-reader-experiment-41316472431",
+    "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/41316472431/artifacts/13088300909",
+    "archive_size_bytes": 20299125,
+    "archive_digest": "sha256:4590f8c0970c2d808f6200e2e64a0158eea46084f7bb3eaae351fd201cf937d9",
+    "expires_at_shanghai": "2026-11-15T22:44:24+08:00",
+    "github_login_required": true
+  },
+  "application": {
+    "entrypoint": "lib/main.dart",
+    "reader_integrated": true,
+    "dart_version": "1.18.2-harmony.3+3",
+    "bundle_name": "com.github.cyrilpeng.veneranext.harmony",
+    "version_name": "1.18.2.3",
+    "version_code": 3,
+    "minimum_api": 260000026,
+    "target_api": 260000026,
+    "device_types": [
+      "phone",
+      "tablet"
+    ],
+    "libraries": [
+      {
+        "name": "libapp.so",
+        "bytes": 14894000,
+        "sha256": "200f27abf4538315d77e8543f1d07da392b85291fdfd0ff804445742e6d997f8"
+      },
+      {
+        "name": "libc++_shared.so",
+        "bytes": 1262504,
+        "sha256": "965803c3fe53e02452e4c0479ad13c88f166c04207d27e3c531161a7c75a6c17"
+      },
+      {
+        "name": "libflutter.so",
+        "bytes": 16416376,
+        "sha256": "78385c78e1f79e30475d12f99d6bb402c01c8199d39b2c94f709deb5e3cbb83f"
+      },
+      {
+        "name": "libflutter_7zip.so",
+        "bytes": 90520,
+        "sha256": "c0c1b3944f52af27513184b3de1fa28ba38ab3784a21580591b4b90c1ea85a96"
+      },
+      {
+        "name": "libinappwebview.so",
+        "bytes": 13680,
+        "sha256": "80b8504e4aadbab7f78eaa9162626f534051048ad8df9805af64c00957cb4431"
+      },
+      {
+        "name": "liblodepng_flutter.so",
+        "bytes": 115280,
+        "sha256": "a92bff9ba4a8708b097b126f9012e298e1f8b09cdddfbeb23f0b96123d4230f6"
+      },
+      {
+        "name": "libqjs.so",
+        "bytes": 1056024,
+        "sha256": "5db7b42b1797e5915efa5a9943cdf094caacf0538ee54092a07f59fb278fce3d"
+      },
+      {
+        "name": "librhttp.so",
+        "bytes": 4165480,
+        "sha256": "5f07255477227d68fbae7ec54b94caed7d512321679c8b8428e0b3ac5043bd64"
+      },
+      {
+        "name": "libsqlite3.so",
+        "bytes": 1499688,
+        "sha256": "72d5f39b3a493b451093b2f6ec71587f93e14a549fa851c746da1f9cf5e3474b"
+      },
+      {
+        "name": "libzip_flutter.so",
+        "bytes": 172280,
+        "sha256": "130c62a4d312f532ef81333a99054cd0640ac4236c80fb9083c0f57db21d54e2"
+      }
+    ],
+    "asset_count": 8
+  },
+  "unsigned_hap": {
+    "hap": "venera-next-1.18.2-harmony.3-arm64-unsigned.hap",
+    "bytes": 44648414,
+    "sha256": "b216a8e074eeebe6605cb83404b0fb96c5819a0009d15e67d5b6f31f25872b05"
+  },
+  "checks": {
+    "python_tests": {
+      "passed": 34
+    },
+    "native_bridge_host_tests": {
+      "passed": 13,
+      "executes_actual_arkts_template": true,
+      "device_runtime": false
+    },
+    "windows_host_regressions": {
+      "passed": 528,
+      "flutter": "3.41.6",
+      "dart": "3.11.4"
+    },
+    "linux_full_app_regressions": {
+      "passed": 496,
+      "skipped": 32,
+      "skipped_reason": "Existing platform-conditioned cases"
+    },
+    "strict_analysis": "passed",
+    "structure_and_architecture_boundaries": "passed",
+    "downloaded_artifact_audit": {
+      "status": "passed",
+      "source_files_verified": 552,
+      "git_blob_hashes_match_build_commit": true,
+      "full_dart_inventory_matches": true,
+      "elf_headers_and_hashes": "passed",
+      "packaged_assets_and_guides": "passed",
+      "bundle_version_api": "passed"
+    }
+  },
+  "delivery": {
+    "issue": 77,
+    "comment_url": "https://github.com/CyrilPeng/Venera-Next/issues/77#issuecomment-6559568206",
+    "comment_created_at_shanghai": "2026-11-01T22:53:17+08:00",
+    "source_guide_url": "https://github.com/CyrilPeng/Venera-Next/blob/4c4bb547f086fde72b9f44f248db82666d2fd63a/doc/distribution/harmonyos-reader.zh.md"
+  },
+  "boundaries": {
+    "signed": false,
+    "device_runtime_verified": false,
+    "original_device_folder_copy_root_cause_confirmed": false,
+    "upgrade_and_signing_renewal_verified": false,
+    "mainline_release_created": false,
+    "issue_closed": false,
+    "notes": [
+      "Zero-import success and missing result visibility have host regressions; the original HarmonyOS device failure remains open.",
+      "Source files, selected ZIP files and committed comics are retained according to existing ownership/recovery rules.",
+      "No probe or private logs are requested for this delivery."
+    ]
+  }
+}
