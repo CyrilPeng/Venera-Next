@@ -5,9 +5,12 @@ import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/components/message.dart'
+    show LoadingDialogController;
 import '../local_storage_guard.dart';
 import 'cbz.dart';
 import 'comic_import_service.dart';
+import 'comic_collection_archive.dart';
 import 'epub_import.dart';
 import 'pdf_import.dart';
 import 'pdf_import_batch.dart';
@@ -212,30 +215,99 @@ class ImportComic {
   }
 
   Future<bool> directory(bool single, SelectionOperation operation) async {
+    LoadingDialogController? controller;
     final selection = await operation.pickDirectory(
       () => DirectoryPicker().pickDirectory(
         copyForImport: true,
         checkStop: operation.checkActive,
+        onCopyProgress: (processed, total) =>
+            controller?.setProgress(total > 0 ? processed / total : null),
       ),
     );
     if (selection == null) return false;
-    return _showImportResult(
-      () => service.runImport((importing) async {
-        if (!copyToLocal && !App.isHarmonyOS) {
-          await selection.retainAccessForSession();
-        }
-        operation.checkActive();
-        return operation.useDirectory(
-          selection,
-          (directory) => importing.directory(
-            directory,
-            single: single,
-            copy: copyToLocal || App.isHarmonyOS,
-            folder: selectedFolder,
-          ),
-        );
-      }),
+    controller = presentation.showLoading(
+      allowCancel: false,
+      message: 'Preparing selected folder'.tl,
     );
+    try {
+      return await _showImportResult(
+        () => service.runImport((importing) async {
+          if (!copyToLocal && !App.isHarmonyOS) {
+            await selection.retainAccessForSession();
+          }
+          operation.checkActive();
+          return operation.useDirectory(selection, (directory) {
+            controller?.setProgress(null);
+            controller?.setMessage('Scanning and importing comics'.tl);
+            return importing.directory(
+              directory,
+              single: single,
+              copy: copyToLocal || App.isHarmonyOS,
+              folder: selectedFolder,
+              onScanProgress: (count) => controller?.setMessage(
+                'Scanned @a folders; preparing import'.tlParams({'a': count}),
+              ),
+              onScanComplete: () =>
+                  controller?.setMessage('Saving imported comics'.tl),
+            );
+          });
+        }),
+        persistent: App.isHarmonyOS,
+        beforeResult: () => controller?.close(),
+      );
+    } finally {
+      controller?.close();
+    }
+  }
+
+  Future<bool> collectionArchive(SelectionOperation operation) async {
+    final file = await operation.pickFile(
+      () => selectFile(ext: ['zip'], checkStop: operation.checkActive),
+    );
+    if (file == null) return false;
+    final controller = presentation.showLoading(
+      allowCancel: false,
+      message: 'Extracting comic collection'.tl,
+    );
+    try {
+      return await _showImportResult(
+        () => service.runImport(
+          (importing) => operation.useFile(file, (source) {
+            return operation.useTemporaryDirectory(
+              cacheDirectory: Directory(App.cachePath),
+              prepare: (workspace) async {
+                if ((await CBZ.checkType(source)).mime != 'application/zip') {
+                  throw const FormatException(
+                    'The collection must be a ZIP file',
+                  );
+                }
+                await extractComicCollection(source, workspace);
+              },
+              consume: (workspace) async {
+                controller?.setMessage('Scanning and importing comics'.tl);
+                return importing.directory(
+                  workspace,
+                  single: false,
+                  copy: true,
+                  folder: selectedFolder,
+                  onScanProgress: (count) => controller?.setMessage(
+                    'Scanned @a folders; preparing import'.tlParams({
+                      'a': count,
+                    }),
+                  ),
+                  onScanComplete: () =>
+                      controller?.setMessage('Saving imported comics'.tl),
+                );
+              },
+            );
+          }),
+        ),
+        persistent: true,
+        beforeResult: () => controller?.close(),
+      );
+    } finally {
+      controller?.close();
+    }
   }
 
   Future<bool> localDownloads() => _showImportResult(() async {
@@ -297,16 +369,43 @@ class ImportComic {
   });
 
   Future<bool> _showImportResult(
-    Future<ComicImportResult> Function() action,
-  ) async {
+    Future<ComicImportResult> Function() action, {
+    bool persistent = false,
+    void Function()? beforeResult,
+  }) async {
+    late final ComicImportResult result;
     try {
-      final result = await action();
+      result = await action();
+    } on LocalComicStorageBusy catch (error) {
+      beforeResult?.call();
+      presentation.showMessage(message: error.message.tl);
+      return false;
+    } on SelectionCancelled {
+      rethrow;
+    } catch (error, stack) {
+      if (!persistent) rethrow;
+      result = ComicImportResult(
+        succeeded: false,
+        issues: [
+          ComicImportIssue(ComicImportIssueKind.scanFailed, error, stack),
+        ],
+      );
+    }
+    beforeResult?.call();
+    try {
+      final details = <String>[];
       for (final issue in result.issues) {
         final message = switch (issue.kind) {
-          ComicImportIssueKind.invalidComic => 'Invalid Comic'.tl,
+          ComicImportIssueKind.invalidComic =>
+            issue.error is String
+                ? (issue.error as String).tl
+                : 'Invalid Comic'.tl,
           ComicImportIssueKind.localPathNotFound => 'Local path not found'.tl,
           ComicImportIssueKind.noValidComics => 'No valid comics found'.tl,
-          ComicImportIssueKind.scanFailed => issue.error.toString(),
+          ComicImportIssueKind.scanFailed =>
+            issue.error is FormatException
+                ? (issue.error as FormatException).message.tl
+                : issue.error.toString(),
           ComicImportIssueKind.copyRecoveryRequired =>
             'Copy recovery could not finish. The files were kept.'.tl,
           ComicImportIssueKind.copyFailed => 'Failed to copy comics'.tl,
@@ -317,8 +416,16 @@ class ImportComic {
               'name': issue.sourceName ?? 'Archive'.tl,
               'error': issue.error.toString(),
             }),
+          ComicImportIssueKind.directorySkipped =>
+            'Skipped @name: @reason'.tlParams({
+              'name': issue.sourceName ?? 'Folder'.tl,
+              'reason': issue.error is String
+                  ? (issue.error as String).tl
+                  : issue.error.toString(),
+            }),
         };
-        presentation.showMessage(message: message);
+        details.add(message);
+        if (!persistent) presentation.showMessage(message: message);
         final error = issue.error;
         if (error != null) {
           Log.error(
@@ -331,27 +438,37 @@ class ImportComic {
       final failedArchives = result.issues
           .where((issue) => issue.kind == ComicImportIssueKind.archiveFailed)
           .length;
-      if (failedArchives > 0) {
+      if (!persistent && failedArchives > 0) {
         presentation.showMessage(
           message: 'Success: @a, Failed: @b'.tlParams({
             'a': result.importedCount,
             'b': failedArchives,
           }),
         );
-      } else if (result.succeeded && result.importedCount > 0) {
+      } else if (!persistent && result.succeeded && result.importedCount > 0) {
         presentation.showMessage(
           message: 'Imported @a comics'.tlParams({'a': result.importedCount}),
         );
       }
       if (result.pendingCopies.isNotEmpty) {
-        presentation.showMessage(
-          message: 'Some copied comics still need recovery'.tl,
+        final message = 'Some copied comics still need recovery'.tl;
+        if (persistent) {
+          details.add(message);
+        } else {
+          presentation.showMessage(message: message);
+        }
+      }
+      if (persistent) {
+        await presentation.showResult(
+          imported: result.importedCount,
+          details: details,
         );
       }
-      return result.succeeded;
-    } on LocalComicStorageBusy catch (error) {
-      presentation.showMessage(message: error.message.tl);
-      return false;
+    } catch (error, stack) {
+      if (!persistent) rethrow;
+      // Presentation failure cannot turn a committed import into zero success.
+      Log.error('Import result presentation', error, stack);
     }
+    return result.succeeded;
   }
 }

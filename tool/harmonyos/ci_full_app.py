@@ -37,6 +37,8 @@ TESTS = (
     "test/features/local_comics/import_export/cbz_import_lifecycle_test.dart",
     "test/features/local_comics/import_export/epub_import_test.dart",
     "test/features/local_comics/import_export/comic_import_service_test.dart",
+    "test/features/local_comics/import_export/comic_collection_archive_test.dart",
+    "test/features/local_comics/import_export/copy_cleanup_test.dart",
     "test/features/local_comics/import_export/import_presentation_test.dart",
     "test/features/local_comics/harmonyos_import_test.dart",
     "test/features/local_comics/local_archive_visibility_test.dart",

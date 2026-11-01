@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "bundle_name": "com.github.cyrilpeng.veneranext.harmony",
-  "version_name": "1.18.2-harmony.2",
-  "hap_version_name": "1.18.2.2",
-  "version_code": 2,
+  "version_name": "1.18.2-harmony.3",
+  "hap_version_name": "1.18.2.3",
+  "version_code": 3,
   "webview": {
     "repository": "https://gitcode.com/CPF-Flutter/flutter_inappwebview.git",
     "ref": "6.1.5-ohos-1.0.1",

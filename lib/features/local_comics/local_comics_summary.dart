@@ -225,6 +225,9 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
           .tl,
       "Select an EhViewer database and a download folder.".tl,
       "Scan the current local path and restore the local database.".tl,
+      if (App.isHarmonyOS)
+        "Select a ZIP whose root contains one folder per comic. Do not include an extra outer folder. Ordinary CBZ imports are unchanged."
+            .tl,
     ][type];
     List<String> importMethods = [
       "Single Comic".tl,
@@ -235,6 +238,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
       "An image EPUB file".tl,
       "EhViewer downloads".tl,
       "Restore local downloads".tl,
+      if (App.isHarmonyOS) "Comic collection ZIP".tl,
     ];
 
     return ContentDialog(
@@ -285,7 +289,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
                   if (!App.isIOS &&
                       !App.isMacOS &&
                       !App.isHarmonyOS &&
-                      ![2, 3, 4, 5, 7].contains(type))
+                      ![2, 3, 4, 5, 7, 8].contains(type))
                     CheckboxListTile(
                       enabled: true,
                       title: Text("Copy to app local path".tl),
@@ -298,7 +302,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
                     ).paddingHorizontal(8),
                   if (App.isHarmonyOS && [0, 1, 6].contains(type))
                     Text(
-                      "On HarmonyOS, folders are copied into the app. Originals are not changed. If folder selection is unavailable, use multiple archive files."
+                      "On HarmonyOS, folders are copied into the app. Originals are not changed. You can also use Comic collection ZIP or Multiple archive files."
                           .tl,
                     ).paddingHorizontal(24),
                   const SizedBox(height: 8),
@@ -367,6 +371,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
           5 => await importer.epub(operation),
           6 => await importer.ehViewer(operation),
           7 => await importer.localDownloads(),
+          8 when App.isHarmonyOS => await importer.collectionArchive(operation),
           int() => false,
         },
       );

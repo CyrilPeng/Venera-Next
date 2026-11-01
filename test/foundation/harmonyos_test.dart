@@ -150,6 +150,134 @@ void main() {
     ]);
   });
 
+  testWidgets('copy polls progress only until the actual preparation settles', (
+    tester,
+  ) async {
+    final copied = Completer<void>();
+    final laterProgress = Completer<Object?>();
+    var polls = 0;
+    final progress = <(int, int)>[];
+    mock((call) async {
+      if (call.method == 'selectDirectory') return directoryReceipt();
+      if (call.method == 'prepareDirectory') {
+        await copied.future;
+        return null;
+      }
+      if (call.method == 'directoryCopyProgress') {
+        if (++polls == 1) return {'processed': 2.0, 'total': 10.0};
+        return laterProgress.future;
+      }
+      return null;
+    });
+    final selection = (await HarmonyOS.selectDirectory(
+      cachePath: cache,
+      onCopyProgress: (done, total) => progress.add((done, total)),
+    ))!;
+    final reading = selection.withDirectory((_) async {});
+    await tester.pump();
+    expect(calls.map((call) => call.method), contains('prepareDirectory'));
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
+    expect(polls, 1);
+    expect(calls.last.arguments, {
+      'path': directoryReceipt()['path'],
+      'token': token,
+    });
+    expect(progress, [(2, 10)]);
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(seconds: 1));
+    expect(polls, 2, reason: 'Do not overlap pending progress requests');
+    copied.complete();
+    await tester.pump();
+    await reading;
+    await selection.dispose();
+    laterProgress.complete({'processed': 10, 'total': 10});
+    await tester.pump(const Duration(seconds: 1));
+    expect(progress, [(2, 10)], reason: 'No callbacks after prepare/release');
+    expect(polls, 2);
+    expect(
+      calls.where((call) => call.method == 'releaseDirectory'),
+      hasLength(1),
+    );
+  });
+
+  testWidgets(
+    'bad progress cannot replace a real copy failure or leak a timer',
+    (tester) async {
+      final copied = Completer<void>();
+      var polls = 0;
+      final progress = <(int, int)>[];
+      mock((call) async {
+        if (call.method == 'selectDirectory') return directoryReceipt();
+        if (call.method == 'prepareDirectory') {
+          await copied.future;
+          return null;
+        }
+        if (call.method == 'directoryCopyProgress') {
+          return switch (++polls) {
+            1 => {'processed': -1, 'total': 10},
+            2 => {'processed': 11, 'total': 10},
+            3 => {'processed': double.nan, 'total': double.infinity},
+            4 => {'processed': '1', 'total': 10},
+            _ => throw PlatformException(code: 'progress_unavailable'),
+          };
+        }
+        return null;
+      });
+      final selection = (await HarmonyOS.selectDirectory(
+        cachePath: cache,
+        onCopyProgress: (done, total) => progress.add((done, total)),
+      ))!;
+      final reading = selection.withDirectory(
+        (_) async => fail('No partial copy'),
+      );
+      final rejected = expectLater(
+        reading,
+        throwsA(
+          isA<PlatformException>().having(
+            (error) => error.code,
+            'code',
+            'copy_failed',
+          ),
+        ),
+      );
+      await tester.pump();
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 250));
+      }
+      copied.completeError(PlatformException(code: 'copy_failed'));
+      await tester.pump();
+      await rejected;
+      await selection.dispose();
+      await tester.pump(const Duration(seconds: 1));
+      expect(progress, isEmpty);
+      expect(polls, 5);
+    },
+  );
+
+  testWidgets('an unobserved copy never requests progress', (tester) async {
+    final copied = Completer<void>();
+    mock((call) async {
+      if (call.method == 'selectDirectory') return directoryReceipt();
+      if (call.method == 'prepareDirectory') {
+        await copied.future;
+        return null;
+      }
+      return null;
+    });
+    final selection = (await HarmonyOS.selectDirectory(cachePath: cache))!;
+    final reading = selection.withDirectory((_) async {});
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      calls.where((call) => call.method == 'directoryCopyProgress'),
+      isEmpty,
+    );
+    copied.complete();
+    await tester.pump();
+    await reading;
+    await selection.dispose();
+  });
+
   test(
     'untrusted directory receipts are never consumed or recursively released',
     () async {

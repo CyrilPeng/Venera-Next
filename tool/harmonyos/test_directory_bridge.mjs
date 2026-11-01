@@ -31,9 +31,9 @@ function fixture(t) {
       if (state.failRemove) throw new Error('synthetic cleanup failure');
       fs.rmdirSync(value);
     },
-    copy: async (source, destination) => {
+    copy: async (source, destination, options) => {
       state.copies++;
-      if (state.copy) return state.copy(source, destination);
+      if (state.copy) return state.copy(source, destination, options);
       const input = fileURLToPath(source);
       await fs.promises.cp(input, path.join(fileURLToPath(destination), path.basename(input)),
         { recursive: true, dereference: false, errorOnExist: true, force: false });
@@ -211,4 +211,41 @@ test('folder and file dialogs share the native busy guard', async (t) => {
   const { ability, call } = fixture(t);
   ability.selecting = true;
   await assert.rejects(call('selectDirectory'), /dialog is already active/);
+});
+
+test('copy progress is numeric and isolated by the same owned receipt', async (t) => {
+  const { state, call } = fixture(t);
+  const first = await call('selectDirectory');
+  const second = await call('selectDirectory');
+  let finish;
+  state.copy = async (_source, destination, options) => {
+    assert.equal(typeof options.progressListener, 'function');
+    options.progressListener({ processedSize: 12, totalSize: 40 });
+    await new Promise((resolve) => { finish = resolve; });
+    fs.mkdirSync(first.path);
+    fs.writeFileSync(path.join(first.path, '1.png'), 'page');
+    assert.equal(path.resolve(path.dirname(first.path)), path.resolve(fileURLToPath(destination)));
+    options.progressListener({ processedSize: 40, totalSize: 40 });
+  };
+  const preparing = call('prepareDirectory', first);
+  assert.deepEqual(await call('directoryCopyProgress', first), { processed: 12, total: 40 });
+  assert.deepEqual(await call('directoryCopyProgress', second), { processed: 0, total: 0 });
+  await assert.rejects(call('directoryCopyProgress', { ...first, token: second.token }), /Unknown owned/);
+  finish();
+  await preparing;
+  assert.deepEqual(await call('directoryCopyProgress', first), { processed: 40, total: 40 });
+  await call('releaseDirectory', first);
+  await assert.rejects(call('directoryCopyProgress', first), /Unknown owned/);
+  await call('releaseDirectory', second);
+});
+
+test('copy failure retains the operation and numeric system error code', async (t) => {
+  const { state, call } = fixture(t);
+  const receipt = await call('selectDirectory');
+  state.copy = async () => { throw Object.assign(new Error('no space'), { code: 13900011 }); };
+  await assert.rejects(call('prepareDirectory', receipt), {
+    code: 'harmonyos_operation_failed',
+    message: 'prepareDirectory (13900011): no space',
+  });
+  await call('releaseDirectory', receipt);
 });

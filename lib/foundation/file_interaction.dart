@@ -64,6 +64,7 @@ class DirectoryPicker {
     bool directAccess = false,
     // OHOS import copies cannot become persistent storage locations.
     bool copyForImport = false,
+    void Function(int processed, int total)? onCopyProgress,
     void Function()? checkStop,
   }) async {
     checkStop?.call();
@@ -73,7 +74,10 @@ class DirectoryPicker {
         checkStop?.call();
         if (App.isHarmonyOS) {
           if (copyForImport) {
-            return HarmonyOS.selectDirectory(cachePath: App.cachePath);
+            return HarmonyOS.selectDirectory(
+              cachePath: App.cachePath,
+              onCopyProgress: onCopyProgress,
+            );
           }
           throw UnsupportedError(
             'Persistent external directories are not supported in this HarmonyOS experiment. '

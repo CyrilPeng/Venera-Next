@@ -4,6 +4,7 @@ import {
 import { picker, fileIo, fileUri } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
 import { window } from '@kit.ArkUI';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { GeneratedPluginRegistrant } from '../plugins/GeneratedPluginRegistrant';
 
 interface Receipt {
@@ -17,6 +18,8 @@ interface DirectoryReceipt extends Receipt {
   root: string;
   inode: bigint;
   preparing: Promise<void> | null;
+  processed: number;
+  total: number;
 }
 
 class BrowserHandler implements MethodCallHandler {
@@ -78,6 +81,10 @@ export default class EntryAbility extends FlutterAbility implements MethodCallHa
           await this.prepareDirectory(call.argument('path') as string, call.argument('token') as string);
           result.success(null);
           break;
+        case 'directoryCopyProgress':
+          const copying = this.ownedDirectory(call.argument('path') as string, call.argument('token') as string);
+          result.success(new Map<string, number>([['processed', copying.processed], ['total', copying.total]]));
+          break;
         case 'releaseDirectory':
           await this.releaseDirectory(call.argument('path') as string, call.argument('token') as string);
           result.success(null);
@@ -98,8 +105,9 @@ export default class EntryAbility extends FlutterAbility implements MethodCallHa
           result.notImplemented();
       }
     } catch (error) {
-      const failure = error as Error;
-      result.error('harmonyos_operation_failed', failure.message, null);
+      const failure = error as BusinessError;
+      const code = typeof failure.code === 'number' ? ` (${failure.code})` : '';
+      result.error('harmonyos_operation_failed', `${call.method}${code}: ${failure.message}`, null);
     }
   }
 
@@ -195,7 +203,8 @@ export default class EntryAbility extends FlutterAbility implements MethodCallHa
       fileIo.mkdirSync(root);
       const receipt: DirectoryReceipt = {
         path: root + '/contents/' + name, name: name, token: token,
-        source: uris[0], root: root, inode: fileIo.lstatSync(root).ino, preparing: null
+        source: uris[0], root: root, inode: fileIo.lstatSync(root).ino, preparing: null,
+        processed: 0, total: 0
       };
       this.directoryReceipts.set(token, receipt);
       // Copying starts only after Dart has registered ownership of this receipt.
@@ -234,7 +243,12 @@ export default class EntryAbility extends FlutterAbility implements MethodCallHa
     fileIo.mkdirSync(contents);
     // copy() accepts the picker grant itself and copies the named source folder
     // into an existing destination. Only the destination URI comes from a path.
-    await fileIo.copy(receipt.source, fileUri.getUriFromPath(contents));
+    await fileIo.copy(receipt.source, fileUri.getUriFromPath(contents), {
+      progressListener: (progress: fileIo.Progress) => {
+        receipt.processed = progress.processedSize;
+        receipt.total = progress.totalSize;
+      }
+    });
     this.checkDirectoryRoot(receipt);
     const entries = fileIo.listFileSync(contents);
     if (entries.length !== 1 || entries[0] !== receipt.name || !fileIo.lstatSync(receipt.path).isDirectory()) {

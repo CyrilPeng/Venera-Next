@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -50,6 +51,7 @@ abstract final class HarmonyOS {
 
   static Future<DirectorySelection?> selectDirectory({
     required String cachePath,
+    void Function(int processed, int total)? onCopyProgress,
   }) async {
     final result = await channel.invokeMapMethod<String, Object?>(
       'selectDirectory',
@@ -76,11 +78,56 @@ abstract final class HarmonyOS {
     return DirectorySelection.ownedCopy(
       directory: Directory(path),
       token: token,
-      prepare: (receipt) =>
-          channel.invokeMethod<void>('prepareDirectory', receipt),
+      prepare: (receipt) => _prepareDirectory(receipt, onCopyProgress),
       release: (receipt) =>
           channel.invokeMethod<void>('releaseDirectory', receipt),
     );
+  }
+
+  static Future<void> _prepareDirectory(
+    Map<String, String> receipt,
+    void Function(int, int)? onProgress,
+  ) async {
+    var active = true;
+    var polling = false;
+    Future<void> poll() async {
+      if (!active || polling) return;
+      polling = true;
+      try {
+        final progress = await channel.invokeMapMethod<String, Object?>(
+          'directoryCopyProgress',
+          receipt,
+        );
+        final processed = progress?['processed'];
+        final total = progress?['total'];
+        if (active &&
+            processed is num &&
+            total is num &&
+            processed.isFinite &&
+            total.isFinite &&
+            processed >= 0 &&
+            total >= processed) {
+          onProgress?.call(processed.toInt(), total.toInt());
+        }
+      } catch (_) {
+        // Progress is advisory; only the actual copy decides success or failure.
+      } finally {
+        polling = false;
+      }
+    }
+
+    final timer = onProgress == null
+        ? null
+        : Timer.periodic(
+            const Duration(milliseconds: 250),
+            (_) => unawaited(poll()),
+          );
+    try {
+      await channel.invokeMethod<void>('prepareDirectory', receipt);
+    } finally {
+      active = false;
+      timer?.cancel();
+    }
   }
 
   static Future<List<FileSelection>> selectFiles({
