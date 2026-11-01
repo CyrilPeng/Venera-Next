@@ -252,8 +252,8 @@ class NaviPaneState extends State<NaviPane>
   }
 
   Widget buildMainView() {
-    return HeroControllerScope(
-      controller: MaterialApp.createMaterialHeroController(),
+    return _NaviHeroScope(
+      key: ValueKey(widget.navigatorKey),
       child: PopScope(
         canPop: _canPop,
         onPopInvokedWithResult: (didPop, result) {
@@ -725,6 +725,30 @@ class _NaviPopScopeState extends State<_NaviPopScope> {
       child: widget.child,
     );
   }
+}
+
+class _NaviHeroScope extends StatefulWidget {
+  const _NaviHeroScope({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  State<_NaviHeroScope> createState() => _NaviHeroScopeState();
+}
+
+class _NaviHeroScopeState extends State<_NaviHeroScope> {
+  // A flight must keep its observer through rebuilds and finish with its navigator.
+  late final _controller = MaterialApp.createMaterialHeroController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      HeroControllerScope(controller: _controller, child: widget.child);
 }
 
 class _NaviMainView extends StatefulWidget {
