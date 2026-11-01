@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -9,6 +10,7 @@ import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/display_image_provider.dart';
 import 'package:venera_next/foundation/image_provider/reader_image.dart';
 import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/foundation/reader_diagnostics.dart';
 
 class _Provider extends ReaderImageProvider {
   _Provider(this.bytes)
@@ -55,10 +57,12 @@ class _ScrollPolicy extends ScrollPhysics {
 }
 
 class _Fixture {
-  _Fixture(Future<Uint8List> bytes) : source = _Provider(bytes);
+  _Fixture(Future<Uint8List> bytes, {ReaderDiagnostics? diagnostics})
+    : source = _Provider(bytes),
+      work = ImageWork(diagnostics: diagnostics);
 
   final _Provider source;
-  final work = ImageWork();
+  final ImageWork work;
   late final display = ReaderDisplayImageProvider(source, work);
   bool defer = false;
   final cache = PaintingBinding.instance.imageCache;
@@ -133,6 +137,65 @@ void main() {
     'png': img.encodePng(pixels),
     'jpeg': img.encodeJpg(pixels),
   };
+
+  for (final entry in fixtures.entries) {
+    testWidgets(
+      'encoded ${entry.key} bytes do not bypass scroll deferral or measure it as display wait',
+      (tester) async {
+        var now = 0;
+        final diagnostics = ReaderDiagnostics(
+          nowMicros: () => now,
+          attachTimings: (_) {},
+          detachTimings: (_) {},
+        );
+        // Bytes are already available, as after an encoded-only predownload.
+        final fixture = _Fixture(
+          Future.value(entry.value),
+          diagnostics: diagnostics,
+        );
+        try {
+          diagnostics.start(
+            mode: ReaderDiagnosticMode.continuous,
+            processingEnabled: false,
+            appVersion: '1.18.2+243',
+            refreshRate: 120,
+          );
+          fixture.defer = true;
+          await fixture.mount(tester, comic: true);
+          now = 200000;
+          await tester.pump(const Duration(milliseconds: 200));
+          expect(fixture.source.loads, 0);
+          expect(fixture.source.decodes, 0);
+          expect(fixture.frame(tester), isNull);
+          final waiting = jsonDecode(diagnostics.exportJson()) as Map;
+          expect(waiting['retainedStageSamples']['displayWait']['count'], 0);
+
+          fixture.defer = false;
+          await tester.pump();
+          await fixture.waitForFrame(tester);
+          diagnostics.stop(ReaderDiagnosticStop.review);
+          final report = jsonDecode(diagnostics.exportJson()) as Map;
+          final event = (report['imageEvents'] as List).singleWhere(
+            (event) => event['stage'] == 'displayWait',
+          );
+          expect(event['atUs'], 200000);
+          expect(event['waitUs'], 0);
+          expect(fixture.source.loads, 1);
+          expect(fixture.source.decodes, 1);
+
+          await fixture.unmount(tester);
+          fixture.defer = true;
+          await fixture.mount(tester, comic: true);
+          await tester.pump();
+          expect(fixture.frame(tester), isNotNull);
+          expect(fixture.source.decodes, 1);
+        } finally {
+          await fixture.dispose(tester);
+          diagnostics.dispose();
+        }
+      },
+    );
+  }
 
   for (final comic in [false, true]) {
     final consumer = comic ? 'ComicImage' : 'Image';
