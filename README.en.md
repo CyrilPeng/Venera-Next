@@ -107,20 +107,20 @@ When in doubt, use the universal `VeneraNext-xxx-android.apk` package.
 
 ### Android TV
 
-TV support has completed small-scale testing and is integrated into the main branch. Future builds and releases include both mobile and TV packages. Choose a version with TV assets on the [Releases page](https://github.com/CyrilPeng/venera-next/releases):
+Download a TV APK from the [latest stable release](https://github.com/CyrilPeng/venera-next/releases/latest):
 
-| File | Description |
-|---|---|
-| `VeneraNext-xxx-android-tv.apk` | Universal TV build; recommended when the device ABI is unknown |
-| `VeneraNext-xxx-android-tv-arm64-v8a.apk` | TV ARM64 build; requires an OS that supports ARM64 apps |
-| `VeneraNext-xxx-android-tv-armeabi-v7a.apk` | TV ARM32 build for 32-bit TV or box systems |
-| `VeneraNext-xxx-android-tv-x86_64.apk` | TV x86_64 build for matching devices or emulators |
+| File | Description | Recommended for |
+|---|---|---|
+| `VeneraNext-xxx-android-tv.apk` | Universal TV build | Most Android TVs or boxes |
+| `VeneraNext-xxx-android-tv-arm64-v8a.apk` | TV ARM64 build | TVs or boxes that support ARM64 apps |
+| `VeneraNext-xxx-android-tv-armeabi-v7a.apk` | TV ARM32 build | TVs or boxes with a 32-bit OS |
+| `VeneraNext-xxx-android-tv-x86_64.apk` | TV x86_64 build | x86_64 devices or emulators |
 
-Transfer the APK to the TV and sideload it; its launcher name is **VeneraNext TV**. The separate `.tv` package and data directory do not replace the mobile app. Existing official TV Alpha installations can upgrade in place with the new TV package. Export a separate backup first; uninstalling or clearing data is not required.
+When in doubt, use the universal `VeneraNext-xxx-android-tv.apk` package.
 
-> TV packages start with builds after this mainline integration. Published `v1.18.1` and `v1.18.2-rc.6` releases do not contain TV APKs and will not be backfilled. An update notification opens the matching release page; choose an `android-tv` APK, not a mobile package.
+Transfer the APK to the TV and sideload it. Its launcher name is **VeneraNext TV**; it can coexist with the mobile app and keeps its data separate.
 
-See [TV remote controls and low-memory reading](#tv-remote-controls-and-low-memory-reading) for usage and [Android TV Distribution](doc/distribution/android_tv.en.md) for builds, upgrade rules, and compatibility limits.
+See [TV remote controls and low-memory reading](#tv-remote-controls-and-low-memory-reading) for usage and [Android TV Distribution](doc/distribution/android_tv.en.md) for installation and upgrade details.
 
 ### iOS
 
@@ -150,7 +150,7 @@ Download the package matching your distribution and architecture from the [lates
 | Arch Linux (x86_64) | `sudo pacman -U ./venera-next-xxx-x86_64.pkg.tar.zst` |
 | AppImage (x86_64 / ARM64) | Run `chmod +x VeneraNext-xxx-x86_64.AppImage`, then `./VeneraNext-xxx-x86_64.AppImage` (use the `aarch64` file on ARM64) |
 
-Replace `xxx` with the actual version in the downloaded filename. The v1.18.1 stable release includes RPM and AppImage packages for both x86_64 and ARM64. Use `uname -m` to check your architecture.
+Replace `xxx` with the actual version in the downloaded filename. RPM and AppImage packages are available for both x86_64 and ARM64. Use `uname -m` to check your architecture.
 
 Linux packages are built on Ubuntu 22.04 with a glibc 2.35 baseline. The current stable AppImage includes GTK 3 and WebKitGTK 4.1, so no separate GTK/WebKit installation is needed. It still requires host glibc 2.35 or newer and compatible OpenGL/EGL graphics drivers. See [Linux Installation and Distribution](doc/distribution/linux.en.md) for dependencies, FUSE troubleshooting, and distribution compatibility.
 
@@ -189,7 +189,7 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 - **Main UI:** use direction keys to move focus and Select / gamepad A to activate; Back / gamepad B returns. Remotes with a menu key can open context menus on supported controls.
 - **Reading surface:** direction keys turn pages or scroll; Select opens the reader menu. While the menu is open, direction keys navigate controls without turning pages in the background. Back closes the menu first, then saves progress and exits the reader.
 - **Low-memory defaults:** single-page reading, one-page preloading, a 64 MiB decoded-image cache, and an approximately 2.07-megapixel decode budget. Disable Settings → Reading → TV low-memory mode to restore previous settings and use modes such as Waterfall. This switch is device-local and excluded from backups and synchronization.
-- **Compatibility limits:** originals are unchanged, but long strips and zoomed details may look softer. The image-cache cap is not a total process-memory cap. Web login, CAPTCHA, file pickers, and similar flows may still need an input method or companion device; small-scale testing does not certify every TV or box.
+- **Usage notes:** low-memory mode leaves originals unchanged, but long strips and zoomed details may look softer. Web login, CAPTCHA, file pickers, and similar flows may need an input method or companion device.
 
 ### Nighttime and E-Ink reading
 

@@ -1,8 +1,68 @@
-# Patch release readiness
+# Release readiness
 
 This checklist tracks release preparation following v1.18.0. A release does
 not mark unresolved reports as fixed. Dated verification records and the
-original device acceptance checklist remain below.
+original device acceptance checklist remain below. The newest dated section
+defines the current release scope; older candidate sections are historical.
+
+## Stable release preparation (2026-11-01)
+
+The maintainer approved v1.18.2, build 243, rather than extending the RC series
+while waiting for every reporter. Freeze runtime changes at integrated main
+9b5a30482d250e51c7f08c3b6378b3af019f4071. Release preparation changes metadata
+and documentation only. Include the earlier RC fixes, two-level favorites,
+Android TV, QuickJS buffer handling, Windows WebView2 proxy routing and Tokio
+1.54.1. HarmonyOS stays separate. Keep historical tags and releases unchanged.
+
+### Acceptance gates
+
+- Run the exact release commit's metadata, script, strict analysis, full
+  Flutter, TV flavor, native and dependency checks. Earlier PR results are
+  useful evidence, not a substitute for these checks.
+- Recheck old favorites migration before wider distribution: preserve direct
+  contents, order, network links, timestamps and follow-update preferences;
+  keep the independent pre-migration SQLite snapshot; roll back failures;
+  reopen the database; round-trip complete backups and WebDAV snapshots; reject
+  malformed or unknown modern schemas before replacing live data.
+- Migration occurs on initialization, not only after using child folders.
+  Back up application data separately and retain original comics. Devices
+  sharing sync data should upgrade together; do not alternate old and new
+  writers. Downgrade recovery uses the pre-upgrade backup, not a promise of
+  backward-compatible live data. No data reset is part of acceptance.
+- Build fresh release packages on the tag for Android mobile and TV, Windows,
+  macOS, iOS, Linux x64 and Linux ARM64. Windows release CI must pass its
+  isolated installation/startup checks. Android checks must preserve the
+  published signing certificate, package IDs and monotonically increasing
+  version codes, including upgrades from the TV Alpha line.
+- Publish only after all required jobs pass. Expected public inventory is
+  19 installation assets (8 APK, 2 Windows, 1 DMG, 1 IPA, 2 DEB, 2 RPM,
+  2 AppImage, 1 Arch package) plus 2 Android provenance/SHA-256 manifests.
+  Verify the annotated tag target, non-prerelease/latest status, asset names,
+  sizes, digests and matching release notes. Do not relabel RC artifacts.
+- Update AltStore only from the actual public IPA metadata and review its
+  automation PR. Validate and submit the stable Winget manifest; distinguish
+  submission from Microsoft approval and public-source availability. Remove
+  merged temporary branches, keeping main and HarmonyOS as long-lived branches.
+
+### Feedback and known boundaries
+
+#125 has a confirmed application-side buffer handling fix, but its remaining
+first-view pause with processing disabled is unresolved. The completed
+first-view/revisit comparison must not be requested again. Do not infer a
+network-only or device-only cause from report volume. #128 is an application
+Windows proxy bug, not a comic-source defect; original-device site login is
+still outstanding. #110/#115, #126 and #129 keep their own unresolved scope.
+#111 is closed after the reporter confirmed normal startup on v1.18.1.
+
+After publication, send one version-specific notice to the newly delivered
+feature/fix issues and retain their open state pending verification. For the
+first week, triage reproducible startup failures, data loss or widespread
+crashes as hotfix/distribution-stop candidates; track limited performance
+reports separately. Collect version/build, flavor, device/OS, reader mode,
+local/remote content type and minimal steps, with existing opt-in diagnostics
+only when needed. Do not enable automatic telemetry, request private backups,
+repeat completed comparisons or treat silence as acceptance. No scheduled
+monitor is created by this release procedure.
 
 ## Sixth patch candidate preparation (2026-10-30)
 

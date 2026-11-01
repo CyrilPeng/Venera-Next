@@ -105,20 +105,20 @@
 
 ### Android TV
 
-TV 版已完成小范围测试并纳入主线，后续构建和版本发布会同时提供手机与 TV 安装包。在 [Releases](https://github.com/CyrilPeng/venera-next/releases) 中选择含 TV 资产的版本：
+从 [最新稳定版](https://github.com/CyrilPeng/venera-next/releases/latest) 下载 TV APK 安装包：
 
-| 文件名 | 说明 |
-|---|---|
-| `VeneraNext-xxx-android-tv.apk` | TV 通用版，不确定设备架构时优先选用 |
-| `VeneraNext-xxx-android-tv-arm64-v8a.apk` | TV ARM64 版，要求系统支持 ARM64 应用 |
-| `VeneraNext-xxx-android-tv-armeabi-v7a.apk` | TV ARM32 版，适合 32 位系统的电视或盒子 |
-| `VeneraNext-xxx-android-tv-x86_64.apk` | TV x86_64 版，适合对应设备或模拟器 |
+| 文件名 | 说明 | 适用场景 |
+|---|---|---|
+| `VeneraNext-xxx-android-tv.apk` | TV 通用版 | 适用于大多数 Android 电视或盒子 |
+| `VeneraNext-xxx-android-tv-arm64-v8a.apk` | TV ARM64 版 | 支持 ARM64 应用的电视或盒子 |
+| `VeneraNext-xxx-android-tv-armeabi-v7a.apk` | TV ARM32 版 | 32 位系统的电视或盒子 |
+| `VeneraNext-xxx-android-tv-x86_64.apk` | TV x86_64 版 | x86_64 设备或模拟器 |
 
-将 APK 传到电视后侧载，启动器名称为 **VeneraNext TV**。TV 版使用独立 `.tv` 包名和数据目录，不会覆盖手机版；已有官方 TV Alpha 测试版可使用新 TV 包覆盖升级，升级前先另存数据备份，无需卸载或清空数据。
+**推荐**：如果不确定应该下载哪个，选择通用版 `VeneraNext-xxx-android-tv.apk`。
 
-> TV 包从本次主线集成后的新构建开始提供；已发布的 `v1.18.1`、`v1.18.2-rc.6` 不包含 TV 包，不会回填旧 Release。应用更新提示会打开相应发布页，请选择文件名含 `android-tv` 的 APK，而不是手机版包。
+将 APK 传到电视后侧载，启动器名称为 **VeneraNext TV**，可与手机版共存，数据独立。
 
-遥控器操作与默认阅读策略见[TV 遥控器与低内存阅读](#tv-遥控器与低内存阅读)，构建、升级规则和兼容边界见 [Android TV 分发说明](doc/distribution/android_tv.zh.md)。
+操作说明见 [TV 遥控器与低内存阅读](#tv-遥控器与低内存阅读)，安装与升级详情见 [Android TV 分发说明](doc/distribution/android_tv.zh.md)。
 
 ### iOS
 
@@ -148,7 +148,7 @@ Windows 安装器、便携包和 winget manifest 维护说明见 [doc/distributi
 | Arch Linux（x86_64） | `sudo pacman -U ./venera-next-xxx-x86_64.pkg.tar.zst` |
 | AppImage（x86_64 / ARM64） | `chmod +x VeneraNext-xxx-x86_64.AppImage`，再执行 `./VeneraNext-xxx-x86_64.AppImage`（ARM64 选择 `aarch64` 文件） |
 
-`xxx` 请替换为下载文件中的实际版本号。v1.18.1 稳定版提供 x86_64 和 ARM64 的 RPM 与 AppImage；可用 `uname -m` 查看机器架构。
+`xxx` 请替换为下载文件中的实际版本号。RPM 与 AppImage 提供 x86_64 和 ARM64 版本；可用 `uname -m` 查看机器架构。
 
 Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定版 AppImage 已包含 GTK 3 和 WebKitGTK 4.1，无需额外安装 GTK/WebKit；仍需系统提供 glibc 2.35 或更新版本及兼容的 OpenGL/EGL 显卡驱动。依赖安装、FUSE 问题及发行版兼容范围见 [Linux 安装与分发](doc/distribution/linux.zh.md)。
 
@@ -187,7 +187,7 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 - **主界面**：方向键移动焦点，确定键／手柄 A 激活；返回键／手柄 B 返回。支持菜单键的遥控器可打开部分控件的上下文菜单。
 - **阅读画面**：方向键翻页或滚动，确定键打开阅读菜单；菜单打开后方向键只选择菜单控件，不会在背景翻页。返回先收起菜单，再保存进度并退出阅读器。
 - **默认低内存模式**：单页阅读、预加载 1 页、64 MiB 解码图片缓存和约 207 万像素解码预算。可在“设置 → 阅读器 → TV 低内存模式”关闭，恢复原有阅读配置并使用瀑布流等模式；这个开关仅保存在当前设备，不参与备份或同步。
-- **兼容边界**：低内存模式不修改原文件，但长条图和放大细节可能变糊；缓存上限不是应用总内存上限。网页登录、验证码、文件选择器等仍可能需要输入法或配套输入设备，小范围测试不代表所有电视和盒子均已验证。
+- **使用提示**：低内存模式不修改原文件，但长条图和放大细节可能变糊。网页登录、验证码和文件选择器等可能需要输入法或配套输入设备。
 
 ### 夜间与墨水屏阅读
 
