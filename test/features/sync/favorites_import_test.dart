@@ -16,6 +16,7 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 
 import '../../support/legacy_favorites_fixture.dart';
+import '../../support/zip_fixture.dart';
 
 FavoriteItem _item(String id) => FavoriteItem(
   id: id,
@@ -323,5 +324,94 @@ void main() {
         }
       },
     );
+  }
+
+  for (final sync in [false, true]) {
+    for (final damage in ZipFixtureDamage.values) {
+      test(
+        'damaged ZIP preserves live favorites and settings; sync=$sync damage=$damage',
+        () async {
+          final root = Directory.systemTemp.createTempSync(
+            'damaged-favorites-',
+          );
+          final checkpoint = appdata.captureImportCheckpoint();
+          final manager = LocalFavoritesManager();
+          try {
+            App.dataPath = (Directory('${root.path}/data')..createSync()).path;
+            App.cachePath = (Directory(
+              '${root.path}/cache',
+            )..createSync()).path;
+            await manager.init();
+            await manager.createFolder('original');
+            await manager.addComic('original', _item('old'));
+            await manager.debugWaitForHashedIdsRefresh();
+            await appdata.saveData(false);
+            final generation = manager.connectionGeneration;
+            final before = File(manager.databasePath).readAsBytesSync();
+            final settings = jsonEncode(appdata.toJson());
+            final savedSettings = File(
+              '${App.dataPath}/appdata.json',
+            ).readAsBytesSync();
+            final incomingPath = '${root.path}/incoming.db';
+            final incoming = sqlite3.open(incomingPath);
+            try {
+              final repository = FavoritesRepository(incoming)
+                ..initializeMetadata();
+              repository.createFolder('imported');
+              repository.addComic(
+                'imported',
+                _item('new'),
+                translatedTags: '',
+                append: true,
+              );
+            } finally {
+              incoming.dispose();
+            }
+            final entries = [
+              ZipFixtureEntry(
+                utf8.encode('appdata.json'),
+                utf8.encode(
+                  jsonEncode({
+                    'settings': {'language': 'ja-JP'},
+                    'searchHistory': ['incoming'],
+                  }),
+                ),
+              ),
+              ZipFixtureEntry(
+                utf8.encode('local_favorite.db'),
+                File(incomingPath).readAsBytesSync(),
+              ),
+            ];
+            final source = File('${root.path}/incoming.venera')
+              ..writeAsBytesSync(zipFixture(entries, damage: damage));
+            Future<DataSyncCommitState> restore() => sync
+                ? importSyncAppData(source, checkActive: () {})
+                : importAppData(source);
+
+            await expectLater(restore(), throwsFormatException);
+            expect(manager.connectionGeneration, generation);
+            expect(File(manager.databasePath).readAsBytesSync(), before);
+            expect(jsonEncode(appdata.toJson()), settings);
+            expect(
+              File('${App.dataPath}/appdata.json').readAsBytesSync(),
+              savedSettings,
+            );
+            expect(manager.getFolderComics('original').single.id, 'old');
+            expect(Directory(App.cachePath).listSync(), isEmpty);
+
+            source.writeAsBytesSync(zipFixture(entries));
+            expect(await restore(), DataSyncCommitState.applied);
+            expect(manager.getFolderComics('imported').single.id, 'new');
+            expect(manager.isExist('old', ComicType.local), isFalse);
+            expect(appdata.searchHistory, ['incoming']);
+          } finally {
+            await AppDataOperations.instance.run(() async {});
+            await manager.closeAndWait();
+            await appdata.restoreImportCheckpoint(checkpoint, persist: false);
+            root.deleteSync(recursive: true);
+          }
+        },
+      );
+    }
   }
 }

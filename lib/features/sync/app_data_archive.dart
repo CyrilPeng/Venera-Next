@@ -98,7 +98,12 @@ Future<void> _deleteTemporary(FileSystemEntity entity) async {
 void _extractZip(String archivePath, String outputPath) {
   final input = archive_io.InputFileStream(archivePath);
   try {
-    final archive = archive_io.ZipDecoder().decodeStream(input);
+    // Partial output must never be promoted to a valid backup database.
+    final archive = archive_io.ZipDecoder().decodeStream(
+      input,
+      verify: true,
+      throwOnError: true,
+    );
     final entries = archive.map((entry) {
       final name = entry.name.replaceAll('\\', '/');
       final destination = p.normalize(p.join(outputPath, name));
