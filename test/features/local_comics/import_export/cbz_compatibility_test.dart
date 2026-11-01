@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'package:archive/archive_io.dart' as archive_io;
 import 'package:enough_convert/enough_convert.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/features/local_comics/import_export/import_export.dart';
 import 'package:venera_next/foundation/file_system.dart';
+
+import '../../../support/zip_fixture.dart';
 
 void main() {
   group('CBZ compatibility helpers', () {
@@ -275,4 +278,129 @@ void main() {
       }
     });
   });
+
+  group('ZIP decoder compatibility', () {
+    const chineseName = '猫之眼[北条司]/第01卷/001.jpg';
+    const literalLatinName = '\u00c3\u00a9.jpg';
+    final filenameCases = [
+      (
+        'GBK',
+        ZipFixtureEntry(const GbkCodec().encode(chineseName), [1]),
+        chineseName,
+      ),
+      (
+        'flagged UTF-8',
+        ZipFixtureEntry(utf8.encode(chineseName), [1], utf8Name: true),
+        chineseName,
+      ),
+      (
+        'unflagged UTF-8',
+        ZipFixtureEntry(utf8.encode(chineseName), [1]),
+        chineseName,
+      ),
+      (
+        'literal Latin UTF-8',
+        ZipFixtureEntry(utf8.encode(literalLatinName), [1], utf8Name: true),
+        literalLatinName,
+      ),
+      (
+        'unflagged literal Latin UTF-8',
+        ZipFixtureEntry(utf8.encode(literalLatinName), [1]),
+        literalLatinName,
+      ),
+      (
+        'CP437',
+        ZipFixtureEntry(
+          [...ascii.encode('caf'), 0x82, ...ascii.encode('/001.jpg')],
+          [1],
+        ),
+        'caf\u00e9/001.jpg',
+      ),
+      (
+        'Unicode path',
+        ZipFixtureEntry(const GbkCodec().encode(chineseName), [
+          1,
+        ], unicodePath: '第02卷/001.jpg'),
+        '第02卷/001.jpg',
+      ),
+      (
+        'literal Latin Unicode path',
+        ZipFixtureEntry(ascii.encode('fallback.jpg'), [
+          1,
+        ], unicodePath: literalLatinName),
+        literalLatinName,
+      ),
+      (
+        'invalid Unicode path CRC',
+        ZipFixtureEntry(
+          const GbkCodec().encode(chineseName),
+          [1],
+          unicodePath: 'wrong.jpg',
+          validUnicodePathCrc: false,
+        ),
+        chineseName,
+      ),
+    ];
+
+    for (final (label, entry, expectedName) in filenameCases) {
+      test('preserves $label from independently encoded name bytes', () async {
+        final root = Directory.systemTemp.createTempSync('zip-name-');
+        addTearDown(() => root.deleteSync(recursive: true));
+        final file = File('${root.path}/book.cbz')
+          ..writeAsBytesSync(zipFixture([entry]));
+        final out = Directory('${root.path}/out')..createSync();
+        await _extractWithDart(file, out);
+        expect(File('${out.path}/$expectedName').readAsBytesSync(), [1]);
+        expect(out.listSync(recursive: true).whereType<File>(), hasLength(1));
+      });
+    }
+
+    for (final damage in ZipFixtureDamage.values) {
+      test(
+        'Dart fallback rejects $damage instead of accepting missing pages',
+        () async {
+          final root = Directory.systemTemp.createTempSync('zip-damage-');
+          addTearDown(() => root.deleteSync(recursive: true));
+          final file = File('${root.path}/book.cbz')
+            ..writeAsBytesSync(
+              zipFixture([
+                ZipFixtureEntry(ascii.encode('001.jpg'), List.filled(4096, 1)),
+              ], damage: damage),
+            );
+          final out = Directory('${root.path}/out')..createSync();
+          await expectLater(_extractWithDart(file, out), throwsFormatException);
+          file.renameSync('${file.path}.released');
+        },
+      );
+    }
+
+    test(
+      'valid Unicode metadata cannot bypass the decoded path guard',
+      () async {
+        final root = Directory.systemTemp.createTempSync('zip-unicode-path-');
+        addTearDown(() => root.deleteSync(recursive: true));
+        final file = File('${root.path}/book.cbz')
+          ..writeAsBytesSync(
+            zipFixture([
+              ZipFixtureEntry(ascii.encode('safe.jpg'), [
+                1,
+              ], unicodePath: '../escape.jpg'),
+            ]),
+          );
+        final out = Directory('${root.path}/out')..createSync();
+        await _extractWithDart(file, out);
+        expect(out.listSync(), isEmpty);
+        expect(File('${root.path}/escape.jpg').existsSync(), isFalse);
+      },
+    );
+  });
 }
+
+Future<void> _extractWithDart(File file, Directory out) => CBZ.extractArchive(
+  file,
+  out,
+  zipExtractor: (_, _, _) async =>
+      throw const FormatException('Use Dart fallback'),
+  sevenZipExtractor: (_, _, _) async =>
+      throw const FormatException('Use Dart fallback'),
+);

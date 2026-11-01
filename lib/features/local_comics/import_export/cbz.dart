@@ -73,7 +73,9 @@ abstract class CBZ {
   ) async {
     final input = archive_io.InputFileStream(archivePath);
     try {
-      final archive = archive_io.ZipDecoder().decodeStream(input);
+      final archive = archive_io.ZipDecoder(
+        filenameEncoding: const _LegacyZipFilenameEncoding(),
+      ).decodeStream(input, verify: true, throwOnError: true);
       for (final entry in archive) {
         final entryName = _normalizeZipEntryName(entry.name);
         if (entryName == null) continue;
@@ -99,8 +101,7 @@ abstract class CBZ {
   }
 
   static String? _normalizeZipEntryName(String name) {
-    final decodedName = _decodeLegacyZipName(name);
-    final normalized = decodedName.replaceAll('\\', '/');
+    final normalized = name.replaceAll('\\', '/');
     final segments = normalized
         .split('/')
         .where((segment) => segment.isNotEmpty && segment != '.')
@@ -112,49 +113,6 @@ abstract class CBZ {
       return null;
     }
     return segments.join(Platform.pathSeparator);
-  }
-
-  static String _decodeLegacyZipName(String name) {
-    final bytes = name.codeUnits;
-    if (bytes.any((byte) => byte > 0xff)) {
-      return name;
-    }
-    try {
-      final decoded = const GbkCodec().decode(bytes);
-      if (_containsCjk(decoded) &&
-          (!_containsCjk(name) || _looksLikeMojibake(name))) {
-        return decoded;
-      }
-      return name;
-    } catch (_) {
-      return name;
-    }
-  }
-
-  static bool _containsCjk(String name) {
-    return name.runes.any(
-      (rune) =>
-          rune >= 0x3400 && rune <= 0x9fff || rune >= 0xf900 && rune <= 0xfaff,
-    );
-  }
-
-  static bool _looksLikeMojibake(String name) {
-    return name.contains('�') ||
-        name.contains('├') ||
-        name.contains('┬') ||
-        name.contains('╬') ||
-        name.contains('▒') ||
-        name.contains('╫') ||
-        name.contains('╓') ||
-        name.contains('╘') ||
-        name.contains('─') ||
-        name.contains('│') ||
-        name.contains('µ') ||
-        name.contains('Ú') ||
-        name.contains('¾') ||
-        name.contains('Ï') ||
-        name.contains('Ã') ||
-        name.contains('Â');
   }
 
   static bool _isWithinDirectory(String directory, String filePath) {
@@ -552,6 +510,42 @@ abstract class CBZ {
 
   static Future<void> _compress(String src, String dst) async {
     await ZipFile.compressFolderAsync(src, dst, 4);
+  }
+}
+
+// ZipDecoder invokes this only for unflagged raw names and still gives valid
+// Unicode Path metadata precedence. A FormatException keeps its CP437 fallback.
+class _LegacyZipFilenameEncoding extends Encoding {
+  const _LegacyZipFilenameEncoding();
+
+  @override
+  String get name => 'zip-utf8-gbk';
+
+  @override
+  Converter<String, List<int>> get encoder => utf8.encoder;
+
+  @override
+  Converter<List<int>, String> get decoder => const _LegacyZipFilenameDecoder();
+}
+
+class _LegacyZipFilenameDecoder extends Converter<List<int>, String> {
+  const _LegacyZipFilenameDecoder();
+
+  @override
+  String convert(List<int> input) {
+    try {
+      return utf8.decode(input);
+    } on FormatException {
+      final decoded = const GbkCodec().decode(input);
+      if (decoded.runes.any(
+        (rune) =>
+            rune >= 0x3400 && rune <= 0x9fff ||
+            rune >= 0xf900 && rune <= 0xfaff,
+      )) {
+        return decoded;
+      }
+      throw const FormatException('Not a UTF-8 or CJK GBK ZIP filename');
+    }
   }
 }
 
