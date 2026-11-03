@@ -13,6 +13,7 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
+import 'favorite_folder_browser.dart';
 
 Future<void> sortFolders(BuildContext context) {
   final result = _sortFolders(context);
@@ -39,7 +40,14 @@ Future<void> _sortFolders(BuildContext context) async {
   final manager = store.manager;
   final generation = manager.connectionGeneration;
   final dataPath = App.dataPath;
-  final folders = List<String>.of(manager.folderNames);
+  final tree = manager.folderTree;
+  final groups = <String?, List<String>>{
+    null: tree.roots.map((folder) => folder.name).toList(),
+    for (final root in tree.roots)
+      root.id: tree.childrenOf(root.id).map((folder) => folder.name).toList(),
+  };
+  String? parentId;
+  var folders = groups[null]!;
   final navigator = Navigator.of(context, rootNavigator: true);
   bool isCurrentDatabase() =>
       store.isCurrent &&
@@ -95,6 +103,20 @@ Future<void> _sortFolders(BuildContext context) async {
                 if (view.mounted && canDismiss()) navigator.pop();
               },
               tailing: [
+                if (tree.flattened.any((folder) => folder.parentId != null))
+                  FavoriteFolderSelect(
+                    tree: tree,
+                    current: tree.identified(parentId ?? '')?.name,
+                    allowRoot: true,
+                    rootsOnly: true,
+                    onChanged: (name) {
+                      if (!canEdit(view)) return;
+                      setState(() {
+                        parentId = name == null ? null : tree.named(name)!.id;
+                        folders = groups[parentId]!;
+                      });
+                    },
+                  ),
                 Tooltip(
                   message: "Help".tl,
                   child: IconButton(
@@ -159,6 +181,37 @@ Future<void> _sortFolders(BuildContext context) async {
                 itemBuilder: (context, index) => ListTile(
                   key: ValueKey(folders[index]),
                   title: Text(folders[index]),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Move up'.tl,
+                        icon: const Icon(Icons.arrow_upward),
+                        onPressed: index == 0
+                            ? null
+                            : () {
+                                if (!canEdit(view)) return;
+                                setState(() {
+                                  final item = folders.removeAt(index);
+                                  folders.insert(index - 1, item);
+                                });
+                              },
+                      ),
+                      IconButton(
+                        tooltip: 'Move down'.tl,
+                        icon: const Icon(Icons.arrow_downward),
+                        onPressed: index == folders.length - 1
+                            ? null
+                            : () {
+                                if (!canEdit(view)) return;
+                                setState(() {
+                                  final item = folders.removeAt(index);
+                                  folders.insert(index + 1, item);
+                                });
+                              },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -170,11 +223,25 @@ Future<void> _sortFolders(BuildContext context) async {
         canDismiss: canDismiss,
       );
       await present(popup, ended);
-      final order = List<String>.of(folders);
+      final order = [
+        for (final root in groups[null]!) ...[
+          root,
+          ...groups[tree.named(root)!.id]!,
+        ],
+      ];
       // Closing the original host must still persist its accepted draft.
       // Database replacement, however, retires the old write at admission.
       await AppDataOperations.instance.access(() async {
         checkDatabase();
+        final current = manager.folderTree;
+        if (current.flattened.length != tree.flattened.length ||
+            tree.flattened.any(
+              (folder) =>
+                  current.named(folder.name)?.id != folder.id ||
+                  current.named(folder.name)?.parentId != folder.parentId,
+            )) {
+          throw StateError('Favorite folders changed while sorting');
+        }
         await manager.updateOrder(order);
       });
     }, reportFailureOnClose: true);

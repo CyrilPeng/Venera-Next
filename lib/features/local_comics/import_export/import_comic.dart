@@ -265,7 +265,7 @@ class ImportComic {
       () => selectFile(ext: ['zip'], checkStop: operation.checkActive),
     );
     if (file == null) return false;
-    final controller = presentation.showLoading(
+    var controller = presentation.showLoading(
       allowCancel: false,
       message: 'Extracting comic collection'.tl,
     );
@@ -284,9 +284,25 @@ class ImportComic {
                 await extractComicCollection(source, workspace);
               },
               consume: (workspace) async {
+                final layout = await inspectComicCollection(workspace);
+                operation.checkActive();
+                var collectionRoot = layout.root;
+                final enclosing = layout.enclosingComic;
+                if (enclosing != null) {
+                  controller?.close();
+                  controller = null;
+                  final separate = await presentation.chooseCollectionLayout(
+                    enclosingComic: enclosing,
+                    comicTitles: layout.comicTitles,
+                  );
+                  operation.checkActive();
+                  if (separate == null) throw const SelectionCancelled();
+                  if (!separate) collectionRoot = workspace;
+                  controller = presentation.showLoading(allowCancel: false);
+                }
                 controller?.setMessage('Scanning and importing comics'.tl);
                 return importing.directory(
-                  workspace,
+                  collectionRoot,
                   single: false,
                   copy: true,
                   folder: selectedFolder,

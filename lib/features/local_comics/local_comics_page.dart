@@ -361,6 +361,11 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
             ),
           SliverGridComics(
             comics: comics,
+            badgeBuilder: (comic) => comic is LocalComic && comic.isIncomplete
+                ? 'Incomplete: @a missing pages'.tlParams({
+                    'a': comic.missingImageCount,
+                  })
+                : null,
             showHiddenCount: true,
             selections: selectedComics,
             onLongPressed: (c, heroID) {
@@ -392,6 +397,33 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
             },
             menuBuilder: (c) {
               return [
+                if (c is LocalComic && c.isIncomplete)
+                  MenuEntry(
+                    icon: Icons.refresh,
+                    text: 'Retry missing pages'.tl,
+                    onClick: () {
+                      final manager = LocalManager();
+                      final task = manager.downloadingTasks
+                          .where(
+                            (task) =>
+                                task.id == c.id &&
+                                task.comicType == c.comicType,
+                          )
+                          .firstOrNull;
+                      if (task?.isAwaitingMissingPages == true) {
+                        manager.retryMissingPages(task!);
+                      } else {
+                        context.to(
+                          () => ComicPage(
+                            id: c.id,
+                            sourceKey: c.sourceKey,
+                            cover: c.cover,
+                            title: c.title,
+                          ),
+                        );
+                      }
+                    },
+                  ),
                 MenuEntry(
                   icon: Icons.watch_later_outlined,
                   text:

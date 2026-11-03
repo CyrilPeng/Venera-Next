@@ -58,6 +58,108 @@ void main() {
     },
   );
 
+  Future<ComicCollectionLayout> inspectPaths(List<String> names) async {
+    writeZip([
+      for (final name in names) archive.ArchiveFile.bytes(name, [1, 2, 3]),
+    ]);
+    await extractComicCollection(source, workspace);
+    return inspectComicCollection(workspace);
+  }
+
+  test(
+    'recognizes one outer folder when a contained comic has chapters',
+    () async {
+      final layout = await inspectPaths([
+        'Collection/Book 10/1.png',
+        'Collection/Book 2/Chapter/1.png',
+      ]);
+      expect(layout.root.path, p.join(workspace.path, 'Collection'));
+      expect(layout.enclosingComic, isNull);
+      expect(layout.comicTitles, ['Book 2', 'Book 10']);
+      expect(source.existsSync(), isTrue);
+    },
+  );
+
+  test('keeps normal multi-book roots unchanged', () async {
+    final layout = await inspectPaths(['Book A/1.png', 'Book B/Chapter/1.png']);
+    expect(layout.root.path, workspace.path);
+    expect(layout.enclosingComic, isNull);
+  });
+
+  for (final names in [
+    ['Collection/Book A/1.png', 'Collection/Book B/1.png'],
+    ['Book/Chapter 1/1.png', 'Book/Chapter 2/1.png'],
+    ['Collection/Book A/1.png'],
+  ]) {
+    test(
+      'marks structurally ambiguous books/chapters for confirmation: $names',
+      () async {
+        final layout = await inspectPaths(names);
+        expect(layout.enclosingComic, names.first.split('/').first);
+        expect(
+          layout.comicTitles,
+          names.map((name) => name.split('/')[1]).toList(),
+        );
+        expect(layout.root.path, p.join(workspace.path, layout.enclosingComic));
+      },
+    );
+  }
+
+  for (final names in [
+    ['Book/1.png', 'Book/2.png'],
+    ['Book/cover.PNG', 'Book/Chapter 1/1.png', 'Book/Chapter 2/1.png'],
+    ['Book/1.png', 'Book/Chapter/1.png'],
+  ]) {
+    test('pages or a cover keep a single comic root intact: $names', () async {
+      final layout = await inspectPaths(names);
+      expect(layout.root.path, workspace.path);
+      expect(layout.enclosingComic, isNull);
+    });
+  }
+
+  test('ignores ZIP sidecars for detection but keeps their bytes', () async {
+    final layout = await inspectPaths([
+      '.DS_Store',
+      '._cover.png',
+      '__MACOSX/._Book',
+      'README.txt',
+      'Collection/.hidden/1.png',
+      'Collection/Book/Chapter/1.png',
+    ]);
+    expect(layout.root.path, p.join(workspace.path, 'Collection'));
+    expect(layout.enclosingComic, isNull);
+    expect(layout.comicTitles, ['Book']);
+    expect(File(p.join(workspace.path, '.DS_Store')).readAsBytesSync(), [
+      1,
+      2,
+      3,
+    ]);
+  });
+
+  test(
+    'does not flatten a malformed deep tree or multiple wrapper roots',
+    () async {
+      final layout = await inspectPaths([
+        'Outer/Another/Book/Chapter/1.png',
+        'Other/Book/1.png',
+      ]);
+      expect(layout.root.path, workspace.path);
+      expect(layout.enclosingComic, isNull);
+    },
+  );
+
+  test('rejects a wrapped unsafe path before writing good comics', () async {
+    writeZip([
+      archive.ArchiveFile.bytes('Collection/Good/1.png', [1]),
+      archive.ArchiveFile.bytes('Collection/.hidden/../../escape.png', [2]),
+    ]);
+    await expectLater(
+      extractComicCollection(source, workspace),
+      throwsFormatException,
+    );
+    expect(workspace.listSync(), isEmpty);
+  });
+
   for (final name in [
     '../escape.png',
     '/absolute.png',

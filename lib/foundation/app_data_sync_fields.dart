@@ -16,8 +16,8 @@ const appDataLocalFields = {
   ...appDataDeviceOnlyFields,
 };
 
-/// Native registrations must not travel in portable backups or WebDAV uploads.
-const appDataDeviceOnlyFields = {'windowsWindowHotkey'};
+/// Device policies must not travel in portable backups or WebDAV uploads.
+const appDataDeviceOnlyFields = {'windowsWindowHotkey', 'tvLowMemoryMode'};
 
 const appDataOptionalArchiveFields = {'backupWebdav', 'backupWebdavPath'};
 

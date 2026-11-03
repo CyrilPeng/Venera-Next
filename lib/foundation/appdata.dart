@@ -6,6 +6,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_profile.dart';
+import 'package:venera_next/foundation/tv_reader_policy.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/app_data_sync_fields.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
@@ -686,8 +688,12 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
         true;
   }
 
+  bool get tvLowMemoryEnabled =>
+      AppProfile.current.isTv &&
+      TvReaderPolicy.lowMemory.normalize(_data[TvReaderPolicy.lowMemory.key]);
+
   ReaderSettings get globalReaderSettings =>
-      ReaderSettings.resolve(global: _data);
+      ReaderSettings.resolve(global: _data, tvLowMemory: tvLowMemoryEnabled);
 
   /// Resolve an immutable snapshot without changing stored settings or scopes.
   ReaderSettings readerSettings(String comicId, String sourceKey) {
@@ -704,6 +710,7 @@ class Settings with ChangeNotifier implements ReaderPreferenceSettings {
           : null,
       comic: record(_data['comicSpecificSettings'], '$comicId@$sourceKey'),
       layout: comicLayout(comicId, sourceKey),
+      tvLowMemory: tvLowMemoryEnabled,
     );
   }
 

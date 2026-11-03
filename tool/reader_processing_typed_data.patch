@@ -1,0 +1,15 @@
+--- a/lib/src/ffi.dart
++++ b/lib/src/ffi.dart
+@@ -9,4 +9,5 @@
+ import 'dart:ffi' as ffi;
+ import 'dart:io';
+ import 'dart:isolate';
++import 'dart:typed_data';
+ import 'package:ffi/ffi.dart';
+@@ -47,5 +48,5 @@
+     void Function(JSRef) cb, [
+     Set? cache,
+   ]) {
+-    if (obj == null) return;
++    if (obj == null || obj is TypedData) return;
+     if (cache == null) cache = Set();

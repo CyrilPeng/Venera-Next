@@ -1,10 +1,54 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as path;
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/favorites/favorites_api.dart';
 import 'package:venera_next/features/favorites/favorites_repository.dart';
 import 'package:venera_next/foundation/persistence_failure.dart';
+import 'package:venera_next/foundation/comic_type.dart';
 
 import 'local_comic_model.dart';
 import 'local_repository.dart';
+
+String findUnusedLocalComicId(
+  Database localDatabase,
+  ComicType type, {
+  String? favoritesPath,
+}) {
+  final explicitFavorites = favoritesPath != null;
+  if (favoritesPath == null) {
+    final filename =
+        localDatabase
+                .select('PRAGMA database_list;')
+                .singleWhere((row) => row['name'] == 'main')['file']
+            as String;
+    if (filename.isNotEmpty) {
+      favoritesPath = path.join(path.dirname(filename), 'local_favorite.db');
+    }
+  }
+  final local = LocalRepository(localDatabase);
+  if (favoritesPath == null) {
+    return local.findValidId(type);
+  }
+  final kind = FileSystemEntity.typeSync(favoritesPath);
+  if (kind == FileSystemEntityType.notFound && !explicitFavorites) {
+    return local.findValidId(type);
+  }
+  if (kind != FileSystemEntityType.file) {
+    throw StateError('Favorites database is missing or unavailable');
+  }
+  // A migrated favorite may outlive local.db. Read the original store even
+  // without a selected folder or initialized UI; never create or repair it here.
+  final favorites = sqlite3.open(favoritesPath, mode: OpenMode.readOnly);
+  try {
+    return local.findValidId(
+      type,
+      reservedIds: FavoritesRepository(favorites).comicIds(type.value),
+    );
+  } finally {
+    favorites.dispose();
+  }
+}
 
 /// A single SQLite commit owns both records. The caller holds data admission,
 /// local write ownership and the favorites mutation queue. Publication follows
@@ -57,8 +101,16 @@ void registerLocalComicRecords({
     if (local.find(id, comic.comicType) != null) {
       throw StateError('Comic registration identity is already in use');
     }
+    final favorites = FavoritesRepository(localDatabase);
+    if (favorites.containsIdentity(
+      id,
+      comic.comicType.value,
+      schema: 'registration_favorites',
+    )) {
+      throw StateError('Favorite registration identity is already in use');
+    }
     local.add(comic, id);
-    final added = FavoritesRepository(localDatabase).addComic(
+    final added = favorites.addComic(
       folder,
       favorite,
       translatedTags: translatedTags,

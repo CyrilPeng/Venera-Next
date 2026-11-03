@@ -13,11 +13,13 @@ class ApplicationUpdateService {
   ApplicationUpdateService({
     required Dio Function() createClient,
     required String Function() currentVersion,
+    this.forAndroidTv = false,
   }) : _createClient = createClient,
        _currentVersion = currentVersion;
 
   final Dio Function() _createClient;
   final String Function() _currentVersion;
+  final bool forAndroidTv;
   final _pending = <RequestScope, Future<void>>{};
   final _cleanupFailures = <ApplicationUpdateCleanupFailure>[];
   bool _closed = false;
@@ -81,7 +83,7 @@ class ApplicationUpdateService {
         }
       }
       final latest = selectPublishedReleaseVersion(
-        data,
+        forAndroidTv ? releases.where(_hasTvPackage).toList() : data,
         includePrerelease: includePrerelease,
       );
       available = latest != null && shouldNotifyRelease(latest, version)
@@ -123,6 +125,23 @@ class ApplicationUpdateService {
     }
     scope.check();
     return available;
+  }
+
+  static bool _hasTvPackage(Object? release) {
+    if (release is! Map || release['assets'] is! List) return false;
+    final version = (release['tag_name'] as String).replaceFirst(
+      RegExp(r'^[vV]'),
+      '',
+    );
+    // Updates open the release page, never download a guessed mobile APK.
+    // Require the universal TV package so the offered release is installable.
+    return (release['assets'] as List).whereType<Map>().any(
+      (asset) =>
+          asset['name'] == 'VeneraNext-$version-android-tv.apk' &&
+          asset['state'] == 'uploaded' &&
+          asset['size'] is num &&
+          (asset['size'] as num) > 0,
+    );
   }
 
   Future<void> closeAndWait() {

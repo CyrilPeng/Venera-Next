@@ -17,4 +17,17 @@ LocalComic localComicFromRow(Row row) => LocalComic(
     jsonDecode(row['downloadedChapters'] as String),
   ),
   createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
+  incompleteChapters: Map.unmodifiable({
+    for (final entry
+        in (jsonDecode(
+                  row.keys.contains('incomplete_pages')
+                      ? row['incomplete_pages'] as String
+                      : '{}',
+                )
+                as Map)
+            .entries)
+      entry.key as String: IncompleteChapter.fromJson(
+        Map<String, dynamic>.from(entry.value as Map),
+      ),
+  }),
 );

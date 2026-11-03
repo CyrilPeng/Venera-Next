@@ -531,6 +531,16 @@ void main() {
     expect(appdata.searchHistory, ['captured']);
   });
 
+  test('TV performance policy stays local across imported settings', () async {
+    appdata.settings['tvLowMemoryMode'] = false;
+    await appdata.syncData({
+      'settings': {'tvLowMemoryMode': true},
+      'searchHistory': <String>[],
+    });
+    expect(appdata.settings['tvLowMemoryMode'], isFalse);
+    expect(read()['settings']['tvLowMemoryMode'], isFalse);
+  });
+
   test(
     'listeners cannot borrow edit access to bypass waiting replacement',
     () async {

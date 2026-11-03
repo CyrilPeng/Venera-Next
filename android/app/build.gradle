@@ -82,6 +82,19 @@ android {
         versionName = flutterVersionName
     }
 
+    flavorDimensions += "device"
+    productFlavors {
+        mobile {
+            dimension "device"
+        }
+        tv {
+            dimension "device"
+            applicationIdSuffix ".tv"
+            // Keep upgrades above the retired Alpha sequence (100000 + run).
+            versionCode = flutterVersionCode.toInteger() + 200000
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled true
@@ -102,15 +115,16 @@ android {
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             def abi = output.getFilter(com.android.build.OutputFile.ABI)
+            def platform = variant.flavorName == "tv" ? "android-tv" : "android"
             if (variant.buildType.name == "release") {
                 if (abi != null) {
-                    outputFileName = "VeneraNext-${variant.versionName}-android-${abi}.apk"
+                    outputFileName = "VeneraNext-${variant.versionName}-${platform}-${abi}.apk"
                     def abiVersionCode = project.ext.abiCodes.get(abi)
                     if (abiVersionCode != null) {
                         versionCodeOverride = variant.versionCode * 10 + abiVersionCode
                     }
                 } else {
-                    outputFileName = "VeneraNext-${variant.versionName}-android.apk"
+                    outputFileName = "VeneraNext-${variant.versionName}-${platform}.apk"
                     versionCodeOverride = variant.versionCode * 10
                 }
             } else if (variant.buildType.name == "debug") {

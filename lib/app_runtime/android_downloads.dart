@@ -50,7 +50,7 @@ class AndroidDownloads with WidgetsBindingObserver {
 
   void _changed() {
     if (!_ownsChannel) return;
-    final first = manager.downloadingTasks.firstOrNull;
+    final first = manager.currentDownloadingTask;
     if (!identical(first, _task)) {
       _task?.removeListener(_changed);
       _task = first;

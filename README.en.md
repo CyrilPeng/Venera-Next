@@ -25,7 +25,7 @@
 
 ## Introduction
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, iOS, Windows, Linux, and macOS**.
+[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, iOS, Windows, Linux, and macOS**.
 
 This fork focuses on fewer interruptions and more reading: Waterfall mode scrolls across chapters without leaving the reader, long-pressing Favorite skips the folder picker, and nighttime and E-Ink devices get their own reading adjustments. Local import, offline downloads, reading statistics, and multi-device sync make finding comics, reading them, and following ongoing series easier.
 
@@ -65,7 +65,8 @@ A fresh install creates this folder automatically (named "追更" by default). T
 
 ### Reading experience
 
-- **Waterfall reading across chapters (default mode)**: finish a chapter and keep going — the next chapter loads automatically near the end, and you can scroll back to a previously loaded chapter. Progress is recorded where you actually stopped.
+- **Waterfall reading across chapters (non-TV default)**: finish a chapter and keep going — the next chapter loads automatically near the end, and you can scroll back to a previously loaded chapter. Progress is recorded where you actually stopped.
+- **Android TV and boxes**: a separate TV package with a landscape launcher, directional remote navigation, visible focus, and single-page low-memory reading by default. It can coexist with the mobile app.
 - **Split wide spreads vertically**: two-page spreads too small on a phone? Enable split double pages in vertical Continuous/Waterfall modes to stack the two halves, and swap their order to match the reading direction.
 - **Night dimming**: dim the comic inside the reader for nighttime reading, without changing the system brightness.
 - **E-Ink refresh**: Gallery mode can flash the screen at a page-turn interval to help reduce ghosting, with adjustable intervals and styles.
@@ -91,7 +92,7 @@ A fresh install creates this folder automatically (named "追更" by default). T
 
 ## Download and installation
 
-### Android
+### Android phones and tablets
 
 Download an APK from the [latest stable release](https://github.com/CyrilPeng/Venera-Next/releases/latest):
 
@@ -100,8 +101,26 @@ Download an APK from the [latest stable release](https://github.com/CyrilPeng/Ve
 | `VeneraNext-xxx-android.apk` | Universal build | Most Android devices |
 | `VeneraNext-xxx-android-arm64-v8a.apk` | ARM64 build | Android devices that support ARM64 apps |
 | `VeneraNext-xxx-android-armeabi-v7a.apk` | ARM32 build | Older 32-bit devices |
+| `VeneraNext-xxx-android-x86_64.apk` | x86_64 build | x86_64 devices or emulators |
 
 When in doubt, use the universal `VeneraNext-xxx-android.apk` package.
+
+### Android TV
+
+Download a TV APK from the [latest stable release](https://github.com/CyrilPeng/venera-next/releases/latest):
+
+| File | Description | Recommended for |
+|---|---|---|
+| `VeneraNext-xxx-android-tv.apk` | Universal TV build | Most Android TVs or boxes |
+| `VeneraNext-xxx-android-tv-arm64-v8a.apk` | TV ARM64 build | TVs or boxes that support ARM64 apps |
+| `VeneraNext-xxx-android-tv-armeabi-v7a.apk` | TV ARM32 build | TVs or boxes with a 32-bit OS |
+| `VeneraNext-xxx-android-tv-x86_64.apk` | TV x86_64 build | x86_64 devices or emulators |
+
+When in doubt, use the universal `VeneraNext-xxx-android-tv.apk` package.
+
+Transfer the APK to the TV and sideload it. Its launcher name is **VeneraNext TV**; it can coexist with the mobile app and keeps its data separate.
+
+See [TV remote controls and low-memory reading](#tv-remote-controls-and-low-memory-reading) for usage and [Android TV Distribution](doc/distribution/android_tv.en.md) for installation and upgrade details.
 
 ### iOS
 
@@ -131,7 +150,7 @@ Download the package matching your distribution and architecture from the [lates
 | Arch Linux (x86_64) | `sudo pacman -U ./venera-next-xxx-x86_64.pkg.tar.zst` |
 | AppImage (x86_64 / ARM64) | Run `chmod +x VeneraNext-xxx-x86_64.AppImage`, then `./VeneraNext-xxx-x86_64.AppImage` (use the `aarch64` file on ARM64) |
 
-Replace `xxx` with the actual version in the downloaded filename. The v1.18.1 stable release includes RPM and AppImage packages for both x86_64 and ARM64. Use `uname -m` to check your architecture.
+Replace `xxx` with the actual version in the downloaded filename. RPM and AppImage packages are available for both x86_64 and ARM64. Use `uname -m` to check your architecture.
 
 Linux packages are built on Ubuntu 22.04 with a glibc 2.35 baseline. The current stable AppImage includes GTK 3 and WebKitGTK 4.1, so no separate GTK/WebKit installation is needed. It still requires host glibc 2.35 or newer and compatible OpenGL/EGL graphics drivers. See [Linux Installation and Distribution](doc/distribution/linux.en.md) for dependencies, FUSE troubleshooting, and distribution compatibility.
 
@@ -143,9 +162,9 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 
 ## Quick start
 
-1. **Install** the build for your platform from the [latest stable release](https://github.com/CyrilPeng/venera-next/releases/latest).
+1. **Install** the build for your platform from the [latest stable release](https://github.com/CyrilPeng/venera-next/releases/latest); on a TV, choose the separate package described under [Android TV](#android-tv).
 2. **Add content** (any one of these is enough to get started): existing comic files → Local → Import; network series → install an extension in Comic Source management; a NAS folder → Settings → APP → WebDAV Comic Library.
-3. **Start reading**: the default Waterfall mode reads across chapters without extra taps; when you find a series to follow, try long-pressing the Favorite button on its details page. Reading mode, split spreads, night dimming, and more can be adjusted anytime in Settings → Reading or inside the reader.
+3. **Start reading**: phones and desktops default to Waterfall reading across chapters, while TV defaults to single-page low-memory reading. When you find a series to follow, try long-pressing the Favorite button on its details page. Reading mode, split spreads, night dimming, and more can be adjusted anytime in Settings → Reading or inside the reader.
 
 ## Usage guide
 
@@ -153,7 +172,7 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 
 | Mode | Directions | Best for |
 |---|---|---|
-| Waterfall (default) | Top to bottom | Continuous reading across chapters; adjacent chapters load near boundaries |
+| Waterfall (non-TV default) | Top to bottom | Continuous reading across chapters; adjacent chapters load near boundaries |
 | Gallery | L→R / R→L / T→B | Page-by-page reading with configurable multi-image layouts |
 | Continuous | L→R / R→L / T→B | Scrolling inside the current chapter with explicit boundaries |
 
@@ -164,6 +183,13 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 | Single-page view | Split double-page view |
 |---|---|
 | <a href="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Single%20Page%20View.jpg"><img src="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Single%20Page%20View.jpg" alt="A wide page before splitting" width="100%" /></a> | <a href="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Double%20Page%20View.jpg"><img src="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Double%20Page%20View.jpg" alt="The same spread with double-page splitting enabled" width="100%" /></a> |
+
+### TV remote controls and low-memory reading
+
+- **Main UI:** use direction keys to move focus and Select / gamepad A to activate; Back / gamepad B returns. Remotes with a menu key can open context menus on supported controls.
+- **Reading surface:** direction keys turn pages or scroll; Select opens the reader menu. While the menu is open, direction keys navigate controls without turning pages in the background. Back closes the menu first, then saves progress and exits the reader.
+- **Low-memory defaults:** single-page reading, one-page preloading, a 64 MiB decoded-image cache, and an approximately 2.07-megapixel decode budget. Disable Settings → Reading → TV low-memory mode to restore previous settings and use modes such as Waterfall. This switch is device-local and excluded from backups and synchronization.
+- **Usage notes:** low-memory mode leaves originals unchanged, but long strips and zoomed details may look softer. Web login, CAPTCHA, file pickers, and similar flows may need an input method or companion device.
 
 ### Nighttime and E-Ink reading
 

@@ -6,6 +6,7 @@ import 'package:venera_next/foundation/image_provider/image_provider_lifecycle.d
 import 'package:venera_next/foundation/image_provider/reader_image.dart';
 
 import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/foundation/reader_diagnostics.dart';
 
 /// A reader's visible consumers share this forwarding stream. The underlying
 /// provider retains its original cache key and Flutter's animation scheduling.
@@ -22,8 +23,19 @@ class ReaderDisplayImageProvider extends ImageProvider<ReaderImageProvider> {
   // ScrollAwareImageProvider must see the source's pending/decoded cache entry,
   // not this uncached relay, before deciding to defer a fast-scrolling image.
   @override
-  Future<ReaderImageProvider> obtainKey(ImageConfiguration configuration) =>
-      image.obtainKey(configuration);
+  Future<ReaderImageProvider> obtainKey(ImageConfiguration configuration) {
+    final diagnostics = work.diagnostics;
+    if (diagnostics?.isRecording == true) {
+      final status = PaintingBinding.instance.imageCache.statusForKey(image);
+      diagnostics!.recordCache(
+        image.hashCode,
+        pending: status.pending,
+        keepAlive: status.keepAlive,
+        live: status.live,
+      );
+    }
+    return image.obtainKey(configuration);
+  }
 
   @override
   void resolveStreamForKey(
@@ -122,6 +134,7 @@ class _DisplayImageAttempt {
   ImageStreamListener? _listener;
   bool _initializing = true;
   bool _released = false;
+  ReaderDiagnosticSpan? _diagnostic;
 
   void _record(Object error, StackTrace stack) {
     if (BaseImageProvider.isCancellation(error) || !_reported.add(error)) {
@@ -137,6 +150,10 @@ class _DisplayImageAttempt {
   }
 
   void resolve() {
+    _diagnostic = owner.work.diagnostics?.beginImageSpan(
+      owner.image.hashCode,
+      ReaderDiagnosticStage.displayWait,
+    );
     try {
       final stream = _stream = owner.image.resolve(owner.configuration);
       final listener = _listener = ImageStreamListener(
@@ -148,6 +165,10 @@ class _DisplayImageAttempt {
           owner.originalImageSize = stream.completer is OriginalImageSize
               ? (stream.completer as OriginalImageSize).originalImageSize
               : null;
+          _diagnostic?.finish(
+            width: info.image.width,
+            height: info.image.height,
+          );
           owner.receiveImage(info);
         },
         onChunk: (event) {
@@ -169,6 +190,7 @@ class _DisplayImageAttempt {
   }
 
   void _fail(Object error, StackTrace stack) {
+    _diagnostic?.finish(success: false);
     if (task.isCancelled || BaseImageProvider.isCleanupFailure(error)) {
       _record(error, stack);
     }
@@ -184,6 +206,7 @@ class _DisplayImageAttempt {
 
   void release() {
     if (_released) return;
+    _diagnostic?.finish(success: false);
     _released = true;
     if (!_initializing) _releaseNow();
   }

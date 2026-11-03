@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/sync/app_data_archive.dart';
 
+import '../../support/zip_fixture.dart';
+
 void main() {
   late Directory root;
   setUp(() => root = Directory.systemTemp.createTempSync('app-data-archive-'));
@@ -87,4 +89,46 @@ void main() {
     expect(File('${root.path}/escape').existsSync(), isFalse);
     input.renameSync('${input.path}.released');
   });
+
+  for (final damage in ZipFixtureDamage.values) {
+    test('rejects $damage instead of accepting partial archive data', () async {
+      final input = File('${root.path}/damaged.venera')
+        ..writeAsBytesSync(
+          zipFixture([
+            ZipFixtureEntry(utf8.encode('appdata.json'), utf8.encode('{}')),
+            ZipFixtureEntry(
+              utf8.encode('local_favorite.db'),
+              List.filled(4096, 42),
+            ),
+          ], damage: damage),
+        );
+      await expectLater(
+        AppDataArchive.extract(input.path, '${root.path}/extracted'),
+        throwsFormatException,
+      );
+      input.renameSync('${input.path}.released');
+    });
+  }
+
+  for (final compress in [false, true]) {
+    test(
+      'checks the CRC of stored and deflated members; compress=$compress',
+      () async {
+        final input = File('${root.path}/checksum.picadata')
+          ..writeAsBytesSync(
+            zipFixture([
+              ZipFixtureEntry(
+                utf8.encode('data.json'),
+                utf8.encode('{}'),
+                compress: compress,
+              ),
+            ], damage: ZipFixtureDamage.checksum),
+          );
+        await expectLater(
+          AppDataArchive.extract(input.path, '${root.path}/extracted'),
+          throwsA(isA<ArchiveChecksumException>()),
+        );
+      },
+    );
+  }
 }

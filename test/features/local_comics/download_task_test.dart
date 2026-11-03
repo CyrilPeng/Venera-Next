@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 import 'package:rhttp/rhttp.dart' as rhttp;
 import 'package:sqlite3/sqlite3.dart';
+import 'package:path/path.dart' as p;
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/comic_type.dart';
@@ -26,12 +27,156 @@ void main() {
     ComicSourceManager().remove(sourceKey);
     ComicSourceManager().add(_testSource(sourceKey));
     appdata.settings['downloadThreads'] = 1;
+    appdata.settings['skipUnavailableDownloadImages'] = false;
   });
 
   tearDown(() {
     ComicSourceManager().remove(sourceKey);
     LocalManager.current?.dispose();
   });
+
+  test(
+    'global skip default applies only to new tasks, not restored or overridden tasks',
+    () {
+      final root = Directory.systemTemp.createTempSync('download-default-');
+      final storage = _TaskStorage(root.path);
+      addTearDown(() => root.deleteSync(recursive: true));
+      appdata.settings['skipUnavailableDownloadImages'] = true;
+      final task = ImagesDownloadTask(
+        storage: storage,
+        source: _testSource(sourceKey),
+        comicId: 'one',
+      );
+      final override = ImagesDownloadTask(
+        storage: storage,
+        source: _testSource(sourceKey),
+        comicId: 'two',
+        skipUnavailableImages: false,
+      );
+      expect(task.skipUnavailableImages, isTrue);
+      expect(override.skipUnavailableImages, isFalse);
+      final oldSnapshot = task.toJson()..remove('skipUnavailableImages');
+      final restored = ImagesDownloadTask.fromJson(storage, oldSnapshot)!;
+      expect(restored.skipUnavailableImages, isFalse);
+      appdata.settings['skipUnavailableDownloadImages'] = false;
+      expect(task.skipUnavailableImages, isTrue);
+      expect(task.isPaused, isTrue);
+      task.dispose();
+      override.dispose();
+      restored.dispose();
+    },
+  );
+
+  test(
+    'incomplete library pages retain positions across restart and repair without redownloading',
+    () async {
+      final root = Directory.systemTemp.createTempSync(
+        'download-partial-library-',
+      );
+      App.dataPath = root.path;
+      App.cachePath = root.path;
+      var manager = LocalManager(initializeSources: () async {});
+      await manager.init();
+      final output = Directory('${manager.path}/partial')..createSync();
+      final bytes = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6uwAAAABJRU5ErkJggg==',
+      );
+      File('${output.path}/cover.png').writeAsBytesSync(bytes);
+      var recovered = false;
+      final attempts = <String, int>{};
+      Stream<ImageDownloadProgress> load(
+        String image,
+        String? _,
+        String _,
+        String _,
+      ) async* {
+        attempts[image] = (attempts[image] ?? 0) + 1;
+        if (image == 'missing' && !recovered) {
+          final request = RequestOptions(path: image);
+          throw DioException.badResponse(
+            statusCode: 404,
+            requestOptions: request,
+            response: Response(requestOptions: request, statusCode: 404),
+          );
+        }
+        yield ImageDownloadProgress(
+          currentBytes: bytes.length,
+          totalBytes: bytes.length,
+          imageBytes: bytes,
+        );
+      }
+
+      var task = ImagesDownloadTask.fromJson(manager, {
+        'type': 'ImagesDownloadTask',
+        'source': sourceKey,
+        'comicId': 'partial',
+        'comic': _archiveComic(sourceKey, id: 'partial').toJson(),
+        'chapters': null,
+        'path': output.path,
+        'cover': 'file://${output.path}/cover.png',
+        'images': {
+          '': ['first', 'missing', 'last'],
+        },
+        'downloadedCount': 0,
+        'totalCount': 3,
+        'index': 0,
+        'chapter': 0,
+        'skipUnavailableImages': true,
+      }, loadImage: load)!;
+      try {
+        final next = _CompletionTask('next');
+        manager.restorePausedDownloads([task, next]);
+        manager.resumeDownload(task);
+        await task.debugResumeFuture;
+        await pumpEventQueue();
+        expect(task.isAwaitingMissingPages, isTrue);
+        expect(next.resumes, 1);
+        expect(manager.find(task.id, task.comicType)!.missingImageCount, 1);
+        expect(manager.isDownloaded(task.id, task.comicType), isFalse);
+        final images = await manager.getImages(task.id, task.comicType, 1);
+        expect(images, [
+          'file://${p.normalize(p.join(output.path, '0.png'))}',
+          'missing-download://2',
+          'file://${p.normalize(p.join(output.path, '2.png'))}',
+        ]);
+        await manager.saveCurrentDownloadingTasks();
+        await manager.pendingDownloadTaskWrites;
+        manager.dispose();
+        task.dispose();
+        manager = LocalManager(initializeSources: () async {});
+        await manager.init();
+        expect(manager.currentDownloadingTask, isNull);
+        expect(manager.find('partial', task.comicType)!.isIncomplete, isTrue);
+        expect(
+          (await manager.getImages('partial', task.comicType, 1))[1],
+          'missing-download://2',
+        );
+        final restored = manager.downloadingTasks.single as ImagesDownloadTask;
+        expect(restored.isAwaitingMissingPages, isTrue);
+        task = ImagesDownloadTask.fromJson(
+          manager,
+          restored.toJson(),
+          loadImage: load,
+        )!;
+        restored.dispose();
+        manager.restorePausedDownloads([task]);
+        recovered = true;
+        await manager.retryMissingPages(task);
+        await task.debugResumeFuture;
+        expect(attempts, {'first': 1, 'missing': 2, 'last': 1});
+        expect(manager.downloadingTasks, isEmpty);
+        expect(manager.find(task.id, task.comicType)!.isIncomplete, isFalse);
+        expect(manager.isDownloaded(task.id, task.comicType), isTrue);
+      } finally {
+        task.pause();
+        await task.pendingCleanup;
+        await manager.pendingDownloadTaskWrites;
+        task.dispose();
+        manager.dispose();
+        root.deleteSync(recursive: true);
+      }
+    },
+  );
 
   for (final skip in [false, true]) {
     for (final restore in [false, true]) {
@@ -89,7 +234,9 @@ void main() {
           try {
             task.resume();
             await task.debugResumeFuture;
-            expect(task.isError, isTrue);
+            expect(task.isError, !skip);
+            expect(task.isAwaitingMissingPages, skip);
+            expect(storage.comic?.isIncomplete, skip ? isTrue : isNull);
             expect(storage.completed, isEmpty);
             expect(attempts['last.png'], skip ? 1 : null);
             expect(task.missingImageCount, skip ? 1 : 0);
@@ -97,7 +244,9 @@ void main() {
               task.progress,
               skip ? closeTo(2 / 3, 0.001) : closeTo(1 / 3, 0.001),
             );
-            if (skip) expect(task.message, contains('Download incomplete'));
+            if (skip) {
+              expect(task.message, contains('Waiting for missing pages'));
+            }
             if (restore) {
               await task.pendingCleanup;
               final snapshot =
@@ -2147,6 +2296,11 @@ class _TaskStorage implements DownloadTaskStorage {
   @override
   void completeTask(DownloadTask task) {
     completed.add(task);
+    comic = task.toLocalComic();
+  }
+
+  @override
+  void retainIncompleteTask(DownloadTask task) {
     comic = task.toLocalComic();
   }
 

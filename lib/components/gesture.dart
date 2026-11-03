@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/context.dart';
 
 import 'consts.dart';
+import 'tv_navigation.dart';
 
 class ClickInkWell extends InkWell {
   const ClickInkWell({
@@ -35,6 +36,13 @@ class ClickInkWell extends InkWell {
     super.enableFeedback,
     super.excludeFromSemantics,
   }) : super(mouseCursor: mouseCursor);
+
+  @override
+  Widget build(BuildContext context) => TvFocusOutline(
+    borderRadius: borderRadius ?? const BorderRadius.all(Radius.circular(8)),
+    onMenu: onLongPress,
+    child: super.build(context),
+  );
 }
 
 class MouseBackDetector extends StatelessWidget {
@@ -85,26 +93,30 @@ class _AnimatedTapRegionState extends State<AnimatedTapRegion> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) {
-        setState(() {
-          isHovered = true;
-        });
-      },
-      onExit: (_) {
-        setState(() {
-          isHovered = false;
-        });
-      },
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedPhysicalModel(
-          duration: fastAnimationDuration,
-          elevation: isHovered ? 3 : 1,
-          color: context.colorScheme.surface,
-          shadowColor: context.colorScheme.shadow,
-          borderRadius: BorderRadius.circular(widget.borderRadius),
-          child: widget.child,
+    return TvFocusable(
+      onPressed: widget.onTap,
+      borderRadius: BorderRadius.circular(widget.borderRadius),
+      child: MouseRegion(
+        onEnter: (_) {
+          setState(() {
+            isHovered = true;
+          });
+        },
+        onExit: (_) {
+          setState(() {
+            isHovered = false;
+          });
+        },
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedPhysicalModel(
+            duration: fastAnimationDuration,
+            elevation: isHovered ? 3 : 1,
+            color: context.colorScheme.surface,
+            shadowColor: context.colorScheme.shadow,
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+            child: widget.child,
+          ),
         ),
       ),
     );

@@ -334,7 +334,8 @@ abstract mixin class ComicPageActions {
         var localComic = library.find(target.id, target.comicType);
         if (localComic != null) {
           for (int i = 0; i < chapterIds.length; i++) {
-            if (localComic.downloadedChapters.contains(chapterIds[i])) {
+            if (localComic.downloadedChapters.contains(chapterIds[i]) &&
+                !localComic.incompleteChapters.containsKey(chapterIds[i])) {
               downloaded.add(i);
             }
           }

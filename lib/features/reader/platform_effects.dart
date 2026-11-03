@@ -8,6 +8,7 @@ import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/harmonyos.dart';
+import 'package:venera_next/foundation/app_profile.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 
 import 'platform_effects_controller.dart';
@@ -63,7 +64,9 @@ class ReaderPlatformEffectsBinding {
     handle = coordinator.createOwner(
       orientationEnabled:
           orientationEnabled ??
-          (App.isHarmonyOS || defaultTargetPlatform == TargetPlatform.android),
+          (App.isHarmonyOS ||
+              (defaultTargetPlatform == TargetPlatform.android &&
+                  !AppProfile.current.isTv)),
       systemBarsVisible: systemBarsVisible,
     );
     if (_registry?.isClosing == true || _frame?.isClosing == true) {

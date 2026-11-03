@@ -31,6 +31,7 @@ English index: [README.en.md](README.en.md)
 
 ## 分发和发布
 
+- [Android TV 安装与分发](distribution/android_tv.zh.md) / [Android TV Distribution](distribution/android_tv.en.md)
 - [Windows 分发](distribution/windows.zh.md) / [Windows Distribution](distribution/windows.en.md)
 - [Linux 安装与分发](distribution/linux.zh.md) / [Linux Installation and Distribution](distribution/linux.en.md)
 - [HarmonyOS 实验签装与升级验证](distribution/harmonyos.zh.md) / [HarmonyOS Experimental Sideload Checks](distribution/harmonyos.en.md)：仅诊断探针，不是阅读器发行版。
@@ -38,6 +39,7 @@ English index: [README.en.md](README.en.md)
 ## 用户和命令行
 
 - [应用数据同步](user/data_sync.zh.md) / [App-data synchronization](user/data_sync.en.md)
+- [两级本地收藏目录（待发布）](user/favorite_folders.zh.md) / [Two-Level Local Favorite Folders](user/favorite_folders.en.md)
 - [自动选择阅读模式](user/automatic_reader_mode.zh.md) / [Automatic Reader Mode](user/automatic_reader_mode.en.md)
 - [自动阅读与不可用图片处理](user/automatic_reading.zh.md)
 - [条漫左右边距](user/reader_width.zh.md) / [Reader side margins](user/reader_width.en.md)
@@ -47,8 +49,8 @@ English index: [README.en.md](README.en.md)
 
 ## 实验和任务跟踪
 
-- [HarmonyOS 独立分支实验](experiments/harmonyos.zh.md)：云端未签名 HAP 构建、核心依赖验证及后续真机验收，尚未接入完整阅读器，不代表正式平台支持。
-
+- [HarmonyOS 独立分支记录](experiments/harmonyos.zh.md)：完整阅读器 HAP 构建与设备反馈。
+- [Android TV Alpha 历史实验记录（已进入主线）](experiments/android_tv.zh.md)
 - [漫画源安装任务交互设计](experiments/source_installation_tasks.zh.md)
 - [漫画源与源仓库管理设计](experiments/source_repositories.zh.md)
 - [图片增强实验](experiments/image_enhancement.zh.md)

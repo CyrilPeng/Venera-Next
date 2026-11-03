@@ -89,6 +89,58 @@ void main() {
 
   const localFirstTitle = 'Show local favorites before network favorites';
   const closeTitle = 'Auto close favorite panel after operation';
+  for (final width in [375.0, 812.0]) {
+    testWidgets(
+      'custom folder choices cannot save to a retargeted field at $width',
+      (tester) async {
+        tester.view.physicalSize = Size(width, 740);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final setting = ValueNotifier('quickFavorite');
+        addTearDown(setting.dispose);
+        appdata.settings['quickFavorite'] = null;
+        appdata.settings['readLaterFolder'] = null;
+        await tester.pumpWidget(
+          _libraryView(
+            MaterialApp(
+              home: Scaffold(
+                body: ValueListenableBuilder<String>(
+                  valueListenable: setting,
+                  builder: (context, name, _) => SelectSetting(
+                    title: 'Folder',
+                    settingKey: name,
+                    optionTranslation: const {'target': 'Target'},
+                    selectorBuilder: (context, value, onChanged) => TextButton(
+                      onPressed: onChanged == null
+                          ? null
+                          : () => onChanged('target'),
+                      child: const Text('Choose'),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        final oldChoice = tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Choose'))
+            .onPressed!;
+        setting.value = 'readLaterFolder';
+        await tester.pump();
+        oldChoice();
+        await _flush(tester, appdata.saveData(false));
+        expect(appdata.settings['quickFavorite'], isNull);
+        expect(appdata.settings['readLaterFolder'], isNull);
+        await tester.tap(find.widgetWithText(TextButton, 'Choose'));
+        await _flush(tester, appdata.saveData(false));
+        expect(appdata.settings['quickFavorite'], isNull);
+        expect(appdata.settings['readLaterFolder'], 'target');
+        await tester.pumpWidget(const SizedBox());
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   testWidgets(
     'actual favorite form reads malformed flags and choices without rewriting them',
     (tester) async {

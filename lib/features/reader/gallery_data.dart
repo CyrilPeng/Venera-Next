@@ -21,6 +21,7 @@ class ReaderGalleryData {
     required this.chapterId,
     this.showImageDimensions = false,
     this.observeImageReadiness = false,
+    this.decodePixelBudget,
   });
 
   final ReaderContentState content;
@@ -39,6 +40,7 @@ class ReaderGalleryData {
   final String chapterId;
   final bool showImageDimensions;
   final bool observeImageReadiness;
+  final int? decodePixelBudget;
 
   List<String> get images => content.images ?? const [];
   int get imagePages => layout.pageCount(images.length);

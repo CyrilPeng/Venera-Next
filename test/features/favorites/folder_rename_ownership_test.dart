@@ -1,3 +1,4 @@
+import 'package:venera_next/features/favorites/favorite_folder.dart';
 import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -34,6 +35,8 @@ import '../../components/sidebar_presentation_test.dart'
     show pumpSidebar, settleSidebarWork, sidebarCauses;
 
 class _Manager extends Fake implements LocalFavoritesManager {
+  @override
+  FavoriteFolderTree get folderTree => FavoriteFolderTree.flat(folderNames);
   @override
   int connectionGeneration = 1;
   final names = ['Original', 'Other'];
@@ -261,7 +264,13 @@ Future<void> _press(WidgetTester tester, [String label = 'Confirm']) {
 Future<void> _open(WidgetTester tester) async {
   _rename(tester)();
   await pumpSidebar(tester);
-  await tester.enterText(find.byType(TextField), 'Renamed');
+  await tester.enterText(
+    find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField && widget.decoration?.hintText == 'New Name',
+    ),
+    'Renamed',
+  );
 }
 
 void main() {
@@ -311,7 +320,13 @@ void main() {
       await pumpSidebar(tester);
       retained();
       await pumpSidebar(tester);
-      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField && widget.decoration?.hintText == 'New Name',
+        ),
+        findsNothing,
+      );
       expect(host.manager.renames, isEmpty);
       expect(tester.takeException(), isNull);
     });
@@ -405,7 +420,13 @@ void main() {
       expect(host.manager.names, ['Renamed', 'Other']);
       expect(host.lists, 1);
       expect(host.selected, ['Renamed']);
-      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField && widget.decoration?.hintText == 'New Name',
+        ),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -497,7 +518,13 @@ void main() {
       await pumpSidebar(tester);
       expect(host.manager.renames, hasLength(1));
       expect(host.selected, ['Renamed']);
-      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField && widget.decoration?.hintText == 'New Name',
+        ),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -646,7 +673,13 @@ void main() {
       expect(host.selected, isEmpty);
       await tester.tap(find.widgetWithIcon(IconButton, Icons.close));
       await pumpSidebar(tester);
-      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField && widget.decoration?.hintText == 'New Name',
+        ),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     });
   }
@@ -676,7 +709,14 @@ void main() {
         await pumpSidebar(tester);
         await tester.tap(find.widgetWithIcon(IconButton, Icons.close));
         await pumpSidebar(tester);
-        expect(find.byType(TextField), findsNothing);
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is TextField &&
+                widget.decoration?.hintText == 'New Name',
+          ),
+          findsNothing,
+        );
         expect(host.selected, isEmpty);
         pending.complete();
         await settleSidebarWork(tester, () => confirming);
@@ -757,7 +797,13 @@ void main() {
             reportedStack = errorStack;
           });
       await pumpSidebar(tester);
-      await tester.enterText(find.byType(TextField), 'Renamed');
+      await tester.enterText(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField && widget.decoration?.hintText == 'New Name',
+        ),
+        'Renamed',
+      );
       await settleSidebarWork(tester, () => _press(tester));
       await settleSidebarWork(tester, () => shown);
       await pumpSidebar(tester);
@@ -770,7 +816,13 @@ void main() {
       await settleSidebarWork(tester, host.registry.closeAndWait);
       expect(publications, 1);
       expect(host.manager.renames, [('Original', 'Renamed')]);
-      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField && widget.decoration?.hintText == 'New Name',
+        ),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -841,7 +893,14 @@ void main() {
           onRenamed: host.selected.add,
         );
         await pumpSidebar(tester);
-        await tester.enterText(find.byType(TextField), renamed);
+        await tester.enterText(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is TextField &&
+                widget.decoration?.hintText == 'New Name',
+          ),
+          renamed,
+        );
         await settleSidebarWork(tester, () => _press(tester));
         await pumpSidebar(tester);
         if (failingObserver) {
@@ -952,7 +1011,14 @@ void main() {
           find.byKey(const PageStorageKey('local_Renamed')),
           findsOneWidget,
         );
-        expect(find.byType(TextField), findsNothing);
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is TextField &&
+                widget.decoration?.hintText == 'New Name',
+          ),
+          findsNothing,
+        );
         final saved = jsonDecode(
           File(p.join(root.path, 'implicitData.json')).readAsStringSync(),
         );

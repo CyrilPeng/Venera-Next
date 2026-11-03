@@ -26,6 +26,9 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 
 class _Messages extends ImportComicPresentation {
+  _Messages({this.collectionChoice});
+  final bool? collectionChoice;
+  final choices = <({String enclosing, List<String> titles})>[];
   final messages = <String>[];
   final results = <({int imported, List<String> details})>[];
   @override
@@ -36,6 +39,15 @@ class _Messages extends ImportComicPresentation {
     required List<String> details,
   }) async {
     results.add((imported: imported, details: details));
+  }
+
+  @override
+  Future<bool?> chooseCollectionLayout({
+    required String enclosingComic,
+    required List<String> comicTitles,
+  }) async {
+    choices.add((enclosing: enclosingComic, titles: comicTitles));
+    return collectionChoice;
   }
 }
 
@@ -533,69 +545,142 @@ void main() {
     });
   }
 
-  test(
-    'explicit collection ZIP imports separate comics with chapters and durable favorites',
-    () async {
-      await favorites.createFolder('Imported');
-      mockCollection(
-        archive.ZipEncoder().encodeBytes(
-          archive.Archive()
-            ..addFile(archive.ArchiveFile('Book A/1.png', png.length, png))
-            ..addFile(
-              archive.ArchiveFile('Book B/Chapter 1/1.png', png.length, png),
-            )
-            ..addFile(archive.ArchiveFile.directory('Empty/')),
-        ),
-      );
-      final messages = _Messages();
-      final operation = SelectionOperation();
-      expect(
-        await operation.run(
+  for (final prefix in ['', 'Outer/']) {
+    test(
+      'collection ZIP detects its root and imports durable favorites; prefix=$prefix',
+      () async {
+        await favorites.createFolder('Imported');
+        mockCollection(
+          archive.ZipEncoder().encodeBytes(
+            archive.Archive()
+              ..addFile(
+                archive.ArchiveFile('${prefix}Book A/1.png', png.length, png),
+              )
+              ..addFile(
+                archive.ArchiveFile(
+                  '${prefix}Book B/Chapter 1/1.png',
+                  png.length,
+                  png,
+                ),
+              )
+              ..addFile(archive.ArchiveFile.directory('${prefix}Empty/')),
+          ),
+        );
+        final messages = _Messages();
+        final operation = SelectionOperation();
+        expect(
+          await operation.run(
+            (op) => ImportComic(
+              service: service,
+              presentation: messages,
+              selectedFolder: 'Imported',
+            ).collectionArchive(op),
+          ),
+          isTrue,
+        );
+        expect(manager.count, 2);
+        expect(messages.choices, isEmpty);
+        expect(messages.results.single.imported, 2);
+        expect(
+          messages.results.single.details,
+          contains('Skipped Empty: No supported images found'),
+        );
+        expect(manager.findByName('Book B')!.chapters!.allChapters.values, [
+          'Chapter 1',
+        ]);
+        expect(operation.hasPendingCleanup, isFalse);
+        expect(
+          Directory(App.cachePath).listSync().whereType<Directory>().where(
+            (d) => p.basename(d.path).startsWith('selected-directory-'),
+          ),
+          isEmpty,
+        );
+        expect(
+          calls.where((call) => call.method == 'selectDirectory'),
+          isEmpty,
+        );
+        await manager.pendingDownloadTaskWrites;
+        manager.dispose();
+        manager = LocalManager(initializeSources: () async {});
+        await manager.init();
+        expect(manager.count, 2);
+        for (final title in ['Book A', 'Book B']) {
+          final comic = manager.findByName(title)!;
+          final pages = await manager.getImages(
+            comic.id,
+            ComicType.local,
+            comic.chapters == null ? 0 : 1,
+          );
+          expect(
+            File(pages.single.replaceFirst('file://', '')).readAsBytesSync(),
+            png,
+          );
+          expect(
+            favorites.find(comic.id, ComicType.local),
+            contains('Imported'),
+          );
+        }
+      },
+    );
+  }
+
+  for (final separate in [true, false, null]) {
+    test(
+      'ambiguous collection uses the explicit choice without losing chapters; choice=$separate',
+      () async {
+        mockCollection(
+          archive.ZipEncoder().encodeBytes(
+            archive.Archive()
+              ..addFile(
+                archive.ArchiveFile('Outer/Book A/1.png', png.length, png),
+              )
+              ..addFile(
+                archive.ArchiveFile('Outer/Book B/1.png', png.length, png),
+              ),
+          ),
+        );
+        final messages = _Messages(collectionChoice: separate);
+        final operation = SelectionOperation();
+        final importing = operation.run(
           (op) => ImportComic(
             service: service,
             presentation: messages,
-            selectedFolder: 'Imported',
           ).collectionArchive(op),
-        ),
-        isTrue,
-      );
-      expect(manager.count, 2);
-      expect(messages.results.single.imported, 2);
-      expect(
-        messages.results.single.details,
-        contains('Skipped Empty: No supported images found'),
-      );
-      expect(manager.findByName('Book B')!.chapters!.allChapters.values, [
-        'Chapter 1',
-      ]);
-      expect(operation.hasPendingCleanup, isFalse);
-      expect(
-        Directory(App.cachePath).listSync().whereType<Directory>().where(
-          (d) => p.basename(d.path).startsWith('selected-directory-'),
-        ),
-        isEmpty,
-      );
-      expect(calls.where((call) => call.method == 'selectDirectory'), isEmpty);
-      await manager.pendingDownloadTaskWrites;
-      manager.dispose();
-      manager = LocalManager(initializeSources: () async {});
-      await manager.init();
-      expect(manager.count, 2);
-      for (final title in ['Book A', 'Book B']) {
-        final comic = manager.findByName(title)!;
-        final pages = await manager.getImages(
-          comic.id,
-          ComicType.local,
-          comic.chapters == null ? 0 : 1,
+        );
+        if (separate == null) {
+          await expectLater(importing, throwsA(isA<SelectionCancelled>()));
+          expect(manager.count, 0);
+          expect(messages.results, isEmpty);
+        } else {
+          expect(await importing, isTrue);
+          expect(manager.count, separate ? 2 : 1);
+          if (separate) {
+            expect(manager.findByName('Book A')!.chapters, isNull);
+            expect(manager.findByName('Book B')!.chapters, isNull);
+          } else {
+            expect(manager.findByName('Outer')!.chapters!.allChapters.values, [
+              'Book A',
+              'Book B',
+            ]);
+          }
+        }
+        expect(messages.choices.single.enclosing, 'Outer');
+        expect(messages.choices.single.titles, ['Book A', 'Book B']);
+        expect(operation.hasPendingCleanup, isFalse);
+        expect(
+          calls.where((call) => call.method == 'releaseFile'),
+          hasLength(1),
         );
         expect(
-          File(pages.single.replaceFirst('file://', '')).readAsBytesSync(),
-          png,
+          Directory(App.cachePath).listSync().whereType<Directory>().where(
+            (directory) =>
+                p.basename(directory.path).startsWith('selected-directory-'),
+          ),
+          isEmpty,
         );
-        expect(favorites.find(comic.id, ComicType.local), contains('Imported'));
-      }
-    },
-  );
+      },
+    );
+  }
 
   for (final invalid in ['root page', 'not ZIP', 'empty']) {
     test(
@@ -826,7 +911,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(
           find.text(
-            'Select a ZIP whose root contains one folder per comic. Do not include an extra outer folder. Ordinary CBZ imports are unchanged.'
+            'Select a ZIP containing comic folders, optionally inside one outer folder. The layout is detected automatically; ambiguous layouts ask for confirmation. Ordinary CBZ imports are unchanged.'
                 .tl,
           ),
           findsOneWidget,
@@ -836,7 +921,7 @@ void main() {
         if (output != null) {
           await tester.ensureVisible(
             find.text(
-              'Select a ZIP whose root contains one folder per comic. Do not include an extra outer folder. Ordinary CBZ imports are unchanged.'
+              'Select a ZIP containing comic folders, optionally inside one outer folder. The layout is detected automatically; ambiguous layouts ask for confirmation. Ordinary CBZ imports are unchanged.'
                   .tl,
             ),
           );

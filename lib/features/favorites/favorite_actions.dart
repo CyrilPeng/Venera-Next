@@ -6,6 +6,7 @@ import 'network_favorite_import.dart';
 import 'network_favorite_import_dialog.dart';
 import 'favorite_models.dart';
 import 'create_favorite_folder_dialog.dart';
+import 'favorite_folder_browser.dart';
 import 'dart:convert';
 import 'dart:async';
 
@@ -13,7 +14,6 @@ import 'package:flutter/material.dart';
 import 'package:venera_next/components/async_confirm_dialog.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
-import 'package:venera_next/components/select.dart';
 import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/network/request_scope.dart';
@@ -31,8 +31,9 @@ import 'package:venera_next/foundation/translations.dart';
 Future<void> newFolder(
   BuildContext context, {
   ValueChanged<List<String>>? onChanged,
+  String? parentId,
 }) {
-  final result = _newFolder(context, onChanged: onChanged);
+  final result = _newFolder(context, onChanged: onChanged, parentId: parentId);
   unawaited(
     result.then<void>(
       (_) {},
@@ -47,6 +48,7 @@ Future<void> newFolder(
 Future<void> _newFolder(
   BuildContext context, {
   ValueChanged<List<String>>? onChanged,
+  String? parentId,
 }) async {
   final owner = WindowSelectionTask(context);
   if (!owner.canPresent) return;
@@ -60,6 +62,15 @@ Future<void> _newFolder(
   final manager = store.manager;
   final generation = manager.connectionGeneration;
   final dataPath = App.dataPath;
+  final tree = manager.folderTree;
+  if (parentId != null &&
+      (tree.identified(parentId) == null ||
+          tree.identified(parentId)!.parentId != null)) {
+    return;
+  }
+  String? parentName = parentId == null
+      ? null
+      : tree.identified(parentId)?.name;
   bool isCurrent() =>
       store.isCurrent &&
       manager.connectionGeneration == generation &&
@@ -100,7 +111,32 @@ Future<void> _newFolder(
             checkCurrent();
             return validateFolderName(name, folders: manager.folderNames);
           },
-          create: (name) => write(() async => await manager.createFolder(name)),
+          parentSelector: (ownerContext, enabled) => StatefulBuilder(
+            builder: (context, setState) => FavoriteFolderSelect(
+              menuOwnerContext: ownerContext,
+              tree: tree,
+              current: parentName,
+              allowRoot: true,
+              rootsOnly: true,
+              onChanged: !enabled
+                  ? null
+                  : (value) {
+                      if (isCurrent()) setState(() => parentName = value);
+                    },
+            ),
+          ),
+          create: (name) {
+            final selectedParentId = parentName == null
+                ? null
+                : tree.named(parentName!)!.id;
+            return write(() async {
+              if (selectedParentId == null) {
+                await manager.createFolder(name);
+              } else {
+                await manager.createChildFolder(name, selectedParentId);
+              }
+            });
+          },
           selectImport: (operation) async {
             checkCurrent();
             final file = await operation.pickFile(
@@ -174,6 +210,7 @@ Future<void> _addFavorite(
   final generation = manager.connectionGeneration;
   final dataPath = App.dataPath;
   final folders = List<String>.unmodifiable(manager.folderNames);
+  final tree = manager.folderTree;
   if (folders.isEmpty) return;
   final items = comics
       .map(
@@ -204,20 +241,22 @@ Future<void> _addFavorite(
     contentBuilder: (dialogContext, enabled) => StatefulBuilder(
       builder: (context, setState) => ListTile(
         title: Text('Folder'.tl),
-        trailing: Select(
+        trailing: FavoriteFolderSelect(
+          menuOwnerContext: dialogContext,
+          tree: tree,
           current: selectedFolder,
-          values: folders,
-          minWidth: 112,
-          onTap: (index) {
-            if (!enabled ||
-                !context.mounted ||
-                !owner.active ||
-                isCurrent?.call() == false ||
-                !currentDatabase()) {
-              return;
-            }
-            setState(() => selectedFolder = folders[index]);
-          },
+          onChanged: !enabled
+              ? null
+              : (name) {
+                  if (!enabled ||
+                      !context.mounted ||
+                      !owner.active ||
+                      isCurrent?.call() == false ||
+                      !currentDatabase()) {
+                    return;
+                  }
+                  setState(() => selectedFolder = name);
+                },
         ),
       ),
     ),

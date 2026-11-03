@@ -10,6 +10,59 @@ import 'package:venera_next/features/comic_storage/comic_storage.dart';
 Future<void> extractComicCollection(File source, Directory workspace) =>
     compute(_extractCollection, (source: source.path, output: workspace.path));
 
+class ComicCollectionLayout {
+  const ComicCollectionLayout(
+    this.root, {
+    this.enclosingComic,
+    this.comicTitles = const [],
+  });
+
+  final Directory root;
+
+  /// Non-null when the same tree also describes a single book with chapters.
+  final String? enclosingComic;
+  final List<String> comicTitles;
+}
+
+/// Inspect only the optional outer folder, never flatten arbitrary nesting.
+Future<ComicCollectionLayout> inspectComicCollection(
+  Directory workspace,
+) async {
+  Future<List<FileSystemEntity>> visible(Directory directory) async => [
+    await for (final entry in directory.list(followLinks: false))
+      if (!isIgnoredComicStorageEntry(p.basename(entry.path))) entry,
+  ];
+
+  final roots = (await visible(workspace)).whereType<Directory>().toList();
+  if (roots.length != 1) return ComicCollectionLayout(workspace);
+  final outer = roots.single;
+  final entries = await visible(outer);
+  // A page or explicit cover is evidence that this is already the book root.
+  if (entries.whereType<File>().any(
+    (file) => isComicImageFileName(file.path),
+  )) {
+    return ComicCollectionLayout(workspace);
+  }
+  final children = entries.whereType<Directory>().toList()
+    ..sort((a, b) => compareComicFileNames(a.path, b.path));
+  final titles = <String>[];
+  for (final child in children) {
+    final layout = await ComicFileSystemLayout.inspectAsync(child);
+    if (layout.hasImages && layout.nestedDirectories.isEmpty) {
+      titles.add(p.basename(child.path));
+    }
+  }
+  if (titles.isEmpty) return ComicCollectionLayout(workspace);
+  final original = await ComicFileSystemLayout.inspectAsync(outer);
+  return ComicCollectionLayout(
+    outer,
+    enclosingComic: original.hasImages && original.nestedDirectories.isEmpty
+        ? p.basename(outer.path)
+        : null,
+    comicTitles: List.unmodifiable(titles),
+  );
+}
+
 Future<void> _extractCollection(
   ({String source, String output}) request,
 ) async {
@@ -26,6 +79,7 @@ Future<void> _extractCollection(
     final names = <String, bool>{};
     archive.ZipDecoder().decodeStream(
       input,
+      throwOnError: true,
       callback: (entry) {
         final raw = entry.name.replaceAll('\\', '/');
         final segments = raw
@@ -68,7 +122,10 @@ Future<void> _extractCollection(
           );
         }
         names[key] = directory;
-        if (!directory && segments.length == 1 && isComicImageFileName(name)) {
+        if (!directory &&
+            segments.length == 1 &&
+            !isIgnoredComicStorageEntry(name) &&
+            isComicImageFileName(name)) {
           throw const FormatException(
             'The collection root must contain comic folders, not image files',
           );
@@ -112,7 +169,7 @@ Future<void> _extractCollection(
         size += bytes.length;
         crc = archive.getCrc32(bytes, crc);
       }
-      // archive 4.2's verify flag does not validate CRCs; check streamed output.
+      // Validate the actual streamed bytes independently of decoder defaults.
       if (size != item.entry.size || crc != item.entry.crc32) {
         throw const FormatException(
           'The collection contains damaged file data',

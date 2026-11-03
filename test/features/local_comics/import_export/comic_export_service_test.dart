@@ -10,6 +10,9 @@ class _Comic extends Fake implements LocalComic {
   _Comic(this.title);
   @override
   final String title;
+  @override
+  bool get isIncomplete => incomplete;
+  bool incomplete = false;
 }
 
 void main() {
@@ -49,6 +52,22 @@ void main() {
       isCancelled: cancelled ?? () => false,
     ),
   );
+  test('incomplete comics cannot be exported as complete archives', () async {
+    final comic = _Comic('Partial')..incomplete = true;
+    var called = false;
+    await expectLater(
+      run(
+        [comic],
+        exporter: (comic, path) async {
+          called = true;
+          return File(path);
+        },
+      ),
+      throwsA(isA<Exception>()),
+    );
+    expect(called, isFalse);
+    expect(root.listSync(), isEmpty);
+  });
   for (final stage in ['export', 'compress', 'save']) {
     test('retains $stage cause and staging for release-only retry', () async {
       final owner = SelectionOperation();

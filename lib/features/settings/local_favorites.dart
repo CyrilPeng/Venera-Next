@@ -1,4 +1,5 @@
 import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/favorites/favorite_folder_browser.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/appbar.dart';
@@ -22,72 +23,87 @@ class _LocalFavoritesSettingsState extends State<LocalFavoritesSettings> {
   final _tasks = SettingsTaskPresenter();
   @override
   Widget build(BuildContext context) {
-    return SmoothCustomScrollView(
-      slivers: [
-        SliverAppbar(title: Text("Local Favorites".tl)),
-        SwitchSetting.preference(
-          title: "Show local favorites before network favorites".tl,
-          preference: FavoritePreferences.localFavoritesFirst,
-        ).toSliver(),
-        SwitchSetting.preference(
-          title: "Auto close favorite panel after operation".tl,
-          preference: FavoritePreferences.autoCloseFavoritePanel,
-        ).toSliver(),
-        SelectSetting.preference(
-          title: "Add new favorite to".tl,
-          preference: FavoritePreferences.newFavoriteAddTo,
-          optionTranslation: {"start": "Start".tl, "end": "End".tl},
-        ).toSliver(),
-        SelectSetting.preference(
-          title: "Move favorite after reading".tl,
-          preference: FavoritePreferences.moveFavoriteAfterRead,
-          optionTranslation: {
-            "none": "None".tl,
-            "end": "End".tl,
-            "start": "Start".tl,
-          },
-        ).toSliver(),
-        SelectSetting.preference(
-          title: "Quick Favorite".tl,
-          preference: FavoritePreferences.quickFavorite,
-          help:
-              "Long press on the favorite button to quickly add to this folder"
-                  .tl,
-          optionTranslation: {
-            for (var e in FavoritesScope.read(context).folderNames) e: e,
-          },
-        ).toSliver(),
-        CallbackSetting(
-          title: "Delete all unavailable local favorite items".tl,
-          callback: () async {
-            var count = 0;
-            await _tasks.run(
-              context,
-              task: (_) async {
-                final local = LocalManager();
-                count = await FavoritesScope.read(context).removeInvalid(
-                  localComicExists: (id) =>
-                      local.find(id, ComicType.local) != null,
-                );
-                return null;
+    final manager = FavoritesScope.read(context);
+    return ListenableBuilder(
+      listenable: manager,
+      builder: (context, _) {
+        final tree = manager.folderTree;
+        return SmoothCustomScrollView(
+          slivers: [
+            SliverAppbar(title: Text("Local Favorites".tl)),
+            SwitchSetting.preference(
+              title: "Show local favorites before network favorites".tl,
+              preference: FavoritePreferences.localFavoritesFirst,
+            ).toSliver(),
+            SwitchSetting.preference(
+              title: "Auto close favorite panel after operation".tl,
+              preference: FavoritePreferences.autoCloseFavoritePanel,
+            ).toSliver(),
+            SelectSetting.preference(
+              title: "Add new favorite to".tl,
+              preference: FavoritePreferences.newFavoriteAddTo,
+              optionTranslation: {"start": "Start".tl, "end": "End".tl},
+            ).toSliver(),
+            SelectSetting.preference(
+              title: "Move favorite after reading".tl,
+              preference: FavoritePreferences.moveFavoriteAfterRead,
+              optionTranslation: {
+                "none": "None".tl,
+                "end": "End".tl,
+                "start": "Start".tl,
               },
-              errorMessage: "Error".tl,
-              onSuccess: () => context.showMessage(
-                message: "Deleted @a favorite items".tlParams({'a': count}),
-              ),
-            );
-          },
-          actionTitle: 'Delete'.tl,
-        ).toSliver(),
-        SelectSetting.preference(
-          title: "Click favorite".tl,
-          preference: FavoritePreferences.onClickFavorite,
-          optionTranslation: {
-            "viewDetail": "View Detail".tl,
-            "read": "Read".tl,
-          },
-        ).toSliver(),
-      ],
+            ).toSliver(),
+            SelectSetting.preference(
+              title: "Quick Favorite".tl,
+              preference: FavoritePreferences.quickFavorite,
+              help:
+                  "Long press on the favorite button to quickly add to this folder"
+                      .tl,
+              optionTranslation: {
+                for (var e in tree.flattened) e.name: tree.label(e.name),
+              },
+              selectorBuilder: (context, value, onChanged) =>
+                  FavoriteFolderSelect(
+                    tree: tree,
+                    current: tree.named(value ?? '')?.name,
+                    allowRoot: true,
+                    nullLabel: 'None'.tl,
+                    onChanged: onChanged,
+                  ),
+            ).toSliver(),
+            CallbackSetting(
+              title: "Delete all unavailable local favorite items".tl,
+              callback: () async {
+                var count = 0;
+                await _tasks.run(
+                  context,
+                  task: (_) async {
+                    final local = LocalManager();
+                    count = await FavoritesScope.read(context).removeInvalid(
+                      localComicExists: (id) =>
+                          local.find(id, ComicType.local) != null,
+                    );
+                    return null;
+                  },
+                  errorMessage: "Error".tl,
+                  onSuccess: () => context.showMessage(
+                    message: "Deleted @a favorite items".tlParams({'a': count}),
+                  ),
+                );
+              },
+              actionTitle: 'Delete'.tl,
+            ).toSliver(),
+            SelectSetting.preference(
+              title: "Click favorite".tl,
+              preference: FavoritePreferences.onClickFavorite,
+              optionTranslation: {
+                "viewDetail": "View Detail".tl,
+                "read": "Read".tl,
+              },
+            ).toSliver(),
+          ],
+        );
+      },
     );
   }
 }

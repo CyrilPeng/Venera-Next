@@ -348,7 +348,8 @@ class ComicImportOperation {
       succeeded: false,
       issues: [
         ...result.issues,
-        const ComicImportIssue(ComicImportIssueKind.noValidComics),
+        if (imported.values.every((comics) => comics.isEmpty))
+          const ComicImportIssue(ComicImportIssueKind.noValidComics),
       ],
       pendingCopies: result.pendingCopies,
     );
@@ -1010,6 +1011,7 @@ class ComicImportOperation {
       comicType: comic.comicType,
       downloadedChapters: List<String>.of(comic.downloadedChapters),
       createdAt: comic.createdAt,
+      incompleteChapters: Map.unmodifiable(comic.incompleteChapters),
     );
     var startedWrite = false;
     var committed = false;
@@ -1020,7 +1022,10 @@ class ComicImportOperation {
         translatedTags,
         append,
       ) {
-        final id = _manager.findValidId(captured.comicType);
+        final id = _manager.findValidId(
+          captured.comicType,
+          favoritesPath: favoritesPath,
+        );
         final favorite = FavoriteItem(
           id: id,
           name: captured.title,

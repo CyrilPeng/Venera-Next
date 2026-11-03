@@ -17,6 +17,7 @@ import 'package:venera_next/network/image_http_client.dart';
 import 'package:venera_next/network/image_stream.dart';
 
 import 'image_provider_lifecycle.dart';
+import '../reader_diagnostics.dart';
 
 /// Metadata belongs to the cached stream, so cache hits keep the encoded size.
 abstract interface class OriginalImageSize {
@@ -30,6 +31,8 @@ class _ImageDimensions {
 abstract class BaseImageProvider<T extends BaseImageProvider<T>>
     extends ImageProvider<T> {
   const BaseImageProvider();
+
+  ReaderDiagnostics? get diagnostics => null;
 
   static final _lifecycle = ImageProviderLifecycle();
 
@@ -101,6 +104,11 @@ abstract class BaseImageProvider<T extends BaseImageProvider<T>>
   }
 
   static const int maxImagePixel = 2560 * 1440;
+
+  @protected
+  TargetImageSize targetSizeForImage(int width, int height) => enableResize
+      ? _getTargetSize(width, height)
+      : TargetImageSize(width: width, height: height);
 
   static TargetImageSize _getTargetSize(int width, int height) {
     // ignore invalid size
@@ -200,7 +208,12 @@ abstract class BaseImageProvider<T extends BaseImageProvider<T>>
             codec.dispose();
             attempt.check();
           }
-          final owned = _OwnedImageCodec(codec, consumer.recordFailure);
+          final owned = _OwnedImageCodec(
+            codec,
+            consumer.recordFailure,
+            diagnostics: diagnostics,
+            diagnosticIdentity: hashCode,
+          );
           consumer.codec = owned;
           return owned;
         } catch (error, stack) {
@@ -281,6 +294,10 @@ abstract class BaseImageProvider<T extends BaseImageProvider<T>>
     }
     attempt.check();
     final bytes = data;
+    final diagnostic = diagnostics?.beginImageSpan(
+      hashCode,
+      ReaderDiagnosticStage.codecInitWait,
+    );
     try {
       final buffer = await ImmutableBuffer.fromUint8List(bytes);
       if (attempt.isCancelled) {
@@ -289,16 +306,17 @@ abstract class BaseImageProvider<T extends BaseImageProvider<T>>
       }
       // Flutter's decoder takes ownership on invocation. Only a buffer which
       // never reaches decode above belongs to this provider for disposal.
-      return await decode(
+      final codec = await decode(
         buffer,
         getTargetSize: (width, height) {
           dimensions.size = Size(width.toDouble(), height.toDouble());
-          return enableResize
-              ? _getTargetSize(width, height)
-              : TargetImageSize(width: width, height: height);
+          return targetSizeForImage(width, height);
         },
       );
+      diagnostic?.finish(bytes: bytes.length);
+      return codec;
     } catch (error) {
+      diagnostic?.finish(success: false);
       if (attempt.isCancelled || isCancellation(error)) rethrow;
       await CacheManager().delete(key);
       if (bytes.length < 2 * 1024) {
@@ -410,11 +428,18 @@ typedef _NativeImageFrame = ({
 /// Flutter owns animation scheduling; this adapter owns each native frame
 /// request until its image is handed to Flutter or discarded after cancellation.
 class _OwnedImageCodec implements ui.Codec {
-  _OwnedImageCodec(this._raw, this._recordFailure)
-    : frameCount = _raw.frameCount,
-      repetitionCount = _raw.repetitionCount;
+  _OwnedImageCodec(
+    this._raw,
+    this._recordFailure, {
+    this.diagnostics,
+    required this.diagnosticIdentity,
+  }) : frameCount = _raw.frameCount,
+       repetitionCount = _raw.repetitionCount;
 
   final ui.Codec _raw;
+  final ReaderDiagnostics? diagnostics;
+  final int diagnosticIdentity;
+  bool _firstDecodeMeasured = false;
   final void Function(Object, StackTrace) _recordFailure;
   final _closed = Completer<void>();
   Future<void> get closed => _closed.future;
@@ -496,9 +521,25 @@ class _OwnedImageCodec implements ui.Codec {
         frame = _pendingFrame;
         _pendingFrame = null;
         if (frame == null) {
-          final native = _raw.getNextFrame();
-          _nativeFrame = (frame: native, attempt: attempt);
-          frame = await native;
+          final diagnostic = !_firstDecodeMeasured
+              ? diagnostics?.beginImageSpan(
+                  diagnosticIdentity,
+                  ReaderDiagnosticStage.firstDecodeWait,
+                )
+              : null;
+          _firstDecodeMeasured = true;
+          try {
+            final native = _raw.getNextFrame();
+            _nativeFrame = (frame: native, attempt: attempt);
+            frame = await native;
+            diagnostic?.finish(
+              width: frame.image.width,
+              height: frame.image.height,
+            );
+          } catch (_) {
+            diagnostic?.finish(success: false);
+            rethrow;
+          }
         }
         if (attempt.isCancelled && !_disposed) {
           // Native decode has finished, but a reversible hold must preserve

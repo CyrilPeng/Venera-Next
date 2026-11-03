@@ -10,6 +10,7 @@ import 'harmonyos.dart';
 
 class _App {
   String version = "0.0.0";
+  String buildVersion = "0.0.0";
 
   bool get isAndroid => Platform.isAndroid;
 
@@ -120,7 +121,8 @@ class _App {
   Future<void> _initVersion() async {
     final pubspec = await rootBundle.loadString("pubspec.yaml");
     final data = loadYaml(pubspec);
-    version = data["version"].toString().split('+').first;
+    buildVersion = data["version"].toString();
+    version = buildVersion.split('+').first;
   }
 }
 

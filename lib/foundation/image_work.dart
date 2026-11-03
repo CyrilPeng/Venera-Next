@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'reader_diagnostics.dart';
 
 /// Owns image reads and platform deliveries, including work whose
 /// originating widget has gone away. A cancellation stops the next stage;
 /// completion is acknowledged only after the current stage actually returns.
 class ImageWork {
+  ImageWork({this.diagnostics});
+  final ReaderDiagnostics? diagnostics;
   final _tasks = <ImageWorkTask>{};
   final _holds = <Object>{};
   final _resumeListeners = <({Object token, void Function() callback})>{};
@@ -59,6 +62,7 @@ class ImageWork {
   }
 
   void Function() holdForExit() {
+    diagnostics?.stop(ReaderDiagnosticStop.interrupted);
     final hold = Object();
     if (_holds.isEmpty) _holdRevision++;
     _holds.add(hold);

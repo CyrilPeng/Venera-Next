@@ -113,6 +113,41 @@ Cat's Eye.cbz
 If there is no `cover.[ext]` in the root folder, the first image from the first
 chapter is used as the cover.
 
+### HarmonyOS Comic Collection ZIP
+
+The development branch accepts both layouts below through **Comic collection ZIP**.
+Automatic outer-folder detection has not yet shipped in an installation package.
+
+```text
+Collection.zip                  Collection.zip
+|-- Book A/images               `-- Outer folder/
+`-- Book B/chapters/images           |-- Book A/images
+                                    `-- Book B/chapters/images
+```
+
+Only one optional outer folder is detected; arbitrary nesting is not flattened.
+One top-level folder containing image-only subfolders could mean separate comics
+or the chapters of one comic. In that case, the app previews the folder names and
+asks which layout to use, with no preselected answer. Cancelling imports nothing;
+you do not need to repackage the ZIP. A comic root containing a cover or pages is
+not automatically removed.
+
+Comic and chapter names are preserved. **An archive file** still imports one book
+and never automatically splits its chapters into books. Hidden system sidecars
+are ignored for layout detection, but all archive paths must still pass validation.
+
+### Migrated Settings and Favorites
+
+The development branch fixes `Favorite registration identity is already in use`
+after importing old settings. New comics receive an ID unused by both the local
+library and every favorite folder for the same comic type. Imports without a
+selected favorite folder also avoid accidentally linking to an old favorite.
+
+There is no need to delete old favorites or clear the database before importing
+new comics. The fix does not match records by title, rewrite existing favorites
+or paths, or modify original comic files. External paths from another platform
+still require separate migration; importing settings does not make them accessible.
+
 ## PDF and Image-based EPUB
 
 Open `Local` -> `Import` and select either a PDF comic file or an image-based
@@ -149,9 +184,11 @@ Document import never overwrites an existing comic with the same title.
 
 ## WebDAV CBZ Archive Results and Retries
 
-New on main (unreleased, #126): archiving local comics to WebDAV and downloading
+Starting with v1.18.2-rc.4 (#126), archiving local comics to WebDAV and downloading
 archives for import keep a result dialog open with each title, remote filename,
 status and selectable error details instead of a brief count-only message.
+v1.18.1 and earlier release candidates do not include these result and retry
+improvements.
 
 - Retry one failed item or all failed items without replaying successful uploads
   or imports. Cancellation waits for active work to finish safely, keeps completed

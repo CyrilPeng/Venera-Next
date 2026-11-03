@@ -13,6 +13,7 @@ class ReaderExitGuard extends StatefulWidget {
     required this.holdForLeave,
     required this.onError,
     required this.child,
+    this.onBackRequested,
     super.key,
   });
 
@@ -20,6 +21,9 @@ class ReaderExitGuard extends StatefulWidget {
   final void Function() Function() holdForLeave;
   final void Function(Object error, StackTrace stackTrace) onError;
   final Widget child;
+
+  /// A visible menu may consume back before the save-and-leave transaction.
+  final bool Function()? onBackRequested;
 
   @override
   ReaderExitGuardState createState() => ReaderExitGuardState();
@@ -37,6 +41,13 @@ class ReaderExitGuardState extends State<ReaderExitGuard> {
 
   bool _allowsNavigation() =>
       mounted && !_closing && NavigationAdmission.allows(context);
+
+  Future<void> _requestBack() {
+    if (!_closing && widget.onBackRequested?.call() == true) {
+      return Future.value();
+    }
+    return requestExit();
+  }
 
   Future<void> requestExit() {
     final active = _attempt;
@@ -175,12 +186,12 @@ class ReaderExitGuardState extends State<ReaderExitGuard> {
   Widget build(BuildContext context) => PopScope(
     canPop: false,
     onPopInvokedWithResult: (didPop, _) {
-      if (!didPop) unawaited(requestExit());
+      if (!didPop) unawaited(_requestBack());
     },
     child: CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): () =>
-            unawaited(requestExit()),
+            unawaited(_requestBack()),
       },
       child: Listener(
         onPointerDown: (event) => _pointers.add(event.pointer),

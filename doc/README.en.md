@@ -31,6 +31,7 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 
 ## Distribution
 
+- [Android TV 安装与分发](distribution/android_tv.zh.md) / [Android TV Distribution](distribution/android_tv.en.md)
 - [Windows 分发](distribution/windows.zh.md) / [Windows Distribution](distribution/windows.en.md)
 - [Linux 安装与分发](distribution/linux.zh.md) / [Linux Installation and Distribution](distribution/linux.en.md)
 - [HarmonyOS 实验签装与升级验证](distribution/harmonyos.zh.md) / [HarmonyOS Experimental Sideload Checks](distribution/harmonyos.en.md): diagnostic probes only, not a reader release.
@@ -38,6 +39,7 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 ## User And CLI
 
 - [应用数据同步](user/data_sync.zh.md) / [App-data synchronization](user/data_sync.en.md)
+- [两级本地收藏目录](user/favorite_folders.zh.md) / [Two-Level Local Favorite Folders (unreleased)](user/favorite_folders.en.md)
 - [自动选择阅读模式](user/automatic_reader_mode.zh.md) / [Automatic Reader Mode](user/automatic_reader_mode.en.md)
 - [Automatic reading and unavailable images](user/automatic_reading.en.md)
 - [条漫左右边距](user/reader_width.zh.md) / [Reader side margins](user/reader_width.en.md)
@@ -47,6 +49,7 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 
 ## Experiments
 
+- [Historical Android TV Alpha experiment, now integrated into main (Chinese)](experiments/android_tv.zh.md)
 - [Source installation task design (Chinese)](experiments/source_installation_tasks.zh.md)
 - [Source repository management design (Chinese)](experiments/source_repositories.zh.md)
 - [图片增强实验](experiments/image_enhancement.zh.md)

@@ -22,6 +22,7 @@ import '../../support/comic_source_fixture.dart';
 
 class _Platform extends InAppWebViewPlatform {
   bool progressSent = false;
+  late InAppWebViewController controller;
   Future<List<Cookie>> Function() cookies = () async => [
     Cookie(name: 'session', value: 'value'),
   ];
@@ -48,6 +49,8 @@ class _Environment extends PlatformWebViewEnvironment {
   Future<PlatformWebViewEnvironment> create({
     WebViewEnvironmentSettings? settings,
   }) async => this;
+  @override
+  Future<void> dispose() async {}
 }
 
 class _WebWidget extends PlatformInAppWebViewWidget {
@@ -57,10 +60,10 @@ class _WebWidget extends PlatformInAppWebViewWidget {
   Widget build(BuildContext context) {
     if (!owner.progressSent) {
       owner.progressSent = true;
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) =>
-            params.onProgressChanged?.call(_Controller(_LocalStorage()), 100),
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        params.onWebViewCreated?.call(owner.controller);
+        params.onProgressChanged?.call(owner.controller, 100);
+      });
     }
     return const SizedBox.expand();
   }
@@ -69,7 +72,9 @@ class _WebWidget extends PlatformInAppWebViewWidget {
   T controllerFromPlatform<T>(PlatformInAppWebViewController controller) =>
       throw UnimplementedError();
   @override
-  void dispose() {}
+  void dispose() {
+    params.webViewEnvironment?.onBrowserProcessExited?.call(_BrowserExit());
+  }
 }
 
 class _Cookies extends PlatformCookieManager {
@@ -143,12 +148,14 @@ void main() {
     Log.isMuted = true;
     appdata.settings['language'] = 'en-US';
     appdata.settings['proxy'] = 'direct';
-    InAppWebViewPlatform.instance = _Platform();
+    final platform = _Platform();
+    InAppWebViewPlatform.instance = platform;
     SingleInstanceCookieJar.instance = null;
     SingleInstanceCookieJar('${root.path}/cookie.db');
     storage = _Storage();
     local = _LocalStorage();
     controller = _Controller(local);
+    platform.controller = controller;
     callbacks = 0;
     onSuccess = null;
     source = ComicSourceFixture(
@@ -186,7 +193,6 @@ void main() {
       SingleInstanceCookieJar.instance?.dispose();
       SingleInstanceCookieJar.instance = previousJar;
       if (previous != null) InAppWebViewPlatform.instance = previous;
-      AppWebview.webViewEnvironment = null;
       appdata.settings['language'] = language;
       appdata.settings['proxy'] = proxy;
       Log.isMuted = muted;
@@ -303,3 +309,5 @@ void main() {
     skip: io.Platform.isLinux,
   );
 }
+
+class _BrowserExit extends Fake implements BrowserProcessExitedDetail {}

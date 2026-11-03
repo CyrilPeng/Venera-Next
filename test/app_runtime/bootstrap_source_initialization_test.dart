@@ -76,7 +76,11 @@ void main() {
       late Map<String, Object?> internalBefore;
       try {
         seedAnalyzedLegacyFavorites(favorites);
-        internalBefore = sqliteInternalTableSnapshot(favorites);
+        // SQLite drops obsolete statistics for rebuilt hierarchy metadata.
+        internalBefore = sqliteInternalTableSnapshot(
+          favorites,
+          excludeStatisticsFor: {'folder_order'},
+        );
       } finally {
         favorites.dispose();
       }

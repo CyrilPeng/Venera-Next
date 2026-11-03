@@ -143,6 +143,7 @@ class LocalStorageRelocation {
         comicType: original.comicType,
         downloadedChapters: original.downloadedChapters,
         createdAt: original.createdAt,
+        incompleteChapters: original.incompleteChapters,
       );
       cleanups.add({
         'id': original.id,

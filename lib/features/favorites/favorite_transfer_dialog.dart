@@ -15,6 +15,7 @@ import 'package:venera_next/foundation/translations.dart';
 
 import 'favorite_actions.dart' show newFolder;
 import 'favorite_models.dart';
+import 'favorite_folder_browser.dart';
 import 'favorites_manager.dart';
 
 /// Owns a captured transfer and publishes only its known commit after the
@@ -72,7 +73,7 @@ Future<void> _showFavoriteTransferDialog({
       manager.connectionGeneration == generation &&
       App.dataPath == path;
   if (!currentDatabase() || !manager.existsFolder(source)) return;
-  var folders = manager.folderNames.where((name) => name != source).toList();
+  var tree = manager.folderTree;
   final selected = <String>{};
   final navigator = Navigator.of(context, rootNavigator: true);
   final disposed = Completer<void>();
@@ -147,64 +148,44 @@ Future<void> _showFavoriteTransferDialog({
                     child: Column(
                       children: [
                         Expanded(
-                          child: ListView.builder(
-                            itemCount: folders.length + 1,
-                            itemBuilder: (_, index) {
-                              if (index == folders.length) {
-                                return Center(
-                                  child: TextButton(
-                                    onPressed: saving || confirmed
-                                        ? null
-                                        : () {
-                                            if (!canEdit()) return;
-                                            newFolder(
-                                              view,
-                                              onChanged: (names) {
-                                                if (!view.mounted ||
-                                                    !canEdit()) {
-                                                  return;
-                                                }
-                                                setState(() {
-                                                  folders = names
-                                                      .where(
-                                                        (name) =>
-                                                            name != source,
-                                                      )
-                                                      .toList();
-                                                  selected.retainAll(folders);
-                                                });
-                                              },
-                                            );
-                                          },
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.add, size: 20),
-                                        const SizedBox(width: 4),
-                                        Flexible(child: Text('New Folder'.tl)),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }
-                              final folder = folders[index];
-                              return CheckboxListTile(
-                                title: Text(folder),
-                                value: selected.contains(folder),
-                                onChanged: saving || confirmed
-                                    ? null
-                                    : (value) {
-                                        if (!canEdit() || value == null) return;
-                                        setState(() {
-                                          if (value) {
-                                            selected.add(folder);
-                                          } else {
-                                            selected.remove(folder);
-                                          }
-                                        });
-                                      },
-                              );
+                          child: FavoriteFolderBrowser(
+                            tree: tree,
+                            selected: Set.of(selected),
+                            disabled: {source},
+                            hidden: {source},
+                            enabled: !saving && !confirmed,
+                            checkboxes: true,
+                            onSelected: (folder) {
+                              if (!canEdit()) return;
+                              setState(() {
+                                if (!selected.add(folder)) {
+                                  selected.remove(folder);
+                                }
+                              });
                             },
+                            footers: [
+                              TextButton.icon(
+                                onPressed: saving || confirmed
+                                    ? null
+                                    : () {
+                                        if (!canEdit()) return;
+                                        newFolder(
+                                          view,
+                                          onChanged: (names) {
+                                            if (!view.mounted || !canEdit()) {
+                                              return;
+                                            }
+                                            setState(() {
+                                              tree = manager.folderTree;
+                                              selected.retainAll(names);
+                                            });
+                                          },
+                                        );
+                                      },
+                                icon: const Icon(Icons.add),
+                                label: Text('New Folder'.tl),
+                              ),
+                            ],
                           ),
                         ),
                         Center(

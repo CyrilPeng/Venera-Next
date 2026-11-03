@@ -15,6 +15,7 @@ class ReaderSettings {
     Map? device,
     Map? comic,
     ComicLayout layout = ComicLayout.unknown,
+    bool tvLowMemory = false,
   }) {
     final deviceEnabled = device?['enabled'] == true;
     final comicEnabled = comic?['enabled'] == true;
@@ -51,6 +52,15 @@ class ReaderSettings {
         (deviceEnabled ? _legacyAction(device) : null) ??
         _legacyAction(global) ??
         'zoom';
+    if (tvLowMemory) {
+      values['readerMode'] = values['readerMode'] == 'galleryRightToLeft'
+          ? 'galleryRightToLeft'
+          : 'galleryLeftToRight';
+      values['autoReaderMode'] = false;
+      values['readerScreenPicNumberForLandscape'] = 1;
+      values['readerScreenPicNumberForPortrait'] = 1;
+      values['preloadImageCount'] = 1;
+    }
     return ReaderSettings._(values);
   }
 

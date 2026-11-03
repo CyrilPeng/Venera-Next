@@ -37,11 +37,13 @@ import 'package:venera_next/app_shell/startup_failure.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'components/gesture.dart';
+import 'components/tv_navigation.dart';
 import 'components/js_ui.dart';
 import 'components/message.dart';
 import 'components/window_frame.dart';
 import 'components/window_selection_task.dart';
 import 'foundation/app.dart';
+import 'foundation/app_profile.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'foundation/app_locale.dart';
 import 'foundation/appdata.dart';
@@ -148,6 +150,22 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  Future<void> _tvBack() async {
+    if (!mounted || widget.host.isClosing) return;
+    if (await appNavigation.rootNavigatorKey.currentState?.maybePop() ??
+        false) {
+      return;
+    }
+    if (!mounted || widget.host.isClosing) return;
+    if (await appNavigation.mainNavigatorKey?.currentState?.maybePop() ??
+        false) {
+      return;
+    }
+    if (mounted && !widget.host.isClosing && App.isAndroid) {
+      await SystemNavigator.pop();
+    }
+  }
+
   late final _library = webDavLibrary;
   late final _interactiveBindings = createPlatformInteractiveBindings(
     placement: widget.host.placement?.attach(),
@@ -381,6 +399,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ),
       ),
       listTileTheme: ListTileThemeData(),
+      focusColor: AppProfile.current.isTv
+          ? primary.withValues(alpha: 0.25)
+          : null,
     );
   }
 
@@ -422,7 +443,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           tertiary = light.tertiary;
         }
         return MaterialApp(
-          title: "VeneraNext",
+          title: AppProfile.current.applicationTitle,
           home: home,
           debugShowCheckedModeBanner: false,
           theme: getTheme(primary, secondary, tertiary, Brightness.light),
@@ -463,7 +484,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   MediaQuery.of(context).viewPadding.top <= 0 ||
                   MediaQuery.of(context).viewPadding.top > 200;
 
-              if (isPaddingCheckError && Platform.isAndroid) {
+              if (isPaddingCheckError &&
+                  Platform.isAndroid &&
+                  !AppProfile.current.isTv) {
                 widget = MediaQuery(
                   data: MediaQuery.of(context).copyWith(
                     viewPadding: const EdgeInsets.only(top: 15, bottom: 15),
@@ -547,10 +570,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   child: widget,
                 );
               }
-              return _SystemUiProvider(
-                Material(
-                  color: App.isLinux ? Colors.transparent : null,
-                  child: widget,
+              return TvNavigation(
+                onBack: () => unawaited(_tvBack()),
+                child: _SystemUiProvider(
+                  Material(
+                    color: App.isLinux ? Colors.transparent : null,
+                    child: widget,
+                  ),
                 ),
               );
             }

@@ -7,8 +7,8 @@ import 'package:venera_next/features/favorites/favorites_repository.dart';
 class FailingRepository extends FavoritesRepository {
   FailingRepository(super.db);
   @override
-  void createFolder(String folder) {
-    super.createFolder(folder);
+  void createFolder(String folder, {String? parentId}) {
+    super.createFolder(folder, parentId: parentId);
     final table = '"${folder.replaceAll('"', '""')}"';
     db.execute(
       "CREATE TRIGGER fail_import BEFORE INSERT ON $table WHEN new.id = 'fail' BEGIN SELECT RAISE(ABORT, 'injected'); END;",

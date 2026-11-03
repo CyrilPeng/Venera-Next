@@ -135,7 +135,8 @@ class _LocalComicsSummaryState extends State<LocalComicsSummary> {
                     Button.outlined(
                       child: Row(
                         children: [
-                          if (LocalManager().downloadingTasks.first.isPaused)
+                          if (LocalManager().currentDownloadingTask?.isPaused !=
+                              false)
                             const Icon(Icons.pause_circle_outline, size: 18)
                           else
                             const _AnimatedDownloadingIcon(),
@@ -226,7 +227,7 @@ class _ImportComicsWidgetState extends State<_ImportComicsWidget> {
       "Select an EhViewer database and a download folder.".tl,
       "Scan the current local path and restore the local database.".tl,
       if (App.isHarmonyOS)
-        "Select a ZIP whose root contains one folder per comic. Do not include an extra outer folder. Ordinary CBZ imports are unchanged."
+        "Select a ZIP containing comic folders, optionally inside one outer folder. The layout is detected automatically; ambiguous layouts ask for confirmation. Ordinary CBZ imports are unchanged."
             .tl,
     ][type];
     List<String> importMethods = [

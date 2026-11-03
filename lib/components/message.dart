@@ -264,6 +264,7 @@ class ResourceDialogRoute<T> extends DialogRoute<T> {
     super.themes,
     super.barrierColor,
     super.barrierDismissible,
+    super.animationStyle,
     required this.onDispose,
   });
 

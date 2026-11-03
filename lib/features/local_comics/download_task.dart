@@ -12,6 +12,11 @@ abstract class DownloadTask with ChangeNotifier {
 
   bool get isWaitingToRetry => false;
 
+  bool get isAwaitingMissingPages => false;
+
+  /// Queue-only preparation; publication and scheduling belong to the queue.
+  void prepareMissingPageRetry() {}
+
   /// A network/foreground hint may wake an existing wait, never resume a task.
   void retryNow() {}
 

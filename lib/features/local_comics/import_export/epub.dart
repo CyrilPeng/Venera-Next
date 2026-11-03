@@ -6,6 +6,7 @@ import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/foundation/file_type.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:zip_flutter/zip_flutter.dart';
+import 'comic_export_service.dart';
 
 class EpubData {
   final String title;
@@ -202,6 +203,7 @@ Future<File> createEpubWithLocalComic(
   LocalComic comic,
   String outFilePath,
 ) async {
+  requireCompleteComicForExport(comic);
   var chapters = <String, List<File>>{};
   if (comic.chapters == null) {
     chapters[comic.title] = (await LocalManager().getImages(

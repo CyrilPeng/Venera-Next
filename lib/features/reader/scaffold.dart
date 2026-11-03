@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:venera_next/components/settings_save_state.dart';
+import 'package:venera_next/components/tv_navigation.dart';
+import 'tv_input.dart';
 
 import 'package:venera_next/features/reader/status_info.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +32,7 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/reader/image_export.dart';
 import 'package:venera_next/features/reader/image_export_binding.dart';
 import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/foundation/reader_diagnostics.dart';
 import 'package:venera_next/features/reader/settings_effects.dart';
 import 'package:venera_next/features/reader/settings_panel.dart';
 import 'package:venera_next/features/reader/image_selection.dart';
@@ -61,6 +64,9 @@ class ReaderScaffold extends StatefulWidget {
     required this.createChapterComments,
     required this.chapterNavigation,
     required this.child,
+    this.onDiagnostics,
+    this.onRemoteKey,
+    this.onCancelRemoteKeys,
   });
 
   final ReaderShellData data;
@@ -83,6 +89,9 @@ class ReaderScaffold extends StatefulWidget {
   final ReaderChapterCommentsRequest? Function() createChapterComments;
   final ReaderChapterNavigationAction? chapterNavigation;
   final Widget child;
+  final VoidCallback? onDiagnostics;
+  final ValueChanged<KeyEvent>? onRemoteKey;
+  final VoidCallback? onCancelRemoteKeys;
 
   @override
   State<ReaderScaffold> createState() => ReaderScaffoldState();
@@ -223,65 +232,76 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
         .map((size) => scaler.scale(size) / size)
         .fold(1.0, (largest, scale) => scale > largest ? scale : largest);
     final topBarHeight = kTopBarHeight * titleScale;
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: AbsorbPointer(
-            absorbing: widget.data.animating,
-            child: widget.child,
-          ),
-        ),
-        if (!isOnChapterCommentsPage)
+    return TvReaderInput(
+      menuOpen: _isOpen,
+      contentInteractive: isOnChapterCommentsPage,
+      onToggleMenu: openOrClose,
+      onReadKey: widget.onRemoteKey ?? (_) {},
+      onCancelReadKeys: widget.onCancelRemoteKeys ?? () {},
+      onExit: widget.onExit,
+      child: Stack(
+        children: [
           Positioned.fill(
-            child: ReaderBrightnessOverlay(
-              enabled:
-                  _brightnessPreview.enabled ??
-                  widget.data.preferences.readerBrightnessEnabled,
-              brightness:
-                  _brightnessPreview.brightness ??
-                  widget.data.preferences.readerBrightness,
+            child: AbsorbPointer(
+              absorbing: widget.data.animating,
+              child: ExcludeFocus(
+                excluding: _isOpen && TvNavigation.enabledOf(context),
+                child: widget.child,
+              ),
             ),
           ),
-        if (!isOnChapterCommentsPage) _buildInformation(),
-        ReaderChapterNavigationButton(action: widget.chapterNavigation),
-        AnimatedPositioned(
-          duration: menuDuration,
-          top: _isOpen ? 0 : -(topBarHeight + context.padding.top),
-          left: 0,
-          right: 0,
-          // Insets change immediately when the native/custom frame changes.
-          // Keep content height in sync; animate only its entrance position.
-          child: SizedBox(
-            height: topBarHeight + context.padding.top,
-            child: _menuRegion(visible: _isOpen, child: buildTop()),
+          if (!isOnChapterCommentsPage)
+            Positioned.fill(
+              child: ReaderBrightnessOverlay(
+                enabled:
+                    _brightnessPreview.enabled ??
+                    widget.data.preferences.readerBrightnessEnabled,
+                brightness:
+                    _brightnessPreview.brightness ??
+                    widget.data.preferences.readerBrightness,
+              ),
+            ),
+          if (!isOnChapterCommentsPage) _buildInformation(),
+          ReaderChapterNavigationButton(action: widget.chapterNavigation),
+          AnimatedPositioned(
+            duration: menuDuration,
+            top: _isOpen ? 0 : -(topBarHeight + context.padding.top),
+            left: 0,
+            right: 0,
+            // Insets change immediately when the native/custom frame changes.
+            // Keep content height in sync; animate only its entrance position.
+            child: SizedBox(
+              height: topBarHeight + context.padding.top,
+              child: _menuRegion(visible: _isOpen, child: buildTop()),
+            ),
           ),
-        ),
-        AnimatedPositioned(
-          duration: menuDuration,
-          bottom: _isOpen
-              ? 0
-              : -(ReaderBottomBar.height +
-                    MediaQuery.of(context).padding.bottom),
-          left: 0,
-          right: 0,
-          child: _menuRegion(visible: _isOpen, child: buildBottom()),
-        ),
-        AnimatedPositioned(
-          duration: menuDuration,
-          curve: Curves.easeOut,
-          right: 16 + context.padding.right,
-          bottom: brightnessPanelVisible
-              ? ReaderBottomBar.height + context.padding.bottom + 12
-              : -context.height,
-          child: _menuRegion(
-            visible: brightnessPanelVisible,
-            child: buildBrightnessPanel(),
+          AnimatedPositioned(
+            duration: menuDuration,
+            bottom: _isOpen
+                ? 0
+                : -(ReaderBottomBar.height +
+                      MediaQuery.of(context).padding.bottom),
+            left: 0,
+            right: 0,
+            child: _menuRegion(visible: _isOpen, child: buildBottom()),
           ),
-        ),
-        Positioned.fill(
-          child: EInkRefreshOverlay(controller: _eInkRefreshController),
-        ),
-      ],
+          AnimatedPositioned(
+            duration: menuDuration,
+            curve: Curves.easeOut,
+            right: 16 + context.padding.right,
+            bottom: brightnessPanelVisible
+                ? ReaderBottomBar.height + context.padding.bottom + 12
+                : -context.height,
+            child: _menuRegion(
+              visible: brightnessPanelVisible,
+              child: buildBrightnessPanel(),
+            ),
+          ),
+          Positioned.fill(
+            child: EInkRefreshOverlay(controller: _eInkRefreshController),
+          ),
+        ],
+      ),
     );
   }
 
@@ -299,6 +319,26 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
     chapterTitle: widget.data.chapterTitle,
     onBack: () => unawaited(widget.onExit()),
     actions: [
+      if (widget.onDiagnostics != null && widget.imageWork.diagnostics != null)
+        ListenableBuilder(
+          listenable: widget.imageWork.diagnostics!,
+          builder: (context, _) => Tooltip(
+            message: widget.imageWork.diagnostics!.isRecording
+                ? 'Stop and review'.tl
+                : 'Reading diagnostics'.tl,
+            child: IconButton(
+              icon: Icon(
+                widget.imageWork.diagnostics!.isRecording
+                    ? Icons.stop_circle_outlined
+                    : Icons.speed,
+              ),
+              onPressed: () {
+                if (_isOpen) openOrClose();
+                widget.onDiagnostics!();
+              },
+            ),
+          ),
+        ),
       if (shouldShowChapterComments())
         Tooltip(
           message: "Chapter Comments".tl,
@@ -519,6 +559,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   void share() => unawaited(_imageExporter.export(sharing: true));
 
   void openSetting() {
+    widget.imageWork.diagnostics?.stop(ReaderDiagnosticStop.interrupted);
     final request = widget.createSettings();
     if (request == null || !request.isCurrent()) return;
     final work = widget.imageWork;

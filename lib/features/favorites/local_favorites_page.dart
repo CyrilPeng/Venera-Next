@@ -4,6 +4,8 @@ import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/components/file_save_task.dart';
 import 'favorite_models.dart';
+import 'favorite_folder.dart';
+import 'folder_move_dialog.dart';
 import 'dart:convert';
 import 'dart:async';
 
@@ -434,6 +436,14 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     if (title == localAllFolderLabel) {
       title = "All".tl;
     }
+    final folderTree = _canReadObservedFolder
+        ? _observedManager.folderTree
+        : FavoriteFolderTree.flat(const []);
+    final currentFolder = folderTree.named(widget.folder);
+    final childFolders = currentFolder == null
+        ? const <FavoriteFolder>[]
+        : folderTree.childrenOf(currentFolder.id);
+    if (!isAllFolder) title = folderTree.label(widget.folder);
     final displayedComics = searchMode ? searchResults : filterComics(comics);
 
     Widget body = SmoothCustomScrollView(
@@ -571,6 +581,41 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
               if (!isAllFolder)
                 MenuButton(
                   entries: [
+                    if (currentFolder?.parentId == null)
+                      MenuEntry(
+                        icon: Icons.create_new_folder_outlined,
+                        text: 'Create subfolder'.tl,
+                        onClick: () {
+                          if (!_canReadObservedFolder ||
+                              currentFolder == null ||
+                              _queryOwner?.canPresent != true) {
+                            return;
+                          }
+                          newFolder(
+                            context,
+                            parentId: currentFolder.id,
+                            onChanged: (_) => target.updateFolderList(),
+                          );
+                        },
+                      ),
+                    MenuEntry(
+                      icon: Icons.drive_file_move_outline,
+                      text: 'Move folder'.tl,
+                      onClick: () {
+                        if (!_canReadObservedFolder ||
+                            _queryOwner?.canPresent != true) {
+                          return;
+                        }
+                        moveFavoriteFolder(
+                          context,
+                          folder: target.folder,
+                          isCurrent: () =>
+                              _canReadObservedFolder &&
+                              widget.folder == target.folder,
+                          onCommitted: target.updateFolderList,
+                        );
+                      },
+                    ),
                     MenuEntry(
                       icon: Icons.edit_outlined,
                       text: "Rename".tl,
@@ -610,7 +655,11 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                     ),
                     MenuEntry(
                       icon: Icons.upload_file,
-                      text: "Export".tl,
+                      text:
+                          (childFolders.isEmpty
+                                  ? 'Export'
+                                  : 'Export this folder only (no subfolders)')
+                              .tl,
                       onClick: () {
                         if (!_canReadObservedFolder ||
                             _queryOwner?.canPresent != true ||
@@ -645,14 +694,21 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       color: context.colorScheme.error,
                       onClick: () {
                         if (_queryOwner?.canPresent != true) return;
+                        if (childFolders.isNotEmpty) {
+                          context.showMessage(
+                            message:
+                                'Move subfolders before deleting this folder'
+                                    .tl,
+                          );
+                          return;
+                        }
                         confirmFavoriteMutation(
                           context: context,
                           manager: _observedManager,
                           folder: target.folder,
                           title: "Delete".tl,
-                          content: "Delete folder '@f' ?".tlParams({
-                            "f": target.folder,
-                          }),
+                          content:
+                              '${"Delete folder '@f' ?".tlParams({"f": target.folder})}\n${'Only favorite records in this folder are removed; comic files are kept.'.tl}',
                           btnColor: context.colorScheme.error,
                           isCurrent: () =>
                               _canReadObservedFolder &&
@@ -856,6 +912,34 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
               },
             ).paddingBottom(8).paddingRight(8),
           ),
+        if (!searchMode && !multiSelectMode && childFolders.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                'Subfolders are separate. Comics below belong directly to this folder.'
+                    .tl,
+              ),
+            ),
+          ),
+          SliverList.builder(
+            itemCount: childFolders.length,
+            itemBuilder: (context, index) {
+              final folder = childFolders[index];
+              return ListTile(
+                leading: const Icon(Icons.folder_outlined),
+                title: Text(folder.name),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  if (_canReadObservedFolder &&
+                      _queryOwner?.canPresent == true) {
+                    target.onFolderSelected(false, folder.name);
+                  }
+                },
+              );
+            },
+          ),
+        ],
         if (_loadError != null)
           SliverToBoxAdapter(
             child: Column(

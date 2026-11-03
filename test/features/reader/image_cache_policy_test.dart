@@ -4,6 +4,37 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/reader/image_cache_policy.dart';
 
 void main() {
+  test(
+    'TV ceiling is applied before memory query and survives query failure',
+    () async {
+      final limits = <int>[];
+      final memory = Completer<int?>();
+      final policy = ReaderImageCachePolicy(
+        readAvailableMemory: () => memory.future,
+        maximumBytes: () => 64 << 20,
+        setLimit: limits.add,
+        onError: (_, _) {},
+      );
+      final configured = policy.configure();
+      expect(limits, [64 << 20]);
+      memory.complete(8 << 30);
+      await configured;
+      expect(limits.last, 64 << 20);
+      policy.dispose();
+      final failedLimits = <int>[];
+      final failed = ReaderImageCachePolicy(
+        readAvailableMemory: () async =>
+            throw StateError('unsupported platform'),
+        maximumBytes: () => 64 << 20,
+        setLimit: failedLimits.add,
+        onError: (_, _) {},
+      );
+      await failed.configure();
+      expect(failedLimits, [64 << 20]);
+      failed.dispose();
+    },
+  );
+
   test('memory thresholds retain the existing cache limits', () {
     for (final entry in <int, int>{
       0: 100,

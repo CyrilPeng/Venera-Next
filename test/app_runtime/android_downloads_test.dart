@@ -70,6 +70,26 @@ void main() {
   });
 
   test(
+    'missing-page tasks do not own foreground execution or block the next task',
+    () async {
+      final missing = _Task('missing')..awaitingMissing = true;
+      manager.restorePausedDownloads([missing, first]);
+      attach();
+      await pumpEventQueue();
+      expect(methods('start'), isEmpty);
+      expect(missing.listeners, 0);
+      expect(first.listeners, 1);
+      manager.resumeDownload(first);
+      await pumpEventQueue();
+      expect(methods('start'), hasLength(1));
+      expect(missing.resumes, 0);
+      await manager.pauseDownload(first);
+      await pumpEventQueue();
+      expect(methods('stop'), hasLength(1));
+    },
+  );
+
+  test(
     'restored tasks stay paused; active queue owns one foreground session',
     () async {
       final owner = attach();
@@ -256,6 +276,9 @@ class _Task extends DownloadTask {
   int resumes = 0;
   int wakes = 0;
   bool paused = true;
+  bool awaitingMissing = false;
+  @override
+  bool get isAwaitingMissingPages => awaitingMissing;
   bool waiting = false;
   double amount = 0;
   void emit() => notifyListeners();

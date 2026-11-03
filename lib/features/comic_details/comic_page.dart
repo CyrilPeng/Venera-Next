@@ -139,10 +139,9 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
 
   @override
   Widget buildError() {
-    final isDownloaded = LocalManager().isDownloaded(
-      widget.id,
-      ComicType.fromKey(widget.sourceKey),
-    );
+    final isDownloaded =
+        LocalManager().find(widget.id, ComicType.fromKey(widget.sourceKey)) !=
+        null;
     Widget? action;
     if (isDownloaded) {
       action = FilledButton.tonal(

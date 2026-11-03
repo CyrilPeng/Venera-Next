@@ -32,6 +32,77 @@ void main() {
   });
 
   test(
+    'incomplete tasks remain readable without blocking or automatically retrying',
+    () async {
+      final gate = Completer<void>();
+      final first = _Task('missing', events)..cleanup = gate.future;
+      final second = _Task('second', events);
+      queue.add(first);
+      queue.add(second);
+      first.pause();
+      first.awaitingMissing = true;
+      events.clear();
+      queue.retainIncomplete(first);
+      expect(queue.tasks, [first, second]);
+      expect(queue.currentTask, second);
+      expect(second.isPaused, isTrue);
+      expect(events, ['commit:missing', 'notify', 'save']);
+      gate.complete();
+      await pumpEventQueue();
+      expect(second.isPaused, isFalse);
+      expect(events.where((event) => event == 'resume:missing'), isEmpty);
+      queue.complete(second);
+      expect(queue.currentTask, isNull);
+      expect(queue.tasks, [first]);
+      final last = _Task('last', events);
+      queue.add(last);
+      expect(queue.currentTask, last);
+      expect(last.isPaused, isFalse);
+      expect(events.where((event) => event == 'resume:missing'), isEmpty);
+    },
+  );
+
+  test(
+    'explicit missing-page retry drains work and is still cancellable',
+    () async {
+      final gate = Completer<void>();
+      final missing = _Task('missing', events)..awaitingMissing = true;
+      final active = _Task('active', events)..cleanup = gate.future;
+      queue.restorePausedTasks([missing, active]);
+      queue.resume(active);
+      events.clear();
+      final retry = queue.retryIncomplete(missing);
+      expect(queue.currentTask, missing);
+      expect(missing.awaitingMissing, isFalse);
+      expect(active.isPaused, isTrue);
+      expect(queue.isResumePending, isTrue);
+      final paused = queue.pause(missing);
+      gate.complete();
+      await Future.wait([retry, paused]);
+      await pumpEventQueue();
+      expect(events.where((event) => event.startsWith('resume:')), isEmpty);
+      queue.resume(missing);
+      expect(events.where((event) => event.startsWith('resume:')), [
+        'resume:missing',
+      ]);
+    },
+  );
+
+  test('restored missing-only queue requires explicit retry', () async {
+    final missing = _Task('missing', events)..awaitingMissing = true;
+    queue.restorePausedTasks([missing]);
+    queue.resume(missing);
+    expect(queue.currentTask, isNull);
+    expect(events, isEmpty);
+    await queue.retryIncomplete(missing);
+    await pumpEventQueue();
+    expect(queue.currentTask, missing);
+    expect(events.where((event) => event.startsWith('resume:')), [
+      'resume:missing',
+    ]);
+  });
+
+  test(
     'move publishes immediately but all automatic starts wait for cleanup',
     () async {
       final gate = Completer<void>();
@@ -564,6 +635,11 @@ class _Task extends DownloadTask {
   @override
   Future<void> get pendingCleanup => cleanup ?? Future.value();
   bool _paused = true;
+  bool awaitingMissing = false;
+  @override
+  bool get isAwaitingMissingPages => awaitingMissing;
+  @override
+  void prepareMissingPageRetry() => awaitingMissing = false;
   void Function()? onPause;
   void Function()? onCancel;
   @override

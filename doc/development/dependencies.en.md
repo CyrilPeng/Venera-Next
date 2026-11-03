@@ -23,7 +23,7 @@ VeneraNext maintainers own patch selection, upstream review, and validation for 
 
 | Dependency | Commit | Upstream / license | Immediate reason for retaining the customized repository |
 |---|---|---|---|
-| `flutter_qjs` | `8feae95df7fb00455df129ad7a0dfec1d0e8d8e4` | Fork upstream not recorded / MIT | The pinned revision includes NDK r28 build support; replacement requires JavaScript runtime and native platform build verification |
+| `flutter_qjs` | `295f77421eedff356a02e92987181b525970c780` | Fork upstream not recorded / MIT | Retains NDK r28 support and skips numeric-buffer reference walks for asynchronous byte results; replacement requires runtime and native platform verification |
 | `scrollable_positioned_list` | `09e756b1f1b04e6298318d99ec20a787fb360f59` | `google/flutter.widgets` / BSD-3-Clause | The pinned revision adds `scrollControllerCallback` and `scrollBehavior`, used by continuous-reader positioning |
 | `desktop_webview_window` | `7801fc582ecf5a7351632887891ecf309a7b2583` | `wgh136/flutter_desktop_webview` / not declared | The pinned revision fixes Windows ARM64 builds; replacement requires verification on every desktop platform |
 | `flutter_inappwebview` | `3ef899b3db57c911b080979f1392253b835f98ab` | `pichillilorenzo/flutter_inappwebview` / Apache-2.0 | The pinned revision fixes `GraphicsContext` deallocation; embedded WebView and Cloudflare flows rely on this branch behavior |
@@ -35,6 +35,16 @@ VeneraNext maintainers own patch selection, upstream review, and validation for 
 The table uses commit messages to explain why the project cannot immediately switch back to upstream. It is not a complete diff audit. Every Git dependency update must document the upstream repository, comparison range, all custom changes, upstream PR if any, security impact, and rollback path.
 
 `desktop_webview_window` does not declare a license, while `lodepng_flutter`, `flutter_saf`, and `flutter_7zip` still contain placeholder license files. These are known supply-chain debts. Confirm licensing with the maintainers before upgrading; if it cannot be confirmed, migrate to an upstream revision or replacement with clear licensing.
+
+## QuickJS Numeric-Buffer Reference Walk Fix (2026-10-31)
+
+The pin moves from `8feae95df7fb00455df129ad7a0dfec1d0e8d8e4` to `295f77421eedff356a02e92987181b525970c780` on the existing fork's `venera-next-pinned` branch. The application still uses the full immutable commit, not a floating branch.
+The [complete diff](https://github.com/CyrilPeng/flutter_qjs/compare/8feae95df7fb00455df129ad7a0dfec1d0e8d8e4...295f77421eedff356a02e92987181b525970c780) contains only a `TypedData` early return in `lib/src/ffi.dart`, regression tests, and the dependency changelog. License, package version 0.3.7, native code, NDK/CMake and platform settings are unchanged. No unverified upstream PR is claimed.
+
+Previously, `JSRef._callRecursive` copied and scanned `Uint8List` as an ordinary list even though numeric buffers cannot contain JS references. Skipping those buffers removes unnecessary Promise byte-result walks while preserving normal list/map traversal, aliases, cycles, callbacks and asynchronous completion. It does not disable processing, rewrite user scripts, or introduce zero-copy buffers.
+The [reader diagnostic record](reader_diagnostics.md) preserves an isolated A/B/A comparison and its limits. Two dependency-local regressions cover buffers and cyclic graphs; application regressions cover results, cancellation, errors, workers and reference release. Host checks do not replace Android-device retesting or platform builds, and do not close #125.
+
+This is not a QuickJS engine security upgrade and does not resolve the existing upstream-provenance debt. It adds no permissions or network capabilities. Roll back the pin in `pubspec.yaml`, `pubspec.lock`, `git_dependencies.json` and the current dependency table together, then revalidate loading/processing lifetimes; never patch the shared Pub cache as a rollback mechanism.
 
 ## Locally Maintained PhotoView
 
