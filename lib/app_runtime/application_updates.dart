@@ -15,6 +15,7 @@ ApplicationUpdateService createApplicationUpdates() => ApplicationUpdateService(
   createClient: () => Dio()..httpClientAdapter = RHttpAdapter(),
   currentVersion: () => App.version,
   forAndroidTv: AppProfile.current.isTv,
+  forHarmonyOS: App.isHarmonyOS,
 );
 
 StartupUpdateCheck createStartupUpdateCheck({

@@ -13,6 +13,7 @@ from pathlib import Path
 from native_build import CONFIG, ROOT, digest, require_within
 from prepare_probe import (BASE, command, configure_device_types, configure_profile,
                            export_qjs, verify_native_report)
+from release_context import build_inputs
 
 
 FULL_CONFIG_PATH = Path(__file__).with_name("full_app_config.json")
@@ -22,6 +23,9 @@ PROJECT = BASE / "full-app"
 WEBVIEW_PACKAGES = tuple("flutter_inappwebview" + suffix for suffix in (
     "", "_platform_interface", "_ohos", "_android", "_ios", "_macos", "_web", "_windows"))
 EXTRA_LIBRARIES = ("liblodepng_flutter.so", "libzip_flutter.so", "libflutter_7zip.so", "libinappwebview.so")
+WEBVIEW_API_TYPES = ("browser_process_exit_kind.dart", "browser_process_exit_kind.g.dart",
+                     "browser_process_exited_detail.dart", "browser_process_exited_detail.g.dart", "enum_method.dart")
+WEBVIEW_TYPES = Path("flutter_inappwebview_platform_interface/lib/src/types")
 
 
 def tree_digest(root):
@@ -80,6 +84,45 @@ def patch_webview_native_profile(text):
       "cppFlags": "",
     }
   },''', '  "buildOption": {},')
+
+
+def patch_webview_environment_api(destination, upstream):
+    """Keep Windows-only source type-safe; never synthesize an exit event."""
+    facade = "flutter_inappwebview/lib/src/webview_environment/webview_environment.dart"
+    interface = "flutter_inappwebview_platform_interface/lib/src/webview_environment/platform_webview_environment.dart"
+    patterns = {
+        facade: (r"  ///\{@macro flutter_inappwebview_platform_interface\.PlatformWebViewEnvironment\.onBrowserProcessExited\}"
+                 r".*?platform\.onBrowserProcessExited = value;"),
+        interface: (r"  ///\{@template flutter_inappwebview_platform_interface\.PlatformWebViewEnvironment\.onBrowserProcessExited\}"
+                    r".*?void Function\(BrowserProcessExitedDetail detail\)\? onBrowserProcessExited;"),
+    }
+    blocks = {}
+    for name, pattern in patterns.items():
+        matches = re.findall(pattern, (upstream / name).read_text(encoding="utf-8"), re.S)
+        if len(matches) != 1:
+            raise ValueError("Pinned WebView environment API changed; review the backport")
+        blocks[name] = matches[0]
+    for name in WEBVIEW_API_TYPES:
+        target = destination / WEBVIEW_TYPES / name
+        if target.exists():
+            raise ValueError("WebView API backport must only be applied once")
+        shutil.copy2(upstream / WEBVIEW_TYPES / name, target)
+    for name, block in blocks.items():
+        target = destination / name
+        text = target.read_text(encoding="utf-8")
+        if "onBrowserProcessExited" in text:
+            raise ValueError("WebView API backport must only be applied once")
+        if name == interface:
+            text = patch_once(text, "import '../types/disposable.dart';",
+                              "import '../types/disposable.dart';\nimport '../types/browser_process_exited_detail.dart';")
+        anchor = ("  ///{@macro flutter_inappwebview_platform_interface.PlatformWebViewEnvironment.dispose}"
+                  if name == facade else
+                  "  ///{@template flutter_inappwebview_platform_interface.PlatformWebViewEnvironment.dispose}")
+        target.write_text(patch_once(text, anchor, block + "\n\n" + anchor), encoding="utf-8")
+    target = destination / WEBVIEW_TYPES / "main.dart"
+    target.write_text(patch_once(target.read_text(encoding="utf-8"), "export 'disposable.dart';",
+                                "export 'disposable.dart';\nexport 'browser_process_exit_kind.dart';\n"
+                                "export 'browser_process_exited_detail.dart';\nexport 'enum_method.dart';"), encoding="utf-8")
 
 
 def extract_checked(archive, destination):
@@ -142,8 +185,14 @@ def export_hosted(name, spec):
 
 def prepare_dependencies(qjs_source):
     DEPS.mkdir(parents=True, exist_ok=True)
+    previous = verify_dependencies() if (DEPS / "sources.json").exists() else {}
+    if "webview_api" in previous:
+        # Only remove known added files from a byte-verified owned export.
+        # The original Git archive restores all other patched dependency files.
+        for name in WEBVIEW_API_TYPES:
+            require_within(DEPS / "webview" / WEBVIEW_TYPES / name, DEPS).unlink()
     records = {}
-    for name in ("webview", "code_assets", "lodepng_flutter", "flutter_7zip"):
+    for name in ("webview", "webview_api", "code_assets", "lodepng_flutter", "flutter_7zip"):
         spec = FULL_CONFIG[name]
         root = export_git(name, spec)
         records[name] = {"revision": spec["revision"], "original_sha256": tree_digest(root)}
@@ -151,6 +200,7 @@ def prepare_dependencies(qjs_source):
         root = export_hosted(name, spec)
         records[name] = {**spec, "original_sha256": tree_digest(root)}
     export_qjs(qjs_source, BASE / "deps/flutter_qjs")
+    patch_webview_environment_api(DEPS / "webview", DEPS / "webview_api")
     for name, loader in (("lodepng_flutter", "lib/lodepng_flutter.dart"),
                          ("flutter_7zip", "lib/flutter_7zip.dart"),
                          ("zip_flutter", "lib/src/zip_dart_base.dart")):
@@ -182,8 +232,9 @@ def verify_dependencies():
     return records
 
 
-def configure_pubspec(text):
-    text = re.sub(r"^version: .*?$", f"version: {FULL_CONFIG['version_name']}+{FULL_CONFIG['version_code']}",
+def configure_pubspec(text, identity=None):
+    identity = identity or build_inputs()
+    text = re.sub(r"^version: .*?$", f"version: {identity['version_name']}+{identity['version_code']}",
                   text, count=1, flags=re.M)
     for name in ("photo_view", "share_plus", "rhttp"):
         text = patch_once(text, f"path: packages/{name}", f"path: ../../../packages/{name}")
@@ -212,6 +263,7 @@ def app_source_manifest():
 
 
 def prepare_project(args):
+    identity = build_inputs()
     sdk = args.flutter_sdk.resolve()
     head = subprocess.check_output(["git", "-C", sdk, "rev-parse", "HEAD"], text=True).strip()
     if head != CONFIG["flutter"]["revision"]:
@@ -243,8 +295,8 @@ def prepare_project(args):
         path = project / name
         relocated = os.path.relpath(source, path.parent).replace("\\", "/")
         path.write_text(patch_once(path.read_text(encoding="utf-8"), original, relocated), encoding="utf-8")
-    (project / "pubspec.yaml").write_text(configure_pubspec((ROOT / "pubspec.yaml").read_text(encoding="utf-8")), encoding="utf-8")
-    shutil.copy2(ROOT / "CHANGELOG.md", project / "CHANGELOG.md")
+    (project / "pubspec.yaml").write_text(configure_pubspec((ROOT / "pubspec.yaml").read_text(encoding="utf-8"), identity), encoding="utf-8")
+    (project / "CHANGELOG.md").write_text(identity["changelog"], encoding="utf-8")
     shutil.copy2(ROOT / "LICENSE", project / "LICENSE")
     shutil.copy2(ROOT / "analysis_options.yaml", project / "analysis_options.yaml")
     lock = Path(__file__).with_name("app") / "pubspec.lock.template"
@@ -266,8 +318,8 @@ def prepare_project(args):
     module.write_text(configure_device_types(module.read_text(encoding="utf-8")), encoding="utf-8")
     app_json = project / "ohos/AppScope/app.json5"
     app = json.loads(app_json.read_text(encoding="utf-8"))
-    app["app"].update(bundleName=FULL_CONFIG["bundle_name"], versionName=FULL_CONFIG["hap_version_name"],
-                       versionCode=FULL_CONFIG["version_code"], vendor="CyrilPeng")
+    app["app"].update(bundleName=FULL_CONFIG["bundle_name"], versionName=identity["hap_version_name"],
+                       versionCode=identity["version_code"], vendor="CyrilPeng")
     app_json.write_text(json.dumps(app, indent=2) + "\n", encoding="utf-8")
     entry_profile = project / "ohos/entry/build-profile.json5"
     entry_profile.write_text(json.dumps({"apiType": "stageMode", "buildOption": {
@@ -278,7 +330,7 @@ def prepare_project(args):
         data = json.loads(strings.read_text(encoding="utf-8"))
         for item in data["string"]:
             if item["name"] in ("app_name", "EntryAbility_label"):
-                item["value"] = "VeneraNext (HarmonyOS Lab)"
+                item["value"] = "VeneraNext (HarmonyOS Beta)"
         strings.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         for name in ("app_icon.png", "icon.png"):
             if (root / "media" / name).exists():
@@ -305,9 +357,10 @@ def prepare_project(args):
     metadata = {
         "schema": 1, "purpose": "full_reader_experiment", "branch": "HarmonyOS",
         "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-        "bundle_name": FULL_CONFIG["bundle_name"], "version_name": FULL_CONFIG["version_name"],
-        "hap_version_name": FULL_CONFIG["hap_version_name"],
-        "version_code": FULL_CONFIG["version_code"], "device_types": ["phone", "tablet"],
+        "bundle_name": FULL_CONFIG["bundle_name"], "version_name": identity["version_name"],
+        "hap_version_name": identity["hap_version_name"],
+        "version_code": identity["version_code"], "device_types": ["phone", "tablet"],
+        "release": identity["release"],
         "minimum_sdk": "26.0.0", "entrypoint": "lib/main.dart", "reader_integrated": True,
         "runtime_verified": False, "signed": False, "unavailable": FULL_CONFIG["unavailable"],
         "source_files": app_source_manifest(), "dependencies": records, "native_libraries": expected,

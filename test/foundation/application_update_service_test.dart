@@ -7,6 +7,90 @@ import 'package:venera_next/network/request_scope.dart';
 import '../support/application_update_adapter.dart';
 
 void main() {
+  for (final kind in [
+    'hap',
+    'missing',
+    'wrong version',
+    'APK',
+    'unsigned name',
+    'empty',
+    'pending',
+    'no manifest',
+    'draft',
+  ]) {
+    test(
+      'HarmonyOS only offers published matching unsigned HAPs: $kind',
+      () async {
+        final adapter = ApplicationUpdateAdapter()..released.complete();
+        final service = ApplicationUpdateService(
+          forHarmonyOS: true,
+          createClient: () => Dio()..httpClientAdapter = adapter,
+          currentVersion: () => '1.18.2',
+        );
+        final checked = service.check();
+        await adapter.entered.future;
+        adapter.complete({
+          'tag_name': 'v1.18.3',
+          'draft': kind == 'draft',
+          'assets': [
+            if (kind != 'missing')
+              {
+                'name': switch (kind) {
+                  'wrong version' =>
+                    'VeneraNext-1.18.2-harmonyos-arm64-unsigned.hap',
+                  'APK' => 'VeneraNext-1.18.3-android.apk',
+                  'unsigned name' => 'VeneraNext-1.18.3-harmonyos-arm64.hap',
+                  _ => 'VeneraNext-1.18.3-harmonyos-arm64-unsigned.hap',
+                },
+                'state': kind == 'pending' ? 'starter' : 'uploaded',
+                'size': kind == 'empty' ? 0 : 20,
+              },
+            if (kind != 'no manifest')
+              {
+                'name': 'harmonyos-manifest.json',
+                'state': 'uploaded',
+                'size': 10,
+              },
+          ],
+        });
+        expect(await checked, kind == 'hap' ? '1.18.3' : isNull);
+        expect(adapter.paths.single, endsWith('releases/latest'));
+        await service.closeAndWait();
+      },
+    );
+  }
+
+  test(
+    'HarmonyOS RC checks keep release ordering and skip mobile-only previews',
+    () async {
+      final adapter = ApplicationUpdateAdapter()..released.complete();
+      final service = ApplicationUpdateService(
+        forHarmonyOS: true,
+        createClient: () => Dio()..httpClientAdapter = adapter,
+        currentVersion: () => '1.18.3-rc.1',
+      );
+      final checked = service.check();
+      await adapter.entered.future;
+      adapter.complete([
+        {'tag_name': 'v1.18.3-rc.4', 'prerelease': true},
+        {
+          'tag_name': 'v1.18.3-rc.2',
+          'prerelease': true,
+          'assets': [
+            for (final name in [
+              'VeneraNext-1.18.3-rc.2-harmonyos-arm64-unsigned.hap',
+              'harmonyos-manifest.json',
+            ])
+              {'name': name, 'state': 'uploaded', 'size': 20},
+          ],
+        },
+      ]);
+      expect(await checked, '1.18.3-rc.2');
+      expect(adapter.paths.single, endsWith('releases?per_page=20'));
+      await service.closeAndWait();
+    },
+  );
+
   for (final tv in [false, true]) {
     test('only TV checks require an uploaded TV package; TV=$tv', () async {
       final adapter = ApplicationUpdateAdapter()..released.complete();

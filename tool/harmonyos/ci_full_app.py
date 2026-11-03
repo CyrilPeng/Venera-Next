@@ -5,21 +5,24 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
 
 from ci_build import CI, run_logged
 from native_build import ROOT, digest, require_within, validate_elf
-from prepare_full_app import BASE, DEPS, EXTRA_LIBRARIES, FULL_CONFIG, PROJECT
+from prepare_full_app import BASE, DEPS, EXTRA_LIBRARIES, PROJECT
 from prepare_probe import LIBRARIES
 from sideload import audit_device_types
+from release_context import build_inputs
 
 
 ASSET_PREFIX = "resources/rawfile/flutter_assets/"
 METADATA_ASSET = ASSET_PREFIX + "assets/harmonyos-app-build.json"
 TESTS = (
     "test/components/application_update_prompt_test.dart",
+    "test/foundation/application_update_service_test.dart",
     "test/foundation/harmonyos_test.dart",
     "test/foundation/directory_selection_test.dart",
     "test/foundation/selection_operation_test.dart",
@@ -28,6 +31,13 @@ TESTS = (
     "test/foundation/image_processing_test.dart",
     "test/foundation/image_processing_native_test.dart",
     "test/features/sync/app_data_archive_test.dart",
+    "test/features/sync/favorite_hierarchy_transfer_test.dart",
+    "test/features/favorites/favorite_hierarchy_test.dart",
+    "test/features/favorites/favorites_manager_test.dart",
+    "test/features/comic_source/source_web_login_test.dart",
+    "test/routing/webview_menu_test.dart",
+    "test/routing/windows_webview_environment_test.dart",
+    "test/routing/windows_webview_proxy_test.dart",
     "test/features/sync/comic_archive_batch_test.dart",
     "test/features/sync/comic_archive_transfer_dialog_test.dart",
     "test/features/sync/comic_backup_test.dart",
@@ -37,11 +47,16 @@ TESTS = (
     "test/features/local_comics/import_export/cbz_import_lifecycle_test.dart",
     "test/features/local_comics/import_export/epub_import_test.dart",
     "test/features/local_comics/import_export/comic_import_service_test.dart",
+    "test/features/local_comics/import_export/import_identity_allocation_test.dart",
+    "test/features/local_comics/import_export/import_registration_failure_test.dart",
     "test/features/local_comics/import_export/comic_collection_archive_test.dart",
+    "test/features/local_comics/import_export/collection_layout_dialog_test.dart",
     "test/features/local_comics/import_export/copy_cleanup_test.dart",
     "test/features/local_comics/import_export/import_presentation_test.dart",
     "test/features/local_comics/harmonyos_import_test.dart",
     "test/features/local_comics/local_archive_visibility_test.dart",
+    "test/features/local_comics/local_registration_storage_test.dart",
+    "test/features/local_comics/local_repository_test.dart",
     "test/features/reader/platform_effects_controller_test.dart",
     "test/features/reader/platform_effects_test.dart",
     "test/features/reader/reader_exit_integration_test.dart",
@@ -103,7 +118,10 @@ def check_real_source(metadata):
     sources = {path.relative_to(PROJECT).as_posix() for path in (PROJECT / "lib").rglob("*.dart")}
     if sources != {name for name in metadata["source_files"] if name.startswith("lib/")}:
         raise ValueError("Missing or injected full application Dart source")
-    if metadata["source_commit"] != os.environ["GITHUB_SHA"]:
+    source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    expected = build_inputs()["release"]
+    if (metadata["source_commit"] != source_commit or metadata.get("release") != expected
+            or (expected is None and source_commit != os.environ["GITHUB_SHA"])):
         raise ValueError("Unexpected full reader source commit")
     registrant = PROJECT / "ohos/entry/src/main/ets/plugins/GeneratedPluginRegistrant.ets"
     if "InAppWebViewFlutterPlugin" not in registrant.read_text(encoding="utf-8"):
@@ -112,7 +130,8 @@ def check_real_source(metadata):
 
 def build(flutter_sdk):
     CI.mkdir(parents=True, exist_ok=True)
-    report = {"status": "building", "purpose": "full_reader_experiment", "commit": os.environ.get("GITHUB_SHA"),
+    source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    report = {"status": "building", "purpose": "full_reader_experiment", "commit": source_commit,
               "signed": False, "reader_integrated": True, "runtime_verified": False}
     try:
         run_logged([sys.executable, ROOT / "tool/harmonyos/prepare_full_app.py", "project", "--flutter-sdk", flutter_sdk], "full-app-prepare")
@@ -123,7 +142,7 @@ def build(flutter_sdk):
             if native["sdk_profile"] != "harmony-ci" or native["sdk_api"] != 26:
                 raise ValueError("Cloud reader HAP requires fresh API 26 libraries")
         flutter = flutter_sdk / "bin/flutter"
-        run_logged([flutter, "analyze", "--no-pub", "--fatal-infos"], "full-app-analyze", PROJECT)
+        run_logged([flutter, "analyze", "--no-pub", "--fatal-infos", "--fatal-warnings"], "full-app-analyze", PROJECT)
         host = require_within(BASE / "full-host", BASE)
         host_sources = {"flutter_qjs": BASE / "deps/flutter_qjs", **{name: DEPS / name for name in ("zip_flutter", "flutter_7zip", "lodepng_flutter")}}
         run_logged(["cmake", "-S", ROOT / ".github/scripts/native_test_libraries", "-B", host, "-G", "Ninja",
@@ -132,37 +151,39 @@ def build(flutter_sdk):
         previous_path = os.environ.get("LD_LIBRARY_PATH", "")
         os.environ["LD_LIBRARY_PATH"] = str(host / "lib") + (":" + previous_path if previous_path else "")
         try:
-            run_logged([flutter, "test", "--no-pub", "--reporter", "expanded", *TESTS], "full-app-test", PROJECT)
+            run_logged([flutter, "test", "--no-pub", "--concurrency", "2", "--reporter", "expanded", *TESTS], "full-app-test", PROJECT)
         finally:
             if previous_path:
                 os.environ["LD_LIBRARY_PATH"] = previous_path
             else:
                 os.environ.pop("LD_LIBRARY_PATH", None)
         run_logged([flutter, "build", "hap", "--release", "--no-codesign", "--target-platform", "ohos-arm64", "--no-pub", "--target", "lib/main.dart",
-                    "--build-name", FULL_CONFIG["hap_version_name"], "--build-number", str(FULL_CONFIG["version_code"])], "full-app-build", PROJECT)
+                    "--build-name", metadata["hap_version_name"], "--build-number", str(metadata["version_code"])], "full-app-build", PROJECT)
         check_real_source(metadata)
         haps = list((PROJECT / "build/ohos/hap").glob("*-unsigned.hap"))
         if len(haps) != 1:
             raise ValueError("Expected one real reader unsigned HAP")
-        expected_assets = {**metadata["bundled_assets"], "CHANGELOG.md": metadata["source_files"]["CHANGELOG.md"]}
+        expected_assets = {**metadata["bundled_assets"], "CHANGELOG.md": digest(PROJECT / "CHANGELOG.md")}
         expected_assets["pubspec.yaml"] = digest(PROJECT / "pubspec.yaml")
         audit = audit_full_hap(haps[0], metadata, expected_assets)
-        artifacts = CI / "full-app-artifacts"
+        release = metadata.get("release") is not None
+        artifacts = CI / ("release-artifacts" if release else "full-app-artifacts")
         artifacts.mkdir(parents=True, exist_ok=True)
-        exported = artifacts / f"venera-next-{FULL_CONFIG['version_name']}-arm64-unsigned.hap"
+        exported = artifacts / f"VeneraNext-{metadata['version_name']}-harmonyos-arm64-unsigned.hap"
         shutil.copy2(haps[0], exported)
         if digest(exported) != digest(haps[0]):
             raise ValueError("Exported reader HAP differs from the audited bytes")
         report.update(status="packaging_pass", hap=exported.name, bytes=exported.stat().st_size,
                       sha256=digest(exported), packaged_app=audit, build=metadata, expected_assets=expected_assets)
-        (artifacts / "full-app-manifest.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-        (artifacts / "SHA256SUMS").write_text(f"{digest(exported)}  {exported.name}\n", encoding="utf-8")
+        (artifacts / ("harmonyos-manifest.json" if release else "full-app-manifest.json")).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        (artifacts / ("harmonyos-SHA256SUMS" if release else "SHA256SUMS")).write_text(f"{digest(exported)}  {exported.name}\n", encoding="utf-8")
+        guide_prefix = "harmonyos-install" if release else "install"
         for language in ("zh", "en"):
             guide = ROOT / f"doc/distribution/harmonyos-reader.{language}.md"
             text = guide.read_text(encoding="utf-8")
             for companion in ("zh", "en"):
-                text = text.replace(f"harmonyos-reader.{companion}.md", f"install.{companion}.md")
-            (artifacts / f"install.{language}.md").write_text(text, encoding="utf-8")
+                text = text.replace(f"harmonyos-reader.{companion}.md", f"{guide_prefix}.{companion}.md")
+            (artifacts / f"{guide_prefix}.{language}.md").write_text(text, encoding="utf-8")
     except Exception as error:
         report.update(status="failed", error_type=type(error).__name__)
         raise

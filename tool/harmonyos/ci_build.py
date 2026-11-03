@@ -65,7 +65,8 @@ def build(stage, flutter_sdk, qjs_source=None):
     CI.mkdir(parents=True, exist_ok=True)
     flutter = flutter_sdk / "bin/flutter"
     project = require_within(BASE / ("blank" if stage == "blank" else "probe"), BASE)
-    report = {"stage": stage, "status": "building", "commit": os.getenv("GITHUB_SHA"),
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    report = {"stage": stage, "status": "building", "commit": commit,
               "signed": False, "runtime_verified": False, "reader_integrated": False}
     try:
         expected = None

@@ -25,7 +25,7 @@
 
 ## 项目介绍
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) 是基于 [Venera](https://github.com/venera-app/venera) 持续开发的 Flutter 漫画阅读器，支持 **Android、Android TV、iOS、Windows、Linux 和 macOS**。
+[VeneraNext](https://github.com/CyrilPeng/venera-next) 是基于 [Venera](https://github.com/venera-app/venera) 持续开发的 Flutter 漫画阅读器，支持 **Android、Android TV、iOS、Windows、Linux 和 macOS**，另提供 **HarmonyOS 测试版**。
 
 本分支围绕“少一点打断，多一点阅读”打磨日常体验：瀑布流跨章连读不用退出，长按收藏省去选择收藏夹的步骤，夜间和墨水屏设备各有阅读设置。本地导入、离线下载、阅读统计与多设备同步，让找书、看漫画和追连载更方便。
 
@@ -119,6 +119,16 @@
 将 APK 传到电视后侧载，启动器名称为 **VeneraNext TV**，可与手机版共存，数据独立。
 
 操作说明见 [TV 遥控器与低内存阅读](#tv-遥控器与低内存阅读)，安装与升级详情见 [Android TV 分发说明](doc/distribution/android_tv.zh.md)。
+
+### HarmonyOS（测试版）
+
+从 [发布页](https://github.com/CyrilPeng/Venera-Next/releases) 选择提供鸿蒙安装包的版本：
+
+| 文件名 | 说明 | 适用场景 |
+|---|---|---|
+| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | 未签名 ARM64 测试版 | 满足 API 26 要求的鸿蒙手机与平板 |
+
+需自行签名侧载；升级时沿用原签名密钥，不卸载或清空数据。安装步骤与功能限制见 [鸿蒙测试版安装指南](doc/distribution/harmonyos-reader.zh.md)。
 
 ### iOS
 
@@ -277,7 +287,7 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 ## 开发者入口
 
 - [构建与开发](doc/development/build.zh.md)：Flutter/Rust 环境、依赖锁定、测试和发布。
-- [HarmonyOS 独立分支实验](doc/experiments/harmonyos.zh.md)：`HarmonyOS` 分支已产出并复核首个[完整应用实验包](doc/distribution/harmonyos-reader.zh.md)，复用现有阅读器，提供小白调试助手签装与日常使用，不再要求重复探针验证。完整应用的真机功能、文件／备份及续签仍待实际使用反馈，不属于正式支持平台。
+- [鸿蒙随版构建](doc/development/harmonyos_releases.zh.md)：固定分支来源、独立 SDK、未签名 HAP 与发布门禁。
 - [贡献指南](CONTRIBUTING.md) · [依赖治理](doc/development/dependencies.zh.md)。
 - [Windows 分发维护](doc/distribution/windows.zh.md) · [无头命令模式](doc/user/headless.zh.md)。
 - [安全政策](SECURITY.md) · [行为准则](CODE_OF_CONDUCT.md) · [完整文档索引](doc/README.md)。

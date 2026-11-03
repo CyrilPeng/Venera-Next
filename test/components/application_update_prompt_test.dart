@@ -52,6 +52,7 @@ void main() {
     String name,
     Future<void> Function(WidgetTester) body, {
     bool forAndroidTv = false,
+    bool forHarmonyOS = false,
   }) {
     testWidgets(name, (tester) async {
       adapter = ApplicationUpdateAdapter();
@@ -59,6 +60,7 @@ void main() {
         createClient: () => Dio()..httpClientAdapter = adapter,
         currentVersion: () => '1.0.0',
         forAndroidTv: forAndroidTv,
+        forHarmonyOS: forHarmonyOS,
       );
       try {
         await body(tester);
@@ -112,6 +114,47 @@ void main() {
   void closeWindow(WidgetTester tester) =>
       (tester.state(find.byType(WindowFrame)) as WindowListener)
           .onWindowClose();
+
+  for (final size in [const Size(375, 812), const Size(812, 375)]) {
+    testUpdateWidgets(
+      'HarmonyOS update uses the release page and explains same-key signing; $size',
+      (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(app(const AboutSettings(), textScale: 1.8));
+        await tester.ensureVisible(find.text('Check'));
+        await tester.tap(find.text('Check'));
+        await waitFor(tester, () => adapter.entered.isCompleted);
+        adapter.complete({
+          'tag_name': 'v2.0.0',
+          'assets': [
+            for (final name in [
+              'VeneraNext-2.0.0-harmonyos-arm64-unsigned.hap',
+              'harmonyos-manifest.json',
+            ])
+              {'name': name, 'state': 'uploaded', 'size': 20},
+          ],
+        });
+        adapter.released.complete();
+        await tester.pumpAndSettle();
+        expect(
+          find.text(
+            'HarmonyOS beta 2.0.0 is available. Open the release page, choose the unsigned HAP, and sign it with your existing key to upgrade.',
+          ),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.ensureVisible(find.text('Cancel'));
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(find.text('New version available'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+      forHarmonyOS: true,
+    );
+  }
 
   testUpdateWidgets(
     'about page disposal cancels its request and never sets state or shows late UI',

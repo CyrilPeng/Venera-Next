@@ -1,8 +1,28 @@
-# HarmonyOS 核心依赖探针
+# HarmonyOS 构建与发布工具
 
-仅用于 `HarmonyOS` 实验分支。复用主工程固定的 Dart / Rust / QuickJS / SQLite 依赖，不是 ArkTS 重写，也不是完整阅读器版本。当前结果及后续门槛见[实验记录](../../doc/experiments/harmonyos.zh.md)。
+`HarmonyOS` 分支以独立 Flutter OH SDK 构建现有完整阅读器，保留平台适配、固定依赖及原生库审计。主线不切换 SDK，也不维护另一套阅读器。用户入口见[测试版安装指南](../../doc/distribution/harmonyos-reader.zh.md)；早期探针记录见[实验记录](../../doc/experiments/harmonyos.zh.md)。
 
-## GitHub Actions 云端尝试
+## 随版完整阅读器
+
+主线 `.github/workflows/harmonyos-release.yml` 读取 `.github/harmonyos-release.json` 中的完整提交 SHA，在独立 checkout 构建鸿蒙包。共同基线后的主线运行代码、依赖或原生工具链变更会阻止构建，必须先同步到鸿蒙分支、验证并更新 pin；不能把旧 HAP 改名成新版本。
+
+`release_context.py` 验证调用方提交、版本、构建号、运行号和 changelog 摘要。`prepare_full_app.py` 只在 `build/harmonyos/full-app` 生成工程中注入版本与 changelog，不改写固定的源 checkout；分支独立构建则读取自身 `release.json`。`app/pubspec.lock.template` 是独立 OH SDK 的受控锁文件，CI 使用 `--enforce-lockfile`，不自动升级或去掉约束。
+
+`ci_full_app.py` 在独立工程中执行严格分析、宿主回归、真实 ARM64 HAP 构建及 ELF／资产审计。发布模式输出 `VeneraNext-版本-harmonyos-arm64-unsigned.hap`、`harmonyos-manifest.json`、`harmonyos-SHA256SUMS` 和两份 `harmonyos-install.*.md`；主线再次核对固定 Git 源码清单、包内版本及全部五项资产，草稿上传核验通过后才发布。失败不允许静默略过 HAP。
+
+CPF WebView 保留其 OHOS 实现，并从主线固定的 `3ef899b` 导出浏览器退出事件 Dart 接口与类型，补齐同步后 Windows 专用代码的静态依赖。覆盖层不改写应用代理逻辑、不生成退出事件，不声称鸿蒙支持 Windows Environment；生成工程仅用于 HAP，Windows 发行仍使用主线原依赖。复制的上游类型与生成文件保持原字节，原始和适配后的依赖树均记录摘要。
+
+签名、设备授权与私钥始终留在用户本机；CI 不安装到真机、不签名、不自动关闭或跟踪 issue。首个随版 Release 构建号至少为 244；接入 CI 不创建版本、标签或 Release。`packaging_pass` 不是覆盖升级、续签或全功能真机验收。
+
+在已准备好同一 API 26 SDK 和已审计核心原生库的环境中：
+
+```bash
+python3 tool/harmonyos/prepare_full_app.py deps --qjs-source "$QJS_SOURCE"
+python3 tool/harmonyos/full_native_build.py --sdk-native "$HARMONY_NATIVE_SDK"
+python3 tool/harmonyos/ci_full_app.py --flutter-sdk "$FLUTTER_OH_SDK"
+```
+
+## 独立分支构建与早期 SDK 记录
 
 `.github/workflows/harmonyos-experiment.yml` 仅在 `HarmonyOS` 分支的相关构建文件更新或手动触发时运行，使用临时 Ubuntu runner，不依赖维护者本机 SDK、不访问签名密钥、不创建 Release、不更新应用版本。
 
@@ -12,13 +32,13 @@
 
 首次 API 26 运行已确认真实 Native 组件版本为 `26.0.0.105`，空白包、核心库编译、探针分析与 6 项宿主回归均通过；探针 HAP 编译完成后，由于自动 strip 改写库字节而被严格哈希检查拒绝。现固定组件版本和重建 ZIP 的完整 SHA-256，并关闭探针模块的自动 strip 后重新验证；不能把被审计拒绝的那次运行称为全流程成功。
 
-云端依次构建空白 ARM64 未签名 HAP，再以同一商业 SDK 重编译四个核心库，生成并分析／回归测试隔离探针，最后构建探针 HAP。探针模块关闭打包阶段的自动 strip，保留已审计原生库的原始字节；打包检查会核对 AArch64 ELF、四个库是否真正入包及其精确哈希，拒绝缺库、内容变化和空包。证据与日志保留 14 天；仅全流程成功才上传 `harmonyos-unsigned-lab-haps-*` 测试产物。
+独立分支流程保留空白包及早期核心／升级探针，并继续构建完整阅读器；主线随版流程不分发探针。打包模块关闭自动 strip，保留已审计原生库的原始字节；检查 AArch64 ELF、实际入包库和精确哈希，拒绝缺库、内容变化和空包。证据保留 14 天，完整阅读器分支产物为 `harmonyos-reader-experiment-*`，早期探针产物为 `harmonyos-unsigned-lab-haps-*`。
 
-Actions 的 `packaging_pass` 只表示未签名打包及静态审计通过，不是完整阅读器、不代表可直接安装，也不代表原生库真机加载、运行或数据恢复通过。社区测试按下文小白签装指南完成；DevEco 保留为开发者本机调试备选，不要求普通测试者安装完整 SDK。不要将 CI 编译成功作为关闭 #77 的依据。
+只有完整阅读器阶段的 `packaging_pass` 表示 `lib/main.dart` 和原应用代码实际编译入包；空白或探针成功不能替代它。未签名包仍需用户本地签装，CI 不证明原生库真机运行或数据恢复。DevEco 仅保留为开发者调试备选，不要求普通用户安装完整 SDK。
 
-## 小白签装与升级探针
+## 早期签装与升级探针记录
 
-社区实验采用 Kazumi 的“unsigned HAP + 用户本地小白调试助手”路线；先验证现有探针，尚不接入完整阅读器。用户操作、账号与安全边界、失败处理见[中文签装指南](../../doc/distribution/harmonyos.zh.md) / [English guide](../../doc/distribution/harmonyos.en.md)。不要求普通测试者安装 DevEco，不在 CI 保存签名材料，也不声称免开发者账号或永久免续签。
+早期实验采用“unsigned HAP + 用户本地小白调试助手”路线验证核心探针。以下保留开发与历史核对方法，不是当前阅读器安装入口，也不要求用户重复已完成的探针测试。旧配对指南见[中文](../../doc/distribution/harmonyos.zh.md) / [English](../../doc/distribution/harmonyos.en.md)。CI 不保存签名材料，不声称免开发者账号或永久免续签。
 
 2026-10-29 已将 #77 自愿测试者的三份平板报告与 `ef2904f` 构建配对及原生记录核对，结果为 `reported_checks_pass`；空白包成功按本人反馈单独记录。结论仅覆盖该设备／版本的核心探针、进程重启和合成升级数据，不认证硬件／签名身份，不验证续签、文件导入或完整阅读器。脱敏结论及摘要见[设备复核记录](../../doc/experiments/data/harmonyos-tablet-device-review-20261029.json)，原始 JSON 不进版本控制。后续文档更新触发的新构建不替代这次设备报告所对应的旧配对，也无需测试者重复相同四步。
 

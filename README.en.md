@@ -25,7 +25,7 @@
 
 ## Introduction
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, iOS, Windows, Linux, and macOS**.
+[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, iOS, Windows, Linux, and macOS**, with a separate **HarmonyOS beta**.
 
 This fork focuses on fewer interruptions and more reading: Waterfall mode scrolls across chapters without leaving the reader, long-pressing Favorite skips the folder picker, and nighttime and E-Ink devices get their own reading adjustments. Local import, offline downloads, reading statistics, and multi-device sync make finding comics, reading them, and following ongoing series easier.
 
@@ -121,6 +121,16 @@ When in doubt, use the universal `VeneraNext-xxx-android-tv.apk` package.
 Transfer the APK to the TV and sideload it. Its launcher name is **VeneraNext TV**; it can coexist with the mobile app and keeps its data separate.
 
 See [TV remote controls and low-memory reading](#tv-remote-controls-and-low-memory-reading) for usage and [Android TV Distribution](doc/distribution/android_tv.en.md) for installation and upgrade details.
+
+### HarmonyOS (Beta)
+
+Choose a version providing a HarmonyOS package on the [release page](https://github.com/CyrilPeng/Venera-Next/releases):
+
+| File | Description | Recommended for |
+|---|---|---|
+| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | Unsigned ARM64 beta | HarmonyOS phones and tablets meeting API 26 requirements |
+
+Sign and sideload it yourself. Keep the original signing key for upgrades; do not uninstall or clear data. See the [HarmonyOS beta installation guide](doc/distribution/harmonyos-reader.en.md) for instructions and limitations.
 
 ### iOS
 
@@ -279,7 +289,7 @@ Run `winget upgrade --id CyrilPeng.VeneraNext --exact`. Public-source availabili
 ## Developer resources
 
 - [Build and Development](doc/development/build.en.md): Flutter/Rust, locked dependencies, tests, and releases.
-- [HarmonyOS branch experiment (Chinese)](doc/experiments/harmonyos.zh.md): `HarmonyOS` now provides its first built and independently audited [full-app experiment](doc/distribution/harmonyos-reader.en.md), reusing the existing reader for Xiaobai-assisted sideloading and ordinary use without repeated probe tests. Full-app device behavior, files/backups and certificate renewal remain unverified; this is not a supported platform yet.
+- [HarmonyOS Release Builds](doc/development/harmonyos_releases.en.md): pinned branch source, independent SDK, unsigned HAP and publication gates.
 - [Contributing](CONTRIBUTING.en.md) · [Dependency Governance](doc/development/dependencies.en.md).
 - [Windows Distribution](doc/distribution/windows.en.md) · [Headless Mode](doc/user/headless.en.md).
 - [Security Policy](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Documentation Index](doc/README.en.md).
