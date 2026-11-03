@@ -35,6 +35,7 @@ import 'package:venera_next/app_runtime/app_runtime.dart';
 import 'package:venera_next/app_shell/app_shell.dart';
 import 'package:venera_next/app_shell/startup_failure.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/failure_presentation.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'components/gesture.dart';
 import 'components/tv_navigation.dart';
@@ -82,7 +83,10 @@ void main(List<String> args) {
         try {
           WidgetsFlutterBinding.ensureInitialized();
           registerShowMessageHandler((context, message) {
-            showToast(message: message, context: context);
+            showToast(
+              message: presentTechnicalFailureMessage(message),
+              context: context,
+            );
           });
           JsEngine().bindUiMessageHandler(JsUiApi());
           final sync = createApplicationDataSync();
@@ -474,7 +478,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 "${details.exception}\n${details.stack}",
               );
               return Material(
-                child: Center(child: Text(details.exception.toString())),
+                child: Center(child: Text(presentFailure(details.exception))),
               );
             };
             if (widget != null) {

@@ -4,6 +4,7 @@ import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/pop_up_widget.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/failure_presentation.dart';
 import 'package:venera_next/foundation/image_provider/cached_image.dart';
 import 'package:venera_next/features/local_comics/download_task.dart';
 import 'package:venera_next/features/local_comics/images_download_task.dart';
@@ -290,7 +291,7 @@ class _DownloadTaskTileState extends State<_DownloadTaskTile> {
                                   showDialog<void>(
                                     context: context,
                                     builder: (_) => AlertDialog(
-                                      content: Text(error.toString()),
+                                      content: Text(presentFailure(error)),
                                     ),
                                   );
                                 }
@@ -331,7 +332,11 @@ class _DownloadTaskTileState extends State<_DownloadTaskTile> {
                 if (!widget.task.isPaused ||
                     widget.task.isError ||
                     widget.task.isAwaitingMissingPages)
-                  Text(widget.task.message, style: ts.s12, maxLines: 3),
+                  Text(
+                    presentFailureMessage(widget.task.message),
+                    style: ts.s12,
+                    maxLines: 3,
+                  ),
                 const SizedBox(height: 4),
                 LinearProgressIndicator(value: widget.task.progress),
                 const SizedBox(height: 8),

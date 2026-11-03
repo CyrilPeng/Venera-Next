@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:venera_next/foundation/failure_presentation.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
@@ -38,6 +39,7 @@ class NetworkError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var cfe = CloudflareException.fromString(message);
+    final displayMessage = presentFailureMessage(message);
     Widget body = Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -61,7 +63,9 @@ class NetworkError extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            cfe == null ? message : "Cloudflare verification required".tl,
+            cfe == null
+                ? displayMessage
+                : "Cloudflare verification required".tl,
             textAlign: TextAlign.center,
             maxLines: 3,
           ),
