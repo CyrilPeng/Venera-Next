@@ -521,7 +521,8 @@ class _LocalAfterWrite extends Fake implements LocalManager {
   @override
   void requireStorageAccess() => actual.requireStorageAccess();
   @override
-  String findValidId(ComicType type) => actual.findValidId(type);
+  String findValidId(ComicType type, {String? favoritesPath}) =>
+      actual.findValidId(type, favoritesPath: favoritesPath);
   @override
   Future<void> add(LocalComic comic, [String? id]) async {
     await actual.add(comic, id);

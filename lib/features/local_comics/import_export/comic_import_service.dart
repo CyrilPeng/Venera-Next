@@ -947,7 +947,10 @@ class ComicImportOperation {
         translatedTags,
         append,
       ) {
-        final id = _manager.findValidId(captured.comicType);
+        final id = _manager.findValidId(
+          captured.comicType,
+          favoritesPath: favoritesPath,
+        );
         final favorite = FavoriteItem(
           id: id,
           name: captured.title,

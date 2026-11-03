@@ -401,7 +401,8 @@ class LocalManager with ChangeNotifier implements DownloadTaskStorage {
     restoreDownloadingTasks();
   }
 
-  String findValidId(ComicType type) => _repository.findValidId(type);
+  String findValidId(ComicType type, {String? favoritesPath}) =>
+      findUnusedLocalComicId(_db, type, favoritesPath: favoritesPath);
 
   Future<void> add(LocalComic comic, [String? id]) async {
     LocalComicStorageGuard.instance.write(() => _repository.add(comic, id));
