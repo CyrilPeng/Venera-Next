@@ -5,6 +5,28 @@ not mark unresolved reports as fixed. Dated verification records and the
 original device acceptance checklist remain below. The newest dated section
 defines the current release scope; older candidate sections are historical.
 
+## HarmonyOS release integration (2026-11-03)
+
+The next release adds an unsigned ARM64 HarmonyOS beta HAP and four companions:
+a source manifest, SHA-256 sums and Chinese/English installation guides. The
+expected public inventory becomes 20 installation assets plus 6 companion
+manifests, checksums and guides, for 26 assets total. Existing platform assets
+and Android signing requirements remain part of acceptance.
+
+- Keep main and HarmonyOS separate. Pin the exact reviewed HarmonyOS commit
+  and a shared main baseline; block a release when runtime, dependency, asset
+  or test changes on main have not been synced and validated on HarmonyOS.
+- Require strict source analysis and host regressions, a real API 26 HAP,
+  ARM64 native-library and embedded-source audits, all five HarmonyOS assets,
+  and uploaded draft asset sizes/digests before publishing.
+- Use the caller's version, build and changelog. The first tagged HAP build
+  must be at least 244; branch CI can validate the current 1.18.2+243 without
+  publishing. This integration does not bump versions, create tags or a
+  Release, or backfill previously published releases.
+- The package is unsigned and requires self-signing with a retained key for
+  upgrades. Packaging checks do not establish on-device runtime acceptance.
+  Issue #77 is closed; leave it closed without tracking or notifications.
+
 ## Stable release preparation (2026-11-01)
 
 The maintainer approved v1.18.2, build 243, rather than extending the RC series

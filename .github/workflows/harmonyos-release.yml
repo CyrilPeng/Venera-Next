@@ -1,0 +1,187 @@
+name: HarmonyOS Release HAP
+run-name: "HarmonyOS release verification / ${{ github.ref_name }}"
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/harmonyos-release.json
+      - .github/scripts/harmonyos_release.py
+      - .github/scripts/tests/test_harmonyos_release.py
+      - .github/workflows/harmonyos-release.yml
+      - .github/workflows/main.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: harmonyos-release-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  unsigned-hap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      CI: 'true'
+      PYTHONUNBUFFERED: '1'
+      RUSTUP_TOOLCHAIN: '1.92.0'
+      PUB_HOSTED_URL: https://pub.dev
+      FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
+      FLUTTER_OHOS_STORAGE_BASE_URL: https://flutter-ohos.obs.cn-south-1.myhuaweicloud.com
+      FLUTTER_GIT_URL: https://gitcode.com/CPF-Flutter/flutter_flutter.git
+    defaults:
+      run:
+        shell: bash
+        working-directory: harmonyos
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: release
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Read the immutable reviewed source pin
+        id: pin
+        working-directory: release
+        run: python3 .github/scripts/harmonyos_release.py config --github-output "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.pin.outputs.source_commit }}
+          path: harmonyos
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reject stale source and bind the caller version and changelog
+        working-directory: release
+        run: |
+          python3 .github/scripts/harmonyos_release.py prepare \
+            --source-root ../harmonyos --output "$RUNNER_TEMP/harmonyos-release-context.json"
+          echo "HARMONYOS_RELEASE_CONTEXT=$RUNNER_TEMP/harmonyos-release-context.json" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.23.4'
+
+      - name: Test the pinned platform tools
+        run: |
+          python3 -m unittest discover -s tool/harmonyos -p 'test_*.py' -v
+          node --test tool/harmonyos/test_directory_bridge.mjs
+          command -v 7z
+          df -h .
+
+      - name: Install checksum-pinned HarmonyOS CLI
+        run: |
+          python3 tool/harmonyos/ci_sdk.py \
+            --destination "$RUNNER_TEMP/harmony-sdk" \
+            --downloads "$RUNNER_TEMP/harmony-downloads" \
+            --report build/harmonyos/ci/sdk.json
+
+      - name: Install Linux host test dependencies
+        timeout-minutes: 4
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 \
+            -o Acquire::https::Timeout=20 install -y --no-install-recommends \
+            libgtk-3-0 libglu1-mesa ninja-build cmake pkg-config libsqlite3-dev g++
+
+      - name: Install the independent pinned Flutter OH SDK
+        run: |
+          sdk="$RUNNER_TEMP/flutter-oh"
+          tag="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["flutter"]["tag"])')"
+          revision="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["flutter"]["revision"])')"
+          git clone --filter=blob:none --sparse --depth 1 --branch "$tag" "$FLUTTER_GIT_URL" "$sdk"
+          git -C "$sdk" sparse-checkout set bin packages dev examples
+          test "$(git -C "$sdk" rev-parse HEAD)" = "$revision"
+          echo "FLUTTER_OH_SDK=$sdk" >> "$GITHUB_ENV"
+          echo "$sdk/bin" >> "$GITHUB_PATH"
+          "$sdk/bin/flutter" --version
+          "$sdk/bin/flutter" precache --ohos --linux
+          ohpm --version
+          hvigorw --version
+
+      - name: Verify a blank unsigned ARM64 build
+        run: python3 tool/harmonyos/ci_build.py blank --flutter-sdk "$FLUTTER_OH_SDK"
+
+      - name: Prepare pinned Rust QuickJS and SQLite sources
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal --target aarch64-unknown-linux-ohos
+          revision="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["quickjs"]["revision"])')"
+          git init "$RUNNER_TEMP/flutter-qjs"
+          git -C "$RUNNER_TEMP/flutter-qjs" remote add origin https://github.com/CyrilPeng/flutter_qjs.git
+          git -C "$RUNNER_TEMP/flutter-qjs" fetch --depth 1 origin "$revision"
+          git -C "$RUNNER_TEMP/flutter-qjs" checkout --detach FETCH_HEAD
+          url="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["sqlite"]["archive"])')"
+          curl --fail --location --retry 4 --retry-all-errors --output "$RUNNER_TEMP/sqlite.tar.gz" "$url"
+          mkdir "$RUNNER_TEMP/sqlite"
+          tar -xzf "$RUNNER_TEMP/sqlite.tar.gz" -C "$RUNNER_TEMP/sqlite" --strip-components=1
+
+      - name: Rebuild and audit core native libraries with API 26
+        run: |
+          python3 tool/harmonyos/native_build.py \
+            --sdk-native "$HARMONY_NATIVE_SDK" --sdk-profile harmony-ci \
+            --sdk-receipt build/harmonyos/ci/sdk.json \
+            --qjs-source "$RUNNER_TEMP/flutter-qjs" \
+            --sqlite-source "$RUNNER_TEMP/sqlite/sqlite3.c" \
+            2>&1 | tee build/harmonyos/ci/logs/native-build.txt
+
+      - name: Prepare locked dependency overlays and reader native libraries
+        run: |
+          python3 tool/harmonyos/prepare_full_app.py deps --qjs-source "$RUNNER_TEMP/flutter-qjs"
+          python3 tool/harmonyos/full_native_build.py --sdk-native "$HARMONY_NATIVE_SDK" \
+            2>&1 | tee build/harmonyos/ci/logs/full-native-build.txt
+
+      - name: Analyze test build and audit the real reader HAP
+        run: python3 tool/harmonyos/ci_full_app.py --flutter-sdk "$FLUTTER_OH_SDK"
+
+      - name: Independently verify all five release assets
+        working-directory: release
+        run: |
+          python3 .github/scripts/harmonyos_release.py verify \
+            --source-root ../harmonyos --artifacts ../harmonyos/build/harmonyos/ci/release-artifacts
+
+      - name: Upload verified unsigned release assets
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: harmonyos-release
+          path: harmonyos/build/harmonyos/ci/release-artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Record the packaging outcome without claiming device acceptance
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## HarmonyOS beta build\n\n')
+              for label, name in (('SDK', 'ci/sdk'), ('blank', 'ci/blank-build'),
+                                  ('core native', 'native/native-build'),
+                                  ('reader native', 'full-native/extra-native-build'),
+                                  ('reader HAP', 'ci/full-app-build')):
+                  path = Path(f'build/harmonyos/{name}.json')
+                  status = json.loads(path.read_text())['status'] if path.exists() else 'not completed'
+                  summary.write(f'- {label}: `{status}`\n')
+              summary.write('\nUnsigned ARM64 phone/tablet beta only. No signing, device installation, '
+                            'certificate renewal or feature acceptance is claimed. This job does not publish a release.\n')
+          PY
+
+      - name: Upload logs and build provenance without SDK or signing material
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: harmonyos-release-evidence
+          path: |
+            harmonyos/build/harmonyos/ci/*.json
+            harmonyos/build/harmonyos/ci/logs/*.txt
+            harmonyos/build/harmonyos/native/native-build.json
+            harmonyos/build/harmonyos/full-native/extra-native-build.json
+          if-no-files-found: warn
+          retention-days: 14
