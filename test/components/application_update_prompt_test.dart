@@ -124,8 +124,11 @@ void main() {
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
         await tester.pumpWidget(app(const AboutSettings(), textScale: 1.8));
-        await tester.ensureVisible(find.text('Check'));
-        await tester.tap(find.text('Check'));
+        final check = find.widgetWithText(FilledButton, 'Check');
+        await tester.ensureVisible(check);
+        await tester.pumpAndSettle();
+        expect(check.hitTestable(), findsOneWidget);
+        await tester.tap(check);
         await waitFor(tester, () => adapter.entered.isCompleted);
         adapter.complete({
           'tag_name': 'v2.0.0',
@@ -147,6 +150,8 @@ void main() {
         );
         expect(tester.takeException(), isNull);
         await tester.ensureVisible(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(find.text('Cancel').hitTestable(), findsOneWidget);
         await tester.tap(find.text('Cancel'));
         await tester.pumpAndSettle();
         expect(find.text('New version available'), findsNothing);
