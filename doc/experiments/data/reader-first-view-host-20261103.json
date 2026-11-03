@@ -1,0 +1,218 @@
+{
+  "schema": 1,
+  "date": "2026-11-03",
+  "purpose": "host-first-view-scheduling",
+  "revision": "4e8c9d625da845d0b5e0274c47e140b1abea1dfd+working-tree",
+  "tool_sha256": "bc4a9519375c52b00bdd25cecd1617ad2d0d6741081aaa9235e9770f7e387f3e",
+  "raw_report_sha256": "6bf89fa9be380fce03c46139b186489e7830e1d580b9bc96349dc26f452c5ab9",
+  "dimensions": [
+    1500,
+    2400
+  ],
+  "controlled_deferral_ms": 120,
+  "runs_after_warmup": 5,
+  "limitations": [
+    "Synthetic encoded memory, no private content, file or network I/O.",
+    "One predecoded image; no production settings, scheduling or cache-limit changes.",
+    "Paint submission is a UI paint traversal, not GPU completion or screen presentation.",
+    "Pump wall times include the widget-test harness and are not device frame timings.",
+    "RSS and decoded bytes are sampled, not a continuous process-memory peak.",
+    "Controlled deferral demonstrates scheduling, not the cause or improvement on Android."
+  ],
+  "groups": [
+    {
+      "format": "png",
+      "encoded_bytes": 120511,
+      "encoded_sha256": "b05fa99449ee451cf92d6875bd734287464b9f65f77df244ab645ae2e3ac89e8",
+      "modes": {
+        "encodedOnlyA1": {
+          "view_to_paint_us": {
+            "count": 5,
+            "p50": 213060,
+            "p95": 214206,
+            "max": 214206
+          },
+          "painted_before_release": 0,
+          "decoded_cache_before_display_bytes": {
+            "count": 5,
+            "p50": 0,
+            "p95": 0,
+            "max": 0
+          },
+          "sampled_process_rss_max_bytes": {
+            "count": 5,
+            "p50": 231534592,
+            "p95": 233078784,
+            "max": 233078784
+          },
+          "pump_wall_us": {
+            "count": 44,
+            "p50": 337,
+            "p95": 3369,
+            "max": 4110
+          },
+          "engine_frame_timing_count": 10
+        },
+        "decodedNext": {
+          "view_to_paint_us": {
+            "count": 5,
+            "p50": 16519,
+            "p95": 16979,
+            "max": 16979
+          },
+          "painted_before_release": 5,
+          "decoded_cache_before_display_bytes": {
+            "count": 5,
+            "p50": 14400000,
+            "p95": 14400000,
+            "max": 14400000
+          },
+          "sampled_process_rss_max_bytes": {
+            "count": 5,
+            "p50": 245624832,
+            "p95": 246579200,
+            "max": 246579200
+          },
+          "pump_wall_us": {
+            "count": 30,
+            "p50": 219,
+            "p95": 2432,
+            "max": 2682
+          },
+          "engine_frame_timing_count": 10,
+          "predecode_lead_us": {
+            "count": 5,
+            "p50": 68303,
+            "p95": 71582,
+            "max": 71582
+          }
+        },
+        "encodedOnlyA2": {
+          "view_to_paint_us": {
+            "count": 5,
+            "p50": 200965,
+            "p95": 214499,
+            "max": 214499
+          },
+          "painted_before_release": 0,
+          "decoded_cache_before_display_bytes": {
+            "count": 5,
+            "p50": 0,
+            "p95": 0,
+            "max": 0
+          },
+          "sampled_process_rss_max_bytes": {
+            "count": 5,
+            "p50": 230580224,
+            "p95": 242098176,
+            "max": 242098176
+          },
+          "pump_wall_us": {
+            "count": 31,
+            "p50": 1230,
+            "p95": 3489,
+            "max": 4382
+          },
+          "engine_frame_timing_count": 9
+        }
+      }
+    },
+    {
+      "format": "jpeg",
+      "encoded_bytes": 2424487,
+      "encoded_sha256": "70fa8b698e776e23822f61d482fd683278f21cecd7a70f2b9e779a956867f253",
+      "modes": {
+        "encodedOnlyA1": {
+          "view_to_paint_us": {
+            "count": 5,
+            "p50": 229733,
+            "p95": 232748,
+            "max": 232748
+          },
+          "painted_before_release": 0,
+          "decoded_cache_before_display_bytes": {
+            "count": 5,
+            "p50": 0,
+            "p95": 0,
+            "max": 0
+          },
+          "sampled_process_rss_max_bytes": {
+            "count": 5,
+            "p50": 237146112,
+            "p95": 237780992,
+            "max": 237780992
+          },
+          "pump_wall_us": {
+            "count": 40,
+            "p50": 377,
+            "p95": 2528,
+            "max": 3909
+          },
+          "engine_frame_timing_count": 10
+        },
+        "decodedNext": {
+          "view_to_paint_us": {
+            "count": 5,
+            "p50": 12944,
+            "p95": 13901,
+            "max": 13901
+          },
+          "painted_before_release": 5,
+          "decoded_cache_before_display_bytes": {
+            "count": 5,
+            "p50": 14400000,
+            "p95": 14400000,
+            "max": 14400000
+          },
+          "sampled_process_rss_max_bytes": {
+            "count": 5,
+            "p50": 252416000,
+            "p95": 256794624,
+            "max": 256794624
+          },
+          "pump_wall_us": {
+            "count": 35,
+            "p50": 163,
+            "p95": 2145,
+            "max": 2305
+          },
+          "engine_frame_timing_count": 10,
+          "predecode_lead_us": {
+            "count": 5,
+            "p50": 73574,
+            "p95": 97700,
+            "max": 97700
+          }
+        },
+        "encodedOnlyA2": {
+          "view_to_paint_us": {
+            "count": 5,
+            "p50": 230129,
+            "p95": 230490,
+            "max": 230490
+          },
+          "painted_before_release": 0,
+          "decoded_cache_before_display_bytes": {
+            "count": 5,
+            "p50": 0,
+            "p95": 0,
+            "max": 0
+          },
+          "sampled_process_rss_max_bytes": {
+            "count": 5,
+            "p50": 234184704,
+            "p95": 238530560,
+            "max": 238530560
+          },
+          "pump_wall_us": {
+            "count": 40,
+            "p50": 208,
+            "p95": 2701,
+            "max": 2733
+          },
+          "engine_frame_timing_count": 10
+        }
+      }
+    }
+  ]
+}

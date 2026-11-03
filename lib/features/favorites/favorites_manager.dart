@@ -13,6 +13,7 @@ import 'package:venera_next/foundation/file_replacement.dart';
 import 'favorites_repository.dart';
 import 'favorite_models.dart';
 import 'favorite_folder.dart';
+import 'favorite_folder_name.dart';
 import 'package:venera_next/foundation/sqlite_snapshot.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -1036,14 +1037,13 @@ class LocalFavoritesManager with ChangeNotifier {
         throw OperationFailure.message("name is empty!");
       }
     }
-    if (existsFolder(name)) {
+    if (hasFavoriteFolderName(folderNames, name)) {
       if (renameWhenInvalidName) {
         var prevName = name;
         int i = 0;
-        while (existsFolder(i.toString())) {
-          i++;
-        }
-        name = prevName + i.toString();
+        do {
+          name = prevName + (i++).toString();
+        } while (hasFavoriteFolderName(folderNames, name));
       } else {
         throw Exception("Folder is existing");
       }
@@ -1563,7 +1563,8 @@ class LocalFavoritesManager with ChangeNotifier {
   }
 
   Future<void> _rename(String before, String after) async {
-    if (existsFolder(after)) {
+    if (before == after) return;
+    if (hasFavoriteFolderName(folderNames, after, excluding: before)) {
       throw OperationFailure.message("Name already exists!");
     }
     if (after.contains('"')) {

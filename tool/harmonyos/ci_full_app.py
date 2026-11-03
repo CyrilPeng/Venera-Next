@@ -21,6 +21,7 @@ from release_context import build_inputs
 ASSET_PREFIX = "resources/rawfile/flutter_assets/"
 METADATA_ASSET = ASSET_PREFIX + "assets/harmonyos-app-build.json"
 TESTS = (
+    "test/components/context_menu_test.dart",
     "test/components/application_update_prompt_test.dart",
     "test/foundation/application_update_service_test.dart",
     "test/foundation/harmonyos_test.dart",
@@ -34,6 +35,11 @@ TESTS = (
     "test/features/sync/favorite_hierarchy_transfer_test.dart",
     "test/features/favorites/favorite_hierarchy_test.dart",
     "test/features/favorites/favorites_manager_test.dart",
+    "test/features/favorites/folder_name_case_test.dart",
+    "test/features/favorites/folder_creation_presentation_test.dart",
+    "test/features/favorites/folder_rename_ownership_test.dart",
+    "test/features/favorites/favorite_folder_import_test.dart",
+    "test/features/favorites/read_later_service_test.dart",
     "test/features/comic_source/source_web_login_test.dart",
     "test/routing/webview_menu_test.dart",
     "test/routing/windows_webview_environment_test.dart",

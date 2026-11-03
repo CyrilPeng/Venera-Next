@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'favorite_models.dart';
 import 'favorites_repository.dart';
+import 'favorite_folder_name.dart';
 import 'package:venera_next/foundation/sqlite_transaction.dart';
 
 /// Decode the entire folder before writing; publish no partial folder on error.
@@ -26,7 +27,7 @@ import 'package:venera_next/foundation/sqlite_transaction.dart';
     final folders = repository.folderNames().toSet();
     var folder = name;
     var suffix = 0;
-    while (folders.contains(folder)) {
+    while (hasFavoriteFolderName(folders, folder)) {
       folder = '$name(${suffix++})';
     }
     repository.createFolder(folder);

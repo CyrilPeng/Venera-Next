@@ -295,6 +295,27 @@ void main() {
     });
   });
 
+  for (final name in ['oRIGINAL', 'oTHER']) {
+    testWidgets('rename validates case against the original folder: $name', (
+      tester,
+    ) async {
+      final host = _Host();
+      await host.mount(tester);
+      await _open(tester);
+      await tester.enterText(find.byType(TextField).last, name);
+      await settleSidebarWork(tester, () => _press(tester));
+      await pumpSidebar(tester);
+      if (name == 'oRIGINAL') {
+        expect(host.manager.renames, [('Original', name)]);
+        expect(host.selected, [name]);
+      } else {
+        expect(host.manager.renames, isEmpty);
+        expect(find.text('Folder already exists'), findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final reason in [
     'removed',
     'covered',

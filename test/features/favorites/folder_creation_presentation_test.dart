@@ -17,6 +17,7 @@ import 'package:venera_next/features/favorites/favorite_actions.dart';
 import 'package:venera_next/features/favorites/favorite_transfer_dialog.dart';
 import 'package:venera_next/features/favorites/favorite_models.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
+import 'package:venera_next/features/favorites/favorites_page.dart';
 import 'package:venera_next/features/favorites/local_favorites_page.dart';
 import 'package:venera_next/features/favorites/side_bar.dart';
 import 'package:venera_next/foundation/app.dart';
@@ -208,6 +209,59 @@ void main() {
       );
     });
   });
+
+  for (final scenario in [
+    (width: 390.0, create: true),
+    (width: 390.0, create: false),
+    (width: 1200.0, create: true),
+    (width: 1200.0, create: false),
+  ]) {
+    testWidgets('real folder menu can reopen after closing: $scenario', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(scenario.width, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final host = _FolderCreationHost()
+        ..content = Navigator(
+          onGenerateRoute: (_) =>
+              MaterialPageRoute<void>(builder: (_) => const FavoritesPage()),
+        );
+      await host.mount(tester);
+      await tester.pumpAndSettle();
+      if (scenario.width < 600) {
+        await tester.tap(find.byIcon(Icons.menu).hitTestable());
+        await tester.pumpAndSettle();
+      }
+      for (final name in ['First new folder', 'Second new folder']) {
+        await tester.tap(find.byIcon(Icons.more_horiz).hitTestable());
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Create Folder').hitTestable(),
+          findsOneWidget,
+          reason: 'Menu before creating $name',
+        );
+        await tester.tap(find.text('Create Folder').hitTestable());
+        await tester.pumpAndSettle();
+        expect(find.byType(CreateFavoriteFolderDialog), findsOneWidget);
+        if (scenario.create) {
+          await _create(tester, name);
+        } else {
+          await tester.tap(
+            find.descendant(
+              of: find.byType(CreateFavoriteFolderDialog),
+              matching: find.byIcon(Icons.close),
+            ),
+          );
+        }
+        await tester.pumpAndSettle();
+        expect(find.byType(CreateFavoriteFolderDialog), findsNothing);
+        expect(host.manager.folderNames.contains(name), scenario.create);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   for (final built in [false, true]) {
     testWidgets('creation presentation ends after Navigator disposal: $built', (

@@ -791,6 +791,7 @@
     "features/favorites/favorite_cover_cache.dart",
     "features/favorites/favorite_folder.dart",
     "features/favorites/favorite_folder_import.dart",
+    "features/favorites/favorite_folder_name.dart",
     "features/favorites/favorite_identity_index.dart",
     "features/favorites/favorite_metadata_update.dart",
     "features/favorites/favorite_models.dart",
