@@ -89,19 +89,20 @@ class LocalRepository {
     return findPageMigration(id, type)!;
   });
 
-  String findValidId(ComicType type) {
-    final res = db.select(
-      '''
-      SELECT id FROM comics WHERE comic_type = ?
-      ORDER BY CAST(id AS INTEGER) DESC
-      LIMIT 1;
-      ''',
-      [type.value],
-    );
-    if (res.isEmpty) {
-      return '1';
+  String findValidId(
+    ComicType type, {
+    Iterable<String> reservedIds = const [],
+  }) {
+    var highest = BigInt.zero;
+    final ids = db
+        .select('SELECT id FROM comics WHERE comic_type = ?', [type.value])
+        .map((row) => row['id'] as String);
+    for (final id in ids.followedBy(reservedIds)) {
+      if (!RegExp(r'^[0-9]+$').hasMatch(id)) continue;
+      final value = BigInt.parse(id);
+      if (value > highest) highest = value;
     }
-    return (int.parse(res.first['id'] as String) + 1).toString();
+    return (highest + BigInt.one).toString();
   }
 
   void add(LocalComic comic, [String? id]) => runSqliteTransaction(db, () {

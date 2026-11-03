@@ -211,6 +211,37 @@ void main() {
     },
   );
 
+  test(
+    'numeric allocation reserves migrated and large IDs without parsing unrelated text',
+    () {
+      final db = sqlite3.openInMemory();
+      final repository = LocalRepository(db)..initialize();
+      addTearDown(db.dispose);
+      expect(repository.findValidId(ComicType.local), '1');
+      expect(
+        repository.findValidId(
+          ComicType.local,
+          reservedIds: ['legacy-text', '-9', '0xFF', '', '0008', '2'],
+        ),
+        '9',
+      );
+      expect(
+        repository.findValidId(
+          ComicType.local,
+          reservedIds: ['9223372036854775807'],
+        ),
+        '9223372036854775808',
+      );
+      expect(
+        repository.findValidId(
+          ComicType.local,
+          reservedIds: ['999999999999999999999999999999'],
+        ),
+        '1000000000000000000000000000000',
+      );
+    },
+  );
+
   test('writes and migration markers commit together without mutating chapters', () {
     final db = sqlite3.openInMemory();
     final repository = LocalRepository(db)..initialize();

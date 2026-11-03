@@ -187,6 +187,93 @@ void main() {
     );
     expectCounts(1, 0);
   });
+  test(
+    'an identity in a different favorite folder also blocks registration',
+    () {
+      final repository = FavoritesRepository(favorites);
+      repository.createFolder('Other');
+      favorite.name = 'Migrated old comic';
+      repository.addComic(
+        'Other',
+        favorite,
+        translatedTags: 'old',
+        append: true,
+      );
+      favorite.name = 'New import';
+      expect(
+        register,
+        throwsA(
+          failure(
+            PersistenceCommitState.notCommitted,
+            'identity is already in use',
+          ),
+        ),
+      );
+      expectCounts(0, 0);
+      expect(
+        repository.findComic('Other', '1', ComicType.local.value)!.name,
+        'Migrated old comic',
+      );
+    },
+  );
+  test('allocation reads every persisted folder and filters the full type', () {
+    final repository = FavoritesRepository(favorites);
+    repository.createFolder('Other');
+    favorite.id = '4';
+    repository.addComic('Other', favorite, translatedTags: 'old', append: true);
+    favorite.id = '9999';
+    favorite.type = const ComicType(17);
+    repository.addComic(
+      folder,
+      favorite,
+      translatedTags: 'remote',
+      append: true,
+    );
+    expect(
+      findUnusedLocalComicId(
+        local,
+        ComicType.local,
+        favoritesPath: '${root.path}/favorite.db',
+      ),
+      '5',
+    );
+    expect(
+      findUnusedLocalComicId(
+        local,
+        const ComicType(17),
+        favoritesPath: '${root.path}/favorite.db',
+      ),
+      '10000',
+    );
+    expectCounts(0, 1);
+    expect(repository.count('Other'), 1);
+  });
+  test('allocation never creates a missing favorites store', () {
+    expect(findUnusedLocalComicId(local, ComicType.local), '1');
+    expect(File('${root.path}/local_favorite.db').existsSync(), isFalse);
+    expect(
+      () => findUnusedLocalComicId(
+        local,
+        ComicType.local,
+        favoritesPath: '${root.path}/missing.db',
+      ),
+      throwsStateError,
+    );
+    expect(File('${root.path}/missing.db').existsSync(), isFalse);
+  });
+  test(
+    'an unreadable existing favorites store fails closed instead of reusing IDs',
+    () {
+      final file = File('${root.path}/local_favorite.db')
+        ..writeAsStringSync('not SQLite');
+      expect(
+        () => findUnusedLocalComicId(local, ComicType.local),
+        throwsA(isA<SqliteException>()),
+      );
+      expect(file.readAsStringSync(), 'not SQLite');
+      expectCounts(0, 0);
+    },
+  );
   test('mismatched favorite identity rolls back before inserting', () {
     favorite.id = '2';
     expect(

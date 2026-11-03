@@ -494,13 +494,28 @@ class FavoritesRepository {
   static String _qualifiedTable(String folder, String? schema) =>
       schema == null ? _table(folder) : '${_table(schema)}.${_table(folder)}';
 
-  List<String> _storedFolderNames() => db
+  List<String> _storedFolderNames({String? schema}) => db
       .select(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*';",
+        "SELECT name FROM ${_qualifiedTable('sqlite_master', schema)} WHERE type='table' AND name NOT GLOB 'sqlite_*';",
       )
       .map((row) => row['name'] as String)
       .where((name) => name != 'folder_sync' && name != 'folder_order')
       .toList();
+
+  /// Read persisted identities, not display metadata or a refreshing UI index.
+  List<String> comicIds(int type, {String? schema}) => [
+    for (final folder in _storedFolderNames(schema: schema))
+      for (final row in db.select(
+        'SELECT id FROM ${_qualifiedTable(folder, schema)} WHERE type = ?;',
+        [type],
+      ))
+        row['id'] as String,
+  ];
+
+  bool containsIdentity(String id, int type, {String? schema}) =>
+      _storedFolderNames(
+        schema: schema,
+      ).any((folder) => comicExists(folder, id, type, schema: schema));
 
   List<String> folderNames() {
     if (_hasHierarchy) {

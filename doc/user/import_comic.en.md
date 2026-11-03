@@ -113,6 +113,18 @@ Cat's Eye.cbz
 If there is no `cover.[ext]` in the root folder, the first image from the first
 chapter is used as the cover.
 
+### Migrated Settings and Favorites
+
+The development branch fixes `Favorite registration identity is already in use`
+after importing old settings. New comics receive an ID unused by both the local
+library and every favorite folder for the same comic type. Imports without a
+selected favorite folder also avoid accidentally linking to an old favorite.
+
+There is no need to delete old favorites or clear the database before importing
+new comics. The fix does not match records by title, rewrite existing favorites
+or paths, or modify original comic files. External paths from another platform
+still require separate migration; importing settings does not make them accessible.
+
 ## PDF and Image-based EPUB
 
 Open `Local` -> `Import` and select either a PDF comic file or an image-based

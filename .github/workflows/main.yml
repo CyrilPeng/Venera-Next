@@ -26,6 +26,8 @@ jobs:
       - name: 校验分支构建元数据
         if: github.ref_type != 'tag'
         run: python3 .github/scripts/validate_release.py --build-only
+      - name: 校验鸿蒙固定来源配置
+        run: python3 .github/scripts/harmonyos_release.py config
 
   Quality:
     needs: Release_Metadata
@@ -44,17 +46,41 @@ jobs:
       build_linux_arm64: true
     secrets: inherit
 
+  HarmonyOS:
+    needs: [Release_Metadata, Quality]
+    uses: ./.github/workflows/harmonyos-release.yml
+
   Release:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    needs: [Release_Metadata, Quality, Build]
+    needs: [Release_Metadata, Quality, Build, HarmonyOS]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: 校验发布元数据
         run: python3 .github/scripts/validate_release.py --write-notes release_notes.md
+      - name: 读取鸿蒙固定来源
+        id: harmonyos_pin
+        run: python3 .github/scripts/harmonyos_release.py config --github-output "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.harmonyos_pin.outputs.source_commit }}
+          path: harmonyos-source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: harmonyos-release
+          path: outputs/harmonyos
+      - name: 核验鸿蒙版本、源码、原生库及资产
+        run: |
+          python3 .github/scripts/harmonyos_release.py verify \
+            --source-root harmonyos-source --artifacts outputs/harmonyos
       - uses: actions/download-artifact@v8
         with:
           name: macos_build
@@ -124,6 +150,7 @@ jobs:
         run: |
           shopt -s nullglob
           files=(
+            outputs/harmonyos/*
             outputs/*.ipa
             outputs/*.dmg
             outputs/*.apk
@@ -141,6 +168,7 @@ jobs:
           fi
 
           args=(
+            --verify-tag
             --title "${GITHUB_REF_NAME}"
             --notes-file release_notes.md
             --draft
@@ -149,10 +177,22 @@ jobs:
             args+=(--prerelease)
           fi
           gh release create "${GITHUB_REF_NAME}" "${files[@]}" "${args[@]}"
+      - name: 核验草稿中鸿蒙资产的实际大小与摘要
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/scripts/harmonyos_release.py verify-draft \
+            --source-root harmonyos-source --artifacts outputs/harmonyos
       - name: 发布草稿 Release
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: gh release edit "${GITHUB_REF_NAME}" --draft=false
+      - name: 复核已发布鸿蒙资产
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/scripts/harmonyos_release.py verify-published \
+            --source-root harmonyos-source --artifacts outputs/harmonyos
       - name: 清理 jsDelivr CDN 缓存
         run: |
           curl -s "https://purge.jsdelivr.net/gh/CyrilPeng/venera-next@main/pubspec.yaml" | jq '.status'
