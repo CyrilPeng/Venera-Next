@@ -108,6 +108,7 @@ class ApplicationUpdatePrompt {
       final dialog = DialogRoute<void>(
         context: context,
         builder: (context) => AlertDialog(
+          scrollable: service.forHarmonyOS,
           title: Text('New version available'.tl),
           content: Text(
             service.forHarmonyOS

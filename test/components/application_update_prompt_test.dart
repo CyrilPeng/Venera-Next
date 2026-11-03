@@ -115,50 +115,81 @@ void main() {
       (tester.state(find.byType(WindowFrame)) as WindowListener)
           .onWindowClose();
 
-  for (final size in [const Size(375, 812), const Size(812, 375)]) {
-    testUpdateWidgets(
-      'HarmonyOS update uses the release page and explains same-key signing; $size',
-      (tester) async {
-        tester.view.physicalSize = size;
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        await tester.pumpWidget(app(const AboutSettings(), textScale: 1.8));
-        final check = find.widgetWithText(FilledButton, 'Check');
-        await tester.ensureVisible(check);
-        await tester.pumpAndSettle();
-        expect(check.hitTestable(), findsOneWidget);
-        await tester.tap(check);
-        await waitFor(tester, () => adapter.entered.isCompleted);
-        adapter.complete({
-          'tag_name': 'v2.0.0',
-          'assets': [
-            for (final name in [
-              'VeneraNext-2.0.0-harmonyos-arm64-unsigned.hap',
-              'harmonyos-manifest.json',
-            ])
-              {'name': name, 'state': 'uploaded', 'size': 20},
-          ],
-        });
-        adapter.released.complete();
-        await tester.pumpAndSettle();
-        expect(
-          find.text(
-            'HarmonyOS beta 2.0.0 is available. Open the release page, choose the unsigned HAP, and sign it with your existing key to upgrade.',
-          ),
-          findsOneWidget,
-        );
-        expect(tester.takeException(), isNull);
-        await tester.ensureVisible(find.text('Cancel'));
-        await tester.pumpAndSettle();
-        expect(find.text('Cancel').hitTestable(), findsOneWidget);
-        await tester.tap(find.text('Cancel'));
-        await tester.pumpAndSettle();
-        expect(find.text('New version available'), findsNothing);
-        expect(tester.takeException(), isNull);
-      },
-      forHarmonyOS: true,
-    );
+  for (final brightness in Brightness.values) {
+    for (final size in [const Size(375, 812), const Size(812, 375)]) {
+      testUpdateWidgets(
+        'HarmonyOS update uses the release page and explains same-key signing; $brightness $size',
+        (tester) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          await tester.pumpWidget(
+            app(const AboutSettings(), brightness: brightness, textScale: 1.8),
+          );
+          final check = find.widgetWithText(FilledButton, 'Check');
+          await tester.ensureVisible(check);
+          await tester.pumpAndSettle();
+          expect(check.hitTestable(), findsOneWidget);
+          await tester.tap(check);
+          await waitFor(tester, () => adapter.entered.isCompleted);
+          adapter.complete({
+            'tag_name': 'v2.0.0',
+            'assets': [
+              for (final name in [
+                'VeneraNext-2.0.0-harmonyos-arm64-unsigned.hap',
+                'harmonyos-manifest.json',
+              ])
+                {'name': name, 'state': 'uploaded', 'size': 20},
+            ],
+          });
+          adapter.released.complete();
+          await tester.pumpAndSettle();
+          const notice =
+              'HarmonyOS beta 2.0.0 is available. Open the release page, choose the unsigned HAP, and sign it with your existing key to upgrade.';
+          final content = find.text(notice);
+          expect(content, findsOneWidget);
+          final scroll = find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(SingleChildScrollView),
+          );
+          expect(scroll, findsOneWidget);
+          await tester.drag(scroll, const Offset(0, -1000));
+          await tester.pumpAndSettle();
+          final paragraph = tester.renderObject<RenderParagraph>(content);
+          expect(
+            paragraph.size.height,
+            moreOrLessEquals(
+              paragraph.getMinIntrinsicHeight(paragraph.size.width),
+            ),
+          );
+          final ending = paragraph
+              .getBoxesForSelection(
+                const TextSelection(
+                  baseOffset: notice.length - 8,
+                  extentOffset: notice.length,
+                ),
+              )
+              .last
+              .toRect();
+          expect(
+            tester
+                .getRect(scroll)
+                .contains(paragraph.localToGlobal(ending.center)),
+            isTrue,
+          );
+          expect(tester.takeException(), isNull);
+          await tester.ensureVisible(find.text('Cancel'));
+          await tester.pumpAndSettle();
+          expect(find.text('Cancel').hitTestable(), findsOneWidget);
+          await tester.tap(find.text('Cancel'));
+          await tester.pumpAndSettle();
+          expect(find.text('New version available'), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+        forHarmonyOS: true,
+      );
+    }
   }
 
   testUpdateWidgets(
