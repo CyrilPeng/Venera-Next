@@ -5,6 +5,33 @@ not mark unresolved reports as fixed. Dated verification records and the
 original device acceptance checklist remain below. The newest dated section
 defines the current release scope; older candidate sections are historical.
 
+## Stable patch preparation (2026-11-03)
+
+Prepare v1.18.3, build 244, after the maintainer accepted the next-step plan.
+Include #143's repeat-create menu lifecycle and case-only folder rename fixes,
+the existing favorite-ID, ZIP compatibility and #129 fixes, and the first
+unsigned HarmonyOS beta distribution. The #125 A/B/A probe is development
+evidence only; production preloading and cache limits remain unchanged.
+
+- Keep the source fixes, probe and release metadata as separate conventional
+  commits with matching changelog entries, then merge the shared main baseline
+  into HarmonyOS and pin the reviewed resulting source. Keep only main and
+  HarmonyOS as long-lived branches and retain both existing worktrees.
+- Verify the exact candidate with strict analysis, architecture/import and Git
+  dependency checks, favorites/navigation/data regressions, reader lifecycle
+  tests, release-script tests, and the normal full platform/HAP workflows.
+- Branch workflow dispatch builds reviewable 1.18.3+244 installation artifacts
+  without creating a tag or public Release. The packaging inventory remains
+  the 26 assets described below; preserve Android mobile/TV identity, signing
+  certificates and increasing version codes.
+- Complete Android/Windows data-preserving upgrade checks and HarmonyOS
+  retained-key signing, install/upgrade and basic reading acceptance before
+  tagging. No Android or HarmonyOS target was attached during preparation;
+  CI compilation and unsigned-package audits do not substitute for that check.
+- Preserve #125's unresolved first-view scope and #129/#143 original-device
+  verification boundaries in the candidate notes. Keep #115/#126 open for
+  concrete new evidence. Leave #77 closed without tracking or notifications.
+
 ## HarmonyOS release integration (2026-11-03)
 
 The next release adds an unsigned ARM64 HarmonyOS beta HAP and four companions:
