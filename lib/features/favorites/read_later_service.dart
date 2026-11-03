@@ -1,5 +1,6 @@
 import 'favorite_models.dart';
 import 'favorites_repository.dart';
+import 'favorite_folder_name.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/sqlite_transaction.dart';
 
@@ -71,7 +72,7 @@ class ReadLaterService {
           var candidate = folderName;
           var suffix = 2;
           final existing = repo.folderNames().toSet();
-          while (existing.contains(candidate)) {
+          while (hasFavoriteFolderName(existing, candidate)) {
             candidate = '$folderName (${suffix++})';
           }
           repo.createFolder(candidate);

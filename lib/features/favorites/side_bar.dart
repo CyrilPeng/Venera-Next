@@ -174,6 +174,8 @@ class _FavoritesFolderSidebarState extends State<FavoritesFolderSidebar>
           Text("Local".tl),
           const Spacer(),
           MenuButton(
+            // Route-status rebuilds keep the same library actions available.
+            menuIdentity: (_manager, _managerGeneration),
             entries: [
               MenuEntry(
                 icon: Icons.add,

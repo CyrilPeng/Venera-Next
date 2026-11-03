@@ -42,6 +42,16 @@ void main() {
         translateTags: (_) => 'translated',
       );
 
+  test('JSON import chooses an unused name across ASCII case variants', () {
+    repository.createFolder('folder');
+    repository.createFolder('FOLDER(0)');
+    final (name, _) = run(package([item('imported')]));
+    expect(name, 'Folder(1)');
+    expect(repository.count('folder'), 0);
+    expect(repository.count('FOLDER(0)'), 0);
+    expect(repository.getFolderComics(name).single.id, 'imported');
+  });
+
   test(
     'malformed late data and translation failure do not create a folder',
     () {

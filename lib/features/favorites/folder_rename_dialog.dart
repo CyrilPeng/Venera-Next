@@ -72,7 +72,11 @@ Future<void> _renameFavoriteFolder(
         popup?.isActive == false) {
       throw const SelectionCancelled();
     }
-    final error = validateFolderName(name, folders: manager.folderNames);
+    final error = validateFolderName(
+      name,
+      folders: manager.folderNames,
+      currentName: folder,
+    );
     if (error != null) return error;
     try {
       await AppDataOperations.instance.access(() async {

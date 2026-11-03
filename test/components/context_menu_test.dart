@@ -91,6 +91,47 @@ void main() {
     visible.dispose();
   });
 
+  testWidgets('MenuButton keeps a stable owner and retires a changed owner', (
+    tester,
+  ) async {
+    final revision = ValueNotifier(0);
+    final calls = <int>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ValueListenableBuilder<int>(
+            valueListenable: revision,
+            builder: (_, value, _) => MenuButton(
+              menuIdentity: value ~/ 2,
+              entries: [
+                MenuEntry(
+                  text: 'Owned action',
+                  onClick: () => calls.add(value),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(MenuButton));
+    await tester.pumpAndSettle();
+    revision.value = 1;
+    await tester.pumpAndSettle();
+    expect(find.text('Owned action'), findsOneWidget);
+    await tester.tap(find.text('Owned action'));
+    await tester.pumpAndSettle();
+    expect(calls, [0]);
+    await tester.tap(find.byType(MenuButton));
+    await tester.pumpAndSettle();
+    revision.value = 2;
+    await tester.pumpAndSettle();
+    expect(find.text('Owned action'), findsNothing);
+    expect(calls, [0]);
+    await tester.pumpWidget(const SizedBox());
+    revision.dispose();
+  });
+
   testWidgets(
     'row region keeps the same target on rebuild and retires a replacement',
     (tester) async {

@@ -378,9 +378,12 @@ class _IconButtonState extends State<_IconButton> {
 }
 
 class MenuButton extends StatefulWidget {
-  const MenuButton({super.key, required this.entries});
+  const MenuButton({super.key, required this.entries, this.menuIdentity});
 
   final List<MenuEntry> entries;
+
+  /// Stable action owner when route-status rebuilds recreate the entries.
+  final Object? menuIdentity;
 
   @override
   State<MenuButton> createState() => _MenuButtonState();
@@ -388,7 +391,7 @@ class MenuButton extends StatefulWidget {
 
 class _MenuButtonState extends State<MenuButton> with ContextMenuOwner {
   @override
-  Object get contextMenuIdentity => widget.entries;
+  Object get contextMenuIdentity => widget.menuIdentity ?? widget.entries;
   @override
   Widget build(BuildContext context) {
     return Tooltip(

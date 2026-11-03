@@ -103,6 +103,50 @@ LocalFavoritesManager _ownedFavorites() {
 }
 
 void main() {
+  test(
+    'case-only folder rename preserves settings and rejects other names',
+    () async {
+      await _withFavoritesManager((manager) async {
+        final previousLater = appdata.settings['readLaterFolder'];
+        try {
+          await manager.createFolder('ip');
+          await manager.createFolder('IP0');
+          await manager.addComic('ip', _favorite('kept'));
+          await manager.prepareTableForFollowUpdates('ip');
+          final id = manager.folderTree.named('ip')!.id;
+          for (final key in [
+            'readLaterFolder',
+            'quickFavorite',
+            'followUpdatesFolder',
+          ]) {
+            appdata.settings[key] = 'ip';
+          }
+          await expectLater(manager.createFolder('IP'), throwsException);
+          expect(await manager.createFolder('IP', true), 'IP1');
+          await expectLater(manager.rename('ip', 'ip0'), throwsException);
+          await manager.rename('ip', 'IP');
+          expect(manager.folderTree.named('IP')!.id, id);
+          expect(manager.folderComics('IP'), 1);
+          expect(manager.getFolderComics('IP').single.id, 'kept');
+          for (final key in [
+            'readLaterFolder',
+            'quickFavorite',
+            'followUpdatesFolder',
+          ]) {
+            expect(appdata.settings[key], 'IP');
+          }
+          await manager.rename('IP', 'IP');
+          await manager.closeAndWait();
+          await manager.init();
+          expect(manager.folderTree.named('IP')!.id, id);
+          expect(manager.getFolderComics('IP').single.id, 'kept');
+        } finally {
+          appdata.settings['readLaterFolder'] = previousLater;
+        }
+      });
+    },
+  );
+
   for (final action in [
     'add',
     'storage add',

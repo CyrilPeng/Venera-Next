@@ -3,6 +3,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'favorite_models.dart';
 import 'favorite_row.dart';
 import 'favorite_folder.dart';
+import 'favorite_folder_name.dart';
 import 'package:uuid/uuid.dart';
 
 /// Favorite persistence on a caller-owned connection; no cache or notifications.
@@ -208,7 +209,23 @@ class FavoritesRepository {
   });
 
   void renameFolder(String before, String after) => _transaction(() {
-    db.execute('ALTER TABLE ${_table(before)} RENAME TO ${_table(after)};');
+    if (before == after) return;
+    var source = before;
+    if (favoriteFolderNameKey(before) == favoriteFolderNameKey(after)) {
+      // SQLite rejects case-only ALTER TABLE. Both steps share this transaction.
+      String temporary;
+      do {
+        temporary = '_favorite_rename_${const Uuid().v4()}';
+      } while (db.select(
+        'SELECT 1 FROM sqlite_master WHERE name = ? COLLATE NOCASE;',
+        [temporary],
+      ).isNotEmpty);
+      db.execute(
+        'ALTER TABLE ${_table(before)} RENAME TO ${_table(temporary)};',
+      );
+      source = temporary;
+    }
+    db.execute('ALTER TABLE ${_table(source)} RENAME TO ${_table(after)};');
     db.execute(
       'UPDATE folder_order SET folder_name = ? WHERE folder_name = ?;',
       [after, before],
