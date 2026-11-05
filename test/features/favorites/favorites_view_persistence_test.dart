@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/select.dart';
+import 'package:venera_next/components/navigation_bar.dart';
 import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/features/favorites/favorite_models.dart';
@@ -49,6 +50,7 @@ Future<void> _flush(WidgetTester tester, Future<void> operation) async {
 Future<Directory> _prepare(WidgetTester tester) async {
   final root = Directory.systemTemp.createTempSync('favorites-view-');
   final previousPath = App.dataPath;
+  final previousCachePath = App.cachePath;
   final previousSettings = Map<String, dynamic>.from(
     appdata.toJson()['settings'] as Map,
   );
@@ -90,6 +92,7 @@ Future<Directory> _prepare(WidgetTester tester) async {
     previousSettings.forEach((key, value) => appdata.settings[key] = value);
     appdata.implicitData = previousImplicit;
     App.dataPath = previousPath;
+    App.cachePath = previousCachePath;
     root.deleteSync(recursive: true);
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       const MethodChannel('window_manager'),
@@ -150,6 +153,284 @@ Future<void> _reopenSavedView(WidgetTester tester, Directory root) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   App.dataPath = Directory.systemTemp.path;
+  App.cachePath = Directory.systemTemp.path;
+
+  for (final size in [const Size(375, 800), const Size(1024, 600)]) {
+    testWidgets(
+      'nested app back returns to the real parent and persists at width ${size.width}',
+      (tester) async {
+        final root = await _prepare(tester);
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final previousNavigator = appNavigation.mainNavigatorKey;
+        addTearDown(() => appNavigation.mainNavigatorKey = previousNavigator);
+        final manager = _favoritesForView();
+        await tester.runAsync(() async {
+          await manager.createFolder('Parent / collection');
+          await manager.createChildFolder(
+            'Child / collection',
+            manager.folderTree.named('Parent / collection')!.id,
+          );
+          await manager.addComic(
+            'Child / collection',
+            FavoriteItem(
+              id: 'navigation-comic',
+              name: 'Navigation comic',
+              coverPath: '',
+              author: '',
+              type: ComicType.local,
+              tags: const [],
+            ),
+          );
+        });
+        final child = manager.folderTree.named('Child / collection')!;
+        await tester.pumpWidget(_nestedHost(const FavoritesPage()));
+        await _saveFolderSelection(tester, child.name);
+        await tester.pumpAndSettle();
+
+        expect(
+          await appNavigation.rootNavigatorKey.currentState!.maybePop(),
+          isTrue,
+        );
+        await tester.pump();
+        final owner = tester.state<SettingsSaveState>(
+          find.byType(FavoritesPage),
+        );
+        await _flush(tester, owner.waitForSettingsSave());
+        await tester.pumpAndSettle();
+        expect(_visibleFolder(tester), 'Parent / collection');
+        expect(_saved(root)['favoriteFolder'], {
+          'name': 'Parent / collection',
+          'isNetwork': false,
+        });
+        expect(manager.folderTree.named(child.name)!.id, child.id);
+        expect(
+          manager.getFolderComics(child.name).single.id,
+          'navigation-comic',
+        );
+        expect(manager.getFolderComics('Parent / collection'), isEmpty);
+        expect(
+          await appNavigation.rootNavigatorKey.currentState!.maybePop(),
+          isFalse,
+        );
+
+        await _reopenSavedView(tester, root);
+        expect(_visibleFolder(tester), 'Parent / collection');
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'folder picker back closes the overlay before returning to parent',
+    (tester) async {
+      await _prepare(tester);
+      tester.view.physicalSize = const Size(375, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await _createChildForNavigation(tester);
+      await tester.pumpWidget(_host(const FavoritesPage()));
+      await _saveFolderSelection(tester, 'Child');
+      tester
+          .widget<LocalFavoritesPage>(find.byType(LocalFavoritesPage))
+          .showFolders();
+      await tester.pumpAndSettle();
+      expect(find.byType(FavoritesFolderSidebar), findsNWidgets(2));
+      await appNavigation.rootNavigatorKey.currentState!.maybePop();
+      await tester.pumpAndSettle();
+      expect(find.byType(FavoritesFolderSidebar), findsOneWidget);
+      expect(_visibleFolder(tester), 'Child');
+      await appNavigation.rootNavigatorKey.currentState!.maybePop();
+      await tester.pump();
+      final owner = tester.state<SettingsSaveState>(find.byType(FavoritesPage));
+      await _flush(tester, owner.waitForSettingsSave());
+      expect(_visibleFolder(tester), 'B');
+    },
+  );
+
+  testWidgets('back exits search before navigating out of a child', (
+    tester,
+  ) async {
+    await _prepare(tester);
+    await _createChildForNavigation(tester);
+    await tester.pumpWidget(_host(const FavoritesPage()));
+    await _saveFolderSelection(tester, 'Child');
+    await tester.tap(
+      find.descendant(
+        of: find.byType(LocalFavoritesPage),
+        matching: find.byIcon(Icons.search),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('favorite-path-parent')), findsNothing);
+    await appNavigation.rootNavigatorKey.currentState!.maybePop();
+    await tester.pumpAndSettle();
+    expect(_visibleFolder(tester), 'Child');
+    expect(find.byKey(const ValueKey('favorite-path-parent')), findsOneWidget);
+    await appNavigation.rootNavigatorKey.currentState!.maybePop();
+    await tester.pump();
+    final owner = tester.state<SettingsSaveState>(find.byType(FavoritesPage));
+    await _flush(tester, owner.waitForSettingsSave());
+    expect(_visibleFolder(tester), 'B');
+  });
+
+  testWidgets('back clears multi-selection before navigating out of a child', (
+    tester,
+  ) async {
+    await _prepare(tester);
+    await _createChildForNavigation(tester);
+    await tester.runAsync(
+      () => _favoritesForView().addComic(
+        'Child',
+        FavoriteItem(
+          id: 'selection-comic',
+          name: 'Selection comic',
+          coverPath: '',
+          author: '',
+          type: ComicType.local,
+          tags: const [],
+        ),
+      ),
+    );
+    await tester.pumpWidget(_host(const FavoritesPage()));
+    await _saveFolderSelection(tester, 'Child');
+    await tester.longPress(find.text('Selection comic').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Selected 1 comics'), findsOneWidget);
+    await appNavigation.rootNavigatorKey.currentState!.maybePop();
+    await tester.pumpAndSettle();
+    expect(find.text('Selected 1 comics'), findsNothing);
+    expect(_visibleFolder(tester), 'Child');
+    await appNavigation.rootNavigatorKey.currentState!.maybePop();
+    await tester.pump();
+    final owner = tester.state<SettingsSaveState>(find.byType(FavoritesPage));
+    await _flush(tester, owner.waitForSettingsSave());
+    expect(_visibleFolder(tester), 'B');
+  });
+
+  testWidgets(
+    'retired parent button cannot follow a child moved to another parent',
+    (tester) async {
+      await _prepare(tester);
+      await _createChildForNavigation(tester);
+      await tester.pumpWidget(_host(const FavoritesPage()));
+      await _saveFolderSelection(tester, 'Child');
+      final button = tester.widget<TextButton>(
+        find.byKey(const ValueKey('favorite-path-parent')),
+      );
+      await tester.runAsync(
+        () => _favoritesForView().moveFolder(
+          'Child',
+          _favoritesForView().folderTree.named('A')!.id,
+        ),
+      );
+      await tester.pumpAndSettle();
+      button.onPressed!();
+      await tester.pumpAndSettle();
+      expect(_visibleFolder(tester), 'Child');
+      await tester.tap(find.byKey(const ValueKey('favorite-path-parent')));
+      await tester.pump();
+      final owner = tester.state<SettingsSaveState>(find.byType(FavoritesPage));
+      await _flush(tester, owner.waitForSettingsSave());
+      expect(_visibleFolder(tester), 'A');
+    },
+  );
+
+  testWidgets(
+    'parent path button follows a renamed parent by its stable identity',
+    (tester) async {
+      final root = await _prepare(tester);
+      await _createChildForNavigation(tester);
+      await tester.pumpWidget(_host(const FavoritesPage()));
+      await _saveFolderSelection(tester, 'Child');
+      final button = tester.widget<TextButton>(
+        find.byKey(const ValueKey('favorite-path-parent')),
+      );
+      await tester.runAsync(
+        () => _favoritesForView().rename('B', 'Renamed parent'),
+      );
+      await tester.pumpAndSettle();
+      button.onPressed!();
+      await tester.pump();
+      final owner = tester.state<SettingsSaveState>(find.byType(FavoritesPage));
+      await _flush(tester, owner.waitForSettingsSave());
+      expect(_visibleFolder(tester), 'Renamed parent');
+      expect(_saved(root)['favoriteFolder']['name'], 'Renamed parent');
+    },
+  );
+
+  testWidgets('back during a pending folder save finishes at the parent', (
+    tester,
+  ) async {
+    final root = await _prepare(tester);
+    await _createChildForNavigation(tester);
+    await tester.pumpWidget(_host(const FavoritesPage()));
+    final release = Completer<void>();
+    final exclusive = AppDataOperations.instance.run(() => release.future);
+    addTearDown(() {
+      if (!release.isCompleted) release.complete();
+    });
+    tester
+        .widget<FavoritesFolderSidebar>(find.byType(FavoritesFolderSidebar))
+        .onFolderSelected(false, 'Child');
+    await tester.pump();
+    final owner = tester.state<SettingsSaveState>(find.byType(FavoritesPage));
+    expect(owner.savingSettings, isTrue);
+    await appNavigation.rootNavigatorKey.currentState!.maybePop();
+    await tester.pump();
+    release.complete();
+    await _flush(tester, Future.wait([exclusive, owner.waitForSettingsSave()]));
+    await tester.pumpAndSettle();
+    expect(_visibleFolder(tester), 'B');
+    expect(_saved(root)['favoriteFolder'], {'name': 'B', 'isNetwork': false});
+  });
+
+  testWidgets(
+    'pending-save back exits search without replaying a parent back',
+    (tester) async {
+      final root = await _prepare(tester);
+      await _createChildForNavigation(tester);
+      await tester.pumpWidget(_host(const FavoritesPage()));
+      await _saveFolderSelection(tester, 'Child');
+      final release = Completer<void>();
+      final exclusive = AppDataOperations.instance.run(() => release.future);
+      addTearDown(() {
+        if (!release.isCompleted) release.complete();
+      });
+      tester
+          .widget<FavoritesFolderSidebar>(find.byType(FavoritesFolderSidebar))
+          .onFolderSelected(false, 'Child');
+      await tester.pump();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(LocalFavoritesPage),
+          matching: find.byIcon(Icons.search),
+        ),
+      );
+      await tester.pump();
+      final owner = tester.state<SettingsSaveState>(find.byType(FavoritesPage));
+      await appNavigation.rootNavigatorKey.currentState!.maybePop();
+      await tester.pump();
+      release.complete();
+      await _flush(
+        tester,
+        Future.wait([exclusive, owner.waitForSettingsSave()]),
+      );
+      await tester.pumpAndSettle();
+      expect(_visibleFolder(tester), 'Child');
+      expect(
+        find.byKey(const ValueKey('favorite-path-parent')),
+        findsOneWidget,
+      );
+      expect(_saved(root)['favoriteFolder'], {
+        'name': 'Child',
+        'isNetwork': false,
+      });
+    },
+  );
 
   for (final size in [const Size(375, 800), const Size(1024, 600)]) {
     for (final folder in [localAllFolderLabel, 'A']) {
@@ -501,6 +782,39 @@ void main() {
     expect(_saved(root)['local_favorites_update_page_num'], 2);
     expect(layoutError, isNull);
   });
+}
+
+String _visibleFolder(WidgetTester tester) =>
+    tester.widget<LocalFavoritesPage>(find.byType(LocalFavoritesPage)).folder;
+
+Future<void> _createChildForNavigation(WidgetTester tester) => tester.runAsync(
+  () async {
+    final manager = _favoritesForView();
+    await manager.createChildFolder('Child', manager.folderTree.named('B')!.id);
+  },
+);
+
+Widget _nestedHost(Widget child) {
+  final navigatorKey = GlobalKey<NavigatorState>();
+  appNavigation.mainNavigatorKey = navigatorKey;
+  return _libraryView(
+    MaterialApp(
+      navigatorKey: appNavigation.rootNavigatorKey,
+      home: NaviPane(
+        paneItems: [
+          PaneItemEntry(
+            label: 'Favorites',
+            icon: Icons.favorite_outline,
+            activeIcon: Icons.favorite,
+          ),
+        ],
+        paneActions: const [],
+        pageBuilder: (_) => child,
+        observer: NaviObserver(),
+        navigatorKey: navigatorKey,
+      ),
+    ),
+  );
 }
 
 LocalFavoritesManager? _favoritesOwner;

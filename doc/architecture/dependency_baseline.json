@@ -566,6 +566,7 @@
     "features/favorites/favorite_actions.dart",
     "features/favorites/favorite_confirmation_dialog.dart",
     "features/favorites/favorite_folder_browser.dart",
+    "features/favorites/favorite_folder_path.dart",
     "features/favorites/favorite_metadata_dialog.dart",
     "features/favorites/favorite_transfer_dialog.dart",
     "features/favorites/favorites.dart",

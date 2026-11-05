@@ -5,6 +5,7 @@ import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/components/file_save_task.dart';
 import 'favorite_models.dart';
 import 'favorite_folder.dart';
+import 'favorite_folder_path.dart';
 import 'folder_move_dialog.dart';
 import 'dart:convert';
 import 'dart:async';
@@ -443,7 +444,28 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     final childFolders = currentFolder == null
         ? const <FavoriteFolder>[]
         : folderTree.childrenOf(currentFolder.id);
-    if (!isAllFolder) title = folderTree.label(widget.folder);
+    final parentFolder = currentFolder?.parentId == null
+        ? null
+        : folderTree.identified(currentFolder!.parentId!);
+    void goToParent() {
+      if (!_canReadObservedFolder ||
+          _queryOwner?.canPresent != true ||
+          widget.folder != target.folder ||
+          currentFolder == null ||
+          parentFolder == null) {
+        return;
+      }
+      final latest = _observedManager.folderTree;
+      final child = latest.named(target.folder);
+      final parent = latest.identified(parentFolder.id);
+      if (child?.id != currentFolder.id ||
+          child?.parentId != parent?.id ||
+          parent == null) {
+        return;
+      }
+      target.onFolderSelected(false, parent.name);
+    }
+
     final displayedComics = searchMode ? searchResults : filterComics(comics);
 
     Widget body = SmoothCustomScrollView(
@@ -464,11 +486,18 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                     )
                   : const SizedBox(),
             ),
-            title: GestureDetector(
-              onTap: context.width < favoritesTwoPanelChangeWidth
-                  ? widget.showFolders
+            title: FavoriteFolderPath(
+              currentName: title,
+              parentName: parentFolder?.name,
+              onParentSelected: parentFolder == null ? null : goToParent,
+              onCurrentSelected: context.width < favoritesTwoPanelChangeWidth
+                  ? () {
+                      if (_queryOwner?.canPresent == true &&
+                          widget.folder == target.folder) {
+                        target.showFolders();
+                      }
+                    }
                   : null,
-              child: Text(title),
             ),
             actions: [
               if (networkSource != null && !isAllFolder)
@@ -1142,8 +1171,9 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
       ),
     );
     return PopScope(
-      canPop: !multiSelectMode && !searchMode,
+      canPop: !multiSelectMode && !searchMode && parentFolder == null,
       onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         if (multiSelectMode) {
           setState(() {
             multiSelectMode = false;
@@ -1155,6 +1185,8 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
             keyword = "";
             updateComics();
           });
+        } else {
+          goToParent();
         }
       },
       child: body,
