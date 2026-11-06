@@ -14,6 +14,7 @@
 - 鸿蒙源码和项目包摘要统一按已提交 Git blob 计算，避免 PowerShell 等文件的 CRLF 检出规则改变跨平台摘要；生成清单前拒绝工作区及暂存源码漂移，保留原生库和五项资产的严格核验。
 - 鸿蒙 CI 的宿主依赖安装改用 Ubuntu 官方 HTTPS 镜像，仅刷新 Ubuntu 软件源，保留 20 秒连接超时、两次重试及 8 分钟步骤预算；合并相同依赖的安装，避免 Azure 软件镜像连续超时，不跳过构建或包内容核验。
 - Linux 原生平台门禁同样使用 Ubuntu 官方 HTTPS 镜像，限定软件源刷新、20 秒连接超时、两次重试及 8 分钟安装预算；Rust 工具链准备拆为独立步骤，便于定位宿主下载与原生编译问题。
+- Ubuntu 官方镜像配置直接设置并核对软件源的 `URIs` 字段，兼容 CI 的 `mirror+file` 镜像列表入口，确保鸿蒙与 Linux 原生依赖实际通过官方源下载。
 - 新增自编 `venera_saf 1.0.0` 替代占位许可证的 SAF 包装层，保留 Android 既有目录路径与系统持久授权；以最长完整根 ID 解析含 `/` 的授权，较长授权撤销、provider 不可用、authority 歧义和文件不存在分别报错，中文、emoji、冒号及 `|` 名称使用 UTF-8 JSON 传递。
 - 原 `ParcelFileDescriptor` 持有到最终关闭，采用原生 64 位读写、定位、长度、截断与 flush；generation token、两阶段 isolate 交接及 worker drain 防止句柄复用与提前关闭，显式关闭传播 provider 错误。流取消和 PDF worker 失败路径完整清理并保留主错误；创建已有文件不截断，复制前拒绝规范化自身路径及不同授权下的同一文档，同目录重命名检查目标，授权根及不支持的原子接口明确保护。
 - SAF 迁移后统一管理 2 个 Git 来源、8 个 Git 包和 8 个本地包，其余 155 项锁定记录及 SDK 不变；新增完整项目源码／许可证清单、200 轮 C++ 句柄与 >2 GiB 稀疏文件回归、Linux ASan／UBSan，以及隔离 Android DocumentsProvider／混淆 Release／重启验证，CI 使用显式 Android SDK 工具路径。Android 与 TV 构建核对全部 SAF 原生／JNI 导出、ABI 与随包声明。
