@@ -169,9 +169,11 @@ jobs:
           - platform: Linux
             runner: ubuntu-24.04
             target: linux
+            architecture: x64
           - platform: macOS
             runner: macos-15
             target: macos
+            architecture: arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     steps:
@@ -180,7 +182,7 @@ jobs:
         with:
           channel: stable
           flutter-version-file: pubspec.yaml
-          architecture: x64
+          architecture: ${{ matrix.architecture }}
           cache: true
       - name: 准备 Linux 原生构建依赖
         if: ${{ matrix.target == 'linux' }}
