@@ -19,7 +19,7 @@ See the [dependency audit](dependency_audit.en.md) for ownership and replacement
 
 ## Current Git Dependencies
 
-2026-09-28: `flutter_qjs`, `photo_view`, `flutter.widgets`, `flutter_inappwebview`, and `webdav_client` moved to existing forks under `CyrilPeng`, without changing pins. The six platform subpackages of `flutter_inappwebview` resolve through repository-relative paths to the same fork. `photo_view` became local on 2026-10-05; `scrollable_positioned_list`, `webdav_client` and then `desktop_webview_window` became local on 2026-11-06. Five independent Git origins and eleven Git packages remain. All six local packages appear in the combined inventory. Roll back declarations, lockfile and inventory together.
+2026-09-28: `flutter_qjs`, `photo_view`, `flutter.widgets`, `flutter_inappwebview`, and `webdav_client` moved to existing forks under `CyrilPeng`, without changing pins. The six platform subpackages of `flutter_inappwebview` resolve through repository-relative paths to the same fork. `photo_view` became local on 2026-10-05; `scrollable_positioned_list`, `webdav_client` and then `desktop_webview_window` became local on 2026-11-06, followed by project-authored `venera_native` replacing the PNG/7z wrappers. Three independent Git origins, nine Git packages and seven local packages remain in the combined inventory. Roll back declarations, lockfile and inventory together.
 
 VeneraNext maintainers own patch selection, upstream review, and validation for these forks. Preserve original copyrights and licenses. Mirroring does not replace ongoing maintenance or resolve missing licenses.
 
@@ -27,13 +27,11 @@ VeneraNext maintainers own patch selection, upstream review, and validation for 
 |---|---|---|---|
 | `flutter_qjs` | `295f77421eedff356a02e92987181b525970c780` | Fork upstream not recorded / MIT | Retains NDK r28 support and skips numeric-buffer reference walks for asynchronous byte results; replacement requires runtime and native platform verification |
 | `flutter_inappwebview` | `3ef899b3db57c911b080979f1392253b835f98ab` | `pichillilorenzo/flutter_inappwebview` / Apache-2.0 | The pinned revision fixes `GraphicsContext` deallocation; embedded WebView and Cloudflare flows rely on this branch behavior |
-| `lodepng_flutter` | `ac7d05dde32e8d728102a9ff66e6b55f05d94ba1` | Fork upstream not recorded / license file is still a placeholder | The pinned revision includes NDK r28 build support, and the image pipeline still uses its native plugin |
 | `flutter_saf` | `fe182cdf40e5fa6230f451bc1d643b860f610d13` | `pkuislm/flutter_saf` / license file is still a placeholder | The pinned revision disables minification to avoid Android release-build problems; storage access still uses this plugin |
-| `flutter_7zip` | `b33344797f1d2469339e0e1b75f5f954f1da224c` | `wgh136/flutter_7zip` / license file is still a placeholder | The pinned revision fixes compilation errors, and CBZ/archive fallback compatibility still uses this plugin |
 
 The table uses commit messages to explain why the project cannot immediately switch back to upstream. It is not a complete diff audit. Every Git dependency update must document the upstream repository, comparison range, all custom changes, upstream PR if any, security impact, and rollback path.
 
-The `desktop_webview_window` package directory already contains Apache-2.0 LICENSE; the previous repository-root lookup missed it. Its local source retains third-party notices. `lodepng_flutter`, `flutter_saf`, and `flutter_7zip` still contain placeholder package licenses. Review their wrapper and embedded native licenses, or validate replacements with clear licensing.
+The `desktop_webview_window` package directory already contains Apache-2.0 LICENSE; the previous repository-root lookup missed it. Its local source retains third-party notices. PNG/7z now use project-authored bridges with explicitly licensed official cores. `flutter_saf` retains its placeholder package license pending a validated replacement that preserves persistent grants and IOOverrides behavior.
 
 ## QuickJS Numeric-Buffer Reference Walk Fix (2026-10-31)
 
@@ -55,6 +53,7 @@ This is not a QuickJS engine security upgrade and does not resolve the existing 
 | `scrollable_positioned_list` | 0.3.8+1 | `packages/scrollable_positioned_list` | Same-named package directory at former fork commit `09e756b1f1b04e6298318d99ec20a787fb360f59` |
 | `webdav_client` | 1.2.2 | `packages/webdav_client` | Former fork commit `2f669c98fb81cff1c64fee93466a1475c77e4273` |
 | `desktop_webview_window` | 0.2.4 | `packages/desktop_webview_window` | Package directory at fork commit `7801fc582ecf5a7351632887891ecf309a7b2583` |
+| `venera_native` | 1.0.0 | `packages/venera_native` | Application commit pins project-authored bridges; third-party cores have separate official pins |
 
 The first migration retains both packages' runtime sources, manifests, original BSD-3-Clause licenses and copyrights, README and CHANGELOG. Examples, upstream test projects and build outputs are omitted. Reader scroll interfaces and WebDAV adapter, authentication, redirect and upload behavior retain their existing implementations. Each `LOCAL_PATCHES.md` documents current-SDK equivalents, explicit dynamic types, unreferenced private helpers and package analysis policies. Package versions, unrelated dependencies and native toolchains are not upgraded together.
 
@@ -62,7 +61,7 @@ Both new `UPSTREAM_MANIFEST.json` files record canonical LF Git blob SHA-256 has
 
 Local declarations and relative lockfile paths must agree; package manifest names/versions must match the inventory. Resolved files must remain inside the reviewed package directory. License hashes use canonical LF bytes, and patch notes must retain the source baseline and version. Unreviewed direct dependencies, overrides and transitive local packages fail validation. The application Git commit fixes local contents; a lockfile path alone cannot ensure unchanged source.
 
-Update patch notes, inventory and applicable local file hashes with each change, compare upstream updates and run strict analysis and affected feature regressions. Restore declarations, lockfile and Git inventory entries together when reverting to Git. Existing forks remain available for historical builds and rollback. The three dependencies with placeholder package licenses retain their pinned origins while wrapper licensing and replacements are audited separately.
+Update patch notes, inventory and applicable local file hashes with each change, compare upstream updates and run strict analysis and affected feature regressions. Restore declarations, lockfile and Git inventory entries together when reverting to Git. Existing forks remain available for historical builds and rollback. `flutter_saf` retains its pinned origin while its replacement and persistent-grant compatibility are validated.
 
 ## Initial Local PhotoView Migration (2026-10-05)
 
@@ -131,3 +130,13 @@ validate platform builds.
 `desktop_webview_window 0.2.4` retains the pinned desktop proxy, Linux WebKit/libsoup and Windows ARM64 implementation. Its package directory already contains Apache-2.0 LICENSE; the previous repository-root lookup missed it. The x64 1.0.992.28 and ARM64 1.0.3124.44 WebView2 loaders/import libraries match official NuGet archives byte for byte. Archive hashes, entries and SDK LICENSE/NOTICE are recorded in the local `NATIVE_ARTIFACTS.json` and `licenses/`; WIL and strconv notices are retained.
 
 The reviewed official 0.4.2 archive requires Flutter >=3.44.0 and changes configuration/title-bar APIs without an equivalent public proxy parameter. This migration retains application Flutter 3.41.4 and package 0.2.4. Maintenance and rollback are documented in `packages/desktop_webview_window/LOCAL_PATCHES.md`. The inventory declares `source_directories` for complete native-tree review. Binary entries use `encoding: binary` and raw-byte hashes; text uses canonical LF. Unregistered files and links fail the check.
+
+## Project-Owned PNG/7z Bridges (2026-11-06)
+
+`packages/venera_native 1.0.0` replaces the Dart/FFI wrappers and build integration of two packages with placeholder licenses. The new wrapper is project-authored GPL-3.0-or-later code; the old wrappers were not copied or relicensed. The separate cores come from official LodePNG `79a61c79cc62814f315661f53a026004bac80614` (20241015, Zlib) and 7-Zip `e5431fa6f5505e385c6f9367260717e9c47dc2ee` (24.09, only retained C decoder files with explicit public-domain headers). That declaration does not apply to the entire 7-Zip repository. The local `SOURCE_MANIFEST.json` and `LOCAL_PATCHES.md` record source pins, original filenames, hashes and notices.
+
+Packages with `source.type: project` still require a complete source inventory, license and maintenance record. Third-party trees have separate immutable provenance and licenses; their files cannot be relabeled as project-authored code. APK checks verify codec libraries, real exports and assets notices for each Flutter ABI. Windows/Linux check loaded exports; Apple checks framework exports, ARM64 and notices inside the built app. CI adds independent ASan/UBSan C ABI regressions and complete platform builds. Windows image/JS lifecycle tests accept `VENERA_NATIVE_TEST_DIRECTORY` to use the current Debug bundle instead of accidentally skipping when only looking for historical Release DLLs.
+
+PNG keeps the algorithm/settings, validates RGBA/alpha and offset typed views, and returns owned Dart bytes after releasing all native allocations. One background isolate owns and closes each 7z archive while reusing its solid-block cache. All names, collisions, directory conflicts and links are preflighted, and decoding checks CRC and lengths. Password protection and unsupported compression methods fail explicitly. The application's ZIP → 7z → Dart ZIP fallback remains.
+
+`tool/native_png_probe.py` performs old/new/old A/B/A with identical RGBA bytes and reports byte equality, timing and host-process RSS. Peak RSS is cumulative for that process, not an independent per-encode peak. This does not measure Android frames or energy use. Algorithm updates need separate upstream review, provenance/hash updates and pixel, archive, memory-safety and platform regressions. Historical forks remain for old builds; the frozen `1.18.3+244` Harmony source and assets are unchanged.

@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+group = 'com.cyrilpeng.venera_native'
+version = '1.0.0'
+
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
+}
+apply plugin: 'com.android.library'
+
+android {
+    namespace = 'com.cyrilpeng.venera_native'
+    compileSdk = 34
+    ndkVersion = '28.0.13004108'
+    defaultConfig { minSdk = 21 }
+    externalNativeBuild {
+        cmake {
+            path = '../src/CMakeLists.txt'
+            buildStagingDirectory = file("${buildDir}/.cxx")
+        }
+    }
+    sourceSets { main { assets.srcDirs = ['../notices'] } }
+}

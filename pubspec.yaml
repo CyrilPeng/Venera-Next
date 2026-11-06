@@ -47,10 +47,8 @@ dependencies:
   flutter_file_dialog: ^3.0.3
   file_selector: ^1.1.0
   zip_flutter: ^0.0.13
-  lodepng_flutter:
-    git:
-      url: https://github.com/venera-app/lodepng_flutter
-      ref: ac7d05dde32e8d728102a9ff66e6b55f05d94ba1
+  venera_native:
+    path: packages/venera_native
   rhttp:
     path: packages/rhttp
   flutter_rust_bridge: 2.11.1
@@ -66,10 +64,6 @@ dependencies:
   shimmer_animation: ^2.1.0
   flutter_memory_info: ^0.0.3
   syntax_highlight: ^0.5.0
-  flutter_7zip:
-    git:
-      url: https://github.com/venera-app/flutter_7zip
-      ref: b33344797f1d2469339e0e1b75f5f954f1da224c
   flex_seed_scheme: ^4.0.1
   flutter_localizations:
     sdk: flutter

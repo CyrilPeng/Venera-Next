@@ -1,0 +1,62 @@
+VeneraNext native codecs
+
+Project-authored bridge and build integration: Copyright (C) 2026 VeneraNext contributors.
+GPL-3.0-or-later; source: https://github.com/CyrilPeng/Venera-Next
+
+LodePNG 20241015: Lode Vandevenne, Zlib license.
+
+LodePNG version 20241015
+
+Copyright (c) 2005-2024 Lode Vandevenne
+
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+    1. The origin of this software must not be misrepresented; you must not
+    claim that you wrote the original software. If you use this software
+    in a product, an acknowledgment in the product documentation would be
+    appreciated but is not required.
+
+    2. Altered source versions must be plainly marked as such, and must not be
+    misrepresented as being the original software.
+
+    3. This notice may not be removed or altered from any source
+    distribution.
+
+
+7-Zip 24.09 C decoder subset: Igor Pavlov, public domain.
+Only files retaining their explicit public-domain headers are included.
+Other parts of the 7-Zip repository are not included.
+
+#define MY_VER_MAJOR 24
+#define MY_VER_MINOR 9
+#define MY_VER_BUILD 0
+#define MY_VERSION_NUMBERS "24.09"
+#define MY_VERSION MY_VERSION_NUMBERS
+
+#ifdef MY_CPU_NAME
+  #define MY_VERSION_CPU MY_VERSION " (" MY_CPU_NAME ")"
+#else
+  #define MY_VERSION_CPU MY_VERSION
+#endif
+
+#define MY_DATE "2024-11-29"
+#undef MY_COPYRIGHT
+#undef MY_VERSION_COPYRIGHT_DATE
+#define MY_AUTHOR_NAME "Igor Pavlov"
+#define MY_COPYRIGHT_PD "Igor Pavlov : Public domain"
+#define MY_COPYRIGHT_CR "Copyright (c) 1999-2024 Igor Pavlov"
+
+#ifdef USE_COPYRIGHT_CR
+  #define MY_COPYRIGHT MY_COPYRIGHT_CR
+#else
+  #define MY_COPYRIGHT MY_COPYRIGHT_PD
+#endif
+
+#define MY_COPYRIGHT_DATE MY_COPYRIGHT " : " MY_DATE
+#define MY_VERSION_COPYRIGHT_DATE MY_VERSION_CPU " : " MY_COPYRIGHT " : " MY_DATE

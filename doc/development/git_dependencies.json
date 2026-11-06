@@ -30,16 +30,6 @@
       }
     },
     {
-      "dependency": "lodepng_flutter",
-      "url": "https://github.com/venera-app/lodepng_flutter",
-      "commit": "ac7d05dde32e8d728102a9ff66e6b55f05d94ba1",
-      "status": "license-review",
-      "reason": "Placeholder license; native buffer ownership and PNG performance require a replacement audit.",
-      "packages": {
-        "lodepng_flutter": "."
-      }
-    },
-    {
       "dependency": "flutter_saf",
       "url": "https://github.com/venera-app/flutter_saf",
       "commit": "fe182cdf40e5fa6230f451bc1d643b860f610d13",
@@ -47,16 +37,6 @@
       "reason": "Placeholder license; IO overrides and native storage APIs differ from pub.dev namesake.",
       "packages": {
         "flutter_saf": "."
-      }
-    },
-    {
-      "dependency": "flutter_7zip",
-      "url": "https://github.com/venera-app/flutter_7zip",
-      "commit": "b33344797f1d2469339e0e1b75f5f954f1da224c",
-      "status": "license-review",
-      "reason": "Placeholder license; 7Z/CB7 support and ZIP fallback require a replacement audit.",
-      "packages": {
-        "flutter_7zip": "."
       }
     }
   ],
@@ -187,6 +167,72 @@
         "macos",
         "windows",
         "licenses"
+      ]
+    },
+    {
+      "dependency": "venera_native",
+      "path": "packages/venera_native",
+      "version": "1.0.0",
+      "status": "maintained-local",
+      "reason": "Project-owned ownership-safe PNG and 7z bridges replace wrappers with placeholder licenses; retain explicitly licensed official native cores.",
+      "upstream": "https://github.com/CyrilPeng/Venera-Next",
+      "source": {
+        "type": "project",
+        "url": "https://github.com/CyrilPeng/Venera-Next",
+        "path": "packages/venera_native"
+      },
+      "license": {
+        "spdx": "GPL-3.0-or-later",
+        "file": "LICENSE",
+        "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+      },
+      "patches": "LOCAL_PATCHES.md",
+      "source_manifest": "SOURCE_MANIFEST.json",
+      "source_directories": [
+        "lib",
+        "src",
+        "android",
+        "ios",
+        "macos",
+        "linux",
+        "windows",
+        "third_party",
+        "notices",
+        "test"
+      ],
+      "third_party_sources": [
+        {
+          "id": "lodepng",
+          "directory": "third_party/lodepng",
+          "upstream": "https://github.com/lvandeve/lodepng",
+          "source": {
+            "type": "git",
+            "url": "https://github.com/lvandeve/lodepng",
+            "commit": "79a61c79cc62814f315661f53a026004bac80614",
+            "path": "."
+          },
+          "license": {
+            "spdx": "Zlib",
+            "file": "third_party/lodepng/LICENSE",
+            "sha256": "5dd8e1ee4d5313d81bb1c6e04e0b5a8baf746d44887c9a3fd6337e563f3e04d7"
+          }
+        },
+        {
+          "id": "lzma",
+          "directory": "third_party/lzma",
+          "upstream": "https://github.com/ip7z/7zip",
+          "source": {
+            "type": "git",
+            "url": "https://github.com/ip7z/7zip",
+            "commit": "e5431fa6f5505e385c6f9367260717e9c47dc2ee",
+            "path": "C"
+          },
+          "license": {
+            "spdx": "LicenseRef-LZMA-SDK-Public-Domain",
+            "file": "third_party/lzma/7zVersion.h",
+            "sha256": "b2b1f2e5cb73afb74ca9800e23df6876c4457f88402de4de447c613a7f902a0c"
+          }
+        }
       ]
     }
   ]

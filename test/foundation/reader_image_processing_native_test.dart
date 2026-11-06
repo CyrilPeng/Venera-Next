@@ -20,7 +20,10 @@ void main() {
   bool nativeAvailable;
   try {
     if (Platform.isWindows) {
-      final build = Directory('build/windows/x64/runner/Release').absolute.path;
+      final build = Directory(
+        Platform.environment['VENERA_NATIVE_TEST_DIRECTORY'] ??
+            'build/windows/x64/runner/Release',
+      ).absolute.path;
       if (File('$build/flutter_windows.dll').existsSync()) {
         DynamicLibrary.open('$build/flutter_windows.dll');
         DynamicLibrary.open('$build/flutter_qjs_plugin.dll');

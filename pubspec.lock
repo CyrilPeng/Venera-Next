@@ -333,15 +333,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_7zip:
-    dependency: "direct main"
-    description:
-      path: "."
-      ref: b33344797f1d2469339e0e1b75f5f954f1da224c
-      resolved-ref: b33344797f1d2469339e0e1b75f5f954f1da224c
-      url: "https://github.com/venera-app/flutter_7zip"
-    source: git
-    version: "0.0.1"
   flutter_file_dialog:
     dependency: "direct main"
     description:
@@ -670,15 +661,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.1"
-  lodepng_flutter:
-    dependency: "direct main"
-    description:
-      path: "."
-      ref: ac7d05dde32e8d728102a9ff66e6b55f05d94ba1
-      resolved-ref: ac7d05dde32e8d728102a9ff66e6b55f05d94ba1
-      url: "https://github.com/venera-app/lodepng_flutter"
-    source: git
-    version: "0.0.1"
   logging:
     dependency: transitive
     description:
@@ -1168,6 +1150,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  venera_native:
+    dependency: "direct main"
+    description:
+      path: "packages/venera_native"
+      relative: true
+    source: path
+    version: "1.0.0"
   vm_service:
     dependency: transitive
     description:

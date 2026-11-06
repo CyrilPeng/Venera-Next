@@ -126,6 +126,19 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y cmake ninja-build g++ libsqlite3-dev
           python3 .github/scripts/prepare_linux_test_libraries.py
+      - name: 验证原生编码与归档 ABI 的内存安全
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          cmake -S packages/venera_native/src -B build/native-sanitizers -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug -DVENERA_NATIVE_BUILD_TESTS=ON \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          cmake --build build/native-sanitizers --parallel 2
+          ctest --test-dir build/native-sanitizers --output-on-failure
       - run: flutter test --coverage
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/build/test-native/lib
