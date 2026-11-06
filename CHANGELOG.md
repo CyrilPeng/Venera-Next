@@ -10,6 +10,7 @@
 - 将固定 QuickJS 的内嵌核心匹配到 QuickJS-NG `d07f6b5` 的 18 个源码／头文件，纠正旧 VERSION 标签；逐项核对 10 项公开 GHSA，记录数组初始化／增长、CallSite／Promise OOM、Atomics、32 位分配及外部缓冲转移的源码模式与当前 API 暴露限制。核心修复须独立验证，普通生命周期回归不作为安全缺陷已修复的证据。
 - 保留 `1.18.3+244` 鸿蒙 schema 1 来源与历史资产，另加 schema 2 下一候选 pin。主线仍为 244 时，PR／手动运行验证候选自身的 `1.18.3+245` 版本、changelog、八个项目包、七个受管原生库及九个 PNG／7z 导出和 NOTICE，保留真实调用方与运行上下文；pin 必须来自已提交 Git 输入，源码及包摘要统一使用 canonical Git blob 并拒绝工作区／暂存漂移，避免 CRLF 检出规则改变跨平台摘要。预览及未绑定实际 tag 的下一候选产物禁止发布。下一候选保持 `release_enabled: false`，完成 QuickJS 核心修复与平台审核前拒绝 tag 分发；随版 PR 检查限定主线，QuickJS 下载 URL 从所选来源工具清单读取，并说明既有 Rhttp 鸿蒙平台变体。
 - 鸿蒙 CI 的宿主依赖安装使用 Ubuntu 官方 HTTPS 镜像，限定 Ubuntu 软件源刷新、20 秒连接超时、两次重试和 8 分钟步骤预算；处理 Azure 镜像连续下载超时，完整构建与资产审核仍为必需门禁。
+- 鸿蒙下一候选重新固定到修正 TV 横屏／大字体更新检查按钮定位的 `6244d9e`；回归先滚动构建按钮再点击，保留完整签名说明和取消断言，245 候选继续仅供无发布预览。
 - 新增自编 `venera_saf 1.0.0` 替代占位许可证的 SAF 包装层，保留 Android 既有目录路径与系统持久授权；以最长完整根 ID 解析含 `/` 的授权，较长授权撤销、provider 不可用、authority 歧义和文件不存在分别报错，中文、emoji、冒号及 `|` 名称使用 UTF-8 JSON 传递。
 - 原 `ParcelFileDescriptor` 持有到最终关闭，采用原生 64 位读写、定位、长度、截断与 flush；generation token、两阶段 isolate 交接及 worker drain 防止句柄复用与提前关闭，显式关闭传播 provider 错误。流取消和 PDF worker 失败路径完整清理并保留主错误；创建已有文件不截断，复制前拒绝规范化自身路径及不同授权下的同一文档，同目录重命名检查目标，授权根及不支持的原子接口明确保护。
 - SAF 迁移后统一管理 2 个 Git 来源、8 个 Git 包和 8 个本地包，其余 155 项锁定记录及 SDK 不变；新增完整项目源码／许可证清单、200 轮 C++ 句柄与 >2 GiB 稀疏文件回归、Linux ASan／UBSan，以及隔离 Android DocumentsProvider／混淆 Release／重启验证，CI 使用显式 Android SDK 工具路径。Android 与 TV 构建核对全部 SAF 原生／JNI 导出、ABI 与随包声明。
