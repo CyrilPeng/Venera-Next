@@ -114,7 +114,7 @@ class ImportComicPresentation {
         content: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           child: SelectableText(
-            visible.isEmpty ? 'Done'.tl : visible.join('\n\n'),
+            visible.isEmpty ? 'Finished'.tl : visible.join('\n\n'),
           ),
         ),
         actions: [
