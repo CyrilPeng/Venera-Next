@@ -10,6 +10,7 @@
 - 既有 `1.18.3+244` 鸿蒙提交、锁文件及资产保持冻结；下一候选使用 `>=245` 的版本门禁和独立无发布验证，来源清单覆盖本地包与原生核心。HAP 构建及包内核验不代表真机覆盖升级或续签验收。
 - 下一候选的独立 OHOS 锁文件只迁移三项本地来源、删除三个旧包装层并加入两个项目包，其余 151 项完整依赖记录和 SDK 约束不变。接受带调用方版本的 schema 2 预览上下文，拒绝将预览用于 tag；原生包审计同时拒绝多余导出与其他架构的动态库，PR 构建绑定实际审核的 head SHA。
 - 下一候选仍作为无发布预览：完整上游审计已找到固定 QuickJS-NG 核心中多项安全公告对应代码模式，须独立修复并验证。主线下一 pin 保持 `release_enabled: false`，拒绝把构建／常规回归成功当成核心安全修复或启用 tag 分发的依据。
+- 鸿蒙随版 selector 的 PR 检查限定目标主线；目标 `HarmonyOS` 的 PR 由候选流程核验其准确 head，避免以仍冻结的 244 selector 校验 245 独立平台分支。
 - 新增自编 `venera_saf 1.0.0` 替代占位许可证的 SAF 包装层，保留 Android 既有目录路径与系统持久授权；以最长完整根 ID 解析含 `/` 的授权，较长授权撤销、provider 不可用、authority 歧义和文件不存在分别报错，中文、emoji、冒号及 `|` 名称使用 UTF-8 JSON 传递。
 - 原 `ParcelFileDescriptor` 持有到最终关闭，采用原生 64 位读写、定位、长度、截断与 flush；generation token、两阶段 isolate 交接及 worker drain 防止句柄复用与提前关闭，显式关闭传播 provider 错误。流取消和 PDF worker 失败路径完整清理并保留主错误；创建已有文件不截断，复制前拒绝规范化自身路径及不同授权下的同一文档，同目录重命名检查目标，授权根及不支持的原子接口明确保护。
 - SAF 迁移后统一管理 2 个 Git 来源、8 个 Git 包和 8 个本地包，其余 155 项锁定记录及 SDK 不变；新增完整项目源码／许可证清单、200 轮 C++ 句柄与 >2 GiB 稀疏文件回归、Linux ASan／UBSan，以及隔离 Android DocumentsProvider／混淆 Release／重启验证，CI 使用显式 Android SDK 工具路径。Android 与 TV 构建核对全部 SAF 原生／JNI 导出、ABI 与随包声明。
