@@ -4,7 +4,7 @@ import 'dart:async';
 import 'package:file_selector/file_selector.dart' as file_selector;
 import 'package:flutter/services.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
-import 'package:flutter_saf/flutter_saf.dart';
+import 'package:venera_saf/venera_saf.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:share_plus/share_plus.dart' as s;
@@ -288,24 +288,7 @@ Future<bool> saveFile({
   );
 }
 
-final class _IOOverrides extends IOOverrides {
-  final _parentZone = Zone.current;
-
-  // Only file/directory construction is overridden for SAF. Preserve native
-  // type queries through the parent zone: Dart 3.11's default IOOverrides
-  // adapter can report existing Windows paths as notFound.
-  @override
-  Future<FileSystemEntityType> fseGetType(String path, bool followLinks) =>
-      _parentZone.run(
-        () => FileSystemEntity.type(path, followLinks: followLinks),
-      );
-
-  @override
-  FileSystemEntityType fseGetTypeSync(String path, bool followLinks) =>
-      _parentZone.run(
-        () => FileSystemEntity.typeSync(path, followLinks: followLinks),
-      );
-
+final class _IOOverrides extends SafIOOverrides {
   @override
   Directory createDirectory(String path) {
     if (App.isAndroid) {

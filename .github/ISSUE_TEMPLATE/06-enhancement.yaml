@@ -1,0 +1,97 @@
+name: 6. 功能建议 / Feature request
+description: 说明使用场景、方案和验收标准，无需日志。 / Describe the need, proposal and acceptance criteria.
+title: '[Enhancement]: '
+labels:
+- enhancement
+body:
+- type: markdown
+  attributes:
+    value: |
+      请先搜索现有建议，一个 Issue 聚焦一个需求。应用已经承诺的行为出错，请使用相应缺陷表单。
+      Search existing proposals and keep one need per Issue. Use a bug form for broken existing behavior.
+
+      [提交说明](https://github.com/CyrilPeng/Venera-Next/blob/main/doc/user/issue_reporting.zh.md) / [English guide](https://github.com/CyrilPeng/Venera-Next/blob/main/doc/user/issue_reporting.en.md)
+- type: dropdown
+  id: issue-type
+  attributes:
+    label: 问题类型 / Issue type
+    description: 本入口支持的问题类型 / Issue types handled by this form
+    options:
+    - 功能建议 / Feature request
+    default: 0
+  validations:
+    required: true
+- type: dropdown
+  id: feature-area
+  attributes:
+    label: 涉及功能 / Feature area
+    description: 选择主要涉及的功能 / Select the main affected feature
+    options:
+    - 阅读器 / Reader
+    - 本地漫画、收藏或数据 / Local comics, favorites or data
+    - 下载、网络或 WebDAV / Download, network or WebDAV
+    - 界面、导航或交互 / UI, navigation or interaction
+    - 扩展运行时 / Extension runtime
+    - 安装、启动或平台支持 / Installation, startup or platform support
+    - 其他 / Other
+  validations:
+    required: true
+- type: dropdown
+  id: platform
+  attributes:
+    label: 平台 / Platform
+    description: 选择适用平台，通用建议选择所有支持的平台 / Select relevant platforms or all supported platforms
+    options:
+    - 所有支持的平台 / All supported platforms
+    - Android 手机／平板 / Android phone or tablet
+    - Android TV
+    - Windows
+    - macOS
+    - Linux
+    - iOS
+    - HarmonyOS / 鸿蒙
+    - 其他（请说明） / Other (please specify)
+    multiple: true
+  validations:
+    required: true
+- type: textarea
+  id: use-case
+  attributes:
+    label: 需求场景 / Use case
+    description: 说明现在要完成什么、现有操作哪里受阻；不要只写请增加功能。 / Explain the task and the limitation of the current behavior.
+  validations:
+    required: true
+- type: textarea
+  id: proposal
+  attributes:
+    label: 建议方案 / Proposed solution
+    description: 描述希望新增的操作与边界，也可说明已经考虑过的替代方案。 / Describe the proposed behavior and its boundaries or alternatives.
+  validations:
+    required: true
+- type: textarea
+  id: acceptance
+  attributes:
+    label: 验收标准 / Acceptance criteria
+    description: 给出可观察的完成条件或例子，便于判断实现是否满足需求。 / Give an observable completion condition or example.
+  validations:
+    required: true
+- type: textarea
+  id: screenshots
+  attributes:
+    label: 截图或录屏 / Screenshots or video
+    description: 选填，用于说明界面与操作；提交前遮盖私人信息，确认上传完成。录屏不替代需要的日志／阅读报告。 / Optional visual evidence; verify the upload and redact private
+      information.
+  validations:
+    required: false
+- type: checkboxes
+  id: checklist
+  attributes:
+    label: 提交前确认 / Checklist
+    options:
+    - label: 我已搜索现有 Issue，并将独立问题分开提交。 / I searched existing Issues and separated unrelated problems.
+      required: true
+    - label: 我了解本仓库维护应用本体，源站内容、作品可用性和第三方源脚本应联系对应维护者。 / I understand this repository maintains the app; source content and
+        third-party source scripts belong with their maintainers.
+      required: true
+    - label: 我已检查附件与文本，移除账号、Cookie、Token、签名链接及私人内容。 / I reviewed and redacted credentials, signed URLs and private content.
+      required: true

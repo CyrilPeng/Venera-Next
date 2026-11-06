@@ -1,0 +1,4 @@
+# This upstream package declares no lint set. Keep its analysis policy separate
+# from application style rules while retaining analyzer errors and warnings.
+linter:
+  rules: []

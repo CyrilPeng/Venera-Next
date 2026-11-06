@@ -2,9 +2,26 @@
 
 `HarmonyOS` 分支以独立 Flutter OH SDK 构建现有完整阅读器，保留平台适配、固定依赖及原生库审计。主线不切换 SDK，也不维护另一套阅读器。用户入口见[测试版安装指南](../../doc/distribution/harmonyos-reader.zh.md)；早期探针记录见[实验记录](../../doc/experiments/harmonyos.zh.md)。
 
+当前滚动候选为 **`1.18.3+245`**，同步主线 `55c7c44` 的收藏导航与依赖治理。
+既有 `1.18.3+244` 继续使用提交 `3e1be1391ba784bb228803525696d38c208f471f`
+和原锁文件、原生库及 Release 资产；不以新 HAP 覆盖这些历史产物。
+后续候选的读者版本门禁为 `>=245`，与主线的冻结 pin 分开验证。
+
+本候选只用于无发布预览。2026-11-06 的完整上游审计发现，固定 QuickJS-NG 核心
+仍含数组初始化／增长、CallSite 和 Promise OOM 清理、Atomics 以及 32 位分配的
+安全公告对应代码模式；常规运行回归通过不能替代这些核心修复。主线下一 pin 的
+`release_enabled` 保持 false，完成独立核心修复与平台审核前拒绝 tag 发布。
+
+完整阅读器直接使用仓库内八个包，并将每个受 Git 管理的包输入记录到来源摘要。
+源码清单和项目包摘要使用已提交的 canonical Git blob，保持二进制原字节，避免 `.gitattributes` 的 CRLF 检出规则改变摘要；生成前拒绝工作区或暂存源码漂移，不将未提交输入隐藏在固定提交的摘要后。
+PNG／7z 由 `packages/venera_native` 的自编桥接和独立固定的官方核心编译成
+`libvenera_native.so`，核对九个导出及包内第三方声明；不再获取原组织的两个包装层。
+`venera_saf` 随源码同步，鸿蒙继续使用自己的目录能力边界；Android SAF 插件不被
+声明为鸿蒙持久授权实现。独立 OH 锁文件仅同步所需来源和覆盖路径。
+
 ## 随版完整阅读器
 
-主线 `.github/workflows/harmonyos-release.yml` 读取 `.github/harmonyos-release.json` 中的完整提交 SHA，在独立 checkout 构建鸿蒙包。共同基线后的主线运行代码、依赖或原生工具链变更会阻止构建，必须先同步到鸿蒙分支、验证并更新 pin；不能把旧 HAP 改名成新版本。
+主线 `.github/workflows/harmonyos-release.yml` 保留 `.github/harmonyos-release.json` 的 schema 1 冻结来源，下一候选另用 `.github/harmonyos-next.json` 的 schema 2 pin。主线仍为 244 时，PR／手动运行使用候选自身的 245 版本和 changelog；预览上下文保留调用方版本、提交和运行号，并拒绝 Release 资产发布。共同基线后的主线运行代码、依赖或原生工具链变更会阻止构建，必须先同步到鸿蒙分支、验证并更新 pin。
 
 `release_context.py` 验证调用方提交、版本、构建号、运行号和 changelog 摘要。`prepare_full_app.py` 只在 `build/harmonyos/full-app` 生成工程中注入版本与 changelog，不改写固定的源 checkout；分支独立构建则读取自身 `release.json`。`app/pubspec.lock.template` 是独立 OH SDK 的受控锁文件，CI 使用 `--enforce-lockfile`，不自动升级或去掉约束。
 
@@ -24,7 +41,7 @@ python3 tool/harmonyos/ci_full_app.py --flutter-sdk "$FLUTTER_OH_SDK"
 
 ## 独立分支构建与早期 SDK 记录
 
-`.github/workflows/harmonyos-experiment.yml` 仅在 `HarmonyOS` 分支的相关构建文件更新或手动触发时运行，使用临时 Ubuntu runner，不依赖维护者本机 SDK、不访问签名密钥、不创建 Release、不更新应用版本。
+`.github/workflows/harmonyos-experiment.yml` 在目标为 `HarmonyOS` 的相关 PR、分支更新或手动触发时运行，PR checkout 与来源检查绑定实际 head SHA。使用临时 Ubuntu runner，不依赖维护者本机 SDK、不访问签名密钥、不创建 Release、不更新应用版本。
 
 此前 Cocos API 21 和 SDL API 24 CLI 均完成下载校验、安装和空白工程尝试，但当前固定 Flutter OH 嵌入层引用了旧 SDK 缺少的接口，ArkTS 编译失败。HAR 中的旧编译元数据不能作为完整 ArkTS 接口兼容的依据；当前 Flutter OH 发布说明要求以 `26.0.0` 编译。现使用[社区 CI 镜像](https://github.com/zhongdaiqi/command-line-tools-for-hmos/releases/tag/clt-26.0.0.851)的 CLI `26.0.0.851` / API 26，并以 GitHub Release 资产摘要固定两个原始分片的大小和 SHA-256。先逐片校验、再按固定顺序拼接 ZIP，并记录完整包摘要；不伪造 SDK 目录或元数据，不删减引擎接口，也不关闭 ArkTS 检查。
 

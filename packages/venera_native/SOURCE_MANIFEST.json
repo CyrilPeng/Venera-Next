@@ -1,0 +1,784 @@
+{
+  "source": {
+    "type": "project",
+    "url": "https://github.com/CyrilPeng/Venera-Next",
+    "path": "packages/venera_native"
+  },
+  "third_party_sources": [
+    {
+      "id": "lodepng",
+      "directory": "third_party/lodepng",
+      "upstream": "https://github.com/lvandeve/lodepng",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/lvandeve/lodepng",
+        "commit": "79a61c79cc62814f315661f53a026004bac80614",
+        "path": "."
+      },
+      "license": {
+        "spdx": "Zlib",
+        "file": "third_party/lodepng/LICENSE",
+        "sha256": "5dd8e1ee4d5313d81bb1c6e04e0b5a8baf746d44887c9a3fd6337e563f3e04d7"
+      }
+    },
+    {
+      "id": "lzma",
+      "directory": "third_party/lzma",
+      "upstream": "https://github.com/ip7z/7zip",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/ip7z/7zip",
+        "commit": "e5431fa6f5505e385c6f9367260717e9c47dc2ee",
+        "path": "C"
+      },
+      "license": {
+        "spdx": "LicenseRef-LZMA-SDK-Public-Domain",
+        "file": "third_party/lzma/7zVersion.h",
+        "sha256": "b2b1f2e5cb73afb74ca9800e23df6876c4457f88402de4de447c613a7f902a0c"
+      }
+    }
+  ],
+  "files": [
+    {
+      "path": "android/build.gradle",
+      "origin": "project",
+      "sha256": "bd89ab28dd90ff06442169354535a2d3e1d764af4f9fb2b49d687be8ee185766",
+      "local_sha256": "bd89ab28dd90ff06442169354535a2d3e1d764af4f9fb2b49d687be8ee185766"
+    },
+    {
+      "path": "android/settings.gradle",
+      "origin": "project",
+      "sha256": "033578a09142f996e61926c3cddb828ddb4b115ae57d667290c4dfb2db6d379a",
+      "local_sha256": "033578a09142f996e61926c3cddb828ddb4b115ae57d667290c4dfb2db6d379a"
+    },
+    {
+      "path": "android/src/main/AndroidManifest.xml",
+      "origin": "project",
+      "sha256": "343d5be1ac17cdd45d1a2f2ddc616c509290e655869125a9422a96d88aa66066",
+      "local_sha256": "343d5be1ac17cdd45d1a2f2ddc616c509290e655869125a9422a96d88aa66066"
+    },
+    {
+      "path": "ios/Classes/7zAlloc.c",
+      "origin": "project",
+      "sha256": "b7d42e1522b7ec7d6cef02d14e23679a655ae16cad05a2cf42e9e886abdde0dc",
+      "local_sha256": "b7d42e1522b7ec7d6cef02d14e23679a655ae16cad05a2cf42e9e886abdde0dc"
+    },
+    {
+      "path": "ios/Classes/7zArcIn.c",
+      "origin": "project",
+      "sha256": "b4f263c566e81b55d2d6fe4a588bda9b042ff7715f44fd22d9ceb5378eb0a7db",
+      "local_sha256": "b4f263c566e81b55d2d6fe4a588bda9b042ff7715f44fd22d9ceb5378eb0a7db"
+    },
+    {
+      "path": "ios/Classes/7zBuf.c",
+      "origin": "project",
+      "sha256": "da2ddc32eed6e5f86dbaf98df87c17359a376db02ec48001155fb57b684c0a98",
+      "local_sha256": "da2ddc32eed6e5f86dbaf98df87c17359a376db02ec48001155fb57b684c0a98"
+    },
+    {
+      "path": "ios/Classes/7zBuf2.c",
+      "origin": "project",
+      "sha256": "13a19017f9a4f8ab4c7095a998f7dbd026765de06e08fba890df4e4056e2948c",
+      "local_sha256": "13a19017f9a4f8ab4c7095a998f7dbd026765de06e08fba890df4e4056e2948c"
+    },
+    {
+      "path": "ios/Classes/7zCrc.c",
+      "origin": "project",
+      "sha256": "948a2b6bfa326ed7a2d11c7b24edd51ea10ca37f219e46826222c286a7d98115",
+      "local_sha256": "948a2b6bfa326ed7a2d11c7b24edd51ea10ca37f219e46826222c286a7d98115"
+    },
+    {
+      "path": "ios/Classes/7zCrcOpt.c",
+      "origin": "project",
+      "sha256": "26503c5611f2f8610395460a86f26e852336d1e837220ecccb2a33a09ced0f5b",
+      "local_sha256": "26503c5611f2f8610395460a86f26e852336d1e837220ecccb2a33a09ced0f5b"
+    },
+    {
+      "path": "ios/Classes/7zDec.c",
+      "origin": "project",
+      "sha256": "3088cbdec662161bfe93deac777eb2b260e774230849a29687d4646fe3fa0f49",
+      "local_sha256": "3088cbdec662161bfe93deac777eb2b260e774230849a29687d4646fe3fa0f49"
+    },
+    {
+      "path": "ios/Classes/7zFile.c",
+      "origin": "project",
+      "sha256": "ad69f085f88919070f8b599b468eee4b1b83a7821d245150dd4aaf10eb096d10",
+      "local_sha256": "ad69f085f88919070f8b599b468eee4b1b83a7821d245150dd4aaf10eb096d10"
+    },
+    {
+      "path": "ios/Classes/7zStream.c",
+      "origin": "project",
+      "sha256": "330c18657f20d7181c03e49ecea3032f4149e7780aa2c813c999d76be7c8dc73",
+      "local_sha256": "330c18657f20d7181c03e49ecea3032f4149e7780aa2c813c999d76be7c8dc73"
+    },
+    {
+      "path": "ios/Classes/Bcj2.c",
+      "origin": "project",
+      "sha256": "a98da7cf358fcbc55cf243a0f12c2369a17c315eb61e4fccbc067ab51f1f5304",
+      "local_sha256": "a98da7cf358fcbc55cf243a0f12c2369a17c315eb61e4fccbc067ab51f1f5304"
+    },
+    {
+      "path": "ios/Classes/Bra.c",
+      "origin": "project",
+      "sha256": "820c7caac2f8cd8285d38d9d17f9f335cf201ec45621946297b1e481e1e89138",
+      "local_sha256": "820c7caac2f8cd8285d38d9d17f9f335cf201ec45621946297b1e481e1e89138"
+    },
+    {
+      "path": "ios/Classes/Bra86.c",
+      "origin": "project",
+      "sha256": "7b4b5c1238bded53da217682879eebd0b725bd6cd35a4120eef643610f6cf9a0",
+      "local_sha256": "7b4b5c1238bded53da217682879eebd0b725bd6cd35a4120eef643610f6cf9a0"
+    },
+    {
+      "path": "ios/Classes/CpuArch.c",
+      "origin": "project",
+      "sha256": "3c02201f52fe481f1c2528f191eeacee4bfe1b2782d82318c8fccee5e760c245",
+      "local_sha256": "3c02201f52fe481f1c2528f191eeacee4bfe1b2782d82318c8fccee5e760c245"
+    },
+    {
+      "path": "ios/Classes/Delta.c",
+      "origin": "project",
+      "sha256": "290fa6fde30a23d7c6089a40a1eb88d12344fb621026e8cfd604adc6860f8c2b",
+      "local_sha256": "290fa6fde30a23d7c6089a40a1eb88d12344fb621026e8cfd604adc6860f8c2b"
+    },
+    {
+      "path": "ios/Classes/lodepng.c",
+      "origin": "project",
+      "sha256": "0cee8153f0b949094feae8f7e57ef4b4018116ebb27660739a1caa996606bc3e",
+      "local_sha256": "0cee8153f0b949094feae8f7e57ef4b4018116ebb27660739a1caa996606bc3e"
+    },
+    {
+      "path": "ios/Classes/Lzma2Dec.c",
+      "origin": "project",
+      "sha256": "26cb14ec4260fa42f9938da8db118a7bb52ccb63e4237685b8888facd93e2f79",
+      "local_sha256": "26cb14ec4260fa42f9938da8db118a7bb52ccb63e4237685b8888facd93e2f79"
+    },
+    {
+      "path": "ios/Classes/LzmaDec.c",
+      "origin": "project",
+      "sha256": "6ef00d88b21348a04bc33eee6f3f6155b8ed18001b45ca39f4805f054d85b55a",
+      "local_sha256": "6ef00d88b21348a04bc33eee6f3f6155b8ed18001b45ca39f4805f054d85b55a"
+    },
+    {
+      "path": "ios/Classes/venera_7z.cpp",
+      "origin": "project",
+      "sha256": "5cde2cdfa3e3a7c5ea0ee8d4316260119984d9ba9580937fdbb2aafe3d3b01f2",
+      "local_sha256": "5cde2cdfa3e3a7c5ea0ee8d4316260119984d9ba9580937fdbb2aafe3d3b01f2"
+    },
+    {
+      "path": "ios/Classes/venera_png.c",
+      "origin": "project",
+      "sha256": "038fbcb477c02519d4ad0a0ce6345765546acae19f6d9fb3430b63fba5c25538",
+      "local_sha256": "038fbcb477c02519d4ad0a0ce6345765546acae19f6d9fb3430b63fba5c25538"
+    },
+    {
+      "path": "ios/LICENSE",
+      "origin": "project",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "local_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "ios/Resources/VENERA_NATIVE_THIRD_PARTY_NOTICES.txt",
+      "origin": "project",
+      "sha256": "aa74a441fd1889ce0080cd143905e09abaad1030388273aa4f0940ccc66ce161",
+      "local_sha256": "aa74a441fd1889ce0080cd143905e09abaad1030388273aa4f0940ccc66ce161"
+    },
+    {
+      "path": "ios/venera_native.podspec",
+      "origin": "project",
+      "sha256": "a9281c64753c40599576a108657759a5d1115558ec49043706e5df19c5e6dab5",
+      "local_sha256": "a9281c64753c40599576a108657759a5d1115558ec49043706e5df19c5e6dab5"
+    },
+    {
+      "path": "lib/src/native_library.dart",
+      "origin": "project",
+      "sha256": "d2f5a737e915818f98423954468300e7fbf3bd1f1554d99198141485e98f160c",
+      "local_sha256": "d2f5a737e915818f98423954468300e7fbf3bd1f1554d99198141485e98f160c"
+    },
+    {
+      "path": "lib/src/png.dart",
+      "origin": "project",
+      "sha256": "2a6493747e2d726aa6dd386b2898182d9160e0e64fcbc8568f5e6aaded97b2f3",
+      "local_sha256": "2a6493747e2d726aa6dd386b2898182d9160e0e64fcbc8568f5e6aaded97b2f3"
+    },
+    {
+      "path": "lib/src/seven_zip.dart",
+      "origin": "project",
+      "sha256": "bf643d2c6f5fd7b3398ce4ea7ff90904cf926214083cffce5acf7d83f13a9ff5",
+      "local_sha256": "bf643d2c6f5fd7b3398ce4ea7ff90904cf926214083cffce5acf7d83f13a9ff5"
+    },
+    {
+      "path": "lib/venera_native.dart",
+      "origin": "project",
+      "sha256": "f6a3e79e15dc71f2c3d910eed4954606f4a0b0add84e7c1ea959c4981533b56c",
+      "local_sha256": "f6a3e79e15dc71f2c3d910eed4954606f4a0b0add84e7c1ea959c4981533b56c"
+    },
+    {
+      "path": "LICENSE",
+      "origin": "project",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "local_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "linux/CMakeLists.txt",
+      "origin": "project",
+      "sha256": "091181f84b1cf8c857ce730b823e5dc9ae42bf4254dc78e1efa7d134e17a501a",
+      "local_sha256": "091181f84b1cf8c857ce730b823e5dc9ae42bf4254dc78e1efa7d134e17a501a"
+    },
+    {
+      "path": "LOCAL_PATCHES.md",
+      "origin": "project",
+      "sha256": "cde45b552e3e5b62a91cefc0ab5422fb7355c8e74f38dd81bff4a38fe20c9dd4",
+      "local_sha256": "cde45b552e3e5b62a91cefc0ab5422fb7355c8e74f38dd81bff4a38fe20c9dd4"
+    },
+    {
+      "path": "macos/Classes/7zAlloc.c",
+      "origin": "project",
+      "sha256": "b7d42e1522b7ec7d6cef02d14e23679a655ae16cad05a2cf42e9e886abdde0dc",
+      "local_sha256": "b7d42e1522b7ec7d6cef02d14e23679a655ae16cad05a2cf42e9e886abdde0dc"
+    },
+    {
+      "path": "macos/Classes/7zArcIn.c",
+      "origin": "project",
+      "sha256": "b4f263c566e81b55d2d6fe4a588bda9b042ff7715f44fd22d9ceb5378eb0a7db",
+      "local_sha256": "b4f263c566e81b55d2d6fe4a588bda9b042ff7715f44fd22d9ceb5378eb0a7db"
+    },
+    {
+      "path": "macos/Classes/7zBuf.c",
+      "origin": "project",
+      "sha256": "da2ddc32eed6e5f86dbaf98df87c17359a376db02ec48001155fb57b684c0a98",
+      "local_sha256": "da2ddc32eed6e5f86dbaf98df87c17359a376db02ec48001155fb57b684c0a98"
+    },
+    {
+      "path": "macos/Classes/7zBuf2.c",
+      "origin": "project",
+      "sha256": "13a19017f9a4f8ab4c7095a998f7dbd026765de06e08fba890df4e4056e2948c",
+      "local_sha256": "13a19017f9a4f8ab4c7095a998f7dbd026765de06e08fba890df4e4056e2948c"
+    },
+    {
+      "path": "macos/Classes/7zCrc.c",
+      "origin": "project",
+      "sha256": "948a2b6bfa326ed7a2d11c7b24edd51ea10ca37f219e46826222c286a7d98115",
+      "local_sha256": "948a2b6bfa326ed7a2d11c7b24edd51ea10ca37f219e46826222c286a7d98115"
+    },
+    {
+      "path": "macos/Classes/7zCrcOpt.c",
+      "origin": "project",
+      "sha256": "26503c5611f2f8610395460a86f26e852336d1e837220ecccb2a33a09ced0f5b",
+      "local_sha256": "26503c5611f2f8610395460a86f26e852336d1e837220ecccb2a33a09ced0f5b"
+    },
+    {
+      "path": "macos/Classes/7zDec.c",
+      "origin": "project",
+      "sha256": "3088cbdec662161bfe93deac777eb2b260e774230849a29687d4646fe3fa0f49",
+      "local_sha256": "3088cbdec662161bfe93deac777eb2b260e774230849a29687d4646fe3fa0f49"
+    },
+    {
+      "path": "macos/Classes/7zFile.c",
+      "origin": "project",
+      "sha256": "ad69f085f88919070f8b599b468eee4b1b83a7821d245150dd4aaf10eb096d10",
+      "local_sha256": "ad69f085f88919070f8b599b468eee4b1b83a7821d245150dd4aaf10eb096d10"
+    },
+    {
+      "path": "macos/Classes/7zStream.c",
+      "origin": "project",
+      "sha256": "330c18657f20d7181c03e49ecea3032f4149e7780aa2c813c999d76be7c8dc73",
+      "local_sha256": "330c18657f20d7181c03e49ecea3032f4149e7780aa2c813c999d76be7c8dc73"
+    },
+    {
+      "path": "macos/Classes/Bcj2.c",
+      "origin": "project",
+      "sha256": "a98da7cf358fcbc55cf243a0f12c2369a17c315eb61e4fccbc067ab51f1f5304",
+      "local_sha256": "a98da7cf358fcbc55cf243a0f12c2369a17c315eb61e4fccbc067ab51f1f5304"
+    },
+    {
+      "path": "macos/Classes/Bra.c",
+      "origin": "project",
+      "sha256": "820c7caac2f8cd8285d38d9d17f9f335cf201ec45621946297b1e481e1e89138",
+      "local_sha256": "820c7caac2f8cd8285d38d9d17f9f335cf201ec45621946297b1e481e1e89138"
+    },
+    {
+      "path": "macos/Classes/Bra86.c",
+      "origin": "project",
+      "sha256": "7b4b5c1238bded53da217682879eebd0b725bd6cd35a4120eef643610f6cf9a0",
+      "local_sha256": "7b4b5c1238bded53da217682879eebd0b725bd6cd35a4120eef643610f6cf9a0"
+    },
+    {
+      "path": "macos/Classes/CpuArch.c",
+      "origin": "project",
+      "sha256": "3c02201f52fe481f1c2528f191eeacee4bfe1b2782d82318c8fccee5e760c245",
+      "local_sha256": "3c02201f52fe481f1c2528f191eeacee4bfe1b2782d82318c8fccee5e760c245"
+    },
+    {
+      "path": "macos/Classes/Delta.c",
+      "origin": "project",
+      "sha256": "290fa6fde30a23d7c6089a40a1eb88d12344fb621026e8cfd604adc6860f8c2b",
+      "local_sha256": "290fa6fde30a23d7c6089a40a1eb88d12344fb621026e8cfd604adc6860f8c2b"
+    },
+    {
+      "path": "macos/Classes/lodepng.c",
+      "origin": "project",
+      "sha256": "0cee8153f0b949094feae8f7e57ef4b4018116ebb27660739a1caa996606bc3e",
+      "local_sha256": "0cee8153f0b949094feae8f7e57ef4b4018116ebb27660739a1caa996606bc3e"
+    },
+    {
+      "path": "macos/Classes/Lzma2Dec.c",
+      "origin": "project",
+      "sha256": "26cb14ec4260fa42f9938da8db118a7bb52ccb63e4237685b8888facd93e2f79",
+      "local_sha256": "26cb14ec4260fa42f9938da8db118a7bb52ccb63e4237685b8888facd93e2f79"
+    },
+    {
+      "path": "macos/Classes/LzmaDec.c",
+      "origin": "project",
+      "sha256": "6ef00d88b21348a04bc33eee6f3f6155b8ed18001b45ca39f4805f054d85b55a",
+      "local_sha256": "6ef00d88b21348a04bc33eee6f3f6155b8ed18001b45ca39f4805f054d85b55a"
+    },
+    {
+      "path": "macos/Classes/venera_7z.cpp",
+      "origin": "project",
+      "sha256": "5cde2cdfa3e3a7c5ea0ee8d4316260119984d9ba9580937fdbb2aafe3d3b01f2",
+      "local_sha256": "5cde2cdfa3e3a7c5ea0ee8d4316260119984d9ba9580937fdbb2aafe3d3b01f2"
+    },
+    {
+      "path": "macos/Classes/venera_png.c",
+      "origin": "project",
+      "sha256": "038fbcb477c02519d4ad0a0ce6345765546acae19f6d9fb3430b63fba5c25538",
+      "local_sha256": "038fbcb477c02519d4ad0a0ce6345765546acae19f6d9fb3430b63fba5c25538"
+    },
+    {
+      "path": "macos/LICENSE",
+      "origin": "project",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "local_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "macos/Resources/VENERA_NATIVE_THIRD_PARTY_NOTICES.txt",
+      "origin": "project",
+      "sha256": "aa74a441fd1889ce0080cd143905e09abaad1030388273aa4f0940ccc66ce161",
+      "local_sha256": "aa74a441fd1889ce0080cd143905e09abaad1030388273aa4f0940ccc66ce161"
+    },
+    {
+      "path": "macos/venera_native.podspec",
+      "origin": "project",
+      "sha256": "77e0c4dae8c58661c3f525d8b2bbd56404b29ed26c6ade0faadad28d1d00c3ea",
+      "local_sha256": "77e0c4dae8c58661c3f525d8b2bbd56404b29ed26c6ade0faadad28d1d00c3ea"
+    },
+    {
+      "path": "notices/VENERA_NATIVE_THIRD_PARTY_NOTICES.txt",
+      "origin": "project",
+      "sha256": "aa74a441fd1889ce0080cd143905e09abaad1030388273aa4f0940ccc66ce161",
+      "local_sha256": "aa74a441fd1889ce0080cd143905e09abaad1030388273aa4f0940ccc66ce161"
+    },
+    {
+      "path": "pubspec.yaml",
+      "origin": "project",
+      "sha256": "39a24ff44761e4cd3e367c183562a1d02346cd751bbdecd9488f4f00a34e625e",
+      "local_sha256": "39a24ff44761e4cd3e367c183562a1d02346cd751bbdecd9488f4f00a34e625e"
+    },
+    {
+      "path": "README.md",
+      "origin": "project",
+      "sha256": "0b8e6139bee206b14753a58c1f0eb397249676d6f872845a5c159e434a6b88db",
+      "local_sha256": "0b8e6139bee206b14753a58c1f0eb397249676d6f872845a5c159e434a6b88db"
+    },
+    {
+      "path": "src/CMakeLists.txt",
+      "origin": "project",
+      "sha256": "a9ca06716c2098706a25ba9a95ea5ca4ae6dc718f1059045d686a0352e173284",
+      "local_sha256": "a9ca06716c2098706a25ba9a95ea5ca4ae6dc718f1059045d686a0352e173284"
+    },
+    {
+      "path": "src/venera_7z.cpp",
+      "origin": "project",
+      "sha256": "81ab8077c7b494f48601e02c3e88447d5891c0cc3f8ccaf79936090cdafb8354",
+      "local_sha256": "81ab8077c7b494f48601e02c3e88447d5891c0cc3f8ccaf79936090cdafb8354"
+    },
+    {
+      "path": "src/venera_native.h",
+      "origin": "project",
+      "sha256": "3435b90e9e43b19a65619a9856f463bef093ea3bf07e754f819cbffb6f8cf0a7",
+      "local_sha256": "3435b90e9e43b19a65619a9856f463bef093ea3bf07e754f819cbffb6f8cf0a7"
+    },
+    {
+      "path": "src/venera_png.c",
+      "origin": "project",
+      "sha256": "7633aa979796f55ba7619e124763ad610655ac73932385d889ae48e76c2a8b2c",
+      "local_sha256": "7633aa979796f55ba7619e124763ad610655ac73932385d889ae48e76c2a8b2c"
+    },
+    {
+      "path": "test/fixtures/absolute.7z",
+      "origin": "project",
+      "sha256": "fb292b38c49f99ebb074f0b53438abcebfc53c975d8d37ddbf497a372729e126",
+      "local_sha256": "fb292b38c49f99ebb074f0b53438abcebfc53c975d8d37ddbf497a372729e126",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/fixtures/bad-crc.7z",
+      "origin": "project",
+      "sha256": "070d65f1bca2272c94481cbc7f387faf9a8ca7a0c7349adbb70c2e365e55b332",
+      "local_sha256": "070d65f1bca2272c94481cbc7f387faf9a8ca7a0c7349adbb70c2e365e55b332",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/fixtures/copy.7z",
+      "origin": "project",
+      "sha256": "204ca51b39b284c1c6da82205ca03591658f9d05135a51742b46fccfd184de96",
+      "local_sha256": "204ca51b39b284c1c6da82205ca03591658f9d05135a51742b46fccfd184de96",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/fixtures/drive.7z",
+      "origin": "project",
+      "sha256": "03d9b32f6f7c90a7aba7f339ed23f05eb671fbc607ef19f94dbd357e808ff40f",
+      "local_sha256": "03d9b32f6f7c90a7aba7f339ed23f05eb671fbc607ef19f94dbd357e808ff40f",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/fixtures/duplicate.7z",
+      "origin": "project",
+      "sha256": "2c386cd7c1ef73f8498572318b0472825b4fb4858c9ac635d4230a02bfd5ed6b",
+      "local_sha256": "2c386cd7c1ef73f8498572318b0472825b4fb4858c9ac635d4230a02bfd5ed6b",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/fixtures/encrypted.7z",
+      "origin": "project",
+      "sha256": "b0cefa7a585cbdc94f43628bb44672fcef5075297f97d8bf3fa4f8984b6b1dc0",
+      "local_sha256": "b0cefa7a585cbdc94f43628bb44672fcef5075297f97d8bf3fa4f8984b6b1dc0",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/fixtures/expected.json",
+      "origin": "project",
+      "sha256": "cadb3a9d6c655034e7bf62943178a9fb385d05690e3a8ee1376fce38acb0f452",
+      "local_sha256": "cadb3a9d6c655034e7bf62943178a9fb385d05690e3a8ee1376fce38acb0f452"
+    },
+    {
+      "path": "test/fixtures/file-parent.7z",
+      "origin": "project",
+      "sha256": "eb5a4b7602f70ba5be7378be7e6bb828b9adc43ea81aec183f669a746baa6efd",
+      "local_sha256": "eb5a4b7602f70ba5be7378be7e6bb828b9adc43ea81aec183f669a746baa6efd",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/fixtures/missing-name.7z",
+      "origin": "project",
+      "sha256": "75d589c32784543336584266f380b57c375b4519dc98622eb2a8c2c8596df575",
+      "local_sha256": "75d589c32784543336584266f380b57c375b4519dc98622eb2a8c2c8596df575",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/fixtures/non-solid.7z",
+      "origin": "project",
+      "sha256": "6f9ca3e154dadefad720ea018a0c0fc8dca8ea6f9a09c017d692e71caf3ed969",
+      "local_sha256": "6f9ca3e154dadefad720ea018a0c0fc8dca8ea6f9a09c017d692e71caf3ed969",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/fixtures/solid.7z",
+      "origin": "project",
+      "sha256": "5e4ce3c6d3775fca2b53de3f725e7cff6d63b778df6f816158ddc031cd01595f",
+      "local_sha256": "5e4ce3c6d3775fca2b53de3f725e7cff6d63b778df6f816158ddc031cd01595f",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/fixtures/symlink.7z",
+      "origin": "project",
+      "sha256": "f0608e6ae0123d12021246c33985445d036cc5be5f282e165f2e49f359b8cdef",
+      "local_sha256": "f0608e6ae0123d12021246c33985445d036cc5be5f282e165f2e49f359b8cdef",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/fixtures/traversal.7z",
+      "origin": "project",
+      "sha256": "3e2f53fbf6ac61966e3f7dec96d7ff112b4547f9eafa14a8d43c6e1ae411fd24",
+      "local_sha256": "3e2f53fbf6ac61966e3f7dec96d7ff112b4547f9eafa14a8d43c6e1ae411fd24",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/fixtures/truncated.7z",
+      "origin": "project",
+      "sha256": "3d911bad0c7db9d88782c118406aaa2923b4162f015a4dd6f3d376192a863a4f",
+      "local_sha256": "3d911bad0c7db9d88782c118406aaa2923b4162f015a4dd6f3d376192a863a4f",
+      "encoding": "binary"
+    },
+    {
+      "path": "test/native_test.cpp",
+      "origin": "project",
+      "sha256": "01f1ff65b7ec49f2f71809611a111fa7dde022fd76a4bc51194c4dcdc3913d1c",
+      "local_sha256": "01f1ff65b7ec49f2f71809611a111fa7dde022fd76a4bc51194c4dcdc3913d1c"
+    },
+    {
+      "path": "third_party/lodepng/LICENSE",
+      "origin": "lodepng",
+      "sha256": "320118b5ef306bccab6ae9b13c4a2c2907c44f1fd48a373858b20399d60cec51",
+      "local_sha256": "5dd8e1ee4d5313d81bb1c6e04e0b5a8baf746d44887c9a3fd6337e563f3e04d7",
+      "upstream_path": "lodepng.cpp"
+    },
+    {
+      "path": "third_party/lodepng/lodepng.c",
+      "origin": "lodepng",
+      "sha256": "320118b5ef306bccab6ae9b13c4a2c2907c44f1fd48a373858b20399d60cec51",
+      "local_sha256": "320118b5ef306bccab6ae9b13c4a2c2907c44f1fd48a373858b20399d60cec51",
+      "upstream_path": "lodepng.cpp"
+    },
+    {
+      "path": "third_party/lodepng/lodepng.h",
+      "origin": "lodepng",
+      "sha256": "84152d2d973214a890140bac68652077d98168910bfd2931bb6d2605b379bd46",
+      "local_sha256": "84152d2d973214a890140bac68652077d98168910bfd2931bb6d2605b379bd46",
+      "upstream_path": "lodepng.h"
+    },
+    {
+      "path": "third_party/lzma/7z.h",
+      "origin": "lzma",
+      "sha256": "b3f59ce743927000b704d925aa6e31795c572acb43814a7e50ebbcc785bfccf1",
+      "local_sha256": "b3f59ce743927000b704d925aa6e31795c572acb43814a7e50ebbcc785bfccf1",
+      "upstream_path": "7z.h"
+    },
+    {
+      "path": "third_party/lzma/7zAlloc.c",
+      "origin": "lzma",
+      "sha256": "f48b0eab42de8caa9339aac078707f31889efb9a92fb71712f5e4b7738de3b8e",
+      "local_sha256": "f48b0eab42de8caa9339aac078707f31889efb9a92fb71712f5e4b7738de3b8e",
+      "upstream_path": "7zAlloc.c"
+    },
+    {
+      "path": "third_party/lzma/7zAlloc.h",
+      "origin": "lzma",
+      "sha256": "b8e7138b05910d60fb70e44464f166ddbbfaa37b4cc02b2032afee39771de71d",
+      "local_sha256": "b8e7138b05910d60fb70e44464f166ddbbfaa37b4cc02b2032afee39771de71d",
+      "upstream_path": "7zAlloc.h"
+    },
+    {
+      "path": "third_party/lzma/7zArcIn.c",
+      "origin": "lzma",
+      "sha256": "9b863803e963b276fe74f2dabb8c25f4094e98ef5bf9974d5720dc02a29082a5",
+      "local_sha256": "9b863803e963b276fe74f2dabb8c25f4094e98ef5bf9974d5720dc02a29082a5",
+      "upstream_path": "7zArcIn.c"
+    },
+    {
+      "path": "third_party/lzma/7zBuf.c",
+      "origin": "lzma",
+      "sha256": "54ecf8ed84545b20f2fb8519de4de309efcef6434353b03383dea6bd79e9c4c7",
+      "local_sha256": "54ecf8ed84545b20f2fb8519de4de309efcef6434353b03383dea6bd79e9c4c7",
+      "upstream_path": "7zBuf.c"
+    },
+    {
+      "path": "third_party/lzma/7zBuf.h",
+      "origin": "lzma",
+      "sha256": "8077b812692353fa662bcb267a38737cdca7660d4b086067afac16dfe5809c3d",
+      "local_sha256": "8077b812692353fa662bcb267a38737cdca7660d4b086067afac16dfe5809c3d",
+      "upstream_path": "7zBuf.h"
+    },
+    {
+      "path": "third_party/lzma/7zBuf2.c",
+      "origin": "lzma",
+      "sha256": "bc1ad7f5f33f0e12044991cbcd707549e85bf3d54b8bc171247d1f24057d5b2a",
+      "local_sha256": "bc1ad7f5f33f0e12044991cbcd707549e85bf3d54b8bc171247d1f24057d5b2a",
+      "upstream_path": "7zBuf2.c"
+    },
+    {
+      "path": "third_party/lzma/7zCrc.c",
+      "origin": "lzma",
+      "sha256": "6c826585a824f991488d16fc4fa236ab6abe317b8f853fea77282e31d5160c54",
+      "local_sha256": "6c826585a824f991488d16fc4fa236ab6abe317b8f853fea77282e31d5160c54",
+      "upstream_path": "7zCrc.c"
+    },
+    {
+      "path": "third_party/lzma/7zCrc.h",
+      "origin": "lzma",
+      "sha256": "75ff8362de5ef390c286adfec246f16eceaff6dff1090a80240495c47d88e923",
+      "local_sha256": "75ff8362de5ef390c286adfec246f16eceaff6dff1090a80240495c47d88e923",
+      "upstream_path": "7zCrc.h"
+    },
+    {
+      "path": "third_party/lzma/7zCrcOpt.c",
+      "origin": "lzma",
+      "sha256": "df23d84d9297358f401e36c0a0a5b004304f72f588f0f1db346a74d30e10036a",
+      "local_sha256": "df23d84d9297358f401e36c0a0a5b004304f72f588f0f1db346a74d30e10036a",
+      "upstream_path": "7zCrcOpt.c"
+    },
+    {
+      "path": "third_party/lzma/7zDec.c",
+      "origin": "lzma",
+      "sha256": "774c32cfa322175be5a43073a6fb1ff918ec9dcaa9014ea949d96701aa740079",
+      "local_sha256": "774c32cfa322175be5a43073a6fb1ff918ec9dcaa9014ea949d96701aa740079",
+      "upstream_path": "7zDec.c"
+    },
+    {
+      "path": "third_party/lzma/7zFile.c",
+      "origin": "lzma",
+      "sha256": "dcdb148580ee3d7ab8bc557d3cae8741f88735eca883e569b3183a60a8e4830d",
+      "local_sha256": "dcdb148580ee3d7ab8bc557d3cae8741f88735eca883e569b3183a60a8e4830d",
+      "upstream_path": "7zFile.c"
+    },
+    {
+      "path": "third_party/lzma/7zFile.h",
+      "origin": "lzma",
+      "sha256": "a442375674ea8200ab180468a0027d350086771ba59e141931858b6bb09d698d",
+      "local_sha256": "a442375674ea8200ab180468a0027d350086771ba59e141931858b6bb09d698d",
+      "upstream_path": "7zFile.h"
+    },
+    {
+      "path": "third_party/lzma/7zStream.c",
+      "origin": "lzma",
+      "sha256": "835941df3324d828770bc09749a976bad8449e3733896d51bf102557c9ac0acb",
+      "local_sha256": "835941df3324d828770bc09749a976bad8449e3733896d51bf102557c9ac0acb",
+      "upstream_path": "7zStream.c"
+    },
+    {
+      "path": "third_party/lzma/7zTypes.h",
+      "origin": "lzma",
+      "sha256": "5de943c886d5d7bbcf16203e9b292a9e7be327b43fe3dfd9f4ad07d6d0870ef6",
+      "local_sha256": "5de943c886d5d7bbcf16203e9b292a9e7be327b43fe3dfd9f4ad07d6d0870ef6",
+      "upstream_path": "7zTypes.h"
+    },
+    {
+      "path": "third_party/lzma/7zVersion.h",
+      "origin": "lzma",
+      "sha256": "b2b1f2e5cb73afb74ca9800e23df6876c4457f88402de4de447c613a7f902a0c",
+      "local_sha256": "b2b1f2e5cb73afb74ca9800e23df6876c4457f88402de4de447c613a7f902a0c",
+      "upstream_path": "7zVersion.h"
+    },
+    {
+      "path": "third_party/lzma/7zWindows.h",
+      "origin": "lzma",
+      "sha256": "8e7d4ed4f6599ca599514d5c1710668a61865f0c11c44b47994aede33f4cac16",
+      "local_sha256": "8e7d4ed4f6599ca599514d5c1710668a61865f0c11c44b47994aede33f4cac16",
+      "upstream_path": "7zWindows.h"
+    },
+    {
+      "path": "third_party/lzma/Bcj2.c",
+      "origin": "lzma",
+      "sha256": "52f5c6bbaf512f867fe46a378d79888825a5b4e31abbd4c94f007058a890174e",
+      "local_sha256": "52f5c6bbaf512f867fe46a378d79888825a5b4e31abbd4c94f007058a890174e",
+      "upstream_path": "Bcj2.c"
+    },
+    {
+      "path": "third_party/lzma/Bcj2.h",
+      "origin": "lzma",
+      "sha256": "e45c841e5d805deeb2ae3f212c8860ce312252efdc55f713f52f837cf8c4452f",
+      "local_sha256": "e45c841e5d805deeb2ae3f212c8860ce312252efdc55f713f52f837cf8c4452f",
+      "upstream_path": "Bcj2.h"
+    },
+    {
+      "path": "third_party/lzma/Bra.c",
+      "origin": "lzma",
+      "sha256": "c90cbc0747a406d056daf3d7b2bf05cf88c55529777469db5ca15f754b7c38e8",
+      "local_sha256": "c90cbc0747a406d056daf3d7b2bf05cf88c55529777469db5ca15f754b7c38e8",
+      "upstream_path": "Bra.c"
+    },
+    {
+      "path": "third_party/lzma/Bra.h",
+      "origin": "lzma",
+      "sha256": "bf4addce6209562a700edf040a8efc5b392bb33d4427b1513b6e3a877d04f431",
+      "local_sha256": "bf4addce6209562a700edf040a8efc5b392bb33d4427b1513b6e3a877d04f431",
+      "upstream_path": "Bra.h"
+    },
+    {
+      "path": "third_party/lzma/Bra86.c",
+      "origin": "lzma",
+      "sha256": "0925d655955bdd2b7b25a01bbb3d2d395e5bac6d572f2cfd273141d1896af0ec",
+      "local_sha256": "0925d655955bdd2b7b25a01bbb3d2d395e5bac6d572f2cfd273141d1896af0ec",
+      "upstream_path": "Bra86.c"
+    },
+    {
+      "path": "third_party/lzma/Compiler.h",
+      "origin": "lzma",
+      "sha256": "959dac87ac7109502f6467e910d0722b932176e243153bf8c663479aa8c29b20",
+      "local_sha256": "959dac87ac7109502f6467e910d0722b932176e243153bf8c663479aa8c29b20",
+      "upstream_path": "Compiler.h"
+    },
+    {
+      "path": "third_party/lzma/CpuArch.c",
+      "origin": "lzma",
+      "sha256": "9f215eaf12eaafdb6e83755bb3ac82fe3629905fcd9d257880a89ef2edd67755",
+      "local_sha256": "9f215eaf12eaafdb6e83755bb3ac82fe3629905fcd9d257880a89ef2edd67755",
+      "upstream_path": "CpuArch.c"
+    },
+    {
+      "path": "third_party/lzma/CpuArch.h",
+      "origin": "lzma",
+      "sha256": "051d8a61373d9b6c90eb3b80f2aa1d932126fec7091242b085276e0bbd9bec03",
+      "local_sha256": "7a53a7789bd09dbdad5beb29f8e524ad7f32eff5b5af0de5c0872a4d2ac30783",
+      "upstream_path": "CpuArch.h"
+    },
+    {
+      "path": "third_party/lzma/Delta.c",
+      "origin": "lzma",
+      "sha256": "d5b3fad0896c21b428c9803760e537a30b82ed344faa525d39ca9a4b555a80f2",
+      "local_sha256": "d5b3fad0896c21b428c9803760e537a30b82ed344faa525d39ca9a4b555a80f2",
+      "upstream_path": "Delta.c"
+    },
+    {
+      "path": "third_party/lzma/Delta.h",
+      "origin": "lzma",
+      "sha256": "ce359ff7eb4c9d806777e21d0ec0416cf06c1f556242cbbcf565492b47141eeb",
+      "local_sha256": "ce359ff7eb4c9d806777e21d0ec0416cf06c1f556242cbbcf565492b47141eeb",
+      "upstream_path": "Delta.h"
+    },
+    {
+      "path": "third_party/lzma/Lzma2Dec.c",
+      "origin": "lzma",
+      "sha256": "3d691d30e4a1f4b661d56fc483db702167ff6a91781d143a017c793c1860476f",
+      "local_sha256": "3d691d30e4a1f4b661d56fc483db702167ff6a91781d143a017c793c1860476f",
+      "upstream_path": "Lzma2Dec.c"
+    },
+    {
+      "path": "third_party/lzma/Lzma2Dec.h",
+      "origin": "lzma",
+      "sha256": "a4b97083c3817d3e1e3049f8b1abc0b4ca3e91192606497c02bb5351b57422c7",
+      "local_sha256": "a4b97083c3817d3e1e3049f8b1abc0b4ca3e91192606497c02bb5351b57422c7",
+      "upstream_path": "Lzma2Dec.h"
+    },
+    {
+      "path": "third_party/lzma/LzmaDec.c",
+      "origin": "lzma",
+      "sha256": "b9ca2b8707400347c75d6fef288d1354a3b4cf93e8da42f26207b8bd4c4d5e59",
+      "local_sha256": "b9ca2b8707400347c75d6fef288d1354a3b4cf93e8da42f26207b8bd4c4d5e59",
+      "upstream_path": "LzmaDec.c"
+    },
+    {
+      "path": "third_party/lzma/LzmaDec.h",
+      "origin": "lzma",
+      "sha256": "3aaf07b4ae4173a2d103179455dc7089b5ddbc7fc3db3c0e40964a7499c69266",
+      "local_sha256": "3aaf07b4ae4173a2d103179455dc7089b5ddbc7fc3db3c0e40964a7499c69266",
+      "upstream_path": "LzmaDec.h"
+    },
+    {
+      "path": "third_party/lzma/Ppmd.h",
+      "origin": "lzma",
+      "sha256": "c67e58afd6cd0b0d598ae92338bc32fc96d951d65d041c086627f46287896e00",
+      "local_sha256": "c67e58afd6cd0b0d598ae92338bc32fc96d951d65d041c086627f46287896e00",
+      "upstream_path": "Ppmd.h"
+    },
+    {
+      "path": "third_party/lzma/Ppmd7.h",
+      "origin": "lzma",
+      "sha256": "d228a585bc801743f08686c5073431b41b258b23bb2840f3318c68f720ab319d",
+      "local_sha256": "d228a585bc801743f08686c5073431b41b258b23bb2840f3318c68f720ab319d",
+      "upstream_path": "Ppmd7.h"
+    },
+    {
+      "path": "third_party/lzma/Precomp.h",
+      "origin": "lzma",
+      "sha256": "fea249c753dfbbdd69d9397e91497205452b784279f70cad4658dc567cd2f85f",
+      "local_sha256": "fea249c753dfbbdd69d9397e91497205452b784279f70cad4658dc567cd2f85f",
+      "upstream_path": "Precomp.h"
+    },
+    {
+      "path": "third_party/lzma/RotateDefs.h",
+      "origin": "lzma",
+      "sha256": "9bc3ff572bec5611c5c2508b7d0c18706a1dc4c908ea3bd432237c33056e1f28",
+      "local_sha256": "9bc3ff572bec5611c5c2508b7d0c18706a1dc4c908ea3bd432237c33056e1f28",
+      "upstream_path": "RotateDefs.h"
+    },
+    {
+      "path": "windows/CMakeLists.txt",
+      "origin": "project",
+      "sha256": "091181f84b1cf8c857ce730b823e5dc9ae42bf4254dc78e1efa7d134e17a501a",
+      "local_sha256": "091181f84b1cf8c857ce730b823e5dc9ae42bf4254dc78e1efa7d134e17a501a"
+    }
+  ]
+}

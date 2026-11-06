@@ -92,7 +92,10 @@ void main() {
   var nativeAvailable = true;
   try {
     if (Platform.isWindows) {
-      final path = Directory('build/windows/x64/runner/Release').absolute.path;
+      final path = Directory(
+        Platform.environment['VENERA_NATIVE_TEST_DIRECTORY'] ??
+            'build/windows/x64/runner/Release',
+      ).absolute.path;
       DynamicLibrary.open('$path/flutter_windows.dll');
       DynamicLibrary.open('$path/flutter_qjs_plugin.dll');
     } else {

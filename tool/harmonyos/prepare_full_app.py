@@ -22,7 +22,11 @@ DEPS = BASE / "full-deps"
 PROJECT = BASE / "full-app"
 WEBVIEW_PACKAGES = tuple("flutter_inappwebview" + suffix for suffix in (
     "", "_platform_interface", "_ohos", "_android", "_ios", "_macos", "_web", "_windows"))
-EXTRA_LIBRARIES = ("liblodepng_flutter.so", "libzip_flutter.so", "libflutter_7zip.so", "libinappwebview.so")
+EXTRA_LIBRARIES = ("libvenera_native.so", "libzip_flutter.so", "libinappwebview.so")
+GIT_DEPENDENCIES = ("webview", "webview_api", "code_assets")
+PROJECT_PACKAGES = tuple(FULL_CONFIG["project_packages"])
+NATIVE_NOTICE_ASSET = "assets/notices/VENERA_NATIVE_THIRD_PARTY_NOTICES.txt"
+NATIVE_NOTICE_SOURCE = ROOT / "packages/venera_native/notices/VENERA_NATIVE_THIRD_PARTY_NOTICES.txt"
 WEBVIEW_API_TYPES = ("browser_process_exit_kind.dart", "browser_process_exit_kind.g.dart",
                      "browser_process_exited_detail.dart", "browser_process_exited_detail.g.dart", "enum_method.dart")
 WEBVIEW_TYPES = Path("flutter_inappwebview_platform_interface/lib/src/types")
@@ -41,6 +45,60 @@ def tree_digest(root):
             result.update(path.relative_to(root).as_posix().encode() + b"\0")
             result.update(path.read_bytes())
     return result.hexdigest()
+
+
+def require_committed_inputs(*paths):
+    changed = subprocess.check_output(["git", "-C", str(ROOT), "diff", "--name-only", "HEAD", "--",
+                                       *paths], timeout=120)
+    if changed:
+        raise ValueError("Uncommitted reader source inputs: " + changed.decode("utf-8").strip())
+
+
+def git_input_bytes(name):
+    """Use canonical Git bytes, independent of checkout EOL attributes."""
+    try:
+        return subprocess.check_output(["git", "-C", str(ROOT), "show", f"HEAD:{name}"], timeout=120)
+    except subprocess.CalledProcessError as error:
+        raise ValueError("Missing committed reader input: " + name) from error
+
+
+def project_tree_digest(root):
+    """Hash committed package blobs, independently of EOL rules and build caches."""
+    prefix = root.relative_to(ROOT).as_posix()
+    names = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-z", "--",
+                                     prefix], timeout=120).split(b"\0")
+    if not any(names):
+        raise ValueError("Missing committed project package")
+    inputs = sorted(value.decode("utf-8") for value in names if value)
+    for name in inputs:
+        path = require_within(ROOT / name, root)
+        if not path.is_file():
+            raise ValueError("Missing project package input: " + name)
+    require_committed_inputs(prefix)
+    result = hashlib.sha256()
+    for name in inputs:
+        result.update(Path(name).relative_to(root.relative_to(ROOT)).as_posix().encode("utf-8") + b"\0")
+        result.update(git_input_bytes(name))
+    return result.hexdigest()
+
+
+def project_packages():
+    inventory = json.loads((ROOT / "doc/development/git_dependencies.json").read_text(encoding="utf-8"))
+    records = {item["dependency"]: item for item in inventory["local_packages"]}
+    if set(records) != set(PROJECT_PACKAGES):
+        raise ValueError("Project package inventory changed; review the OHOS candidate")
+    result = {}
+    for name in PROJECT_PACKAGES:
+        item = records[name]
+        if item["path"] != "packages/" + name:
+            raise ValueError("Unexpected project package path")
+        root = ROOT / item["path"]
+        version = re.findall(r"^version:[ \t]*([^\r\n]+)$", (root / "pubspec.yaml").read_text(encoding="utf-8"), re.M)
+        if version != [item["version"]]:
+            raise ValueError("Project package version changed: " + name)
+        result[name] = {"project_path": item["path"], "version": item["version"],
+                        "prepared_sha256": project_tree_digest(root)}
+    return result
 
 
 def patch_once(text, original, replacement):
@@ -142,6 +200,8 @@ def export_git(name, spec):
         if repository.exists():
             raise ValueError("Refusing an unknown dependency checkout")
         command(["git", "clone", "--filter=blob:none", "--no-checkout", spec["repository"], repository])
+        if os.name == "nt":
+            command(["git", "-C", repository, "config", "--local", "core.longpaths", "true"])
         command(["git", "-C", repository, "fetch", "--depth", "1", "origin", spec["ref"]])
         command(["git", "-C", repository, "checkout", "--detach", "FETCH_HEAD"])
     head = subprocess.check_output(["git", "-C", repository, "rev-parse", "HEAD"], text=True).strip()
@@ -192,7 +252,7 @@ def prepare_dependencies(qjs_source):
         for name in WEBVIEW_API_TYPES:
             require_within(DEPS / "webview" / WEBVIEW_TYPES / name, DEPS).unlink()
     records = {}
-    for name in ("webview", "webview_api", "code_assets", "lodepng_flutter", "flutter_7zip"):
+    for name in GIT_DEPENDENCIES:
         spec = FULL_CONFIG[name]
         root = export_git(name, spec)
         records[name] = {"revision": spec["revision"], "original_sha256": tree_digest(root)}
@@ -201,9 +261,7 @@ def prepare_dependencies(qjs_source):
         records[name] = {**spec, "original_sha256": tree_digest(root)}
     export_qjs(qjs_source, BASE / "deps/flutter_qjs")
     patch_webview_environment_api(DEPS / "webview", DEPS / "webview_api")
-    for name, loader in (("lodepng_flutter", "lib/lodepng_flutter.dart"),
-                         ("flutter_7zip", "lib/flutter_7zip.dart"),
-                         ("zip_flutter", "lib/src/zip_dart_base.dart")):
+    for name, loader in (("zip_flutter", "lib/src/zip_dart_base.dart"),):
         path = DEPS / name / loader
         path.write_text(patch_so_loader(path.read_text(encoding="utf-8")), encoding="utf-8")
     path = DEPS / "sqlite3/lib/src/ffi/load_library.dart"
@@ -219,13 +277,22 @@ def prepare_dependencies(qjs_source):
         records[name]["prepared_sha256"] = tree_digest(DEPS / name)
     records["flutter_qjs"] = {"revision": CONFIG["quickjs"]["revision"],
                               "prepared_sha256": tree_digest(BASE / "deps/flutter_qjs")}
+    records.update(project_packages())
     (DEPS / "sources.json").write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")
     return records
 
 
 def verify_dependencies():
     records = json.loads((DEPS / "sources.json").read_text(encoding="utf-8"))
+    expected = set(GIT_DEPENDENCIES) | set(FULL_CONFIG["hosted"]) | {"flutter_qjs"} | set(PROJECT_PACKAGES)
+    if set(records) != expected:
+        raise ValueError("Incomplete reviewed reader dependency manifest")
+    projects = project_packages()
     for name, record in records.items():
+        if name in projects:
+            if record != projects[name]:
+                raise ValueError("Prepared project package changed: " + name)
+            continue
         root = BASE / "deps/flutter_qjs" if name == "flutter_qjs" else DEPS / name
         if tree_digest(root) != record["prepared_sha256"]:
             raise ValueError(f"Prepared dependency changed: {name}")
@@ -236,18 +303,19 @@ def configure_pubspec(text, identity=None):
     identity = identity or build_inputs()
     text = re.sub(r"^version: .*?$", f"version: {identity['version_name']}+{identity['version_code']}",
                   text, count=1, flags=re.M)
-    for name in ("photo_view", "share_plus", "rhttp"):
+    for name in PROJECT_PACKAGES:
         text = patch_once(text, f"path: packages/{name}", f"path: ../../../packages/{name}")
     overrides = {
         "flutter_qjs": "../deps/flutter_qjs",
-        **{name: f"../full-deps/{name}" for name in ("sqlite3", "zip_flutter", "lodepng_flutter", "flutter_7zip", "pdfium_dart")},
+        **{name: f"../full-deps/{name}" for name in ("sqlite3", "zip_flutter", "pdfium_dart")},
         "code_assets": "../full-deps/code_assets/pkgs/code_assets",
         **{name: f"../full-deps/webview/{name}" for name in WEBVIEW_PACKAGES},
     }
     lines = "".join(f"  {name}:\n    path: {path}\n" for name, path in overrides.items())
     text = patch_once(text, "dependency_overrides:\n", "dependency_overrides:\n" + lines)
     text = patch_once(text, "    - assets/translation.json\n",
-                      "    - assets/translation.json\n    - assets/harmonyos-app-build.json\n")
+                      "    - assets/translation.json\n    - assets/harmonyos-app-build.json\n"
+                      f"    - {NATIVE_NOTICE_ASSET}\n")
     if re.search(r"^hooks:", text, re.M):
         raise ValueError("Main hook configuration changed; review the experiment")
     text += ("\nhooks:\n  user_defines:\n    pdfium_dart:\n"
@@ -256,10 +324,16 @@ def configure_pubspec(text, identity=None):
 
 
 def app_source_manifest():
-    files = [ROOT / "pubspec.yaml", ROOT / "pubspec.lock", ROOT / "CHANGELOG.md"]
+    require_committed_inputs("pubspec.yaml", "pubspec.lock", "CHANGELOG.md", "release.json",
+                             "lib", "assets", "packages")
+    files = [ROOT / "pubspec.yaml", ROOT / "pubspec.lock", ROOT / "CHANGELOG.md", ROOT / "release.json"]
     files.extend(sorted((ROOT / "lib").rglob("*.dart")))
     files.extend(sorted(path for path in (ROOT / "assets").rglob("*") if path.is_file()))
-    return {path.relative_to(ROOT).as_posix(): digest(path) for path in files}
+    packages = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-z", "--", "packages/"]).split(b"\0")
+    files.extend(ROOT / name.decode("utf-8") for name in packages if name)
+    return {path.relative_to(ROOT).as_posix():
+        hashlib.sha256(git_input_bytes(path.relative_to(ROOT).as_posix())).hexdigest()
+        for path in files}
 
 
 def prepare_project(args):
@@ -284,6 +358,11 @@ def prepare_project(args):
         if destination.exists():
             shutil.rmtree(destination)
         shutil.copytree(ROOT / name, destination)
+    notice = require_within(project / NATIVE_NOTICE_ASSET, project)
+    notice.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(NATIVE_NOTICE_SOURCE, notice)
+    fixtures = require_within(project / "packages/venera_native/test/fixtures", project)
+    shutil.copytree(ROOT / "packages/venera_native/test/fixtures", fixtures, dirs_exist_ok=True)
     # Only relocate repository-relative test imports; runtime source is unchanged.
     for name, original, source in (
         ("test/foundation/photo_view_controller_lifecycle_test.dart",
@@ -369,6 +448,7 @@ def prepare_project(args):
                 r"^    - (assets/[^\r\n]+)$", (ROOT / "pubspec.yaml").read_text(encoding="utf-8"), re.M)
         },
     }
+    metadata["bundled_assets"][NATIVE_NOTICE_ASSET] = digest(NATIVE_NOTICE_SOURCE)
     (project / "assets/harmonyos-app-build.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     pub_args = ["pub", "get"] + ([] if args.resolve_lock else ["--enforce-lockfile"])
     if args.offline:

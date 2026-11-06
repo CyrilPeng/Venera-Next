@@ -128,7 +128,14 @@ void main() {
             app(const AboutSettings(), brightness: brightness, textScale: 1.8),
           );
           final check = find.widgetWithText(FilledButton, 'Check');
-          await tester.ensureVisible(check);
+          await tester.scrollUntilVisible(
+            check,
+            120,
+            scrollable: find.descendant(
+              of: find.byType(AboutSettings),
+              matching: find.byType(Scrollable),
+            ),
+          );
           await tester.pumpAndSettle();
           expect(check.hitTestable(), findsOneWidget);
           await tester.tap(check);

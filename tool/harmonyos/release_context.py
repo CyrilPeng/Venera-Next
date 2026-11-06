@@ -14,9 +14,9 @@ VERSION = re.compile(r"\d+\.\d+\.\d+(?:-rc\.\d+)?")
 
 def validate_context(value, source_commit, environ):
     fields = {"schema", "channel", "source_commit", "main_baseline", "release_commit", "version", "build",
-              "tag", "run_id", "tagged", "changelog_sha256", "changelog"}
-    if (set(value) != fields or type(value["schema"]) is not int or value["schema"] != 1 or value["channel"] != "harmonyos-beta"
-            or type(value["tagged"]) is not bool
+              "tag", "run_id", "tagged", "changelog_sha256", "changelog", "preview", "caller_version", "caller_build"}
+    if (set(value) != fields or type(value["schema"]) is not int or value["schema"] != 2 or value["channel"] != "harmonyos-beta"
+            or type(value["tagged"]) is not bool or type(value["preview"]) is not bool
             or any(not isinstance(value[key], str) or not re.fullmatch(r"[0-9a-f]{40}", value[key])
                    for key in ("source_commit", "main_baseline", "release_commit"))
             or value["source_commit"] != source_commit
@@ -26,10 +26,18 @@ def validate_context(value, source_commit, environ):
         raise ValueError("Invalid source-bound HarmonyOS release context")
     version, build = value["version"], value["build"]
     validate_version(version, build)
+    if (not isinstance(value["caller_version"], str) or not VERSION.fullmatch(value["caller_version"])
+            or type(value["caller_build"]) is not int or not 3 < value["caller_build"] <= 2147483647):
+        raise ValueError("Invalid caller release metadata")
+    if value["preview"]:
+        if value["tagged"] or environ.get("GITHUB_REF_TYPE") == "tag":
+            raise ValueError("A release tag cannot use the next-candidate preview")
+    elif (version, build) != (value["caller_version"], value["caller_build"]):
+        raise ValueError("A release build must use the caller version and build")
     if value["tag"] != "v" + version or value["run_id"] != environ.get("GITHUB_RUN_ID", value["run_id"]):
         raise ValueError("Mismatched release tag/run")
     if value["tagged"] and (environ.get("GITHUB_REF_TYPE") != "tag"
-                            or environ.get("GITHUB_REF_NAME") != value["tag"] or build < 244):
+                            or environ.get("GITHUB_REF_NAME") != value["tag"] or build < 245):
         raise ValueError("Unverified release-tag context")
     if not value["tagged"] and environ.get("GITHUB_REF_TYPE") == "tag":
         raise ValueError("A release tag cannot masquerade as a branch build")
@@ -37,8 +45,8 @@ def validate_context(value, source_commit, environ):
 
 
 def validate_version(version, build):
-    if not isinstance(version, str) or not VERSION.fullmatch(version) or type(build) is not int or not 3 < build <= 2147483647:
-        raise ValueError("Invalid release version or non-increasing legacy HAP build number")
+    if not isinstance(version, str) or not VERSION.fullmatch(version) or type(build) is not int or not 245 <= build <= 2147483647:
+        raise ValueError("The next HarmonyOS reader requires a valid version and build number >=245")
 
 
 def build_inputs():
@@ -47,6 +55,11 @@ def build_inputs():
         source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         context = validate_context(json.loads(Path(filename).read_text(encoding="utf-8")), source, os.environ)
         version, build, changelog = context["version"], context["build"], context["changelog"]
+        if context["preview"]:
+            config = json.loads((ROOT / "release.json").read_text(encoding="utf-8"))
+            if ((version, build) != (config["version"], config["build"])
+                    or changelog != (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")):
+                raise ValueError("Preview must use the reviewed candidate's own version and changelog")
         release = {key: item for key, item in context.items() if key != "changelog"}
     else:
         if os.environ.get("GITHUB_REF_TYPE") == "tag":

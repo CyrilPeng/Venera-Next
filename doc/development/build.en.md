@@ -154,7 +154,9 @@ Android release workflows require these repository Secrets:
 
 After a stable release, the AltStore workflow reuses the fixed `automation/update-altstore` branch and creates a pull request. Configure `ALTSTORE_PR_TOKEN` with permission to push a branch and create pull requests in this repository; when it is not configured, the workflow falls back to `WINGET_PKGS_TOKEN`. A missing token or failed PR creation now fails the job instead of reporting success with only an orphan branch.
 
-AI issue checking is disabled by default. After confirming that `API_URL` and `API_KEY` work, set the repository variable `ENABLE_AI_ISSUE_CHECK` to `true`; `ISSUE_CHECK_MODEL` can override the default model. The workflow posts summaries and close recommendations only and never closes an issue automatically.
+Issue classification and format checks run by default without an AI API. `.github/scripts/issue_policy.py` validates structured reports, category-specific evidence and classification/missing-information labels. New/edit/reopen and comment changes trigger rechecks; the same bot comment is updated. Bot events, PRs, closed Issues and historical formats are skipped. Required labels are created when absent; existing label colors and descriptions are preserved. See the [reporting guide](../user/issue_reporting.en.md).
+
+Optional AI summaries are disabled by default and run only for complete opened/edited reports. After verifying `API_URL` and `API_KEY`, set `ENABLE_AI_ISSUE_CHECK` to `true`; `ISSUE_CHECK_MODEL` can override the model. Format and AI jobs have separate per-Issue queues; skipped bot jobs cannot replace pending human checks, and slow AI calls do not block later format checks. AI updates its marked comment using the body and reporter/maintainer supplements; failure does not affect the fixed rules. Suggestions require maintainer review and never close Issues. Issue text is not interpolated into shell commands, and automation does not download attachments.
 
 Never put Secrets, signing files, or real passwords in code, logs, or documentation examples.
 

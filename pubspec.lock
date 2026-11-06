@@ -165,10 +165,8 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/desktop_webview_window"
-      ref: "7801fc582ecf5a7351632887891ecf309a7b2583"
-      resolved-ref: "7801fc582ecf5a7351632887891ecf309a7b2583"
-      url: "https://github.com/venera-app/flutter_desktop_webview"
-    source: git
+      relative: true
+    source: path
     version: "0.2.4"
   device_info_plus:
     dependency: transitive
@@ -335,15 +333,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_7zip:
-    dependency: "direct main"
-    description:
-      path: "."
-      ref: b33344797f1d2469339e0e1b75f5f954f1da224c
-      resolved-ref: b33344797f1d2469339e0e1b75f5f954f1da224c
-      url: "https://github.com/venera-app/flutter_7zip"
-    source: git
-    version: "0.0.1"
   flutter_file_dialog:
     dependency: "direct main"
     description:
@@ -477,15 +466,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.11.1"
-  flutter_saf:
-    dependency: "direct main"
-    description:
-      path: "."
-      ref: fe182cdf40e5fa6230f451bc1d643b860f610d13
-      resolved-ref: fe182cdf40e5fa6230f451bc1d643b860f610d13
-      url: "https://github.com/venera-app/flutter_saf"
-    source: git
-    version: "0.0.1"
   flutter_staggered_grid_view:
     dependency: "direct main"
     description:
@@ -672,15 +652,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.1"
-  lodepng_flutter:
-    dependency: "direct main"
-    description:
-      path: "."
-      ref: ac7d05dde32e8d728102a9ff66e6b55f05d94ba1
-      resolved-ref: ac7d05dde32e8d728102a9ff66e6b55f05d94ba1
-      url: "https://github.com/venera-app/lodepng_flutter"
-    source: git
-    version: "0.0.1"
   logging:
     dependency: transitive
     description:
@@ -939,10 +910,8 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/scrollable_positioned_list"
-      ref: "09e756b1f1b04e6298318d99ec20a787fb360f59"
-      resolved-ref: "09e756b1f1b04e6298318d99ec20a787fb360f59"
-      url: "https://github.com/CyrilPeng/flutter.widgets"
-    source: git
+      relative: true
+    source: path
     version: "0.3.8+1"
   share_plus:
     dependency: "direct main"
@@ -1172,6 +1141,20 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  venera_native:
+    dependency: "direct main"
+    description:
+      path: "packages/venera_native"
+      relative: true
+    source: path
+    version: "1.0.0"
+  venera_saf:
+    dependency: "direct main"
+    description:
+      path: "packages/venera_saf"
+      relative: true
+    source: path
+    version: "1.0.0"
   vm_service:
     dependency: transitive
     description:
@@ -1191,11 +1174,9 @@ packages:
   webdav_client:
     dependency: "direct main"
     description:
-      path: "."
-      ref: "2f669c98fb81cff1c64fee93466a1475c77e4273"
-      resolved-ref: "2f669c98fb81cff1c64fee93466a1475c77e4273"
-      url: "https://github.com/CyrilPeng/webdav_client"
-    source: git
+      path: "packages/webdav_client"
+      relative: true
+    source: path
     version: "1.2.2"
   win32:
     dependency: transitive
