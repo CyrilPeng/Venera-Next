@@ -187,13 +187,13 @@ def has_attachment(text: str, *, diagnostic: bool) -> bool:
 
 def has_log(text: str) -> bool:
     visible = _visible(text)
-    if not has_information(visible, minimum=24):
+    if not has_information(visible, minimum=12):
         return False
     return bool(re.search(
         r"\b20\d{2}-\d{2}-\d{2}[T ]\d{2}:\d{2}"
         r"|\b\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+"
         r"|(?:^|\n)\s*#\d+\s+\S+"
-        r"|\b\w+(?:Exception|Error)\b[^\n]*[:(]"
+        r"|\b\w*(?:Exception|Error)\b[^\n]*[:(]"
         r"|Traceback \(most recent call last\)"
         r"|FATAL EXCEPTION|Terminating app due to uncaught exception|Faulting application name:"
         r"|(?:^|\n)\s*(?:Unhandled [Ee]xception|\[(?:ERROR|WARN|INFO)\])",

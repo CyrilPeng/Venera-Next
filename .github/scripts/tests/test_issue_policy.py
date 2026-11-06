@@ -172,6 +172,8 @@ class PolicyValidationTests(unittest.TestCase):
             "Terminating app due to uncaught exception 'NSInvalidArgumentException'",
             "Faulting application name: VeneraNext.exe, version: 1.18.2",
             "SqliteException(1): while executing, transaction failed",
+            "Exception: Could not open the selected archive",
+            "Error: HTTP 401",
         ):
             with self.subTest(log=log):
                 self.assertTrue(policy.has_log(log))
