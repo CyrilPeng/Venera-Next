@@ -8,7 +8,7 @@
 
 - 新增自编 `venera_saf 1.0.0` 替代占位许可证的 SAF 包装层，保留 Android 既有目录路径与系统持久授权；以最长完整根 ID 解析含 `/` 的授权，较长授权撤销、provider 不可用、authority 歧义和文件不存在分别报错，中文、emoji、冒号及 `|` 名称使用 UTF-8 JSON 传递。
 - 原 `ParcelFileDescriptor` 持有到最终关闭，采用原生 64 位读写、定位、长度、截断与 flush；generation token、两阶段 isolate 交接及 worker drain 防止句柄复用与提前关闭，显式关闭传播 provider 错误。流取消和 PDF worker 失败路径完整清理并保留主错误；创建已有文件不截断，复制前拒绝规范化自身路径及不同授权下的同一文档，同目录重命名检查目标，授权根及不支持的原子接口明确保护。
-- SAF 迁移后统一管理 2 个 Git 来源、8 个 Git 包和 8 个本地包，其余 155 项锁定记录及 SDK 不变；新增完整项目源码／许可证清单、200 轮 C++ 句柄与 >2 GiB 稀疏文件回归、Linux ASan／UBSan，以及隔离 Android DocumentsProvider／混淆 Release／重启验证。Android 与 TV 构建核对全部 SAF 原生／JNI 导出、ABI 与随包声明。
+- SAF 迁移后统一管理 2 个 Git 来源、8 个 Git 包和 8 个本地包，其余 155 项锁定记录及 SDK 不变；新增完整项目源码／许可证清单、200 轮 C++ 句柄与 >2 GiB 稀疏文件回归、Linux ASan／UBSan，以及隔离 Android DocumentsProvider／混淆 Release／重启验证，CI 使用显式 Android SDK 工具路径。Android 与 TV 构建核对全部 SAF 原生／JNI 导出、ABI 与随包声明。
 - 新增自管 `venera_native 1.0.0`，以项目自编的 Dart／FFI 桥接与平台构建替代许可证仍为占位内容的 `lodepng_flutter` 和 `flutter_7zip` 包装层；分别收纳官方 LodePNG 20241015 的 Zlib 源码与 7-Zip 24.09 明确声明 public domain 的 C 解码子集，保留原算法、版权、独立来源和随包声明。
 - PNG 编码校验尺寸、字节视图与原生错误，复制结果后立即释放原生缓冲；7z 在单个后台 isolate 内持有并关闭归档、复用 solid block，核对 Unicode 路径、CRC、长度、重复名、目录越界与链接，缺失文件名元数据时安全失败。保留 ZIP／7z／Dart ZIP 兼容回退；新增独立归档夹具、原生内存安全和真实图片生命周期回归。
 - 根据 Linux UBSan 检查修复 7-Zip 核心的未对齐整数访问，各平台统一启用原核心的逐字节读取路径并保留上游与本地摘要；Android 冒烟构建与应用拆分配置统一覆盖 ARM32、ARM64 和 x86_64，继续严格核验引擎／原生库 ABI、导出和随包声明。
