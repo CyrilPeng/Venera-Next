@@ -1,5 +1,7 @@
 {
+  "schema_version": 2,
   "reviewed_on": "2026-09-28",
+  "local_packages_reviewed_on": "2026-11-06",
   "repositories": [
     {
       "dependency": "flutter_qjs",
@@ -9,16 +11,6 @@
       "reason": "QuickJS-NG migration, JS numeric conversion, native platform patches and the 2026-10-31 TypedData reference-walk fix; validate runtime lifetimes before replacement.",
       "packages": {
         "flutter_qjs": "."
-      }
-    },
-    {
-      "dependency": "scrollable_positioned_list",
-      "url": "https://github.com/CyrilPeng/flutter.widgets",
-      "commit": "09e756b1f1b04e6298318d99ec20a787fb360f59",
-      "status": "maintained-fork",
-      "reason": "Reader uses scrollControllerCallback and scrollBehavior absent from the stable package.",
-      "packages": {
-        "scrollable_positioned_list": "packages/scrollable_positioned_list"
       }
     },
     {
@@ -58,16 +50,6 @@
       }
     },
     {
-      "dependency": "webdav_client",
-      "url": "https://github.com/CyrilPeng/webdav_client",
-      "commit": "2f669c98fb81cff1c64fee93466a1475c77e4273",
-      "status": "maintained-fork",
-      "reason": "Requires the newClient adapter parameter plus redirect, upload and authentication patches.",
-      "packages": {
-        "webdav_client": "."
-      }
-    },
-    {
       "dependency": "flutter_saf",
       "url": "https://github.com/venera-app/flutter_saf",
       "commit": "fe182cdf40e5fa6230f451bc1d643b860f610d13",
@@ -86,6 +68,108 @@
       "packages": {
         "flutter_7zip": "."
       }
+    }
+  ],
+  "local_packages": [
+    {
+      "dependency": "photo_view",
+      "path": "packages/photo_view",
+      "version": "0.14.0",
+      "status": "maintained-local",
+      "reason": "Reader-specific scale/reset APIs and image, controller and gesture lifetime patches are maintained with the application.",
+      "upstream": "https://github.com/renancaraujo/photo_view",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/CyrilPeng/photo_view",
+        "commit": "a1255d1b5945aad4b7323303ec2ecdf0c90ffc4c",
+        "path": "."
+      },
+      "license": {
+        "spdx": "MIT",
+        "file": "LICENSE",
+        "sha256": "6c2156a7940de2bce1ae284aab6109514248634eb75f3be7ce00bf62a143cbe4"
+      },
+      "patches": "LOCAL_PATCHES.md"
+    },
+    {
+      "dependency": "share_plus",
+      "path": "packages/share_plus",
+      "version": "12.0.2",
+      "status": "maintained-local",
+      "reason": "Native sharing payload, file retention and callback ownership fixes require coordinated application and platform validation.",
+      "upstream": "https://github.com/fluttercommunity/plus_plugins",
+      "source": {
+        "type": "archive",
+        "url": "https://pub.dev/api/archives/share_plus-12.0.2.tar.gz",
+        "sha256": "223873d106614442ea6f20db5a038685cc5b32a2fba81cdecaefbbae0523f7fa"
+      },
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "file": "LICENSE",
+        "sha256": "eb9741a672906ebd01fd9b3bef38f6c82eff250e91149cf404539ee7981079fd"
+      },
+      "patches": "LOCAL_PATCHES.md"
+    },
+    {
+      "dependency": "rhttp",
+      "path": "packages/rhttp",
+      "version": "0.15.1",
+      "status": "maintained-local",
+      "reason": "Cancellation-safe Rust/Dart callback draining and locked native dependency security fixes are maintained with the application.",
+      "upstream": "https://codeberg.org/Tienisto/rhttp",
+      "source": {
+        "type": "archive",
+        "url": "https://pub.dev/api/archives/rhttp-0.15.1.tar.gz",
+        "sha256": "b111638045b730f825a85cb045017b5bd3dfb47b38e98eb293b0519ee6050f2e"
+      },
+      "license": {
+        "spdx": "MIT",
+        "file": "LICENSE",
+        "sha256": "522dfc2f5fdcf53ef9b7569b6b50d9ce1d88524b40b07c6fadaad2a1335b6d34"
+      },
+      "patches": "LOCAL_PATCHES.md"
+    },
+    {
+      "dependency": "scrollable_positioned_list",
+      "path": "packages/scrollable_positioned_list",
+      "version": "0.3.8+1",
+      "status": "maintained-local",
+      "reason": "Reader uses the pinned fork's scrollControllerCallback and scrollBehavior interfaces; the package is small and application-specific.",
+      "upstream": "https://github.com/google/flutter.widgets",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/CyrilPeng/flutter.widgets",
+        "commit": "09e756b1f1b04e6298318d99ec20a787fb360f59",
+        "path": "packages/scrollable_positioned_list"
+      },
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "file": "LICENSE",
+        "sha256": "d347790d98693ff63129eafe676bac5cb5247c972f1a36f631bfa0e4dbb17293"
+      },
+      "patches": "LOCAL_PATCHES.md",
+      "source_manifest": "UPSTREAM_MANIFEST.json"
+    },
+    {
+      "dependency": "webdav_client",
+      "path": "packages/webdav_client",
+      "version": "1.2.2",
+      "status": "maintained-local",
+      "reason": "Retains the adapter, redirect, upload and authentication patches used by WebDAV reading and backup without maintaining a separate fork.",
+      "upstream": "https://github.com/flymzero/webdav_client",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/CyrilPeng/webdav_client",
+        "commit": "2f669c98fb81cff1c64fee93466a1475c77e4273",
+        "path": "."
+      },
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "file": "LICENSE",
+        "sha256": "b17d7a897d3602d6ea9e53038329cea1a581ce53672d148893ef436f3fe255b9"
+      },
+      "patches": "LOCAL_PATCHES.md",
+      "source_manifest": "UPSTREAM_MANIFEST.json"
     }
   ]
 }

@@ -2,14 +2,16 @@
 
 Default Chinese version: [dependencies.zh.md](dependencies.zh.md)
 
-This document records governance rules for VeneraNext's direct dependencies, especially Git dependencies that are not resolved from pub.dev. `pubspec.lock` is part of reproducible builds, but it does not replace documenting dependency provenance and maintenance responsibility.
+This document records governance rules for VeneraNext's Git dependencies and repository-local source packages. `pubspec.lock` is part of reproducible builds, but it does not replace documenting dependency provenance and maintenance responsibility.
 
 ## Rules
 
-See the [2026-09-28 audit](dependency_audit.en.md) for ownership and replacement decisions. [git_dependencies.json](git_dependencies.json) records current origins, pins, and all transitive Git packages. Update it with every Git dependency change and run `dart tool/check_git_dependencies.dart`.
+See the [dependency audit](dependency_audit.en.md) for ownership and replacement decisions. The [combined inventory](git_dependencies.json) keeps active Git origins and all transitive Git packages in `repositories`; `local_packages` records local paths, versions, upstreams, immutable source baselines, licenses and patch notes. Update it with every Git or local dependency change and run `dart tool/check_git_dependencies.dart`.
 
 - Commit related changes to both `pubspec.yaml` and `pubspec.lock`.
 - Prefer stable pub.dev packages. Every Git fork must have a documented reason.
+- Prefer keeping necessary application-specific source patches under `packages/`, fixed by the application commit, instead of creating an independent fork for each small package. Consider a shared dependency repository when multiple applications need the same patches.
+- Each local package must identify its original upstream, complete source commit or archive SHA-256, version, retained license and checksum, maintenance reason and `LOCAL_PATCHES.md`. Switching to `path` must not bypass provenance review.
 - Pin Git dependencies to immutable commits. Do not use a default branch, `main`, or `HEAD`.
 - Tools installed with `dart pub global activate` in release workflows must use the same pinned commit.
 - Review upstream changes, security advisories, licenses, platform builds, and relevant tests when upgrading.
@@ -17,18 +19,16 @@ See the [2026-09-28 audit](dependency_audit.en.md) for ownership and replacement
 
 ## Current Git Dependencies
 
-2026-09-28: `flutter_qjs`, `photo_view`, `flutter.widgets`, `flutter_inappwebview`, and `webdav_client` moved to the existing forks under `CyrilPeng`, without changing pinned commits. The six platform subpackages of `flutter_inappwebview` resolve through repository-relative paths to the same fork. That stage changed provenance only, not versions. On 2026-10-05, `photo_view` became the local path package documented below and left the current Git inventory. Roll back dependency declarations, lockfile, and the corresponding inventory entry together.
+2026-09-28: `flutter_qjs`, `photo_view`, `flutter.widgets`, `flutter_inappwebview`, and `webdav_client` moved to existing forks under `CyrilPeng`, without changing pins. The six platform subpackages of `flutter_inappwebview` resolve through repository-relative paths to the same fork. `photo_view` became local on 2026-10-05; `scrollable_positioned_list` and `webdav_client` became local on 2026-11-06. Six independent Git origins and twelve Git packages remain. All local packages now appear in the combined inventory. Roll back declarations, lockfile and inventory together.
 
 VeneraNext maintainers own patch selection, upstream review, and validation for these forks. Preserve original copyrights and licenses. Mirroring does not replace ongoing maintenance or resolve missing licenses.
 
 | Dependency | Commit | Upstream / license | Immediate reason for retaining the customized repository |
 |---|---|---|---|
 | `flutter_qjs` | `295f77421eedff356a02e92987181b525970c780` | Fork upstream not recorded / MIT | Retains NDK r28 support and skips numeric-buffer reference walks for asynchronous byte results; replacement requires runtime and native platform verification |
-| `scrollable_positioned_list` | `09e756b1f1b04e6298318d99ec20a787fb360f59` | `google/flutter.widgets` / BSD-3-Clause | The pinned revision adds `scrollControllerCallback` and `scrollBehavior`, used by continuous-reader positioning |
 | `desktop_webview_window` | `7801fc582ecf5a7351632887891ecf309a7b2583` | `wgh136/flutter_desktop_webview` / not declared | The pinned revision fixes Windows ARM64 builds; replacement requires verification on every desktop platform |
 | `flutter_inappwebview` | `3ef899b3db57c911b080979f1392253b835f98ab` | `pichillilorenzo/flutter_inappwebview` / Apache-2.0 | The pinned revision fixes `GraphicsContext` deallocation; embedded WebView and Cloudflare flows rely on this branch behavior |
 | `lodepng_flutter` | `ac7d05dde32e8d728102a9ff66e6b55f05d94ba1` | Fork upstream not recorded / license file is still a placeholder | The pinned revision includes NDK r28 build support, and the image pipeline still uses its native plugin |
-| `webdav_client` | `2f669c98fb81cff1c64fee93466a1475c77e4273` | `wgh136/webdav_client` / BSD-3-Clause | The pinned revision adds multiple authentication methods required by WebDAV reading and backup compatibility |
 | `flutter_saf` | `fe182cdf40e5fa6230f451bc1d643b860f610d13` | `pkuislm/flutter_saf` / license file is still a placeholder | The pinned revision disables minification to avoid Android release-build problems; storage access still uses this plugin |
 | `flutter_7zip` | `b33344797f1d2469339e0e1b75f5f954f1da224c` | `wgh136/flutter_7zip` / license file is still a placeholder | The pinned revision fixes compilation errors, and CBZ/archive fallback compatibility still uses this plugin |
 
@@ -46,7 +46,27 @@ The [reader diagnostic record](reader_diagnostics.md) preserves an isolated A/B/
 
 This is not a QuickJS engine security upgrade and does not resolve the existing upstream-provenance debt. It adds no permissions or network capabilities. Roll back the pin in `pubspec.yaml`, `pubspec.lock`, `git_dependencies.json` and the current dependency table together, then revalidate loading/processing lifetimes; never patch the shared Pub cache as a rollback mechanism.
 
-## Locally Maintained PhotoView
+## Local Packages and First Migration (2026-11-06)
+
+| Local package | Version | Application path | Immutable source baseline |
+|---|---|---|---|
+| `photo_view` | 0.14.0 | `packages/photo_view` | Former fork commit `a1255d1b5945aad4b7323303ec2ecdf0c90ffc4c` |
+| `share_plus` | 12.0.2 | `packages/share_plus` | pub.dev 12.0.2 archive and SHA-256 |
+| `rhttp` | 0.15.1 | `packages/rhttp` | pub.dev 0.15.1 archive and SHA-256 |
+| `scrollable_positioned_list` | 0.3.8+1 | `packages/scrollable_positioned_list` | Same-named package directory at former fork commit `09e756b1f1b04e6298318d99ec20a787fb360f59` |
+| `webdav_client` | 1.2.2 | `packages/webdav_client` | Former fork commit `2f669c98fb81cff1c64fee93466a1475c77e4273` |
+
+The first migration retains both packages' runtime sources, manifests, original BSD-3-Clause licenses and copyrights, README and CHANGELOG. Examples, upstream test projects and build outputs are omitted. Reader scroll interfaces and WebDAV adapter, authentication, redirect and upload behavior retain their existing implementations. Each `LOCAL_PATCHES.md` documents current-SDK equivalents, explicit dynamic types, unreferenced private helpers and package analysis policies. Package versions, unrelated dependencies and native toolchains are not upgraded together.
+
+Both new `UPSTREAM_MANIFEST.json` files record canonical LF Git blob SHA-256 hashes and reviewed local file hashes. The checker validates matching source provenance, local file hashes and registration of every Dart file under `lib/`. The three previously local packages retain their detailed patch/archive records and gain combined declaration, provenance, license and documentation checks.
+
+Local declarations and relative lockfile paths must agree; package manifest names/versions must match the inventory. Resolved files must remain inside the reviewed package directory. License hashes use canonical LF bytes, and patch notes must retain the source baseline and version. Unreviewed direct dependencies, overrides and transitive local packages fail validation. The application Git commit fixes local contents; a lockfile path alone cannot ensure unchanged source.
+
+Update patch notes, inventory and applicable local file hashes with each change, compare upstream updates and run strict analysis and affected feature regressions. Restore declarations, lockfile and Git inventory entries together when reverting to Git. Existing forks remain available for historical builds and rollback. The four license-review dependencies retain their pinned origins while authorization and replacement audits proceed separately.
+
+## Initial Local PhotoView Migration (2026-10-05)
+
+The following preserves the initial migration scope. Later lifecycle and zoom patches are documented in the local `LOCAL_PATCHES.md`.
 
 `photo_view` resolves through `path: packages/photo_view` to the [local package](../../packages/photo_view/pubspec.yaml), still at version **0.14.0**. Its source is the previously pinned [CyrilPeng/photo_view](https://github.com/CyrilPeng/photo_view) commit `a1255d1b5945aad4b7323303ec2ecdf0c90ffc4c`, with [renancaraujo/photo_view](https://github.com/renancaraujo/photo_view) as upstream. Original copyrights and the [MIT license](../../packages/photo_view/LICENSE) remain unchanged. VeneraNext maintainers own the local patch and future upstream comparisons.
 
@@ -56,7 +76,7 @@ This is not a QuickJS engine security upgrade and does not resolve the existing 
 - `translate(dx, dy)` → `translateByDouble(dx, dy, 0.0, 1.0)`.
 - `scale(s)` → `scaleByDouble(s, s, s, 1.0)`, preserving scaling on all three axes and the homogeneous coordinate.
 
-The migration retains the existing fork's reader interfaces and behavior; it does not adopt the pub.dev release. After formatter normalization, only the three documented source files differ. Package version, manifest dependencies, all **156** other locked dependency records, and SDK locks remain unchanged. `git_dependencies.json` lists active Git dependencies, so its `photo_view` entry is removed while the local patch record preserves full provenance. Resolve dependencies with `PUB_HOSTED_URL=https://pub.dev` to match the lockfile, using `flutter pub get --offline --enforce-lockfile`.
+The migration retains the existing fork's reader interfaces and behavior; it does not adopt the pub.dev release. After formatter normalization, only the three documented source files differ. Package version, manifest dependencies, all **156** other locked dependency records, and SDK locks remain unchanged. Initially `photo_view` left the then Git-only inventory; on 2026-11-06 it joined the combined inventory's `local_packages` list, retaining the detailed provenance and patch record. Resolve dependencies with `PUB_HOSTED_URL=https://pub.dev` to match the lockfile, using `flutter pub get --offline --enforce-lockfile`.
 
 Real PhotoView regressions cover cached and asynchronous first frames, replacement, unmount cleanup, contained sizing, and zoom. The PR build rules already include `packages/`, so changes to this package trigger existing platform validation without a separate rule change. Restoring the Git source requires restoring `pubspec.yaml`, `pubspec.lock`, and the Git inventory together, then revalidating image lifetimes.
 
@@ -100,6 +120,7 @@ validate platform builds.
 
 - [ ] `pubspec.yaml` uses immutable commits, never `HEAD` or a default branch.
 - [ ] Resolved commits in `pubspec.lock` match the declarations.
+- [ ] Local paths, versions, upstreams, source checksums, licenses and patch notes are synchronized; applicable source manifests and local file hashes are updated.
 - [ ] Release workflows use the same commit for Git-installed tools.
 - [ ] `flutter pub get --enforce-lockfile`, `flutter analyze --no-pub`, and `flutter test --no-pub` have passed.
 - [ ] Platform builds have passed, or unverified platforms are documented.
