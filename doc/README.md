@@ -39,6 +39,7 @@ English index: [README.en.md](README.en.md)
 
 ## 用户和命令行
 
+- [Issue 分类与诊断采集](user/issue_reporting.zh.md) / [Issue reporting and diagnostics](user/issue_reporting.en.md)
 - [应用数据同步](user/data_sync.zh.md) / [App-data synchronization](user/data_sync.en.md)
 - [两级本地收藏目录（待发布）](user/favorite_folders.zh.md) / [Two-Level Local Favorite Folders](user/favorite_folders.en.md)
 - [自动选择阅读模式](user/automatic_reader_mode.zh.md) / [Automatic Reader Mode](user/automatic_reader_mode.en.md)
