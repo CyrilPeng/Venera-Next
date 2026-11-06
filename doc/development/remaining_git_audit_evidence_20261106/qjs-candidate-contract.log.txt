@@ -1,0 +1,20 @@
+Running build hooks...00:00 +0: loading test\contract_test.dart
+00:00 +0: test\contract_test.dart: JS numeric values retain finite values, NaN and infinities
+QJS_NEGATIVE_ZERO type=double negative=true
+00:00 +1: test\contract_test.dart: JS Map entries remain visible to the application bridge
+00:00 +1 -1: test\contract_test.dart: JS Map entries remain visible to the application bridge [E]
+  Expected: {'中文': 7, 'second': 9}
+    Actual: {}
+     Which: has different length and is missing map key '中文'
+
+  package:matcher               expect
+  test\contract_test.dart 51:7  main.<fn>
+
+00:00 +1 -1: test\contract_test.dart: Promise, callbacks and copied buffers survive repeated engine teardown
+00:00 +2 -1: Some tests failed.
+
+Failing tests:
+  test\contract_test.dart: JS Map entries remain visible to the application bridge
+
+Consider enabling the flag chain-stack-traces to receive more detailed exceptions.
+For example, 'dart test --chain-stack-traces'.

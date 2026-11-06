@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "reviewed_on": "2026-09-28",
+  "reviewed_on": "2026-11-06",
   "local_packages_reviewed_on": "2026-11-06",
   "repositories": [
     {
@@ -8,17 +8,18 @@
       "url": "https://github.com/CyrilPeng/flutter_qjs",
       "commit": "295f77421eedff356a02e92987181b525970c780",
       "status": "maintained-fork",
-      "reason": "QuickJS-NG migration, JS numeric conversion, native platform patches and the 2026-10-31 TypedData reference-walk fix; validate runtime lifetimes before replacement.",
+      "reason": "Keep the Dart/FFI, Map, TypedData and lifecycle contract: official unpublished 0.4.0 fails application resolution and its native Map probe. Separately remediate the matched 0.8-era QuickJS-NG core security findings before enabling the next HarmonyOS release.",
       "packages": {
         "flutter_qjs": "."
-      }
+      },
+      "audit": "doc/development/remaining_git_audit_20261106.json"
     },
     {
       "dependency": "flutter_inappwebview",
       "url": "https://github.com/CyrilPeng/flutter_inappwebview",
       "commit": "3ef899b3db57c911b080979f1392253b835f98ab",
       "status": "maintained-fork",
-      "reason": "Keep the coordinated 6.2.0-beta.3 platform packages and GraphicsContext disposal fix.",
+      "reason": "Keep all seven coordinated platform packages: stable 6.1.5 lacks the browser-exit API, while official master passes analysis but retains the static GraphicsContext and lacks native multiview/proxy acceptance.",
       "packages": {
         "flutter_inappwebview": "flutter_inappwebview",
         "flutter_inappwebview_android": "flutter_inappwebview_android",
@@ -27,7 +28,8 @@
         "flutter_inappwebview_platform_interface": "flutter_inappwebview_platform_interface",
         "flutter_inappwebview_web": "flutter_inappwebview_web",
         "flutter_inappwebview_windows": "flutter_inappwebview_windows"
-      }
+      },
+      "audit": "doc/development/remaining_git_audit_20261106.json"
     }
   ],
   "local_packages": [

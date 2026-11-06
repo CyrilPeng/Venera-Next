@@ -2,6 +2,8 @@
 
 Default Chinese version: [dependencies.zh.md](dependencies.zh.md)
 
+See the [2026-11-06 complete audit](remaining_git_audit_20261106.en.md) for the two remaining Git origins, licenses, candidate probes and advisory assessments. Preserve the QuickJS wrapper contract while prioritizing the recorded core security fixes. The next HarmonyOS pin permits preview only; core remediation and platform review precede tag distribution. Keep current SHAs and all eight local packages controlled, and update provenance, complete locks, audit and platform overlays together.
+
 This document records governance rules for VeneraNext's Git dependencies and repository-local source packages. `pubspec.lock` is part of reproducible builds, but it does not replace documenting dependency provenance and maintenance responsibility.
 
 ## Rules

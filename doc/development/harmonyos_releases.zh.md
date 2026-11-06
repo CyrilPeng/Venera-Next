@@ -13,6 +13,14 @@
 3. 将新的完整鸿蒙 SHA 和共同基线写入 pin，提交 changelog 与必要的安装指南更新。
 4. pin／发布工作流变更的 PR 会运行 `HarmonyOS Release HAP`；只有同一候选代码的质量与 HAP 检查通过后才合并。
 
+## 冻结的 244 与下一候选
+
+`1.18.3+244` 继续使用 schema 1 的 `.github/harmonyos-release.json`，其来源、独立锁文件和历史 Release 资产保持冻结。构建号至少为 245 的新版本使用 schema 2 的 `.github/harmonyos-next.json`；禁止回退到旧 pin。两个 pin 都必须来自调用方已提交的 Git 文件。
+
+主线 PR 和分支手动运行使用 `--preview-next`。即使主线仍为 244，预览也使用候选自身的 `1.18.3+245` 版本、构建号和 changelog，并分别保存真实调用方提交、版本、构建号及 Actions run ID。八个项目包按候选 Git 文件计算摘要，七个受管原生库、PNG／7z 导出及生成的第三方 NOTICE 参与完整 HAP 审计。鸿蒙既有的 Rhttp 显式加载接口按其真实平台变体核验。
+
+下一 pin 当前为 `release_enabled: false`。完成[QuickJS 核心审计中的修复](remaining_git_audit_20261106.zh.md)和平台审核前，tag 构建不得启用下一候选分发。预览和未绑定实际 tag 的 schema 2 产物均拒绝 Release 验证；通过预览不会自动改变发布状态。
+
 ## 版本与产物
 
 发布工作流校验调用方的 Git 提交、版本、构建号、运行号及 changelog 摘要。只有独占生成工程被写入调用方版本，固定源 checkout 不被改写。原生版本名为三段数字，Dart 版本保留 RC 后缀；构建号沿用主线并递增。第一个包含 HAP 的标签构建号至少为 **244**，不回填 `v1.18.2` 等旧 Release。
@@ -31,11 +39,12 @@ HAP 采用 `com.github.cyrilpeng.veneranext.harmony` 包名和 `VeneraNext (Harm
 
 完整构建的 `Release` 同时依赖 Quality、原平台 Build 与 HarmonyOS。HAP 缺失、内容损坏、源码过期或摘要错误都不得 `continue-on-error`。先创建草稿并上传，再从 GitHub API 核对全部五项鸿蒙资产的名称、大小、上传状态和 SHA-256；通过后才公开，公开后再复核一次。任一阶段失败须查看日志，不允许静默去掉鸿蒙包后继续。
 
-`HarmonyOS Release HAP` 的分支手动运行和 PR 运行只产出 Actions artifacts，不创建标签或 Release；可用于检查当前版本的构建接线，但不表示该版本已经发布 HAP。常用检查：
+`HarmonyOS Release HAP` 的分支手动运行和目标主线的 PR 运行只产出下一候选的 Actions artifacts，不创建标签或 Release；鸿蒙分支 PR 使用独立候选流程核验其准确 head。常用检查：
 
 ```bash
 python3 -m unittest discover -s .github/scripts/tests -p test_harmonyos_release.py -v
 python3 .github/scripts/harmonyos_release.py config
+python3 .github/scripts/harmonyos_release.py config --preview-next
 gh workflow run harmonyos-release.yml --ref main
 ```
 

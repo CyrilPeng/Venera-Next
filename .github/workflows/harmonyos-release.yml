@@ -5,8 +5,10 @@ on:
   workflow_call:
   workflow_dispatch:
   pull_request:
+    branches: [main]
     paths:
       - .github/harmonyos-release.json
+      - .github/harmonyos-next.json
       - .github/scripts/harmonyos_release.py
       - .github/scripts/tests/test_harmonyos_release.py
       - .github/workflows/harmonyos-release.yml
@@ -26,6 +28,7 @@ jobs:
     env:
       CI: 'true'
       PYTHONUNBUFFERED: '1'
+      HARMONYOS_PREVIEW_NEXT: ${{ github.ref_type != 'tag' }}
       RUSTUP_TOOLCHAIN: '1.92.0'
       PUB_HOSTED_URL: https://pub.dev
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
@@ -42,10 +45,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Read the immutable reviewed source pin
+      - name: Select the frozen release or reviewed next preview
         id: pin
         working-directory: release
-        run: python3 .github/scripts/harmonyos_release.py config --github-output "$GITHUB_OUTPUT"
+        run: |
+          options=()
+          if [ "$HARMONYOS_PREVIEW_NEXT" = true ]; then options+=(--preview-next); fi
+          python3 .github/scripts/harmonyos_release.py config "${options[@]}" --github-output "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -57,8 +63,10 @@ jobs:
       - name: Reject stale source and bind the caller version and changelog
         working-directory: release
         run: |
+          options=()
+          if [ "$HARMONYOS_PREVIEW_NEXT" = true ]; then options+=(--preview-next); fi
           python3 .github/scripts/harmonyos_release.py prepare \
-            --source-root ../harmonyos --output "$RUNNER_TEMP/harmonyos-release-context.json"
+            "${options[@]}" --source-root ../harmonyos --output "$RUNNER_TEMP/harmonyos-release-context.json"
           echo "HARMONYOS_RELEASE_CONTEXT=$RUNNER_TEMP/harmonyos-release-context.json" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
@@ -113,8 +121,9 @@ jobs:
         run: |
           rustup toolchain install 1.92.0 --profile minimal --target aarch64-unknown-linux-ohos
           revision="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["quickjs"]["revision"])')"
+          repository="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["quickjs"]["repository"])')"
           git init "$RUNNER_TEMP/flutter-qjs"
-          git -C "$RUNNER_TEMP/flutter-qjs" remote add origin https://github.com/CyrilPeng/flutter_qjs.git
+          git -C "$RUNNER_TEMP/flutter-qjs" remote add origin "$repository"
           git -C "$RUNNER_TEMP/flutter-qjs" fetch --depth 1 origin "$revision"
           git -C "$RUNNER_TEMP/flutter-qjs" checkout --detach FETCH_HEAD
           url="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["sqlite"]["archive"])')"
@@ -143,8 +152,10 @@ jobs:
       - name: Independently verify all five release assets
         working-directory: release
         run: |
+          options=()
+          if [ "$HARMONYOS_PREVIEW_NEXT" = true ]; then options+=(--preview-next); fi
           python3 .github/scripts/harmonyos_release.py verify \
-            --source-root ../harmonyos --artifacts ../harmonyos/build/harmonyos/ci/release-artifacts
+            "${options[@]}" --source-root ../harmonyos --artifacts ../harmonyos/build/harmonyos/ci/release-artifacts
 
       - name: Upload verified unsigned release assets
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

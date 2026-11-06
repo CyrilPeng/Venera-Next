@@ -13,6 +13,14 @@ After the baseline, mainline may change documentation, workflows, release metada
 3. Update the full source SHA and common baseline, changelog and installation guides where needed.
 4. Pin/release-workflow PRs run `HarmonyOS Release HAP`. Merge only after quality and HAP checks pass for the candidate code.
 
+## Frozen Build 244 and the Next Candidate
+
+`1.18.3+244` continues to use the schema 1 `.github/harmonyos-release.json`; its source, independent lockfile and historical Release assets remain frozen. Builds of at least 245 use the schema 2 `.github/harmonyos-next.json` without falling back to the old pin. Both pins must be part of the caller's committed Git inputs.
+
+Mainline PRs and branch dispatches use `--preview-next`. While main remains at 244, the preview uses the candidate's own `1.18.3+245` version, build number and changelog, recording the actual caller commit, version, build and Actions run ID separately. The complete HAP audit covers Git-file digests for all eight project packages, seven managed native libraries, PNG/7z exports and the generated third-party NOTICE. The existing HarmonyOS Rhttp explicit-loading interface is verified against its actual platform variant.
+
+The next pin currently has `release_enabled: false`. Tag distribution is blocked until the [audited QuickJS core findings](remaining_git_audit_20261106.en.md) are remediated and platform review completes. Preview assets and schema 2 assets without a verified tag context are rejected by Release verification; passing a preview never changes publication readiness automatically.
+
 ## Versions and Assets
 
 The caller's Git commit, version, build number, run ID and changelog digest are validated. Only the owned generated project receives the caller's version and changelog; the pinned checkout is unchanged. Native versions have three numeric components, while Dart versions retain RC suffixes. Build numbers follow mainline monotonically. The first tagged HAP release must have build **244** or later; existing releases such as `v1.18.2` are not backfilled.
@@ -31,11 +39,12 @@ The bundle is `com.github.cyrilpeng.veneranext.harmony`, with label `VeneraNext 
 
 The full workflow's `Release` requires Quality, the existing platform Build and HarmonyOS. Missing, damaged, stale or mismatched HAP assets must never use `continue-on-error`. Upload to a draft first, then verify all five HarmonyOS assets through the GitHub API: names, sizes, upload state and SHA-256. Publish only after verification, then check the public assets again. Investigate failures rather than silently omitting HarmonyOS.
 
-Branch dispatches and PR runs of `HarmonyOS Release HAP` create Actions artifacts only, never tags or releases. They exercise current-version wiring without claiming a HAP was publicly released for that version:
+Branch dispatches and mainline PR runs of `HarmonyOS Release HAP` create next-candidate Actions artifacts only, never tags or releases. HarmonyOS-targeted PRs use the independent candidate workflow to verify their exact head:
 
 ```bash
 python3 -m unittest discover -s .github/scripts/tests -p test_harmonyos_release.py -v
 python3 .github/scripts/harmonyos_release.py config
+python3 .github/scripts/harmonyos_release.py config --preview-next
 gh workflow run harmonyos-release.yml --ref main
 ```
 
