@@ -1,0 +1,136 @@
+{
+  "source": {
+    "type": "project",
+    "url": "https://github.com/CyrilPeng/Venera-Next",
+    "path": "packages/venera_saf"
+  },
+  "third_party_sources": [],
+  "files": [
+    {
+      "path": "android/build.gradle",
+      "origin": "project",
+      "sha256": "72e410b4c86c83998e48d228d013767219efe29918af6ae74cf035958817f792",
+      "local_sha256": "72e410b4c86c83998e48d228d013767219efe29918af6ae74cf035958817f792"
+    },
+    {
+      "path": "android/consumer-rules.pro",
+      "origin": "project",
+      "sha256": "fff222c17ee23952f75eba116face7b2ac94aca731b8485a4cd926bbb2221912",
+      "local_sha256": "fff222c17ee23952f75eba116face7b2ac94aca731b8485a4cd926bbb2221912"
+    },
+    {
+      "path": "android/src/main/AndroidManifest.xml",
+      "origin": "project",
+      "sha256": "343d5be1ac17cdd45d1a2f2ddc616c509290e655869125a9422a96d88aa66066",
+      "local_sha256": "343d5be1ac17cdd45d1a2f2ddc616c509290e655869125a9422a96d88aa66066"
+    },
+    {
+      "path": "android/src/main/kotlin/com/cyrilpeng/venera_saf/SafDocuments.kt",
+      "origin": "project",
+      "sha256": "4ea2cfb9f7e8c7f1afd7cf7a96ed4a35eddcf16b33d5818af637379de7c65812",
+      "local_sha256": "4ea2cfb9f7e8c7f1afd7cf7a96ed4a35eddcf16b33d5818af637379de7c65812"
+    },
+    {
+      "path": "android/src/main/kotlin/com/cyrilpeng/venera_saf/VeneraSafPlugin.kt",
+      "origin": "project",
+      "sha256": "62ca76323379caf21bdffc286227070241742c35ecb505caded223aa4feb9d01",
+      "local_sha256": "62ca76323379caf21bdffc286227070241742c35ecb505caded223aa4feb9d01"
+    },
+    {
+      "path": "lib/src/backend.dart",
+      "origin": "project",
+      "sha256": "ee11a1c0d0dc406dd51ff4bf576b3d0ffa8d31606a5a758f7083cc7b6226c049",
+      "local_sha256": "ee11a1c0d0dc406dd51ff4bf576b3d0ffa8d31606a5a758f7083cc7b6226c049"
+    },
+    {
+      "path": "lib/src/entities.dart",
+      "origin": "project",
+      "sha256": "e0a61175a4ee3e6248fbb6d6748e79e79fe4772197ebf2043dbc8397036ae463",
+      "local_sha256": "e0a61175a4ee3e6248fbb6d6748e79e79fe4772197ebf2043dbc8397036ae463"
+    },
+    {
+      "path": "lib/src/native_backend.dart",
+      "origin": "project",
+      "sha256": "ad471ceeebb764aae20e27cb6b0b694e3bfa05dbaa918dc3cc4cc46ba96d4058",
+      "local_sha256": "ad471ceeebb764aae20e27cb6b0b694e3bfa05dbaa918dc3cc4cc46ba96d4058"
+    },
+    {
+      "path": "lib/src/overrides.dart",
+      "origin": "project",
+      "sha256": "990102750208decbc63bd77494d8b789c460aa50be8e63ae669610e237eb2f1e",
+      "local_sha256": "990102750208decbc63bd77494d8b789c460aa50be8e63ae669610e237eb2f1e"
+    },
+    {
+      "path": "lib/src/random_access.dart",
+      "origin": "project",
+      "sha256": "ef9a45ba988e7a7e3ed49cd70279df9a99ee6b6a2c4ba2380279a8bcf4a787a3",
+      "local_sha256": "ef9a45ba988e7a7e3ed49cd70279df9a99ee6b6a2c4ba2380279a8bcf4a787a3"
+    },
+    {
+      "path": "lib/src/worker.dart",
+      "origin": "project",
+      "sha256": "e33481b8d3c3d17e934de2adf9fce638cc7f126bb3c2f45d75906224d53c4301",
+      "local_sha256": "e33481b8d3c3d17e934de2adf9fce638cc7f126bb3c2f45d75906224d53c4301"
+    },
+    {
+      "path": "lib/venera_saf.dart",
+      "origin": "project",
+      "sha256": "31d95d620cf3d5143a2680640055a3901982d56f2b43d9229d7b8423aac2d4a8",
+      "local_sha256": "31d95d620cf3d5143a2680640055a3901982d56f2b43d9229d7b8423aac2d4a8"
+    },
+    {
+      "path": "LICENSE",
+      "origin": "project",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "local_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "LOCAL_PATCHES.md",
+      "origin": "project",
+      "sha256": "909847faf299857e00b35f8aac8f51510841b5095a095832d61503cca623ef98",
+      "local_sha256": "909847faf299857e00b35f8aac8f51510841b5095a095832d61503cca623ef98"
+    },
+    {
+      "path": "notices/VENERA_SAF_NOTICES.txt",
+      "origin": "project",
+      "sha256": "79846f3681ab9ecf622f787d81aca771d44453ec1f97a1971aaace4a44cb8547",
+      "local_sha256": "79846f3681ab9ecf622f787d81aca771d44453ec1f97a1971aaace4a44cb8547"
+    },
+    {
+      "path": "pubspec.yaml",
+      "origin": "project",
+      "sha256": "a8299f5b7405531d1eeeec001479cc26e378c4a8ae5caa8d7df5c7130a92629f",
+      "local_sha256": "a8299f5b7405531d1eeeec001479cc26e378c4a8ae5caa8d7df5c7130a92629f"
+    },
+    {
+      "path": "src/CMakeLists.txt",
+      "origin": "project",
+      "sha256": "c20e7f034870f6f346d7a263aab1bc186e1c6d0b20ccb7cc34d4ce08b4b6fd61",
+      "local_sha256": "c20e7f034870f6f346d7a263aab1bc186e1c6d0b20ccb7cc34d4ce08b4b6fd61"
+    },
+    {
+      "path": "src/handles.cpp",
+      "origin": "project",
+      "sha256": "4fdc90f45d017a06b5ee573a7ec635f13c14e6bfd7a1fb5ba94f35a369f22223",
+      "local_sha256": "4fdc90f45d017a06b5ee573a7ec635f13c14e6bfd7a1fb5ba94f35a369f22223"
+    },
+    {
+      "path": "src/handles.h",
+      "origin": "project",
+      "sha256": "ca6fcd97c0d4ff0587d2a242885ad57b05a1f38ea3d728f66bc72ae45ea1dd1f",
+      "local_sha256": "ca6fcd97c0d4ff0587d2a242885ad57b05a1f38ea3d728f66bc72ae45ea1dd1f"
+    },
+    {
+      "path": "src/native_bridge.cpp",
+      "origin": "project",
+      "sha256": "32282d14228e63f52b66d7922463b1d33ee45f27fae72aa632055b17fbef4c15",
+      "local_sha256": "32282d14228e63f52b66d7922463b1d33ee45f27fae72aa632055b17fbef4c15"
+    },
+    {
+      "path": "test/descriptor_test.cpp",
+      "origin": "project",
+      "sha256": "2ad3658955ff971e5a05fe9fe701424c00a27392519c96d5e07c16ff4f4c0597",
+      "local_sha256": "2ad3658955ff971e5a05fe9fe701424c00a27392519c96d5e07c16ff4f4c0597"
+    }
+  ]
+}

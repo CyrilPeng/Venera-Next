@@ -19,7 +19,7 @@ English version: [dependencies.en.md](dependencies.en.md)
 
 ## 当前 Git 依赖
 
-2026-09-28：`flutter_qjs`、`photo_view`、`flutter.widgets`、`flutter_inappwebview` 和 `webdav_client` 曾改用 `CyrilPeng` 下的现有 fork，固定 commit 不变。`flutter_inappwebview` 的六个平台子包通过仓库内相对路径一起解析到同一 fork。2026-10-05 起，`photo_view` 改为本地 path 包；2026-11-06，`scrollable_positioned_list`、`webdav_client` 和桌面 WebView 也改为本地包，PNG／7z 包装层由自编 `venera_native` 替代。当前剩余 3 个独立 Git 来源、9 个 Git 包，7 个本地包纳入统一清单；回滚时同步恢复依赖声明、锁文件和对应清单记录。
+2026-09-28：`flutter_qjs`、`photo_view`、`flutter.widgets`、`flutter_inappwebview` 和 `webdav_client` 曾改用 `CyrilPeng` 下的现有 fork，固定 commit 不变。`flutter_inappwebview` 的六个平台子包通过仓库内相对路径一起解析到同一 fork。2026-10-05 起，`photo_view` 改为本地 path 包；2026-11-06，`scrollable_positioned_list`、`webdav_client` 和桌面 WebView 也改为本地包，PNG／7z 包装层由自编 `venera_native` 替代，SAF 由自编 `venera_saf` 替代。当前剩余 2 个独立 Git 来源、8 个 Git 包，8 个本地包纳入统一清单；回滚时同步恢复依赖声明、锁文件和对应清单记录。
 
 这些 fork 的补丁选择、上游审查和更新验证由 VeneraNext 维护者负责。保留原作者版权和许可证；镜像不能替代持续维护，也不能解决许可证缺失。
 
@@ -27,11 +27,10 @@ English version: [dependencies.en.md](dependencies.en.md)
 |---|---|---|---|
 | `flutter_qjs` | `295f77421eedff356a02e92987181b525970c780` | 未记录 fork 上游 / MIT | 保留 NDK r28 构建适配，修复异步字节结果的数值缓冲引用扫描开销；替换前必须验证 JavaScript 运行时和各平台原生构建 |
 | `flutter_inappwebview` | `3ef899b3db57c911b080979f1392253b835f98ab` | `pichillilorenzo/flutter_inappwebview` / Apache-2.0 | 固定版本包含 `GraphicsContext` 释放修复；内嵌 WebView 和 Cloudflare 流程依赖该分支行为 |
-| `flutter_saf` | `fe182cdf40e5fa6230f451bc1d643b860f610d13` | `pkuislm/flutter_saf` / 许可证文件仍为占位内容 | 固定版本关闭代码压缩以规避 Android 发布构建问题，存储访问流程依赖该插件 |
 
 上表依据当前固定 commit 的提交说明记录“为什么现在不能直接切回上游”，不等同于完整差异审计。每次升级 Git 依赖时，应在 PR 中补充上游仓库、对比范围、全部定制修改、上游 PR（如有）、安全影响和回滚方式。
 
-`desktop_webview_window` 的包目录已有 Apache-2.0 许可证，已纠正此前根目录检查的遗漏并随本地源码保留第三方声明。PNG／7z 已采用自编桥接和许可证明确的官方核心。`flutter_saf` 的包许可证仍为占位内容，接下来须验证保留既有持久授权与 IOOverrides 行为的替代实现。
+`desktop_webview_window` 的包目录已有 Apache-2.0 许可证，已纠正此前根目录检查的遗漏并随本地源码保留第三方声明。PNG／7z 已采用自编桥接和许可证明确的官方核心。原 `flutter_saf` 已由项目自编的 `venera_saf` 替代，保留历史路径与系统持久授权，不复制占位许可证包装层的源码。
 
 ## QuickJS 数值缓冲引用扫描修复（2026-10-31）
 
@@ -54,6 +53,7 @@ English version: [dependencies.en.md](dependencies.en.md)
 | `webdav_client` | 1.2.2 | `packages/webdav_client` | 原 fork commit `2f669c98fb81cff1c64fee93466a1475c77e4273` |
 | `desktop_webview_window` | 0.2.4 | `packages/desktop_webview_window` | 原 fork commit `7801fc582ecf5a7351632887891ecf309a7b2583` 的包子目录 |
 | `venera_native` | 1.0.0 | `packages/venera_native` | 项目提交固定自编桥接；第三方核心独立固定官方 commit |
+| `venera_saf` | 1.0.0 | `packages/venera_saf` | 项目提交固定自编 Dart／Kotlin／JNI 与原生句柄实现 |
 
 首批迁移保留两个包的全部运行时源码、manifest、BSD-3-Clause 许可证、版权及上游 README／CHANGELOG，省略示例工程、上游测试工程和构建输出。阅读器的定制滚动接口和 WebDAV 的 adapter、认证、重定向及上传行为保持原实现。当前 SDK 等价调用、显式 dynamic 类型、未引用私有助手及包级分析策略分别记录在两个包的 `LOCAL_PATCHES.md`；不同时升级包版本、其他依赖或原生工具链。
 
@@ -61,7 +61,7 @@ English version: [dependencies.en.md](dependencies.en.md)
 
 所有本地包的声明和锁文件路径必须一致，锁文件使用相对路径；包 manifest 的名称／版本须与清单相同。文件的真实路径须留在审核包目录内，许可证按 canonical LF 字节校验，补丁文档必须保留版本和来源摘要。未登记的直接依赖、覆盖项或传递本地包均使检查失败。`path` 包的内容由应用 Git 提交固定，不能仅凭锁文件中的路径保证源码不变。
 
-修改本地包时同步更新补丁记录、清单及适用的本地文件摘要，比较上游变更，运行严格分析和受影响的功能回归。恢复 Git 来源时一起恢复声明、锁文件和清单中的 Git 条目。现有历史 fork 保留作旧版本构建和回滚来源；`flutter_saf` 继续使用既有固定来源，接下来推进替代实现与持久授权兼容验证。
+修改本地包时同步更新补丁记录、清单及适用的本地文件摘要，比较上游变更，运行严格分析和受影响的功能回归。恢复 Git 来源时一起恢复声明、锁文件和清单中的 Git 条目。现有历史 fork 保留作旧版本构建和回滚来源；SAF 使用项目自管实现，既有目录授权和存储引用继续保留。
 
 ## PhotoView 初次本地迁移记录（2026-10-05）
 
@@ -129,3 +129,15 @@ cargo audit --file packages/rhttp/rust/Cargo.lock --deny unsound
 PNG 保留算法与参数，验证 RGBA／alpha 和带偏移的 typed view，返回独立 Dart bytes 后释放全部原生分配。7z 使用一个后台 isolate 拥有并关闭归档，复用 solid block；写入前检查全部路径、重复名、目录冲突和链接，解码时检查 CRC 与长度。密码保护或未支持的压缩方法明确失败；应用原有 ZIP → 7z → Dart ZIP 回退保留。
 
 `tool/native_png_probe.py` 使用同一 RGBA 输入执行原库／新库／原库的 A/B/A，对比编码字节、耗时与宿主进程 RSS。其峰值 RSS 是同一进程累计峰值，不能视为单次编码独立峰值；本探针不测 Android 帧率或功耗。改变算法版本须单独比较官方修复、更新来源／摘要，并重新运行像素、归档、内存安全和平台回归。历史 fork 仍供旧构建使用；冻结的 `1.18.3+244` 鸿蒙来源与资产不随本轮迁移改变。
+
+## Android SAF 自管实现（2026-11-06）
+
+`packages/venera_saf 1.0.0` 以项目自编的 GPL-3.0-or-later 实现替代占位许可证插件。源码、许可证、平台构建和维护说明由完整 `SOURCE_MANIFEST.json` 管理，不包含原包装层源码；迁移后为 **2 个 Git 来源、8 个 Git 包、8 个本地包**，其余 **155** 项锁定记录及 SDK 不变。
+
+已有 `android://<treeDocumentId>/<display names>` 路径与 Android 持久 URI 授权继续使用。树 ID 中的 `/` 以最长完整授权根解析；已见的较长授权被撤销时明确报错，避免改按较短根访问。不同 provider authority 的同一根 ID、缺失文件、未授权与 provider 不可用分别处理；名称通过 UTF-8 JSON 传递，保留中文、emoji、冒号和 `|`。
+
+原 `ParcelFileDescriptor` 保持到最终关闭，原生 64 位读写、定位、长度、截断与 flush 不通过 JNI 拷贝数据。跨 isolate 文件采用 retain／ack／sender release／adopted 交接，调用方取得文件前释放 worker 的 lease；generation token 防止误关复用的 FD。worker 幂等启动、保留异常栈并在 dispose 时 drain；流取消和 PDF 子 isolate 的失败路径关闭输出及 worker。显式关闭传播 provider 错误，清理保留主读写错误。
+
+创建已有文件不截断内容，重命名限同目录并检查已有目标，授权根受保护；原子独占创建、createTemp、watch、文件锁及设置时间等不支持的接口明确失败。provider API 的跨应用竞态和各云盘限制不能被通用接口消除。
+
+宿主回归、200 轮 C++ 句柄／错误／复用测试与 >2 GiB 稀疏文件检查纳入验证；CI 执行 ASan／UBSan、完整 Android／TV 构建、13 个原生／JNI 导出及随包声明核验。`tool/saf_provider_probe` 的两个隔离 APK 和混淆 Release 消费端验证真实 DocumentsProvider、持久授权、重启、Unicode、读写模式、流取消、关闭回调与错误。详细语义和维护方式见 `packages/venera_saf/LOCAL_PATCHES.md`，外部云盘仍按具体 provider／设备补充验收。

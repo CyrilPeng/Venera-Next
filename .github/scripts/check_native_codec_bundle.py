@@ -3,6 +3,7 @@
 import argparse
 import ctypes
 import hashlib
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -19,7 +20,7 @@ SYMBOLS = ("venera_png_encode", "venera_png_error_text", "venera_native_free",
 def exported_symbols(binary: Path, platform: str) -> set[str]:
     if platform == "android":
         output = subprocess.check_output(
-            ["readelf", "--dyn-syms", "--wide", str(binary)], text=True
+            [os.environ.get("READELF", "readelf"), "--dyn-syms", "--wide", str(binary)], text=True
         )
         return {
             fields[7].split("@", 1)[0]
