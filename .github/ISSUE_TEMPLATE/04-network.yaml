@@ -1,0 +1,156 @@
+name: 4. 下载、网络与 WebDAV 故障 / Network & WebDAV
+description: 下载、CBZ 归档、应用数据同步、在线库或网页登录失败；需要日志。 / Download, archive, sync or login failures.
+title: '[Network]: '
+labels:
+- bug
+- 'area: network'
+body:
+- type: markdown
+  attributes:
+    value: |
+      请按实际失败的功能选择入口，一个 Issue 记录一个独立问题；同一问题涉及多个平台可合并说明。
+      归档或导入失败请选择对应入口，只有应用退出、启动失败或整段无响应才选崩溃入口。
+      Please choose the failed app feature and report one independent problem per Issue.
+
+      先阅读 [分类与诊断采集说明](https://github.com/CyrilPeng/Venera-Next/blob/main/doc/user/issue_reporting.zh.md) / [English guide](https://github.com/CyrilPeng/Venera-Next/blob/main/doc/user/issue_reporting.en.md)。
+      标题请写清触发条件和症状，勿只写“有 bug”。源站内容、作品可用性及第三方源脚本请联系对应维护者；应用的扩展运行时、网络和 WebDAV 问题可在这里报告。
+      安全漏洞请走 [私密报告入口](https://github.com/CyrilPeng/Venera-Next/security) / [Security policy](https://github.com/CyrilPeng/Venera-Next/blob/main/SECURITY.md)。
+- type: dropdown
+  id: issue-type
+  attributes:
+    label: 问题类型 / Issue type
+    description: 本入口支持的问题类型 / Issue types handled by this form
+    options:
+    - 下载、网络或 WebDAV 故障 / Download, network or WebDAV
+    default: 0
+  validations:
+    required: true
+- type: input
+  id: version
+  attributes:
+    label: 应用版本 / App version
+    description: 从关于页面复制具体版本及构建号，注明手机／TV／鸿蒙测试版或自编译 commit；不要只填最新版。 / Copy the exact version/build and identify the app variant
+      or custom-build commit.
+    placeholder: 1.18.2+243（手机版） / 1.18.2+243 (mobile)
+  validations:
+    required: true
+- type: dropdown
+  id: platform
+  attributes:
+    label: 平台 / Platform
+    description: 选择实际发生问题的平台 / Select the affected platforms
+    options:
+    - Android 手机／平板 / Android phone or tablet
+    - Android TV
+    - Windows
+    - macOS
+    - Linux
+    - iOS
+    - HarmonyOS / 鸿蒙
+    - 其他（请说明） / Other (please specify)
+    multiple: true
+  validations:
+    required: true
+- type: textarea
+  id: device-os
+  attributes:
+    label: 设备与系统 / Device and OS
+    description: 填写设备型号、系统完整版本；桌面注明系统版本，TV 注明遥控器类型，鸿蒙注明系统及安装包来源。无需设备序列号。 / Include the device model, OS version and relevant
+      input/installation details.
+    placeholder: 小米 13，Android 16 / HyperOS 3；或 Windows 11 24H2，键鼠操作
+  validations:
+    required: true
+- type: textarea
+  id: steps
+  attributes:
+    label: 复现步骤 / Steps to reproduce
+    description: 从具体入口开始写最短步骤，并说明每次／偶发／首次发生。无法稳定复现时描述最后一次现场；已有对照无需重做。 / Give the shortest steps and frequency, or the last
+      observed circumstances.
+    placeholder: |-
+      1. 打开……
+      2. 执行……
+      3. 观察到……；每次／偶发，最近发生时间……
+  validations:
+    required: true
+- type: textarea
+  id: expected
+  attributes:
+    label: 预期行为 / Expected behavior
+    description: 说明本来应该发生什么 / What should have happened?
+  validations:
+    required: true
+- type: textarea
+  id: actual
+  attributes:
+    label: 实际行为 / Actual behavior
+    description: 说明实际现象、错误文字和是否能继续操作；涉及数据时区分失败、提示成功但不可见、选择数量和真实结果。 / Describe the actual behavior and errors; distinguish
+      reported success from visible or saved results.
+  validations:
+    required: true
+- type: textarea
+  id: context
+  attributes:
+    label: 网络操作与错误 / Network operation and error
+    description: 区分漫画下载、CBZ 上传／下载、应用数据同步、WebDAV 在线阅读或网页登录。注明服务提供商、系统／直连／手动代理、错误／HTTP 状态、结果窗口的失败阶段与单项状态（如有）。地址只保留非敏感结构，不含账号、完整目录、Cookie
+      或签名参数。 / Name the transfer/login route, provider, proxy mode, error and per-item failure stage when available.
+    placeholder: 本地 → 归档到 WebDAV，服务……；系统代理；成功 8、失败 2；失败项上传阶段，HTTP 429；单项重试……
+  validations:
+    required: true
+- type: dropdown
+  id: diagnostic-source
+  attributes:
+    label: 诊断提供方式 / Diagnostic source
+    description: 日志可贴片段或上传附件。无法取得是一条有效路径，但必须说明原因并补替代证据；不要只填无日志或稍后补。 / Choose how diagnostics are provided; unavailable diagnostics
+      need an explanation and alternatives.
+    options:
+    - 已粘贴脱敏日志或报告 / Pasted redacted logs or report
+    - 已上传日志或报告附件 / Attached logs or report
+    - 无法取得（需说明原因并提供替代证据） / Unavailable (explain and provide alternatives)
+  validations:
+    required: true
+- type: textarea
+  id: diagnostics
+  attributes:
+    label: 日志或诊断报告 / Logs or diagnostic report
+    description: 复现后尽快在设置 → 日志 → 更多 → 导出，粘贴相关时间段的脱敏日志／错误调用栈，或拖入 .txt/.log/.json/.zip 附件。启动失败可用系统／原生启动日志。 / Export from Settings
+      → Logs → More → Export, or attach a redacted log/stack trace for the failure.
+    placeholder: 在这里粘贴脱敏日志／报告，或拖入附件。无法取得时写明无法取得，并完成下面两项。 / Paste or attach diagnostics; if unavailable, complete both fields
+      below.
+  validations:
+    required: true
+- type: textarea
+  id: diagnostics-unavailable
+  attributes:
+    label: 日志无法取得的原因 / Why diagnostics are unavailable
+    description: '仅在无法取得时必填：说明尝试过的入口和具体阻碍，例如点图标即退出、尚未生成日志、旧版没有阅读诊断。不会导出或稍后补不是有效原因。 / Required when unavailable: name the attempted
+      collection method and concrete obstacle.'
+  validations:
+    required: false
+- type: textarea
+  id: alternative-evidence
+  attributes:
+    label: 替代证据 / Alternative evidence
+    description: '仅在无法取得时必填：脱敏错误截图／系统错误／安装日志，或包含发生时间、出错阶段、复现频率的具体说明。不要求清库、私人漫画或完整备份。 / Required when unavailable: redacted
+      errors, system diagnostics, screenshots or detailed circumstances with time and failure stage.'
+  validations:
+    required: false
+- type: textarea
+  id: screenshots
+  attributes:
+    label: 截图或录屏 / Screenshots or video
+    description: 选填，用于说明界面与操作；提交前遮盖私人信息，确认上传完成。录屏不替代需要的日志／阅读报告。 / Optional visual evidence; verify the upload and redact private
+      information.
+  validations:
+    required: false
+- type: checkboxes
+  id: checklist
+  attributes:
+    label: 提交前确认 / Checklist
+    options:
+    - label: 我已搜索现有 Issue，并将独立问题分开提交。 / I searched existing Issues and separated unrelated problems.
+      required: true
+    - label: 我了解本仓库维护应用本体，源站内容、作品可用性和第三方源脚本应联系对应维护者。 / I understand this repository maintains the app; source content and
+        third-party source scripts belong with their maintainers.
+      required: true
+    - label: 我已检查附件与文本，移除账号、Cookie、Token、签名链接及私人内容。 / I reviewed and redacted credentials, signed URLs and private content.
+      required: true
