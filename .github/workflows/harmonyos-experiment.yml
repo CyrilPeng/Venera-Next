@@ -86,14 +86,17 @@ jobs:
             --report build/harmonyos/ci/sdk.json
 
       - name: Install Linux host test dependencies with a bounded network wait
-        timeout-minutes: 4
+        timeout-minutes: 8
         run: |
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+            /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources \
+            -o Dir::Etc::sourceparts=- -o Acquire::Retries=2 \
+            -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          # Existing FFI test sources run on Linux, not against OHOS binaries.
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 \
             -o Acquire::https::Timeout=20 install -y --no-install-recommends \
-            libgtk-3-0 libglu1-mesa ninja-build cmake pkg-config
-            # Existing FFI test sources run on Linux, not against OHOS binaries.
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 \
-            -o Acquire::https::Timeout=20 install -y --no-install-recommends libsqlite3-dev g++
+            libgtk-3-0 libglu1-mesa ninja-build cmake pkg-config libsqlite3-dev g++
 
       - name: Install the pinned independent Flutter OH SDK
         run: |
