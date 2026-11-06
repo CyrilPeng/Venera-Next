@@ -1,8 +1,21 @@
-name: HarmonyOS Experimental HAP
-run-name: "HarmonyOS unsigned HAP / ${{ github.sha }}"
+name: HarmonyOS Next Candidate HAP
+run-name: "HarmonyOS unsigned candidate >=245 / ${{ github.sha }}"
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [HarmonyOS]
+    paths:
+      - .github/workflows/harmonyos-experiment.yml
+      - tool/harmonyos/**
+      - lib/**
+      - assets/**
+      - test/**
+      - packages/**
+      - pubspec.yaml
+      - pubspec.lock
+      - release.json
+      - CHANGELOG.md
   push:
     branches: [HarmonyOS]
     paths:
@@ -28,12 +41,13 @@ concurrency:
 
 jobs:
   unsigned-hap:
-    if: github.ref == 'refs/heads/HarmonyOS'
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/HarmonyOS' || (github.event_name == 'pull_request' && github.base_ref == 'HarmonyOS')
     runs-on: ubuntu-24.04
     timeout-minutes: 100
     env:
       CI: 'true'
       PYTHONUNBUFFERED: '1'
+      VENERA_HARMONYOS_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       RUSTUP_TOOLCHAIN: '1.92.0'
       PUB_HOSTED_URL: https://pub.dev
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
@@ -45,6 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
@@ -102,8 +117,9 @@ jobs:
         run: |
           rustup toolchain install 1.92.0 --profile minimal --target aarch64-unknown-linux-ohos
           revision="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["quickjs"]["revision"])')"
+          repository="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["quickjs"]["repository"])')"
           git init "$RUNNER_TEMP/flutter-qjs"
-          git -C "$RUNNER_TEMP/flutter-qjs" remote add origin https://github.com/CyrilPeng/flutter_qjs.git
+          git -C "$RUNNER_TEMP/flutter-qjs" remote add origin "$repository"
           git -C "$RUNNER_TEMP/flutter-qjs" fetch --depth 1 origin "$revision"
           git -C "$RUNNER_TEMP/flutter-qjs" checkout --detach FETCH_HEAD
           url="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["sqlite"]["archive"])')"

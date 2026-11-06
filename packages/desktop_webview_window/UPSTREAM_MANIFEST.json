@@ -1,0 +1,397 @@
+{
+  "source": {
+    "type": "git",
+    "url": "https://github.com/venera-app/flutter_desktop_webview",
+    "commit": "7801fc582ecf5a7351632887891ecf309a7b2583",
+    "path": "packages/desktop_webview_window"
+  },
+  "files": [
+    {
+      "path": "analysis_options.yaml",
+      "sha256": "df692318073ecc5f3b8a759a1f9338eb21995900d3c2bc1fbcd2c7780a1c7c6e",
+      "local_sha256": "df692318073ecc5f3b8a759a1f9338eb21995900d3c2bc1fbcd2c7780a1c7c6e"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "37063b9bf4de5f5669ab99f8e4a9e290e0aad6ced78cab0f78f0918393b1127a",
+      "local_sha256": "37063b9bf4de5f5669ab99f8e4a9e290e0aad6ced78cab0f78f0918393b1127a"
+    },
+    {
+      "path": "lib/desktop_webview_window.dart",
+      "sha256": "ed9f558734d77b92f39bf2422806bd3a2b180212d9bf46fcbaa510d5c239ea8a",
+      "local_sha256": "42f6a2fce160f2ddd2f0dcf5de6ef060367dde4e999fb2af596e5d896ed1bab7"
+    },
+    {
+      "path": "lib/src/cookie.dart",
+      "sha256": "e3c9824c337f5465e9835e91a62737b7da76e415e231438f6e2268139ac74d81",
+      "local_sha256": "27932a42c1c94f96ffb634a19d612227d4477ebd431ea0b43c0091c765a188d8"
+    },
+    {
+      "path": "lib/src/create_configuration.dart",
+      "sha256": "9ecd31f18deb7d719507ac12ad3e41d62fc888beffd9b82a2f033cb04476f8ce",
+      "local_sha256": "c17cb506791f50e5a368790a406414a7ce2e4f48398b3ac31e6e8428f1d8d8d4"
+    },
+    {
+      "path": "lib/src/message_channel.dart",
+      "sha256": "1cdd752cacca63c888a7f9d9ca0414e7002d011491cf29641492069531797e53",
+      "local_sha256": "1cdd752cacca63c888a7f9d9ca0414e7002d011491cf29641492069531797e53"
+    },
+    {
+      "path": "lib/src/title_bar.dart",
+      "sha256": "36bcbc4216347e52fb61c1746a77812984e94c6908ad1aa6f6a9a2c16d3b073a",
+      "local_sha256": "9371fd195f8f835034f753a4df5d2d933470a3af4c01c596b67bda89ad545db7"
+    },
+    {
+      "path": "lib/src/webview.dart",
+      "sha256": "1776791a71f35cad8cfb39edfc8b912b2674c8667f26c633934ae3000aab89f9",
+      "local_sha256": "03eb04c2e626fbbfc7219bb975644f95b71c0bc92d1559fd9ad551500acc6254"
+    },
+    {
+      "path": "lib/src/webview_impl.dart",
+      "sha256": "3e403240b68b1dee549755b667a7381bbd1ce0c0aa3c2b50034cdc853fac24eb",
+      "local_sha256": "942cf0f7ecdabde89532b11eef4cd04a07ad36b19b19856e3700ce0e1bad3b48"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "07e78d4ec132261d6487f8b8df8edc0f526b4d4a1a6041ee0994e26c9c4b23bc",
+      "local_sha256": "07e78d4ec132261d6487f8b8df8edc0f526b4d4a1a6041ee0994e26c9c4b23bc"
+    },
+    {
+      "path": "linux/CMakeLists.txt",
+      "sha256": "840a59ff57a4662643f8b6f7318bb47d3c460448d3e9289e4fd96c8d2bab261c",
+      "local_sha256": "840a59ff57a4662643f8b6f7318bb47d3c460448d3e9289e4fd96c8d2bab261c"
+    },
+    {
+      "path": "linux/desktop_webview_window_plugin.cc",
+      "sha256": "2061f1fe967ba6f36564a1588b67432866b678ae815586732a8eeb01229b0272",
+      "local_sha256": "2061f1fe967ba6f36564a1588b67432866b678ae815586732a8eeb01229b0272"
+    },
+    {
+      "path": "linux/include/desktop_webview_window/desktop_webview_window_plugin.h",
+      "sha256": "5ff77e62fdf0de4f462930a440aaa9a519d925f967ca6a63033ff7c10b9866be",
+      "local_sha256": "5ff77e62fdf0de4f462930a440aaa9a519d925f967ca6a63033ff7c10b9866be"
+    },
+    {
+      "path": "linux/message_channel_plugin.cc",
+      "sha256": "0c098a6694c2454a1a7c6ae6e7ac6fa574dd330eda22a6f219cbe76b90190921",
+      "local_sha256": "0c098a6694c2454a1a7c6ae6e7ac6fa574dd330eda22a6f219cbe76b90190921"
+    },
+    {
+      "path": "linux/message_channel_plugin.h",
+      "sha256": "6f16f65a6c96e91b1f994bd30c093f4fa0ac76f58e5b33c81e31470d214be51d",
+      "local_sha256": "6f16f65a6c96e91b1f994bd30c093f4fa0ac76f58e5b33c81e31470d214be51d"
+    },
+    {
+      "path": "linux/webview_window.cc",
+      "sha256": "b802c22feedc4e7039c796653bc2799589cbe632c909f7df705b890861d31396",
+      "local_sha256": "b802c22feedc4e7039c796653bc2799589cbe632c909f7df705b890861d31396"
+    },
+    {
+      "path": "linux/webview_window.h",
+      "sha256": "005a131c19753318fc04a1cc448dd0cec7069184b0dc4d714355576443a1e32b",
+      "local_sha256": "005a131c19753318fc04a1cc448dd0cec7069184b0dc4d714355576443a1e32b"
+    },
+    {
+      "path": "macos/Classes/DesktopWebviewWindowPlugin.swift",
+      "sha256": "0572af02ef8b96dba4e8fb89ef107cf22962cf474ff80f6c96837213afe8b4e3",
+      "local_sha256": "0572af02ef8b96dba4e8fb89ef107cf22962cf474ff80f6c96837213afe8b4e3"
+    },
+    {
+      "path": "macos/Classes/MessageChannelPlugin.swift",
+      "sha256": "0f3e71515146d287b3909fb7d254e52dc16e5106828d633286ce6d1d27e52a29",
+      "local_sha256": "0f3e71515146d287b3909fb7d254e52dc16e5106828d633286ce6d1d27e52a29"
+    },
+    {
+      "path": "macos/Classes/WebViewLayoutController.swift",
+      "sha256": "9ed379bc021899516ff132b1f8e07aee9ae93fdd897848532d5e83865eaed053",
+      "local_sha256": "9ed379bc021899516ff132b1f8e07aee9ae93fdd897848532d5e83865eaed053"
+    },
+    {
+      "path": "macos/Classes/WebViewLayoutController.xib",
+      "sha256": "8997a0eb099567ef6da9f6f40d526cdca002d214d6b77d093c213b06ba63548f",
+      "local_sha256": "8997a0eb099567ef6da9f6f40d526cdca002d214d6b77d093c213b06ba63548f"
+    },
+    {
+      "path": "macos/Classes/WebviewWindowController.swift",
+      "sha256": "b3db3c283861027cd1b0e67807fd75f044681efb392f958efc85ed4513003bec",
+      "local_sha256": "b3db3c283861027cd1b0e67807fd75f044681efb392f958efc85ed4513003bec"
+    },
+    {
+      "path": "macos/desktop_webview_window.podspec",
+      "sha256": "be1154c78da4e56b0ce45185b62b2b651a7ce866baa61941738b91f901a9100c",
+      "local_sha256": "be1154c78da4e56b0ce45185b62b2b651a7ce866baa61941738b91f901a9100c"
+    },
+    {
+      "path": "pubspec.yaml",
+      "sha256": "af8a2a21c91f3be962403f301e0315c9f088db869e56ffc73ffa6526aa51c555",
+      "local_sha256": "af8a2a21c91f3be962403f301e0315c9f088db869e56ffc73ffa6526aa51c555"
+    },
+    {
+      "path": "README.md",
+      "sha256": "d66ed043fb312d0d0f1b17d4da5c86e9dc7f29a2a61472ee6333a21ab5f105ab",
+      "local_sha256": "d66ed043fb312d0d0f1b17d4da5c86e9dc7f29a2a61472ee6333a21ab5f105ab"
+    },
+    {
+      "path": "windows/.gitignore",
+      "sha256": "038fec0b0ab8369ad01f0ff60f9e90593dedb672df53fbd33b75fac5ef0f400d",
+      "local_sha256": "038fec0b0ab8369ad01f0ff60f9e90593dedb672df53fbd33b75fac5ef0f400d"
+    },
+    {
+      "path": "windows/CMakeLists.txt",
+      "sha256": "e96edbb8abec4e140f264b17eea6b509679b523c9ff800ba3c1124ef12d4e6f3",
+      "local_sha256": "a678a683cda80a3c3efd7d110930a9f723d344ad152f33859c05c5dc70576b6d"
+    },
+    {
+      "path": "windows/desktop_webview_window_plugin.cpp",
+      "sha256": "29ed07b08e9d2c10a675a2b1fb9d39461ab240ea558f8deacc77ebb77c5af960",
+      "local_sha256": "29ed07b08e9d2c10a675a2b1fb9d39461ab240ea558f8deacc77ebb77c5af960"
+    },
+    {
+      "path": "windows/flutter_view.cc",
+      "sha256": "303c551ea479c68bbee368346de4bfb13835bf0cca53639c946b82badf09d97f",
+      "local_sha256": "303c551ea479c68bbee368346de4bfb13835bf0cca53639c946b82badf09d97f"
+    },
+    {
+      "path": "windows/flutter_view.h",
+      "sha256": "747140c5f65fcf005e572d8316720d112878a5cd5c0f1ff9b0c207a11257a1cb",
+      "local_sha256": "747140c5f65fcf005e572d8316720d112878a5cd5c0f1ff9b0c207a11257a1cb"
+    },
+    {
+      "path": "windows/include/desktop_webview_window/desktop_webview_window_plugin.h",
+      "sha256": "83a04f844981e07a0a909f959c17f7a207960fd74fc483c0afa8d0fe76dc7136",
+      "local_sha256": "83a04f844981e07a0a909f959c17f7a207960fd74fc483c0afa8d0fe76dc7136"
+    },
+    {
+      "path": "windows/libs/arm64/WebView2Loader.dll",
+      "sha256": "027128c9584dca50d36318458964bc88eba8578313857998ff300312ca7f2101",
+      "local_sha256": "027128c9584dca50d36318458964bc88eba8578313857998ff300312ca7f2101",
+      "encoding": "binary"
+    },
+    {
+      "path": "windows/libs/arm64/WebView2Loader.dll.lib",
+      "sha256": "d70271daa44507865ca0696cd1c1ede5e58e694eec74cb2d06e17dbbe205e9a2",
+      "local_sha256": "d70271daa44507865ca0696cd1c1ede5e58e694eec74cb2d06e17dbbe205e9a2",
+      "encoding": "binary"
+    },
+    {
+      "path": "windows/libs/x64/WebView2Loader.dll",
+      "sha256": "c4674acf95f0800793a4a6d61132adf5dfa694c218e482d86093494c4e84100a",
+      "local_sha256": "c4674acf95f0800793a4a6d61132adf5dfa694c218e482d86093494c4e84100a",
+      "encoding": "binary"
+    },
+    {
+      "path": "windows/libs/x64/WebView2Loader.dll.lib",
+      "sha256": "61fefc3ed0e0f899fc6f9ad8903f45a5d1b8f568deea655975bdbca967e8f71b",
+      "local_sha256": "61fefc3ed0e0f899fc6f9ad8903f45a5d1b8f568deea655975bdbca967e8f71b",
+      "encoding": "binary"
+    },
+    {
+      "path": "windows/message_channel_plugin.cc",
+      "sha256": "e8a5992a32ab6f018acd3624f3ab24e7dd3dbf0e0f77e62fc891a1ca0db34dcd",
+      "local_sha256": "e8a5992a32ab6f018acd3624f3ab24e7dd3dbf0e0f77e62fc891a1ca0db34dcd"
+    },
+    {
+      "path": "windows/message_channel_plugin.h",
+      "sha256": "6b00245c795981e865135a073f77e8fa0077143e5f99149d842257288fee5137",
+      "local_sha256": "6b00245c795981e865135a073f77e8fa0077143e5f99149d842257288fee5137"
+    },
+    {
+      "path": "windows/strconv.h",
+      "sha256": "007c9e245836e6b5d6365a101950c642249b0a939b126785bcc6ec483928345f",
+      "local_sha256": "007c9e245836e6b5d6365a101950c642249b0a939b126785bcc6ec483928345f"
+    },
+    {
+      "path": "windows/utils.cc",
+      "sha256": "ea7c81cbc9871974d2e3402b37118aceca97fc61cae52a567db687dd4fe725bb",
+      "local_sha256": "ea7c81cbc9871974d2e3402b37118aceca97fc61cae52a567db687dd4fe725bb"
+    },
+    {
+      "path": "windows/utils.h",
+      "sha256": "5dcbbb0e925c3d908a68bd1c4f388a3bf4931ac820ef08511a16d82ccd6388db",
+      "local_sha256": "5dcbbb0e925c3d908a68bd1c4f388a3bf4931ac820ef08511a16d82ccd6388db"
+    },
+    {
+      "path": "windows/web_view.cc",
+      "sha256": "70c078027683d867a733d14ec1b25ff59e37f7db89df98614b7623076e6deef6",
+      "local_sha256": "70c078027683d867a733d14ec1b25ff59e37f7db89df98614b7623076e6deef6"
+    },
+    {
+      "path": "windows/web_view.h",
+      "sha256": "557d728810445b702987a93034ecc37d2295cfd329976148d56cefc9ef4b9060",
+      "local_sha256": "557d728810445b702987a93034ecc37d2295cfd329976148d56cefc9ef4b9060"
+    },
+    {
+      "path": "windows/web_view_window_plugin.cc",
+      "sha256": "bba56f1123932b9ef176cda6fae4de17942a037ced2cbed14c90966d84179ceb",
+      "local_sha256": "bba56f1123932b9ef176cda6fae4de17942a037ced2cbed14c90966d84179ceb"
+    },
+    {
+      "path": "windows/web_view_window_plugin.h",
+      "sha256": "eddad185bfff0b68e9fece1111ce9723fb516c070322c053523ac7a6469cd32c",
+      "local_sha256": "eddad185bfff0b68e9fece1111ce9723fb516c070322c053523ac7a6469cd32c"
+    },
+    {
+      "path": "windows/WebView2.h",
+      "sha256": "bfb45cdbe9821a681a53b8def97ca6772a6e7d09dbe19233787d58d98c9ea14e",
+      "local_sha256": "bfb45cdbe9821a681a53b8def97ca6772a6e7d09dbe19233787d58d98c9ea14e"
+    },
+    {
+      "path": "windows/WebView2EnvironmentOptions.h",
+      "sha256": "ee7f07b42a1ee1d84a076e561b9a073b7c8cb7fef61f130d2c211b54118159c4",
+      "local_sha256": "ee7f07b42a1ee1d84a076e561b9a073b7c8cb7fef61f130d2c211b54118159c4"
+    },
+    {
+      "path": "windows/webview_window.cc",
+      "sha256": "dc8ebc458a2f3ad796568b02ef1d7d63b5788feb3d35c7a2e3ade294a2537c7e",
+      "local_sha256": "dc8ebc458a2f3ad796568b02ef1d7d63b5788feb3d35c7a2e3ade294a2537c7e"
+    },
+    {
+      "path": "windows/webview_window.h",
+      "sha256": "76faaf11344575d541cbb8fc73e11ea3a8b8dc2bb469464f748ddd71b97902d7",
+      "local_sha256": "76faaf11344575d541cbb8fc73e11ea3a8b8dc2bb469464f748ddd71b97902d7"
+    },
+    {
+      "path": "windows/wil/com.h",
+      "sha256": "0850c6950fbf544cff061290a35e900e13dad1879b96e7a5c0ac2e0717c2e4a0",
+      "local_sha256": "0850c6950fbf544cff061290a35e900e13dad1879b96e7a5c0ac2e0717c2e4a0"
+    },
+    {
+      "path": "windows/wil/common.h",
+      "sha256": "4fff1537591e852d887969b5eb21d336ae2dd452c9cb199e8dc84d5d72dd0b72",
+      "local_sha256": "4fff1537591e852d887969b5eb21d336ae2dd452c9cb199e8dc84d5d72dd0b72"
+    },
+    {
+      "path": "windows/wil/cppwinrt.h",
+      "sha256": "091a413a6be8c2ec0e6218fc9a83e5d067b4f33c5119934c0014e591ee2bec9e",
+      "local_sha256": "091a413a6be8c2ec0e6218fc9a83e5d067b4f33c5119934c0014e591ee2bec9e"
+    },
+    {
+      "path": "windows/wil/filesystem.h",
+      "sha256": "895765409da2b299ed2a99676c9cdd9e3c0c1924ec32ac97aae28088a529484a",
+      "local_sha256": "895765409da2b299ed2a99676c9cdd9e3c0c1924ec32ac97aae28088a529484a"
+    },
+    {
+      "path": "windows/wil/LICENSE",
+      "sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0",
+      "local_sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0"
+    },
+    {
+      "path": "windows/wil/registry.h",
+      "sha256": "fa78504bbc355bc5003f499afe0109c019bf4f0e33778347bc8154f98bf7f43d",
+      "local_sha256": "fa78504bbc355bc5003f499afe0109c019bf4f0e33778347bc8154f98bf7f43d"
+    },
+    {
+      "path": "windows/wil/resource.h",
+      "sha256": "4f22b3c4bc6e5013b285c936b045f3ef284822e41890eee224fa2298776b4be0",
+      "local_sha256": "4f22b3c4bc6e5013b285c936b045f3ef284822e41890eee224fa2298776b4be0"
+    },
+    {
+      "path": "windows/wil/result.h",
+      "sha256": "0e2b67088be597f1c58e57a557c953ba214e8c482d18704de1326e6af586efed",
+      "local_sha256": "0e2b67088be597f1c58e57a557c953ba214e8c482d18704de1326e6af586efed"
+    },
+    {
+      "path": "windows/wil/result_macros.h",
+      "sha256": "f89d36590f9752e9d94bf63f4eb01f0f1aa0e753b4818065cea706072fa748e9",
+      "local_sha256": "f89d36590f9752e9d94bf63f4eb01f0f1aa0e753b4818065cea706072fa748e9"
+    },
+    {
+      "path": "windows/wil/result_originate.h",
+      "sha256": "c0154a4360921ff41781788dbb0211a72ecbf5067061494d8de236867d0ca0ac",
+      "local_sha256": "c0154a4360921ff41781788dbb0211a72ecbf5067061494d8de236867d0ca0ac"
+    },
+    {
+      "path": "windows/wil/rpc_helpers.h",
+      "sha256": "dbb6367e56051d80448279d75a16f70ab796ed9574c6c555bd07a9830ac961f1",
+      "local_sha256": "dbb6367e56051d80448279d75a16f70ab796ed9574c6c555bd07a9830ac961f1"
+    },
+    {
+      "path": "windows/wil/safecast.h",
+      "sha256": "de13a1338e49a276ef28b0b1345214283171e65d3f7cc1cdac3f7e13a447d3c4",
+      "local_sha256": "de13a1338e49a276ef28b0b1345214283171e65d3f7cc1cdac3f7e13a447d3c4"
+    },
+    {
+      "path": "windows/wil/stl.h",
+      "sha256": "803ee16f09a20e562ae7f08b1292cd297add72b7456cc1161379ea04ed91bae9",
+      "local_sha256": "803ee16f09a20e562ae7f08b1292cd297add72b7456cc1161379ea04ed91bae9"
+    },
+    {
+      "path": "windows/wil/ThirdPartyNotices.txt",
+      "sha256": "146cfe74287c4144ec41687a97bdbb123b92d099d544488c0d706d62df64d0a7",
+      "local_sha256": "146cfe74287c4144ec41687a97bdbb123b92d099d544488c0d706d62df64d0a7"
+    },
+    {
+      "path": "windows/wil/token_helpers.h",
+      "sha256": "7b3c4a9bb74d43a070fb1a20cec482a13ae2f1767120aaa87ba1be1623fdc8a8",
+      "local_sha256": "7b3c4a9bb74d43a070fb1a20cec482a13ae2f1767120aaa87ba1be1623fdc8a8"
+    },
+    {
+      "path": "windows/wil/win32_helpers.h",
+      "sha256": "bbea368fafa79ff1306e920e99fafe82744a2074316ec827692e28cce19d184b",
+      "local_sha256": "bbea368fafa79ff1306e920e99fafe82744a2074316ec827692e28cce19d184b"
+    },
+    {
+      "path": "windows/wil/winrt.h",
+      "sha256": "747e01d3cc93941d96f3ee92d5b97d99a93e4895f325cbe3971132b084988257",
+      "local_sha256": "747e01d3cc93941d96f3ee92d5b97d99a93e4895f325cbe3971132b084988257"
+    },
+    {
+      "path": "windows/wil/wistd_config.h",
+      "sha256": "e31031d6427ba32344723a686bef4b5e84786400ae6fd851b2e524fa1a6352aa",
+      "local_sha256": "e31031d6427ba32344723a686bef4b5e84786400ae6fd851b2e524fa1a6352aa"
+    },
+    {
+      "path": "windows/wil/wistd_functional.h",
+      "sha256": "f1afbe7c197d581c6299d46e1e173b61c3677dfc1d829e7d16bb7ed5a6930513",
+      "local_sha256": "f1afbe7c197d581c6299d46e1e173b61c3677dfc1d829e7d16bb7ed5a6930513"
+    },
+    {
+      "path": "windows/wil/wistd_memory.h",
+      "sha256": "062c49a9ad9a0b60a442ee5aa5b17ac540886737207910f8f9c05e3d79500f59",
+      "local_sha256": "062c49a9ad9a0b60a442ee5aa5b17ac540886737207910f8f9c05e3d79500f59"
+    },
+    {
+      "path": "windows/wil/wistd_type_traits.h",
+      "sha256": "f82b4feaefc3f902cdb0ece1872f02cd2ad2bd01450910af969fe2f8beeb38f6",
+      "local_sha256": "f82b4feaefc3f902cdb0ece1872f02cd2ad2bd01450910af969fe2f8beeb38f6"
+    },
+    {
+      "path": "windows/wil/wrl.h",
+      "sha256": "51bbdc13718c96ba18e3d053866f8720b4ebbd6c4ef4e63bb5ed8feefbf126f6",
+      "local_sha256": "51bbdc13718c96ba18e3d053866f8720b4ebbd6c4ef4e63bb5ed8feefbf126f6"
+    },
+    {
+      "path": "licenses/WebView2-1.0.992.28/LICENSE.txt",
+      "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55",
+      "local_sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55",
+      "origin_artifact": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.992.28/microsoft.web.webview2.1.0.992.28.nupkg",
+      "origin_path": "LICENSE.txt"
+    },
+    {
+      "path": "licenses/WebView2-1.0.3124.44/LICENSE.txt",
+      "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55",
+      "local_sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55",
+      "origin_artifact": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.3124.44/microsoft.web.webview2.1.0.3124.44.nupkg",
+      "origin_path": "LICENSE.txt"
+    },
+    {
+      "path": "licenses/WebView2-1.0.3124.44/NOTICE.txt",
+      "sha256": "106423785c5b7eba0a8e61d1837f2132e9c828e20ad530f565d981c1df60dd90",
+      "local_sha256": "106423785c5b7eba0a8e61d1837f2132e9c828e20ad530f565d981c1df60dd90",
+      "origin_artifact": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.3124.44/microsoft.web.webview2.1.0.3124.44.nupkg",
+      "origin_path": "NOTICE.txt"
+    },
+    {
+      "path": "NATIVE_ARTIFACTS.json",
+      "sha256": "f482f99d133808b1f3aa4bccb47061865fe9a68bc2a23dc053a0c31342a37e4a",
+      "local_sha256": "f482f99d133808b1f3aa4bccb47061865fe9a68bc2a23dc053a0c31342a37e4a",
+      "origin": "local-provenance-record"
+    },
+    {
+      "path": "WINDOWS_THIRD_PARTY_NOTICES.txt",
+      "sha256": "fccc3bf0cd739835213bf557cf78844977c1da8bf463922d1a507c42a13aa224",
+      "local_sha256": "fccc3bf0cd739835213bf557cf78844977c1da8bf463922d1a507c42a13aa224",
+      "origin": "local-provenance-record"
+    }
+  ]
+}

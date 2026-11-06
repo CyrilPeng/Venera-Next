@@ -1,18 +1,23 @@
 import hashlib
 import json
 import struct
+import subprocess
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from ci_full_app import ASSET_PREFIX, METADATA_ASSET, audit_full_hap
-from prepare_full_app import (EXTRA_LIBRARIES, FULL_CONFIG, ROOT, check_hosted_baseline,
+from prepare_full_app import (EXTRA_LIBRARIES, FULL_CONFIG, ROOT, PROJECT_PACKAGES,
+                              NATIVE_NOTICE_ASSET, NATIVE_NOTICE_SOURCE, check_hosted_baseline,
                               configure_pubspec, patch_pdfium_hook, patch_so_loader,
                               patch_sqlite_loader, patch_webview_native_profile,
                               patch_webview_environment_api)
 from prepare_probe import LIBRARIES
 from release_context import build_inputs, validate_context, validate_version
+import prepare_full_app
+import full_native_build
 
 
 def elf():
@@ -23,6 +28,26 @@ def elf():
 
 
 class FullAppTests(unittest.TestCase):
+    def test_project_digest_ignores_build_outputs_and_detects_changed_or_missing_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / 'packages/example'
+            package.mkdir(parents=True)
+            source = package / 'owned.txt'
+            source.write_text('reviewed')
+            subprocess.run(['git', 'init', str(root)], check=True, capture_output=True)
+            subprocess.run(['git', '-C', str(root), 'add', '--', 'packages/example/owned.txt'], check=True)
+            with patch.object(prepare_full_app, 'ROOT', root):
+                original = prepare_full_app.project_tree_digest(package)
+                (package / 'build').mkdir()
+                (package / 'build/output').write_text('compiler cache')
+                self.assertEqual(prepare_full_app.project_tree_digest(package), original)
+                source.write_text('changed')
+                self.assertNotEqual(prepare_full_app.project_tree_digest(package), original)
+                source.unlink()
+                with self.assertRaisesRegex(ValueError, 'Missing'):
+                    prepare_full_app.project_tree_digest(package)
+
     def test_webview_exit_api_comes_from_the_mainline_pin_without_faking_events(self):
         pin = FULL_CONFIG['webview_api']['revision']
         self.assertEqual(FULL_CONFIG['webview_api']['ref'], pin)
@@ -74,10 +99,13 @@ class FullAppTests(unittest.TestCase):
         self.assertIn('name: venera_next\n', prepared)
         identity = build_inputs()
         self.assertIn(f"version: {identity['version_name']}+{identity['version_code']}\n", prepared)
-        for name in ('photo_view', 'share_plus', 'rhttp'):
+        for name in PROJECT_PACKAGES:
             self.assertIn(f'path: ../../../packages/{name}', prepared)
         self.assertIn('    path: ../full-deps/sqlite3', prepared)
         self.assertIn('    path: ../full-deps/webview/flutter_inappwebview_ohos', prepared)
+        self.assertNotIn('full-deps/lodepng_flutter', prepared)
+        self.assertNotIn('full-deps/flutter_7zip', prepared)
+        self.assertIn('    - ' + NATIVE_NOTICE_ASSET, prepared)
         self.assertIn('    - assets/init.js', prepared)
         self.assertIn('hooks:\n  user_defines:\n    pdfium_dart:\n      venera_harmonyos_experiment: true', prepared)
         self.assertEqual((ROOT / 'pubspec.yaml').read_text(encoding='utf-8'), original)
@@ -138,12 +166,15 @@ class FullAppTests(unittest.TestCase):
             archive.writestr('module.json', json.dumps({'app': app, 'module': {'deviceTypes': ['phone', 'tablet']}}))
             archive.writestr(METADATA_ASSET, json.dumps(packed))
             archive.writestr(ASSET_PREFIX + 'assets/init.js', b'real source asset')
+            if omit != NATIVE_NOTICE_ASSET:
+                archive.writestr(ASSET_PREFIX + NATIVE_NOTICE_ASSET, NATIVE_NOTICE_SOURCE.read_bytes())
             for name in (*LIBRARIES, *EXTRA_LIBRARIES, 'libapp.so', 'libflutter.so'):
                 if name != omit:
                     archive.writestr('libs/arm64-v8a/' + name, b'invalid' if corrupt_library else data)
             if extra:
                 archive.writestr('libs/arm64-v8a/' + extra, data)
-        return path, metadata, {'assets/init.js': hashlib.sha256(b'real source asset').hexdigest()}
+        return path, metadata, {'assets/init.js': hashlib.sha256(b'real source asset').hexdigest(),
+                                NATIVE_NOTICE_ASSET: hashlib.sha256(NATIVE_NOTICE_SOURCE.read_bytes()).hexdigest()}
 
     def test_full_reader_packaging_requires_all_real_native_libraries(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -151,11 +182,21 @@ class FullAppTests(unittest.TestCase):
             result = audit_full_hap(path, metadata, assets)
             self.assertEqual(result['bundle_name'], FULL_CONFIG['bundle_name'])
             self.assertEqual(result['version_name'], build_inputs()['hap_version_name'])
-            self.assertEqual(len(result['libraries']), 10)
+            self.assertEqual(len(result['libraries']), 9)
             for name in EXTRA_LIBRARIES:
                 path, metadata, assets = self.make_hap(Path(temporary), omit=name)
                 with self.assertRaises(ValueError):
                     audit_full_hap(path, metadata, assets)
+
+    def test_next_candidate_never_omits_the_reviewed_codec_notice(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path, metadata, assets = self.make_hap(Path(temporary), omit=NATIVE_NOTICE_ASSET)
+            with self.assertRaises((ValueError, KeyError)):
+                audit_full_hap(path, metadata, assets)
+            path, metadata, assets = self.make_hap(Path(temporary))
+            del assets[NATIVE_NOTICE_ASSET]
+            with self.assertRaisesRegex(ValueError, 'notice'):
+                audit_full_hap(path, metadata, assets)
 
     def test_native_numeric_version_is_exact_and_separate_from_dart_prerelease(self):
         self.assertRegex(build_inputs()['hap_version_name'], r'^\d+\.\d+\.\d+$')
@@ -168,33 +209,69 @@ class FullAppTests(unittest.TestCase):
 
     def test_caller_version_override_keeps_dependencies_and_original_source(self):
         original = (ROOT / 'pubspec.yaml').read_text(encoding='utf-8')
-        prepared = configure_pubspec(original, {'version_name': '1.19.0-rc.1', 'version_code': 244})
-        self.assertIn('version: 1.19.0-rc.1+244\n', prepared)
+        prepared = configure_pubspec(original, {'version_name': '1.19.0-rc.1', 'version_code': 245})
+        self.assertIn('version: 1.19.0-rc.1+245\n', prepared)
         self.assertIn('archive: ^4.6.0', prepared)
         self.assertEqual((ROOT / 'pubspec.yaml').read_text(encoding='utf-8'), original)
 
     def test_release_context_is_bound_to_both_commits_run_and_changelog(self):
-        context = {'schema': 1, 'channel': 'harmonyos-beta', 'source_commit': '1' * 40,
+        context = {'schema': 2, 'channel': 'harmonyos-beta', 'source_commit': '1' * 40,
                    'main_baseline': '2' * 40, 'release_commit': '3' * 40,
-                   'version': '1.19.0', 'build': 244, 'tag': 'v1.19.0', 'run_id': '123', 'tagged': True,
+                   'version': '1.19.0', 'build': 245, 'tag': 'v1.19.0', 'run_id': '123', 'tagged': True,
+                   'preview': False, 'caller_version': '1.19.0', 'caller_build': 245,
                    'changelog': '# Changelog', 'changelog_sha256': hashlib.sha256(b'# Changelog').hexdigest()}
         env = {'GITHUB_SHA': '3' * 40, 'GITHUB_RUN_ID': '123', 'GITHUB_REF_TYPE': 'tag', 'GITHUB_REF_NAME': 'v1.19.0'}
         self.assertEqual(validate_context(context, '1' * 40, env), context)
         for change in ({'source_commit': '4' * 40}, {'release_commit': '4' * 40}, {'run_id': 'other'},
                        {'tag': 'v0.0.0'}, {'changelog': 'tampered'}, {'channel': 'stable'},
-                       {'tagged': False}, {'version': '1.19.0-harmony.4'}, {'build': 3}, {'build': True}):
+                       {'tagged': False}, {'version': '1.19.0-harmony.4'}, {'build': 244}, {'build': 3}, {'build': True},
+                       {'schema': 1}, {'preview': True}, {'preview': 0}, {'caller_build': 244}, {'caller_build': True}):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 validate_context(context | change, '1' * 40, env)
-        for build in (0, 1, 2, 3, True, 2147483648):
+        for build in (0, 1, 2, 3, 244, True, 2147483648):
             with self.assertRaises(ValueError):
                 validate_version('1.19.0', build)
 
+    def test_next_preview_can_validate_a_245_candidate_for_a_244_caller_but_never_a_tag(self):
+        context = {'schema': 2, 'channel': 'harmonyos-beta', 'source_commit': '1' * 40,
+                   'main_baseline': '2' * 40, 'release_commit': '3' * 40,
+                   'version': '1.18.3', 'build': 245, 'tag': 'v1.18.3', 'run_id': '123', 'tagged': False,
+                   'preview': True, 'caller_version': '1.18.3', 'caller_build': 244,
+                   'changelog': '# Changelog', 'changelog_sha256': hashlib.sha256(b'# Changelog').hexdigest()}
+        env = {'GITHUB_SHA': '3' * 40, 'GITHUB_RUN_ID': '123', 'GITHUB_REF_TYPE': 'branch'}
+        self.assertEqual(validate_context(context, '1' * 40, env), context)
+        with self.assertRaisesRegex(ValueError, 'preview'):
+            validate_context(context, '1' * 40, env | {'GITHUB_REF_TYPE': 'tag'})
+        with self.assertRaisesRegex(ValueError, 'caller version'):
+            validate_context(context | {'preview': False}, '1' * 40, env)
+
     def test_linux_pdfium_or_other_unreviewed_libraries_are_never_accepted(self):
         with tempfile.TemporaryDirectory() as temporary:
-            for name in ('libpdfium.so', 'libother.so'):
+            for name in ('libpdfium.so', 'libother.so', 'liblodepng_flutter.so', 'libflutter_7zip.so'):
                 path, metadata, assets = self.make_hap(Path(temporary), extra=name)
                 with self.assertRaisesRegex(ValueError, 'Unreviewed/missing'):
                     audit_full_hap(path, metadata, assets)
+
+    def test_foreign_architecture_payload_cannot_hide_behind_a_complete_arm64_set(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path, metadata, assets = self.make_hap(Path(temporary))
+            with zipfile.ZipFile(path, 'a') as archive:
+                archive.writestr('libs/x86_64/libqjs.so', elf())
+            with self.assertRaisesRegex(ValueError, 'Unreviewed/missing'):
+                audit_full_hap(path, metadata, assets)
+
+    def test_project_codec_abi_rejects_extra_exports_as_well_as_missing_exports(self):
+        required = set(full_native_build.EXPORTS['libvenera_native.so'])
+        for exports in (required, required | {'unreviewed_export'}, required - {'venera_7z_read'}):
+            symbols = '\n'.join('0000 T ' + name for name in exports)
+            with patch.object(full_native_build, 'inspect_library', return_value={'name': 'libvenera_native.so'}), \
+                    patch.object(full_native_build, 'run', return_value=symbols):
+                if exports == required:
+                    result = full_native_build.inspect_reader_library(Path('sdk'), Path('libvenera_native.so'))
+                    self.assertEqual(set(result['checked_exports']), required)
+                else:
+                    with self.assertRaises(ValueError):
+                        full_native_build.inspect_reader_library(Path('sdk'), Path('libvenera_native.so'))
 
     def test_audit_rejects_probe_metadata_rewritten_assets_and_bad_elf(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -208,7 +285,7 @@ class FullAppTests(unittest.TestCase):
                 audit_full_hap(path, metadata, assets)
             path, metadata, assets = self.make_hap(root)
             with self.assertRaises(ValueError):
-                audit_full_hap(path, metadata, {'assets/init.js': '0' * 64})
+                audit_full_hap(path, metadata, assets | {'assets/init.js': '0' * 64})
 
 
 if __name__ == '__main__':

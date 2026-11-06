@@ -28,11 +28,15 @@ void main() {
   setUpAll(() async {
     if (Platform.isWindows) {
       final native = Directory(
-        'build/windows/x64/runner/Release',
+        Platform.environment['VENERA_NATIVE_TEST_DIRECTORY'] ??
+            'build/windows/x64/runner/Release',
       ).absolute.path;
       DynamicLibrary.open('$native/flutter_windows.dll');
       DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
-      DynamicLibrary.open('$native/lodepng_flutter.dll');
+      final codecs =
+          Platform.environment['VENERA_NATIVE_TEST_LIBRARY'] ??
+          '$native/venera_native.dll';
+      DynamicLibrary.open(codecs);
     }
     initialization = await File('assets/init.js').readAsString();
   });
@@ -61,7 +65,7 @@ void main() {
       expect(output.getPixelAtIndex(0).value, 0xff0000ff);
       expect(output.getPixelAtIndex(1).value, 0xffff0000);
     },
-    skip: !Platform.isWindows,
+    skip: !(Platform.isWindows || Platform.isLinux),
   );
 
   test(

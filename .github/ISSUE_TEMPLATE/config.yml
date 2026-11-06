@@ -1,1 +1,8 @@
 blank_issues_enabled: false
+contact_links:
+  - name: 分类与诊断采集说明 / Issue reporting guide
+    url: https://github.com/CyrilPeng/Venera-Next/blob/main/doc/user/issue_reporting.zh.md
+    about: 选择正确入口，查看日志、阅读诊断及无法启动时的替代材料。
+  - name: 安全漏洞私密反馈 / Private security reports
+    url: https://github.com/CyrilPeng/Venera-Next/blob/main/SECURITY.md
+    about: 安全漏洞请按安全政策私密报告，不要放到公开 Issue。

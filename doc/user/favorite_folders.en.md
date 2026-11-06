@@ -1,6 +1,6 @@
 # Two-Level Local Favorite Folders
 
-> Mainline feature, not released yet, for #123. This guide applies to builds containing this feature; the published v1.18.1 and v1.18.2-rc.6 do not include it.
+> Two-level folders shipped in `v1.18.2+243` for #123. Parent-back navigation and clickable paths described below are subsequent unreleased improvements; the `1.18.3+244` candidate does not include those two navigation changes.
 
 Local favorites support at most two levels. Both root folders and child folders can contain comics directly. Network favorites remain managed by their comic sources. Folder names must still be globally unique, even under different parents.
 
@@ -16,6 +16,8 @@ Local favorites support at most two levels. Both root folders and child folders 
 ## Browsing And Selecting Folders
 
 In the favorites sidebar, select a folder name to open it. Use the separate arrow to expand or collapse its children. Search matches folder names and `Parent / Child` paths; clearing search does not change the saved hierarchy.
+
+Subsequent unreleased improvements: Back in a child folder first exits search or multi-selection, then opens its parent. Root folders and All retain the existing app-back behavior. An open folder picker or other dialog closes first. Select the parent name in the toolbar path to jump directly; a full-size parent button replaces that label in narrow titles, with the complete name available in its tooltip. The current label can still open the picker on narrow screens. A `/` inside a name is text, not another hierarchy level. The resulting folder selection is saved and restored after restart.
 
 A root folder page provides links to its children, but its comic list and count show **direct favorites only**, not an aggregate of child contents. Comic search, reading-status filters, and blocked keywords continue to apply to the current comic list. All includes favorites from both levels and deduplicates comic identities. A comic can still belong to multiple folders.
 

@@ -12,7 +12,7 @@ from pathlib import Path
 
 from ci_build import CI, run_logged
 from native_build import ROOT, digest, require_within, validate_elf
-from prepare_full_app import BASE, DEPS, EXTRA_LIBRARIES, PROJECT
+from prepare_full_app import BASE, DEPS, EXTRA_LIBRARIES, PROJECT, NATIVE_NOTICE_ASSET, NATIVE_NOTICE_SOURCE
 from prepare_probe import LIBRARIES
 from sideload import audit_device_types
 from release_context import build_inputs
@@ -31,6 +31,11 @@ TESTS = (
     "test/foundation/file_selection_lifecycle_test.dart",
     "test/foundation/image_processing_test.dart",
     "test/foundation/image_processing_native_test.dart",
+    "test/foundation/native_codecs_test.dart",
+    "test/foundation/saf_test.dart",
+    "test/features/local_comics/import_export/directory_copy_test.dart",
+    "test/features/local_comics/import_export/pdf_export_lifecycle_test.dart",
+    "test/features/favorites/favorite_folder_path_test.dart",
     "test/features/sync/app_data_archive_test.dart",
     "test/features/sync/favorite_hierarchy_transfer_test.dart",
     "test/features/favorites/favorite_hierarchy_test.dart",
@@ -81,6 +86,8 @@ def audit_full_hap(hap, metadata, expected_assets):
     expected = metadata["native_libraries"]
     if set(expected) != set(LIBRARIES) | set(EXTRA_LIBRARIES):
         raise ValueError("Incomplete full reader native manifest")
+    if expected_assets.get(NATIVE_NOTICE_ASSET) != digest(NATIVE_NOTICE_SOURCE):
+        raise ValueError("Missing reviewed native codec notice")
     with zipfile.ZipFile(hap) as archive:
         names = archive.namelist()
         if len(names) != len(set(names)) or archive.testzip() is not None:
@@ -98,9 +105,10 @@ def audit_full_hap(hap, metadata, expected_assets):
         if app.get("minAPIVersion") != 260000026 or app.get("targetAPIVersion") != 260000026:
             raise ValueError("Unexpected full reader API baseline")
         required = set(expected) | {"libflutter.so", "libapp.so"}
-        actual = {Path(name).name for name in names if name.startswith("libs/arm64-v8a/") and name.endswith(".so")}
-        if actual != required:
-            raise ValueError(f"Unreviewed/missing reader libraries: {actual ^ required}")
+        actual = {name for name in names if name.startswith("libs/") and name.endswith(".so")}
+        expected_paths = {"libs/arm64-v8a/" + name for name in required}
+        if actual != expected_paths:
+            raise ValueError(f"Unreviewed/missing reader libraries: {actual ^ expected_paths}")
         records = []
         for name in sorted(required):
             data = archive.read(f"libs/arm64-v8a/{name}")
@@ -127,7 +135,7 @@ def check_real_source(metadata):
     source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     expected = build_inputs()["release"]
     if (metadata["source_commit"] != source_commit or metadata.get("release") != expected
-            or (expected is None and source_commit != os.environ["GITHUB_SHA"])):
+            or (expected is None and source_commit != os.environ.get("VENERA_HARMONYOS_SOURCE_SHA", os.environ.get("GITHUB_SHA")))):
         raise ValueError("Unexpected full reader source commit")
     registrant = PROJECT / "ohos/entry/src/main/ets/plugins/GeneratedPluginRegistrant.ets"
     if "InAppWebViewFlutterPlugin" not in registrant.read_text(encoding="utf-8"):
@@ -150,7 +158,8 @@ def build(flutter_sdk):
         flutter = flutter_sdk / "bin/flutter"
         run_logged([flutter, "analyze", "--no-pub", "--fatal-infos", "--fatal-warnings"], "full-app-analyze", PROJECT)
         host = require_within(BASE / "full-host", BASE)
-        host_sources = {"flutter_qjs": BASE / "deps/flutter_qjs", **{name: DEPS / name for name in ("zip_flutter", "flutter_7zip", "lodepng_flutter")}}
+        host_sources = {"flutter_qjs": BASE / "deps/flutter_qjs", "zip_flutter": DEPS / "zip_flutter",
+                        "venera_native": ROOT / "packages/venera_native"}
         run_logged(["cmake", "-S", ROOT / ".github/scripts/native_test_libraries", "-B", host, "-G", "Ninja",
                     "-DCMAKE_BUILD_TYPE=Release", *[f"-D{name.upper()}_ROOT={path}" for name, path in host_sources.items()]], "full-app-host-prepare")
         run_logged(["cmake", "--build", host, "--parallel", "2"], "full-app-host-build")

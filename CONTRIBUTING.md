@@ -14,6 +14,12 @@ English version: [CONTRIBUTING.en.md](CONTRIBUTING.en.md)
 
 不要提交源站内容、搜索结果、具体作品可用性、章节缺失、图片可用性或版权问题。此类问题应反馈给对应扩展、源站或网络服务提供者。
 
+## 提交 Issue
+
+使用[分类表单](https://github.com/CyrilPeng/Venera-Next/issues/new/choose)，按实际出错的功能选择崩溃、阅读性能、本地数据、网络／WebDAV、界面操作或功能建议。一个 Issue 记录一个独立问题，标题写清触发条件与症状。
+
+崩溃、导入／数据和网络失败需脱敏日志；阅读卡顿需手动阅读诊断；纯界面问题和功能建议不强制日志。无法取得时说明具体原因并提供替代证据。固定规则列出缺项，补齐后更新同一条提示，不自动关闭或追补旧报告。详见[分类与诊断采集说明](doc/user/issue_reporting.zh.md)。
+
 ## 开发要求
 
 先使用仓库指定的 Flutter 版本，并从锁文件解析依赖：
@@ -31,6 +37,8 @@ flutter analyze --no-pub
 flutter test --no-pub
 git diff --check
 ```
+
+仅修改 Issue 表单、Python 自动检查或配套文档时，先运行 Python 脚本测试、版本／结构检查和 `git diff --check`；Flutter 分析、完整测试及平台门禁由 PR 的现有质量流程验证。
 
 新增依赖必须说明来源、版本或 commit、使用原因、许可证、上游状态和替代方案。不要提交 `any` 依赖或未固定的 Git 分支。具体规则见[依赖治理](doc/development/dependencies.zh.md)。
 

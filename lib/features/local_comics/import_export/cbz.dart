@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:archive/archive_io.dart' as archive_io;
 import 'package:enough_convert/enough_convert.dart';
-import 'package:flutter_7zip/flutter_7zip.dart';
+import 'package:venera_native/venera_native.dart';
 import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
@@ -37,7 +37,10 @@ abstract class CBZ {
     dartZipExtractor,
   }) async {
     final zipExtract = zipExtractor ?? ZipFile.openAndExtractAsync;
-    final sevenZipExtract = sevenZipExtractor ?? SZArchive.extractIsolates;
+    final sevenZipExtract =
+        sevenZipExtractor ??
+        (String archivePath, String outputPath, int _) =>
+            extractSevenZip(archivePath, outputPath);
     final dartZipExtract = dartZipExtractor ?? _extractZipWithDart;
     var fileType = await checkType(file);
     if (fileType.mime == 'application/zip') {

@@ -1,0 +1,73 @@
+{
+  "artifacts": [
+    {
+      "version": "1.0.992.28",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.992.28/microsoft.web.webview2.1.0.992.28.nupkg",
+      "sha256": "632e2b03d5382689232b1d3a632fc8b8adf92d97b5a27e402f60f3df37c0a2f3",
+      "licenses": [
+        {
+          "path": "licenses/WebView2-1.0.992.28/LICENSE.txt",
+          "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55",
+          "archive_entry": "LICENSE.txt"
+        }
+      ]
+    },
+    {
+      "version": "1.0.3124.44",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.3124.44/microsoft.web.webview2.1.0.3124.44.nupkg",
+      "sha256": "31d61a59a5d5ae2ef5dcb9f175b626c1d64218217f879701ec73ed8fd74b65ae",
+      "licenses": [
+        {
+          "path": "licenses/WebView2-1.0.3124.44/LICENSE.txt",
+          "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55",
+          "archive_entry": "LICENSE.txt"
+        },
+        {
+          "path": "licenses/WebView2-1.0.3124.44/NOTICE.txt",
+          "sha256": "106423785c5b7eba0a8e61d1837f2132e9c828e20ad530f565d981c1df60dd90",
+          "archive_entry": "NOTICE.txt"
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "windows/libs/x64/WebView2Loader.dll",
+      "sdk": "1.0.992.28",
+      "archive_entries": [
+        "build/native/x64/WebView2Loader.dll",
+        "runtimes/win-x64/native/WebView2Loader.dll"
+      ],
+      "sha256": "c4674acf95f0800793a4a6d61132adf5dfa694c218e482d86093494c4e84100a",
+      "matches_official_archive": true
+    },
+    {
+      "path": "windows/libs/x64/WebView2Loader.dll.lib",
+      "sdk": "1.0.992.28",
+      "archive_entries": [
+        "build/native/x64/WebView2Loader.dll.lib"
+      ],
+      "sha256": "61fefc3ed0e0f899fc6f9ad8903f45a5d1b8f568deea655975bdbca967e8f71b",
+      "matches_official_archive": true
+    },
+    {
+      "path": "windows/libs/arm64/WebView2Loader.dll",
+      "sdk": "1.0.3124.44",
+      "archive_entries": [
+        "build/native/arm64/WebView2Loader.dll",
+        "runtimes/win-arm64/native/WebView2Loader.dll"
+      ],
+      "sha256": "027128c9584dca50d36318458964bc88eba8578313857998ff300312ca7f2101",
+      "matches_official_archive": true
+    },
+    {
+      "path": "windows/libs/arm64/WebView2Loader.dll.lib",
+      "sdk": "1.0.3124.44",
+      "archive_entries": [
+        "build/native/arm64/WebView2Loader.dll.lib"
+      ],
+      "sha256": "d70271daa44507865ca0696cd1c1ede5e58e694eec74cb2d06e17dbbe205e9a2",
+      "matches_official_archive": true
+    }
+  ]
+}

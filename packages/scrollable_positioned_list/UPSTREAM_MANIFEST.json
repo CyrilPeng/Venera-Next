@@ -1,0 +1,97 @@
+{
+  "source": {
+    "type": "git",
+    "url": "https://github.com/CyrilPeng/flutter.widgets",
+    "commit": "09e756b1f1b04e6298318d99ec20a787fb360f59",
+    "path": "packages/scrollable_positioned_list"
+  },
+  "hash_format": "SHA-256 of canonical LF Git blob bytes before local formatting",
+  "files": [
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "f258a99185ecdebfbca7d7dbcc8b061040e26b687c51c4e1d1b9cad3a377920b",
+      "local_sha256": "f258a99185ecdebfbca7d7dbcc8b061040e26b687c51c4e1d1b9cad3a377920b"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "d347790d98693ff63129eafe676bac5cb5247c972f1a36f631bfa0e4dbb17293",
+      "local_sha256": "d347790d98693ff63129eafe676bac5cb5247c972f1a36f631bfa0e4dbb17293"
+    },
+    {
+      "path": "README.md",
+      "sha256": "5c781cb654df92e6849b8c9511676d6f0a402f3ec2a564848c10d522f3bb2ef1",
+      "local_sha256": "98261f6005f0cb5b3e7cc8daba4292d294533e340fded821110a820a8efc13af"
+    },
+    {
+      "path": "lib/scrollable_positioned_list.dart",
+      "sha256": "51d87d0e36be45d396e85eb4a4c60be9f57912c3c62491cd6c8763620d0c845f",
+      "local_sha256": "51d87d0e36be45d396e85eb4a4c60be9f57912c3c62491cd6c8763620d0c845f"
+    },
+    {
+      "path": "lib/src/element_registry.dart",
+      "sha256": "c4e6e37e05e8858561717b2e37fd44f46be7598dc963697151ca202370f5815f",
+      "local_sha256": "c4e6e37e05e8858561717b2e37fd44f46be7598dc963697151ca202370f5815f"
+    },
+    {
+      "path": "lib/src/item_positions_listener.dart",
+      "sha256": "bd7409f898483de1d3cbcde312b8a4824260333debff31b56216efa3ea4139ff",
+      "local_sha256": "769f9405e72b75be9b9dc4cd5fe7b955a4657d2ffe574487d7eeb8919ad16a6c"
+    },
+    {
+      "path": "lib/src/item_positions_notifier.dart",
+      "sha256": "6c0d81f9fdf545e80f96eae0756b7709db3dbb83dc26d70757999be578014a5a",
+      "local_sha256": "6c0d81f9fdf545e80f96eae0756b7709db3dbb83dc26d70757999be578014a5a"
+    },
+    {
+      "path": "lib/src/positioned_list.dart",
+      "sha256": "75d280dbfd60d44bfeba0128e72982e3ffc9f6fe2a923b50016116c91b658a8e",
+      "local_sha256": "75d280dbfd60d44bfeba0128e72982e3ffc9f6fe2a923b50016116c91b658a8e"
+    },
+    {
+      "path": "lib/src/post_mount_callback.dart",
+      "sha256": "8e74463c9e5e5498770116fecc3be2fd7648bcb9aabc3cee7fa662f685ef854c",
+      "local_sha256": "8e74463c9e5e5498770116fecc3be2fd7648bcb9aabc3cee7fa662f685ef854c"
+    },
+    {
+      "path": "lib/src/scroll_offset_listener.dart",
+      "sha256": "7f85a1ca69d0f26c02f53b4d1086a107d68f3c28c00c64484891c99c39fc2f8b",
+      "local_sha256": "7f85a1ca69d0f26c02f53b4d1086a107d68f3c28c00c64484891c99c39fc2f8b"
+    },
+    {
+      "path": "lib/src/scroll_offset_notifier.dart",
+      "sha256": "b37c7e2ab1afdda00415748c08da6e7a0a82ae4dda281c0d939dd1f5f136d8eb",
+      "local_sha256": "b37c7e2ab1afdda00415748c08da6e7a0a82ae4dda281c0d939dd1f5f136d8eb"
+    },
+    {
+      "path": "lib/src/scroll_view.dart",
+      "sha256": "42e00ea7866c39220d541f506b84c63bec0c235b52b05a19a19e20918d6689c5",
+      "local_sha256": "f74b924b048a698cacbee29d6b04353ff8ce22daec3677b100b550e26ba40852"
+    },
+    {
+      "path": "lib/src/scrollable_positioned_list.dart",
+      "sha256": "80fd9fd7c9d90fd9e9bfc9791232e4c4c1366b26feefa08c3ce8d3398ea154fb",
+      "local_sha256": "c9be12584ec59a6d62bc8d6be8464589d24b5a50a19031dadbd2dbb9f42eaf43"
+    },
+    {
+      "path": "lib/src/viewport.dart",
+      "sha256": "c3c06273b3466f80d397001e2eca3f28938c4f2690070a56ca6648d3a636363c",
+      "local_sha256": "c3c06273b3466f80d397001e2eca3f28938c4f2690070a56ca6648d3a636363c"
+    },
+    {
+      "path": "lib/src/wrapping.dart",
+      "sha256": "5275d5a4c7b917e2867c367121dde444479d635f7915730fbe6a03c31f9dcae3",
+      "local_sha256": "51e5efc4fdf6fa16e63984efc6694e2dde05191a27c6ad8a31d6b7fac90df4d5"
+    },
+    {
+      "path": "pubspec.yaml",
+      "sha256": "ecdda67c8d6e869a3e87fe701ed9fca59a5ad4bd0514b6472b28f3a0ad148557",
+      "local_sha256": "4a1d4b1330485fb0f528c4e40cf58e7a307a78a872f64f2474908d79a7fe1f0c"
+    },
+    {
+      "path": "analysis_options.yaml",
+      "upstream_path": "analysis_options.yaml",
+      "sha256": "e5154d2c11a0def57230eee097f3749c0b5073874caa5ae161b65a416e535799",
+      "local_sha256": "e5154d2c11a0def57230eee097f3749c0b5073874caa5ae161b65a416e535799"
+    }
+  ]
+}

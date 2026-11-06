@@ -1,4 +1,4 @@
-"""Cross-compile the reader's real PNG, ZIP and 7Z FFI libraries for OHOS."""
+"""Cross-compile the project's reviewed codecs, ZIP and WebView libraries for OHOS."""
 
 import argparse
 import json
@@ -7,16 +7,17 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from native_build import CONFIG, digest, inspect_library, require_within, run, validate_elf
+from native_build import CONFIG, ROOT, digest, inspect_library, require_within, run, validate_elf
 from prepare_full_app import DEPS, EXTRA_LIBRARIES, verify_dependencies
 from prepare_probe import BASE, verify_native_report
 from ci_sdk import check_native_sdk
 
 
 EXPORTS = {
-    "liblodepng_flutter.so": ("lodepng_encode32", "lodepng_decode32", "freePtr"),
+    "libvenera_native.so": ("venera_png_encode", "venera_png_error_text", "venera_native_free",
+                            "venera_7z_open", "venera_7z_close", "venera_7z_count", "venera_7z_name",
+                            "venera_7z_kind", "venera_7z_read"),
     "libzip_flutter.so": ("zip_open", "zip_close", "zip_entry_open", "zip_entry_fwrite", "zip_entry_read", "zip_extract"),
-    "libflutter_7zip.so": ("openArchive", "closeArchive", "getArchiveFileCount", "getArchiveFile", "readArchiveFile", "extractArchiveToFile", "freeReadData"),
     "libinappwebview.so": ("RegisterEntryModule",),
 }
 
@@ -28,24 +29,31 @@ def compile_libraries(native, output):
     flags = ["--target=aarch64-linux-ohos", f"--sysroot={native / 'sysroot'}",
              "-D__MUSL__", "-D_GNU_SOURCE", "-DDART_SHARED_LIB", "-fPIC", "-O2"]
     link = ["-shared", "-Wl,--no-undefined"]
-    run([clang, *flags, *link, "-Wl,-soname,liblodepng_flutter.so",
-         DEPS / "lodepng_flutter/src/lodepng.c", "-o", output / "liblodepng_flutter.so"])
     run([cxx, *flags, "-std=c++17", *link, "-Wl,-soname,libzip_flutter.so",
          DEPS / "zip_flutter/src/zip.cc", "-o", output / "libzip_flutter.so"])
-    source = DEPS / "flutter_7zip/src"
-    c_source = source / "7zip/C"
-    objects = require_within(output.parent / "7zip-objects", BASE)
+    package = ROOT / "packages/venera_native"
+    c_source = package / "third_party/lzma"
+    objects = require_within(output.parent / "codec-objects", BASE)
     objects.mkdir(parents=True, exist_ok=True)
+    export_map = objects / "venera_native.exports"
+    export_map.write_text("{\n  global:\n" + "".join(
+        f"    {name};\n" for name in EXPORTS["libvenera_native.so"]) + "  local: *;\n};\n", encoding="utf-8")
     names = ("7zAlloc", "7zArcIn", "7zBuf", "7zBuf2", "7zCrc", "7zCrcOpt", "7zDec",
              "7zFile", "7zStream", "Bcj2", "Bra", "Bra86", "Delta", "LzmaDec", "Lzma2Dec", "CpuArch")
     compiled = []
-    for name in names:
+    sources = [(name, c_source / f"{name}.c") for name in names]
+    sources.extend((("lodepng", package / "third_party/lodepng/lodepng.c"),
+                    ("venera_png", package / "src/venera_png.c")))
+    for name, source in sources:
         obj = objects / f"{name}.o"
-        run([clang, *flags, "-std=gnu11", "-I", c_source, "-c", c_source / f"{name}.c", "-o", obj])
+        run([clang, *flags, "-std=gnu11", "-DVENERA_LZMA_PORTABLE_ENDIAN=1",
+             "-fvisibility=hidden", "-I", c_source, "-c", source, "-o", obj])
         compiled.append(obj)
-    run([cxx, *flags, "-std=c++20", "-I", c_source, *link,
-         "-Wl,-soname,libflutter_7zip.so", source / "flutter_7zip.cpp", *compiled,
-         "-o", output / "libflutter_7zip.so"])
+    run([cxx, *flags, "-std=c++17", "-DVENERA_LZMA_PORTABLE_ENDIAN=1",
+         "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-I", c_source, *link,
+         f"-Wl,--version-script={export_map}",
+         "-Wl,-soname,libvenera_native.so", package / "src/venera_7z.cpp", *compiled,
+         "-pthread", "-o", output / "libvenera_native.so"])
     run([cxx, *flags, "-std=c++17", *link, "-Wl,-soname,libinappwebview.so",
          DEPS / "webview/flutter_inappwebview_ohos/ohos/src/main/cpp/napi_init.cpp",
          "-lace_napi.z", "-luv", "-o", output / "libinappwebview.so"])
@@ -67,6 +75,8 @@ def inspect_reader_library(native, path):
     defined = {line.split()[-1] for line in symbols.splitlines() if line.strip()}
     if not set(EXPORTS[path.name]).issubset(defined):
         raise ValueError(f"Missing reader FFI exports: {path.name}")
+    if path.name == "libvenera_native.so" and defined != set(EXPORTS[path.name]):
+        raise ValueError("Unexpected project codec exports")
     record["checked_exports"] = list(EXPORTS[path.name])
     return record
 

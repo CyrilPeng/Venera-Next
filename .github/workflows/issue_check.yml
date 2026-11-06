@@ -1,27 +1,54 @@
-name: 检查 Issue
+name: Issue 分类与格式检查
 
 on:
   issues:
-    types: [opened]
-
-concurrency:
-  group: issue-check-${{ github.event.issue.number }}
-  cancel-in-progress: true
+    types: [opened, edited, reopened]
+  issue_comment:
+    types: [created, edited, deleted]
 
 permissions:
   contents: read
   issues: write
 
 jobs:
-  check:
-    name: 检查 Issue
-    if: ${{ vars.ENABLE_AI_ISSUE_CHECK == 'true' }}
+  format:
+    name: 分类、必填信息与诊断检查
+    if: ${{ !github.event.issue.pull_request && github.event.issue.state == 'open' && github.event.sender.type != 'Bot' }}
+    concurrency:
+      group: issue-format-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      valid: ${{ steps.validate.outputs.valid }}
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: 校验表单并更新分类与补充提示
+        id: validate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/issue_policy.py
+
+  ai:
+    name: 可选 AI 辅助摘要
+    needs: format
+    if: ${{ needs.format.outputs.valid == 'true' && vars.ENABLE_AI_ISSUE_CHECK == 'true' && github.event_name == 'issues' && (github.event.action == 'opened' || github.event.action == 'edited') }}
+    concurrency:
+      group: issue-ai-${{ github.event.issue.number }}
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
       - name: 检出代码
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: 使用 AI 检查 Issue
         env:

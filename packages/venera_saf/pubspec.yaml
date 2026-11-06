@@ -1,0 +1,21 @@
+name: venera_saf
+description: Project-owned Android document-provider IO with persistent grants.
+version: 1.0.0
+publish_to: none
+homepage: https://github.com/CyrilPeng/Venera-Next
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+  flutter: '>=3.32.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  ffi: ^2.2.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.cyrilpeng.venera_saf
+        pluginClass: VeneraSafPlugin
