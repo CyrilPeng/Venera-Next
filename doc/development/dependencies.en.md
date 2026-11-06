@@ -19,7 +19,7 @@ See the [dependency audit](dependency_audit.en.md) for ownership and replacement
 
 ## Current Git Dependencies
 
-2026-09-28: `flutter_qjs`, `photo_view`, `flutter.widgets`, `flutter_inappwebview`, and `webdav_client` moved to existing forks under `CyrilPeng`, without changing pins. The six platform subpackages of `flutter_inappwebview` resolve through repository-relative paths to the same fork. `photo_view` became local on 2026-10-05; `scrollable_positioned_list`, `webdav_client` and then `desktop_webview_window` became local on 2026-11-06, followed by project-authored `venera_native` replacing the PNG/7z wrappers. Three independent Git origins, nine Git packages and seven local packages remain in the combined inventory. Roll back declarations, lockfile and inventory together.
+2026-09-28: `flutter_qjs`, `photo_view`, `flutter.widgets`, `flutter_inappwebview`, and `webdav_client` moved to existing forks under `CyrilPeng`, without changing pins. The six platform subpackages of `flutter_inappwebview` resolve through repository-relative paths to the same fork. `photo_view` became local on 2026-10-05; `scrollable_positioned_list`, `webdav_client` and then `desktop_webview_window` became local on 2026-11-06, followed by project-authored `venera_native` replacing PNG/7z wrappers and `venera_saf` replacing SAF. Two independent Git origins, eight Git packages and eight local packages remain in the combined inventory. Roll back declarations, lockfile and inventory together.
 
 VeneraNext maintainers own patch selection, upstream review, and validation for these forks. Preserve original copyrights and licenses. Mirroring does not replace ongoing maintenance or resolve missing licenses.
 
@@ -27,11 +27,10 @@ VeneraNext maintainers own patch selection, upstream review, and validation for 
 |---|---|---|---|
 | `flutter_qjs` | `295f77421eedff356a02e92987181b525970c780` | Fork upstream not recorded / MIT | Retains NDK r28 support and skips numeric-buffer reference walks for asynchronous byte results; replacement requires runtime and native platform verification |
 | `flutter_inappwebview` | `3ef899b3db57c911b080979f1392253b835f98ab` | `pichillilorenzo/flutter_inappwebview` / Apache-2.0 | The pinned revision fixes `GraphicsContext` deallocation; embedded WebView and Cloudflare flows rely on this branch behavior |
-| `flutter_saf` | `fe182cdf40e5fa6230f451bc1d643b860f610d13` | `pkuislm/flutter_saf` / license file is still a placeholder | The pinned revision disables minification to avoid Android release-build problems; storage access still uses this plugin |
 
 The table uses commit messages to explain why the project cannot immediately switch back to upstream. It is not a complete diff audit. Every Git dependency update must document the upstream repository, comparison range, all custom changes, upstream PR if any, security impact, and rollback path.
 
-The `desktop_webview_window` package directory already contains Apache-2.0 LICENSE; the previous repository-root lookup missed it. Its local source retains third-party notices. PNG/7z now use project-authored bridges with explicitly licensed official cores. `flutter_saf` retains its placeholder package license pending a validated replacement that preserves persistent grants and IOOverrides behavior.
+The `desktop_webview_window` package directory already contains Apache-2.0 LICENSE; the previous repository-root lookup missed it. Its local source retains third-party notices. PNG/7z now use project-authored bridges with explicitly licensed official cores. Project-authored `venera_saf` replaces the former placeholder-license wrapper without retaining its source, preserving stored paths and system-persisted grants.
 
 ## QuickJS Numeric-Buffer Reference Walk Fix (2026-10-31)
 
@@ -54,6 +53,7 @@ This is not a QuickJS engine security upgrade and does not resolve the existing 
 | `webdav_client` | 1.2.2 | `packages/webdav_client` | Former fork commit `2f669c98fb81cff1c64fee93466a1475c77e4273` |
 | `desktop_webview_window` | 0.2.4 | `packages/desktop_webview_window` | Package directory at fork commit `7801fc582ecf5a7351632887891ecf309a7b2583` |
 | `venera_native` | 1.0.0 | `packages/venera_native` | Application commit pins project-authored bridges; third-party cores have separate official pins |
+| `venera_saf` | 1.0.0 | `packages/venera_saf` | Project commit fixes authored Dart/Kotlin/JNI and descriptor source |
 
 The first migration retains both packages' runtime sources, manifests, original BSD-3-Clause licenses and copyrights, README and CHANGELOG. Examples, upstream test projects and build outputs are omitted. Reader scroll interfaces and WebDAV adapter, authentication, redirect and upload behavior retain their existing implementations. Each `LOCAL_PATCHES.md` documents current-SDK equivalents, explicit dynamic types, unreferenced private helpers and package analysis policies. Package versions, unrelated dependencies and native toolchains are not upgraded together.
 
@@ -61,7 +61,7 @@ Both new `UPSTREAM_MANIFEST.json` files record canonical LF Git blob SHA-256 has
 
 Local declarations and relative lockfile paths must agree; package manifest names/versions must match the inventory. Resolved files must remain inside the reviewed package directory. License hashes use canonical LF bytes, and patch notes must retain the source baseline and version. Unreviewed direct dependencies, overrides and transitive local packages fail validation. The application Git commit fixes local contents; a lockfile path alone cannot ensure unchanged source.
 
-Update patch notes, inventory and applicable local file hashes with each change, compare upstream updates and run strict analysis and affected feature regressions. Restore declarations, lockfile and Git inventory entries together when reverting to Git. Existing forks remain available for historical builds and rollback. `flutter_saf` retains its pinned origin while its replacement and persistent-grant compatibility are validated.
+Update patch notes, inventory and applicable local file hashes with each change, compare upstream updates and run strict analysis and affected feature regressions. Restore declarations, lockfile and Git inventory entries together when reverting to Git. Existing forks remain available for historical builds and rollback. SAF now uses the project-maintained implementation with existing grants and saved references preserved.
 
 ## Initial Local PhotoView Migration (2026-10-05)
 
@@ -140,3 +140,15 @@ Packages with `source.type: project` still require a complete source inventory, 
 PNG keeps the algorithm/settings, validates RGBA/alpha and offset typed views, and returns owned Dart bytes after releasing all native allocations. One background isolate owns and closes each 7z archive while reusing its solid-block cache. All names, collisions, directory conflicts and links are preflighted, and decoding checks CRC and lengths. Password protection and unsupported compression methods fail explicitly. The application's ZIP → 7z → Dart ZIP fallback remains.
 
 `tool/native_png_probe.py` performs old/new/old A/B/A with identical RGBA bytes and reports byte equality, timing and host-process RSS. Peak RSS is cumulative for that process, not an independent per-encode peak. This does not measure Android frames or energy use. Algorithm updates need separate upstream review, provenance/hash updates and pixel, archive, memory-safety and platform regressions. Historical forks remain for old builds; the frozen `1.18.3+244` Harmony source and assets are unchanged.
+
+## Project-maintained Android SAF (2026-11-06)
+
+`packages/venera_saf 1.0.0` replaces the placeholder-license wrapper with project-authored GPL-3.0-or-later source. Its complete `SOURCE_MANIFEST.json` inventories the license, source, platform build and maintenance notes; none of the old wrapper's source is copied. The inventory now has **two Git origins, eight Git packages and eight local packages**. All **155** other locked records and SDK pins remain unchanged.
+
+Stored `android://<treeDocumentId>/<display names>` paths and Android's persisted URI grants remain authoritative. The longest complete known tree ID handles IDs containing `/`; a revoked longer grant fails instead of redirecting through a shorter overlapping root. Authority ambiguity, unavailable providers, missing children and denied access have distinct failures. UTF-8 JSON preserves Chinese, emoji, colons and pipes.
+
+The original ParcelFileDescriptor remains alive until final close. Native 64-bit IO/seek/length/truncate/flush do not copy file bytes through JNI. Cross-isolate open uses retain/ack/sender-release/adopted so the worker releases its lease before returning a file. Generation tokens prevent closing reused OS descriptor numbers. Workers initialize idempotently, preserve error stacks and drain on disposal. Streams cancel with cleanup; the PDF worker closes failed output and its SAF worker before completion. Explicit close propagates provider errors; cleanup preserves primary IO failures.
+
+Existing file creation preserves bytes. Same-parent rename checks observed targets, and authorized roots cannot be removed or renamed. Atomic exclusive creation/createTemp, watching, locks and setting timestamps are explicitly unsupported; provider races and external cloud restrictions still need vendor/device validation.
+
+Validation includes host adapters/workers, 200 C++ ownership/error/FD-reuse cycles and >2 GiB sparse-file checks. CI runs ASan/UBSan, complete Android/TV builds, 13 native/JNI export checks and packaged-notice checks. Two isolated APKs in `tool/saf_provider_probe` test real DocumentsProvider grants, restart, Unicode, modes, cancellation, close callbacks and errors with a minified Release consumer. See `packages/venera_saf/LOCAL_PATCHES.md` for exact semantics and maintenance.

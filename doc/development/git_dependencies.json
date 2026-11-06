@@ -28,16 +28,6 @@
         "flutter_inappwebview_web": "flutter_inappwebview_web",
         "flutter_inappwebview_windows": "flutter_inappwebview_windows"
       }
-    },
-    {
-      "dependency": "flutter_saf",
-      "url": "https://github.com/venera-app/flutter_saf",
-      "commit": "fe182cdf40e5fa6230f451bc1d643b860f610d13",
-      "status": "license-review",
-      "reason": "Placeholder license; IO overrides and native storage APIs differ from pub.dev namesake.",
-      "packages": {
-        "flutter_saf": "."
-      }
     }
   ],
   "local_packages": [
@@ -234,6 +224,34 @@
           }
         }
       ]
+    },
+    {
+      "dependency": "venera_saf",
+      "path": "packages/venera_saf",
+      "version": "1.0.0",
+      "status": "maintained-local",
+      "reason": "Project-authored persistent Android document-provider IO replaces the placeholder-license wrapper while retaining stored paths and grants, descriptor ownership, error propagation and native 64-bit operations.",
+      "upstream": "https://github.com/CyrilPeng/Venera-Next",
+      "source": {
+        "type": "project",
+        "url": "https://github.com/CyrilPeng/Venera-Next",
+        "path": "packages/venera_saf"
+      },
+      "license": {
+        "spdx": "GPL-3.0-or-later",
+        "file": "LICENSE",
+        "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+      },
+      "patches": "LOCAL_PATCHES.md",
+      "source_manifest": "SOURCE_MANIFEST.json",
+      "source_directories": [
+        "lib",
+        "src",
+        "android",
+        "notices",
+        "test"
+      ],
+      "third_party_sources": []
     }
   ]
 }

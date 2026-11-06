@@ -103,6 +103,10 @@ jobs:
         env:
           ANDROID_FLAVOR: ${{ matrix.flavor }}
         run: python3 .github/scripts/check_native_codec_bundle.py --platform android --root "build/app/outputs/apk/$ANDROID_FLAVOR/debug"
+      - name: 验证 Android 文档存储 ABI 与声明
+        env:
+          ANDROID_FLAVOR: ${{ matrix.flavor }}
+        run: python3 .github/scripts/check_saf_bundle.py --root "build/app/outputs/apk/$ANDROID_FLAVOR/debug"
 
   windows:
     name: Windows 冒烟构建

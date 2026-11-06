@@ -65,7 +65,7 @@ VeneraNext 维护者负责自有 fork 的补丁选择、上游变更审查和发
 
 ## 后续更新：PNG／7z 包装层替代（2026-11-06）
 
-上表中两个占位许可证包装层的保留决定现已完成替代。`lodepng_flutter` 和 `flutter_7zip` 不再是当前依赖；自编 `packages/venera_native 1.0.0` 以项目 GPL-3.0-or-later 维护 Dart API、C ABI 和平台构建，没有复制旧包装层并重新授权。当前清单为 **3 个 Git 来源、9 个 Git 包、7 个本地包**；其余 **155** 项完整锁定记录和 SDK 锁定保持不变。
+上表中两个占位许可证包装层的保留决定现已完成替代。`lodepng_flutter` 和 `flutter_7zip` 不再是当前依赖；自编 `packages/venera_native 1.0.0` 以项目 GPL-3.0-or-later 维护 Dart API、C ABI 和平台构建，没有复制旧包装层并重新授权。PNG／7z 阶段清单为 **3 个 Git 来源、9 个 Git 包、7 个本地包**；其余 **155** 项完整锁定记录和 SDK 锁定保持不变。
 
 - LodePNG：官方 `lvandeve/lodepng@79a61c79cc62814f315661f53a026004bac80614`，版本 20241015，Zlib；`.cpp` 原样改名为 `.c` 编译，保留完整版权。原固定插件仅在 C 文件附加 `freePtr`、在头文件增加导出声明，新桥接使用自己的 ABI。
 - 7z：官方 `ip7z/7zip@e5431fa6f5505e385c6f9367260717e9c47dc2ee`，版本 24.09；34 个原 runtime C／header 文件逐项匹配，另收纳官方 `7zVersion.h` 声明。仅收纳明确声明 public domain 的 C 解码子集，不包含整个 7-Zip 或旧 Dart／构建包装层。
@@ -74,3 +74,11 @@ VeneraNext 维护者负责自有 fork 的补丁选择、上游变更审查和发
 官方 [7-Zip 历史记录](https://www.7-zip.org/history.txt)已复核至 26.05（固定对比提交 `b88c6bc09339de32f7d18bbab900686b244f42ba`）。后续 XZ、其他归档 handler 和 C++ 链接提取的公告不能直接套用到本包所编译的 C 解码子集；这些实现未收纳，链接条目由新桥接拒绝。`Lzma2Dec.c/.h` 与 26.05 无差异，`LzmaDec.c` 的比较涉及等价临时变量写法；`7zArcIn.c` 另有头部计数、重复属性和边界检查加固。本轮保持算法版本，并在桥接中补齐缺失名称元数据的防护与独立回归；后续核心升级须单独比较这些头部路径，不能据此声称完成了所有输入的安全审计。
 
 本地清单记录 115 个文件，区分项目自编代码、两个独立来源和二进制夹具。CI 核对全部支持平台的原生导出、ABI 和分发声明，运行 C ABI 的 ASan／UBSan、真实 RGBA／alpha／typed view、solid／non-solid／Unicode／空文件以及损坏、越界、链接、失败后重试回归。PNG A/B/A 探针比较同一宿主上的旧／新／旧库，实测记录和限制见本地维护文档。冻结鸿蒙 `1.18.3+244` 来源与资产保持原样，下一候选另行同步。
+
+## 后续更新：SAF 包装层替代（2026-11-06）
+
+历史表中 `flutter_saf` 的保留决定已由自编 `packages/venera_saf 1.0.0` 替代。原插件的占位许可证源码没有被复制或重新授权；新的 Dart／Kotlin／JNI 与 C++ 句柄实现由项目以 GPL-3.0-or-later 维护。当前 **2 个 Git 来源、8 个 Git 包、8 个本地包**；其余 **155** 项锁定记录及 SDK 不变，历史 fork 留供旧构建。
+
+本轮验证重点是保存路径和持久授权、含 `/` 的根 ID、授权撤销及 authority 歧义、原 PFD 的提交／关闭生命周期、跨 isolate 两阶段交接、64 位稀疏文件、流取消、错误清理与 PDF worker 退出。完整来源清单、接口限制和验证方式见 `packages/venera_saf/LOCAL_PATCHES.md`；真实 Android fixture 与混淆 Release 由 `tool/saf_provider_probe` 和 CI 重复验证，外部云盘的具体限制继续按 provider／设备记录。
+
+PNG／7z 的 #148 已通过 Android／TV、Windows、Linux、macOS、iOS、完整 Flutter 与 Linux ASan／UBSan 并合并。UBSan 检出的 `CpuArch.h` 未对齐读取采用原核心逐字节路径修复，固定官方摘要与本地补丁摘要分别保留；未降低 sanitizer 或 ABI 门禁。冻结的 `1.18.3+244` 鸿蒙 selector 与资产保持原来源。

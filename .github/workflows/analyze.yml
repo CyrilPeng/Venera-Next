@@ -139,6 +139,17 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
           cmake --build build/native-sanitizers --parallel 2
           ctest --test-dir build/native-sanitizers --output-on-failure
+      - name: 验证文档存储句柄、64 位操作与内存安全
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          cmake -S packages/venera_saf/src -B build/saf-sanitizers -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug -DVENERA_SAF_BUILD_TESTS=ON \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          cmake --build build/saf-sanitizers --parallel 2
+          ctest --test-dir build/saf-sanitizers --output-on-failure
       - run: flutter test --coverage
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/build/test-native/lib
@@ -167,3 +178,47 @@ jobs:
           path: coverage/lcov.info
           if-no-files-found: error
           retention-days: 14
+
+  android-saf-provider:
+    name: Android 文档存储真实 Provider 回归
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: oracle
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+          architecture: x64
+          cache: true
+      - name: 准备隔离 Provider 与混淆后的 Release 消费端
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-36" "ndk;28.0.13004108" "cmake;3.22.1"
+          python3 tool/saf_provider_probe/prepare_probe.py --flutter "$(command -v flutter)" --sdk "$ANDROID_HOME" --build
+          python3 .github/scripts/check_saf_bundle.py --root build/dependency-followup/saf/android-probe/consumer/build/app/outputs/flutter-apk
+      - name: 启用模拟器硬件加速
+        run: sudo chmod a+rw /dev/kvm
+      - name: 验证持久授权、Unicode、64 位文件与关闭协议
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save
+          script: python3 tool/saf_provider_probe/prepare_probe.py --flutter "$(command -v flutter)" --sdk "$ANDROID_HOME" --run --serial emulator-5554
+      - name: 保存 Provider 运行证据
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-saf-provider-evidence
+          path: |
+            build/dependency-followup/saf/android-probe/*.log
+            build/dependency-followup/saf/android-probe/provider-probe.json
+          if-no-files-found: error
+          retention-days: 7
