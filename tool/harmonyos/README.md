@@ -13,6 +13,7 @@
 `release_enabled` 保持 false，完成独立核心修复与平台审核前拒绝 tag 发布。
 
 完整阅读器直接使用仓库内八个包，并将每个受 Git 管理的包输入记录到来源摘要。
+源码清单和项目包摘要使用已提交的 canonical Git blob，保持二进制原字节，避免 `.gitattributes` 的 CRLF 检出规则改变摘要；生成前拒绝工作区或暂存源码漂移，不将未提交输入隐藏在固定提交的摘要后。
 PNG／7z 由 `packages/venera_native` 的自编桥接和独立固定的官方核心编译成
 `libvenera_native.so`，核对九个导出及包内第三方声明；不再获取原组织的两个包装层。
 `venera_saf` 随源码同步，鸿蒙继续使用自己的目录能力边界；Android SAF 插件不被

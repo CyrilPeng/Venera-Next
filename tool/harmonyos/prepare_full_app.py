@@ -47,20 +47,38 @@ def tree_digest(root):
     return result.hexdigest()
 
 
+def require_committed_inputs(*paths):
+    changed = subprocess.check_output(["git", "-C", str(ROOT), "diff", "--name-only", "HEAD", "--",
+                                       *paths], timeout=120)
+    if changed:
+        raise ValueError("Uncommitted reader source inputs: " + changed.decode("utf-8").strip())
+
+
+def git_input_bytes(name):
+    """Use canonical Git bytes, independent of checkout EOL attributes."""
+    try:
+        return subprocess.check_output(["git", "-C", str(ROOT), "show", f"HEAD:{name}"], timeout=120)
+    except subprocess.CalledProcessError as error:
+        raise ValueError("Missing committed reader input: " + name) from error
+
+
 def project_tree_digest(root):
-    """Hash only the committed package inputs, independently of build caches."""
-    result = hashlib.sha256()
+    """Hash committed package blobs, independently of EOL rules and build caches."""
+    prefix = root.relative_to(ROOT).as_posix()
     names = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-z", "--",
-                                     root.relative_to(ROOT).as_posix()]).split(b"\0")
+                                     prefix], timeout=120).split(b"\0")
     if not any(names):
         raise ValueError("Missing committed project package")
-    for name in sorted(value.decode("utf-8") for value in names if value):
+    inputs = sorted(value.decode("utf-8") for value in names if value)
+    for name in inputs:
         path = require_within(ROOT / name, root)
         if not path.is_file():
             raise ValueError("Missing project package input: " + name)
-        data = os.readlink(ROOT / name).encode("utf-8") if (ROOT / name).is_symlink() else path.read_bytes()
+    require_committed_inputs(prefix)
+    result = hashlib.sha256()
+    for name in inputs:
         result.update(Path(name).relative_to(root.relative_to(ROOT)).as_posix().encode("utf-8") + b"\0")
-        result.update(data)
+        result.update(git_input_bytes(name))
     return result.hexdigest()
 
 
@@ -306,13 +324,15 @@ def configure_pubspec(text, identity=None):
 
 
 def app_source_manifest():
+    require_committed_inputs("pubspec.yaml", "pubspec.lock", "CHANGELOG.md", "release.json",
+                             "lib", "assets", "packages")
     files = [ROOT / "pubspec.yaml", ROOT / "pubspec.lock", ROOT / "CHANGELOG.md", ROOT / "release.json"]
     files.extend(sorted((ROOT / "lib").rglob("*.dart")))
     files.extend(sorted(path for path in (ROOT / "assets").rglob("*") if path.is_file()))
     packages = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-z", "--", "packages/"]).split(b"\0")
     files.extend(ROOT / name.decode("utf-8") for name in packages if name)
-    return {path.relative_to(ROOT).as_posix(): (
-        hashlib.sha256(os.readlink(path).encode("utf-8")).hexdigest() if path.is_symlink() else digest(path))
+    return {path.relative_to(ROOT).as_posix():
+        hashlib.sha256(git_input_bytes(path.relative_to(ROOT).as_posix())).hexdigest()
         for path in files}
 
 

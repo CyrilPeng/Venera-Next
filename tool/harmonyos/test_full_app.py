@@ -37,16 +37,70 @@ class FullAppTests(unittest.TestCase):
             source.write_text('reviewed')
             subprocess.run(['git', 'init', str(root)], check=True, capture_output=True)
             subprocess.run(['git', '-C', str(root), 'add', '--', 'packages/example/owned.txt'], check=True)
+            subprocess.run(['git', '-C', str(root), '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.test',
+                            'commit', '-m', 'test(harmonyos): 固定源码摘要夹具'], check=True, capture_output=True)
             with patch.object(prepare_full_app, 'ROOT', root):
                 original = prepare_full_app.project_tree_digest(package)
                 (package / 'build').mkdir()
                 (package / 'build/output').write_text('compiler cache')
                 self.assertEqual(prepare_full_app.project_tree_digest(package), original)
                 source.write_text('changed')
-                self.assertNotEqual(prepare_full_app.project_tree_digest(package), original)
+                with self.assertRaisesRegex(ValueError, 'Uncommitted'):
+                    prepare_full_app.project_tree_digest(package)
                 source.unlink()
                 with self.assertRaisesRegex(ValueError, 'Missing'):
                     prepare_full_app.project_tree_digest(package)
+
+    def test_source_and_package_digests_use_git_blobs_with_crlf_checkout_rules(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fixtures = {'.gitattributes': b'*.ps1 text eol=crlf\n',
+                        'pubspec.yaml': b'name: fixture\n', 'pubspec.lock': b'packages: {}\n',
+                        'CHANGELOG.md': b'# Fixture changes\n', 'release.json': b'{}\n',
+                        'lib/main.dart': b'void main() {}\n', 'assets/init.js': b'const fixture = true;\n',
+                        'packages/example/tool.ps1': b'Write-Output reviewed\r\n',
+                        'packages/example/data.bin': b'\x00\xff\r\n\x80'}
+            for name, data in fixtures.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            subprocess.run(['git', 'init', str(root)], check=True, capture_output=True)
+            subprocess.run(['git', '-C', str(root), 'add', '.'], check=True, capture_output=True)
+            subprocess.run(['git', '-C', str(root), '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.test',
+                            'commit', '-m', 'test(harmonyos): 记录换行与二进制摘要夹具'], check=True, capture_output=True)
+            script = 'packages/example/tool.ps1'
+            canonical = subprocess.check_output(['git', '-C', str(root), 'show', 'HEAD:' + script])
+            self.assertEqual(canonical, b'Write-Output reviewed\n')
+            self.assertNotEqual((root / script).read_bytes(), canonical)
+            expected = hashlib.sha256()
+            for name in sorted(name for name in fixtures if name.startswith('packages/example/')):
+                expected.update(name.removeprefix('packages/example/').encode() + b'\0')
+                expected.update(subprocess.check_output(['git', '-C', str(root), 'show', 'HEAD:' + name]))
+            with patch.object(prepare_full_app, 'ROOT', root):
+                digest = prepare_full_app.project_tree_digest(root / 'packages/example')
+                self.assertEqual(digest, expected.hexdigest())
+                self.assertEqual(prepare_full_app.app_source_manifest()[script], hashlib.sha256(canonical).hexdigest())
+                (root / script).write_bytes(canonical)
+                self.assertEqual(prepare_full_app.project_tree_digest(root / 'packages/example'), digest)
+                self.assertEqual(prepare_full_app.app_source_manifest()[script], hashlib.sha256(canonical).hexdigest())
+
+    def test_manifest_cannot_hide_modified_or_staged_source_behind_committed_hashes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / 'lib/main.dart'
+            source.parent.mkdir(parents=True)
+            source.write_text('void main() {}\n')
+            subprocess.run(['git', 'init', str(root)], check=True, capture_output=True)
+            subprocess.run(['git', '-C', str(root), 'add', '.'], check=True, capture_output=True)
+            subprocess.run(['git', '-C', str(root), '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.test',
+                            'commit', '-m', 'test(harmonyos): 固定拒绝源码漂移夹具'], check=True, capture_output=True)
+            source.write_text('void changed() {}\n')
+            with patch.object(prepare_full_app, 'ROOT', root):
+                with self.assertRaisesRegex(ValueError, 'Uncommitted'):
+                    prepare_full_app.app_source_manifest()
+                subprocess.run(['git', '-C', str(root), 'add', 'lib/main.dart'], check=True, capture_output=True)
+                with self.assertRaisesRegex(ValueError, 'Uncommitted'):
+                    prepare_full_app.app_source_manifest()
 
     def test_webview_exit_api_comes_from_the_mainline_pin_without_faking_events(self):
         pin = FULL_CONFIG['webview_api']['revision']
