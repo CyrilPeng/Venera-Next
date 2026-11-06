@@ -20,7 +20,7 @@
 | `scrollable_positioned_list` | pub.dev 0.3.8；`google/flutter.widgets`，BSD-3-Clause | 候选没有 `scrollControllerCallback` 和 `scrollBehavior`；当前定制提交 `09e756b` 明确加入两者。保留自有 fork；替换需改造阅读器滚动控制并验证长章节跳页、自动阅读和触摸恢复。 |
 | `flutter_inappwebview` | pub.dev 稳定版 6.1.5；`pichillilorenzo/flutter_inappwebview`，Apache-2.0 | 当前包为 6.2.0-beta.3 定制分支，含 `GraphicsContext` 释放修复。切换稳定版会同时改变 API 基线和多个平台实现。保留整仓 fork；先逐个平台比较，再验证网页登录、Cookie、代理、Cloudflare 流程和销毁重建。 |
 | `webdav_client` | pub.dev 1.2.2；原始上游 `flymzero/webdav_client`，BSD-3-Clause | 官方 `newClient` 只有 user/password/debug 参数，没有应用传入的 adapter。当前历史另有 HTTP adapter、301、上传及多认证修改。保留自有 fork；替换需验证 RHttpAdapter、认证、重定向、目录和大文件上传。 |
-| `desktop_webview_window` | pub.dev 0.3.0；源码指向 `MixinNetwork/flutter-plugins` | 官方包有 Apache-2.0 许可证，但不能据此自动补齐当前 fork 的授权记录。官方 `CreateConfiguration` 没有应用使用的 proxy；当前 fork 还有 libsoup-3.0、Linux 和 Windows ARM64 修改。保留原固定来源，先追溯定制代码授权，再决定迁移。 |
+| `desktop_webview_window` | 原审计候选 pub.dev 0.3.0；2026-11-06 复核 0.4.2 | 已纠正旧判断：固定提交的包目录本来就有 Apache-2.0 LICENSE，根目录检查遗漏。0.4.2 要求 Flutter >=3.44 并改变配置 API，缺少原定制公开 proxy 参数；当前 0.2.4 已迁入本地，保留 Linux／ARM64 实现并补齐 SDK 加载器与第三方声明来源。 |
 | `flutter_saf` | 当前来源 `pkuislm/flutter_saf` 的 fork；pub.dev 同名 0.1.0 来自 `hamiranisahil/flutter_saf` | 当前 LICENSE 是占位文本，同名发布包虽为 MIT，但没有当前使用的 IOOverrides 机制，属于不同实现。保留原固定来源；替换必须覆盖持久目录授权、isolate 内 IO override、随机访问和后台读写。 |
 | `flutter_7zip` | `wgh136/flutter_7zip` 的 fork；pub.dev 同名查询返回 404 | 当前 LICENSE 是占位文本；7Z/CB7 导入直接使用 `SZArchive.extractIsolates`，ZIP 也用它作回退。不能因已有 `archive` 依赖就移除。先核实 Dart/FFI 包装层和内嵌原生代码许可，或选取具有等价 7Z 能力的替代实现。 |
 | `lodepng_flutter` | Venera 原生插件；pub.dev 同名查询返回 404 | 当前 LICENSE 是占位文本。应用使用原生编码指针和 finalizer；替换不仅是 PNG 输出，还涉及内存所有权和大图性能。保留原固定来源，评估许可证清晰的编码器，并以尺寸、透明度、像素一致性、峰值内存和耗时作为验收。 |
@@ -30,7 +30,7 @@
 
 VeneraNext 维护者负责自有 fork 的补丁选择、上游变更审查和发布验证。原始上游与 Venera 的定制历史均须保留；必要时比较两条来源，不能只看最新一次提交说明。每次升级记录比较基线、完整变更范围、保留/已合并/可删除的补丁、许可证及安全公告、对应功能测试和回滚 commit。未经比较，不自动把上游默认分支同步进发布依赖。
 
-许可证待核实的四项不新增发布、不自行套用主项目 GPL 或同名包许可证。继续处理的输入是明确覆盖定制代码和内嵌原生代码的授权材料，或者经功能与平台验证的替代实现；未向外部维护者发送消息。该限制不影响已完成的五个 fork 接管和 Debian 替换。
+初次审计将四项列为许可证待核实；2026-11-06 已确认桌面 WebView 包目录的 Apache-2.0 LICENSE，并纠正根目录检查遗漏。剩余三个占位许可证包需区分包装层和内嵌代码的声明，或使用经功能与平台验证的替代实现；不自行套用主项目或同名包许可证，未向外部维护者发送消息。
 
 回滚来源迁移时同时恢复 pubspec、lockfile 和清单；回滚 Debian 替换还需恢复构建脚本及 CI 安装步骤。锁定 SHA 控制内容漂移，不保证远程仓库永远可用；自有 fork 仍应保留固定提交可达的分支/标签及仓库备份。GitHub 上同一平台内的 fork 不解决 GitHub 整体网络不可用。
 

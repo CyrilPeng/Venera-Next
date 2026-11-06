@@ -165,10 +165,8 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/desktop_webview_window"
-      ref: "7801fc582ecf5a7351632887891ecf309a7b2583"
-      resolved-ref: "7801fc582ecf5a7351632887891ecf309a7b2583"
-      url: "https://github.com/venera-app/flutter_desktop_webview"
-    source: git
+      relative: true
+    source: path
     version: "0.2.4"
   device_info_plus:
     dependency: transitive

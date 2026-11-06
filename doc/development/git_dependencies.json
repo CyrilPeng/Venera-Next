@@ -14,16 +14,6 @@
       }
     },
     {
-      "dependency": "desktop_webview_window",
-      "url": "https://github.com/venera-app/flutter_desktop_webview",
-      "commit": "7801fc582ecf5a7351632887891ecf309a7b2583",
-      "status": "license-review",
-      "reason": "License provenance and Windows proxy / Linux libsoup / ARM64 patches require review.",
-      "packages": {
-        "desktop_webview_window": "packages/desktop_webview_window"
-      }
-    },
-    {
       "dependency": "flutter_inappwebview",
       "url": "https://github.com/CyrilPeng/flutter_inappwebview",
       "commit": "3ef899b3db57c911b080979f1392253b835f98ab",
@@ -170,6 +160,34 @@
       },
       "patches": "LOCAL_PATCHES.md",
       "source_manifest": "UPSTREAM_MANIFEST.json"
+    },
+    {
+      "dependency": "desktop_webview_window",
+      "path": "packages/desktop_webview_window",
+      "version": "0.2.4",
+      "status": "maintained-local",
+      "reason": "Retain the pinned desktop proxy, Linux WebKit/libsoup and ARM64 implementation; official 0.4.2 requires Flutter 3.44 and changes configuration APIs.",
+      "upstream": "https://github.com/MixinNetwork/flutter-plugins",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/venera-app/flutter_desktop_webview",
+        "commit": "7801fc582ecf5a7351632887891ecf309a7b2583",
+        "path": "packages/desktop_webview_window"
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "file": "LICENSE",
+        "sha256": "07e78d4ec132261d6487f8b8df8edc0f526b4d4a1a6041ee0994e26c9c4b23bc"
+      },
+      "patches": "LOCAL_PATCHES.md",
+      "source_manifest": "UPSTREAM_MANIFEST.json",
+      "source_directories": [
+        "lib",
+        "linux",
+        "macos",
+        "windows",
+        "licenses"
+      ]
     }
   ]
 }
