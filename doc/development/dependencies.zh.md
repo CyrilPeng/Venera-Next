@@ -2,6 +2,8 @@
 
 English version: [dependencies.en.md](dependencies.en.md)
 
+剩余两个 Git 来源的当前比较、许可、候选实测和安全公告条件见[2026-11-06 完整审计](remaining_git_audit_20261106.zh.md)。QuickJS 保留包装层 API，同时优先处理已登记的旧核心安全修复；下一鸿蒙 pin 只允许预览，核心修复与平台审核后才能启用 tag 分发。现有 SHA／八个本地包保持受控，更新时同步来源、完整锁文件、审计和平台 overlay。
+
 本文记录 VeneraNext 的依赖治理规则，覆盖不来自 pub.dev 的 Git 依赖和仓库内本地源码包。`pubspec.lock` 是构建复现依据，但不能替代依赖来源和维护责任说明。
 
 ## 基本规则
