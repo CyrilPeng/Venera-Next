@@ -6,6 +6,9 @@
 
 ### 仓库维护
 
+- 新增自管 `venera_native 1.0.0`，以项目自编的 Dart／FFI 桥接与平台构建替代许可证仍为占位内容的 `lodepng_flutter` 和 `flutter_7zip` 包装层；分别收纳官方 LodePNG 20241015 的 Zlib 源码与 7-Zip 24.09 明确声明 public domain 的 C 解码子集，保留原算法、版权、独立来源和随包声明。
+- PNG 编码校验尺寸、字节视图与原生错误，复制结果后立即释放原生缓冲；7z 在单个后台 isolate 内持有并关闭归档、复用 solid block，核对 Unicode 路径、CRC、长度、重复名、目录越界与链接，缺失文件名元数据时安全失败。保留 ZIP／7z／Dart ZIP 兼容回退；新增独立归档夹具、原生内存安全和真实图片生命周期回归。
+- 本地来源清单区分项目自编代码和独立固定的第三方核心，阻止重新标注第三方来源、遗漏目录及许可证漂移；迁移后统一管理 3 个 Git 来源、9 个 Git 包及 7 个本地包，其余 155 项依赖记录与 SDK 锁定不变。平台 CI 增加 Android ABI／导出、Windows 实际编码与导入、Linux／macOS／iOS 构建及随包声明核验，并提供宿主 PNG A/B/A 探针。
 - 将 `desktop_webview_window 0.2.4` 收入 `packages/`，保留桌面代理、Linux WebKit／libsoup 与 Windows ARM64 的固定实现。纠正仓库根目录许可证检查遗漏：原包目录已有 Apache-2.0 许可证；补齐 Microsoft WebView2 加载器的官方归档来源、摘要及许可证／NOTICE，保留 WIL 等第三方声明。比较官方 0.4.2 的 Flutter 3.44 与配置 API 要求，维持当前 SDK 和包版本。
 - 本地源码清单支持二进制摘要与原生源码目录检查，阻止未登记的原生文件和加载器变更；桌面 WebView 迁移后统一管理 5 个 Git 来源、11 个 Git 包及 6 个本地包，仅改变该包的锁文件来源。原生依赖或桌面源码变更增加 Linux／macOS Debug 构建门禁，Flutter SDK 匹配 Linux x64 与 macOS ARM64 宿主架构；必需构建被跳过、取消或失败时拒绝通过，Windows 构建核对随包分发的第三方声明。
 - 将 `scrollable_positioned_list 0.3.8+1` 与 `webdav_client 1.2.2` 从个人 Git fork 迁至仓库内 `packages/`，保留原固定提交的定制接口、BSD-3-Clause 许可证和版权；记录原始文件与审核后源码校验值，仅同步两项锁文件来源，继续保留历史 fork 供旧版本构建与回滚。补充当前 SDK 等价调用、原有分析策略与迁移维护说明。

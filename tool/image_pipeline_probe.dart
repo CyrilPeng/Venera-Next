@@ -136,7 +136,7 @@ void main() {
         for (final name in [
           'flutter_windows.dll',
           'flutter_qjs_plugin.dll',
-          'lodepng_flutter.dll',
+          'venera_native.dll',
         ]) {
           DynamicLibrary.open('$native/$name');
         }

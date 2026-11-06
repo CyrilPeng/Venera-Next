@@ -38,11 +38,11 @@ void main() {
 
   test('rejects a floating branch and changed dependency origin', () {
     spec['dependencies']['flutter_qjs']['git']['ref'] = 'main';
-    spec['dependencies']['flutter_7zip']['git']['url'] =
+    spec['dependencies']['flutter_inappwebview']['git']['url'] =
         'https://example.com/fork';
     final errors = checkDependencyInventory(spec, lock, inventory);
     expect(errors.any((e) => e.startsWith('flutter_qjs:')), isTrue);
-    expect(errors.any((e) => e.startsWith('flutter_7zip:')), isTrue);
+    expect(errors.any((e) => e.startsWith('flutter_inappwebview:')), isTrue);
   });
 
   test('detects platform package left on upstream and resolved SHA drift', () {
@@ -409,6 +409,119 @@ void main() {
           : false,
     );
   });
+
+  group('project-authored packages and third-party cores', () {
+    late _LocalFixture fixture;
+    late Map record;
+
+    setUp(() {
+      fixture = _LocalFixture(local('venera_native'));
+      record = fixture.inventory['local_packages'][0] as Map;
+    });
+
+    void updateManifest(void Function(Map manifest) change) {
+      final file = fixture.file('SOURCE_MANIFEST.json');
+      final manifest = jsonDecode(file.readAsStringSync()) as Map;
+      change(manifest);
+      file.writeAsStringSync(jsonEncode(manifest));
+    }
+
+    test('accepts own code with separately pinned official native sources', () {
+      expect(fixture.check(), isEmpty);
+    });
+
+    test('requires complete review rather than treating project as a bypass', () {
+      record.remove('source_directories');
+      expect(
+        fixture.check(),
+        contains(
+          'venera_native: project source needs its own path, repository and full source manifest',
+        ),
+      );
+    });
+
+    test('rejects floating third-party provenance and missing license', () {
+      final origins = record['third_party_sources'] as List;
+      origins[0]['source']['commit'] = 'main';
+      origins[1].remove('license');
+      updateManifest((manifest) => manifest['third_party_sources'] = origins);
+      final errors = fixture.check();
+      expect(
+        errors,
+        contains(
+          'venera_native: third-party source needs immutable Git/archive provenance: lodepng',
+        ),
+      );
+      expect(
+        errors,
+        contains(
+          'venera_native: third-party license needs its file and checksum: lzma',
+        ),
+      );
+    });
+
+    test('rejects reclassifying a third-party core as authored code', () {
+      updateManifest((manifest) {
+        (manifest['files'] as List).firstWhere(
+          (entry) => entry['path'] == 'third_party/lodepng/lodepng.c',
+        )['origin'] = 'project';
+      });
+      expect(
+        fixture.check(),
+        contains(
+          'venera_native: third-party file needs its reviewed origin: third_party/lodepng/lodepng.c',
+        ),
+      );
+    });
+
+    test(
+      'rejects an undeclared third-party tree despite updated local hashes',
+      () {
+        final file = fixture.file('third_party/unknown/core.c');
+        file.parent.createSync(recursive: true);
+        file.writeAsStringSync('// unreviewed upstream core\n');
+        final hash = sha256
+            .convert(utf8.encode(file.readAsStringSync()))
+            .toString();
+        updateManifest(
+          (manifest) => (manifest['files'] as List).add({
+            'path': 'third_party/unknown/core.c',
+            'origin': 'project',
+            'sha256': hash,
+            'local_sha256': hash,
+          }),
+        );
+        expect(
+          fixture.check(),
+          contains(
+            'venera_native: third-party file has no reviewed source: third_party/unknown/core.c',
+          ),
+        );
+      },
+    );
+
+    test('rejects overlapping third-party directories without throwing', () {
+      final origins = record['third_party_sources'] as List;
+      origins[1]['directory'] = 'third_party/lodepng/child';
+      updateManifest((manifest) => manifest['third_party_sources'] = origins);
+      expect(
+        fixture.check(),
+        contains('venera_native: third-party source directories overlap'),
+      );
+    });
+
+    test('rejects changed third-party license bytes', () {
+      fixture
+          .file('third_party/lodepng/LICENSE')
+          .writeAsStringSync('changed license');
+      expect(
+        fixture.check(),
+        contains(
+          'venera_native: third-party license differs from review: lodepng',
+        ),
+      );
+    });
+  });
 }
 
 class _LocalFixture {
@@ -428,17 +541,17 @@ class _LocalFixture {
       root.deleteSync(recursive: true);
     });
     final record = jsonDecode(jsonEncode(reviewed)) as Map;
+    final name = record['dependency'] as String;
+    final manifestName = record['source_manifest'] as String;
     packagePath = record['path'] as String;
     final manifest =
         jsonDecode(
-              File(
-                path.join(packagePath, 'UPSTREAM_MANIFEST.json'),
-              ).readAsStringSync(),
+              File(path.join(packagePath, manifestName)).readAsStringSync(),
             )
             as Map;
     for (final relative in [
       ...(manifest['files'] as List).map((entry) => entry['path'] as String),
-      'UPSTREAM_MANIFEST.json',
+      manifestName,
       'LOCAL_PATCHES.md',
     ]) {
       final destination = file(relative);
@@ -452,12 +565,12 @@ class _LocalFixture {
     };
     spec = {
       'dependencies': {
-        'webdav_client': {'path': packagePath},
+        name: {'path': packagePath},
       },
     };
     lock = {
       'packages': {
-        'webdav_client': {
+        name: {
           'source': 'path',
           'description': {'path': packagePath, 'relative': true},
           'version': record['version'],

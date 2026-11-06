@@ -143,8 +143,17 @@ List<String> checkDependencyInventory(
         if (!_digest(source['sha256'], 64)) {
           errors.add('$name: source archive needs a SHA-256 checksum');
         }
+      } else if (source['type'] == 'project') {
+        if (source['path'] != packagePath ||
+            source['url'] != record['upstream'] ||
+            !_relativePath(record['source_manifest']) ||
+            record['source_directories'] is! List) {
+          errors.add(
+            '$name: project source needs its own path, repository and full source manifest',
+          );
+        }
       } else {
-        errors.add('$name: source type must be git or archive');
+        errors.add('$name: source type must be git, archive or project');
       }
       final declared = declarations[name];
       if (declared is! Map ||
@@ -345,6 +354,11 @@ void _checkSourceManifest(
       return;
     }
     final retained = <String>{};
+    final projectSource = source['type'] == 'project';
+    final origins = projectSource
+        ? _checkThirdPartySources(workspace, record, manifest, errors)
+        : <String, Map>{};
+    final fileOrigins = <String, String>{};
     for (final entry in manifest['files'] as List) {
       if (entry is! Map ||
           !_relativePath(entry['path']) ||
@@ -360,6 +374,31 @@ void _checkSourceManifest(
       if (!retained.add(relative)) {
         errors.add('$name: duplicate source manifest file $relative');
       }
+      if (projectSource) {
+        final origin = entry['origin'];
+        if (origin is String) fileOrigins[relative] = origin;
+        final thirdParty = origins[origin];
+        final directoryOwner = origins.entries.where(
+          (item) => relative.startsWith('${item.value['directory']}/'),
+        );
+        if (relative.startsWith('third_party/') && directoryOwner.isEmpty) {
+          errors.add(
+            '$name: third-party file has no reviewed source: $relative',
+          );
+        } else if (directoryOwner.isNotEmpty) {
+          if (thirdParty == null ||
+              directoryOwner.single.key != origin ||
+              !_relativePath(entry['upstream_path'])) {
+            errors.add(
+              '$name: third-party file needs its reviewed origin: $relative',
+            );
+          }
+        } else if (origin != 'project') {
+          errors.add(
+            '$name: authored file must identify project origin: $relative',
+          );
+        }
+      }
       final retainedFile = _reviewedFile(
         workspace,
         packagePath,
@@ -371,6 +410,14 @@ void _checkSourceManifest(
           _sourceHash(retainedFile, entry['encoding'] ?? 'text') !=
               entry['local_sha256']) {
         errors.add('$name: local source changed without review: $relative');
+      }
+    }
+    for (final origin in origins.entries) {
+      final license = origin.value['license'];
+      if (license is Map && fileOrigins[license['file']] != origin.key) {
+        errors.add(
+          '$name: third-party license is not in its source manifest: ${origin.key}',
+        );
       }
     }
     final license = record['license'];
@@ -388,6 +435,88 @@ void _checkSourceManifest(
   } on FileSystemException {
     errors.add('$name: cannot read retained source files');
   }
+}
+
+Map<String, Map> _checkThirdPartySources(
+  Directory workspace,
+  Map record,
+  Map manifest,
+  List<String> errors,
+) {
+  final name = record['dependency'] as String;
+  final packagePath = record['path'] as String;
+  final records = record['third_party_sources'];
+  final sources = <String, Map>{};
+  if (records is! List ||
+      jsonEncode(records) != jsonEncode(manifest['third_party_sources'])) {
+    errors.add(
+      '$name: project manifest must match reviewed third-party sources',
+    );
+    return sources;
+  }
+  final directories = <String>{};
+  for (final entry in records) {
+    if (entry is! Map ||
+        !_nonempty(entry['id']) ||
+        entry['id'] == 'project' ||
+        sources.containsKey(entry['id']) ||
+        !_relativePath(entry['directory']) ||
+        !(entry['directory'] as String).startsWith('third_party/')) {
+      errors.add('$name: invalid or duplicate third-party source');
+      continue;
+    }
+    final id = entry['id'] as String;
+    final directory = entry['directory'] as String;
+    if (directories.any(
+      (other) =>
+          directory == other ||
+          directory.startsWith('$other/') ||
+          other.startsWith('$directory/'),
+    )) {
+      errors.add('$name: third-party source directories overlap');
+      continue;
+    }
+    directories.add(directory);
+    sources[id] = entry;
+    final source = entry['source'];
+    if (!_httpsUrl(entry['upstream']) ||
+        source is! Map ||
+        !_httpsUrl(source['url']) ||
+        !(source['type'] == 'git' &&
+                _digest(source['commit'], 40) &&
+                _relativePath(source['path'], allowDot: true) ||
+            source['type'] == 'archive' && _digest(source['sha256'], 64))) {
+      errors.add(
+        '$name: third-party source needs immutable Git/archive provenance: $id',
+      );
+    }
+    final license = entry['license'];
+    if (license is! Map ||
+        !_nonempty(license['spdx']) ||
+        !_relativePath(license['file']) ||
+        !(license['file'] as String).startsWith('$directory/') ||
+        !_digest(license['sha256'], 64)) {
+      errors.add('$name: third-party license needs its file and checksum: $id');
+    } else {
+      final file = _reviewedFile(
+        workspace,
+        packagePath,
+        license['file'],
+        name,
+        errors,
+      );
+      if (file != null && _textHash(file) != license['sha256']) {
+        errors.add('$name: third-party license differs from review: $id');
+      }
+    }
+  }
+  final reviewedDirectories = record['source_directories'];
+  if (sources.isNotEmpty &&
+      (reviewedDirectories is! List ||
+          !reviewedDirectories.contains('third_party'))) {
+    errors.add('$name: project manifest must cover the third_party directory');
+  }
+  return sources;
 }
 
 void _checkSourceDirectories(
