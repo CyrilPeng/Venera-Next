@@ -52,3 +52,13 @@ VeneraNext 维护者负责自有 fork 的补丁选择、上游变更审查和发
 验证记录：真实 PhotoView 的缓存与异步图片所有权两项回归在原源码上失败、修复后通过；覆盖帧替换、卸载、尺寸及缩放。包和回归测试的严格分析、格式检查、来源比较以及 `dart tool/check_git_dependencies.dart` 均通过。新的真实阅读器退出集成回归还覆盖可见图片的原始文件读取、native 帧等待、强制卸载和退出失败后的 PhotoView/连续模式恢复。此更新的局部验证不替代历史记录之外的平台完整构建。
 
 `photo_view` 已移出仅用于当前 Git 依赖的机器清单，来源记录迁至本地补丁文档。`.github/workflows/pr_build.yml` 已覆盖 `packages/`，无需更改构建触发规则。恢复 Git 来源需同步恢复依赖声明、锁文件及清单，并验证图片生命周期。
+
+## 后续更新：首批 Git 依赖迁入本地源码（2026-11-06）
+
+上述保留 fork 的决定仍作为历史审计证据。当前 `scrollable_positioned_list 0.3.8+1` 从 `CyrilPeng/flutter.widgets` 的 `09e756b1f1b04e6298318d99ec20a787fb360f59` 同名子目录迁入 `packages/scrollable_positioned_list`，`webdav_client 1.2.2` 从 `CyrilPeng/webdav_client` 的 `2f669c98fb81cff1c64fee93466a1475c77e4273` 迁入 `packages/webdav_client`。两个 BSD-3-Clause 许可证、版权、运行时源码和定制接口保留，版本与依赖约束不变。
+
+每个包新增 `LOCAL_PATCHES.md` 和 `UPSTREAM_MANIFEST.json`，记录原 Git blob 校验值、审核后的本地摘要、保留文件范围、SDK 等价调用与回滚要求。同版本格式化后，滚动包 9/12、WebDAV 包 8/11 个运行时文件与原来源一致，其余三个文件各有明确记录的兼容处理；包级分析策略保留，应用严格分析门禁不变。
+
+机器清单从仅管理 Git 来源扩展为同时管理 6 个 Git 来源和 5 个本地包。既有 PhotoView、SharePlus、Rhttp 的原始 commit／发布归档摘要及补丁说明也纳入检查。检查器拒绝未审核的本地直接依赖、覆盖项、传递包、路径／版本漂移、许可证或补丁文档缺失、真实路径越界，以及首批包未登记的源码变更。
+
+迁移保留历史 fork 作旧版本构建与回滚来源，没有归档或删除远端仓库。QuickJS、WebView 和四项许可证待核实来源仍保持既有固定版本；此更新不修改冻结候选来源、原生桥接版本或发布资产。当前治理规则和本地维护方式以 [dependencies.zh.md](dependencies.zh.md) 为准。

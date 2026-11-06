@@ -939,10 +939,8 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/scrollable_positioned_list"
-      ref: "09e756b1f1b04e6298318d99ec20a787fb360f59"
-      resolved-ref: "09e756b1f1b04e6298318d99ec20a787fb360f59"
-      url: "https://github.com/CyrilPeng/flutter.widgets"
-    source: git
+      relative: true
+    source: path
     version: "0.3.8+1"
   share_plus:
     dependency: "direct main"
@@ -1191,11 +1189,9 @@ packages:
   webdav_client:
     dependency: "direct main"
     description:
-      path: "."
-      ref: "2f669c98fb81cff1c64fee93466a1475c77e4273"
-      resolved-ref: "2f669c98fb81cff1c64fee93466a1475c77e4273"
-      url: "https://github.com/CyrilPeng/webdav_client"
-    source: git
+      path: "packages/webdav_client"
+      relative: true
+    source: path
     version: "1.2.2"
   win32:
     dependency: transitive

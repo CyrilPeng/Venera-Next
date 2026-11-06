@@ -1,0 +1,86 @@
+{
+  "source": {
+    "type": "git",
+    "url": "https://github.com/CyrilPeng/webdav_client",
+    "commit": "2f669c98fb81cff1c64fee93466a1475c77e4273",
+    "path": "."
+  },
+  "hash_format": "SHA-256 of canonical LF Git blob bytes before local formatting",
+  "files": [
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "86e45526140e96583b11b8b3ae292d3d32450a2b5931542dd567a55debc2bac1",
+      "local_sha256": "3e1c1b500c1b2358c4b14b76eed12e7d9f8f025189b9b4c0ac34ecb63595595f"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "b17d7a897d3602d6ea9e53038329cea1a581ce53672d148893ef436f3fe255b9",
+      "local_sha256": "b17d7a897d3602d6ea9e53038329cea1a581ce53672d148893ef436f3fe255b9"
+    },
+    {
+      "path": "README.md",
+      "sha256": "fbf1cfd40b143ddb3bc23bc76af77e145a823dde65c9becbcf587855969c821b",
+      "local_sha256": "0475255268252915f7b24065e69163a80f5adc686224b68c5ced59f0f7d7de87"
+    },
+    {
+      "path": "lib/src/adapter/adapter_mobile.dart",
+      "sha256": "c4a4d636e88b17156c38f0fb1e5ad9d4ec2fa3d50efb18338ac34ab6bd403e1f",
+      "local_sha256": "c4a4d636e88b17156c38f0fb1e5ad9d4ec2fa3d50efb18338ac34ab6bd403e1f"
+    },
+    {
+      "path": "lib/src/adapter/adapter_stub.dart",
+      "sha256": "d63f1f426cbe7292840facf34f0fde406872d9eafcde13738aeb40c06feb16e9",
+      "local_sha256": "d63f1f426cbe7292840facf34f0fde406872d9eafcde13738aeb40c06feb16e9"
+    },
+    {
+      "path": "lib/src/adapter/adapter_web.dart",
+      "sha256": "56d4d6d0f92b3926ee384c331a508ba4962544a5513a28fb512a562ebe112932",
+      "local_sha256": "56d4d6d0f92b3926ee384c331a508ba4962544a5513a28fb512a562ebe112932"
+    },
+    {
+      "path": "lib/src/auth.dart",
+      "sha256": "062a246c9aedec125a8e989c4973238a59a5e4ba95379d86e30bb41da86f9e69",
+      "local_sha256": "062a246c9aedec125a8e989c4973238a59a5e4ba95379d86e30bb41da86f9e69"
+    },
+    {
+      "path": "lib/src/client.dart",
+      "sha256": "f292d060f684d35a260796bb9702520658fab23b63be93b6236459030ff1f18a",
+      "local_sha256": "f292d060f684d35a260796bb9702520658fab23b63be93b6236459030ff1f18a"
+    },
+    {
+      "path": "lib/src/file.dart",
+      "sha256": "240b7a3027af4196d28fd33d17ba609dd4f209b20d22865057eeca30967664a7",
+      "local_sha256": "240b7a3027af4196d28fd33d17ba609dd4f209b20d22865057eeca30967664a7"
+    },
+    {
+      "path": "lib/src/md5.dart",
+      "sha256": "698a628ec3ae4eb154c9cf8f4eafa26a242482a575dab088c63810b340c7a72e",
+      "local_sha256": "7c3a7ba57ef576a4a46e0395042629ff52f302ae6066c70f552d44a6cd64dbab"
+    },
+    {
+      "path": "lib/src/utils.dart",
+      "sha256": "0cc5be68f85045956346199ed85debaaf691056f908b9acef3cbeb09f8db6515",
+      "local_sha256": "1e8c6ca30a3b30c1c6b7990b872f1e94a84e989ef3f19208a5e874e7f1735049"
+    },
+    {
+      "path": "lib/src/webdav_dio.dart",
+      "sha256": "dbd732cc242e494a1d4d3e1e5e1c1ca8fa73a03055766c22e546d5e0467c849c",
+      "local_sha256": "5e0d0c5490761b37d711d0ef398e697bc82a864d01186123f937191d70379198"
+    },
+    {
+      "path": "lib/src/xml.dart",
+      "sha256": "574a42138611599be18929962b24cb2b5e99f2280bbb6cc5ea61bdcf20c7b74e",
+      "local_sha256": "0d0d7f82825d3b70367bef9c7c2f57deadb1f2edd324926a06b50be0f77e336c"
+    },
+    {
+      "path": "lib/webdav_client.dart",
+      "sha256": "85e2a79f6d2817eecb40639db81c4d1ed481e3ace5b79d1392d116ab4037f0ea",
+      "local_sha256": "85e2a79f6d2817eecb40639db81c4d1ed481e3ace5b79d1392d116ab4037f0ea"
+    },
+    {
+      "path": "pubspec.yaml",
+      "sha256": "972bde8f4b61cb6e9476367f2ec7f7f1c495189600768492f011855055107526",
+      "local_sha256": "972bde8f4b61cb6e9476367f2ec7f7f1c495189600768492f011855055107526"
+    }
+  ]
+}

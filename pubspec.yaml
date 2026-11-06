@@ -32,10 +32,7 @@ dependencies:
   share_plus:
     path: packages/share_plus
   scrollable_positioned_list:
-    git:
-      url: https://github.com/CyrilPeng/flutter.widgets
-      ref: 09e756b1f1b04e6298318d99ec20a787fb360f59
-      path: packages/scrollable_positioned_list
+    path: packages/scrollable_positioned_list
   flutter_reorderable_grid_view: ^5.7.0
   uuid: ^4.6.0
   desktop_webview_window:
@@ -61,9 +58,7 @@ dependencies:
     path: packages/rhttp
   flutter_rust_bridge: 2.11.1
   webdav_client:
-    git:
-      url: https://github.com/CyrilPeng/webdav_client
-      ref: 2f669c98fb81cff1c64fee93466a1475c77e4273
+    path: packages/webdav_client
   battery_plus: ^7.1.2
   local_auth: ^3.0.2
   flutter_saf:
