@@ -48,6 +48,32 @@ class _FavoritesPageState extends SettingsSaveState<FavoritesPage> {
   }
 
   @override
+  Future<void> leaveSettings([ModalRoute<dynamic>? destination]) async {
+    final route = ModalRoute.of(context);
+    if (destination != null &&
+        identical(destination, route) &&
+        route?.isCurrent == true &&
+        !isNetwork &&
+        folder != null &&
+        folder != localAllFolderLabel) {
+      try {
+        if (FavoritesScope.read(context).folderTree.named(folder!)?.parentId !=
+            null) {
+          // LocalFavoritesPage consumes this page-internal back. Replaying it
+          // after saving would consume a second mode/level; entering the base
+          // leaving phase would reject its new parent-folder assignment.
+          await waitForSettingsSave();
+          return;
+        }
+      } catch (error) {
+        if (mounted) context.showMessage(message: error.toString());
+        return;
+      }
+    }
+    await super.leaveSettings(destination);
+  }
+
+  @override
   void initState() {
     var data = appdata.implicitData['favoriteFolder'];
     if (data != null) {
