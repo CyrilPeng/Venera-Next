@@ -248,6 +248,10 @@ String _textHash(File file) => sha256
     .convert(utf8.encode(file.readAsStringSync().replaceAll('\r\n', '\n')))
     .toString();
 
+String _sourceHash(File file, String encoding) => encoding == 'binary'
+    ? sha256.convert(file.readAsBytesSync()).toString()
+    : _textHash(file);
+
 void _checkLocalFiles(Directory workspace, Map record, List<String> errors) {
   final name = record['dependency'] as String;
   final packagePath = record['path'] as String;
@@ -345,7 +349,8 @@ void _checkSourceManifest(
       if (entry is! Map ||
           !_relativePath(entry['path']) ||
           !_digest(entry['sha256'], 64) ||
-          !_digest(entry['local_sha256'], 64)) {
+          !_digest(entry['local_sha256'], 64) ||
+          !['text', 'binary'].contains(entry['encoding'] ?? 'text')) {
         errors.add(
           '$name: source manifest needs file paths and both checksums',
         );
@@ -363,7 +368,8 @@ void _checkSourceManifest(
         errors,
       );
       if (retainedFile != null &&
-          _textHash(retainedFile) != entry['local_sha256']) {
+          _sourceHash(retainedFile, entry['encoding'] ?? 'text') !=
+              entry['local_sha256']) {
         errors.add('$name: local source changed without review: $relative');
       }
     }
@@ -376,33 +382,68 @@ void _checkSourceManifest(
         )) {
       errors.add('$name: source manifest must cover pubspec, license and lib');
     }
-    final lib = Directory(path.join(workspace.path, packagePath, 'lib'));
-    if (lib.existsSync()) {
-      final canonicalPackage = Directory(
-        path.join(workspace.path, packagePath),
-      ).resolveSymbolicLinksSync();
-      if (!path.isWithin(canonicalPackage, lib.resolveSymbolicLinksSync())) {
-        errors.add('$name: lib directory escapes the reviewed package');
-        return;
-      }
-      for (final entity in lib.listSync(recursive: true, followLinks: false)) {
-        final relative = path
-            .relative(entity.path, from: path.join(workspace.path, packagePath))
-            .replaceAll('\\', '/');
-        if (entity is Link) {
-          errors.add('$name: local source tree contains a link: $relative');
-          continue;
-        }
-        if (entity is! File || !entity.path.endsWith('.dart')) continue;
-        if (!retained.contains(relative)) {
-          errors.add('$name: local Dart file has no source record: $relative');
-        }
-      }
-    }
+    _checkSourceDirectories(workspace, record, retained, errors);
   } on FormatException {
     errors.add('$name: cannot parse source manifest');
   } on FileSystemException {
     errors.add('$name: cannot read retained source files');
+  }
+}
+
+void _checkSourceDirectories(
+  Directory workspace,
+  Map record,
+  Set<String> retained,
+  List<String> errors,
+) {
+  final name = record['dependency'] as String;
+  final packagePath = record['path'] as String;
+  final strictFiles = record.containsKey('source_directories');
+  final directories = record['source_directories'] ?? ['lib'];
+  if (directories is! List ||
+      directories.isEmpty ||
+      !directories.contains('lib')) {
+    errors.add('$name: reviewed source directories must include lib');
+    return;
+  }
+  final seen = <String>{};
+  final canonicalPackage = Directory(
+    path.join(workspace.path, packagePath),
+  ).resolveSymbolicLinksSync();
+  if (!path.isWithin(workspace.resolveSymbolicLinksSync(), canonicalPackage)) {
+    errors.add('$name: source package escapes the reviewed workspace');
+    return;
+  }
+  for (final directory in directories) {
+    if (!_relativePath(directory) || !seen.add(directory as String)) {
+      errors.add('$name: invalid or duplicate source directory $directory');
+      continue;
+    }
+    final source = Directory(path.join(workspace.path, packagePath, directory));
+    if (!source.existsSync()) {
+      errors.add('$name: missing reviewed source directory $directory');
+      continue;
+    }
+    if (!path.isWithin(canonicalPackage, source.resolveSymbolicLinksSync())) {
+      errors.add('$name: $directory directory escapes the reviewed package');
+      continue;
+    }
+    for (final entity in source.listSync(recursive: true, followLinks: false)) {
+      final relative = path
+          .relative(entity.path, from: path.join(workspace.path, packagePath))
+          .replaceAll('\\', '/');
+      if (entity is Link) {
+        errors.add('$name: local source tree contains a link: $relative');
+        continue;
+      }
+      if (entity is! File || (!strictFiles && !entity.path.endsWith('.dart'))) {
+        continue;
+      }
+      if (!retained.contains(relative)) {
+        final kind = strictFiles ? 'source' : 'Dart';
+        errors.add('$name: local $kind file has no source record: $relative');
+      }
+    }
   }
 }
 

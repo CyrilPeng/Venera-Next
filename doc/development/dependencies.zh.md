@@ -19,14 +19,13 @@ English version: [dependencies.en.md](dependencies.en.md)
 
 ## 当前 Git 依赖
 
-2026-09-28：`flutter_qjs`、`photo_view`、`flutter.widgets`、`flutter_inappwebview` 和 `webdav_client` 曾改用 `CyrilPeng` 下的现有 fork，固定 commit 不变。`flutter_inappwebview` 的六个平台子包通过仓库内相对路径一起解析到同一 fork。2026-10-05 起，`photo_view` 改为本地 path 包；2026-11-06，`scrollable_positioned_list` 和 `webdav_client` 也改为本地包。当前剩余 6 个独立 Git 来源、12 个 Git 包，全部本地包纳入统一清单；回滚时同步恢复依赖声明、锁文件和对应清单记录。
+2026-09-28：`flutter_qjs`、`photo_view`、`flutter.widgets`、`flutter_inappwebview` 和 `webdav_client` 曾改用 `CyrilPeng` 下的现有 fork，固定 commit 不变。`flutter_inappwebview` 的六个平台子包通过仓库内相对路径一起解析到同一 fork。2026-10-05 起，`photo_view` 改为本地 path 包；2026-11-06，`scrollable_positioned_list` 和 `webdav_client` 也改为本地包。桌面 WebView 随后迁入本地包；当前剩余 5 个独立 Git 来源、11 个 Git 包，全部本地包纳入统一清单；回滚时同步恢复依赖声明、锁文件和对应清单记录。
 
 这些 fork 的补丁选择、上游审查和更新验证由 VeneraNext 维护者负责。保留原作者版权和许可证；镜像不能替代持续维护，也不能解决许可证缺失。
 
 | 依赖 | 当前 commit | 上游 / 许可证 | 暂时保留定制仓库的直接原因 |
 |---|---|---|---|
 | `flutter_qjs` | `295f77421eedff356a02e92987181b525970c780` | 未记录 fork 上游 / MIT | 保留 NDK r28 构建适配，修复异步字节结果的数值缓冲引用扫描开销；替换前必须验证 JavaScript 运行时和各平台原生构建 |
-| `desktop_webview_window` | `7801fc582ecf5a7351632887891ecf309a7b2583` | `wgh136/flutter_desktop_webview` / 未声明 | 固定版本包含 Windows ARM64 构建修复，替换前需验证全部桌面平台 |
 | `flutter_inappwebview` | `3ef899b3db57c911b080979f1392253b835f98ab` | `pichillilorenzo/flutter_inappwebview` / Apache-2.0 | 固定版本包含 `GraphicsContext` 释放修复；内嵌 WebView 和 Cloudflare 流程依赖该分支行为 |
 | `lodepng_flutter` | `ac7d05dde32e8d728102a9ff66e6b55f05d94ba1` | 未记录 fork 上游 / 许可证文件仍为占位内容 | 固定版本包含 NDK r28 构建适配，图片处理链路仍依赖其原生插件 |
 | `flutter_saf` | `fe182cdf40e5fa6230f451bc1d643b860f610d13` | `pkuislm/flutter_saf` / 许可证文件仍为占位内容 | 固定版本关闭代码压缩以规避 Android 发布构建问题，存储访问流程依赖该插件 |
@@ -34,7 +33,7 @@ English version: [dependencies.en.md](dependencies.en.md)
 
 上表依据当前固定 commit 的提交说明记录“为什么现在不能直接切回上游”，不等同于完整差异审计。每次升级 Git 依赖时，应在 PR 中补充上游仓库、对比范围、全部定制修改、上游 PR（如有）、安全影响和回滚方式。
 
-`desktop_webview_window` 未声明许可证，`lodepng_flutter`、`flutter_saf` 和 `flutter_7zip` 的许可证文件仍是占位内容。这些是已知供应链债务：升级前必须向维护方核实许可证，无法确认时应迁移到许可证清晰的上游版本或替代包。
+`desktop_webview_window` 的包目录已有 Apache-2.0 许可证，已纠正此前根目录检查的遗漏并随本地源码保留第三方声明。`lodepng_flutter`、`flutter_saf` 和 `flutter_7zip` 的许可证文件仍是占位内容。这些是已知供应链债务：升级前必须向维护方核实许可证，无法确认时应迁移到许可证清晰的上游版本或替代包。
 
 ## QuickJS 数值缓冲引用扫描修复（2026-10-31）
 
@@ -55,6 +54,7 @@ English version: [dependencies.en.md](dependencies.en.md)
 | `rhttp` | 0.15.1 | `packages/rhttp` | pub.dev 0.15.1 发布归档与 SHA-256 |
 | `scrollable_positioned_list` | 0.3.8+1 | `packages/scrollable_positioned_list` | 原 fork commit `09e756b1f1b04e6298318d99ec20a787fb360f59` 的同名包子目录 |
 | `webdav_client` | 1.2.2 | `packages/webdav_client` | 原 fork commit `2f669c98fb81cff1c64fee93466a1475c77e4273` |
+| `desktop_webview_window` | 0.2.4 | `packages/desktop_webview_window` | 原 fork commit `7801fc582ecf5a7351632887891ecf309a7b2583` 的包子目录 |
 
 首批迁移保留两个包的全部运行时源码、manifest、BSD-3-Clause 许可证、版权及上游 README／CHANGELOG，省略示例工程、上游测试工程和构建输出。阅读器的定制滚动接口和 WebDAV 的 adapter、认证、重定向及上传行为保持原实现。当前 SDK 等价调用、显式 dynamic 类型、未引用私有助手及包级分析策略分别记录在两个包的 `LOCAL_PATCHES.md`；不同时升级包版本、其他依赖或原生工具链。
 
@@ -62,7 +62,7 @@ English version: [dependencies.en.md](dependencies.en.md)
 
 所有本地包的声明和锁文件路径必须一致，锁文件使用相对路径；包 manifest 的名称／版本须与清单相同。文件的真实路径须留在审核包目录内，许可证按 canonical LF 字节校验，补丁文档必须保留版本和来源摘要。未登记的直接依赖、覆盖项或传递本地包均使检查失败。`path` 包的内容由应用 Git 提交固定，不能仅凭锁文件中的路径保证源码不变。
 
-修改本地包时同步更新补丁记录、清单及适用的本地文件摘要，比较上游变更，运行严格分析和受影响的功能回归。恢复 Git 来源时一起恢复声明、锁文件和清单中的 Git 条目。现有历史 fork 保留作旧版本构建和回滚来源；许可证待核实的四个原项目依赖仍使用既有固定来源，接下来分别推进授权与替代实现审计。
+修改本地包时同步更新补丁记录、清单及适用的本地文件摘要，比较上游变更，运行严格分析和受影响的功能回归。恢复 Git 来源时一起恢复声明、锁文件和清单中的 Git 条目。现有历史 fork 保留作旧版本构建和回滚来源；许可证文件仍为占位内容的三个原项目依赖继续使用既有固定来源，接下来分别推进授权与替代实现审计。
 
 ## PhotoView 初次本地迁移记录（2026-10-05）
 
@@ -112,3 +112,11 @@ cargo audit --file packages/rhttp/rust/Cargo.lock --deny unsound
 - [ ] 已运行 `flutter pub get --enforce-lockfile`、`flutter analyze --no-pub` 和 `flutter test --no-pub`。
 - [ ] 已运行平台构建，或说明无法运行的平台及原因。
 - [ ] 已检查许可证、安全公告和上游变更记录。
+
+## 桌面 WebView 本地维护（2026-11-06）
+
+`desktop_webview_window 0.2.4` 保留固定提交的桌面代理、Linux WebKit／libsoup 和 Windows ARM64 实现。原包目录已有 Apache-2.0 LICENSE；此前仓库根目录检查将其误记为未声明许可证，现已纠正。Microsoft WebView2 的 x64 1.0.992.28 与 ARM64 1.0.3124.44 加载器及导入库均与官方 NuGet 归档逐字节一致，归档摘要、匹配条目及 LICENSE／NOTICE 见本地 `NATIVE_ARTIFACTS.json` 和 `licenses/`；原 WIL 与 strconv 声明保留。
+
+官方 0.4.2 已核对发布归档，但要求 Flutter >=3.44.0，并改变配置／标题栏 API，缺少原定制公开 proxy 参数。本轮以来源迁移为范围，维持应用 Flutter 3.41.4 和包版本。维护与回滚方式见 `packages/desktop_webview_window/LOCAL_PATCHES.md`。
+
+本地清单的 `source_directories` 声明需审核的全部原生目录；二进制源码条目使用 `encoding: binary` 和原始字节摘要，其余文件继续使用 canonical LF 校验。目录内新增文件、链接或未审核内容均使检查失败。

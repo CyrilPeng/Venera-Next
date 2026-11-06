@@ -36,10 +36,7 @@ dependencies:
   flutter_reorderable_grid_view: ^5.7.0
   uuid: ^4.6.0
   desktop_webview_window:
-    git:
-      url: https://github.com/venera-app/flutter_desktop_webview
-      path: packages/desktop_webview_window
-      ref: 7801fc582ecf5a7351632887891ecf309a7b2583
+    path: packages/desktop_webview_window
   flutter_inappwebview:
     git:
       url: https://github.com/CyrilPeng/flutter_inappwebview

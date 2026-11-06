@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 import 'package:yaml/yaml.dart';
@@ -37,11 +38,11 @@ void main() {
 
   test('rejects a floating branch and changed dependency origin', () {
     spec['dependencies']['flutter_qjs']['git']['ref'] = 'main';
-    spec['dependencies']['desktop_webview_window']['git']['url'] =
+    spec['dependencies']['flutter_7zip']['git']['url'] =
         'https://example.com/fork';
     final errors = checkDependencyInventory(spec, lock, inventory);
     expect(errors.any((e) => e.startsWith('flutter_qjs:')), isTrue);
-    expect(errors.any((e) => e.startsWith('desktop_webview_window:')), isTrue);
+    expect(errors.any((e) => e.startsWith('flutter_7zip:')), isTrue);
   });
 
   test('detects platform package left on upstream and resolved SHA drift', () {
@@ -273,6 +274,93 @@ void main() {
         fixture.check(),
         contains(
           'webdav_client: source manifest does not match reviewed provenance',
+        ),
+      );
+    });
+
+    void registerNativeFixture() {
+      final bytes = [0x4d, 0x5a, 0xff, 0x00, 0xfe];
+      final native = fixture.file('windows/loader.dll');
+      native.parent.createSync(recursive: true);
+      native.writeAsBytesSync(bytes);
+      final file = fixture.file('UPSTREAM_MANIFEST.json');
+      final manifest = jsonDecode(file.readAsStringSync()) as Map;
+      final digest = sha256.convert(bytes).toString();
+      (manifest['files'] as List).add({
+        'path': 'windows/loader.dll',
+        'sha256': digest,
+        'local_sha256': digest,
+        'encoding': 'binary',
+      });
+      file.writeAsStringSync(jsonEncode(manifest));
+      fixture.inventory['local_packages'][0]['source_directories'] = [
+        'lib',
+        'windows',
+      ];
+    }
+
+    test('checks non-UTF8 binary sources and detects byte changes', () {
+      registerNativeFixture();
+      expect(fixture.check(), isEmpty);
+      fixture.file('windows/loader.dll').writeAsBytesSync([0x4d, 0x5a, 0xff]);
+      expect(
+        fixture.check(),
+        contains(
+          'webdav_client: local source changed without review: windows/loader.dll',
+        ),
+      );
+    });
+
+    test('rejects unregistered native files inside reviewed directories', () {
+      registerNativeFixture();
+      fixture.file('windows/extra.cc').writeAsStringSync('// native source');
+      expect(
+        fixture.check(),
+        contains(
+          'webdav_client: local source file has no source record: windows/extra.cc',
+        ),
+      );
+    });
+
+    test('rejects unknown source encodings instead of skipping the file', () {
+      registerNativeFixture();
+      final file = fixture.file('UPSTREAM_MANIFEST.json');
+      final manifest = jsonDecode(file.readAsStringSync()) as Map;
+      (manifest['files'] as List).last['encoding'] = 'unverified';
+      file.writeAsStringSync(jsonEncode(manifest));
+      expect(
+        fixture.check(),
+        contains(
+          'webdav_client: source manifest needs file paths and both checksums',
+        ),
+      );
+    });
+
+    test('requires lib and rejects unsafe or duplicate source directories', () {
+      registerNativeFixture();
+      final record = fixture.inventory['local_packages'][0] as Map;
+      record['source_directories'] = ['windows'];
+      expect(
+        fixture.check(),
+        contains('webdav_client: reviewed source directories must include lib'),
+      );
+      record['source_directories'] = [
+        'lib',
+        'windows',
+        'windows',
+        '../external',
+      ];
+      final errors = fixture.check();
+      expect(
+        errors,
+        contains(
+          'webdav_client: invalid or duplicate source directory windows',
+        ),
+      );
+      expect(
+        errors,
+        contains(
+          'webdav_client: invalid or duplicate source directory ../external',
         ),
       );
     });

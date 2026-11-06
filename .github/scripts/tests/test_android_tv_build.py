@@ -2,8 +2,11 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
+import subprocess
 import tempfile
+import textwrap
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -326,7 +329,52 @@ class AndroidTvBuildTest(unittest.TestCase):
         self.assertLess(release.index("android_tv_build.py verify-release"), release.index("gh release create"))
         smoke = (workflows / "pr_build.yml").read_text(encoding="utf-8")
         self.assertIn("flavor: [mobile, tv]", smoke)
-        self.assertIn("needs: [changes, android, windows]", smoke)
+        gate = smoke.split("\n  platform_gate:", 1)[1]
+        needs = re.search(r"needs:\s*\[([^]]+)\]", gate)
+        self.assertIsNotNone(needs)
+        self.assertTrue(
+            {"changes", "android", "windows", "desktop"}.issubset(
+                {job.strip() for job in needs.group(1).split(",")}
+            )
+        )
+
+    @unittest.skipIf(os.name == "nt", "Linux CI executes Bash workflow gates.")
+    def test_smoke_gate_requires_changed_platforms_and_rejects_failures(self):
+        root = Path(__file__).resolve().parents[3]
+        smoke = (root / ".github/workflows/pr_build.yml").read_text(encoding="utf-8")
+        gate = smoke.split("\n  platform_gate:", 1)[1]
+        run = re.search(r"\n\s+run: \|\n((?: {10,}[^\n]*\n)+)", gate)
+        self.assertIsNotNone(run)
+        script = textwrap.dedent(run.group(1))
+        passed = {
+            "CHANGES_RESULT": "success", "ANDROID_RESULT": "success",
+            "WINDOWS_RESULT": "success", "DESKTOP_RESULT": "success",
+            "PLATFORM_REQUIRED": "true", "DESKTOP_REQUIRED": "true",
+        }
+        skipped = {
+            "ANDROID_RESULT": "skipped", "WINDOWS_RESULT": "skipped",
+            "DESKTOP_RESULT": "skipped", "PLATFORM_REQUIRED": "false",
+            "DESKTOP_REQUIRED": "false",
+        }
+        cases = [
+            ("all required builds passed", {}, True),
+            ("required desktop skipped", {"DESKTOP_RESULT": "skipped"}, False),
+            ("desktop failed", {"DESKTOP_RESULT": "failure"}, False),
+            ("desktop cancelled", {"DESKTOP_RESULT": "cancelled"}, False),
+            ("required Android skipped", {"ANDROID_RESULT": "skipped"}, False),
+            ("documentation skips builds", skipped, True),
+            ("mobile only", {"DESKTOP_REQUIRED": "false", "DESKTOP_RESULT": "skipped"}, True),
+            ("change detection failed", {**skipped, "CHANGES_RESULT": "failure"}, False),
+            ("unexpected failure", {**skipped, "DESKTOP_RESULT": "failure"}, False),
+        ]
+        for name, overrides, accepted in cases:
+            with self.subTest(name=name):
+                result = subprocess.run(
+                    ["bash", "-c", script],
+                    env={**os.environ, **passed, **overrides},
+                    capture_output=True, text=True, encoding="utf-8", timeout=10,
+                )
+                self.assertEqual(result.returncode == 0, accepted, result.stdout)
 
 
 if __name__ == "__main__":
