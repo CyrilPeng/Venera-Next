@@ -19,6 +19,8 @@
 
 主线 PR 和分支手动运行使用 `--preview-next`。即使主线仍为 244，预览也使用候选自身的 `1.18.3+245` 版本、构建号和 changelog，并分别保存真实调用方提交、版本、构建号及 Actions run ID。八个项目包按候选 Git 文件计算摘要，七个受管原生库、PNG／7z 导出及生成的第三方 NOTICE 参与完整 HAP 审计。鸿蒙既有的 Rhttp 显式加载接口按其真实平台变体核验。
 
+源码及项目包摘要使用已提交的 canonical Git blob；二进制原字节保持一致，PowerShell 等文件的 CRLF 检出规则不参与摘要。生成清单前拒绝工作区及暂存源码漂移，避免固定提交的摘要掩盖实际构建输入变更。
+
 下一 pin 当前为 `release_enabled: false`。完成[QuickJS 核心审计中的修复](remaining_git_audit_20261106.zh.md)和平台审核前，tag 构建不得启用下一候选分发。预览和未绑定实际 tag 的 schema 2 产物均拒绝 Release 验证；通过预览不会自动改变发布状态。
 
 ## 版本与产物

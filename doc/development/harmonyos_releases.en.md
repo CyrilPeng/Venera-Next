@@ -19,6 +19,8 @@ After the baseline, mainline may change documentation, workflows, release metada
 
 Mainline PRs and branch dispatches use `--preview-next`. While main remains at 244, the preview uses the candidate's own `1.18.3+245` version, build number and changelog, recording the actual caller commit, version, build and Actions run ID separately. The complete HAP audit covers Git-file digests for all eight project packages, seven managed native libraries, PNG/7z exports and the generated third-party NOTICE. The existing HarmonyOS Rhttp explicit-loading interface is verified against its actual platform variant.
 
+Source and project-package fingerprints use committed canonical Git blobs, retaining original binary bytes independently of checkout CRLF rules for PowerShell and similar files. Manifest preparation rejects both working-tree and staged source drift so committed fingerprints cannot conceal changed build inputs.
+
 The next pin currently has `release_enabled: false`. Tag distribution is blocked until the [audited QuickJS core findings](remaining_git_audit_20261106.en.md) are remediated and platform review completes. Preview assets and schema 2 assets without a verified tag context are rejected by Release verification; passing a preview never changes publication readiness automatically.
 
 ## Versions and Assets
