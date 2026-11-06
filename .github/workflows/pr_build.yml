@@ -98,7 +98,7 @@ jobs:
       - name: 构建 Android Debug APK
         env:
           ANDROID_FLAVOR: ${{ matrix.flavor }}
-        run: flutter build apk --debug --flavor "$ANDROID_FLAVOR" --target-platform android-arm64
+        run: flutter build apk --debug --flavor "$ANDROID_FLAVOR" --target-platform android-arm,android-arm64,android-x64
       - name: 验证 Android 原生编码包与第三方声明
         env:
           ANDROID_FLAVOR: ${{ matrix.flavor }}

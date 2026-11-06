@@ -11,6 +11,7 @@ add_library(venera_native SHARED venera_png.c venera_7z.cpp "${LODEPNG}/lodepng.
   "${LZMA}/Delta.c" "${LZMA}/LzmaDec.c" "${LZMA}/Lzma2Dec.c" "${LZMA}/CpuArch.c")
 target_include_directories(venera_native PRIVATE "${LZMA}")
 target_compile_features(venera_native PRIVATE c_std_99 cxx_std_17)
+target_compile_definitions(venera_native PRIVATE VENERA_LZMA_PORTABLE_ENDIAN=1)
 find_package(Threads REQUIRED)
 target_link_libraries(venera_native PRIVATE Threads::Threads)
 set_target_properties(venera_native PROPERTIES

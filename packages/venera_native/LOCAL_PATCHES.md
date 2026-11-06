@@ -22,6 +22,16 @@ normalization. The additional official `7zVersion.h` records Igor Pavlov's
 public-domain declaration. Only this expressly public-domain subset is
 retained; this is not a license claim about the entire 7-Zip repository.
 
+CI UBSan identified undefined unaligned integer accesses in `CpuArch.h`,
+including the 7z start-header's 64-bit values at byte offsets 12 and 20.
+One project macro guard, `VENERA_LZMA_PORTABLE_ENDIAN`, now selects the core's
+existing byte-wise endian helpers on every platform. CMake and both Apple pods
+define this flag. The official source hash remains recorded separately from
+the patched local hash; the core's original public-domain notice is retained.
+Alignment sanitizers remain enabled. Android smoke builds target all three
+ABIs configured by the app's split APK build, so every checked APK contains
+matching Flutter and codec libraries.
+
 `SOURCE_MANIFEST.json` labels project files as `project`, and third-party files
 with their separate source IDs and original relative filenames. Third-party
 licenses, complete directory inventories and local file hashes are checked by

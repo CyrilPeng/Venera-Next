@@ -14,6 +14,7 @@ Pod::Spec.new do |s|
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
+    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) VENERA_LZMA_PORTABLE_ENDIAN=1',
     'HEADER_SEARCH_PATHS' => '"${PODS_TARGET_SRCROOT}/../third_party/lzma"',
     'GCC_SYMBOLS_PRIVATE_EXTERN' => 'YES'
   }

@@ -186,8 +186,8 @@
     {
       "path": "ios/venera_native.podspec",
       "origin": "project",
-      "sha256": "dc05cd11a026b02666b967421cc278cf50336cdde5feadd5cbf6859a97a0ea4c",
-      "local_sha256": "dc05cd11a026b02666b967421cc278cf50336cdde5feadd5cbf6859a97a0ea4c"
+      "sha256": "a9281c64753c40599576a108657759a5d1115558ec49043706e5df19c5e6dab5",
+      "local_sha256": "a9281c64753c40599576a108657759a5d1115558ec49043706e5df19c5e6dab5"
     },
     {
       "path": "lib/src/native_library.dart",
@@ -228,8 +228,8 @@
     {
       "path": "LOCAL_PATCHES.md",
       "origin": "project",
-      "sha256": "024cd33377279cc963610f3bb40af8e37eda2ae64b95b7684f66b5de11be5dd6",
-      "local_sha256": "024cd33377279cc963610f3bb40af8e37eda2ae64b95b7684f66b5de11be5dd6"
+      "sha256": "cde45b552e3e5b62a91cefc0ab5422fb7355c8e74f38dd81bff4a38fe20c9dd4",
+      "local_sha256": "cde45b552e3e5b62a91cefc0ab5422fb7355c8e74f38dd81bff4a38fe20c9dd4"
     },
     {
       "path": "macos/Classes/7zAlloc.c",
@@ -360,8 +360,8 @@
     {
       "path": "macos/venera_native.podspec",
       "origin": "project",
-      "sha256": "5aeed8984b54e25e4003cbf2c58329f34de39a4c7ab6bd6a9395271636307cd3",
-      "local_sha256": "5aeed8984b54e25e4003cbf2c58329f34de39a4c7ab6bd6a9395271636307cd3"
+      "sha256": "77e0c4dae8c58661c3f525d8b2bbd56404b29ed26c6ade0faadad28d1d00c3ea",
+      "local_sha256": "77e0c4dae8c58661c3f525d8b2bbd56404b29ed26c6ade0faadad28d1d00c3ea"
     },
     {
       "path": "notices/VENERA_NATIVE_THIRD_PARTY_NOTICES.txt",
@@ -384,8 +384,8 @@
     {
       "path": "src/CMakeLists.txt",
       "origin": "project",
-      "sha256": "8f7f0bc78068d9c0c840cef1ea2a7a66ffd2b3687a413ce5534b43c42650cb44",
-      "local_sha256": "8f7f0bc78068d9c0c840cef1ea2a7a66ffd2b3687a413ce5534b43c42650cb44"
+      "sha256": "a9ca06716c2098706a25ba9a95ea5ca4ae6dc718f1059045d686a0352e173284",
+      "local_sha256": "a9ca06716c2098706a25ba9a95ea5ca4ae6dc718f1059045d686a0352e173284"
     },
     {
       "path": "src/venera_7z.cpp",
@@ -701,7 +701,7 @@
       "path": "third_party/lzma/CpuArch.h",
       "origin": "lzma",
       "sha256": "051d8a61373d9b6c90eb3b80f2aa1d932126fec7091242b085276e0bbd9bec03",
-      "local_sha256": "051d8a61373d9b6c90eb3b80f2aa1d932126fec7091242b085276e0bbd9bec03",
+      "local_sha256": "7a53a7789bd09dbdad5beb29f8e524ad7f32eff5b5af0de5c0872a4d2ac30783",
       "upstream_path": "CpuArch.h"
     },
     {

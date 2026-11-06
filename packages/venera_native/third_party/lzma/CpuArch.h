@@ -411,7 +411,7 @@ MY_CPU_64BIT means that processor can work with 64-bit registers.
 
 
 
-#ifdef MY_CPU_LE
+#if defined(MY_CPU_LE) && !defined(VENERA_LZMA_PORTABLE_ENDIAN)
   #if defined(MY_CPU_X86_OR_AMD64) \
       || defined(MY_CPU_ARM64) \
       || defined(MY_CPU_RISCV) && defined(__riscv_misaligned_fast) \
