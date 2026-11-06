@@ -95,8 +95,10 @@ jobs:
       - name: Install Linux host test dependencies
         timeout-minutes: 8
         run: |
-          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+          sudo sed -i 's|^URIs:.*|URIs: https://archive.ubuntu.com/ubuntu|' \
             /etc/apt/sources.list.d/ubuntu.sources
+          test "$(awk '/^URIs:/ {print $2}' /etc/apt/sources.list.d/ubuntu.sources | sort -u)" \
+            = 'https://archive.ubuntu.com/ubuntu'
           sudo apt-get -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources \
             -o Dir::Etc::sourceparts=- -o Acquire::Retries=2 \
             -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
