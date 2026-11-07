@@ -2,17 +2,18 @@
 
 English version: [dependencies.en.md](dependencies.en.md)
 
-剩余两个 Git 来源的当前比较、许可、候选实测和安全公告条件见[2026-11-06 完整审计](remaining_git_audit_20261106.zh.md)。QuickJS 保留包装层 API，同时优先处理已登记的旧核心安全修复；下一鸿蒙 pin 只允许预览，核心修复与平台审核后才能启用 tag 分发。现有 SHA／八个本地包保持受控，更新时同步来源、完整锁文件、审计和平台 overlay。
-
 本文记录 VeneraNext 的依赖治理规则，覆盖不来自 pub.dev 的 Git 依赖和仓库内本地源码包。`pubspec.lock` 是构建复现依据，但不能替代依赖来源和维护责任说明。
+
+全部直接依赖的迁移前核查见[2026-11-07 官方来源方案](official_dependency_plan_20261107.zh.md)；当前已实施来源、未采用候选和验证证据见[本轮实施记录](official_dependency_implementation_20261107.zh.md)。
 
 ## 基本规则
 
 接管进度和逐项替换条件见[依赖审计记录](dependency_audit.zh.md)。[统一清单](git_dependencies.json)的 `repositories` 记录当前 Git 来源及全部传递 Git 包，`local_packages` 记录本地路径、版本、上游、不可变来源、许可证与补丁文档；修改任一类依赖时同步更新清单，并运行 `dart tool/check_git_dependencies.dart`。
 
 - 同时提交 `pubspec.yaml` 和 `pubspec.lock` 的相关变更。
-- 直接依赖优先使用 pub.dev 的稳定版本；使用 Git fork 时必须说明原因。
-- 需要保留项目定制的源码优先放入 `packages/`，由应用提交固定内容；避免为每个小包新增独立 fork。多项目共同复用时再评估集中依赖仓库。
+- 来源按以下顺序选择：满足功能、SDK、许可证与安全要求的官方稳定发布版；稳定版尚未包含所需修复时，使用已验证的官方完整 commit；两者均不能满足要求时，才保留必要的本地补丁或既有 fork。
+- 优先用应用适配层和官方公开接口消除定制。必须修改依赖源码时，仅保留必要范围，由应用提交固定内容；避免为每个小包新增独立 fork。项目自编模块单独记录，不要求改成同名第三方包。
+- 每项第三方本地或 fork 例外必须记录已比较的官方稳定版与官方 commit、必要补丁、失败/验证证据、退出条件及维护责任。官方版本覆盖补丁并通过验收后，重新选择官方来源；不得为回归官方而丢失现有安全修复。
 - 本地包必须记录原始上游、完整来源 commit／发布归档 SHA-256、版本、保留的许可证及校验值、维护原因和 `LOCAL_PATCHES.md`；不能通过改为 `path` 绕过来源审查。
 - Git 依赖必须固定到不可变 commit，不能使用默认分支、`main` 或 `HEAD`。
 - 发布工作流中通过 `dart pub global activate` 使用的工具也必须固定到同一 commit。
@@ -21,16 +22,16 @@ English version: [dependencies.en.md](dependencies.en.md)
 
 ## 当前 Git 依赖
 
-2026-09-28：`flutter_qjs`、`photo_view`、`flutter.widgets`、`flutter_inappwebview` 和 `webdav_client` 曾改用 `CyrilPeng` 下的现有 fork，固定 commit 不变。`flutter_inappwebview` 的六个平台子包通过仓库内相对路径一起解析到同一 fork。2026-10-05 起，`photo_view` 改为本地 path 包；2026-11-06，`scrollable_positioned_list`、`webdav_client` 和桌面 WebView 也改为本地包，PNG／7z 包装层由自编 `venera_native` 替代，SAF 由自编 `venera_saf` 替代。当前剩余 2 个独立 Git 来源、8 个 Git 包，8 个本地包纳入统一清单；回滚时同步恢复依赖声明、锁文件和对应清单记录。
+2026-09-28：五个依赖曾改用 `CyrilPeng` 下的现有 fork，固定 commit 不变。2026-10-05 起，PhotoView 改为本地包；2026-11-06，滚动列表、WebDAV 和桌面 WebView 也曾收纳为本地包，PNG／7z 和 SAF 包装层由自编模块替代。2026-11-07，滚动列表回归官方 pub.dev 0.3.8，InAppWebView 六包改为同一官方完整 commit，Windows 单包保留实例所有权补丁。当前为 2 个独立 Git 来源、7 个 Git 包、8 个本地包；个人 Git 来源只剩必要的 QuickJS。回滚时同步恢复声明、锁文件和对应清单记录。
 
-这些 fork 的补丁选择、上游审查和更新验证由 VeneraNext 维护者负责。保留原作者版权和许可证；镜像不能替代持续维护，也不能解决许可证缺失。
+必要的 fork／本地补丁选择、上游审查和验证由 VeneraNext 维护者负责；官方 Git 包也核对真实检出 HEAD、子目录及源码状态。保留原作者版权和许可证；来源归属不代替安全验证。
 
-| 依赖 | 当前 commit | 上游 / 许可证 | 暂时保留定制仓库的直接原因 |
+| 依赖 | 当前 commit | 上游 / 许可证 | 来源选择与必要补丁 |
 |---|---|---|---|
-| `flutter_qjs` | `295f77421eedff356a02e92987181b525970c780` | 未记录 fork 上游 / MIT | 保留 NDK r28 构建适配，修复异步字节结果的数值缓冲引用扫描开销；替换前必须验证 JavaScript 运行时和各平台原生构建 |
-| `flutter_inappwebview` | `3ef899b3db57c911b080979f1392253b835f98ab` | `pichillilorenzo/flutter_inappwebview` / Apache-2.0 | 固定版本包含 `GraphicsContext` 释放修复；内嵌 WebView 和 Cloudflare 流程依赖该分支行为 |
+| `flutter_qjs` | `f5a1f20d08c33b0a6b3e38eda2a7b27705420620` | `ekibun/flutter_qjs` / MIT | 既有必要 fork；保留 Map／TypedData／dispatch／port 契约，已回移适用的 d07 核心安全修复。官方 0.4.0 当前解析与 Map 探针失败 |
+| `flutter_inappwebview` | `0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676` | `pichillilorenzo/flutter_inappwebview` / Apache-2.0 | 六包直接使用官方来源；稳定版 6.1.5 缺浏览器退出事件，Windows 实例所有权补丁仅保留在本地单包 |
 
-上表依据当前固定 commit 的提交说明记录“为什么现在不能直接切回上游”，不等同于完整差异审计。每次升级 Git 依赖时，应在 PR 中补充上游仓库、对比范围、全部定制修改、上游 PR（如有）、安全影响和回滚方式。
+上表是当前来源选择摘要；完整比较与候选验证见上述官方来源核查及其固定主线审计链接。每次升级 Git 依赖时，应在 PR 中补充上游仓库、对比范围、全部定制修改、上游 PR（如有）、安全影响、退出条件和回滚方式。
 
 `desktop_webview_window` 的包目录已有 Apache-2.0 许可证，已纠正此前根目录检查的遗漏并随本地源码保留第三方声明。PNG／7z 已采用自编桥接和许可证明确的官方核心。原 `flutter_saf` 已由项目自编的 `venera_saf` 替代，保留历史路径与系统持久授权，不复制占位许可证包装层的源码。
 
@@ -51,13 +52,13 @@ English version: [dependencies.en.md](dependencies.en.md)
 | `photo_view` | 0.14.0 | `packages/photo_view` | 原 fork commit `a1255d1b5945aad4b7323303ec2ecdf0c90ffc4c` |
 | `share_plus` | 12.0.2 | `packages/share_plus` | pub.dev 12.0.2 发布归档与 SHA-256 |
 | `rhttp` | 0.15.1 | `packages/rhttp` | pub.dev 0.15.1 发布归档与 SHA-256 |
-| `scrollable_positioned_list` | 0.3.8+1 | `packages/scrollable_positioned_list` | 原 fork commit `09e756b1f1b04e6298318d99ec20a787fb360f59` 的同名包子目录 |
+| `flutter_inappwebview_windows` | 0.7.0-beta.3 | `packages/flutter_inappwebview_windows` | 官方 commit `0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676` 的 Windows 包及必要实例所有权补丁 |
 | `webdav_client` | 1.2.2 | `packages/webdav_client` | 原 fork commit `2f669c98fb81cff1c64fee93466a1475c77e4273` |
 | `desktop_webview_window` | 0.2.4 | `packages/desktop_webview_window` | 原 fork commit `7801fc582ecf5a7351632887891ecf309a7b2583` 的包子目录 |
 | `venera_native` | 1.0.0 | `packages/venera_native` | 项目提交固定自编桥接；第三方核心独立固定官方 commit |
 | `venera_saf` | 1.0.0 | `packages/venera_saf` | 项目提交固定自编 Dart／Kotlin／JNI 与原生句柄实现 |
 
-首批迁移保留两个包的全部运行时源码、manifest、BSD-3-Clause 许可证、版权及上游 README／CHANGELOG，省略示例工程、上游测试工程和构建输出。阅读器的定制滚动接口和 WebDAV 的 adapter、认证、重定向及上传行为保持原实现。当前 SDK 等价调用、显式 dynamic 类型、未引用私有助手及包级分析策略分别记录在两个包的 `LOCAL_PATCHES.md`；不同时升级包版本、其他依赖或原生工具链。
+上表为当前本地包；首批滚动包已于 2026-11-07 退役，其历史源码和摘要保留在原提交。2026-11-06 的首批迁移曾保留滚动列表与 WebDAV 的运行时源码、manifest、BSD-3-Clause 许可证及版权，相关原始记录继续供旧构建核对。当前滚动控制使用应用适配器与官方公开接口，WebDAV 的 adapter、认证、重定向及上传补丁仍保留本地。
 
 两个包的 `UPSTREAM_MANIFEST.json` 保存原固定提交的 canonical LF Git blob SHA-256 和审核后的本地文件 SHA-256。检查器验证源码清单的来源与统一清单一致、文件摘要匹配、全部 `lib/` Dart 文件已登记。已有三个本地包继续沿用各自详细的补丁／原始归档记录，并新增统一的声明、来源、许可证和文档检查。
 
