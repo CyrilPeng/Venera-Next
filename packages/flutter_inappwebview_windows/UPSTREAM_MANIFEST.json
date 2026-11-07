@@ -1,0 +1,1025 @@
+{
+  "source": {
+    "type": "git",
+    "url": "https://github.com/pichillilorenzo/flutter_inappwebview",
+    "commit": "0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676",
+    "path": "flutter_inappwebview_windows"
+  },
+  "files": [
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "eb3f205e8bf44577953b46c96efe9b70720892064ee765bee260f5866a979e37",
+      "local_sha256": "eb3f205e8bf44577953b46c96efe9b70720892064ee765bee260f5866a979e37"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "23d164b37c82a2c2e1061bbc367c609f718951ddb70de7e0ac5fe9058c91844a",
+      "local_sha256": "23d164b37c82a2c2e1061bbc367c609f718951ddb70de7e0ac5fe9058c91844a"
+    },
+    {
+      "path": "README.md",
+      "sha256": "6d4ddfbe4bbb3456f95b7c448f7d4bef032dfba500d29536a8335883cd67d59c",
+      "local_sha256": "6d4ddfbe4bbb3456f95b7c448f7d4bef032dfba500d29536a8335883cd67d59c"
+    },
+    {
+      "path": "analysis_options.yaml",
+      "sha256": "1565e8519135a182136c0316567d92aabbb0a296564730f907ab4f6d6aef0b1a",
+      "local_sha256": "9648c2b7b552dadaf2506e47539311316903e4611d10609063cb0a69e12b5567"
+    },
+    {
+      "path": "lib/flutter_inappwebview_windows.dart",
+      "sha256": "ca1719639e0fa1a98efc95b058f723bada80d31d939e133c28bb0521fa0e25ae",
+      "local_sha256": "ca1719639e0fa1a98efc95b058f723bada80d31d939e133c28bb0521fa0e25ae"
+    },
+    {
+      "path": "lib/src/cookie_manager.dart",
+      "sha256": "4675639adffeb3dea4d79ccd55452116eb42131ef413f94b329e5a4b8907a157",
+      "local_sha256": "92b1b504152bba689a40109f36b314452d891fd813f929de2702d740fe389446"
+    },
+    {
+      "path": "lib/src/find_interaction/find_interaction_controller.dart",
+      "sha256": "58cca1f6217959b34fa392aa5817d5feccdebfa34416ac3b45cc2a1823135cd1",
+      "local_sha256": "b2b28cb75440c84f1f098334461453973f1f4a1371dc7db4e784a09a28fad799"
+    },
+    {
+      "path": "lib/src/find_interaction/main.dart",
+      "sha256": "35c44a6b45aa0ae17c43b7bb66748b786ddbf739967b5411e03daf63cf5d3b47",
+      "local_sha256": "35c44a6b45aa0ae17c43b7bb66748b786ddbf739967b5411e03daf63cf5d3b47"
+    },
+    {
+      "path": "lib/src/http_auth_credentials_database.dart",
+      "sha256": "a5d9c34d3f5f12858a95f101541999bae7508da6fa7f9480c87f0888d70d433c",
+      "local_sha256": "7dc404912208126fda1cf429f13f4e1cac5b4a90c7223f324e4700065388df91"
+    },
+    {
+      "path": "lib/src/in_app_browser/in_app_browser.dart",
+      "sha256": "11120af0da2dea5ce757e97f9b0df6364c38f27f583402c58a90f27cd8348dfa",
+      "local_sha256": "aa21dc84a04d6a0f0b2038a8ff53be7d269fd9df1ef01e8b771907039c9c6e41"
+    },
+    {
+      "path": "lib/src/in_app_browser/main.dart",
+      "sha256": "de32cfcdd5aac836ca3bba36c70b43e9c27aad72467de55954d32daeb85c4115",
+      "local_sha256": "de32cfcdd5aac836ca3bba36c70b43e9c27aad72467de55954d32daeb85c4115"
+    },
+    {
+      "path": "lib/src/in_app_webview/_static_channel.dart",
+      "sha256": "f7d1400422a98a0d87c8f6115df0926e509f35ad111ced3624307098b719b65e",
+      "local_sha256": "0d4dd5492dc19770e94fdaaee6300f34f543d62a7b459a9e64eb937ac0b287c2"
+    },
+    {
+      "path": "lib/src/in_app_webview/custom_platform_view.dart",
+      "sha256": "404c1ae88c32a27b525008698d2615143145fddf4a184b6e74bea318e0722ea0",
+      "local_sha256": "5e138d6973a1d20d76a58987c3e282a2128699a4e4cafa0e1c8cf8a1f2515b04"
+    },
+    {
+      "path": "lib/src/in_app_webview/headless_in_app_webview.dart",
+      "sha256": "97fa7525fa94a71e9668c50000770d86ce79cbabd8319d8aa3e2c89bb83d3420",
+      "local_sha256": "9535331b2d5ffcaa58caba7ad3296259f80dfb41a0175865772be47ed1efe6af"
+    },
+    {
+      "path": "lib/src/in_app_webview/in_app_webview.dart",
+      "sha256": "45e180ffadd580954ccdb859a986fcbb7c6e837fd16f9fce2c05ce9eb9a9ac04",
+      "local_sha256": "8bc1acee0bd7364287f80d2203281391a2c6d3dfbea29855a0e980914c9c59c5"
+    },
+    {
+      "path": "lib/src/in_app_webview/in_app_webview_controller.dart",
+      "sha256": "22876e5c867050ee7594cb91474d28c721bc2a7b5acc7cd9ae6dccc718c92698",
+      "local_sha256": "5536adad55ce5dacb0d046bd64736d06a40656abcf0768031a93b39ad3b3359f"
+    },
+    {
+      "path": "lib/src/in_app_webview/main.dart",
+      "sha256": "bd9636ec0b0e8cdf89ed514a084545a49ed95e77d723f57c3cfc8d54af8d66b3",
+      "local_sha256": "bd9636ec0b0e8cdf89ed514a084545a49ed95e77d723f57c3cfc8d54af8d66b3"
+    },
+    {
+      "path": "lib/src/inappwebview_platform.dart",
+      "sha256": "9c27d7785bbe6140b0a8bfd4da5960c3de70713a342afc56d7675b0c52db9bf4",
+      "local_sha256": "9c27d7785bbe6140b0a8bfd4da5960c3de70713a342afc56d7675b0c52db9bf4"
+    },
+    {
+      "path": "lib/src/main.dart",
+      "sha256": "3038f83bfcdd24ab134d8af3074644b24c3a36fc40ac2874e27e603067449453",
+      "local_sha256": "3038f83bfcdd24ab134d8af3074644b24c3a36fc40ac2874e27e603067449453"
+    },
+    {
+      "path": "lib/src/platform_util.dart",
+      "sha256": "a4a3fb9c2633b23d0367d2faeda29afd2cbe100693350cb2ee8f17d2e8a90ba3",
+      "local_sha256": "617fa6c5adc5a18c4e1033446fc0615b02aff1d20e204553c3ccc7cd81c0fd87"
+    },
+    {
+      "path": "lib/src/print_job/main.dart",
+      "sha256": "4e72bfaac24828f339a2d96046fc15d87e9e408b57a753294e2241e421e58ba9",
+      "local_sha256": "4e72bfaac24828f339a2d96046fc15d87e9e408b57a753294e2241e421e58ba9"
+    },
+    {
+      "path": "lib/src/print_job/print_job_controller.dart",
+      "sha256": "e92dfa0637f50c9d5beb89299e35e3c740eb13dbb81b5612560f81c722d3227d",
+      "local_sha256": "525aed2046320649d0cd0dd5d158f1c540651c136a0affd7bfa27cae5da59526"
+    },
+    {
+      "path": "lib/src/web_message/main.dart",
+      "sha256": "16bb036ecb928689727b3067d4fd07969116818e553715c31c9e3029841fcbd2",
+      "local_sha256": "16bb036ecb928689727b3067d4fd07969116818e553715c31c9e3029841fcbd2"
+    },
+    {
+      "path": "lib/src/web_message/web_message_channel.dart",
+      "sha256": "ac449b0222acc2d6d39a961747e2d9028179892a5fdea98176652a34a9aca0cd",
+      "local_sha256": "fc311870757a839dadebcc6da8b54e9880825fe4a58af7ed0f9882de49e6ac1e"
+    },
+    {
+      "path": "lib/src/web_message/web_message_listener.dart",
+      "sha256": "eee58d71b5a96263fa82cb3c8537406221d87338bd578af859e7e9483ba4d713",
+      "local_sha256": "9d36f1910aa81a4b369cb5beb98419e61476dc79591167810cba526cc41f43a9"
+    },
+    {
+      "path": "lib/src/web_message/web_message_port.dart",
+      "sha256": "e1dc29028849a5c375c1eb544fc97029f4548a4a90f96e17b069ef6aa5484e5d",
+      "local_sha256": "af023606a272277c886aadcb65c0724a94b30879e7725effd32e34dc82901ee8"
+    },
+    {
+      "path": "lib/src/web_storage/main.dart",
+      "sha256": "a34f131e4a25bc814438f9f1239a43a645f0cbf333c80b45fd408b1711b4587d",
+      "local_sha256": "a34f131e4a25bc814438f9f1239a43a645f0cbf333c80b45fd408b1711b4587d"
+    },
+    {
+      "path": "lib/src/web_storage/web_storage.dart",
+      "sha256": "dc7a310a7cbf0ced8dd7c1be6d15439df87aef3f687401f317434861a22aca1e",
+      "local_sha256": "722e6b6f579daf3c21a0b5b061b55d90b36cfea1ddc64bfebd7dc3518d48ca8b"
+    },
+    {
+      "path": "lib/src/web_storage/web_storage_manager.dart",
+      "sha256": "abc9bd235a6f976009919b9fa93427105f2b690081efba9577db8e68f09667c0",
+      "local_sha256": "9e55984faeb477a4ec46702e6bcafd2605e1a34b291187594ddd840784396c59"
+    },
+    {
+      "path": "lib/src/webview_environment/main.dart",
+      "sha256": "e740b0c32ab502c0370f3517332376d0021b62d94fe62ae47cfff26a115740fe",
+      "local_sha256": "e740b0c32ab502c0370f3517332376d0021b62d94fe62ae47cfff26a115740fe"
+    },
+    {
+      "path": "lib/src/webview_environment/webview_environment.dart",
+      "sha256": "f8b88323fa8822c27b4785aac6d8254494492c1ec704f84cb067d00767334b34",
+      "local_sha256": "9080dae2fb4570284c55b46040d69089a33df0fb105f3c89d461d4a422408e57"
+    },
+    {
+      "path": "pubspec.yaml",
+      "sha256": "d2cef5dc48d28a68033d8c54d5cbe43d1f8e73cea08524c67c7fd3ce2b6e3e4f",
+      "local_sha256": "032ac4d2184c0c1dafff1c9351c9fd6028f829aaf4555fe675047e2626d86cbc"
+    },
+    {
+      "path": "windows/.gitignore",
+      "sha256": "97d4f0f587a0fdcac36de11bfc9f21c92139047edfc2b078f1958a436e374c07",
+      "local_sha256": "97d4f0f587a0fdcac36de11bfc9f21c92139047edfc2b078f1958a436e374c07"
+    },
+    {
+      "path": "windows/CMakeLists.txt",
+      "sha256": "85e924be87f282a4b024088f11d4065c6d93af310780db71076cb581969fe072",
+      "local_sha256": "85e924be87f282a4b024088f11d4065c6d93af310780db71076cb581969fe072"
+    },
+    {
+      "path": "windows/cookie_manager.cpp",
+      "sha256": "19f39d19511b2f60f08ecc7c6339abd1652ea8716e13da467760e1e885ec8c07",
+      "local_sha256": "19f39d19511b2f60f08ecc7c6339abd1652ea8716e13da467760e1e885ec8c07"
+    },
+    {
+      "path": "windows/cookie_manager.h",
+      "sha256": "7514639fbf151543f6ccc2551193fc9d28229add4a345dedf3cf7c1353ad703f",
+      "local_sha256": "7514639fbf151543f6ccc2551193fc9d28229add4a345dedf3cf7c1353ad703f"
+    },
+    {
+      "path": "windows/custom_platform_view/custom_platform_view.cc",
+      "sha256": "1f8f7f86b5d5365f414584d5e2bb276813e73b5f977fca07471015efe30af578",
+      "local_sha256": "1f8f7f86b5d5365f414584d5e2bb276813e73b5f977fca07471015efe30af578"
+    },
+    {
+      "path": "windows/custom_platform_view/custom_platform_view.h",
+      "sha256": "3c8ff3689cf4e70e9e5df6f57e08786c89b9e39ae46d0ebcdaeb5264cb1b9974",
+      "local_sha256": "3c8ff3689cf4e70e9e5df6f57e08786c89b9e39ae46d0ebcdaeb5264cb1b9974"
+    },
+    {
+      "path": "windows/custom_platform_view/graphics_context.cc",
+      "sha256": "e1eba76fbfc804e1bf81fde0354f6ebd0be42ffbb423ef1ff3126be426765e3e",
+      "local_sha256": "e1eba76fbfc804e1bf81fde0354f6ebd0be42ffbb423ef1ff3126be426765e3e"
+    },
+    {
+      "path": "windows/custom_platform_view/graphics_context.h",
+      "sha256": "4386aae0bd6c39e1e596162a1cf8af8cf3513e12abf3d740f5ee541f70e7f66b",
+      "local_sha256": "4386aae0bd6c39e1e596162a1cf8af8cf3513e12abf3d740f5ee541f70e7f66b"
+    },
+    {
+      "path": "windows/custom_platform_view/texture_bridge.cc",
+      "sha256": "03dec091996f07905b61fffb51e71dc499f9b3b080d11f3450f0cb5346171333",
+      "local_sha256": "03dec091996f07905b61fffb51e71dc499f9b3b080d11f3450f0cb5346171333"
+    },
+    {
+      "path": "windows/custom_platform_view/texture_bridge.h",
+      "sha256": "5adc45d08f046c602102b167ec3c7488891a3e84f17fc5db950580ccb20fca64",
+      "local_sha256": "5adc45d08f046c602102b167ec3c7488891a3e84f17fc5db950580ccb20fca64"
+    },
+    {
+      "path": "windows/custom_platform_view/texture_bridge_fallback.cc",
+      "sha256": "6c8cbdf6d835b6fa83467a4e5d7ed8178b806c7bb55ece90b388affbb430c885",
+      "local_sha256": "6c8cbdf6d835b6fa83467a4e5d7ed8178b806c7bb55ece90b388affbb430c885"
+    },
+    {
+      "path": "windows/custom_platform_view/texture_bridge_fallback.h",
+      "sha256": "166424d62dbb998e19c9c54ce407fad1ae7d2d54f626e3694d2f4949caf7f74e",
+      "local_sha256": "166424d62dbb998e19c9c54ce407fad1ae7d2d54f626e3694d2f4949caf7f74e"
+    },
+    {
+      "path": "windows/custom_platform_view/texture_bridge_gpu.cc",
+      "sha256": "abc0ea11638abacb3a934dbc5dc193a3a698d9fb5e745e9317a9cf049b3f2aae",
+      "local_sha256": "abc0ea11638abacb3a934dbc5dc193a3a698d9fb5e745e9317a9cf049b3f2aae"
+    },
+    {
+      "path": "windows/custom_platform_view/texture_bridge_gpu.h",
+      "sha256": "56adf59fc2347e6bbc98a269e0559a3cf5bf7fede64d577a2d44a6d93acc7eb1",
+      "local_sha256": "56adf59fc2347e6bbc98a269e0559a3cf5bf7fede64d577a2d44a6d93acc7eb1"
+    },
+    {
+      "path": "windows/custom_platform_view/util/composition.desktop.interop.h",
+      "sha256": "568786161870fd41f3ac1ce621fef2c8a07a686b674b39b69d9ca5ad91b707cc",
+      "local_sha256": "568786161870fd41f3ac1ce621fef2c8a07a686b674b39b69d9ca5ad91b707cc"
+    },
+    {
+      "path": "windows/custom_platform_view/util/cpuid/cpuinfo.cc",
+      "sha256": "c26c3103f572f479e4d817ff9f575142169e692deb5adeaf7ea26383f140538e",
+      "local_sha256": "c26c3103f572f479e4d817ff9f575142169e692deb5adeaf7ea26383f140538e"
+    },
+    {
+      "path": "windows/custom_platform_view/util/cpuid/cpuinfo.h",
+      "sha256": "b1d16677640d01ef45ae846c74b75abb696555f16f6294dff38f2213ad41ca80",
+      "local_sha256": "b1d16677640d01ef45ae846c74b75abb696555f16f6294dff38f2213ad41ca80"
+    },
+    {
+      "path": "windows/custom_platform_view/util/cpuid/detail/cpuinfo_impl.h",
+      "sha256": "5416a4d23c5592ba02ce2d6493819b3dcf3135ebc4f91a831962dbbab3e39e35",
+      "local_sha256": "5416a4d23c5592ba02ce2d6493819b3dcf3135ebc4f91a831962dbbab3e39e35"
+    },
+    {
+      "path": "windows/custom_platform_view/util/cpuid/detail/extract_x86_flags.h",
+      "sha256": "3fdef51d3a6e1b2e9b5484c6b7c225eb47af8942f990f75ceec05deeca0fbdec",
+      "local_sha256": "3fdef51d3a6e1b2e9b5484c6b7c225eb47af8942f990f75ceec05deeca0fbdec"
+    },
+    {
+      "path": "windows/custom_platform_view/util/cpuid/detail/init_msvc_x86.h",
+      "sha256": "9924d85764230e0a69f3101bcaa9929db817128784c00b89cd4e61afde2d3407",
+      "local_sha256": "9924d85764230e0a69f3101bcaa9929db817128784c00b89cd4e61afde2d3407"
+    },
+    {
+      "path": "windows/custom_platform_view/util/cpuid/detail/init_unknown.h",
+      "sha256": "886853782135057c07de81a683838e5afe1fa49894badc13f5333dae77b40b98",
+      "local_sha256": "886853782135057c07de81a683838e5afe1fa49894badc13f5333dae77b40b98"
+    },
+    {
+      "path": "windows/custom_platform_view/util/d3dutil.h",
+      "sha256": "9ac80f75b468454a0f3436452243148c864559e41ee1dd9cd7e2cf4ea7fb2b56",
+      "local_sha256": "9ac80f75b468454a0f3436452243148c864559e41ee1dd9cd7e2cf4ea7fb2b56"
+    },
+    {
+      "path": "windows/custom_platform_view/util/direct3d11.interop.cc",
+      "sha256": "5af05705030be4eeaed8ff034d768eab8471c1469e3ca08d5b19459358bb4c67",
+      "local_sha256": "5af05705030be4eeaed8ff034d768eab8471c1469e3ca08d5b19459358bb4c67"
+    },
+    {
+      "path": "windows/custom_platform_view/util/direct3d11.interop.h",
+      "sha256": "1f5d4ab5172250a721274cb8e95e2f00d95f7b75290184e8056debf68ee52c83",
+      "local_sha256": "1f5d4ab5172250a721274cb8e95e2f00d95f7b75290184e8056debf68ee52c83"
+    },
+    {
+      "path": "windows/custom_platform_view/util/rohelper.cc",
+      "sha256": "dd5063238cbb29c2a6d56473b1b09004b9f39dc323fba4fcb7148e468c107fda",
+      "local_sha256": "69b0ace596fa03501cba38e7150ff4a8c4b2967cb78c7942e30d01e5cf1d8cba"
+    },
+    {
+      "path": "windows/custom_platform_view/util/rohelper.h",
+      "sha256": "9b8762b5ee30bbc37e888f36537c3d9b1e08563ff42fad067c5cce2cadb423dc",
+      "local_sha256": "abbbf3145f000a7937db4d58ce04e5b8d4d53f53f514606b0a7f4e072ac295d4"
+    },
+    {
+      "path": "windows/custom_platform_view/util/string_converter.cc",
+      "sha256": "f593a04ec30729e5a7d49ae94ab9b6246fcfa0e7c8179706d9d4613c9cc13b85",
+      "local_sha256": "f593a04ec30729e5a7d49ae94ab9b6246fcfa0e7c8179706d9d4613c9cc13b85"
+    },
+    {
+      "path": "windows/custom_platform_view/util/string_converter.h",
+      "sha256": "6c2ec9e6d33d9f02f748edc860ed6d48fecb4200e8c64965dcfddd0e50f276e2",
+      "local_sha256": "6c2ec9e6d33d9f02f748edc860ed6d48fecb4200e8c64965dcfddd0e50f276e2"
+    },
+    {
+      "path": "windows/custom_platform_view/util/swizzle.h",
+      "sha256": "c271ee7b7472252c297555c682194200525652ec19f67f96f5ffede8cc75570b",
+      "local_sha256": "c271ee7b7472252c297555c682194200525652ec19f67f96f5ffede8cc75570b"
+    },
+    {
+      "path": "windows/flutter_inappwebview_windows_plugin.cpp",
+      "sha256": "e8b0c1ebe4758e900fac91fbd2faaf6ce41a94c8fdf73c20e479874a74f91407",
+      "local_sha256": "e8b0c1ebe4758e900fac91fbd2faaf6ce41a94c8fdf73c20e479874a74f91407"
+    },
+    {
+      "path": "windows/flutter_inappwebview_windows_plugin.h",
+      "sha256": "22ab8464d8149a42ce69d31b648882b9b131ed88f33d63d07c8da3db4c1d4e0e",
+      "local_sha256": "22ab8464d8149a42ce69d31b648882b9b131ed88f33d63d07c8da3db4c1d4e0e"
+    },
+    {
+      "path": "windows/flutter_inappwebview_windows_plugin_c_api.cpp",
+      "sha256": "21791b1f4a65a94f4402905746d45a50dd3f82a3298dfb32cb962291457f4341",
+      "local_sha256": "21791b1f4a65a94f4402905746d45a50dd3f82a3298dfb32cb962291457f4341"
+    },
+    {
+      "path": "windows/headless_in_app_webview/headless_in_app_webview.cpp",
+      "sha256": "ca536ef049b7c4ad7f24e70ea376bb33de723c94777f3368bd862de25d32a28e",
+      "local_sha256": "ca536ef049b7c4ad7f24e70ea376bb33de723c94777f3368bd862de25d32a28e"
+    },
+    {
+      "path": "windows/headless_in_app_webview/headless_in_app_webview.h",
+      "sha256": "4eb1b3dff54158c12f67a66b2151dfcc20e3b54b894a5c09f15e7da3b6567af5",
+      "local_sha256": "4eb1b3dff54158c12f67a66b2151dfcc20e3b54b894a5c09f15e7da3b6567af5"
+    },
+    {
+      "path": "windows/headless_in_app_webview/headless_in_app_webview_manager.cpp",
+      "sha256": "a98c0eb81bb4d9e76cbc0c8e6e72c7f6fe27361dee55bf29c73f92a25ab27dc6",
+      "local_sha256": "a98c0eb81bb4d9e76cbc0c8e6e72c7f6fe27361dee55bf29c73f92a25ab27dc6"
+    },
+    {
+      "path": "windows/headless_in_app_webview/headless_in_app_webview_manager.h",
+      "sha256": "fb91655b211fe39ad10d12f0dc7dc3cd1766864eea2bfdb61dafaf84c4d4cff1",
+      "local_sha256": "fb91655b211fe39ad10d12f0dc7dc3cd1766864eea2bfdb61dafaf84c4d4cff1"
+    },
+    {
+      "path": "windows/headless_in_app_webview/headless_webview_channel_delegate.cpp",
+      "sha256": "74692785c58b460ae5c2e264b00eb0f886963be7f13a9bfcd050b93f8e9cb1c7",
+      "local_sha256": "74692785c58b460ae5c2e264b00eb0f886963be7f13a9bfcd050b93f8e9cb1c7"
+    },
+    {
+      "path": "windows/headless_in_app_webview/headless_webview_channel_delegate.h",
+      "sha256": "7c79f6eeef44fba7ce9a33b8369e0b305401229dfdc28311ebeee680b1cb262f",
+      "local_sha256": "7c79f6eeef44fba7ce9a33b8369e0b305401229dfdc28311ebeee680b1cb262f"
+    },
+    {
+      "path": "windows/in_app_browser/in_app_browser.cpp",
+      "sha256": "5cc2912fe7de366e8e0ad2da92904d48be49d08de00d931b4c20462c119ac70e",
+      "local_sha256": "6477ef726abb7541c05fcba303dc6f772d2677fd316a43ba944eb2708a968e9f"
+    },
+    {
+      "path": "windows/in_app_browser/in_app_browser.h",
+      "sha256": "f7174210bf568767bd9037c1173404215c8c1ed2e18efaca84c00fc277613900",
+      "local_sha256": "f7174210bf568767bd9037c1173404215c8c1ed2e18efaca84c00fc277613900"
+    },
+    {
+      "path": "windows/in_app_browser/in_app_browser_channel_delegate.cpp",
+      "sha256": "3da3860aae1648a3d464e245745e2917873a3161455898663a6730d9006aff0a",
+      "local_sha256": "3da3860aae1648a3d464e245745e2917873a3161455898663a6730d9006aff0a"
+    },
+    {
+      "path": "windows/in_app_browser/in_app_browser_channel_delegate.h",
+      "sha256": "3728b3639b235fe035434eb4fe6d6868abc4f14f5391c85d3d81363901f82a5f",
+      "local_sha256": "3728b3639b235fe035434eb4fe6d6868abc4f14f5391c85d3d81363901f82a5f"
+    },
+    {
+      "path": "windows/in_app_browser/in_app_browser_manager.cpp",
+      "sha256": "2a4a88d5757dd15111ff3928d0feb972946779dee1ba6ad33ec6aa15f04abac1",
+      "local_sha256": "2a4a88d5757dd15111ff3928d0feb972946779dee1ba6ad33ec6aa15f04abac1"
+    },
+    {
+      "path": "windows/in_app_browser/in_app_browser_manager.h",
+      "sha256": "2aa96e00f549dd16d8b7519f1b5a7bce0c67e7ddd0a3e3e2398c315a43c7272a",
+      "local_sha256": "2aa96e00f549dd16d8b7519f1b5a7bce0c67e7ddd0a3e3e2398c315a43c7272a"
+    },
+    {
+      "path": "windows/in_app_browser/in_app_browser_settings.cpp",
+      "sha256": "4624fbd1946c1c47cc8b88a7ed6cac57dc5d0b80c34e1b6e8ca218268b9f4f01",
+      "local_sha256": "4624fbd1946c1c47cc8b88a7ed6cac57dc5d0b80c34e1b6e8ca218268b9f4f01"
+    },
+    {
+      "path": "windows/in_app_browser/in_app_browser_settings.h",
+      "sha256": "de18a82731bb6b5d6a893491aed73a15ba23d039c460f8dffba7994d51e24853",
+      "local_sha256": "de18a82731bb6b5d6a893491aed73a15ba23d039c460f8dffba7994d51e24853"
+    },
+    {
+      "path": "windows/in_app_webview/in_app_webview.cpp",
+      "sha256": "f22ac55a30e2275c3dcdd74e2f5d3438a97636617387a95f02cd50b9fa1facd3",
+      "local_sha256": "f22ac55a30e2275c3dcdd74e2f5d3438a97636617387a95f02cd50b9fa1facd3"
+    },
+    {
+      "path": "windows/in_app_webview/in_app_webview.h",
+      "sha256": "05a9b4eab2fe2f375f88cae522c85a91bd2f544d3fd6cb44deeecaf7c437da27",
+      "local_sha256": "05a9b4eab2fe2f375f88cae522c85a91bd2f544d3fd6cb44deeecaf7c437da27"
+    },
+    {
+      "path": "windows/in_app_webview/in_app_webview_manager.cpp",
+      "sha256": "d2329891e7813394dc1e0d23fe4db9b4439631b0a5a1bdd1d3e122b898544794",
+      "local_sha256": "7d32db4452247c5bbbaa6bca29fde89979e1077f90b91a14e0f97880a46e7834"
+    },
+    {
+      "path": "windows/in_app_webview/in_app_webview_manager.h",
+      "sha256": "7fd060d7febc708da8b89cd84d47fae93a4c71591592282707661eacbbd2d444",
+      "local_sha256": "4b1e7fcf3402d9f31a2a1faefe5a6ee856b7a3204fdbced00329f55b2004ad5f"
+    },
+    {
+      "path": "windows/in_app_webview/in_app_webview_settings.cpp",
+      "sha256": "a189d911ebc4e0a65fcf6398ee794b2024ef2ba1e040b2fe95a0e17d0cf6de75",
+      "local_sha256": "a189d911ebc4e0a65fcf6398ee794b2024ef2ba1e040b2fe95a0e17d0cf6de75"
+    },
+    {
+      "path": "windows/in_app_webview/in_app_webview_settings.h",
+      "sha256": "fa50f3aca0b58d41d44f826540fcb55e8115b5212a23c9361cff97aa0e373220",
+      "local_sha256": "fa50f3aca0b58d41d44f826540fcb55e8115b5212a23c9361cff97aa0e373220"
+    },
+    {
+      "path": "windows/in_app_webview/user_content_controller.cpp",
+      "sha256": "b3f846557c0a1b0fb13fce2b64e816d48087ec006f8f02e66409d0cc1db6e42f",
+      "local_sha256": "b3f846557c0a1b0fb13fce2b64e816d48087ec006f8f02e66409d0cc1db6e42f"
+    },
+    {
+      "path": "windows/in_app_webview/user_content_controller.h",
+      "sha256": "4fcf2741d2cc3daea4ed80dca02387465413addc434b240d4dd6ecb7e8ed0903",
+      "local_sha256": "4fcf2741d2cc3daea4ed80dca02387465413addc434b240d4dd6ecb7e8ed0903"
+    },
+    {
+      "path": "windows/in_app_webview/webview_channel_delegate.cpp",
+      "sha256": "9a585c4e1ddabb10ed0079a5996489962e01af942980461a1bcb1a0f889a0c29",
+      "local_sha256": "9a585c4e1ddabb10ed0079a5996489962e01af942980461a1bcb1a0f889a0c29"
+    },
+    {
+      "path": "windows/in_app_webview/webview_channel_delegate.h",
+      "sha256": "43a77f26892bb3cf5688daa749094e4ec596f4d44fe6abfc6f8c624ff2982ab2",
+      "local_sha256": "43a77f26892bb3cf5688daa749094e4ec596f4d44fe6abfc6f8c624ff2982ab2"
+    },
+    {
+      "path": "windows/include/flutter_inappwebview_windows/flutter_inappwebview_windows_plugin_c_api.h",
+      "sha256": "18d532191f23edfe5ad7975b6d0db52ed287a464f940013fa2b30a4e8b00fedb",
+      "local_sha256": "18d532191f23edfe5ad7975b6d0db52ed287a464f940013fa2b30a4e8b00fedb"
+    },
+    {
+      "path": "windows/platform_util.cpp",
+      "sha256": "93b97edb92903be2d5201866e3e6436b166081588b158f3376ea7c02263a7968",
+      "local_sha256": "93b97edb92903be2d5201866e3e6436b166081588b158f3376ea7c02263a7968"
+    },
+    {
+      "path": "windows/platform_util.h",
+      "sha256": "431542053b6739e7726ef12c85b94233b93b8d1d74d23692cb1e2105900fc1e2",
+      "local_sha256": "431542053b6739e7726ef12c85b94233b93b8d1d74d23692cb1e2105900fc1e2"
+    },
+    {
+      "path": "windows/plugin_scripts_js/javascript_bridge_js.h",
+      "sha256": "3d46e7b4643a885aaa236d2db884cb4491ecdd49cbe52342a70d2b7785cdba41",
+      "local_sha256": "3d46e7b4643a885aaa236d2db884cb4491ecdd49cbe52342a70d2b7785cdba41"
+    },
+    {
+      "path": "windows/plugin_scripts_js/plugin_scripts_util.h",
+      "sha256": "ce2ff62862c6fed58534fd6aeb9c0da1d8cfb28d9062837047d51cecbeacb2d1",
+      "local_sha256": "ce2ff62862c6fed58534fd6aeb9c0da1d8cfb28d9062837047d51cecbeacb2d1"
+    },
+    {
+      "path": "windows/test/flutter_inappwebview_windows_plugin_test.cpp",
+      "sha256": "2e78aeed8aca46a67af0d64e1ded63226dcbc8da8098c6e006f9c685fd82ca8a",
+      "local_sha256": "2e78aeed8aca46a67af0d64e1ded63226dcbc8da8098c6e006f9c685fd82ca8a"
+    },
+    {
+      "path": "windows/types/accelerator_key_pressed_detail.cpp",
+      "sha256": "43cf2700a90582a1db5e0ad419c0ee8753d07379ccb3aad36f134707279f7c92",
+      "local_sha256": "43cf2700a90582a1db5e0ad419c0ee8753d07379ccb3aad36f134707279f7c92"
+    },
+    {
+      "path": "windows/types/accelerator_key_pressed_detail.h",
+      "sha256": "bff8604baec3158e44b8fc49488377de2275235ec656d24626d468eaa5bbf8f3",
+      "local_sha256": "bff8604baec3158e44b8fc49488377de2275235ec656d24626d468eaa5bbf8f3"
+    },
+    {
+      "path": "windows/types/base_callback_result.h",
+      "sha256": "919c4d88240cec06d65ecccb0a55dac9eaf6ee9f8904d8e7a0aefb2709196a21",
+      "local_sha256": "919c4d88240cec06d65ecccb0a55dac9eaf6ee9f8904d8e7a0aefb2709196a21"
+    },
+    {
+      "path": "windows/types/browser_process_exited_detail.cpp",
+      "sha256": "f1e41c8c8402efd2d460e7882c5598a75e172e984643cdbc6e0af4113ff420d6",
+      "local_sha256": "f1e41c8c8402efd2d460e7882c5598a75e172e984643cdbc6e0af4113ff420d6"
+    },
+    {
+      "path": "windows/types/browser_process_exited_detail.h",
+      "sha256": "9d2c1d182da43555f33b6b0b0e7a08f64fc6922566467721a0e5894ccb03d233",
+      "local_sha256": "9d2c1d182da43555f33b6b0b0e7a08f64fc6922566467721a0e5894ccb03d233"
+    },
+    {
+      "path": "windows/types/browser_process_info.cpp",
+      "sha256": "e9f81a7f6b9b27ad91e6155a876157bfcc6e664da121b3f6ed0cb21a9baeeccc",
+      "local_sha256": "e9f81a7f6b9b27ad91e6155a876157bfcc6e664da121b3f6ed0cb21a9baeeccc"
+    },
+    {
+      "path": "windows/types/browser_process_info.h",
+      "sha256": "39bd41d236bebc7ffd573a4aa86d7ee64342fa3e8fab7b278a3af9ea307d4a67",
+      "local_sha256": "39bd41d236bebc7ffd573a4aa86d7ee64342fa3e8fab7b278a3af9ea307d4a67"
+    },
+    {
+      "path": "windows/types/browser_process_infos_changed_detail.cpp",
+      "sha256": "a4baea83fccb09c627be341d462c9c425c8734786e3311ab4559509b5f8ff89f",
+      "local_sha256": "a4baea83fccb09c627be341d462c9c425c8734786e3311ab4559509b5f8ff89f"
+    },
+    {
+      "path": "windows/types/browser_process_infos_changed_detail.h",
+      "sha256": "b177965a884781174d59a757a1ee5928d82020db1616060e3456eacf839a4c16",
+      "local_sha256": "b177965a884781174d59a757a1ee5928d82020db1616060e3456eacf839a4c16"
+    },
+    {
+      "path": "windows/types/callbacks_complete.h",
+      "sha256": "8a534f178c926892760706f312f6bb77587a21644da3d4472140506943c66467",
+      "local_sha256": "8a534f178c926892760706f312f6bb77587a21644da3d4472140506943c66467"
+    },
+    {
+      "path": "windows/types/channel_delegate.cpp",
+      "sha256": "1ba6a1f6dbeced264650a5257171012e831ba57df001458189e1c4c576d79c05",
+      "local_sha256": "1ba6a1f6dbeced264650a5257171012e831ba57df001458189e1c4c576d79c05"
+    },
+    {
+      "path": "windows/types/channel_delegate.h",
+      "sha256": "3cc222b197612510a16fcdf58bb5ec8ccd5910d89b80803a275bbaad8b6de759",
+      "local_sha256": "3cc222b197612510a16fcdf58bb5ec8ccd5910d89b80803a275bbaad8b6de759"
+    },
+    {
+      "path": "windows/types/client_cert_challenge.cpp",
+      "sha256": "0757f861f0137d168d0888b373d23f930385d4294c9b008c3c992f1d92595cb1",
+      "local_sha256": "0757f861f0137d168d0888b373d23f930385d4294c9b008c3c992f1d92595cb1"
+    },
+    {
+      "path": "windows/types/client_cert_challenge.h",
+      "sha256": "93f7b88e8bd7ba7568ba938e27b73cdfe558eb9badca241820e6e2e0224e7f1a",
+      "local_sha256": "93f7b88e8bd7ba7568ba938e27b73cdfe558eb9badca241820e6e2e0224e7f1a"
+    },
+    {
+      "path": "windows/types/client_cert_response.cpp",
+      "sha256": "173a5979d2759bb314167fc5acf23626e20637a4ed422166b48e209da6684946",
+      "local_sha256": "173a5979d2759bb314167fc5acf23626e20637a4ed422166b48e209da6684946"
+    },
+    {
+      "path": "windows/types/client_cert_response.h",
+      "sha256": "03b3a4093b09f1b9e83e2a4c1f2ff3646f6ffc87cda6cdbf67d9881b66512b54",
+      "local_sha256": "03b3a4093b09f1b9e83e2a4c1f2ff3646f6ffc87cda6cdbf67d9881b66512b54"
+    },
+    {
+      "path": "windows/types/content_world.cpp",
+      "sha256": "da10c2dbcc1240a96c2df16c53af94558a85204a28489ebd58f795dc470d6aba",
+      "local_sha256": "da10c2dbcc1240a96c2df16c53af94558a85204a28489ebd58f795dc470d6aba"
+    },
+    {
+      "path": "windows/types/content_world.h",
+      "sha256": "f30e1e33df764df5f87caf0e189dabcb8b29a659b55ecbe11cd32407c1ee0b79",
+      "local_sha256": "f30e1e33df764df5f87caf0e189dabcb8b29a659b55ecbe11cd32407c1ee0b79"
+    },
+    {
+      "path": "windows/types/create_window_action.cpp",
+      "sha256": "0beb9d00e79d7311baa1bafb58c4aaf97791b7e3a28d904265dada8dc4afbf6e",
+      "local_sha256": "0beb9d00e79d7311baa1bafb58c4aaf97791b7e3a28d904265dada8dc4afbf6e"
+    },
+    {
+      "path": "windows/types/create_window_action.h",
+      "sha256": "64e532a3b68c0635e3805056806d5d9ccc6790e7e71f7bf73338e0c71b9dfaa2",
+      "local_sha256": "64e532a3b68c0635e3805056806d5d9ccc6790e7e71f7bf73338e0c71b9dfaa2"
+    },
+    {
+      "path": "windows/types/custom_scheme_registration.cpp",
+      "sha256": "6804f2e7b7692916fc5858b176407fa0dedce6cf6771c366362bb06908341293",
+      "local_sha256": "6804f2e7b7692916fc5858b176407fa0dedce6cf6771c366362bb06908341293"
+    },
+    {
+      "path": "windows/types/custom_scheme_registration.h",
+      "sha256": "860b42e8f40323a35dd9eba658aa5e441322bd9b057a68f738e03357cf0da87c",
+      "local_sha256": "860b42e8f40323a35dd9eba658aa5e441322bd9b057a68f738e03357cf0da87c"
+    },
+    {
+      "path": "windows/types/custom_scheme_response.cpp",
+      "sha256": "89adbfbdb83ed53a6a8756630f6a644853aa223e217ebb60420bf119688836a2",
+      "local_sha256": "89adbfbdb83ed53a6a8756630f6a644853aa223e217ebb60420bf119688836a2"
+    },
+    {
+      "path": "windows/types/custom_scheme_response.h",
+      "sha256": "f7963df982e3d4d02ab9e521138a15453c8fadf36cd7b165789b7972c660d12c",
+      "local_sha256": "f7963df982e3d4d02ab9e521138a15453c8fadf36cd7b165789b7972c660d12c"
+    },
+    {
+      "path": "windows/types/download_start_request.cpp",
+      "sha256": "8e78550faa3d5846a0a1bc7d1b7788f64f2098883fef8bc95834233c413ca843",
+      "local_sha256": "8e78550faa3d5846a0a1bc7d1b7788f64f2098883fef8bc95834233c413ca843"
+    },
+    {
+      "path": "windows/types/download_start_request.h",
+      "sha256": "f52daf03e7aed3fa13e45076ec00169883c68d0fff0eeeb81a0ede965136e361",
+      "local_sha256": "f52daf03e7aed3fa13e45076ec00169883c68d0fff0eeeb81a0ede965136e361"
+    },
+    {
+      "path": "windows/types/download_start_response.cpp",
+      "sha256": "bc6d81a034735786afde891d037eee1ac62810d3b509e6a9300ce45acf9886a4",
+      "local_sha256": "bc6d81a034735786afde891d037eee1ac62810d3b509e6a9300ce45acf9886a4"
+    },
+    {
+      "path": "windows/types/download_start_response.h",
+      "sha256": "36b6ca530b17e36ec9be07e96968a211a40f45689229611b643769675fc2c3a9",
+      "local_sha256": "36b6ca530b17e36ec9be07e96968a211a40f45689229611b643769675fc2c3a9"
+    },
+    {
+      "path": "windows/types/frame_info.cpp",
+      "sha256": "9defb025a4c788495b9f53c451c91f27518811b12abf7a53050421357fee03cc",
+      "local_sha256": "9defb025a4c788495b9f53c451c91f27518811b12abf7a53050421357fee03cc"
+    },
+    {
+      "path": "windows/types/frame_info.h",
+      "sha256": "12fd0ac44e0055dba200803575bb38433aa9bcdec9e11bf5d2864ba1f9c5e236",
+      "local_sha256": "12fd0ac44e0055dba200803575bb38433aa9bcdec9e11bf5d2864ba1f9c5e236"
+    },
+    {
+      "path": "windows/types/http_auth_response.cpp",
+      "sha256": "e595a57caef041085baf36119b8e55ae6de93d968168fce4beb64a0836c0d944",
+      "local_sha256": "e595a57caef041085baf36119b8e55ae6de93d968168fce4beb64a0836c0d944"
+    },
+    {
+      "path": "windows/types/http_auth_response.h",
+      "sha256": "f538dbd61fe19967e64a048a3fcbf97074e996c2e1f9180c49945135843d7331",
+      "local_sha256": "f538dbd61fe19967e64a048a3fcbf97074e996c2e1f9180c49945135843d7331"
+    },
+    {
+      "path": "windows/types/http_authentication_challenge.cpp",
+      "sha256": "5613ba855e55deb0205904dc6399fe6c1ab6c3a4442bf59dfe0af0c54df35353",
+      "local_sha256": "5613ba855e55deb0205904dc6399fe6c1ab6c3a4442bf59dfe0af0c54df35353"
+    },
+    {
+      "path": "windows/types/http_authentication_challenge.h",
+      "sha256": "241ab84f7a6d2e6498470ad91b5196b21ba0e106ed1287cca7c6f2378f066ae6",
+      "local_sha256": "241ab84f7a6d2e6498470ad91b5196b21ba0e106ed1287cca7c6f2378f066ae6"
+    },
+    {
+      "path": "windows/types/javascript_handler_function_data.cpp",
+      "sha256": "2684797fd23ff66cfc70abcc4a4612d1ea205b5eb00da1e0242e75ce37ddf215",
+      "local_sha256": "2684797fd23ff66cfc70abcc4a4612d1ea205b5eb00da1e0242e75ce37ddf215"
+    },
+    {
+      "path": "windows/types/javascript_handler_function_data.h",
+      "sha256": "89b9c77c33567984d3c075d0c11dd9b67cb50235c55003828c069973ea34e66a",
+      "local_sha256": "89b9c77c33567984d3c075d0c11dd9b67cb50235c55003828c069973ea34e66a"
+    },
+    {
+      "path": "windows/types/navigation_action.cpp",
+      "sha256": "7b50f630d1307c93488cbaed1874518e0817ebc01d4e9a1d8051cc36f25b7cab",
+      "local_sha256": "7b50f630d1307c93488cbaed1874518e0817ebc01d4e9a1d8051cc36f25b7cab"
+    },
+    {
+      "path": "windows/types/navigation_action.h",
+      "sha256": "3afbea23f8b2c1e49ca0287742e5fb38d6b869333ab57177cdfc2c7bf0b9eb1f",
+      "local_sha256": "3afbea23f8b2c1e49ca0287742e5fb38d6b869333ab57177cdfc2c7bf0b9eb1f"
+    },
+    {
+      "path": "windows/types/new_window_requested_args.cpp",
+      "sha256": "8096ee83ef3401339a50cac86eb4551d758b95d27f7fecbb2b22812fc59f8c90",
+      "local_sha256": "8096ee83ef3401339a50cac86eb4551d758b95d27f7fecbb2b22812fc59f8c90"
+    },
+    {
+      "path": "windows/types/new_window_requested_args.h",
+      "sha256": "d12d508666f573dcd5226f1fbc2f148bc1a222cf81fa71219b9801cc46aacbbf",
+      "local_sha256": "d12d508666f573dcd5226f1fbc2f148bc1a222cf81fa71219b9801cc46aacbbf"
+    },
+    {
+      "path": "windows/types/permission_response.cpp",
+      "sha256": "bba01b056bcc94ed536ffb5c711723cb2d20a0fafc543e09c2a7a667f5301927",
+      "local_sha256": "bba01b056bcc94ed536ffb5c711723cb2d20a0fafc543e09c2a7a667f5301927"
+    },
+    {
+      "path": "windows/types/permission_response.h",
+      "sha256": "2b52115730189b8b5d3a6d5b22e16db764f3c91e104e7a658ca24b34125a7f8d",
+      "local_sha256": "2b52115730189b8b5d3a6d5b22e16db764f3c91e104e7a658ca24b34125a7f8d"
+    },
+    {
+      "path": "windows/types/physical_key_status.cpp",
+      "sha256": "9a82b8c0d14e98094cd2602972212020a1b6287505c386fe1cb3ffd2703ae924",
+      "local_sha256": "9a82b8c0d14e98094cd2602972212020a1b6287505c386fe1cb3ffd2703ae924"
+    },
+    {
+      "path": "windows/types/physical_key_status.h",
+      "sha256": "a356d53230fc9ce697cfeea0d4fb4c8d2400cf21ca4e8ab4b9285dbc9415c553",
+      "local_sha256": "a356d53230fc9ce697cfeea0d4fb4c8d2400cf21ca4e8ab4b9285dbc9415c553"
+    },
+    {
+      "path": "windows/types/plugin_script.cpp",
+      "sha256": "cb0c1737ba86af596f55c15733fa88548e21b5d6f3341d1e01e48258dfd51988",
+      "local_sha256": "cb0c1737ba86af596f55c15733fa88548e21b5d6f3341d1e01e48258dfd51988"
+    },
+    {
+      "path": "windows/types/plugin_script.h",
+      "sha256": "4f33691e795a559d7259a0f50f6d7314f0067645179ba628331492cb43141f60",
+      "local_sha256": "4f33691e795a559d7259a0f50f6d7314f0067645179ba628331492cb43141f60"
+    },
+    {
+      "path": "windows/types/process_failed_detail.cpp",
+      "sha256": "69ee601d99aad823daf59e1d244f153c0c4d3e3bf9580a9e48e3cde89473cee8",
+      "local_sha256": "69ee601d99aad823daf59e1d244f153c0c4d3e3bf9580a9e48e3cde89473cee8"
+    },
+    {
+      "path": "windows/types/process_failed_detail.h",
+      "sha256": "aeb3ddfc231f7f186888785e8ced98e3a948ae5b3acda0abfaa5c3c26abf6d91",
+      "local_sha256": "aeb3ddfc231f7f186888785e8ced98e3a948ae5b3acda0abfaa5c3c26abf6d91"
+    },
+    {
+      "path": "windows/types/rect.cpp",
+      "sha256": "1cb4300d31b445f97bc8b65d260a4a1688a38001bd03b0133df51aa5bc075ad3",
+      "local_sha256": "1cb4300d31b445f97bc8b65d260a4a1688a38001bd03b0133df51aa5bc075ad3"
+    },
+    {
+      "path": "windows/types/rect.h",
+      "sha256": "eb98f471958d2560f92cf7196da395d8f16e3930c4f1f4381f2a8222d7e84785",
+      "local_sha256": "eb98f471958d2560f92cf7196da395d8f16e3930c4f1f4381f2a8222d7e84785"
+    },
+    {
+      "path": "windows/types/render_process_gone_detail.cpp",
+      "sha256": "46162aecb3362dd89b89adf0aedbf2593578269e335288648f49653c483596e6",
+      "local_sha256": "46162aecb3362dd89b89adf0aedbf2593578269e335288648f49653c483596e6"
+    },
+    {
+      "path": "windows/types/render_process_gone_detail.h",
+      "sha256": "bd50ef0bec83c8ccdb68167650cfeb6097901e971af3b25fbc6153b1a8dd1e23",
+      "local_sha256": "bd50ef0bec83c8ccdb68167650cfeb6097901e971af3b25fbc6153b1a8dd1e23"
+    },
+    {
+      "path": "windows/types/screenshot_configuration.cpp",
+      "sha256": "6b3d6c72526d6ae7da3a6679e749e1871af6cb25b4c19192911af55049bf042a",
+      "local_sha256": "6b3d6c72526d6ae7da3a6679e749e1871af6cb25b4c19192911af55049bf042a"
+    },
+    {
+      "path": "windows/types/screenshot_configuration.h",
+      "sha256": "bfcc37858d785235759f6d644f43366b4955d5ec5b513d229d536a75f93ab821",
+      "local_sha256": "bfcc37858d785235759f6d644f43366b4955d5ec5b513d229d536a75f93ab821"
+    },
+    {
+      "path": "windows/types/security_origin.cpp",
+      "sha256": "38b9cbc42f02762b528bb2e436a082be6047a977db4e3656900dce0384b99872",
+      "local_sha256": "38b9cbc42f02762b528bb2e436a082be6047a977db4e3656900dce0384b99872"
+    },
+    {
+      "path": "windows/types/security_origin.h",
+      "sha256": "8c1ab8092b963ab9773e3f6b2d968587a05c259527acb55bad9400951e078e7e",
+      "local_sha256": "8c1ab8092b963ab9773e3f6b2d968587a05c259527acb55bad9400951e078e7e"
+    },
+    {
+      "path": "windows/types/server_trust_auth_response.cpp",
+      "sha256": "701aa1ca4ae5fe29b12f0e961bbfb420aa0af16036f3215f786f2783550d81ae",
+      "local_sha256": "701aa1ca4ae5fe29b12f0e961bbfb420aa0af16036f3215f786f2783550d81ae"
+    },
+    {
+      "path": "windows/types/server_trust_auth_response.h",
+      "sha256": "3395082b9b3f0a6be03db8db8253b238382b3da6aa74d7188eb3d27d073bee4c",
+      "local_sha256": "3395082b9b3f0a6be03db8db8253b238382b3da6aa74d7188eb3d27d073bee4c"
+    },
+    {
+      "path": "windows/types/server_trust_challenge.cpp",
+      "sha256": "d0f1c907659d0f60265d31c5ebbd3402da657d0613e29adaf9a1234d9ca62aee",
+      "local_sha256": "d0f1c907659d0f60265d31c5ebbd3402da657d0613e29adaf9a1234d9ca62aee"
+    },
+    {
+      "path": "windows/types/server_trust_challenge.h",
+      "sha256": "af44a6a8edf60abf9c1e36b0f759f86169ab65037b832641f7a6978af601bd2e",
+      "local_sha256": "af44a6a8edf60abf9c1e36b0f759f86169ab65037b832641f7a6978af601bd2e"
+    },
+    {
+      "path": "windows/types/size_2d.cpp",
+      "sha256": "52f9a0697e5cb5f990f71622bb2fcd5fd55470957108e4014e0e0ed009f18bb9",
+      "local_sha256": "52f9a0697e5cb5f990f71622bb2fcd5fd55470957108e4014e0e0ed009f18bb9"
+    },
+    {
+      "path": "windows/types/size_2d.h",
+      "sha256": "7f7daeed4fa4ba69fa4686af6f53127a1dd29ece28ec0c8cb613c6022b7ae1df",
+      "local_sha256": "7f7daeed4fa4ba69fa4686af6f53127a1dd29ece28ec0c8cb613c6022b7ae1df"
+    },
+    {
+      "path": "windows/types/ssl_certificate.cpp",
+      "sha256": "7195b6e94a0ff16e75ebc44fce1e779caf253dc83e55e50bda7cc460dc3e5ebe",
+      "local_sha256": "7195b6e94a0ff16e75ebc44fce1e779caf253dc83e55e50bda7cc460dc3e5ebe"
+    },
+    {
+      "path": "windows/types/ssl_certificate.h",
+      "sha256": "7a45570f1482a007ebc1b4ea764049843e44d0650567343080e87addbd3786e4",
+      "local_sha256": "7a45570f1482a007ebc1b4ea764049843e44d0650567343080e87addbd3786e4"
+    },
+    {
+      "path": "windows/types/ssl_error.cpp",
+      "sha256": "d91956278e5f47a71ca734ae4b44166c0a89f6abcb941f3ac509bdafcc16fc6f",
+      "local_sha256": "d91956278e5f47a71ca734ae4b44166c0a89f6abcb941f3ac509bdafcc16fc6f"
+    },
+    {
+      "path": "windows/types/ssl_error.h",
+      "sha256": "e6348d5779f5af50ac6d4d51fc27f957ecb69ee0628e2d5855c4389bf5967ddb",
+      "local_sha256": "e6348d5779f5af50ac6d4d51fc27f957ecb69ee0628e2d5855c4389bf5967ddb"
+    },
+    {
+      "path": "windows/types/url_authentication_challenge.cpp",
+      "sha256": "7f4486d0a3d069e3fa43a7df723a1437cd85629e0891e6c6496cbda821b53c08",
+      "local_sha256": "7f4486d0a3d069e3fa43a7df723a1437cd85629e0891e6c6496cbda821b53c08"
+    },
+    {
+      "path": "windows/types/url_authentication_challenge.h",
+      "sha256": "4a4de5ad807c2e4afee7a5b340406fafe955bda6e3d2f7fe44cc9fdc338c8967",
+      "local_sha256": "4a4de5ad807c2e4afee7a5b340406fafe955bda6e3d2f7fe44cc9fdc338c8967"
+    },
+    {
+      "path": "windows/types/url_credential.cpp",
+      "sha256": "ebbf082d995f986ba0f51141c5e595a5634f6a07e7a838264dbbb3cf1834390a",
+      "local_sha256": "ebbf082d995f986ba0f51141c5e595a5634f6a07e7a838264dbbb3cf1834390a"
+    },
+    {
+      "path": "windows/types/url_credential.h",
+      "sha256": "dac39c489185d0b8b9d2d8b5059bb13e4170fe8014ca790b55cc5d07784a0b35",
+      "local_sha256": "dac39c489185d0b8b9d2d8b5059bb13e4170fe8014ca790b55cc5d07784a0b35"
+    },
+    {
+      "path": "windows/types/url_protection_space.cpp",
+      "sha256": "4c59b35a283d25f0291a81024917d3477f9eccf0258220e674c3f7b9065cd990",
+      "local_sha256": "4c59b35a283d25f0291a81024917d3477f9eccf0258220e674c3f7b9065cd990"
+    },
+    {
+      "path": "windows/types/url_protection_space.h",
+      "sha256": "317e070a52a9ca4c1982be8919498248bbfb68e11c50ecaab28a398f147eee51",
+      "local_sha256": "317e070a52a9ca4c1982be8919498248bbfb68e11c50ecaab28a398f147eee51"
+    },
+    {
+      "path": "windows/types/url_request.cpp",
+      "sha256": "8d70992275da5c7a0fa8c358af92d92736b92c833075b7456816dc39003b63fe",
+      "local_sha256": "8d70992275da5c7a0fa8c358af92d92736b92c833075b7456816dc39003b63fe"
+    },
+    {
+      "path": "windows/types/url_request.h",
+      "sha256": "888a30f4536d72689b83aed12ea8cca87d1e0f39de58af39bb36a1ce47d58245",
+      "local_sha256": "888a30f4536d72689b83aed12ea8cca87d1e0f39de58af39bb36a1ce47d58245"
+    },
+    {
+      "path": "windows/types/user_script.cpp",
+      "sha256": "678dacff2e6fff77df8a506fc601a7b2500221fb131dbc243789968c19165e6e",
+      "local_sha256": "678dacff2e6fff77df8a506fc601a7b2500221fb131dbc243789968c19165e6e"
+    },
+    {
+      "path": "windows/types/user_script.h",
+      "sha256": "84b5d67d87714da1ef7aac6f84e2909199f52cf37a8a11395d668e3ea2a36ced",
+      "local_sha256": "84b5d67d87714da1ef7aac6f84e2909199f52cf37a8a11395d668e3ea2a36ced"
+    },
+    {
+      "path": "windows/types/web_history.cpp",
+      "sha256": "2995f18932aecbc3100134e09fd6b6d2b874748e528158b3d258092215a220d5",
+      "local_sha256": "2995f18932aecbc3100134e09fd6b6d2b874748e528158b3d258092215a220d5"
+    },
+    {
+      "path": "windows/types/web_history.h",
+      "sha256": "fee703e4a5c172f5cbad29ed168433825e8a67775123d96c55e1a3daaddee322",
+      "local_sha256": "fee703e4a5c172f5cbad29ed168433825e8a67775123d96c55e1a3daaddee322"
+    },
+    {
+      "path": "windows/types/web_history_item.cpp",
+      "sha256": "388b17af8c3c635a0e2766dd1a8704e05fea84461a63c26b88eb95c3b6d9809b",
+      "local_sha256": "388b17af8c3c635a0e2766dd1a8704e05fea84461a63c26b88eb95c3b6d9809b"
+    },
+    {
+      "path": "windows/types/web_history_item.h",
+      "sha256": "a364009fb83f696839e698332cc6f5f546764a2b710e99ab39d82a0161e33a37",
+      "local_sha256": "a364009fb83f696839e698332cc6f5f546764a2b710e99ab39d82a0161e33a37"
+    },
+    {
+      "path": "windows/types/web_resource_error.cpp",
+      "sha256": "d8a235fce65f20ba404412b89b63812e4c12b1fab7e3a08c83d7e9628d5cc6ee",
+      "local_sha256": "d8a235fce65f20ba404412b89b63812e4c12b1fab7e3a08c83d7e9628d5cc6ee"
+    },
+    {
+      "path": "windows/types/web_resource_error.h",
+      "sha256": "1b2398a2c1ec24cbdb164e8deb8ff2492a7cec152f35e0d8462842caf4028e3f",
+      "local_sha256": "1b2398a2c1ec24cbdb164e8deb8ff2492a7cec152f35e0d8462842caf4028e3f"
+    },
+    {
+      "path": "windows/types/web_resource_request.cpp",
+      "sha256": "cd58634a264e6c3ef749f52d0a3b9a1500e5d9d1e5e933652d7ebe4598cbe528",
+      "local_sha256": "cd58634a264e6c3ef749f52d0a3b9a1500e5d9d1e5e933652d7ebe4598cbe528"
+    },
+    {
+      "path": "windows/types/web_resource_request.h",
+      "sha256": "cdae10c9f8cdc484a8f38864b0d7df32d36b51446bcf64251ba6418e9a868399",
+      "local_sha256": "cdae10c9f8cdc484a8f38864b0d7df32d36b51446bcf64251ba6418e9a868399"
+    },
+    {
+      "path": "windows/types/web_resource_response.cpp",
+      "sha256": "b8039131488ec421a436ff8fa230b1956a616c966257cb90090f9feb39869679",
+      "local_sha256": "b8039131488ec421a436ff8fa230b1956a616c966257cb90090f9feb39869679"
+    },
+    {
+      "path": "windows/types/web_resource_response.h",
+      "sha256": "8456b7287060076708a1b908339a6cc55ee891f93900293c236c78f53fcb7cef",
+      "local_sha256": "8456b7287060076708a1b908339a6cc55ee891f93900293c236c78f53fcb7cef"
+    },
+    {
+      "path": "windows/types/window_features.cpp",
+      "sha256": "10981a07d115d7f061b2d7cff7e31918a1cc034d43d53f03101ccaa924851113",
+      "local_sha256": "10981a07d115d7f061b2d7cff7e31918a1cc034d43d53f03101ccaa924851113"
+    },
+    {
+      "path": "windows/types/window_features.h",
+      "sha256": "82e5e288ab234496889991fbe540a677c8ab88cdd5a92656a067aa08314c851c",
+      "local_sha256": "82e5e288ab234496889991fbe540a677c8ab88cdd5a92656a067aa08314c851c"
+    },
+    {
+      "path": "windows/utils/base64.cpp",
+      "sha256": "3de9f363bed5a5ea34398beab475a05273aaf8d0536ffbf14dcbaf281de9ac78",
+      "local_sha256": "3de9f363bed5a5ea34398beab475a05273aaf8d0536ffbf14dcbaf281de9ac78"
+    },
+    {
+      "path": "windows/utils/base64.h",
+      "sha256": "784e674dcdac0ee106170d50d96602c59887de0007eff9261addd3196e38142f",
+      "local_sha256": "784e674dcdac0ee106170d50d96602c59887de0007eff9261addd3196e38142f"
+    },
+    {
+      "path": "windows/utils/defer.h",
+      "sha256": "d9eedfed641fd1b2b34a8b6b1d19a3ffdd789f1eb1c858caa89952d8a588ae9d",
+      "local_sha256": "d9eedfed641fd1b2b34a8b6b1d19a3ffdd789f1eb1c858caa89952d8a588ae9d"
+    },
+    {
+      "path": "windows/utils/flutter.h",
+      "sha256": "0b3d92f5a4b6a09bdcb862769322da46bcf9548149efb3e7cd77790b2dffb2d0",
+      "local_sha256": "0b3d92f5a4b6a09bdcb862769322da46bcf9548149efb3e7cd77790b2dffb2d0"
+    },
+    {
+      "path": "windows/utils/log.h",
+      "sha256": "91dd5909e8f94ca54dd5a2faa1ce59b82036af16c6874e4a2143df6086b88b0d",
+      "local_sha256": "91dd5909e8f94ca54dd5a2faa1ce59b82036af16c6874e4a2143df6086b88b0d"
+    },
+    {
+      "path": "windows/utils/map.h",
+      "sha256": "9651bf8bb208b960b0e2b7bb59cbd0982f493a4302e8183ed6f70a7bac67e40c",
+      "local_sha256": "9651bf8bb208b960b0e2b7bb59cbd0982f493a4302e8183ed6f70a7bac67e40c"
+    },
+    {
+      "path": "windows/utils/strconv.h",
+      "sha256": "adfe1d8426857afd944cb4eb22de65be25f23e1b2dd0f8612296f323912fa8da",
+      "local_sha256": "adfe1d8426857afd944cb4eb22de65be25f23e1b2dd0f8612296f323912fa8da"
+    },
+    {
+      "path": "windows/utils/string.h",
+      "sha256": "5cc05b4ab75e669f3a0e7c3b8c02d667d51376360d849453323991ab8f1716d1",
+      "local_sha256": "5cc05b4ab75e669f3a0e7c3b8c02d667d51376360d849453323991ab8f1716d1"
+    },
+    {
+      "path": "windows/utils/timer.h",
+      "sha256": "d06e01d4b42ba7af99ea19e125c96ae8b139729f5e8327c6c9e2e10ecc8796f1",
+      "local_sha256": "d06e01d4b42ba7af99ea19e125c96ae8b139729f5e8327c6c9e2e10ecc8796f1"
+    },
+    {
+      "path": "windows/utils/uri.h",
+      "sha256": "015a7647eb682d231e9040e848a82119b331fdfec3a2f61d9545777b00862f6e",
+      "local_sha256": "015a7647eb682d231e9040e848a82119b331fdfec3a2f61d9545777b00862f6e"
+    },
+    {
+      "path": "windows/utils/util.h",
+      "sha256": "1890b7829268bc6464e9f0dde69975c54c3e5865733f98d7d01623353b48e830",
+      "local_sha256": "1890b7829268bc6464e9f0dde69975c54c3e5865733f98d7d01623353b48e830"
+    },
+    {
+      "path": "windows/utils/uuid.h",
+      "sha256": "928f87cedc3db289f9ae33acb20e6e2ad7bed57cc27ad696745e319a0b3ed91a",
+      "local_sha256": "928f87cedc3db289f9ae33acb20e6e2ad7bed57cc27ad696745e319a0b3ed91a"
+    },
+    {
+      "path": "windows/utils/vector.h",
+      "sha256": "d9c5531bf58e91adb8517ace91ffc648953a7c0f37d3ad0a347fc036a61ae296",
+      "local_sha256": "d9c5531bf58e91adb8517ace91ffc648953a7c0f37d3ad0a347fc036a61ae296"
+    },
+    {
+      "path": "windows/webview_environment/webview_environment.cpp",
+      "sha256": "977c6ff6da8d119c5dab6593336f61aabe47a46b38e69221d018bac837684b70",
+      "local_sha256": "977c6ff6da8d119c5dab6593336f61aabe47a46b38e69221d018bac837684b70"
+    },
+    {
+      "path": "windows/webview_environment/webview_environment.h",
+      "sha256": "6f032d3ff263c0e2503d257721535ad600ea540936117287db23dfb732d819f0",
+      "local_sha256": "6f032d3ff263c0e2503d257721535ad600ea540936117287db23dfb732d819f0"
+    },
+    {
+      "path": "windows/webview_environment/webview_environment_channel_delegate.cpp",
+      "sha256": "5611d3223fdf1c9b49be891cd3d2630da3b1073d8dc40d17547610bbc18e5c0a",
+      "local_sha256": "5611d3223fdf1c9b49be891cd3d2630da3b1073d8dc40d17547610bbc18e5c0a"
+    },
+    {
+      "path": "windows/webview_environment/webview_environment_channel_delegate.h",
+      "sha256": "dfe1b0b876e93219212ab3e118de60d14d731601ff2a319cb614c1c77586aac3",
+      "local_sha256": "dfe1b0b876e93219212ab3e118de60d14d731601ff2a319cb614c1c77586aac3"
+    },
+    {
+      "path": "windows/webview_environment/webview_environment_manager.cpp",
+      "sha256": "9214c343f65b4738db88d4981c9fbdba658e48ae3305aaa78cd11ec7d6d683aa",
+      "local_sha256": "9214c343f65b4738db88d4981c9fbdba658e48ae3305aaa78cd11ec7d6d683aa"
+    },
+    {
+      "path": "windows/webview_environment/webview_environment_manager.h",
+      "sha256": "4a07ad95962effdf4c7d602e421aa043158aab3da83934b242f2772a43de3887",
+      "local_sha256": "4a07ad95962effdf4c7d602e421aa043158aab3da83934b242f2772a43de3887"
+    },
+    {
+      "path": "windows/webview_environment/webview_environment_settings.cpp",
+      "sha256": "2305647016d8c16efbbb1ee6da82263522b5859da2608206054da43715120605",
+      "local_sha256": "2305647016d8c16efbbb1ee6da82263522b5859da2608206054da43715120605"
+    },
+    {
+      "path": "windows/webview_environment/webview_environment_settings.h",
+      "sha256": "c308acbd613e1d5271fb4e97e344e9116cc43d960be9e037538526653cc90249",
+      "local_sha256": "c308acbd613e1d5271fb4e97e344e9116cc43d960be9e037538526653cc90249"
+    }
+  ]
+}

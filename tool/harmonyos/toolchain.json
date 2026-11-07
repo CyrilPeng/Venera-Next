@@ -44,7 +44,7 @@
   },
   "quickjs": {
     "repository": "https://github.com/CyrilPeng/flutter_qjs.git",
-    "revision": "295f77421eedff356a02e92987181b525970c780"
+    "revision": "f5a1f20d08c33b0a6b3e38eda2a7b27705420620"
   },
   "sqlite": {
     "version": "3.52.0",

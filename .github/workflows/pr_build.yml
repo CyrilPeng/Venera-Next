@@ -114,6 +114,10 @@ jobs:
     if: ${{ needs.changes.outputs.platform == 'true' }}
     runs-on: windows-2025
     timeout-minutes: 35
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: 'true'
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
@@ -147,7 +151,10 @@ jobs:
             test/foundation/native_codecs_test.dart `
             test/foundation/image_processing_native_test.dart `
             test/foundation/reader_image_processing_native_test.dart `
-            test/foundation/js_engine_lifecycle_test.dart
+            test/foundation/js_engine_lifecycle_test.dart `
+            test/foundation/js_native_contract_test.dart `
+            test/foundation/js_owned_result_test.dart `
+            test/foundation/js_result_descendants_test.dart
       - name: 验证 Windows 网页代理与登录生命周期
         shell: pwsh
         timeout-minutes: 5

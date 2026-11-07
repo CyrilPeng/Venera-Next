@@ -1,0 +1,10 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+Resolving dependencies...
+Note: meta is pinned to version 1.17.0 by flutter from the flutter SDK.
+See https://dart.dev/go/sdk-version-pinning for details.
+
+
+Because every version of flutter from sdk depends on meta 1.17.0 and record_use >=1.0.0 depends on meta ^1.19.0, flutter from sdk is incompatible with record_use >=1.0.0.
+And because every version of flutter_qjs from path depends on hooks ^2.2.0 which depends on record_use ^1.0.0, flutter from sdk is incompatible with flutter_qjs from path.
+So, because venera_next depends on both flutter from sdk and flutter_qjs from path, version solving failed.
+Failed to update packages.

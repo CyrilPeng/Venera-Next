@@ -7,9 +7,9 @@
     "revision": "a281ae3272a9218760d52b95014a71a41866bd6c"
   },
   "webview_api": {
-    "repository": "https://github.com/CyrilPeng/flutter_inappwebview.git",
-    "ref": "3ef899b3db57c911b080979f1392253b835f98ab",
-    "revision": "3ef899b3db57c911b080979f1392253b835f98ab"
+    "repository": "https://github.com/pichillilorenzo/flutter_inappwebview.git",
+    "ref": "0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676",
+    "revision": "0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676"
   },
   "code_assets": {
     "repository": "https://gitcode.com/openharmony-sig/fluttertpc_dart_native.git",
@@ -17,11 +17,11 @@
     "revision": "9d2eaf45940e5042637b3387b18292ed39223a4a"
   },
   "project_packages": [
-    "photo_view", "share_plus", "rhttp", "scrollable_positioned_list",
+    "photo_view", "share_plus", "rhttp", "flutter_inappwebview_windows",
     "webdav_client", "desktop_webview_window", "venera_native", "venera_saf"
   ],
   "hosted": {
-    "sqlite3": {"version": "2.7.4", "sha256": "32b632dda27d664f85520093ed6f735ae5c49b5b75345afb8b19411bc59bb53d"},
+    "sqlite3": {"version": "2.9.4", "sha256": "3145bd74dcdb4fd6f5c6dda4d4e4490a8087d7f286a14dee5d37087290f0f8a2"},
     "zip_flutter": {"version": "0.0.13", "sha256": "baecf8deb6bf53a50e5ab513707ab56cc0c25f5b43333aa56ef562e8e7057357"},
     "pdfium_dart": {"version": "0.2.5", "sha256": "86e95c66b09f3245b95c4924f2edce8d4f7c9786876e5c5ee8e36b104a94bbb0"}
   },

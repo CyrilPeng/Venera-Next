@@ -22,10 +22,15 @@ List<String> checkGitDependencies(Map spec, Map lock, Map inventory) {
       errors.add('$name: inventory must pin a full commit SHA');
     }
     if (!direct.add(name)) errors.add('$name: duplicate direct dependency');
-    if (!['maintained-fork', 'license-review'].contains(repo['status']) ||
+    if (![
+          'official-commit',
+          'maintained-fork',
+          'license-review',
+        ].contains(repo['status']) ||
         (repo['reason'] as String? ?? '').trim().isEmpty) {
       errors.add('$name: record maintenance status and retention reason');
     }
+    _checkSourceDecision(repo, errors);
     final declaration = declarations[name];
     final git = declaration is Map ? declaration['git'] : null;
     final packages = repo['packages'] as Map;
@@ -50,10 +55,19 @@ List<String> checkGitDependencies(Map spec, Map lock, Map inventory) {
     }
   }
   for (final entry in declarations.entries) {
-    if (entry.value is Map &&
-        (entry.value as Map).containsKey('git') &&
-        !direct.contains(entry.key)) {
+    final value = entry.value;
+    if (value is! Map || !value.containsKey('git')) continue;
+    final approved = expected[entry.key];
+    if (approved == null) {
       errors.add('${entry.key}: Git dependency has no review record');
+    } else if (!direct.contains(entry.key)) {
+      final git = value['git'];
+      if (git is! Map ||
+          git['url'] != approved['url'] ||
+          git['ref'] != approved['ref'] ||
+          (git['path'] ?? '.') != approved['path']) {
+        errors.add('${entry.key}: Git override differs from reviewed source');
+      }
     }
   }
   final locked = lock['packages'] as Map;
@@ -162,6 +176,9 @@ List<String> checkDependencyInventory(
         errors.add('$name: pubspec does not match the reviewed local path');
       }
       _checkLocalFiles(workspace, record, errors);
+      if (source is Map && source['type'] != 'project') {
+        _checkSourceDecision(record, errors);
+      }
     }
   }
   for (final entry in declarations.entries) {
@@ -194,7 +211,100 @@ List<String> checkDependencyInventory(
   return errors;
 }
 
+/// A failed Pub checkout can leave a correctly named cache on a different HEAD.
+/// Validate the resolved checkout itself in addition to the lockfile labels.
+List<String> checkResolvedGitDependencies(
+  Map lock,
+  Map config, {
+  required File configFile,
+}) {
+  final errors = <String>[];
+  final resolved = {
+    for (final package in config['packages'] as List)
+      package['name']: package['rootUri'],
+  };
+  for (final entry in (lock['packages'] as Map).entries) {
+    if (entry.value['source'] != 'git') continue;
+    final name = entry.key;
+    final rootUri = resolved[name];
+    if (rootUri is! String) {
+      errors.add('$name: resolved Git package is missing; run pub get');
+      continue;
+    }
+    final uri = configFile.absolute.uri.resolve(rootUri);
+    if (uri.scheme != 'file') {
+      errors.add('$name: resolved Git package must be a local checkout');
+      continue;
+    }
+    try {
+      final root = Directory.fromUri(uri).resolveSymbolicLinksSync();
+      final head = Process.runSync('git', ['-C', root, 'rev-parse', 'HEAD']);
+      if (head.exitCode != 0 ||
+          (head.stdout as String).trim() !=
+              entry.value['description']['resolved-ref']) {
+        errors.add('$name: actual Git checkout differs from the locked SHA');
+        continue;
+      }
+      final top = Process.runSync('git', [
+        '-C',
+        root,
+        'rev-parse',
+        '--show-toplevel',
+      ]);
+      if (top.exitCode != 0 ||
+          path
+                  .relative(root, from: (top.stdout as String).trim())
+                  .replaceAll('\\', '/') !=
+              entry.value['description']['path']) {
+        errors.add('$name: resolved package path differs from the lockfile');
+        continue;
+      }
+      final clean = Process.runSync('git', [
+        '-C',
+        root,
+        'diff',
+        '--quiet',
+        'HEAD',
+        '--',
+        '.',
+      ]);
+      if (clean.exitCode != 0) {
+        errors.add('$name: resolved Git package has tracked source changes');
+      }
+    } on FileSystemException {
+      errors.add('$name: cannot read the resolved Git checkout');
+    } on ProcessException {
+      errors.add('$name: cannot verify the resolved Git checkout');
+    }
+  }
+  return errors;
+}
+
 bool _nonempty(dynamic value) => value is String && value.trim().isNotEmpty;
+
+void _checkSourceDecision(Map record, List<String> errors) {
+  final name = record['dependency'];
+  final review = record['official_review'];
+  if (!_httpsUrl(record['upstream']) ||
+      review is! Map ||
+      !_nonempty(review['stable_version']) ||
+      !_digest(review['commit'], 40) ||
+      !_nonempty(review['validation']) ||
+      !_nonempty(review['exit_condition']) ||
+      !_nonempty(review['maintainer'])) {
+    errors.add('$name: record official candidates, validation and exit review');
+    return;
+  }
+  if (record['status'] == 'official-commit') {
+    if (record['url'] != record['upstream']) {
+      errors.add('$name: official commit must use the reviewed upstream URL');
+    }
+  } else if (review['required_patches'] is! List ||
+      (review['required_patches'] as List).isEmpty ||
+      !(review['required_patches'] as List).every(_nonempty)) {
+    errors.add('$name: non-official source needs its necessary patch scope');
+  }
+}
 
 bool _digest(dynamic value, int length) =>
     value is String && RegExp('^[0-9a-f]{$length}\$').hasMatch(value);
@@ -577,12 +687,25 @@ void _checkSourceDirectories(
 }
 
 void main() {
+  final lock = loadYaml(File('pubspec.lock').readAsStringSync()) as Map;
   final errors = checkDependencyInventory(
     loadYaml(File('pubspec.yaml').readAsStringSync()) as Map,
-    loadYaml(File('pubspec.lock').readAsStringSync()) as Map,
+    lock,
     jsonDecode(File('doc/development/git_dependencies.json').readAsStringSync())
         as Map,
   );
+  final configFile = File('.dart_tool/package_config.json');
+  if (!configFile.existsSync()) {
+    errors.add('Missing resolved package configuration; run pub get');
+  } else {
+    errors.addAll(
+      checkResolvedGitDependencies(
+        lock,
+        jsonDecode(configFile.readAsStringSync()) as Map,
+        configFile: configFile,
+      ),
+    );
+  }
   // Build tools must not bypass the application lockfile and review inventory.
   for (final file in Directory(
     '.github/workflows',
@@ -598,7 +721,7 @@ void main() {
     exitCode = 1;
   } else {
     stdout.writeln(
-      'Dependency inventory matches Git and local packages, provenance and licenses.',
+      'Dependency inventory matches resolved Git checkouts, local sources and licenses.',
     );
   }
 }

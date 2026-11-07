@@ -1,0 +1,6 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+Analyzing app-webview-stable...
+
+  error - The setter 'onBrowserProcessExited' isn't defined for the type 'WebViewEnvironment' - lib\routing\windows_webview_environment.dart:124:17 - undefined_setter
+
+1 issue found. (ran in 25.5s)
