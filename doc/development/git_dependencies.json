@@ -1,42 +1,25 @@
 {
-  "reviewed_on": "2026-09-28",
+  "schema_version": 2,
+  "reviewed_on": "2026-11-06",
+  "local_packages_reviewed_on": "2026-11-06",
   "repositories": [
     {
       "dependency": "flutter_qjs",
       "url": "https://github.com/CyrilPeng/flutter_qjs",
       "commit": "295f77421eedff356a02e92987181b525970c780",
       "status": "maintained-fork",
-      "reason": "QuickJS-NG migration, JS numeric conversion, native platform patches and the 2026-10-31 TypedData reference-walk fix; validate runtime lifetimes before replacement.",
+      "reason": "Keep the Dart/FFI, Map, TypedData and lifecycle contract: official unpublished 0.4.0 fails application resolution and its native Map probe. Separately remediate the matched 0.8-era QuickJS-NG core security findings before enabling the next HarmonyOS release.",
       "packages": {
         "flutter_qjs": "."
-      }
-    },
-    {
-      "dependency": "scrollable_positioned_list",
-      "url": "https://github.com/CyrilPeng/flutter.widgets",
-      "commit": "09e756b1f1b04e6298318d99ec20a787fb360f59",
-      "status": "maintained-fork",
-      "reason": "Reader uses scrollControllerCallback and scrollBehavior absent from the stable package.",
-      "packages": {
-        "scrollable_positioned_list": "packages/scrollable_positioned_list"
-      }
-    },
-    {
-      "dependency": "desktop_webview_window",
-      "url": "https://github.com/venera-app/flutter_desktop_webview",
-      "commit": "7801fc582ecf5a7351632887891ecf309a7b2583",
-      "status": "license-review",
-      "reason": "License provenance and Windows proxy / Linux libsoup / ARM64 patches require review.",
-      "packages": {
-        "desktop_webview_window": "packages/desktop_webview_window"
-      }
+      },
+      "audit": "doc/development/remaining_git_audit_20261106.json"
     },
     {
       "dependency": "flutter_inappwebview",
       "url": "https://github.com/CyrilPeng/flutter_inappwebview",
       "commit": "3ef899b3db57c911b080979f1392253b835f98ab",
       "status": "maintained-fork",
-      "reason": "Keep the coordinated 6.2.0-beta.3 platform packages and GraphicsContext disposal fix.",
+      "reason": "Keep all seven coordinated platform packages: stable 6.1.5 lacks the browser-exit API, while official master passes analysis but retains the static GraphicsContext and lacks native multiview/proxy acceptance.",
       "packages": {
         "flutter_inappwebview": "flutter_inappwebview",
         "flutter_inappwebview_android": "flutter_inappwebview_android",
@@ -45,47 +28,232 @@
         "flutter_inappwebview_platform_interface": "flutter_inappwebview_platform_interface",
         "flutter_inappwebview_web": "flutter_inappwebview_web",
         "flutter_inappwebview_windows": "flutter_inappwebview_windows"
-      }
+      },
+      "audit": "doc/development/remaining_git_audit_20261106.json"
+    }
+  ],
+  "local_packages": [
+    {
+      "dependency": "photo_view",
+      "path": "packages/photo_view",
+      "version": "0.14.0",
+      "status": "maintained-local",
+      "reason": "Reader-specific scale/reset APIs and image, controller and gesture lifetime patches are maintained with the application.",
+      "upstream": "https://github.com/renancaraujo/photo_view",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/CyrilPeng/photo_view",
+        "commit": "a1255d1b5945aad4b7323303ec2ecdf0c90ffc4c",
+        "path": "."
+      },
+      "license": {
+        "spdx": "MIT",
+        "file": "LICENSE",
+        "sha256": "6c2156a7940de2bce1ae284aab6109514248634eb75f3be7ce00bf62a143cbe4"
+      },
+      "patches": "LOCAL_PATCHES.md"
     },
     {
-      "dependency": "lodepng_flutter",
-      "url": "https://github.com/venera-app/lodepng_flutter",
-      "commit": "ac7d05dde32e8d728102a9ff66e6b55f05d94ba1",
-      "status": "license-review",
-      "reason": "Placeholder license; native buffer ownership and PNG performance require a replacement audit.",
-      "packages": {
-        "lodepng_flutter": "."
-      }
+      "dependency": "share_plus",
+      "path": "packages/share_plus",
+      "version": "12.0.2",
+      "status": "maintained-local",
+      "reason": "Native sharing payload, file retention and callback ownership fixes require coordinated application and platform validation.",
+      "upstream": "https://github.com/fluttercommunity/plus_plugins",
+      "source": {
+        "type": "archive",
+        "url": "https://pub.dev/api/archives/share_plus-12.0.2.tar.gz",
+        "sha256": "223873d106614442ea6f20db5a038685cc5b32a2fba81cdecaefbbae0523f7fa"
+      },
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "file": "LICENSE",
+        "sha256": "eb9741a672906ebd01fd9b3bef38f6c82eff250e91149cf404539ee7981079fd"
+      },
+      "patches": "LOCAL_PATCHES.md"
+    },
+    {
+      "dependency": "rhttp",
+      "path": "packages/rhttp",
+      "version": "0.15.1",
+      "status": "maintained-local",
+      "reason": "Cancellation-safe Rust/Dart callback draining and locked native dependency security fixes are maintained with the application.",
+      "upstream": "https://codeberg.org/Tienisto/rhttp",
+      "source": {
+        "type": "archive",
+        "url": "https://pub.dev/api/archives/rhttp-0.15.1.tar.gz",
+        "sha256": "b111638045b730f825a85cb045017b5bd3dfb47b38e98eb293b0519ee6050f2e"
+      },
+      "license": {
+        "spdx": "MIT",
+        "file": "LICENSE",
+        "sha256": "522dfc2f5fdcf53ef9b7569b6b50d9ce1d88524b40b07c6fadaad2a1335b6d34"
+      },
+      "patches": "LOCAL_PATCHES.md"
+    },
+    {
+      "dependency": "scrollable_positioned_list",
+      "path": "packages/scrollable_positioned_list",
+      "version": "0.3.8+1",
+      "status": "maintained-local",
+      "reason": "Reader uses the pinned fork's scrollControllerCallback and scrollBehavior interfaces; the package is small and application-specific.",
+      "upstream": "https://github.com/google/flutter.widgets",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/CyrilPeng/flutter.widgets",
+        "commit": "09e756b1f1b04e6298318d99ec20a787fb360f59",
+        "path": "packages/scrollable_positioned_list"
+      },
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "file": "LICENSE",
+        "sha256": "d347790d98693ff63129eafe676bac5cb5247c972f1a36f631bfa0e4dbb17293"
+      },
+      "patches": "LOCAL_PATCHES.md",
+      "source_manifest": "UPSTREAM_MANIFEST.json"
     },
     {
       "dependency": "webdav_client",
-      "url": "https://github.com/CyrilPeng/webdav_client",
-      "commit": "2f669c98fb81cff1c64fee93466a1475c77e4273",
-      "status": "maintained-fork",
-      "reason": "Requires the newClient adapter parameter plus redirect, upload and authentication patches.",
-      "packages": {
-        "webdav_client": "."
-      }
+      "path": "packages/webdav_client",
+      "version": "1.2.2",
+      "status": "maintained-local",
+      "reason": "Retains the adapter, redirect, upload and authentication patches used by WebDAV reading and backup without maintaining a separate fork.",
+      "upstream": "https://github.com/flymzero/webdav_client",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/CyrilPeng/webdav_client",
+        "commit": "2f669c98fb81cff1c64fee93466a1475c77e4273",
+        "path": "."
+      },
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "file": "LICENSE",
+        "sha256": "b17d7a897d3602d6ea9e53038329cea1a581ce53672d148893ef436f3fe255b9"
+      },
+      "patches": "LOCAL_PATCHES.md",
+      "source_manifest": "UPSTREAM_MANIFEST.json"
     },
     {
-      "dependency": "flutter_saf",
-      "url": "https://github.com/venera-app/flutter_saf",
-      "commit": "fe182cdf40e5fa6230f451bc1d643b860f610d13",
-      "status": "license-review",
-      "reason": "Placeholder license; IO overrides and native storage APIs differ from pub.dev namesake.",
-      "packages": {
-        "flutter_saf": "."
-      }
+      "dependency": "desktop_webview_window",
+      "path": "packages/desktop_webview_window",
+      "version": "0.2.4",
+      "status": "maintained-local",
+      "reason": "Retain the pinned desktop proxy, Linux WebKit/libsoup and ARM64 implementation; official 0.4.2 requires Flutter 3.44 and changes configuration APIs.",
+      "upstream": "https://github.com/MixinNetwork/flutter-plugins",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/venera-app/flutter_desktop_webview",
+        "commit": "7801fc582ecf5a7351632887891ecf309a7b2583",
+        "path": "packages/desktop_webview_window"
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "file": "LICENSE",
+        "sha256": "07e78d4ec132261d6487f8b8df8edc0f526b4d4a1a6041ee0994e26c9c4b23bc"
+      },
+      "patches": "LOCAL_PATCHES.md",
+      "source_manifest": "UPSTREAM_MANIFEST.json",
+      "source_directories": [
+        "lib",
+        "linux",
+        "macos",
+        "windows",
+        "licenses"
+      ]
     },
     {
-      "dependency": "flutter_7zip",
-      "url": "https://github.com/venera-app/flutter_7zip",
-      "commit": "b33344797f1d2469339e0e1b75f5f954f1da224c",
-      "status": "license-review",
-      "reason": "Placeholder license; 7Z/CB7 support and ZIP fallback require a replacement audit.",
-      "packages": {
-        "flutter_7zip": "."
-      }
+      "dependency": "venera_native",
+      "path": "packages/venera_native",
+      "version": "1.0.0",
+      "status": "maintained-local",
+      "reason": "Project-owned ownership-safe PNG and 7z bridges replace wrappers with placeholder licenses; retain explicitly licensed official native cores.",
+      "upstream": "https://github.com/CyrilPeng/Venera-Next",
+      "source": {
+        "type": "project",
+        "url": "https://github.com/CyrilPeng/Venera-Next",
+        "path": "packages/venera_native"
+      },
+      "license": {
+        "spdx": "GPL-3.0-or-later",
+        "file": "LICENSE",
+        "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+      },
+      "patches": "LOCAL_PATCHES.md",
+      "source_manifest": "SOURCE_MANIFEST.json",
+      "source_directories": [
+        "lib",
+        "src",
+        "android",
+        "ios",
+        "macos",
+        "linux",
+        "windows",
+        "third_party",
+        "notices",
+        "test"
+      ],
+      "third_party_sources": [
+        {
+          "id": "lodepng",
+          "directory": "third_party/lodepng",
+          "upstream": "https://github.com/lvandeve/lodepng",
+          "source": {
+            "type": "git",
+            "url": "https://github.com/lvandeve/lodepng",
+            "commit": "79a61c79cc62814f315661f53a026004bac80614",
+            "path": "."
+          },
+          "license": {
+            "spdx": "Zlib",
+            "file": "third_party/lodepng/LICENSE",
+            "sha256": "5dd8e1ee4d5313d81bb1c6e04e0b5a8baf746d44887c9a3fd6337e563f3e04d7"
+          }
+        },
+        {
+          "id": "lzma",
+          "directory": "third_party/lzma",
+          "upstream": "https://github.com/ip7z/7zip",
+          "source": {
+            "type": "git",
+            "url": "https://github.com/ip7z/7zip",
+            "commit": "e5431fa6f5505e385c6f9367260717e9c47dc2ee",
+            "path": "C"
+          },
+          "license": {
+            "spdx": "LicenseRef-LZMA-SDK-Public-Domain",
+            "file": "third_party/lzma/7zVersion.h",
+            "sha256": "b2b1f2e5cb73afb74ca9800e23df6876c4457f88402de4de447c613a7f902a0c"
+          }
+        }
+      ]
+    },
+    {
+      "dependency": "venera_saf",
+      "path": "packages/venera_saf",
+      "version": "1.0.0",
+      "status": "maintained-local",
+      "reason": "Project-authored persistent Android document-provider IO replaces the placeholder-license wrapper while retaining stored paths and grants, descriptor ownership, error propagation and native 64-bit operations.",
+      "upstream": "https://github.com/CyrilPeng/Venera-Next",
+      "source": {
+        "type": "project",
+        "url": "https://github.com/CyrilPeng/Venera-Next",
+        "path": "packages/venera_saf"
+      },
+      "license": {
+        "spdx": "GPL-3.0-or-later",
+        "file": "LICENSE",
+        "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+      },
+      "patches": "LOCAL_PATCHES.md",
+      "source_manifest": "SOURCE_MANIFEST.json",
+      "source_directories": [
+        "lib",
+        "src",
+        "android",
+        "notices",
+        "test"
+      ],
+      "third_party_sources": []
     }
   ]
 }

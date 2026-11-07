@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+group = 'com.cyrilpeng.venera_saf'
+version = '1.0.0'
+
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.1.0'
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0'
+    }
+}
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace = 'com.cyrilpeng.venera_saf'
+    compileSdk = 36
+    ndkVersion = '28.0.13004108'
+    defaultConfig {
+        minSdk = 21
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+    externalNativeBuild {
+        cmake {
+            path = '../src/CMakeLists.txt'
+            buildStagingDirectory = file("${buildDir}/.cxx")
+        }
+    }
+    sourceSets { main { assets.srcDirs = ['../notices'] } }
+}

@@ -68,8 +68,36 @@ class Fixture:
         self.source_commit = commit(self.source)
         self.pin = {'schema': 1, 'source_commit': self.source_commit,
                     'main_baseline': self.baseline, 'first_release_build': 244}
+        self.preview_next = False
         write(self.root, release.PIN, json.dumps(self.pin))
         self.set_version('1.18.3', 244)
+
+    def next_candidate(self):
+        self.next_baseline = self.release_commit
+        git(self.source, 'fetch', str(self.root), 'HEAD')
+        git(self.source, 'merge', '--no-ff', '-m', 'test(ci): merge baseline', 'FETCH_HEAD')
+        for name, content in {
+            'release.json': json.dumps({'version': '1.18.3', 'build': 245}),
+            'pubspec.yaml': self.pubspec.replace('1.18.2+243', '1.18.3+245'),
+            'CHANGELOG.md': '# Changes\n\n## v1.18.3\n\nNext candidate notes.\n',
+            'packages/venera_native/pubspec.yaml': 'name: venera_native\nversion: 1.0.0\n',
+            'packages/venera_native/LICENSE': 'project license\n',
+            release.NOTICE_SOURCE: 'reviewed official codec notice\n',
+            'doc/development/git_dependencies.json': json.dumps({'local_packages': [
+                {'dependency': 'venera_native', 'path': 'packages/venera_native', 'version': '1.0.0'}]}),
+            'tool/harmonyos/toolchain.json': json.dumps({'quickjs': {'revision': 'a' * 40}}),
+            'tool/harmonyos/full_app_config.json': json.dumps({
+                'project_packages': ['venera_native'],
+                **{name: {'revision': 'b' * 40} for name in ('webview', 'webview_api', 'code_assets')},
+                'hosted': {'sqlite3': {'version': '2.7.4', 'sha256': 'c' * 64}}}),
+        }.items():
+            write(self.source, name, content)
+        self.source_commit = commit(self.source)
+        self.next_pin = {'schema': 2, 'source_commit': self.source_commit,
+                         'main_baseline': self.next_baseline, 'first_release_build': 245, 'release_enabled': False}
+        write(self.root, release.NEXT_PIN, json.dumps(self.next_pin))
+        self.release_commit = commit(self.root)
+        self.preview_next = True
 
     def set_version(self, version, build):
         write(self.root, 'release.json', json.dumps({'version': version, 'build': build}))
@@ -84,16 +112,19 @@ class Fixture:
                 'GITHUB_REF_NAME': 'v' + str(config['version']) if tagged else 'main'}
 
     def context(self, *, tagged=False):
-        return release.context(self.root, self.source, self.environment(tagged=tagged))
+        return release.context(self.root, self.source, self.environment(tagged=tagged), preview_next=self.preview_next)
 
     def bundle(self, *, metadata_change=None, members_change=None, report_change=None):
         expected = self.context()
+        next_candidate = expected['schema'] == 2
+        native_names = release.NEXT_NATIVE if next_candidate else release.NATIVE
         names = release.asset_names(expected['version'])
         source_files = {
             name: release.sha256(release.blob(self.source, self.source_commit, name))
             for name in release.tracked(self.source, self.source_commit)
             if name in {'pubspec.yaml', 'pubspec.lock', 'CHANGELOG.md'}
             or name.startswith('assets/') or (name.startswith('lib/') and name.endswith('.dart'))
+            or (next_candidate and (name == 'release.json' or name.startswith('packages/')))
         }
         native = bytearray(64)
         native[:6] = b'\x7fELF\x02\x01'
@@ -105,8 +136,20 @@ class Fixture:
             'source_files': source_files, 'bundle_name': release.BUNDLE,
             'version_name': expected['version'], 'hap_version_name': expected['version'].split('-')[0],
             'version_code': expected['build'], 'bundled_assets': {'assets/page.txt': source_files['assets/page.txt']},
-            'native_libraries': {name: release.sha256(native) for name in release.NATIVE},
+            'native_libraries': {name: release.sha256(native) for name in native_names},
         }
+        if next_candidate:
+            metadata['bundled_assets'][release.NOTICE] = source_files[release.NOTICE_SOURCE]
+            metadata['dependencies'] = {
+                'venera_native': {'project_path': 'packages/venera_native', 'version': '1.0.0',
+                                  'prepared_sha256': release.package_digest(
+                                      self.source, self.source_commit, 'packages/venera_native',
+                                      release.tracked(self.source, self.source_commit))},
+                'flutter_qjs': {'revision': 'a' * 40, 'prepared_sha256': 'd' * 64},
+                **{name: {'revision': 'b' * 40, 'prepared_sha256': 'e' * 64}
+                   for name in ('webview', 'webview_api', 'code_assets')},
+                'sqlite3': {'version': '2.7.4', 'sha256': 'c' * 64, 'prepared_sha256': 'f' * 64},
+            }
         if metadata_change:
             metadata_change(metadata)
         app = {'bundleName': release.BUNDLE, 'versionName': expected['version'].split('-')[0],
@@ -118,10 +161,13 @@ class Fixture:
             release.ASSETS + 'assets/page.txt': b'original asset',
             release.ASSETS + 'pubspec.yaml': pubspec,
             release.ASSETS + 'CHANGELOG.md': expected['changelog'].encode(),
-            **{'libs/arm64-v8a/' + name: bytes(native) for name in release.NATIVE | {'libapp.so', 'libflutter.so'}},
+            **{'libs/arm64-v8a/' + name: bytes(native) for name in native_names | {'libapp.so', 'libflutter.so'}},
         }
+        if next_candidate:
+            members[release.ASSETS + release.NOTICE] = release.blob(self.source, self.source_commit, release.NOTICE_SOURCE)
         expected_assets = {name: release.sha256(members[release.ASSETS + name])
-                           for name in ('assets/page.txt', 'pubspec.yaml', 'CHANGELOG.md')}
+                           for name in ('assets/page.txt', 'pubspec.yaml', 'CHANGELOG.md',
+                                        *((release.NOTICE,) if next_candidate else ()))}
         if members_change:
             members_change(members)
         self.output.mkdir(exist_ok=True)
@@ -259,10 +305,112 @@ class HarmonyReleaseTests(unittest.TestCase):
         self.assertTrue(all(item['bytes'] > 0 for item in assets.values()))
 
     def test_rc_dart_version_has_a_separate_numeric_native_version(self):
+        self.fixture.next_candidate()
+        self.fixture.preview_next = False
         self.fixture.set_version('1.19.0-rc.2', 245)
         expected = self.fixture.bundle()
         self.assertEqual(expected['version'], '1.19.0-rc.2')
         self.verify(expected)
+
+    def test_next_preview_keeps_244_pin_bytes_and_uses_the_candidates_own_245_metadata(self):
+        fixture = self.fixture
+        frozen = (fixture.root / release.PIN).read_bytes()
+        fixture.next_candidate()
+        expected = fixture.bundle()
+        assets = self.verify(expected)
+        self.assertEqual((fixture.root / release.PIN).read_bytes(), frozen)
+        self.assertEqual(release.select_pin(fixture.root), fixture.pin)
+        self.assertEqual(release.select_pin(fixture.root, preview_next=True), fixture.next_pin)
+        self.assertEqual((expected['build'], expected['caller_build']), (245, 244))
+        self.assertEqual(expected['schema'], 2)
+        self.assertTrue(expected['preview'])
+        self.assertIn('Next candidate notes.', expected['changelog'])
+        with self.assertRaisesRegex(ValueError, 'preview assets cannot be published'):
+            release.check_remote_release({}, expected, assets, published=False)
+        with self.assertRaisesRegex(ValueError, 'tag cannot use'):
+            fixture.context(tagged=True)
+
+    def test_245_releases_select_next_and_never_fall_back_to_the_frozen_source(self):
+        fixture = self.fixture
+        fixture.set_version('1.19.0', 245)
+        with self.assertRaises(FileNotFoundError):
+            fixture.context()
+        fixture.next_candidate()
+        fixture.preview_next = False
+        self.assertEqual(release.select_pin(fixture.root), fixture.next_pin)
+        context = fixture.context()
+        self.assertFalse(context['preview'])
+        self.assertEqual((context['build'], context['caller_build']), (245, 245))
+        with self.assertRaisesRegex(ValueError, 'verified release-tag context'):
+            release.check_remote_release({}, context, {}, published=False)
+
+    def test_next_pin_requires_complete_sha_and_a_build_above_244(self):
+        fixture = self.fixture
+        fixture.next_candidate()
+        for change in ({'first_release_build': 244}, {'first_release_build': True},
+                       {'source_commit': 'HarmonyOS'}, {'main_baseline': 'main'}, {'extra': 1},
+                       {'schema': 1}, {'release_enabled': 0}):
+            with self.subTest(change=change):
+                write(fixture.root, release.NEXT_PIN, json.dumps(fixture.next_pin | change))
+                with self.assertRaises(ValueError):
+                    release.load_pin(fixture.root, next_candidate=True)
+
+    def test_next_tags_require_explicit_release_readiness_after_source_review(self):
+        fixture = self.fixture
+        fixture.next_candidate()
+        fixture.preview_next = False
+        fixture.set_version('1.19.0', 245)
+        git(fixture.root, 'tag', '-a', 'v1.19.0', '-m', 'fixture')
+        with self.assertRaisesRegex(ValueError, 'preview only'):
+            fixture.context(tagged=True)
+        # A separately reviewed pin must explicitly enable distribution; a
+        # passing preview by itself never turns the candidate into a release.
+        fixture.next_pin['release_enabled'] = True
+        write(fixture.root, release.NEXT_PIN, json.dumps(fixture.next_pin))
+        fixture.release_commit = commit(fixture.root)
+        git(fixture.root, 'tag', '-d', 'v1.19.0')
+        git(fixture.root, 'tag', '-a', 'v1.19.0', '-m', 'reviewed fixture')
+        self.assertTrue(fixture.context(tagged=True)['tagged'])
+
+    def test_next_preview_still_rejects_unsynced_application_source(self):
+        fixture = self.fixture
+        fixture.next_candidate()
+        write(fixture.root, 'lib/main.dart', 'void changed() {}\n')
+        commit(fixture.root)
+        with self.assertRaisesRegex(ValueError, 'stale files: lib/main.dart'):
+            fixture.context()
+
+    def test_an_untracked_next_pin_cannot_supply_release_provenance(self):
+        fixture = self.fixture
+        fixture.next_candidate()
+        git(fixture.root, 'rm', '--cached', release.NEXT_PIN)
+        git(fixture.root, 'commit', '-m', 'test(ci): remove committed pin')
+        with self.assertRaisesRegex(ValueError, 'committed inputs'):
+            fixture.context()
+
+    def test_next_inventory_native_set_and_generated_notice_cannot_be_omitted_or_forged(self):
+        self.fixture.next_candidate()
+        for change in (
+            lambda m: m['source_files'].pop(release.NOTICE_SOURCE),
+            lambda m: m['source_files'].pop('release.json'),
+            lambda m: m['dependencies'].pop('venera_native'),
+            lambda m: m['dependencies']['venera_native'].update(prepared_sha256='0' * 64),
+            lambda m: m['dependencies']['webview'].update(revision='0' * 40),
+            lambda m: m['dependencies']['sqlite3'].update(sha256='0' * 64),
+            lambda m: m['bundled_assets'].pop(release.NOTICE),
+            lambda m: m['native_libraries'].update({'liblodepng_flutter.so': '0' * 64}),
+        ):
+            expected = self.fixture.bundle(metadata_change=change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                self.verify(expected)
+        for change in (
+            lambda m: m.pop(release.ASSETS + release.NOTICE),
+            lambda m: m.update({release.ASSETS + release.NOTICE: b'altered notice'}),
+            lambda m: m.update({'libs/arm64-v8a/libflutter_7zip.so': b'old wrapper'}),
+        ):
+            expected = self.fixture.bundle(members_change=change)
+            with self.subTest(change=change), self.assertRaises((ValueError, KeyError)):
+                self.verify(expected)
 
     def test_missing_extra_and_modified_companion_assets_are_rejected(self):
         fixture = self.fixture

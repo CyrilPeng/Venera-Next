@@ -40,7 +40,7 @@ class PackagePathsTests(unittest.TestCase):
 
     def test_missing_dependency_requires_pub_get(self):
         self.packages.pop()
-        with self.assertRaisesRegex(ValueError, "missing packages.*lodepng_flutter"):
+        with self.assertRaisesRegex(ValueError, "missing packages.*venera_native"):
             self.resolve()
 
     def test_missing_native_sources_fail_before_build(self):
