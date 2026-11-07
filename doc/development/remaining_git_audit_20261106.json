@@ -2609,8 +2609,8 @@
               "vulnerable_functions": []
             }
           ],
-          "assessment": "source-pattern-present",
-          "evidence": "The old push fast path lacks the upstream array_len == count guard after shrink and grow.",
+          "assessment": "not-applicable-source-pattern-absent",
+          "evidence": "Corrected 2026-11-07: this d07 core uses generic JS_SetPropertyInt64 in js_array_push and has no later optimized array_len/count path. Retain shrink/grow/push/GC regression without backporting the unrelated d98ff101 condition.",
           "source_functions": {
             "set_array_length": {
               "file": "cxx/quickjs-ng/quickjs.c",

@@ -22,6 +22,7 @@ import 'package:venera_next/foundation/widget_utils.dart';
 import 'package:venera_next/features/reader/waterfall_controller.dart';
 
 import 'continuous_data.dart';
+import 'continuous_scroll.dart';
 import 'current_image.dart';
 import 'display_image_provider.dart';
 import 'reader_controller.dart';
@@ -101,7 +102,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
   var photoViewController = PhotoViewController();
   StreamSubscription<PhotoViewControllerValue>? _photoPositionSubscription;
   bool _positionUpdateScheduled = false;
-  ScrollController? _scrollController;
+  ContinuousScrollController? _scrollController;
   bool _disposed = false;
   Timer? _initialCacheTimer;
   Timer? _scrollActivityTimer;
@@ -358,6 +359,14 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   void initState() {
+    _scrollController = ContinuousScrollController(
+      itemPositionsListener.itemPositions,
+      onPositionChanged: () {
+        _smoothPosition = null;
+        _smoothGeneration++;
+        _futurePosition = null;
+      },
+    )..addListener(onScroll);
     widget.onViewportChanged(this, true);
     _initSegments();
     itemPositionsListener.itemPositions.addListener(onPositionChanged);
@@ -404,6 +413,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
     _initialCacheTimer?.cancel();
     _scrollActivityTimer?.cancel();
     _scrollController?.removeListener(onScroll);
+    _scrollController?.dispose();
     _scrollController = null;
     widget.onViewportChanged(this, false);
     // A parent content reload may already have marked its replacement loading.
@@ -498,6 +508,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   void onPositionChanged() {
     if (_disposed || !mounted) return;
+    _scrollController?.syncPosition();
     final viewport = context.findRenderObject();
     if (viewport is! RenderBox || !viewport.attached || !viewport.hasSize) {
       return;
@@ -905,18 +916,6 @@ class ContinuousModeState extends State<ReaderContinuousView>
       initialScrollIndex: currentPage,
       itemScrollController: itemScrollController,
       itemPositionsListener: itemPositionsListener,
-      scrollControllerCallback: (scrollController) {
-        if (_disposed || !mounted) return;
-        if (identical(_scrollController, scrollController)) return;
-        if (_scrollController != null) {
-          _scrollController!.removeListener(onScroll);
-        }
-        _scrollController = scrollController;
-        _smoothPosition = null;
-        _smoothGeneration++;
-        _futurePosition = null;
-        _scrollController!.addListener(onScroll);
-      },
       itemCount: _flowItemCount,
       addSemanticIndexes: false,
       scrollDirection: data.vertical ? Axis.vertical : Axis.horizontal,
@@ -927,68 +926,81 @@ class ContinuousModeState extends State<ReaderContinuousView>
           ? const ClampingScrollPhysics()
           : const BouncingScrollPhysics(),
       itemBuilder: (context, index) {
-        if (index == 0) {
-          return const SizedBox();
-        }
-        if (index == _flowImageCount + 1) {
-          return _buildFlowEnd(context);
-        }
-        var imageRef = _imageRefAt(index);
-        if (imageRef == null) {
-          return const SizedBox();
-        }
-        double? width, height;
-        if (!data.vertical) {
-          height = double.infinity;
-        } else {
-          width = double.infinity;
-        }
-
-        final image = ReaderImageProvider(
-          imageRef.imageKey,
-          data.sourceKey,
-          data.comicId,
-          imageRef.position.chapterId,
-          imageRef.position.imageNumber,
-          enableResize: true,
-          diagnostics: this.widget.imageWork.diagnostics,
-          decodePixelBudget: data.decodePixelBudget,
-        );
-
-        var comicImage = SizeChangedLayoutNotifier(
-          child: ComicImage(
-            filterQuality: FilterQuality.medium,
-            image: ReaderDisplayImageProvider(image, this.widget.imageWork),
-            width: width,
-            height: height,
-            fit: BoxFit.contain,
-            splitWideImage: _splitWideImages,
-            splitWideImageInvert: _splitWideImagesInvert,
-            showImageDimensions: data.showImageDimensions,
-            onInit: (state) => imageStates.add(state),
-            onDispose: (state) => imageStates.remove(state),
-          ),
-        );
-
-        return ColoredBox(
-          color: context.colorScheme.surface,
-          child: data.vertical
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildChapterDivider(context, imageRef),
-                    comicImage,
-                  ],
-                )
-              : comicImage,
+        return ContinuousScrollAnchor(
+          controller: _scrollController!,
+          index: index,
+          child: _buildFlowItem(context, index),
         );
       },
-      scrollBehavior: const MaterialScrollBehavior().copyWith(
+    );
+
+    widget = ScrollConfiguration(
+      behavior: const MaterialScrollBehavior().copyWith(
         scrollbars: false,
         dragDevices: _kTouchLikeDeviceTypes,
       ),
+      child: widget,
     );
 
+    return _buildReaderGestures(context, widget);
+  }
+
+  Widget _buildFlowItem(BuildContext context, int index) {
+    if (index == 0) {
+      return const SizedBox();
+    }
+    if (index == _flowImageCount + 1) {
+      return _buildFlowEnd(context);
+    }
+    var imageRef = _imageRefAt(index);
+    if (imageRef == null) {
+      return const SizedBox();
+    }
+    double? width, height;
+    if (!data.vertical) {
+      height = double.infinity;
+    } else {
+      width = double.infinity;
+    }
+
+    final image = ReaderImageProvider(
+      imageRef.imageKey,
+      data.sourceKey,
+      data.comicId,
+      imageRef.position.chapterId,
+      imageRef.position.imageNumber,
+      enableResize: true,
+      diagnostics: widget.imageWork.diagnostics,
+      decodePixelBudget: data.decodePixelBudget,
+    );
+
+    var comicImage = SizeChangedLayoutNotifier(
+      child: ComicImage(
+        filterQuality: FilterQuality.medium,
+        image: ReaderDisplayImageProvider(image, widget.imageWork),
+        width: width,
+        height: height,
+        fit: BoxFit.contain,
+        splitWideImage: _splitWideImages,
+        splitWideImageInvert: _splitWideImagesInvert,
+        showImageDimensions: data.showImageDimensions,
+        onInit: (state) => imageStates.add(state),
+        onDispose: (state) => imageStates.remove(state),
+      ),
+    );
+
+    return ColoredBox(
+      color: context.colorScheme.surface,
+      child: data.vertical
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [_buildChapterDivider(context, imageRef), comicImage],
+            )
+          : comicImage,
+    );
+  }
+
+  Widget _buildReaderGestures(BuildContext context, Widget widget) {
     widget = NotificationListener<SizeChangedLayoutNotification>(
       onNotification: (_) {
         _schedulePositionUpdate();

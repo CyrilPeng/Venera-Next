@@ -614,6 +614,7 @@
     "features/reader/chapter_swipe_indicator.dart",
     "features/reader/chapters.dart",
     "features/reader/comic_image.dart",
+    "features/reader/continuous_scroll.dart",
     "features/reader/continuous_view.dart",
     "features/reader/current_image.dart",
     "features/reader/diagnostics_dialog.dart",

@@ -6,7 +6,11 @@
 
 ### 仓库维护
 
+- Android／TV CI 确认 dynamic_color 1.9.0 的发布脚本没有应用 Kotlin Android 插件，调用 kotlin／compilerOptions 时无法编译；回退并精确固定已兼容的官方 1.8.1，不为该候选扩大构建工具变更。独立 Provider 的模拟器启动失败另行复核，主线对应 Provider 回归已通过。
 - 汇总既有依赖收纳阶段：保留 PhotoView、SharePlus、Rhttp、WebDAV 和桌面 WebView 的必要补丁，以自编 venera_native／venera_saf 替代许可证不完整的原生包装层；来源、许可证、完整摘要和平台门禁随代码管理。提交整理保留冻结鸿蒙基线与已发布版本的可达性。
+- 按官方稳定版、官方完整 commit、必要补丁的顺序重选依赖：滚动列表回归 pub.dev 0.3.8，以应用适配器保留像素滚动、自动阅读及远距离跳页的活动列表归属；InAppWebView 六包改为原 fork 的官方父提交，仅 Windows 单包保留 GraphicsContext 实例所有权补丁。SQLite 更新到 2.9.4，shimmer_animation 到 2.2.2+1；dynamic_color 1.9.0 的 Android 发布脚本失败后精确固定兼容官方 1.8.1，网格 5.10.0 的拖动负约束回归失败后固定兼容官方 5.7.0，pdfrx 2.4.8 与当前 SDK 的 meta 约束冲突，继续使用 2.4.7。
+- QuickJS 固定到必要核心安全回移提交 `f5a1f20`，保留 Map／TypedData／dispatch／port 契约和包版本；Linux 64／32 位 ASan／UBSan 与 Windows 64／32 位 ASan 均通过，应用新增真实 Map、数值、Promise 缓冲与反复退出回归。更正旧 d07 核心不含后来 push 优化缺陷的审计判断，核心基线、补丁及完整摘要独立记录。
+- 来源治理要求记录官方稳定候选、完整官方 SHA、必要补丁、验证证据和退出条件；除了锁文件，还核对实际 Git 检出 HEAD、子目录和源码状态，拒绝长路径失败后留下的错误缓存。Windows 构建通过进程级 Git longpaths 配置完整检出官方 WebView；不修改全局缓存或工具链。迁移前方案作为历史快照，另记录本轮实施结果。
 - 完成剩余 QuickJS／InAppWebView 的上游差异审计，记录完整比较 SHA、2092 条变化路径、许可摘要与隔离候选实测。官方未发布 QuickJS 0.4.0 已支持 Dart 3，但当前应用解析仍与 Flutter 的 meta 锁定冲突，原生契约实测丢失 JS Map；官方 WebView master 严格分析通过，尚未包含 Windows GraphicsContext 实例所有权补丁及原生生命周期验收。保留两个固定 Git 来源与八个本地包，不升级 SDK 或其余依赖。
 - 将固定 QuickJS 的内嵌核心匹配到 QuickJS-NG `d07f6b5` 的 18 个源码／头文件，纠正旧 VERSION 标签；逐项核对 10 项公开 GHSA，记录数组初始化／增长、CallSite／Promise OOM、Atomics、32 位分配及外部缓冲转移的源码模式与当前 API 暴露限制。核心修复须独立验证，普通生命周期回归不作为安全缺陷已修复的证据。
 - 保留 `1.18.3+244` 鸿蒙 schema 1 来源与历史资产，另加 schema 2 下一候选 pin。主线仍为 244 时，PR／手动运行验证候选自身的 `1.18.3+245` 版本、changelog、八个项目包、七个受管原生库及九个 PNG／7z 导出和 NOTICE，保留真实调用方与运行上下文；pin 必须来自已提交 Git 输入，源码及包摘要统一使用 canonical Git blob 并拒绝工作区／暂存漂移，避免 CRLF 检出规则改变跨平台摘要。预览及未绑定实际 tag 的下一候选产物禁止发布。下一候选保持 `release_enabled: false`，完成 QuickJS 核心修复与平台审核前拒绝 tag 分发；随版 PR 检查限定主线，QuickJS 下载 URL 从所选来源工具清单读取，并说明既有 Rhttp 鸿蒙平台变体。
