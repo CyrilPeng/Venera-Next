@@ -26,7 +26,7 @@ jobs:
       - name: 校验分支构建元数据
         if: github.ref_type != 'tag'
         run: python3 .github/scripts/validate_release.py --build-only
-      - name: 校验鸿蒙固定来源配置
+      - name: 校验同提交鸿蒙来源与随版发布开关
         run: python3 .github/scripts/harmonyos_release.py config
 
   Quality:
@@ -64,7 +64,7 @@ jobs:
           persist-credentials: false
       - name: 校验发布元数据
         run: python3 .github/scripts/validate_release.py --write-notes release_notes.md
-      - name: 读取鸿蒙固定来源
+      - name: 读取同提交鸿蒙构建来源
         id: harmonyos_pin
         run: python3 .github/scripts/harmonyos_release.py config --github-output "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7

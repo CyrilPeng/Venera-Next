@@ -1,11 +1,16 @@
+import contextlib
 import copy
 import importlib.util
+import io
 import json
+import os
 from pathlib import Path
 import struct
 import subprocess
+import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import warnings
 import zipfile
 
@@ -129,8 +134,8 @@ class Fixture:
     def context(self, *, tagged=False):
         return release.context(self.root, self.source, self.environment(tagged=tagged), preview_next=self.preview_next)
 
-    def bundle(self, *, metadata_change=None, members_change=None, report_change=None):
-        expected = self.context()
+    def bundle(self, *, tagged=False, metadata_change=None, members_change=None, report_change=None):
+        expected = self.context(tagged=tagged)
         next_candidate = expected['schema'] >= 2
         native_names = release.NEXT_NATIVE if next_candidate else release.NATIVE
         names = release.asset_names(expected['version'])
@@ -461,6 +466,75 @@ class HarmonyReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'exact release commit'):
             release.context(fixture.root, fixture.source, environment)
 
+    def test_metadata_gate_blocks_disabled_tags_before_emitting_build_outputs(self):
+        fixture = self.fixture
+        fixture.unified_mainline()
+        output = fixture.directory / 'github-output.txt'
+        arguments = ['harmonyos_release.py', 'config', '--root', str(fixture.root),
+                     '--github-output', str(output)]
+        for version, build in (('1.18.3-rc.1', 246), ('1.18.3', 247)):
+            fixture.set_version(version, build)
+            with self.subTest(version=version), patch.dict(os.environ, fixture.environment(tagged=True)), \
+                    patch.object(sys, 'argv', arguments), self.assertRaisesRegex(ValueError, 'preview only'):
+                release.main()
+            self.assertFalse(output.exists())
+        with patch.dict(os.environ, fixture.environment()), patch.object(sys, 'argv', arguments), \
+                contextlib.redirect_stdout(io.StringIO()):
+            release.main()
+        self.assertIn('source_commit=' + fixture.release_commit, output.read_text())
+
+    def test_prerelease_and_stable_haps_bind_full_versions_and_increasing_builds(self):
+        fixture = self.fixture
+        fixture.unified_mainline(release_enabled=True)
+        fixture.preview_next = False
+        frozen = (fixture.root / release.PIN).read_bytes()
+        policy = (fixture.root / release.NEXT_PIN).read_bytes()
+        for version, build in (('1.18.3-rc.1', 246), ('1.18.3', 247)):
+            fixture.set_version(version, build)
+            fixture.sync_mainline_source()
+            git(fixture.root, 'tag', '-a', 'v' + version, '-m', 'reviewed release')
+            fixture.output = fixture.directory / f'artifacts-{build}'
+            expected = fixture.bundle(tagged=True)
+            assets = self.verify(expected)
+            with self.subTest(version=version):
+                self.assertEqual(expected['source_commit'], fixture.release_commit)
+                self.assertEqual(expected['release_commit'], fixture.release_commit)
+                self.assertEqual((expected['version'], expected['build']), (version, build))
+                self.assertFalse(expected['preview'])
+                self.assertEqual(len(assets), 5)
+                remote = {'tag_name': 'v' + version, 'draft': True, 'prerelease': '-rc.' in version,
+                          'assets': [{'name': name, 'size': item['bytes'],
+                                      'digest': 'sha256:' + item['sha256'], 'state': 'uploaded'}
+                                     for name, item in assets.items()]}
+                release.check_remote_release(remote, expected, assets, published=False)
+                release.check_remote_release(remote | {'draft': False}, expected, assets, published=True)
+                with self.assertRaisesRegex(ValueError, 'release tag/state/channel'):
+                    release.check_remote_release(remote | {'prerelease': not remote['prerelease']},
+                                                 expected, assets, published=False)
+            self.assertEqual((fixture.root / release.PIN).read_bytes(), frozen)
+            self.assertEqual((fixture.root / release.NEXT_PIN).read_bytes(), policy)
+
+    def test_other_platform_assets_never_allow_omitting_a_harmonyos_companion(self):
+        fixture = self.fixture
+        fixture.unified_mainline(release_enabled=True)
+        fixture.preview_next = False
+        git(fixture.root, 'tag', '-a', 'v1.18.3', '-m', 'reviewed release')
+        expected = fixture.bundle(tagged=True)
+        assets = self.verify(expected)
+        remote = {'tag_name': expected['tag'], 'draft': True, 'prerelease': False,
+                  'assets': [{'name': name, 'size': item['bytes'],
+                              'digest': 'sha256:' + item['sha256'], 'state': 'uploaded'}
+                             for name, item in assets.items()] +
+                            [{'name': 'VeneraNext-1.18.3-' + name, 'state': 'uploaded'}
+                             for name in ('android.apk', 'android-tv.apk', 'windows.zip',
+                                          'macos.dmg', 'ios.ipa', 'linux.AppImage')]}
+        release.check_remote_release(remote, expected, assets, published=False)
+        for name in assets:
+            damaged = copy.deepcopy(remote)
+            damaged['assets'] = [item for item in damaged['assets'] if item['name'] != name]
+            with self.subTest(asset=name), self.assertRaisesRegex(ValueError, 'HarmonyOS release assets'):
+                release.check_remote_release(damaged, expected, assets, published=False)
+
     def test_mainline_bundle_still_rejects_rewritten_project_code_and_native_libraries(self):
         fixture = self.fixture
         fixture.unified_mainline()
@@ -610,6 +684,10 @@ class HarmonyReleaseTests(unittest.TestCase):
     def test_workflow_requires_hap_and_draft_verification_before_publishing(self):
         workflow = (ROOT / '.github/workflows/main.yml').read_text(encoding='utf-8')
         self.assertIn('needs: [Release_Metadata, Quality, Build, HarmonyOS]', workflow)
+        harmony_job = workflow.split('\n  HarmonyOS:\n', 1)[1].split('\n  Release:\n', 1)[0]
+        self.assertIn('needs: [Release_Metadata, Quality]', harmony_job)
+        self.assertIn('uses: ./.github/workflows/harmonyos-release.yml', harmony_job)
+        self.assertNotRegex(harmony_job, r'(?m)^    (?:if|continue-on-error):')
         self.assertIn('outputs/harmonyos/*', workflow)
         self.assertIn('--verify-tag', workflow)
         self.assertLess(workflow.index('verify-draft'), workflow.index('--draft=false'))

@@ -122,7 +122,7 @@
 
 ### HarmonyOS（测试版）
 
-从 [发布页](https://github.com/CyrilPeng/Venera-Next/releases) 选择提供鸿蒙安装包的版本：
+从 [发布页](https://github.com/CyrilPeng/Venera-Next/releases) 下载鸿蒙安装包。自 `v1.18.3-rc.1` 起，每次候选版和正式版发布均提供同版本的鸿蒙测试版：
 
 | 文件名 | 说明 | 适用场景 |
 |---|---|---|

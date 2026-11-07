@@ -25,7 +25,7 @@
 
 ## Introduction
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, iOS, Windows, Linux, and macOS**, with a separate **HarmonyOS beta**.
+[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, iOS, Windows, Linux, and macOS**, with a **HarmonyOS beta** distributed alongside each release.
 
 This fork focuses on fewer interruptions and more reading: Waterfall mode scrolls across chapters without leaving the reader, long-pressing Favorite skips the folder picker, and nighttime and E-Ink devices get their own reading adjustments. Local import, offline downloads, reading statistics, and multi-device sync make finding comics, reading them, and following ongoing series easier.
 
@@ -124,7 +124,7 @@ See [TV remote controls and low-memory reading](#tv-remote-controls-and-low-memo
 
 ### HarmonyOS (Beta)
 
-Choose a version providing a HarmonyOS package on the [release page](https://github.com/CyrilPeng/Venera-Next/releases):
+Download a HarmonyOS package from the [release page](https://github.com/CyrilPeng/Venera-Next/releases). Starting with `v1.18.3-rc.1`, every prerelease and stable release includes the matching HarmonyOS beta:
 
 | File | Description | Recommended for |
 |---|---|---|
