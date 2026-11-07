@@ -1,0 +1,329 @@
+{
+  "schema": 2,
+  "verified_at_bjt": "2026-10-28T21:41:39.190259+08:00",
+  "branch": "HarmonyOS",
+  "synced_main": "ce57c66e81272c6907748d5ec7d646d4adf29851",
+  "run": {
+    "id": 40696828912,
+    "head_sha": "6f212fdeec47d32f99c3251b81c3d4f2374653e5",
+    "head_branch": "HarmonyOS",
+    "status": "completed",
+    "conclusion": "success",
+    "html_url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/40696828912",
+    "created_at": "2026-10-28T13:29:05Z",
+    "updated_at": "2026-10-28T13:38:20Z",
+    "run_attempt": 1
+  },
+  "toolchain": {
+    "flutter": {
+      "repository": "https://gitcode.com/CPF-Flutter/flutter_flutter.git",
+      "tag": "3.41.9+ohos-1.0.2",
+      "revision": "62357a93d653bf844f730bb1f4b7cc9e2139d14e",
+      "dart": "3.11.5"
+    },
+    "rust": {
+      "version": "1.92.0",
+      "target": "aarch64-unknown-linux-ohos",
+      "flutterRustBridge": "2.11.1"
+    },
+    "cli": "26.0.0.851",
+    "native_sdk": {
+      "apiVersion": "26",
+      "displayName": "Native",
+      "meta": {
+        "metaVersion": "3.0.2"
+      },
+      "path": "native",
+      "platformVersion": "26.0.0",
+      "releaseType": "Release",
+      "version": "26.0.0.105"
+    },
+    "sdk_source": "https://github.com/zhongdaiqi/command-line-tools-for-hmos/releases/tag/clt-26.0.0.851",
+    "sdk_official_integrity_verified": false,
+    "sdk_archive": {
+      "name": "commandline-tools-linux-x64-26.0.0.851.zip",
+      "bytes": 2348063309,
+      "sha256": "ab604bd92721d5cbcafd154e6461d46b9f1b105e7b89eab04a9d046681198082"
+    }
+  },
+  "checks": {
+    "python_tests_passed": 23,
+    "each_probe_stage": {
+      "analyze": "pass",
+      "flutter_host_tests_passed": 13,
+      "flutter_host_tests_skipped": 3
+    },
+    "mainline_targeted_reader_tests_passed_locally": 25,
+    "mainline_additional_reader_integration_tests_passed_locally": 199,
+    "local_reader_native_libraries": "Existing Windows Release DLLs on process PATH",
+    "mainline_changed_dart_analyze_locally": "pass",
+    "native_status": "cross_compile_pass",
+    "rhttp_source_sha256": "945bedce234da672b088e76ee7d8012ff6578bd0127789cb7a70a5a9307818d3",
+    "native_build_fingerprint": "6f8c78f97ff3cc9012f36eea1e71326e16a43127a816cd4a94ac5dd83de64156:61b2376f4ee994fb9f96e6d57eb7678b8902b8d04de37f007fcead99ad844174:3d53910498b9c35456c18b6b76019b945359710f4dd0bf3692850a826ab86b1a",
+    "native_libraries": [
+      {
+        "name": "librhttp.so",
+        "bytes": 4165480,
+        "sha256": "5f07255477227d68fbae7ec54b94caed7d512321679c8b8428e0b3ac5043bd64",
+        "needed": [
+          "libc.so"
+        ],
+        "checked_exports": [
+          "frb_get_rust_content_hash",
+          "frb_init_frb_dart_api_dl",
+          "frb_pde_ffi_dispatcher_primary",
+          "frb_pde_ffi_dispatcher_sync"
+        ]
+      },
+      {
+        "name": "libqjs.so",
+        "bytes": 1056024,
+        "sha256": "5db7b42b1797e5915efa5a9943cdf094caacf0538ee54092a07f59fb278fce3d",
+        "needed": [
+          "libc++_shared.so",
+          "libc.so"
+        ],
+        "checked_exports": [
+          "jsNewRuntime",
+          "jsEval",
+          "jsFreeRuntime"
+        ]
+      },
+      {
+        "name": "libsqlite3.so",
+        "bytes": 1499688,
+        "sha256": "72d5f39b3a493b451093b2f6ec71587f93e14a549fa851c746da1f9cf5e3474b",
+        "needed": [
+          "libc.so"
+        ],
+        "checked_exports": [
+          "sqlite3_open_v2",
+          "sqlite3_close_v2",
+          "sqlite3session_create"
+        ]
+      },
+      {
+        "name": "libc++_shared.so",
+        "bytes": 1262504,
+        "sha256": "965803c3fe53e02452e4c0479ad13c88f166c04207d27e3c531161a7c75a6c17",
+        "needed": [
+          "libc.so"
+        ],
+        "checked_exports": []
+      }
+    ],
+    "downloaded_hap_sizes_and_sha256_rechecked": true,
+    "packaged_bundle_versions_api_rechecked": true,
+    "embedded_probe_source_and_native_identity_rechecked": true,
+    "exported_manifest_sha256sums_and_offline_guides_rechecked": true
+  },
+  "pair": {
+    "schema": 1,
+    "purpose": "xiaobai_sideload_lab",
+    "pair_id": "b467df52dcc545d76bfb0e7a003dc369b1b3712270234bff477087ada7800f13",
+    "source_commit": "6f212fdeec47d32f99c3251b81c3d4f2374653e5",
+    "bundle_name": "com.github.cyrilpeng.harmonyos_probe",
+    "minimum_sdk": "26.0.0",
+    "signed": false,
+    "runtime_verified": false,
+    "reader_integrated": false
+  },
+  "artifacts": [
+    {
+      "stage": "blank",
+      "status": "packaging_pass",
+      "commit": "6f212fdeec47d32f99c3251b81c3d4f2374653e5",
+      "signed": false,
+      "runtime_verified": false,
+      "reader_integrated": false,
+      "hap": "harmonyos-blank-arm64-unsigned.hap",
+      "bytes": 20627191,
+      "sha256": "b56e9c739408629466e8477d46739b690f21a59968444fd1feb03a218f8b1b6f",
+      "libraries": [
+        {
+          "name": "libs/arm64-v8a/libapp.so",
+          "bytes": 3146672,
+          "sha256": "8815c407209ead8dc69caf50715bc0310586069cd9a7142352434b1aca60302a"
+        },
+        {
+          "name": "libs/arm64-v8a/libflutter.so",
+          "bytes": 16416376,
+          "sha256": "78385c78e1f79e30475d12f99d6bb402c01c8199d39b2c94f709deb5e3cbb83f"
+        }
+      ],
+      "bundle_name": "com.github.cyrilpeng.harmonyos_blank",
+      "min_api_version": 260000026,
+      "target_api_version": 260000026,
+      "device_types": [
+        "phone"
+      ],
+      "compile_sdk_version": "26.0.0.105"
+    },
+    {
+      "stage": "probe",
+      "status": "packaging_pass",
+      "commit": "6f212fdeec47d32f99c3251b81c3d4f2374653e5",
+      "signed": false,
+      "runtime_verified": false,
+      "reader_integrated": false,
+      "hap": "harmonyos-probe-baseline-arm64-unsigned.hap",
+      "bytes": 30113126,
+      "sha256": "9792ad0c729ff7b1ba452c2796412d6d1d96318157237621ca56b6bb368d20de",
+      "libraries": [
+        {
+          "name": "libs/arm64-v8a/libapp.so",
+          "bytes": 4899760,
+          "sha256": "10609803ff483e16e4a62a18b6005bd40e8891f36e9bd37e7398fed05a97d074"
+        },
+        {
+          "name": "libs/arm64-v8a/libc++_shared.so",
+          "bytes": 1262504,
+          "sha256": "965803c3fe53e02452e4c0479ad13c88f166c04207d27e3c531161a7c75a6c17"
+        },
+        {
+          "name": "libs/arm64-v8a/libflutter.so",
+          "bytes": 16416376,
+          "sha256": "78385c78e1f79e30475d12f99d6bb402c01c8199d39b2c94f709deb5e3cbb83f"
+        },
+        {
+          "name": "libs/arm64-v8a/libqjs.so",
+          "bytes": 1056024,
+          "sha256": "5db7b42b1797e5915efa5a9943cdf094caacf0538ee54092a07f59fb278fce3d"
+        },
+        {
+          "name": "libs/arm64-v8a/librhttp.so",
+          "bytes": 4165480,
+          "sha256": "5f07255477227d68fbae7ec54b94caed7d512321679c8b8428e0b3ac5043bd64"
+        },
+        {
+          "name": "libs/arm64-v8a/libsqlite3.so",
+          "bytes": 1499688,
+          "sha256": "72d5f39b3a493b451093b2f6ec71587f93e14a549fa851c746da1f9cf5e3474b"
+        }
+      ],
+      "sideload_build": {
+        "schema": 1,
+        "purpose": "xiaobai_sideload_lab",
+        "branch": "HarmonyOS",
+        "bundle_name": "com.github.cyrilpeng.harmonyos_probe",
+        "stage": "baseline",
+        "version_name": "0.2.0",
+        "version_code": 2,
+        "pair_id": "b467df52dcc545d76bfb0e7a003dc369b1b3712270234bff477087ada7800f13",
+        "source_commit": "6f212fdeec47d32f99c3251b81c3d4f2374653e5",
+        "probe_source_sha256": "2f78e3872597cdf54c8ad686074f6482b52dfbef691c7c5fbe5d5152a2cf6efd",
+        "minimum_sdk": "26.0.0",
+        "reader_integrated": false
+      },
+      "packaged_app": {
+        "bundle_name": "com.github.cyrilpeng.harmonyos_probe",
+        "version_name": "0.2.0",
+        "version_code": 2,
+        "minimum_api": 260000026,
+        "target_api": 260000026
+      },
+      "bundle_name": "com.github.cyrilpeng.harmonyos_probe",
+      "min_api_version": 260000026,
+      "target_api_version": 260000026,
+      "device_types": [
+        "phone"
+      ],
+      "compile_sdk_version": "26.0.0.105"
+    },
+    {
+      "stage": "upgrade",
+      "status": "packaging_pass",
+      "commit": "6f212fdeec47d32f99c3251b81c3d4f2374653e5",
+      "signed": false,
+      "runtime_verified": false,
+      "reader_integrated": false,
+      "hap": "harmonyos-probe-upgrade-arm64-unsigned.hap",
+      "bytes": 30113125,
+      "sha256": "286b3524b0810dec809a13413b88c5cdc093d4bb3f474e0b313280040851475f",
+      "libraries": [
+        {
+          "name": "libs/arm64-v8a/libapp.so",
+          "bytes": 4899760,
+          "sha256": "10609803ff483e16e4a62a18b6005bd40e8891f36e9bd37e7398fed05a97d074"
+        },
+        {
+          "name": "libs/arm64-v8a/libc++_shared.so",
+          "bytes": 1262504,
+          "sha256": "965803c3fe53e02452e4c0479ad13c88f166c04207d27e3c531161a7c75a6c17"
+        },
+        {
+          "name": "libs/arm64-v8a/libflutter.so",
+          "bytes": 16416376,
+          "sha256": "78385c78e1f79e30475d12f99d6bb402c01c8199d39b2c94f709deb5e3cbb83f"
+        },
+        {
+          "name": "libs/arm64-v8a/libqjs.so",
+          "bytes": 1056024,
+          "sha256": "5db7b42b1797e5915efa5a9943cdf094caacf0538ee54092a07f59fb278fce3d"
+        },
+        {
+          "name": "libs/arm64-v8a/librhttp.so",
+          "bytes": 4165480,
+          "sha256": "5f07255477227d68fbae7ec54b94caed7d512321679c8b8428e0b3ac5043bd64"
+        },
+        {
+          "name": "libs/arm64-v8a/libsqlite3.so",
+          "bytes": 1499688,
+          "sha256": "72d5f39b3a493b451093b2f6ec71587f93e14a549fa851c746da1f9cf5e3474b"
+        }
+      ],
+      "sideload_build": {
+        "schema": 1,
+        "purpose": "xiaobai_sideload_lab",
+        "branch": "HarmonyOS",
+        "bundle_name": "com.github.cyrilpeng.harmonyos_probe",
+        "stage": "upgrade",
+        "version_name": "0.2.1",
+        "version_code": 3,
+        "pair_id": "b467df52dcc545d76bfb0e7a003dc369b1b3712270234bff477087ada7800f13",
+        "source_commit": "6f212fdeec47d32f99c3251b81c3d4f2374653e5",
+        "probe_source_sha256": "2f78e3872597cdf54c8ad686074f6482b52dfbef691c7c5fbe5d5152a2cf6efd",
+        "minimum_sdk": "26.0.0",
+        "reader_integrated": false
+      },
+      "packaged_app": {
+        "bundle_name": "com.github.cyrilpeng.harmonyos_probe",
+        "version_name": "0.2.1",
+        "version_code": 3,
+        "minimum_api": 260000026,
+        "target_api": 260000026
+      },
+      "bundle_name": "com.github.cyrilpeng.harmonyos_probe",
+      "min_api_version": 260000026,
+      "target_api_version": 260000026,
+      "device_types": [
+        "phone"
+      ],
+      "compile_sdk_version": "26.0.0.105"
+    }
+  ],
+  "signed": false,
+  "signing_identity_verified": false,
+  "device_runtime_verified": false,
+  "in_place_upgrade_verified": false,
+  "certificate_renewal_verified": false,
+  "reader_integrated": false,
+  "release_created": false,
+  "artifact_retention_days": 14,
+  "github_artifacts": [
+    {
+      "id": 12821095332,
+      "name": "harmonyos-unsigned-lab-haps-40696828912",
+      "size_in_bytes": 37035200,
+      "digest": "sha256:d5c2b1ef042319d0272ab1b0daf5744c9918a0d8674c00f9ac53f89ec35a4f1d",
+      "expires_at": "2026-11-11T13:38:09Z"
+    },
+    {
+      "id": 12819808435,
+      "name": "harmonyos-build-evidence-40696828912-1",
+      "size_in_bytes": 16494,
+      "digest": "sha256:04c24779cffea219cd0f21db9e69370a31edf98d9b49b5092f97842c664dcd41",
+      "expires_at": "2026-11-11T13:38:07Z"
+    }
+  ]
+}

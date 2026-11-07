@@ -5,6 +5,7 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
@@ -203,6 +204,7 @@ class _CacheLimitDialogState extends SettingsSaveState<_CacheLimitDialog> {
 }
 
 Future<bool> _supportsAuthorization() async {
+  if (App.isHarmonyOS) return false;
   final auth = LocalAuthentication();
   return await auth.canCheckBiometrics || await auth.isDeviceSupported();
 }

@@ -1,0 +1,166 @@
+{
+  "schema": 1,
+  "scope": "One volunteer device; reported core, process restart and synthetic upgrade-data checks only",
+  "status": "reported_checks_pass",
+  "reviewed_at_bjt": "2026-10-29T11:09:56.780637+08:00",
+  "branch": "HarmonyOS",
+  "review_tool_commit": "3fe6676a87e9b3521ab94e961ee5196bbcb8eb4d",
+  "review_tool_sha256": "2b6c256acd5aa1ad1fad09ed142eef8cf128235bbae589da9450f5560d807c7d",
+  "build_commit": "ef2904f2e67cda61e1d61978ae3623b5bc01dbfd",
+  "synced_main": "ce57c66e81272c6907748d5ec7d646d4adf29851",
+  "ci_run": "https://github.com/CyrilPeng/Venera-Next/actions/runs/40790980474",
+  "ci_evidence_file": "harmonyos-tablet-ci-20261029.json",
+  "pair_id": "15269ae323f7c4131fdf88c2faf767a5e7e2bc6b60030a4c9453cd904308a250",
+  "device_info": {
+    "source": "https://github.com/CyrilPeng/Venera-Next/issues/77#issuecomment-6472701935",
+    "model_reported": "MatePad Pro 13.2 (2024)",
+    "system_version_reported": "7.0.0.111 SP12",
+    "helper_platform_reported": "HarmonyOS",
+    "helper_version_reported": "3.1.0",
+    "device_api_version_independently_observed": false,
+    "device_identity_authenticated": false
+  },
+  "feedback": {
+    "source": "https://github.com/CyrilPeng/Venera-Next/issues/77#issuecomment-6485441224",
+    "created_at_bjt": "2026-10-29T09:35:32+08:00",
+    "last_updated_at_bjt": "2026-10-29T09:37:15+08:00",
+    "blank_hap_sign_install_and_start_reported_success": true,
+    "blank_hap_report_provided": false,
+    "four_step_success_reported": true,
+    "file_management_concerns": [
+      "App data import/export",
+      "Local comic import and filesystem access"
+    ]
+  },
+  "reports": [
+    {
+      "name": "baseline.json",
+      "source": "https://github.com/user-attachments/files/34108024/baseline.json",
+      "bytes": 7372,
+      "sha256": "6474e601f3c56bcafab2c79a1bdf49671c225c368bf3756a73e7b8e1c334596e",
+      "probe_schema": 2,
+      "runtime_platform_reported": "ohos",
+      "status": "core_pass_restart_pending",
+      "stage": "baseline",
+      "version_name": "0.3.0",
+      "version_code": 4,
+      "sideload_state_status": "baseline_ready",
+      "result_statuses": {
+        "quickjs": "pass",
+        "rhttp": "pass",
+        "sqlite": "pass",
+        "process_restart": "pending"
+      },
+      "native_build_metadata_matches_downloaded_ci": true
+    },
+    {
+      "name": "restart.json",
+      "source": "https://github.com/user-attachments/files/34108026/restart.json",
+      "bytes": 7307,
+      "sha256": "0fd171324e964c025398e3c9613090761fb73ed5f7c38aff08404e2aee9f5869",
+      "probe_schema": 2,
+      "runtime_platform_reported": "ohos",
+      "status": "core_checks_pass",
+      "stage": "baseline",
+      "version_name": "0.3.0",
+      "version_code": 4,
+      "sideload_state_status": "baseline_ready",
+      "result_statuses": {
+        "quickjs": "pass",
+        "rhttp": "pass",
+        "sqlite": "pass",
+        "process_restart": "pass"
+      },
+      "native_build_metadata_matches_downloaded_ci": true
+    },
+    {
+      "name": "upgrade.json",
+      "source": "https://github.com/user-attachments/files/34108027/upgrade.json",
+      "bytes": 7312,
+      "sha256": "d2f591070036bf164b96616a39d45a89df033b6779d356fe14ce7f0ff0ab0780",
+      "probe_schema": 2,
+      "runtime_platform_reported": "ohos",
+      "status": "core_checks_pass",
+      "stage": "upgrade",
+      "version_name": "0.3.1",
+      "version_code": 5,
+      "sideload_state_status": "upgrade_data_present",
+      "result_statuses": {
+        "quickjs": "pass",
+        "rhttp": "pass",
+        "sqlite": "pass",
+        "process_restart": "pass"
+      },
+      "native_build_metadata_matches_downloaded_ci": true
+    }
+  ],
+  "offline_review": {
+    "status": "reported_checks_pass",
+    "pair_id": "15269ae323f7c4131fdf88c2faf767a5e7e2bc6b60030a4c9453cd904308a250",
+    "scope": "Reported OHOS core, restart and synthetic upgrade-data checks only",
+    "signing_identity_verified": false,
+    "certificate_renewal_verified": false,
+    "reader_integrated": false
+  },
+  "consistency_checks": {
+    "three_distinct_launch_ids": true,
+    "expected_pair_build_versions_and_device_types": true,
+    "same_synthetic_marker_and_first_launch_id": true,
+    "all_three_core_results_present_and_pass": true,
+    "restart_and_upgrade_process_restart_results_pass": true,
+    "no_fatal_or_inconsistent_completion_events": true,
+    "native_build_metadata_matches_downloaded_ci": true,
+    "negative_cases_rejected": [
+      "host_platform",
+      "other_pair",
+      "data_marker_changed",
+      "same_process_launch",
+      "missing_restart_result",
+      "restart_pending",
+      "failed_core_result",
+      "wrong_device_targets",
+      "fatal_event"
+    ],
+    "python_tool_unit_tests_passed": 25
+  },
+  "screenshot": {
+    "source": "https://github.com/user-attachments/assets/e15e42db-6f83-46e1-9ec0-2b519a97b59b",
+    "bytes": 744556,
+    "sha256": "937621c78d94800d638f58c395883bfdb55592ca4ae1c1eb7cb664a5e06ecfc5",
+    "visually_matches_upgrade_stage_pair_and_pass_statuses": true,
+    "rotation_split_screen_and_large_text_verified": false
+  },
+  "boundaries": {
+    "reported_core_execution_restart_and_upgrade_data_pass": true,
+    "reports_or_device_execution_cryptographically_authenticated": false,
+    "device_execution_independently_observed_by_maintainer": false,
+    "signing_identity_verified": false,
+    "certificate_renewal_verified": false,
+    "reader_integrated": false,
+    "real_reader_data_migration_verified": false,
+    "file_picker_permissions_import_export_verified": false,
+    "other_devices_and_versions_verified": false,
+    "public_reader_release_created": false,
+    "issue_closed": false
+  },
+  "not_verified": [
+    "HTTPS certificates, DNS, HTTP2 and HTTP3",
+    "Existing IsolateQjs wrapper lifecycle and long-running resource recovery",
+    "Reader, source, downloads, WebView and system plugins",
+    "File picker grants, external URI access, app-data backup/import and local comic import",
+    "Cryptographic device and signing identity, certificate renewal and real data migration",
+    "Other device/OS combinations and tablet rotation, split screen and large text on hardware"
+  ],
+  "data_handling": {
+    "raw_reports_only_in_ignored_build_directory": true,
+    "raw_report_contents_launch_ids_markers_device_ids_and_credentials_not_committed": true,
+    "attachments_parsed_as_json_data_only": true
+  },
+  "maintainer_reply": {
+    "source": "https://github.com/CyrilPeng/Venera-Next/issues/77#issuecomment-6486795892",
+    "marker": "<!-- harmonyos-xiaobai-tablet-review-6485441224 -->",
+    "recorded_at_bjt": "2026-10-29T11:08:33.986283+08:00",
+    "same_four_steps_not_requested_again": true,
+    "next_file_and_reader_gate_not_yet_implemented": true
+  }
+}

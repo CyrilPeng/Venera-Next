@@ -1,0 +1,46 @@
+// Optional host semantics tests. These NEVER validate the OHOS binaries.
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:harmonyos_probe/core_checks.dart';
+
+void main() {
+  final hostLibraries = Platform.environment['HARMONYOS_PROBE_HOST_LIBDIR'];
+  final unavailable = !Platform.isWindows || hostLibraries == null;
+
+  test('host-only QuickJS probe semantics', () async {
+    // flutter_qjs_plugin.dll and its dependencies must also be on this process's PATH.
+    expect(await checkQuickJs(), contains('Promise'));
+  }, skip: unavailable);
+
+  test(
+    'host-only rhttp loopback, streaming and cancellation semantics',
+    () async {
+      expect(
+        await checkRhttp(libraryPath: '$hostLibraries/rhttp.dll'),
+        contains('cancellation'),
+      );
+    },
+    skip: unavailable,
+  );
+
+  test('host-only SQLite commit and launch marker semantics', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'venera-probe-test-',
+    );
+    // Retain this small, synthetic fixture; never recursively delete a computed path.
+    final library = '$hostLibraries/sqlite3.dll';
+    expect(
+      await checkSqlite(directory.path, 'launch-one', libraryPath: library),
+      isFalse,
+    );
+    expect(
+      await checkSqlite(directory.path, 'launch-one', libraryPath: library),
+      isFalse,
+    );
+    expect(
+      await checkSqlite(directory.path, 'launch-two', libraryPath: library),
+      isTrue,
+    );
+  }, skip: unavailable);
+}

@@ -1,0 +1,184 @@
+{
+  "schema": 1,
+  "verified_at_bjt": "2026-10-27T17:33:45.353358+08:00",
+  "branch": "HarmonyOS",
+  "run": {
+    "conclusion": "success",
+    "headSha": "14f978e446e19d1ed0238a828956d1f8da6e21bb",
+    "status": "completed",
+    "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/40479827996",
+    "created_at_bjt": "2026-10-27T17:18:52+08:00",
+    "updated_at_bjt": "2026-10-27T17:25:19+08:00"
+  },
+  "toolchain": {
+    "flutter": {
+      "repository": "https://gitcode.com/CPF-Flutter/flutter_flutter.git",
+      "tag": "3.41.9+ohos-1.0.2",
+      "revision": "62357a93d653bf844f730bb1f4b7cc9e2139d14e",
+      "dart": "3.11.5"
+    },
+    "cli": "26.0.0.851",
+    "native_sdk": {
+      "apiVersion": "26",
+      "displayName": "Native",
+      "meta": {
+        "metaVersion": "3.0.2"
+      },
+      "path": "native",
+      "platformVersion": "26.0.0",
+      "releaseType": "Release",
+      "version": "26.0.0.105"
+    },
+    "sdk_source": "https://github.com/zhongdaiqi/command-line-tools-for-hmos/releases/tag/clt-26.0.0.851",
+    "sdk_official_integrity_verified": false,
+    "sdk_archive": {
+      "name": "commandline-tools-linux-x64-26.0.0.851.zip",
+      "bytes": 2348063309,
+      "sha256": "ab604bd92721d5cbcafd154e6461d46b9f1b105e7b89eab04a9d046681198082"
+    },
+    "rust": {
+      "version": "1.92.0",
+      "target": "aarch64-unknown-linux-ohos",
+      "flutterRustBridge": "2.11.1"
+    }
+  },
+  "checks": {
+    "python_tests_passed": 17,
+    "probe_analyze": "pass",
+    "flutter_host_tests_passed": 6,
+    "flutter_host_tests_skipped": 3,
+    "native_status": "cross_compile_pass",
+    "native_libraries": [
+      {
+        "name": "librhttp.so",
+        "bytes": 4165480,
+        "sha256": "5f07255477227d68fbae7ec54b94caed7d512321679c8b8428e0b3ac5043bd64",
+        "needed": [
+          "libc.so"
+        ],
+        "checked_exports": [
+          "frb_get_rust_content_hash",
+          "frb_init_frb_dart_api_dl",
+          "frb_pde_ffi_dispatcher_primary",
+          "frb_pde_ffi_dispatcher_sync"
+        ]
+      },
+      {
+        "name": "libqjs.so",
+        "bytes": 1056024,
+        "sha256": "5db7b42b1797e5915efa5a9943cdf094caacf0538ee54092a07f59fb278fce3d",
+        "needed": [
+          "libc++_shared.so",
+          "libc.so"
+        ],
+        "checked_exports": [
+          "jsNewRuntime",
+          "jsEval",
+          "jsFreeRuntime"
+        ]
+      },
+      {
+        "name": "libsqlite3.so",
+        "bytes": 1499688,
+        "sha256": "72d5f39b3a493b451093b2f6ec71587f93e14a549fa851c746da1f9cf5e3474b",
+        "needed": [
+          "libc.so"
+        ],
+        "checked_exports": [
+          "sqlite3_open_v2",
+          "sqlite3_close_v2",
+          "sqlite3session_create"
+        ]
+      },
+      {
+        "name": "libc++_shared.so",
+        "bytes": 1262504,
+        "sha256": "965803c3fe53e02452e4c0479ad13c88f166c04207d27e3c531161a7c75a6c17",
+        "needed": [
+          "libc.so"
+        ],
+        "checked_exports": []
+      }
+    ],
+    "downloaded_artifacts_rechecked": true
+  },
+  "artifacts": [
+    {
+      "stage": "blank",
+      "status": "packaging_pass",
+      "commit": "14f978e446e19d1ed0238a828956d1f8da6e21bb",
+      "signed": false,
+      "runtime_verified": false,
+      "reader_integrated": false,
+      "hap": "harmonyos-blank-arm64-unsigned.hap",
+      "bytes": 20627191,
+      "sha256": "399dff06f85f4e18ac07566c954e6df9f52b5dd2189eb779adf322f1b9ce80c1",
+      "libraries": [
+        {
+          "name": "libs/arm64-v8a/libapp.so",
+          "bytes": 3146672,
+          "sha256": "8815c407209ead8dc69caf50715bc0310586069cd9a7142352434b1aca60302a"
+        },
+        {
+          "name": "libs/arm64-v8a/libflutter.so",
+          "bytes": 16416376,
+          "sha256": "78385c78e1f79e30475d12f99d6bb402c01c8199d39b2c94f709deb5e3cbb83f"
+        }
+      ],
+      "bundle_name": "com.github.cyrilpeng.harmonyos_blank",
+      "min_api_version": 260000026,
+      "compile_sdk_version": "26.0.0.105"
+    },
+    {
+      "stage": "probe",
+      "status": "packaging_pass",
+      "commit": "14f978e446e19d1ed0238a828956d1f8da6e21bb",
+      "signed": false,
+      "runtime_verified": false,
+      "reader_integrated": false,
+      "hap": "harmonyos-probe-arm64-unsigned.hap",
+      "bytes": 30079595,
+      "sha256": "14e99763c40324a84060f353f86a10b3869ad6bde932d86ce7f535265a40de91",
+      "libraries": [
+        {
+          "name": "libs/arm64-v8a/libapp.so",
+          "bytes": 4866992,
+          "sha256": "0fbb65e3d576d23a4d895050c94fd31a5f539087d5b3fcd47f65c5ba52fa9090"
+        },
+        {
+          "name": "libs/arm64-v8a/libc++_shared.so",
+          "bytes": 1262504,
+          "sha256": "965803c3fe53e02452e4c0479ad13c88f166c04207d27e3c531161a7c75a6c17"
+        },
+        {
+          "name": "libs/arm64-v8a/libflutter.so",
+          "bytes": 16416376,
+          "sha256": "78385c78e1f79e30475d12f99d6bb402c01c8199d39b2c94f709deb5e3cbb83f"
+        },
+        {
+          "name": "libs/arm64-v8a/libqjs.so",
+          "bytes": 1056024,
+          "sha256": "5db7b42b1797e5915efa5a9943cdf094caacf0538ee54092a07f59fb278fce3d"
+        },
+        {
+          "name": "libs/arm64-v8a/librhttp.so",
+          "bytes": 4165480,
+          "sha256": "5f07255477227d68fbae7ec54b94caed7d512321679c8b8428e0b3ac5043bd64"
+        },
+        {
+          "name": "libs/arm64-v8a/libsqlite3.so",
+          "bytes": 1499688,
+          "sha256": "72d5f39b3a493b451093b2f6ec71587f93e14a549fa851c746da1f9cf5e3474b"
+        }
+      ],
+      "bundle_name": "com.github.cyrilpeng.harmonyos_probe",
+      "min_api_version": 260000026,
+      "compile_sdk_version": "26.0.0.105"
+    }
+  ],
+  "signed": false,
+  "device_runtime_verified": false,
+  "reader_integrated": false,
+  "release_created": false,
+  "artifact_retention_days": 14
+}

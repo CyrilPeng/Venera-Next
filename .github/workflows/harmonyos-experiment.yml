@@ -1,0 +1,230 @@
+name: HarmonyOS Next Candidate HAP
+run-name: "HarmonyOS unsigned candidate >=245 / ${{ github.sha }}"
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [HarmonyOS]
+    paths:
+      - .github/workflows/harmonyos-experiment.yml
+      - tool/harmonyos/**
+      - lib/**
+      - assets/**
+      - test/**
+      - packages/**
+      - pubspec.yaml
+      - pubspec.lock
+      - release.json
+      - CHANGELOG.md
+  push:
+    branches: [HarmonyOS]
+    paths:
+      - .github/workflows/harmonyos-experiment.yml
+      - tool/harmonyos/**
+      - doc/distribution/harmonyos.*.md
+      - doc/distribution/harmonyos-reader.*.md
+      - lib/**
+      - assets/**
+      - test/**
+      - pubspec.yaml
+      - pubspec.lock
+      - CHANGELOG.md
+      - packages/**
+      - rust-toolchain.toml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: harmonyos-experiment-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unsigned-hap:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/HarmonyOS' || (github.event_name == 'pull_request' && github.base_ref == 'HarmonyOS')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      CI: 'true'
+      PYTHONUNBUFFERED: '1'
+      VENERA_HARMONYOS_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      RUSTUP_TOOLCHAIN: '1.92.0'
+      PUB_HOSTED_URL: https://pub.dev
+      FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
+      FLUTTER_OHOS_STORAGE_BASE_URL: https://flutter-ohos.obs.cn-south-1.myhuaweicloud.com
+      FLUTTER_GIT_URL: https://gitcode.com/CPF-Flutter/flutter_flutter.git
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.23.4'
+
+      - name: Run script tests and check the hosted archive tool
+        run: |
+          python3 -m unittest discover -s tool/harmonyos -p 'test_*.py' -v
+          node --test tool/harmonyos/test_directory_bridge.mjs
+          command -v 7z
+          df -h .
+
+      - name: Install checksum-pinned HarmonyOS CLI from a public upstream CI mirror
+        run: |
+          python3 tool/harmonyos/ci_sdk.py \
+            --destination "$RUNNER_TEMP/harmony-sdk" \
+            --downloads "$RUNNER_TEMP/harmony-downloads" \
+            --report build/harmonyos/ci/sdk.json
+
+      - name: Install Linux host test dependencies with a bounded network wait
+        timeout-minutes: 8
+        run: |
+          sudo sed -i 's|^URIs:.*|URIs: https://archive.ubuntu.com/ubuntu|' \
+            /etc/apt/sources.list.d/ubuntu.sources
+          test "$(awk '/^URIs:/ {print $2}' /etc/apt/sources.list.d/ubuntu.sources | sort -u)" \
+            = 'https://archive.ubuntu.com/ubuntu'
+          sudo apt-get -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources \
+            -o Dir::Etc::sourceparts=- -o Acquire::Retries=2 \
+            -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          # Existing FFI test sources run on Linux, not against OHOS binaries.
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 \
+            -o Acquire::https::Timeout=20 install -y --no-install-recommends \
+            libgtk-3-0 libglu1-mesa ninja-build cmake pkg-config libsqlite3-dev g++
+
+      - name: Install the pinned independent Flutter OH SDK
+        run: |
+          sdk="$RUNNER_TEMP/flutter-oh"
+          tag="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["flutter"]["tag"])')"
+          revision="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["flutter"]["revision"])')"
+          git clone --filter=blob:none --sparse --depth 1 --branch "$tag" "$FLUTTER_GIT_URL" "$sdk"
+          git -C "$sdk" sparse-checkout set bin packages dev examples
+          test "$(git -C "$sdk" rev-parse HEAD)" = "$revision"
+          echo "FLUTTER_OH_SDK=$sdk" >> "$GITHUB_ENV"
+          echo "$sdk/bin" >> "$GITHUB_PATH"
+          "$sdk/bin/flutter" --version
+          "$sdk/bin/flutter" precache --ohos --linux
+          ohpm --version
+          hvigorw --version
+
+      - name: Build the blank unsigned ARM64 HAP first
+        run: python3 tool/harmonyos/ci_build.py blank --flutter-sdk "$FLUTTER_OH_SDK"
+
+      - name: Prepare the pinned Rust, QuickJS and SQLite sources
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal --target aarch64-unknown-linux-ohos
+          revision="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["quickjs"]["revision"])')"
+          repository="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["quickjs"]["repository"])')"
+          git init "$RUNNER_TEMP/flutter-qjs"
+          git -C "$RUNNER_TEMP/flutter-qjs" remote add origin "$repository"
+          git -C "$RUNNER_TEMP/flutter-qjs" fetch --depth 1 origin "$revision"
+          git -C "$RUNNER_TEMP/flutter-qjs" checkout --detach FETCH_HEAD
+          url="$(python3 -c 'import json; print(json.load(open("tool/harmonyos/toolchain.json"))["sqlite"]["archive"])')"
+          curl --fail --location --retry 4 --retry-all-errors --output "$RUNNER_TEMP/sqlite.tar.gz" "$url"
+          mkdir "$RUNNER_TEMP/sqlite"
+          tar -xzf "$RUNNER_TEMP/sqlite.tar.gz" -C "$RUNNER_TEMP/sqlite" --strip-components=1
+
+      - name: Rebuild and audit all core libraries using the selected HarmonyOS SDK
+        run: |
+          set -o pipefail
+          python3 tool/harmonyos/native_build.py \
+            --sdk-native "$HARMONY_NATIVE_SDK" --sdk-profile harmony-ci \
+            --sdk-receipt build/harmonyos/ci/sdk.json \
+            --qjs-source "$RUNNER_TEMP/flutter-qjs" \
+            --sqlite-source "$RUNNER_TEMP/sqlite/sqlite3.c" \
+            2>&1 | tee build/harmonyos/ci/logs/native-build.txt
+
+      - name: Analyze, test, build and audit the unsigned core probe HAP
+        run: |
+          python3 tool/harmonyos/ci_build.py probe \
+            --flutter-sdk "$FLUTTER_OH_SDK" --qjs-source "$RUNNER_TEMP/flutter-qjs"
+
+      - name: Build the matching upgrade HAP and export the sideload test kit
+        run: |
+          python3 tool/harmonyos/ci_build.py upgrade \
+            --flutter-sdk "$FLUTTER_OH_SDK" --qjs-source "$RUNNER_TEMP/flutter-qjs"
+
+      - name: Prepare the locked full reader dependency overlays
+        run: |
+          python3 tool/harmonyos/prepare_full_app.py deps --qjs-source "$RUNNER_TEMP/flutter-qjs"
+
+      - name: Rebuild and audit the reader PNG ZIP and 7Z libraries
+        run: |
+          set -o pipefail
+          python3 tool/harmonyos/full_native_build.py --sdk-native "$HARMONY_NATIVE_SDK" \
+            2>&1 | tee build/harmonyos/ci/logs/full-native-build.txt
+
+      - name: Analyze test build and audit the real full reader unsigned HAP
+        run: python3 tool/harmonyos/ci_full_app.py --flutter-sdk "$FLUTTER_OH_SDK"
+
+      - name: Record the actual outcome
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## HarmonyOS experimental build\n\n')
+              for name, filename in (('sdk', 'ci/sdk'), ('blank-build', 'ci/blank-build'),
+                                     ('native-build', 'native/native-build'), ('probe-build', 'ci/probe-build'),
+                                     ('upgrade-build', 'ci/upgrade-build'),
+                                     ('reader-native', 'full-native/extra-native-build'),
+                                     ('full-reader', 'ci/full-app-build')):
+                  path = Path(f'build/harmonyos/{filename}.json')
+                  status = json.loads(path.read_text())['status'] if path.exists() else 'not completed'
+                  summary.write(f'- {name}: `{status}`\n')
+              summary.write('\nUnsigned lab artifacts only. No signing, installation, device runtime, '
+                            'feature acceptance or Release publication is verified by this workflow. '
+                            'Only full-reader packaging_pass means the existing lib/main.dart reader '
+                            'source and its reviewed platform adapters were actually built.\n')
+              summary.write('\nThe sideload kit includes a same-bundle baseline/upgrade pair, SHA256SUMS '
+                            'and installation guides. Its current minimum SDK is 26.0.0; '
+                            'do not claim older systems or certificate renewal are verified.\n')
+          PY
+
+      - name: Upload build evidence (no SDK or signing material)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: harmonyos-build-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/harmonyos/ci/*.json
+            build/harmonyos/ci/logs/*.txt
+            build/harmonyos/native/native-build.json
+            build/harmonyos/full-native/extra-native-build.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload the independently audited full reader experiment
+        if: success()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: harmonyos-reader-experiment-${{ github.run_id }}
+          path: |
+            build/harmonyos/ci/full-app-artifacts/*-unsigned.hap
+            build/harmonyos/ci/full-app-artifacts/full-app-manifest.json
+            build/harmonyos/ci/full-app-artifacts/SHA256SUMS
+            build/harmonyos/ci/full-app-artifacts/install.*.md
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload audited unsigned HAPs only
+        if: success()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: harmonyos-unsigned-lab-haps-${{ github.run_id }}
+          path: |
+            build/harmonyos/ci/artifacts/*-unsigned.hap
+            build/harmonyos/ci/artifacts/sideload-manifest.json
+            build/harmonyos/ci/artifacts/SHA256SUMS
+            build/harmonyos/ci/artifacts/install.*.md
+          if-no-files-found: error
+          retention-days: 14
