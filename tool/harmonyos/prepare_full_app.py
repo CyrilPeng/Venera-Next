@@ -311,6 +311,19 @@ def configure_pubspec(text, identity=None):
         "code_assets": "../full-deps/code_assets/pkgs/code_assets",
         **{name: f"../full-deps/webview/{name}" for name in WEBVIEW_PACKAGES},
     }
+    section = re.search(r"^dependency_overrides:\n(.*?)(?=^\w|\Z)", text, re.M | re.S)
+    if section is None:
+        raise ValueError("Missing main dependency overrides; review the OHOS candidate")
+    body = section[1]
+    # The HAP uses one coordinated CPF platform group. Replace mainline Git and
+    # Windows-local overrides before adding these paths, rather than duplicating
+    # YAML keys or resolving incompatible mainline and OHOS interfaces together.
+    for name in overrides:
+        pattern = rf"^  {re.escape(name)}:[ \t]*\n(?:(?:    [^\n]*|[ \t]*)\n)*"
+        body, count = re.subn(pattern, "", body, flags=re.M)
+        if count > 1:
+            raise ValueError("Duplicate main dependency override: " + name)
+    text = patch_once(text, section[0], "dependency_overrides:\n" + body)
     lines = "".join(f"  {name}:\n    path: {path}\n" for name, path in overrides.items())
     text = patch_once(text, "dependency_overrides:\n", "dependency_overrides:\n" + lines)
     text = patch_once(text, "    - assets/translation.json\n",
@@ -369,6 +382,8 @@ def prepare_project(args):
          "../../packages/photo_view/test/controller_lifecycle_test.dart",
          ROOT / "packages/photo_view/test/controller_lifecycle_test.dart"),
         ("test/tool/git_dependencies_test.dart", "../../tool/check_git_dependencies.dart",
+         ROOT / "tool/check_git_dependencies.dart"),
+        ("test/tool/resolved_git_dependencies_test.dart", "../../tool/check_git_dependencies.dart",
          ROOT / "tool/check_git_dependencies.dart"),
     ):
         path = project / name

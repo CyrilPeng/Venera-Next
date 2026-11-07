@@ -154,7 +154,16 @@ class FullAppTests(unittest.TestCase):
         identity = build_inputs()
         self.assertIn(f"version: {identity['version_name']}+{identity['version_code']}\n", prepared)
         for name in PROJECT_PACKAGES:
-            self.assertIn(f'path: ../../../packages/{name}', prepared)
+            if name not in prepare_full_app.WEBVIEW_PACKAGES:
+                self.assertIn(f'path: ../../../packages/{name}', prepared)
+        overrides = prepared.split('dependency_overrides:\n', 1)[1].split('\nflutter:', 1)[0]
+        for name in prepare_full_app.WEBVIEW_PACKAGES:
+            self.assertEqual(overrides.count(f'  {name}:\n'), 1)
+            self.assertIn(f'  {name}:\n    path: ../full-deps/webview/{name}\n', overrides)
+        self.assertNotIn('packages/flutter_inappwebview_windows', overrides)
+        self.assertNotIn('scrollable_positioned_list', PROJECT_PACKAGES)
+        self.assertIn('scrollable_positioned_list: ^0.3.8', prepared)
+        self.assertNotIn('      url:', overrides)
         self.assertIn('    path: ../full-deps/sqlite3', prepared)
         self.assertIn('    path: ../full-deps/webview/flutter_inappwebview_ohos', prepared)
         self.assertNotIn('full-deps/lodepng_flutter', prepared)
@@ -163,6 +172,13 @@ class FullAppTests(unittest.TestCase):
         self.assertIn('    - assets/init.js', prepared)
         self.assertIn('hooks:\n  user_defines:\n    pdfium_dart:\n      venera_harmonyos_experiment: true', prepared)
         self.assertEqual((ROOT / 'pubspec.yaml').read_text(encoding='utf-8'), original)
+
+    def test_duplicate_main_webview_override_requires_explicit_review(self):
+        original = (ROOT / 'pubspec.yaml').read_text(encoding='utf-8')
+        duplicate = original.replace('dependency_overrides:\n',
+            'dependency_overrides:\n  flutter_inappwebview_windows:\n    path: duplicate\n')
+        with self.assertRaisesRegex(ValueError, 'Duplicate main dependency override'):
+            configure_pubspec(duplicate)
 
     def test_native_loaders_patch_only_the_reviewed_default(self):
         original = 'if (Platform.isAndroid || Platform.isLinux) { return lib; }'

@@ -2,17 +2,20 @@
 
 `HarmonyOS` 分支以独立 Flutter OH SDK 构建现有完整阅读器，保留平台适配、固定依赖及原生库审计。主线不切换 SDK，也不维护另一套阅读器。用户入口见[测试版安装指南](../../doc/distribution/harmonyos-reader.zh.md)；早期探针记录见[实验记录](../../doc/experiments/harmonyos.zh.md)。
 
-当前滚动候选为 **`1.18.3+245`**，同步主线 `55c7c44` 的收藏导航与依赖治理。
+当前滚动候选为 **`1.18.3+245`**，同步主线的收藏导航、依赖治理及本轮官方来源调整；
+审核后的共同基线由主线下一候选 pin 的完整 SHA 记录。
 既有 `1.18.3+244` 继续使用提交 `3e1be1391ba784bb228803525696d38c208f471f`
 和原锁文件、原生库及 Release 资产；不以新 HAP 覆盖这些历史产物。
 后续候选的读者版本门禁为 `>=245`，与主线的冻结 pin 分开验证。
 
-本候选只用于无发布预览。2026-11-06 的完整上游审计发现，固定 QuickJS-NG 核心
-仍含数组初始化／增长、CallSite 和 Promise OOM 清理、Atomics 以及 32 位分配的
-安全公告对应代码模式；常规运行回归通过不能替代这些核心修复。主线下一 pin 的
-`release_enabled` 保持 false，完成独立核心修复与平台审核前拒绝 tag 发布。
+本候选只用于无发布预览。2026-11-06 审计发现的适用 QuickJS-NG 核心缺陷已在
+`f5a1f20` 中回移修复；Linux 64／32 位 ASan／UBSan 与 Windows 64／32 位 ASan
+均已通过，来源和边界见依赖的 CORE_PATCHES.md／JSON。旧 d07 的泛型 push 没有
+后来引入的优化缺陷。主线下一 pin 的 `release_enabled` 保持 false，完整平台构建
+与签装、真机运行分别验证，宿主安全回归不作为鸿蒙运行验收。
 
-完整阅读器直接使用仓库内八个包，并将每个受 Git 管理的包输入记录到来源摘要。
+完整阅读器记录仓库内八个包的输入摘要；滚动列表已回归官方 pub.dev 0.3.8。
+主线 Windows 本地包也纳入源码审计，HAP 实际依赖继续由协调的 CPF 平台组覆盖。
 源码清单和项目包摘要使用已提交的 canonical Git blob，保持二进制原字节，避免 `.gitattributes` 的 CRLF 检出规则改变摘要；生成前拒绝工作区或暂存源码漂移，不将未提交输入隐藏在固定提交的摘要后。
 PNG／7z 由 `packages/venera_native` 的自编桥接和独立固定的官方核心编译成
 `libvenera_native.so`，核对九个导出及包内第三方声明；不再获取原组织的两个包装层。
@@ -27,7 +30,7 @@ PNG／7z 由 `packages/venera_native` 的自编桥接和独立固定的官方核
 
 `ci_full_app.py` 在独立工程中执行严格分析、宿主回归、真实 ARM64 HAP 构建及 ELF／资产审计。发布模式输出 `VeneraNext-版本-harmonyos-arm64-unsigned.hap`、`harmonyos-manifest.json`、`harmonyos-SHA256SUMS` 和两份 `harmonyos-install.*.md`；主线再次核对固定 Git 源码清单、包内版本及全部五项资产，草稿上传核验通过后才发布。失败不允许静默略过 HAP。
 
-CPF WebView 保留其 OHOS 实现，并从主线固定的 `3ef899b` 导出浏览器退出事件 Dart 接口与类型，补齐同步后 Windows 专用代码的静态依赖。覆盖层不改写应用代理逻辑、不生成退出事件，不声称鸿蒙支持 Windows Environment；生成工程仅用于 HAP，Windows 发行仍使用主线原依赖。复制的上游类型与生成文件保持原字节，原始和适配后的依赖树均记录摘要。
+CPF WebView 保留其 OHOS 实现，并从主线固定的官方 `0aaf7a0` 导出浏览器退出事件 Dart 接口与类型，补齐 Windows 专用代码的静态依赖。生成时先替换主线同名 Git／Windows 本地 overrides，再插入协调的 CPF path 组，拒绝重复 YAML key。覆盖层不改写应用代理逻辑、不生成退出事件；生成工程用于 HAP，Windows 发行使用主线自己的来源。复制的上游类型与生成文件保持原字节，原始和适配后的依赖树均记录摘要。
 
 签名、设备授权与私钥始终留在用户本机；CI 不安装到真机、不签名、不自动关闭或跟踪 issue。首个随版 Release 构建号至少为 244；接入 CI 不创建版本、标签或 Release。`packaging_pass` 不是覆盖升级、续签或全功能真机验收。
 
