@@ -32,6 +32,10 @@ TESTS = (
     "test/foundation/image_processing_test.dart",
     "test/foundation/image_processing_native_test.dart",
     "test/foundation/native_codecs_test.dart",
+    "test/foundation/js_native_contract_test.dart",
+    "test/foundation/js_engine_lifecycle_test.dart",
+    "test/foundation/js_owned_result_test.dart",
+    "test/foundation/js_result_descendants_test.dart",
     "test/foundation/saf_test.dart",
     "test/features/local_comics/import_export/directory_copy_test.dart",
     "test/features/local_comics/import_export/pdf_export_lifecycle_test.dart",
@@ -71,6 +75,7 @@ TESTS = (
     "test/features/reader/platform_effects_controller_test.dart",
     "test/features/reader/platform_effects_test.dart",
     "test/features/reader/reader_exit_integration_test.dart",
+    "test/features/reader/continuous_input_test.dart",
     "test/features/reader/display_image_provider_test.dart",
     "test/features/reader/scroll_aware_display_image_test.dart",
 )

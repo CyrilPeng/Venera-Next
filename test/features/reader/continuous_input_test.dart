@@ -31,14 +31,14 @@ void main() {
         final loads = <int>[];
         final lifecycle = <bool>[];
         final navigation = ReaderController(
-          pageCount: () => 3,
+          pageCount: () => 30,
           chapterCount: () => 2,
           animationEnabled: () => false,
           viewport: () => binding.current,
           onChanged: () {},
           onPageChanged: () {},
           onError: (error, stack) => fail('$error'),
-        )..replaceChapterImages(List.filled(3, imageKey));
+        )..replaceChapterImages(List.filled(30, imageKey));
         var margin = 0.0;
         var limitImageWidth = false;
         Widget build() => MaterialApp(
@@ -184,6 +184,33 @@ void main() {
                 reason: 'trackpad at x=$x ($mode, $layout)',
               );
             }
+          }
+          if (mode != 'waterfall') {
+            final oldPosition = state.scrollController.position;
+            state.smoothTo(200);
+            await tester.pump(const Duration(milliseconds: 20));
+            var finished = false;
+            final moving = state
+                .animateToPage(30)
+                .whenComplete(() => finished = true);
+            for (var i = 0; i < 100 && !finished; i++) {
+              await tester.pump(const Duration(milliseconds: 20));
+              await tester.runAsync(() => pumpEventQueue());
+            }
+            expect(finished, isTrue, reason: 'distant item animation ($mode)');
+            await moving;
+            await tester.pump();
+            expect(state.scrollController.position, isNot(same(oldPosition)));
+            final before = state.scrollController.offset;
+            state.smoothTo(-60);
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 200));
+            expect(state.scrollController.offset, closeTo(before - 60, 0.1));
+            expect(
+              state.scrollController.positions.contains(oldPosition),
+              isFalse,
+            );
+            expect(tester.takeException(), isNull);
           }
           final beforeZoom = state.scrollController.offset;
           await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);

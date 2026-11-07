@@ -1,32 +1,56 @@
 {
   "schema_version": 2,
-  "reviewed_on": "2026-09-28",
-  "local_packages_reviewed_on": "2026-11-06",
+  "reviewed_on": "2026-11-07",
+  "local_packages_reviewed_on": "2026-11-07",
   "repositories": [
     {
       "dependency": "flutter_qjs",
       "url": "https://github.com/CyrilPeng/flutter_qjs",
-      "commit": "295f77421eedff356a02e92987181b525970c780",
+      "commit": "f5a1f20d08c33b0a6b3e38eda2a7b27705420620",
       "status": "maintained-fork",
-      "reason": "QuickJS-NG migration, JS numeric conversion, native platform patches and the 2026-10-31 TypedData reference-walk fix; validate runtime lifetimes before replacement.",
+      "reason": "Keep the Dart/FFI, Map, TypedData and lifecycle contract: official unpublished 0.4.0 fails application resolution and its native Map probe. This pin backports applicable safety fixes to the matched d07f6b5 QuickJS-NG core without changing wrapper APIs.",
       "packages": {
         "flutter_qjs": "."
-      }
+      },
+      "audit": "doc/development/remaining_git_audit_20261106.json",
+      "official_review": {
+        "stable_version": "0.3.7",
+        "commit": "12a393bd22529753935705b2a8f5db636e93d37f",
+        "required_patches": [
+          "Map/TypedData conversion and dispatch/port lifetime contract",
+          "Current platform build and integer/NaN API compatibility",
+          "Applicable d07f6b5 core memory-safety backports"
+        ],
+        "validation": "Official 0.4.0 commit fails current meta/hook resolution and the Map native probe. The retained core now has bounded native GC, allocation-failure and transfer regressions; Linux ASan/UBSan and application platform checks remain required.",
+        "exit_condition": "Adopt official source after solver, Map/TypedData, Promise/cancellation, secure native core and platform acceptance pass.",
+        "maintainer": "VeneraNext maintainers"
+      },
+      "upstream": "https://github.com/ekibun/flutter_qjs",
+      "core_patch_manifest": "https://github.com/CyrilPeng/flutter_qjs/blob/f5a1f20d08c33b0a6b3e38eda2a7b27705420620/CORE_PATCHES.json"
     },
     {
       "dependency": "flutter_inappwebview",
-      "url": "https://github.com/CyrilPeng/flutter_inappwebview",
-      "commit": "3ef899b3db57c911b080979f1392253b835f98ab",
-      "status": "maintained-fork",
-      "reason": "Keep the coordinated 6.2.0-beta.3 platform packages and GraphicsContext disposal fix.",
+      "url": "https://github.com/pichillilorenzo/flutter_inappwebview",
+      "commit": "0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676",
+      "status": "official-commit",
+      "reason": "Official stable 6.1.5 lacks the browser-exit event. Use the exact official parent of the previous fork; Windows instance ownership alone remains a local override.",
       "packages": {
         "flutter_inappwebview": "flutter_inappwebview",
         "flutter_inappwebview_android": "flutter_inappwebview_android",
         "flutter_inappwebview_ios": "flutter_inappwebview_ios",
         "flutter_inappwebview_macos": "flutter_inappwebview_macos",
         "flutter_inappwebview_platform_interface": "flutter_inappwebview_platform_interface",
-        "flutter_inappwebview_web": "flutter_inappwebview_web",
-        "flutter_inappwebview_windows": "flutter_inappwebview_windows"
+        "flutter_inappwebview_web": "flutter_inappwebview_web"
+      },
+      "audit": "doc/development/remaining_git_audit_20261106.json",
+      "upstream": "https://github.com/pichillilorenzo/flutter_inappwebview",
+      "official_review": {
+        "stable_version": "6.1.5",
+        "commit": "0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676",
+        "required_patches": [],
+        "validation": "Selected official parent and previous fork differ only in the two Windows ownership files; the six official Git packages keep the existing APIs and dependencies.",
+        "exit_condition": "Prefer a stable release once it exposes the required browser-exit API; update all platform sources together.",
+        "maintainer": "VeneraNext maintainers"
       }
     }
   ],
@@ -49,7 +73,18 @@
         "file": "LICENSE",
         "sha256": "6c2156a7940de2bce1ae284aab6109514248634eb75f3be7ce00bf62a143cbe4"
       },
-      "patches": "LOCAL_PATCHES.md"
+      "patches": "LOCAL_PATCHES.md",
+      "official_review": {
+        "stable_version": "0.15.0",
+        "commit": "a13ca2fc387a3fb1276126959e092c44d0029987",
+        "required_patches": [
+          "ImageInfo, controller and gesture ownership",
+          "Reader scale, animateScale and reset APIs"
+        ],
+        "validation": "Official stable replacement produces 15 application API errors; official source still discards an ImageInfo reference.",
+        "exit_condition": "Remove local source when public scale/reset adapters and upstream ownership fixes pass reader and image lifecycle tests.",
+        "maintainer": "VeneraNext maintainers"
+      }
     },
     {
       "dependency": "share_plus",
@@ -68,7 +103,18 @@
         "file": "LICENSE",
         "sha256": "eb9741a672906ebd01fd9b3bef38f6c82eff250e91149cf404539ee7981079fd"
       },
-      "patches": "LOCAL_PATCHES.md"
+      "patches": "LOCAL_PATCHES.md",
+      "official_review": {
+        "stable_version": "13.3.1",
+        "commit": "907994b0e52c2c11ae2f2ccc08d0658e1c73dbaf",
+        "required_patches": [
+          "Windows immutable payload and callback/collection ownership",
+          "Android previously shared file retention"
+        ],
+        "validation": "Official stable/head still differ in native payload ownership and cache retention. Application serial queuing alone does not establish native safety.",
+        "exit_condition": "Adopt official source after concurrent sharing, callback disposal and retained-file native regressions pass.",
+        "maintainer": "VeneraNext maintainers"
+      }
     },
     {
       "dependency": "rhttp",
@@ -87,28 +133,19 @@
         "file": "LICENSE",
         "sha256": "522dfc2f5fdcf53ef9b7569b6b50d9ce1d88524b40b07c6fadaad2a1335b6d34"
       },
-      "patches": "LOCAL_PATCHES.md"
-    },
-    {
-      "dependency": "scrollable_positioned_list",
-      "path": "packages/scrollable_positioned_list",
-      "version": "0.3.8+1",
-      "status": "maintained-local",
-      "reason": "Reader uses the pinned fork's scrollControllerCallback and scrollBehavior interfaces; the package is small and application-specific.",
-      "upstream": "https://github.com/google/flutter.widgets",
-      "source": {
-        "type": "git",
-        "url": "https://github.com/CyrilPeng/flutter.widgets",
-        "commit": "09e756b1f1b04e6298318d99ec20a787fb360f59",
-        "path": "packages/scrollable_positioned_list"
-      },
-      "license": {
-        "spdx": "BSD-3-Clause",
-        "file": "LICENSE",
-        "sha256": "d347790d98693ff63129eafe676bac5cb5247c972f1a36f631bfa0e4dbb17293"
-      },
       "patches": "LOCAL_PATCHES.md",
-      "source_manifest": "UPSTREAM_MANIFEST.json"
+      "official_review": {
+        "stable_version": "0.18.0",
+        "commit": "39a3d766139c34c672561b13877438994afbb4cd",
+        "required_patches": [
+          "Locked Rust dependency security versions",
+          "OHOS explicit external-library loading",
+          "Cancellation-safe callback completion for the current bridge"
+        ],
+        "validation": "Official 0.18.0 lock matches 10 package versions with advisories; latest official Git lock is byte-identical. Official bridge removes old send panic, but strict OHOS loading adaptation is still pending.",
+        "exit_condition": "Adopt official release/commit only after secure Cargo lock, matched FRB/generated code, strict OHOS loading and newly compiled native cancellation/TLS/platform acceptance.",
+        "maintainer": "VeneraNext maintainers"
+      }
     },
     {
       "dependency": "webdav_client",
@@ -129,7 +166,18 @@
         "sha256": "b17d7a897d3602d6ea9e53038329cea1a581ce53672d148893ef436f3fe255b9"
       },
       "patches": "LOCAL_PATCHES.md",
-      "source_manifest": "UPSTREAM_MANIFEST.json"
+      "source_manifest": "UPSTREAM_MANIFEST.json",
+      "official_review": {
+        "stable_version": "1.2.2",
+        "commit": "5a8dd0d9a82bac86e5ed326f648c2b0871478d8f",
+        "required_patches": [
+          "HTTP adapter integration",
+          "Redirect, multiple authentication, upload and cancellation behavior"
+        ],
+        "validation": "Official adapter can be set after construction, but authentication/301/upload/cancellation still differ; the official package invokes a Dio internal API.",
+        "exit_condition": "Adopt official source after adapter migration and authentication, redirect, upload, download and cancellation regressions pass.",
+        "maintainer": "VeneraNext maintainers"
+      }
     },
     {
       "dependency": "desktop_webview_window",
@@ -157,7 +205,18 @@
         "macos",
         "windows",
         "licenses"
-      ]
+      ],
+      "official_review": {
+        "stable_version": "0.3.2",
+        "commit": "d70d8d040730819a1f8b700fd8068eab1ef09d66",
+        "required_patches": [
+          "Desktop proxy and navigation interception",
+          "Linux WebKit/libsoup and Windows ARM64 support"
+        ],
+        "validation": "Compatible official 0.3.2 lacks proxy and setOnNavigation; 0.4.2 requires a newer Flutter SDK.",
+        "exit_condition": "Adopt official source or a unified desktop browser after proxy, login, interception and supported-platform native acceptance.",
+        "maintainer": "VeneraNext maintainers"
+      }
     },
     {
       "dependency": "venera_native",
@@ -252,6 +311,41 @@
         "test"
       ],
       "third_party_sources": []
+    },
+    {
+      "dependency": "flutter_inappwebview_windows",
+      "path": "packages/flutter_inappwebview_windows",
+      "version": "0.7.0-beta.3",
+      "status": "maintained-local",
+      "reason": "Retain only the two Windows GraphicsContext instance ownership changes and adapt the interface dependency to the same official SHA.",
+      "upstream": "https://github.com/pichillilorenzo/flutter_inappwebview",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/pichillilorenzo/flutter_inappwebview",
+        "commit": "0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676",
+        "path": "flutter_inappwebview_windows"
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "file": "LICENSE",
+        "sha256": "23d164b37c82a2c2e1061bbc367c609f718951ddb70de7e0ac5fe9058c91844a"
+      },
+      "patches": "LOCAL_PATCHES.md",
+      "source_manifest": "UPSTREAM_MANIFEST.json",
+      "source_directories": [
+        "lib",
+        "windows"
+      ],
+      "official_review": {
+        "stable_version": "0.6.0",
+        "commit": "0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676",
+        "required_patches": [
+          "Instance-owned GraphicsContext and release after WebView cleanup"
+        ],
+        "validation": "Exact previous native ownership patch retained on the official parent. Newly resolved official interface uses the same full SHA; Windows multiwindow acceptance is required.",
+        "exit_condition": "Drop the override when official source includes the ownership patch and close/recreate, proxy, Cookie and login acceptance pass.",
+        "maintainer": "VeneraNext maintainers"
+      }
     }
   ]
 }
