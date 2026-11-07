@@ -173,6 +173,7 @@ jobs:
 
           args=(
             --verify-tag
+            --target "${GITHUB_SHA}"
             --title "${GITHUB_REF_NAME}"
             --notes-file ../release_notes.md
             --draft

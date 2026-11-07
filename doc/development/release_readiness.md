@@ -8,7 +8,7 @@ defines the current release scope; older candidate sections are historical.
 ## Required HarmonyOS candidate release (2026-11-07)
 
 The maintainer explicitly requires HarmonyOS in every subsequent package
-release. Prepare `v1.18.3-rc.2`, build 247, from unified `main`; standard
+release. Prepare `v1.18.3-rc.3`, build 248, from unified `main`; standard
 platforms and the unsigned HarmonyOS beta must identify the same commit.
 The earlier build-244 and two-development-branch sections below are historical.
 
@@ -23,8 +23,14 @@ The earlier build-244 and two-development-branch sections below are historical.
 - Keep the publishing checkouts in sibling `release-source/` and
   `harmonyos-source/` directories, with notes and outputs outside both Git
   trees. RC1 completed its builds but publication rejected generated untracked
-  inputs; retain that tag and Actions record. RC2 corrects the workspace layout
-  without relaxing source-cleanliness checks.
+  inputs; retain that tag and Actions record. RC2 corrected the workspace layout
+  and passed every build, but the published-only tag endpoint could not read its
+  draft. Retain the RC2 tag and evidence; RC3 corrects draft lookup and rebuilds.
+- Resolve drafts through the authenticated, fully paginated release list with
+  unique exact-tag matching, then fetch by numeric release ID. Reject changed
+  IDs, tags or states, and continue size/digest verification before publication.
+  Use the public tag endpoint after publishing. Explicitly target the source SHA
+  when creating the release. Do not publish earlier failed candidates manually.
 - Require 26 public assets: 19 standard-platform packages, the unsigned HAP,
   two Android provenance manifests and four HarmonyOS companions. Verify the
   HAP, manifest, checksum and both guides before upload, through the draft API,

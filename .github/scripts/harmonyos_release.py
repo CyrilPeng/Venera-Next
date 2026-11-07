@@ -353,6 +353,33 @@ def gh(*args):
     return subprocess.check_output(["gh", *args], timeout=120).decode("utf-8")
 
 
+def read_remote_release(tag, *, published):
+    if published:
+        remote = json.loads(gh("api", f"repos/{REPOSITORY}/releases/tags/{tag}"))
+        if not isinstance(remote, dict):
+            raise ValueError("Invalid published release response")
+        return remote
+
+    # GitHub's tag endpoint only returns published releases. Locate the exact
+    # draft across all pages, then fetch its current asset inventory by ID.
+    pages = json.loads(gh("api", "--paginate", "--slurp", f"repos/{REPOSITORY}/releases?per_page=100"))
+    if (not isinstance(pages, list) or any(not isinstance(page, list) for page in pages)
+            or any(not isinstance(item, dict) for page in pages for item in page)):
+        raise ValueError("Invalid release list response")
+    matches = [item for page in pages for item in page if item.get("tag_name") == tag]
+    if len(matches) != 1:
+        raise ValueError("Expected exactly one release draft for tag: " + tag)
+    identifier = matches[0].get("id")
+    if type(identifier) is not int or identifier <= 0 or matches[0].get("draft") is not True:
+        raise ValueError("Expected a draft with a valid release ID")
+    remote = json.loads(gh("api", f"repos/{REPOSITORY}/releases/{identifier}"))
+    if (not isinstance(remote, dict) or type(remote.get("id")) is not int
+            or remote.get("id") != identifier or remote.get("tag_name") != tag
+            or remote.get("draft") is not True):
+        raise ValueError("Release draft identity changed during verification")
+    return remote
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("config", "prepare", "verify", "verify-draft", "verify-published"))
@@ -388,8 +415,9 @@ def main():
         parser.error("--artifacts is required")
     assets = verify_bundle(args.artifacts, expected, args.source_root)
     if args.action in ("verify-draft", "verify-published"):
-        release = json.loads(gh("api", f"repos/{REPOSITORY}/releases/tags/{expected['tag']}"))
-        check_remote_release(release, expected, assets, published=args.action == "verify-published")
+        published = args.action == "verify-published"
+        release = read_remote_release(expected["tag"], published=published)
+        check_remote_release(release, expected, assets, published=published)
     print("Verified HarmonyOS source, version, native libraries and all five release assets")
 
 

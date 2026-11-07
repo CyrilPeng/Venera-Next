@@ -22,7 +22,7 @@ PR 校验使用 Actions 的准确合并候选 SHA，push 和手动构建使用�
 
 ## 版本与产物
 
-发布工作流校验调用方的 Git 提交、版本、构建号、运行号及 changelog 摘要。只有独占生成工程被写入调用方版本，源 checkout 不被改写。原生版本名为三段数字，Dart 版本保留 RC 后缀；构建号沿用主线并递增。第一个公开的主线随版 HAP 为 `v1.18.3-rc.2`，构建号 **247**；RC1 仅保留已构建的标签与 Actions 记录。主线 schema 3 的首个允许构建号为 245，旧 244 来源只保留历史验证；不回填 `v1.18.2` 等旧 Release。
+发布工作流校验调用方的 Git 提交、版本、构建号、运行号及 changelog 摘要。只有独占生成工程被写入调用方版本，源 checkout 不被改写。原生版本名为三段数字，Dart 版本保留 RC 后缀；构建号沿用主线并递增。第一个公开的主线随版 HAP 为 `v1.18.3-rc.3`，构建号 **248**；RC1／RC2 保留已构建的标签与 Actions 记录，均未公开 Release。主线 schema 3 的首个允许构建号为 245，旧 244 来源只保留历史验证；不回填 `v1.18.2` 等旧 Release。
 
 每次发布必须包含：
 
@@ -37,6 +37,8 @@ HAP 采用 `com.github.cyrilpeng.veneranext.harmony` 包名和 `VeneraNext (Harm
 ## 发布门禁与无发布验证
 
 完整构建的 `Release` 同时依赖 Quality、原平台 Build 与 HarmonyOS。HAP 缺失、内容损坏、源码过期或摘要错误都不得 `continue-on-error`。先创建草稿并上传，再从 GitHub API 核对全部五项鸿蒙资产的名称、大小、上传状态和 SHA-256；通过后才公开，公开后再复核一次。任一阶段失败须查看日志，不允许静默去掉鸿蒙包后继续。
+
+GitHub 按标签查询的 Release 接口只返回已公开版本。草稿阶段使用鉴权发布列表的完整分页定位唯一同标签草稿，再按其数字 ID 重新读取附件；缺失、重名、状态或 ID／标签变化都停止发布。公开后改用标签接口复核，创建 Release 时显式绑定调用方源码 SHA。RC2 的 26 项附件已上传为草稿，但旧查询接口返回 404；本修复由 RC3 重新验证完整发布链路。
 
 发布任务的两个源码 checkout 位于工作区的 `release-source/` 与 `harmonyos-source/`；说明和产物分别位于同级的 `release_notes.md` 与 `outputs/`。脚本从 `release-source/` 执行，全部生成输入留在源码目录外，两个 Git checkout 仍须通过未跟踪与未提交输入检查。
 

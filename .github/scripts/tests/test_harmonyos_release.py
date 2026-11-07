@@ -716,6 +716,7 @@ class HarmonyReleaseTests(unittest.TestCase):
         self.assertIn('verify-release --directory ../outputs', publish_job)
         self.assertIn('--notes-file ../release_notes.md', publish_job)
         self.assertIn('--verify-tag', workflow)
+        self.assertIn('--target "${GITHUB_SHA}"', publish_job)
         self.assertLess(workflow.index('verify-draft'), workflow.index('--draft=false'))
         self.assertGreater(workflow.index('verify-published'), workflow.index('--draft=false'))
         hap = (ROOT / '.github/workflows/harmonyos-release.yml').read_text(encoding='utf-8')
@@ -726,6 +727,65 @@ class HarmonyReleaseTests(unittest.TestCase):
         self.assertNotIn('contents: write', hap)
         self.assertNotIn('secrets: inherit', hap)
         self.assertNotIn('gh issue', workflow + hap)
+
+
+class HarmonyRemoteReleaseTests(unittest.TestCase):
+    def setUp(self):
+        self.expected = {'schema': 3, 'version': '1.18.3-rc.3', 'tag': 'v1.18.3-rc.3',
+                         'preview': False, 'tagged': True}
+        self.assets = {name: {'bytes': 2, 'sha256': 'd' * 64}
+                       for name in release.asset_names(self.expected['version']).values()}
+        self.remote = {'id': 123, 'tag_name': self.expected['tag'], 'draft': True, 'prerelease': True,
+                       'assets': [{'name': name, 'size': record['bytes'],
+                                   'digest': 'sha256:' + record['sha256'], 'state': 'uploaded'}
+                                  for name, record in self.assets.items()]}
+
+    def test_draft_cli_succeeds_when_published_tag_endpoint_returns_404(self):
+        def github(*args):
+            endpoint = args[-1]
+            if endpoint == f"repos/{release.REPOSITORY}/releases/tags/{self.expected['tag']}":
+                raise subprocess.CalledProcessError(1, ['gh', *args], stderr=b'Not Found (HTTP 404)')
+            if endpoint == f'repos/{release.REPOSITORY}/releases?per_page=100':
+                return json.dumps([[{'id': 99, 'tag_name': 'v1.18.2', 'draft': False}], [self.remote]])
+            if endpoint == f"repos/{release.REPOSITORY}/releases/{self.remote['id']}":
+                return json.dumps(self.remote)
+            self.fail(f'Unexpected GitHub API request: {args!r}')
+
+        argv = ['harmonyos_release.py', 'verify-draft', '--source-root', str(ROOT),
+                '--artifacts', str(ROOT / 'build/remote-release-regression')]
+        with patch.object(sys, 'argv', argv), patch.object(release, 'context', return_value=self.expected), \
+                patch.object(release, 'verify_bundle', return_value=self.assets), \
+                patch.object(release, 'gh', side_effect=github), contextlib.redirect_stdout(io.StringIO()):
+            release.main()
+
+    def test_draft_lookup_rejects_missing_duplicate_and_malformed_candidates(self):
+        for pages in (
+            [], [[]], [[self.remote], [self.remote]],
+            [[self.remote | {'draft': False}]], [[self.remote | {'draft': 1}]],
+            [[self.remote | {'id': 0}]], [[self.remote | {'id': True}]],
+            [[self.remote | {'id': '../other'}]], [[None]], {'releases': [self.remote]},
+        ):
+            with self.subTest(pages=pages), patch.object(release, 'gh', return_value=json.dumps(pages)) as github, \
+                    self.assertRaises(ValueError):
+                release.read_remote_release(self.expected['tag'], published=False)
+            self.assertEqual(github.call_count, 1)
+
+    def test_draft_lookup_rejects_changed_id_tag_or_state_after_listing(self):
+        for remote in (
+            self.remote | {'id': 124}, self.remote | {'id': True},
+            self.remote | {'tag_name': 'v1.18.2'}, self.remote | {'draft': False},
+            self.remote | {'draft': 1}, [],
+        ):
+            with self.subTest(remote=remote), \
+                    patch.object(release, 'gh', side_effect=[json.dumps([[self.remote]]), json.dumps(remote)]), \
+                    self.assertRaisesRegex(ValueError, 'identity changed'):
+                release.read_remote_release(self.expected['tag'], published=False)
+
+    def test_published_lookup_uses_public_tag_endpoint(self):
+        remote = self.remote | {'draft': False}
+        with patch.object(release, 'gh', return_value=json.dumps(remote)) as github:
+            self.assertEqual(release.read_remote_release(self.expected['tag'], published=True), remote)
+        github.assert_called_once_with('api', f"repos/{release.REPOSITORY}/releases/tags/{self.expected['tag']}")
 
 
 if __name__ == '__main__':
