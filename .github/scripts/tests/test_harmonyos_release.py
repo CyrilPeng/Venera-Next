@@ -1,11 +1,16 @@
+import contextlib
 import copy
 import importlib.util
+import io
 import json
+import os
 from pathlib import Path
 import struct
 import subprocess
+import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import warnings
 import zipfile
 
@@ -129,8 +134,8 @@ class Fixture:
     def context(self, *, tagged=False):
         return release.context(self.root, self.source, self.environment(tagged=tagged), preview_next=self.preview_next)
 
-    def bundle(self, *, metadata_change=None, members_change=None, report_change=None):
-        expected = self.context()
+    def bundle(self, *, tagged=False, metadata_change=None, members_change=None, report_change=None):
+        expected = self.context(tagged=tagged)
         next_candidate = expected['schema'] >= 2
         native_names = release.NEXT_NATIVE if next_candidate else release.NATIVE
         names = release.asset_names(expected['version'])
@@ -461,6 +466,93 @@ class HarmonyReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'exact release commit'):
             release.context(fixture.root, fixture.source, environment)
 
+    def test_metadata_gate_blocks_disabled_tags_before_emitting_build_outputs(self):
+        fixture = self.fixture
+        fixture.unified_mainline()
+        output = fixture.directory / 'github-output.txt'
+        arguments = ['harmonyos_release.py', 'config', '--root', str(fixture.root),
+                     '--github-output', str(output)]
+        for version, build in (('1.18.3-rc.1', 246), ('1.18.3', 247)):
+            fixture.set_version(version, build)
+            with self.subTest(version=version), patch.dict(os.environ, fixture.environment(tagged=True)), \
+                    patch.object(sys, 'argv', arguments), self.assertRaisesRegex(ValueError, 'preview only'):
+                release.main()
+            self.assertFalse(output.exists())
+        with patch.dict(os.environ, fixture.environment()), patch.object(sys, 'argv', arguments), \
+                contextlib.redirect_stdout(io.StringIO()):
+            release.main()
+        self.assertIn('source_commit=' + fixture.release_commit, output.read_text())
+
+    def test_prerelease_and_stable_haps_bind_full_versions_and_increasing_builds(self):
+        fixture = self.fixture
+        fixture.unified_mainline(release_enabled=True)
+        fixture.preview_next = False
+        frozen = (fixture.root / release.PIN).read_bytes()
+        policy = (fixture.root / release.NEXT_PIN).read_bytes()
+        for version, build in (('1.18.3-rc.1', 246), ('1.18.3', 247)):
+            fixture.set_version(version, build)
+            fixture.sync_mainline_source()
+            git(fixture.root, 'tag', '-a', 'v' + version, '-m', 'reviewed release')
+            fixture.output = fixture.directory / f'artifacts-{build}'
+            expected = fixture.bundle(tagged=True)
+            assets = self.verify(expected)
+            with self.subTest(version=version):
+                self.assertEqual(expected['source_commit'], fixture.release_commit)
+                self.assertEqual(expected['release_commit'], fixture.release_commit)
+                self.assertEqual((expected['version'], expected['build']), (version, build))
+                self.assertFalse(expected['preview'])
+                self.assertEqual(len(assets), 5)
+                remote = {'tag_name': 'v' + version, 'draft': True, 'prerelease': '-rc.' in version,
+                          'assets': [{'name': name, 'size': item['bytes'],
+                                      'digest': 'sha256:' + item['sha256'], 'state': 'uploaded'}
+                                     for name, item in assets.items()]}
+                release.check_remote_release(remote, expected, assets, published=False)
+                release.check_remote_release(remote | {'draft': False}, expected, assets, published=True)
+                with self.assertRaisesRegex(ValueError, 'release tag/state/channel'):
+                    release.check_remote_release(remote | {'prerelease': not remote['prerelease']},
+                                                 expected, assets, published=False)
+            self.assertEqual((fixture.root / release.PIN).read_bytes(), frozen)
+            self.assertEqual((fixture.root / release.NEXT_PIN).read_bytes(), policy)
+
+    def test_other_platform_assets_never_allow_omitting_a_harmonyos_companion(self):
+        fixture = self.fixture
+        fixture.unified_mainline(release_enabled=True)
+        fixture.preview_next = False
+        git(fixture.root, 'tag', '-a', 'v1.18.3', '-m', 'reviewed release')
+        expected = fixture.bundle(tagged=True)
+        assets = self.verify(expected)
+        remote = {'tag_name': expected['tag'], 'draft': True, 'prerelease': False,
+                  'assets': [{'name': name, 'size': item['bytes'],
+                              'digest': 'sha256:' + item['sha256'], 'state': 'uploaded'}
+                             for name, item in assets.items()] +
+                            [{'name': 'VeneraNext-1.18.3-' + name, 'state': 'uploaded'}
+                             for name in ('android.apk', 'android-tv.apk', 'windows.zip',
+                                          'macos.dmg', 'ios.ipa', 'linux.AppImage')]}
+        release.check_remote_release(remote, expected, assets, published=False)
+        for name in assets:
+            damaged = copy.deepcopy(remote)
+            damaged['assets'] = [item for item in damaged['assets'] if item['name'] != name]
+            with self.subTest(asset=name), self.assertRaisesRegex(ValueError, 'HarmonyOS release assets'):
+                release.check_remote_release(damaged, expected, assets, published=False)
+
+    def test_tagged_ci_staging_keeps_notes_outputs_and_both_checkouts_separate(self):
+        fixture = self.fixture
+        fixture.unified_mainline(release_enabled=True)
+        fixture.preview_next = False
+        git(fixture.root, 'tag', '-a', 'v1.18.3', '-m', 'reviewed release')
+        write(fixture.root, 'release_notes.md', 'generated release notes')
+        with self.assertRaisesRegex(ValueError, 'untracked inputs'):
+            fixture.context(tagged=True)
+        (fixture.root / 'release_notes.md').unlink()
+        write(fixture.directory, 'release_notes.md', 'generated release notes')
+        fixture.output = fixture.directory / 'outputs/harmonyos'
+        fixture.output.parent.mkdir()
+        expected = fixture.bundle(tagged=True)
+        assets = self.verify(expected)
+        self.assertEqual(len(assets), 5)
+        self.assertFalse(git(fixture.root, 'ls-files', '--others', '--exclude-standard'))
+        self.assertFalse(git(fixture.source, 'ls-files', '--others', '--exclude-standard'))
+
     def test_mainline_bundle_still_rejects_rewritten_project_code_and_native_libraries(self):
         fixture = self.fixture
         fixture.unified_mainline()
@@ -610,8 +702,21 @@ class HarmonyReleaseTests(unittest.TestCase):
     def test_workflow_requires_hap_and_draft_verification_before_publishing(self):
         workflow = (ROOT / '.github/workflows/main.yml').read_text(encoding='utf-8')
         self.assertIn('needs: [Release_Metadata, Quality, Build, HarmonyOS]', workflow)
+        harmony_job = workflow.split('\n  HarmonyOS:\n', 1)[1].split('\n  Release:\n', 1)[0]
+        self.assertIn('needs: [Release_Metadata, Quality]', harmony_job)
+        self.assertIn('uses: ./.github/workflows/harmonyos-release.yml', harmony_job)
+        self.assertNotRegex(harmony_job, r'(?m)^    (?:if|continue-on-error):')
         self.assertIn('outputs/harmonyos/*', workflow)
+        publish_job = workflow.split('\n  Release:\n', 1)[1]
+        self.assertIn('working-directory: release-source', publish_job)
+        self.assertIn('path: release-source', publish_job)
+        self.assertIn('path: harmonyos-source', publish_job)
+        self.assertIn('--write-notes ../release_notes.md', publish_job)
+        self.assertIn('--source-root ../harmonyos-source --artifacts ../outputs/harmonyos', publish_job)
+        self.assertIn('verify-release --directory ../outputs', publish_job)
+        self.assertIn('--notes-file ../release_notes.md', publish_job)
         self.assertIn('--verify-tag', workflow)
+        self.assertIn('--target "${GITHUB_SHA}"', publish_job)
         self.assertLess(workflow.index('verify-draft'), workflow.index('--draft=false'))
         self.assertGreater(workflow.index('verify-published'), workflow.index('--draft=false'))
         hap = (ROOT / '.github/workflows/harmonyos-release.yml').read_text(encoding='utf-8')
@@ -622,6 +727,65 @@ class HarmonyReleaseTests(unittest.TestCase):
         self.assertNotIn('contents: write', hap)
         self.assertNotIn('secrets: inherit', hap)
         self.assertNotIn('gh issue', workflow + hap)
+
+
+class HarmonyRemoteReleaseTests(unittest.TestCase):
+    def setUp(self):
+        self.expected = {'schema': 3, 'version': '1.18.3-rc.3', 'tag': 'v1.18.3-rc.3',
+                         'preview': False, 'tagged': True}
+        self.assets = {name: {'bytes': 2, 'sha256': 'd' * 64}
+                       for name in release.asset_names(self.expected['version']).values()}
+        self.remote = {'id': 123, 'tag_name': self.expected['tag'], 'draft': True, 'prerelease': True,
+                       'assets': [{'name': name, 'size': record['bytes'],
+                                   'digest': 'sha256:' + record['sha256'], 'state': 'uploaded'}
+                                  for name, record in self.assets.items()]}
+
+    def test_draft_cli_succeeds_when_published_tag_endpoint_returns_404(self):
+        def github(*args):
+            endpoint = args[-1]
+            if endpoint == f"repos/{release.REPOSITORY}/releases/tags/{self.expected['tag']}":
+                raise subprocess.CalledProcessError(1, ['gh', *args], stderr=b'Not Found (HTTP 404)')
+            if endpoint == f'repos/{release.REPOSITORY}/releases?per_page=100':
+                return json.dumps([[{'id': 99, 'tag_name': 'v1.18.2', 'draft': False}], [self.remote]])
+            if endpoint == f"repos/{release.REPOSITORY}/releases/{self.remote['id']}":
+                return json.dumps(self.remote)
+            self.fail(f'Unexpected GitHub API request: {args!r}')
+
+        argv = ['harmonyos_release.py', 'verify-draft', '--source-root', str(ROOT),
+                '--artifacts', str(ROOT / 'build/remote-release-regression')]
+        with patch.object(sys, 'argv', argv), patch.object(release, 'context', return_value=self.expected), \
+                patch.object(release, 'verify_bundle', return_value=self.assets), \
+                patch.object(release, 'gh', side_effect=github), contextlib.redirect_stdout(io.StringIO()):
+            release.main()
+
+    def test_draft_lookup_rejects_missing_duplicate_and_malformed_candidates(self):
+        for pages in (
+            [], [[]], [[self.remote], [self.remote]],
+            [[self.remote | {'draft': False}]], [[self.remote | {'draft': 1}]],
+            [[self.remote | {'id': 0}]], [[self.remote | {'id': True}]],
+            [[self.remote | {'id': '../other'}]], [[None]], {'releases': [self.remote]},
+        ):
+            with self.subTest(pages=pages), patch.object(release, 'gh', return_value=json.dumps(pages)) as github, \
+                    self.assertRaises(ValueError):
+                release.read_remote_release(self.expected['tag'], published=False)
+            self.assertEqual(github.call_count, 1)
+
+    def test_draft_lookup_rejects_changed_id_tag_or_state_after_listing(self):
+        for remote in (
+            self.remote | {'id': 124}, self.remote | {'id': True},
+            self.remote | {'tag_name': 'v1.18.2'}, self.remote | {'draft': False},
+            self.remote | {'draft': 1}, [],
+        ):
+            with self.subTest(remote=remote), \
+                    patch.object(release, 'gh', side_effect=[json.dumps([[self.remote]]), json.dumps(remote)]), \
+                    self.assertRaisesRegex(ValueError, 'identity changed'):
+                release.read_remote_release(self.expected['tag'], published=False)
+
+    def test_published_lookup_uses_public_tag_endpoint(self):
+        remote = self.remote | {'draft': False}
+        with patch.object(release, 'gh', return_value=json.dumps(remote)) as github:
+            self.assertEqual(release.read_remote_release(self.expected['tag'], published=True), remote)
+        github.assert_called_once_with('api', f"repos/{release.REPOSITORY}/releases/tags/{self.expected['tag']}")
 
 
 if __name__ == '__main__':

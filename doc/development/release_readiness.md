@@ -5,6 +5,57 @@ not mark unresolved reports as fixed. Dated verification records and the
 original device acceptance checklist remain below. The newest dated section
 defines the current release scope; older candidate sections are historical.
 
+## Required HarmonyOS candidate release (2026-11-07)
+
+The maintainer explicitly requires HarmonyOS in every subsequent package
+release. Prepare `v1.18.3-rc.3`, build 248, from unified `main`; standard
+platforms and the unsigned HarmonyOS beta must identify the same commit.
+The earlier build-244 and two-development-branch sections below are historical.
+
+- Enable the committed schema-3 distribution switch after source/build review.
+  This authorizes unsigned beta distribution, not device acceptance. Check the
+  switch in the tag metadata gate; keep previews and untagged assets ineligible
+  for publication. Never publish a partial release that omits HarmonyOS.
+- Every candidate and stable tag rebuilds Android mobile/TV, Windows, macOS,
+  iOS, Linux x64/ARM64 and the real API-26 ARM64 HAP. Keep official Flutter and
+  the root lock separate from the pinned Flutter OH SDK and controlled overlays.
+  Preserve all quality, native, license and dependency gates.
+- Keep the publishing checkouts in sibling `release-source/` and
+  `harmonyos-source/` directories, with notes and outputs outside both Git
+  trees. RC1 completed its builds but publication rejected generated untracked
+  inputs; retain that tag and Actions record. RC2 corrected the workspace layout
+  and passed every build, but the published-only tag endpoint could not read its
+  draft. Retain the RC2 tag and evidence; RC3 corrects draft lookup and rebuilds.
+- Resolve drafts through the authenticated, fully paginated release list with
+  unique exact-tag matching, then fetch by numeric release ID. Reject changed
+  IDs, tags or states, and continue size/digest verification before publication.
+  Use the public tag endpoint after publishing. Explicitly target the source SHA
+  when creating the release. Do not publish earlier failed candidates manually.
+- Require 26 public assets: 19 standard-platform packages, the unsigned HAP,
+  two Android provenance manifests and four HarmonyOS companions. Verify the
+  HAP, manifest, checksum and both guides before upload, through the draft API,
+  and again after publication. Check the actual source/version/run, embedded
+  assets, all seven managed native libraries, APK signatures and increasing
+  version codes. A missing or mismatched HarmonyOS asset stops the release.
+- Keep `signed: false`, `runtime_verified: false` and HarmonyOS beta labeling.
+  No HarmonyOS device is attached during this preparation. Publish the reviewed
+  unsigned beta for daily-use testing; signing identity, on-device reading and
+  data-preserving upgrades remain explicit follow-up acceptance. Do not claim
+  that compilation or synthetic host tests established those results.
+- The RC keeps the existing stable update channel, AltStore source and Winget
+  distribution unchanged. Build fresh from the tag; never relabel the earlier
+  244/245 preview artifacts or move published historical tags.
+- Follow up once after publication on #143, #129 and #123 with the exact RC
+  link and checks for newly delivered behavior. Keep #115 investigating and
+  ask only for new-version results that are still missing. #125, #126 and #133
+  are now closed; #77 remains closed. The other open requests are #152, #81
+  and #139, which stay outside this release's runtime scope.
+- Recheck preserved-data installation and the changed storage/codecs/reader
+  paths using the released packages. Reporter confirmation governs the original
+  device symptoms; silence and a successful build do not resolve those reports.
+  Prepare the stable release after the candidate's acceptance, then continue
+  the remaining enhancements. Stable releases retain all five HarmonyOS assets.
+
 ## Stable patch preparation (2026-11-03)
 
 Prepare v1.18.3, build 244, after the maintainer accepted the next-step plan.
