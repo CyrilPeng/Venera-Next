@@ -5,6 +5,50 @@ not mark unresolved reports as fixed. Dated verification records and the
 original device acceptance checklist remain below. The newest dated section
 defines the current release scope; older candidate sections are historical.
 
+## Stable release preparation (2026-11-08)
+
+The maintainer authorized publishing `v1.18.3`, build **249**, and testing the
+complete platform release chain. Freeze runtime and dependency changes at
+consolidated main `1b3fd753a592e3679cc8086430b3269c971aaaec`; its Git tree is
+identical to the independently accepted RC3 source. This preparation changes
+version metadata, changelog and release documentation in one Chinese
+conventional commit. Do not introduce another candidate or move existing tags.
+
+- RC3 published all 26 assets, passed the full platform/quality/native gates,
+  and completed an independent Android data-preserving upgrade, existing comic
+  reading, CB7 import and cold-restart reading check. The consolidated main's
+  dependency, full quality and HarmonyOS checks also passed. Those results are
+  the accepted baseline; run the exact stable commit's required checks too.
+- Synchronize `release.json`, bundled `pubspec.yaml` and the stable changelog.
+  Check the tag, Android mobile/TV identities, canonical signing certificates,
+  increasing version codes and every platform's embedded version. Rebuild from
+  the stable tag; do not relabel RC assets. Preserve backups and original comics
+  during installation checks and retain existing signing identities.
+- Require full quality, dependency/native checks, Android mobile/TV, Windows,
+  macOS, iOS, Linux x64/ARM64 and the same-commit HarmonyOS workflow. Publish only
+  after every required job succeeds. Verify a non-prerelease/latest public
+  release and all 26 asset names, sizes, states and SHA-256 digests, including
+  the unsigned HAP, manifest, checksum and both installation guides.
+- HarmonyOS remains unsigned ARM64/API-26 Beta with `signed: false` and
+  `runtime_verified: false`. The distribution switch applies to stable tags
+  too. No HarmonyOS device is attached; retained-key signing, on-device reading,
+  real-data upgrade and signing renewal remain follow-up acceptance. Never
+  omit the five HarmonyOS assets or infer device acceptance from host checks.
+- Update and review AltStore against the actual public IPA metadata, and
+  validate/submit Winget against the public Windows installer. Distinguish
+  submission from Microsoft approval and public-source availability. Keep
+  release preparation and generated distribution metadata commits clear.
+- #143/#129 retain original-device feedback requirements; #115 is still
+  investigating. #123's deeper hierarchy and #152/#81/#139 enhancements remain
+  future work. Newly reported #155 affects the separate folder/comic sorting
+  entry points in both v1.18.2 and RC3; the sorting code is unchanged and no
+  startup, data-loss or upgrade failure is established. Document the existing
+  sidebar folder-sort path and follow up without treating it as fixed.
+- Post at most one version-specific notice for newly delivered issue behavior
+  after public asset verification. Reuse prior diagnostics and keep reports
+  open pending their own acceptance. A short RC observation window or absent
+  replies do not establish long-term, original-device acceptance.
+
 ## Required HarmonyOS candidate release (2026-11-07)
 
 The maintainer explicitly requires HarmonyOS in every subsequent package

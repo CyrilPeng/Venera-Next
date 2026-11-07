@@ -24,6 +24,8 @@ Canonical committed Git blobs identify runtime source and all eight project pack
 
 The caller's Git commit, version, build number, run ID and changelog digest are validated. Only the owned generated project receives the caller's version and changelog; the source checkout is unchanged. Native versions have three numeric components, while Dart versions retain RC suffixes. Build numbers follow mainline monotonically. The first public mainline release with a HAP is `v1.18.3-rc.3`, build **248**; RC1/RC2 retain their built tags and Actions records and have no public Release. Schema 3 permits builds from 245 onward; build 244 retains its historical source for verification only. Existing releases such as `v1.18.2` are not backfilled.
 
+Stable `v1.18.3` uses build **249** and rebuilds alongside the other platforms from the same stable release commit; accepted candidate artifacts are not renamed into stable packages. The stable release still includes the unsigned Beta HAP and four companions. HarmonyOS device signing, reading, real-data upgrades and signing renewal remain explicit follow-up acceptance.
+
 Every release requires:
 
 - `VeneraNext-VERSION-harmonyos-arm64-unsigned.hap`
