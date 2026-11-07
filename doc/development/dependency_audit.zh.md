@@ -82,3 +82,9 @@ VeneraNext 维护者负责自有 fork 的补丁选择、上游变更审查和发
 本轮验证重点是保存路径和持久授权、含 `/` 的根 ID、授权撤销及 authority 歧义、原 PFD 的提交／关闭生命周期、跨 isolate 两阶段交接、64 位稀疏文件、流取消、错误清理与 PDF worker 退出。完整来源清单、接口限制和验证方式见 `packages/venera_saf/LOCAL_PATCHES.md`；真实 Android fixture 与混淆 Release 由 `tool/saf_provider_probe` 和 CI 重复验证，外部云盘的具体限制继续按 provider／设备记录。
 
 PNG／7z 的 #148 已通过 Android／TV、Windows、Linux、macOS、iOS、完整 Flutter 与 Linux ASan／UBSan 并合并。UBSan 检出的 `CpuArch.h` 未对齐读取采用原核心逐字节路径修复，固定官方摘要与本地补丁摘要分别保留；未降低 sanitizer 或 ABI 门禁。冻结的 `1.18.3+244` 鸿蒙 selector 与资产保持原来源。
+
+## 后续更新：剩余两项完整审计与鸿蒙候选（2026-11-06）
+
+完整比较、2092 条文件变化记录、当前官方候选的实测及安全公告判断见[剩余 Git 依赖审计](remaining_git_audit_20261106.zh.md)和[机器证据](remaining_git_audit_20261106.json)。当前仍为 2 个 Git 来源／8 个 Git 包／8 个本地包。QuickJS 官方 Git 已有支持 Dart 3 的未发布 0.4.0；本轮实际 solver 和 Map 契约失败，不能沿用“官方都不支持 Dart 3”的旧概括。InAppWebView 的个人补丁仅两个 Windows 文件，官方 master 的大范围演进另行登记。
+
+固定 QuickJS 核心的真实来源已匹配到 2025-01-18 的 QuickJS-NG `d07f6b5`。本轮核对 10 项公开 GHSA 并找到多项需修复的源码模式，完整条件和当前 Dart buffer API 的边界逐项记录；保留包装层 API 的决定不替代核心修复。下一鸿蒙来源已同步主线 `55c7c44` 的八个本地包和新原生库，使用独立 >=245 预览 pin，保持 `release_enabled: false`；旧 244 pin、锁文件和 Release 资产保持冻结。

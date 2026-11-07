@@ -45,15 +45,21 @@ void main() {
     expect(errors.any((e) => e.startsWith('flutter_inappwebview:')), isTrue);
   });
 
-  test('detects platform package left on upstream and resolved SHA drift', () {
+  test('detects platform source drift and a lost Windows patch override', () {
     final packages = lock['packages'];
-    packages['flutter_inappwebview_windows']['description']['url'] =
+    packages['flutter_inappwebview_android']['description']['url'] =
         'https://github.com/venera-app/flutter_inappwebview';
+    packages['flutter_inappwebview_windows']['description']['path'] =
+        'packages/unreviewed_windows';
     packages['flutter_inappwebview_ios']['description']['resolved-ref'] =
         'other';
     final errors = checkDependencyInventory(spec, lock, inventory);
     expect(
       errors.any((e) => e.startsWith('flutter_inappwebview_windows:')),
+      isTrue,
+    );
+    expect(
+      errors.any((e) => e.startsWith('flutter_inappwebview_android:')),
       isTrue,
     );
     expect(
@@ -80,6 +86,40 @@ void main() {
             (record) => record['dependency'] == name,
           )
           as Map;
+
+  test('requires evidence for necessary local and fork exceptions', () {
+    local('rhttp')['official_review'].remove('exit_condition');
+    local('photo_view')['official_review']['required_patches'] = [];
+    inventory['repositories'][0].remove('official_review');
+    final errors = checkDependencyInventory(spec, lock, inventory);
+    for (final name in ['rhttp', 'photo_view', 'flutter_qjs']) {
+      expect(errors.any((error) => error.startsWith('$name:')), isTrue);
+    }
+  });
+
+  test('rejects a fork mislabeled as an official commit', () {
+    final repo = (inventory['repositories'] as List).firstWhere(
+      (repo) => repo['dependency'] == 'flutter_inappwebview',
+    );
+    repo['url'] = 'https://example.com/fork';
+    expect(
+      checkDependencyInventory(spec, lock, inventory),
+      contains(
+        'flutter_inappwebview: official commit must use the reviewed upstream URL',
+      ),
+    );
+  });
+
+  test('rejects a federated Git override drifting from the official group', () {
+    spec['dependency_overrides']['flutter_inappwebview_platform_interface']['git']['ref'] =
+        'main';
+    expect(
+      checkDependencyInventory(spec, lock, inventory),
+      contains(
+        'flutter_inappwebview_platform_interface: Git override differs from reviewed source',
+      ),
+    );
+  });
 
   test(
     'rejects direct, override and transitive local packages without review',
