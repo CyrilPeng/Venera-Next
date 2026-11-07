@@ -11,6 +11,14 @@ integrations are retained.
 Original pub archive SHA-256:
 `b111638045b730f825a85cb045017b5bd3dfb47b38e98eb293b0519ee6050f2e`.
 
+## Explicit bundled-library loading
+
+`Rhttp.init` accepts an optional Flutter Rust Bridge `ExternalLibrary` and passes
+it to the existing generated `RustLib.init`. The HarmonyOS adapter supplies
+`librhttp.so`; callers on other platforms retain the default loader. This
+previously separate platform adaptation is maintained in the shared package.
+The Rust ABI and generated bridge remain unchanged.
+
 ## Cancellation-safe streaming callbacks
 
 In `rust/src/api/http.rs`, `make_http_request_receive_stream` previously dropped

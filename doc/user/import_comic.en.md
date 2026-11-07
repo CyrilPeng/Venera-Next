@@ -113,6 +113,29 @@ Cat's Eye.cbz
 If there is no `cover.[ext]` in the root folder, the first image from the first
 chapter is used as the cover.
 
+### HarmonyOS Comic Collection ZIP
+
+The development branch accepts both layouts below through **Comic collection ZIP**.
+Automatic outer-folder detection has not yet shipped in an installation package.
+
+```text
+Collection.zip                  Collection.zip
+|-- Book A/images               `-- Outer folder/
+`-- Book B/chapters/images           |-- Book A/images
+                                    `-- Book B/chapters/images
+```
+
+Only one optional outer folder is detected; arbitrary nesting is not flattened.
+One top-level folder containing image-only subfolders could mean separate comics
+or the chapters of one comic. In that case, the app previews the folder names and
+asks which layout to use, with no preselected answer. Cancelling imports nothing;
+you do not need to repackage the ZIP. A comic root containing a cover or pages is
+not automatically removed.
+
+Comic and chapter names are preserved. **An archive file** still imports one book
+and never automatically splits its chapters into books. Hidden system sidecars
+are ignored for layout detection, but all archive paths must still pass validation.
+
 ### Migrated Settings and Favorites
 
 The development branch fixes `Favorite registration identity is already in use`

@@ -1,0 +1,269 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'probe_runner.dart';
+import 'sideload_state.dart';
+
+void main() => runApp(const ProbeApp());
+
+class ProbeApp extends StatelessWidget {
+  const ProbeApp({super.key, this.buildIdentity});
+
+  final Future<Map<String, dynamic>>? buildIdentity;
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Venera / HarmonyOS Lab',
+    theme: ThemeData(
+      colorSchemeSeed: const Color(0xff16655b),
+      useMaterial3: true,
+    ),
+    home: ProbePage(buildIdentity: buildIdentity),
+  );
+}
+
+class ProbePage extends StatefulWidget {
+  const ProbePage({super.key, this.buildIdentity});
+
+  final Future<Map<String, dynamic>>? buildIdentity;
+
+  @override
+  State<ProbePage> createState() => _ProbePageState();
+}
+
+class _ProbePageState extends State<ProbePage> {
+  final _launchId = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
+  final _events = <ProbeEvent>[];
+  bool _running = false;
+  bool _attempted = false;
+  String _status = 'Not run';
+  Map<String, dynamic>? _nativeBuild;
+  Map<String, dynamic>? _sideloadBuild;
+  Map<String, Object?>? _sideloadState;
+  late final _buildIdentity = widget.buildIdentity ?? _loadBuildIdentity();
+
+  Future<Map<String, dynamic>> _loadBuildIdentity() async =>
+      Map<String, dynamic>.from(
+        jsonDecode(await rootBundle.loadString('assets/sideload-build.json')),
+      );
+
+  String get _json => const JsonEncoder.withIndent('  ').convert({
+    'probe_schema': 2,
+    'launch_id': _launchId,
+    'status': _status,
+    'runtime_platform': Platform.operatingSystem,
+    'dart': Platform.version.split(' ').first,
+    'native_build': _nativeBuild,
+    'sideload_build': _sideloadBuild,
+    'sideload_state': _sideloadState,
+    'events': _events,
+    'not_verified': unverified,
+  });
+
+  Future<void> _run() async {
+    setState(() {
+      _running = true;
+      _attempted = true;
+      _status = 'Running';
+    });
+    try {
+      if (Platform.operatingSystem != 'ohos') {
+        throw UnsupportedError('OHOS device required');
+      }
+      _nativeBuild = jsonDecode(
+        await rootBundle.loadString('assets/native-build.json'),
+      );
+      _sideloadBuild = await _buildIdentity;
+      const channel = MethodChannel('venera/harmonyos_probe');
+      final directory = await channel
+          .invokeMethod<String>('filesDir')
+          .timeout(const Duration(seconds: 5));
+      if (directory == null || !directory.startsWith('/')) {
+        throw StateError('Missing application sandbox');
+      }
+      final sideloadState = await checkSideloadState(
+        directory: directory,
+        launchId: _launchId,
+        build: _sideloadBuild!,
+      );
+      if (!mounted) return;
+      setState(() => _sideloadState = sideloadState);
+      await runProbeWorker(
+        directory: directory,
+        launchId: _launchId,
+        onEvent: (event) {
+          if (!mounted) return;
+          setState(() {
+            _events.add(event);
+            _status = event['type'] == 'done'
+                ? event['status'] as String
+                : 'Running: ${event['id']}';
+          });
+        },
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _status = 'Incomplete / failed';
+        _events.add({
+          'type': 'fatal',
+          'error_type': error.runtimeType.toString(),
+          'detail':
+              'Worker stopped. Check device diagnostics; restart before another attempt.',
+        });
+      });
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Venera / HarmonyOS Lab')),
+    body: SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              Text(
+                'Core compatibility probe',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Experimental branch: HarmonyOS. This is not a reader release and does not open your Venera data.',
+              ),
+              const SizedBox(height: 12),
+              FutureBuilder<Map<String, dynamic>>(
+                future: _buildIdentity,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const Text(
+                      'Build identity unavailable. Do not use this package for upgrade verification.',
+                    );
+                  }
+                  if (!snapshot.hasData) {
+                    return const Text('Loading build identity...');
+                  }
+                  final build = snapshot.data!;
+                  return SelectableText(
+                    'Sideload stage: ${build['stage']} / ${build['version_name']}+${build['version_code']}\n'
+                    'Minimum SDK: ${build['minimum_sdk']} / ARM64 ${(build['device_types'] as List<dynamic>).join(' / ')}\n'
+                    'Pair: ${build['pair_id']}',
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  _status,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_running) const LinearProgressIndicator(),
+              if (_sideloadState != null) ...[
+                const SizedBox(height: 12),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    'Sideload data: ${_sideloadState!['status']}',
+                    style: TextStyle(
+                      color:
+                          [
+                            'baseline_ready',
+                            'upgrade_data_present',
+                          ].contains(_sideloadState!['status'])
+                          ? Theme.of(context).colorScheme.onSurface
+                          : Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+                const Text(
+                  'Core checks alone do not verify upgrade data, signing identity or certificate renewal.',
+                ),
+              ],
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _attempted ? null : _run,
+                    icon: const Icon(Icons.science_outlined),
+                    label: const Text('Run core checks'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _running || !_attempted
+                        ? null
+                        : () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            await Clipboard.setData(ClipboardData(text: _json));
+                            if (mounted) {
+                              messenger.showSnackBar(
+                                const SnackBar(content: Text('Report copied')),
+                              );
+                            }
+                          },
+                    icon: const Icon(Icons.copy_outlined),
+                    label: const Text('Copy report'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Restart check: after the first run, force-stop and relaunch without clearing data. Each process permits one attempt.',
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Save three reports: baseline, baseline after force-stop, and upgrade. '
+                'Use the matching upgrade HAP through the same signing identity. '
+                'Do not uninstall or clear data between these steps. '
+                'Missing or mismatched baseline data is not an upgrade pass.',
+              ),
+              const SizedBox(height: 24),
+              for (final event in _events.where(
+                (event) => event['type'] != 'running',
+              ))
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${event['id'] ?? event['type']} / ${event['status'] ?? event['error_type'] ?? ''}',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          '${event['detail'] ?? event['error_type'] ?? event['status']}',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 24),
+              Text(
+                'Outside this result',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              for (final item in unverified)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('- $item'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}

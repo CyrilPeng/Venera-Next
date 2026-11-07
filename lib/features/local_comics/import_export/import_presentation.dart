@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:venera_next/components/message.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/translations.dart';
 
 import 'pdf_import_dialog.dart';
 import 'pdf_import_tasks.dart';
@@ -17,6 +20,43 @@ class ImportComicPresentation {
   final WindowSelectionTask? _owner;
 
   bool get canPresent => _owner?.presentationContext != null;
+
+  /// Null means cancel/unavailable; ambiguity must not silently split chapters.
+  Future<bool?> chooseCollectionLayout({
+    required String enclosingComic,
+    required List<String> comicTitles,
+  }) async {
+    final context = _owner?.presentationContext;
+    if (context == null) return null;
+    final disposed = Completer<bool?>();
+    VoidCallback? detach;
+    final route = ResourceDialogRoute<bool>(
+      context: context,
+      animationStyle: MediaQuery.disableAnimationsOf(context)
+          ? AnimationStyle.noAnimation
+          : null,
+      onDispose: () {
+        detach?.call();
+        if (!disposed.isCompleted) disposed.complete();
+      },
+      builder: (_) => _CollectionLayoutDialog(
+        enclosingComic: enclosingComic,
+        comicTitles: List.unmodifiable(comicTitles),
+      ),
+    );
+    detach = _owner!.retainPresentation(() {
+      if (route.isActive) route.navigator?.removeRoute(route);
+    }, isCurrent: () => route.isCurrent);
+    try {
+      final choice = await Future.any([
+        Navigator.of(context, rootNavigator: true).push(route),
+        disposed.future,
+      ]);
+      return _owner.canPresent ? choice : null;
+    } finally {
+      detach();
+    }
+  }
 
   Future<ComicCopyRecoveryChoice?> chooseCopyRecovery({
     required String title,
@@ -42,6 +82,67 @@ class ImportComicPresentation {
     final context = _owner?.presentationContext;
     if (context == null) return;
     context.showMessage(message: message);
+  }
+
+  Future<void> showResult({
+    required int imported,
+    required List<String> details,
+  }) async {
+    final context = _owner?.presentationContext;
+    if (context == null) return;
+    const detailLimit = 100;
+    final visible = details.take(detailLimit).toList();
+    if (details.length > detailLimit) {
+      visible.add(
+        'Showing @a of @b details'.tlParams({
+          'a': detailLimit,
+          'b': details.length,
+        }),
+      );
+    }
+    final disposed = Completer<void>();
+    VoidCallback? detach;
+    final route = ResourceDialogRoute<void>(
+      context: context,
+      barrierDismissible: false,
+      onDispose: () {
+        detach?.call();
+        if (!disposed.isCompleted) disposed.complete();
+      },
+      builder: (dialogContext) => ContentDialog(
+        title: 'Imported @a comics'.tlParams({'a': imported}),
+        content: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: SelectableText(
+            visible.isEmpty ? 'Finished'.tl : visible.join('\n\n'),
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () {
+              if (_owner?.canPresent == true &&
+                  ModalRoute.of(dialogContext)?.isCurrent == true) {
+                dialogContext.pop();
+              }
+            },
+            child: Text('OK'.tl),
+          ),
+        ],
+      ),
+    );
+    detach = _owner!.retainPresentation(() {
+      if (route.isActive) route.navigator?.removeRoute(route);
+    }, isCurrent: () => route.isCurrent);
+    try {
+      // Navigator disposal need not complete push's Future. It must not retain
+      // the import's selected files or temporary copies indefinitely.
+      await Future.any([
+        Navigator.of(context, rootNavigator: true).push(route),
+        disposed.future,
+      ]);
+    } finally {
+      detach();
+    }
   }
 
   LoadingDialogController? showLoading({
@@ -78,4 +179,99 @@ class ImportComicPresentation {
           _owner!.retainPresentation(close, isCurrent: isCurrent),
     );
   }
+}
+
+class _CollectionLayoutDialog extends StatefulWidget {
+  const _CollectionLayoutDialog({
+    required this.enclosingComic,
+    required this.comicTitles,
+  });
+
+  final String enclosingComic;
+  final List<String> comicTitles;
+
+  @override
+  State<_CollectionLayoutDialog> createState() =>
+      _CollectionLayoutDialogState();
+}
+
+class _CollectionLayoutDialogState extends State<_CollectionLayoutDialog> {
+  bool? _separate;
+  bool _submitted = false;
+
+  void _finish(bool? choice) {
+    if (_submitted || ModalRoute.of(context)?.isCurrent != true) return;
+    _submitted = true;
+    Navigator.of(context).pop(choice);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    scrollable: true,
+    title: Text('Choose collection layout'.tl),
+    content: SizedBox(
+      width: 440,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'This ZIP layout can represent one comic with chapters or multiple comics. Choose how to import it.'
+                .tl,
+          ),
+          const SizedBox(height: 12),
+          RadioGroup<bool>(
+            groupValue: _separate,
+            onChanged: (value) => setState(() => _separate = value),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<bool>(
+                  value: true,
+                  autofocus: true,
+                  titleAlignment: ListTileTitleAlignment.top,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Separate comics (@a)'.tlParams({
+                      'a': widget.comicTitles.length,
+                    }),
+                  ),
+                ),
+                RadioListTile<bool>(
+                  value: false,
+                  titleAlignment: ListTileTitleAlignment.top,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('One comic with chapters'.tl),
+                  subtitle: Text(widget.enclosingComic),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Contained folders'.tl,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            [
+              ...widget.comicTitles.take(6),
+              if (widget.comicTitles.length > 6)
+                'Showing @a of @b folders'.tlParams({
+                  'a': 6,
+                  'b': widget.comicTitles.length,
+                }),
+            ].join('\n'),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(onPressed: () => _finish(null), child: Text('Cancel'.tl)),
+      FilledButton(
+        onPressed: _separate == null ? null : () => _finish(_separate),
+        child: Text('Import'.tl),
+      ),
+    ],
+  );
 }

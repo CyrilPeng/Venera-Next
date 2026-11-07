@@ -108,9 +108,13 @@ class ApplicationUpdatePrompt {
       final dialog = DialogRoute<void>(
         context: context,
         builder: (context) => AlertDialog(
+          scrollable: service.forHarmonyOS,
           title: Text('New version available'.tl),
           content: Text(
-            service.forAndroidTv
+            service.forHarmonyOS
+                ? 'HarmonyOS beta @v is available. Open the release page, choose the unsigned HAP, and sign it with your existing key to upgrade.'
+                      .tlParams({'v': version})
+                : service.forAndroidTv
                 ? 'TV version @v is available. Open the release page and choose an android-tv APK.'
                       .tlParams({'v': version})
                 : 'A new version @v is available. Do you want to update now?'

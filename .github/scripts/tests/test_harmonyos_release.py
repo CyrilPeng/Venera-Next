@@ -99,6 +99,21 @@ class Fixture:
         self.release_commit = commit(self.root)
         self.preview_next = True
 
+    def unified_mainline(self, *, release_enabled=False):
+        self.next_candidate()
+        for name in release.tracked(self.source, self.source_commit):
+            write(self.root, name, release.blob(self.source, self.source_commit, name))
+        self.next_pin = {'schema': 3, 'source_mode': 'release_commit',
+                         'first_release_build': 245, 'release_enabled': release_enabled}
+        write(self.root, release.NEXT_PIN, json.dumps(self.next_pin))
+        self.release_commit = commit(self.root)
+        self.sync_mainline_source()
+
+    def sync_mainline_source(self):
+        git(self.source, 'fetch', str(self.root), 'HEAD')
+        git(self.source, 'checkout', '--detach', 'FETCH_HEAD')
+        self.source_commit = git(self.source, 'rev-parse', 'HEAD')
+
     def set_version(self, version, build):
         write(self.root, 'release.json', json.dumps({'version': version, 'build': build}))
         write(self.root, 'pubspec.yaml', self.pubspec.replace('1.18.2+243', f'{version}+{build}'))
@@ -116,7 +131,7 @@ class Fixture:
 
     def bundle(self, *, metadata_change=None, members_change=None, report_change=None):
         expected = self.context()
-        next_candidate = expected['schema'] == 2
+        next_candidate = expected['schema'] >= 2
         native_names = release.NEXT_NATIVE if next_candidate else release.NATIVE
         names = release.asset_names(expected['version'])
         source_files = {
@@ -371,6 +386,91 @@ class HarmonyReleaseTests(unittest.TestCase):
         git(fixture.root, 'tag', '-d', 'v1.19.0')
         git(fixture.root, 'tag', '-a', 'v1.19.0', '-m', 'reviewed fixture')
         self.assertTrue(fixture.context(tagged=True)['tagged'])
+
+    def test_mainline_preview_binds_both_checkouts_and_all_assets_to_one_commit(self):
+        fixture = self.fixture
+        frozen = (fixture.root / release.PIN).read_bytes()
+        fixture.unified_mainline()
+        expected = fixture.bundle()
+        self.assertEqual(len(self.verify(expected)), 5)
+        self.assertEqual(expected['schema'], 3)
+        self.assertEqual(expected['source_mode'], 'release_commit')
+        self.assertEqual(expected['source_commit'], expected['release_commit'])
+        self.assertEqual((expected['build'], expected['caller_build']), (245, 245))
+        self.assertNotIn('main_baseline', expected)
+        self.assertEqual((fixture.root / release.PIN).read_bytes(), frozen)
+        self.assertEqual(release.selected_source_commit(fixture.root, fixture.next_pin), fixture.release_commit)
+        with self.assertRaisesRegex(ValueError, 'preview'):
+            release.check_remote_release({}, expected, {}, published=False)
+
+    def test_mainline_fix_needs_no_pin_edit_but_rejects_an_older_source_checkout(self):
+        fixture = self.fixture
+        fixture.unified_mainline()
+        config = (fixture.root / release.NEXT_PIN).read_bytes()
+        write(fixture.root, 'lib/main.dart', 'void main() { print("fixed"); }\n')
+        fixture.release_commit = commit(fixture.root)
+        with self.assertRaisesRegex(ValueError, 'pinned commit'):
+            fixture.context()
+        fixture.sync_mainline_source()
+        expected = fixture.bundle()
+        self.verify(expected)
+        self.assertEqual(expected['source_commit'], fixture.release_commit)
+        self.assertEqual((fixture.root / release.NEXT_PIN).read_bytes(), config)
+
+    def test_mainline_mode_rejects_branch_names_and_embedded_source_pins(self):
+        fixture = self.fixture
+        fixture.unified_mainline()
+        for change in ({'source_mode': 'main'}, {'source_mode': 'HarmonyOS'},
+                       {'source_commit': fixture.source_commit}, {'main_baseline': fixture.baseline},
+                       {'first_release_build': 244}, {'first_release_build': True},
+                       {'release_enabled': 1}, {'schema': True}):
+            with self.subTest(change=change):
+                write(fixture.root, release.NEXT_PIN, json.dumps(fixture.next_pin | change))
+                with self.assertRaises(ValueError):
+                    release.load_pin(fixture.root, next_candidate=True)
+
+    def test_mainline_context_rejects_untracked_caller_and_staged_source_drift(self):
+        fixture = self.fixture
+        fixture.unified_mainline()
+        write(fixture.root, 'lib/injected.dart', 'void injected() {}')
+        with self.assertRaisesRegex(ValueError, 'untracked inputs'):
+            fixture.context()
+        (fixture.root / 'lib/injected.dart').unlink()
+        write(fixture.source, 'lib/main.dart', 'void changed() {}')
+        git(fixture.source, 'add', 'lib/main.dart')
+        with self.assertRaisesRegex(ValueError, 'uncommitted changes'):
+            fixture.context()
+
+    def test_mainline_tag_stays_disabled_until_explicit_acceptance(self):
+        fixture = self.fixture
+        fixture.unified_mainline()
+        fixture.preview_next = False
+        git(fixture.root, 'tag', '-a', 'v1.18.3', '-m', 'fixture')
+        with self.assertRaisesRegex(ValueError, 'preview only'):
+            fixture.context(tagged=True)
+
+    def test_enabled_mainline_tag_uses_the_same_commit_and_rejects_wrong_action_sha(self):
+        fixture = self.fixture
+        fixture.unified_mainline(release_enabled=True)
+        fixture.preview_next = False
+        git(fixture.root, 'tag', '-a', 'v1.18.3', '-m', 'fixture')
+        expected = fixture.context(tagged=True)
+        self.assertTrue(expected['tagged'])
+        self.assertEqual(expected['source_commit'], expected['release_commit'])
+        environment = fixture.environment(tagged=True) | {'GITHUB_SHA': fixture.baseline}
+        with self.assertRaisesRegex(ValueError, 'exact release commit'):
+            release.context(fixture.root, fixture.source, environment)
+
+    def test_mainline_bundle_still_rejects_rewritten_project_code_and_native_libraries(self):
+        fixture = self.fixture
+        fixture.unified_mainline()
+        for mutate in (lambda m: m['source_files'].update({'lib/main.dart': '0' * 64}),
+                       lambda m: m['dependencies']['venera_native'].update(prepared_sha256='0' * 64),
+                       lambda m: m['native_libraries'].pop('libvenera_native.so')):
+            with self.subTest(mutate=mutate):
+                expected = fixture.bundle(metadata_change=mutate)
+                with self.assertRaises(ValueError):
+                    self.verify(expected)
 
     def test_next_preview_still_rejects_unsynced_application_source(self):
         fixture = self.fixture

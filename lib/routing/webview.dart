@@ -129,6 +129,12 @@ class _AppWebviewState extends State<AppWebview> with ContextMenuOwner {
     var proxy = GlobalPreferenceStore(
       appdata.settings,
     ).read(NetworkPreferences.proxy);
+    if (App.isHarmonyOS && proxy != 'system' && proxy != 'direct') {
+      throw UnsupportedError(
+        'Custom WebView proxy override is not integrated in this HarmonyOS experiment. '
+        'Choose system/direct proxy in Settings before opening the embedded browser.',
+      );
+    }
     if (App.isWindows) {
       final environment = await _windowsEnvironments.acquire(
         userDataFolder: "${App.dataPath}\\webview",

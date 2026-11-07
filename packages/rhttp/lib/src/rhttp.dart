@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show ExternalLibrary;
+
 import 'package:rhttp/src/interceptor/interceptor.dart';
 import 'package:rhttp/src/model/cancel_token.dart';
 import 'package:rhttp/src/model/request.dart';
@@ -12,8 +15,9 @@ class Rhttp {
   const Rhttp._();
 
   /// Initializes the Rust library.
-  static Future<void> init() async {
-    await RustLib.init();
+  /// A platform may supply its explicitly bundled [externalLibrary].
+  static Future<void> init({ExternalLibrary? externalLibrary}) async {
+    await RustLib.init(externalLibrary: externalLibrary);
   }
 
   /// Makes an HTTP request.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bind an unsigned HarmonyOS beta to one reviewed source and one release."""
+"""Bind an unsigned HarmonyOS beta to its exact mainline or frozen source."""
 
 import argparse
 import hashlib
@@ -26,7 +26,7 @@ NATIVE = {"librhttp.so", "libqjs.so", "libsqlite3.so", "libc++_shared.so",
 NEXT_NATIVE = NATIVE - {"liblodepng_flutter.so", "libflutter_7zip.so"} | {"libvenera_native.so"}
 NOTICE = "assets/notices/VENERA_NATIVE_THIRD_PARTY_NOTICES.txt"
 NOTICE_SOURCE = "packages/venera_native/notices/VENERA_NATIVE_THIRD_PARTY_NOTICES.txt"
-# These files cannot change the reader built from the independent branch.
+# Legacy schema 1/2 pins permit only release metadata after their baseline.
 RELEASE_ONLY = {"release.json", "CHANGELOG.md", "README.md", "README.en.md", "alt_store.json", PIN, NEXT_PIN,
                 ".github/scripts/harmonyos_release.py", ".github/scripts/tests/test_harmonyos_release.py"}
 
@@ -49,18 +49,28 @@ def tracked(root, commit):
 
 def load_pin(root, *, next_candidate=False):
     value = json.loads((root / (NEXT_PIN if next_candidate else PIN)).read_text(encoding="utf-8"))
-    fields = {"schema", "source_commit", "main_baseline", "first_release_build"}
+    unified = next_candidate and value.get("schema") == 3
+    fields = ({"schema", "source_mode", "first_release_build"} if unified
+              else {"schema", "source_commit", "main_baseline", "first_release_build"})
     if next_candidate:
         fields.add("release_enabled")
     if (set(value) != fields
-            or type(value["schema"]) is not int or value["schema"] != (2 if next_candidate else 1)
-            or any(not isinstance(value[key], str) or not SHA.fullmatch(value[key])
-                   for key in ("source_commit", "main_baseline"))
+            or type(value["schema"]) is not int
+            or value["schema"] not in ((2, 3) if next_candidate else (1,))
+            or (unified and value["source_mode"] != "release_commit")
+            or (not unified and any(not isinstance(value[key], str) or not SHA.fullmatch(value[key])
+                                    for key in ("source_commit", "main_baseline")))
             or type(value["first_release_build"]) is not int
             or value["first_release_build"] < (NEXT_BUILD if next_candidate else 244)
             or (next_candidate and type(value["release_enabled"]) is not bool)):
         raise ValueError("Invalid immutable HarmonyOS release pin")
     return value
+
+
+def selected_source_commit(root, pin):
+    if pin["schema"] == 3:
+        return git(root, "rev-parse", "HEAD").decode().strip()
+    return pin["source_commit"]
 
 
 def select_pin(root, *, preview_next=False):
@@ -83,16 +93,21 @@ def normalized_pubspec(data):
 def check_sources(root, source, pin):
     release_commit = git(root, "rev-parse", "HEAD").decode().strip()
     source_commit = git(source, "rev-parse", "HEAD").decode().strip()
-    if source_commit != pin["source_commit"]:
+    if source_commit != selected_source_commit(root, pin):
         raise ValueError("HarmonyOS checkout does not match the pinned commit")
     for checkout, head in ((root, release_commit), (source, source_commit)):
         if git(checkout, "diff", "--name-only", "HEAD", "--"):
             raise ValueError("Release source has uncommitted changes")
-        if subprocess.run(["git", "-C", str(checkout), "merge-base", "--is-ancestor",
-                           pin["main_baseline"], head], timeout=120).returncode != 0:
+        if pin["schema"] != 3 and subprocess.run(
+                ["git", "-C", str(checkout), "merge-base", "--is-ancestor", pin["main_baseline"], head],
+                timeout=120).returncode != 0:
             raise ValueError("Both checkouts must contain the reviewed main baseline")
+        if pin["schema"] == 3 and git(checkout, "ls-files", "--others", "--exclude-standard"):
+            raise ValueError("Mainline release source contains untracked inputs")
     if git(source, "ls-files", "--others", "--exclude-standard"):
         raise ValueError("HarmonyOS source contains untracked inputs")
+    if pin["schema"] == 3:
+        return release_commit
     changed = {p.decode("utf-8") for p in git(root, "diff", "--name-only", "-z",
                                              pin["main_baseline"], release_commit, "--").split(b"\0") if p}
     stale = []
@@ -129,6 +144,7 @@ def context(root, source, environ, *, preview_next=False):
     caller_version, caller_build, changelog = release_metadata(root, caller_commit)
     next_candidate = preview_next or caller_build >= NEXT_BUILD
     pin = load_pin(root, next_candidate=next_candidate)
+    source_commit = selected_source_commit(root, pin)
     release_commit = check_sources(root, source, pin)
     try:
         committed_pin = json.loads(blob(root, release_commit, NEXT_PIN if next_candidate else PIN))
@@ -138,22 +154,26 @@ def context(root, source, environ, *, preview_next=False):
         raise ValueError("The release pin differs from the caller's committed inputs")
     version, build = caller_version, caller_build
     if preview_next:
-        version, build, changelog = release_metadata(source, pin["source_commit"])
+        version, build, changelog = release_metadata(source, source_commit)
     if next_candidate and build < pin["first_release_build"]:
         raise ValueError("The next reader cannot rebuild the frozen 244 release")
     if next_candidate and tagged and not pin["release_enabled"]:
-        raise ValueError("The reviewed next candidate is preview only; resolve the audited QuickJS core findings before enabling release")
+        raise ValueError("The reviewed next candidate is preview only; complete platform and device acceptance before enabling release")
     if tagged and (environ.get("GITHUB_REF_NAME") != "v" + version or build < pin["first_release_build"]):
         raise ValueError("Release tag/version is mismatched or predates HAP distribution")
     if tagged and git(root, "rev-parse", f"refs/tags/v{version}^{{commit}}").decode().strip() != release_commit:
         raise ValueError("Release tag does not identify the checked-out commit")
     if environ.get("GITHUB_SHA", release_commit) != release_commit:
         raise ValueError("Checkout is not the caller's exact release commit")
-    value = {"schema": 2 if next_candidate else 1, "channel": "harmonyos-beta", "source_commit": pin["source_commit"],
-            "main_baseline": pin["main_baseline"], "release_commit": release_commit,
+    value = {"schema": pin["schema"], "channel": "harmonyos-beta", "source_commit": source_commit,
+             "release_commit": release_commit,
             "version": version, "build": build, "tag": "v" + version,
             "run_id": environ.get("GITHUB_RUN_ID", "local"), "tagged": tagged,
             "changelog_sha256": sha256(changelog.encode()), "changelog": changelog}
+    if pin["schema"] == 3:
+        value["source_mode"] = "release_commit"
+    else:
+        value["main_baseline"] = pin["main_baseline"]
     if next_candidate:
         value.update(preview=preview_next, caller_version=caller_version, caller_build=caller_build)
     return value
@@ -230,7 +250,7 @@ def verify_bundle(directory, expected, source):
     if (directory / names["checksums"]).read_text(encoding="utf-8") != f"{report['sha256']}  {hap.name}\n":
         raise ValueError("HAP checksum file differs")
     commit = expected["source_commit"]
-    next_candidate = expected["schema"] == 2
+    next_candidate = expected["schema"] >= 2
     native_names = NEXT_NATIVE if next_candidate else NATIVE
     source_names = tracked(source, commit)
     files = {n for n in source_names if n in {"pubspec.yaml", "pubspec.lock", "CHANGELOG.md"}
@@ -304,7 +324,7 @@ def verify_bundle(directory, expected, source):
 def check_remote_release(release, expected, assets, *, published):
     if expected.get("preview"):
         raise ValueError("Next-candidate preview assets cannot be published to a release")
-    if expected.get("schema") == 2 and expected.get("tagged") is not True:
+    if expected.get("schema", 1) >= 2 and expected.get("tagged") is not True:
         raise ValueError("Next reader assets require a verified release-tag context before publication")
     if (release.get("tag_name") != expected["tag"] or release.get("draft") is not (not published)
             or release.get("prerelease") is not ("-" in expected["version"])):
@@ -346,8 +366,8 @@ def main():
         pin = select_pin(args.root, preview_next=args.preview_next)
         if args.github_output:
             with args.github_output.open("a", encoding="utf-8") as output:
-                output.write(f"source_commit={pin['source_commit']}\n")
-        print(json.dumps(pin))
+                output.write(f"source_commit={selected_source_commit(args.root, pin)}\n")
+        print(json.dumps(pin | {"source_commit": selected_source_commit(args.root, pin)}))
         return
     if args.source_root is None:
         parser.error("--source-root is required")

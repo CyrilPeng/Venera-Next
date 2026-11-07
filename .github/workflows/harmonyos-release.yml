@@ -4,15 +4,6 @@ run-name: "HarmonyOS release verification / ${{ github.ref_name }}"
 on:
   workflow_call:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    paths:
-      - .github/harmonyos-release.json
-      - .github/harmonyos-next.json
-      - .github/scripts/harmonyos_release.py
-      - .github/scripts/tests/test_harmonyos_release.py
-      - .github/workflows/harmonyos-release.yml
-      - .github/workflows/main.yml
 
 permissions:
   contents: read
@@ -41,11 +32,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ github.sha }}
           path: release
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Select the frozen release or reviewed next preview
+      - name: Select the exact mainline commit or frozen legacy source
         id: pin
         working-directory: release
         run: |
@@ -60,7 +52,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Reject stale source and bind the caller version and changelog
+      - name: Verify the exact source and bind its version and changelog
         working-directory: release
         run: |
           options=()

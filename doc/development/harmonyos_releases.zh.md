@@ -1,31 +1,26 @@
-# 鸿蒙随版构建
+# 鸿蒙主线构建与发布
 
-鸿蒙以独立 `HarmonyOS` 分支、Flutter OH SDK 和锁文件构建完整阅读器，主线仍使用原有工具链。随版 HAP 是 ARM64 手机／平板测试版，不是全面平台支持声明；签名、设备授权和私钥始终留在用户本机。
+阅读器和鸿蒙平台适配统一在 `main`。普通平台使用根 `pubspec.yaml`／`pubspec.lock` 与官方 Flutter；鸿蒙使用同仓库 `tool/harmonyos/` 中固定的 Flutter OH SDK、CPF 插件覆盖、独立锁模板、ArkTS 桥接和原生构建配置。生成工程位于 `build/harmonyos/full-app`，应用运行源码与调用方的 canonical Git blob 一致。
 
-## 固定来源
+## 同一提交的来源约束
 
-`.github/harmonyos-release.json` 保存完整 `source_commit`、共同 `main_baseline` 和 `first_release_build`。两个 checkout 都必须包含共同基线；鸿蒙 checkout 必须精确等于固定提交，不能使用分支名、短 SHA 或工作区改动。
+构建号至少为 245 的主线使用 schema 3 的 `.github/harmonyos-next.json`：`source_mode: release_commit`。配置不保存自身 commit SHA，也不解析浮动分支名；选择器从调用方 checkout 的 HEAD 得到完整 SHA，第二个构建 checkout 必须精确相等。运行上下文记录相等的 `source_commit`／`release_commit`、版本、构建号、Actions run ID 和 changelog 摘要。
 
-基线之后允许主线调整文档、工作流、发版元数据和 `pubspec.yaml` 的版本行。运行代码、资源、测试、依赖锁或原生工具链变化会阻止随版构建，直到重新同步并审查鸿蒙分支。不要仅修改基线数字绕过同步，也不要将旧 HAP 改名上传。
+PR 校验使用 Actions 的准确合并候选 SHA，push 和手动构建使用准确主线 SHA，与普通 Flutter 工作流的来源一致。两个 checkout 的未提交、暂存和未跟踪输入均被拒绝；普通业务修复无需同步另一条开发分支或修改共同基线。
 
-1. 将公共修复合并进主线与鸿蒙分支，保留共同提交的祖先关系；不要在建立 pin 后用 squash/rebase 丢掉该基线。
-2. 验证独立 OH 锁文件、平台宿主回归和真实 HAP 构建，检查平台限制是否改变。
-3. 将新的完整鸿蒙 SHA 和共同基线写入 pin，提交 changelog 与必要的安装指南更新。
-4. pin／发布工作流变更的 PR 会运行 `HarmonyOS Release HAP`；只有同一候选代码的质量与 HAP 检查通过后才合并。
+`.github/workflows/harmonyos-experiment.yml` 监听主线相关源码、依赖、工具和发布配置变化，复用 `harmonyos-release.yml` 的完整阅读器构建。保持独立 SDK 目录、受控 OH lock、原生交叉编译、严格分析、宿主回归、真实 API 26 HAP、完整资产及原生导出审计。生成器仅修改生成工程与下载后的覆盖层，不修改官方 Flutter、共享 Pub cache 或主线根锁。
 
-## 冻结的 244 与下一候选
+## 冻结的 244 与发布开关
 
-`1.18.3+244` 继续使用 schema 1 的 `.github/harmonyos-release.json`，其来源、独立锁文件和历史 Release 资产保持冻结。构建号至少为 245 的新版本使用 schema 2 的 `.github/harmonyos-next.json`；禁止回退到旧 pin。两个 pin 都必须来自调用方已提交的 Git 文件。
+244 的 schema 1 `.github/harmonyos-release.json`、固定 Git 输入和历史资产保留。`harmonyos-frozen-244` 归档标签保留原来源的可达性；`harmonyos-branch-final-245` 保存最后一次双分支候选。后续开发只使用 `main`。旧 schema 2 解析保留用于历史验证，当前主线使用 schema 3。
 
-主线 PR 和分支手动运行使用 `--preview-next`。即使主线仍为 244，预览也使用候选自身的 `1.18.3+245` 版本、构建号和 changelog，并分别保存真实调用方提交、版本、构建号及 Actions run ID。八个项目包按候选 Git 文件计算摘要，七个受管原生库、PNG／7z 导出及生成的第三方 NOTICE 参与完整 HAP 审计。鸿蒙既有的 Rhttp 显式加载接口按其真实平台变体核验。
+下一配置仍为 `release_enabled: false`。普通平台与 HAP 的 CI 通过不自动启用 tag 分发；平台构建审核、设备签装和覆盖升级仍分别验收。schema 2／3 的预览或未绑定实际 tag 的产物均拒绝 Release 验证，归档标签也不会触发 `v*` 发布。
 
-源码及项目包摘要使用已提交的 canonical Git blob；二进制原字节保持一致，PowerShell 等文件的 CRLF 检出规则不参与摘要。生成清单前拒绝工作区及暂存源码漂移，避免固定提交的摘要掩盖实际构建输入变更。
-
-下一 pin 当前为 `release_enabled: false`。适用的 QuickJS 核心修复已固定到 `f5a1f20`，Linux／Windows 32／64 位内存检查通过，必要补丁 PR 已合并；[实施记录](official_dependency_implementation_20261107.zh.md)区分核心、应用与平台验证。下一候选固定鸿蒙 `ca5f7ef98ec03872d087f0b691e40f0de0080939` 和公共基线 `c16e3545e17e12b68296ec125c8702430a6617bd`，该基线包含全部运行代码、依赖、工具和测试。平台审核和真机签装分别验收，预览不会自动启用 tag 分发；预览和未绑定实际 tag 的 schema 2 产物均拒绝 Release 验证。
+源码及八个项目包摘要使用已提交的 canonical Git blob；七个受管原生库、PNG／7z 导出、第三方 NOTICE 和全部应用资产继续参与审计。适用的 QuickJS 核心修复固定到 `f5a1f20`，历史来源见[依赖实施记录](official_dependency_implementation_20261107.zh.md)。
 
 ## 版本与产物
 
-发布工作流校验调用方的 Git 提交、版本、构建号、运行号及 changelog 摘要。只有独占生成工程被写入调用方版本，固定源 checkout 不被改写。原生版本名为三段数字，Dart 版本保留 RC 后缀；构建号沿用主线并递增。第一个包含 HAP 的标签构建号至少为 **244**，不回填 `v1.18.2` 等旧 Release。
+发布工作流校验调用方的 Git 提交、版本、构建号、运行号及 changelog 摘要。只有独占生成工程被写入调用方版本，源 checkout 不被改写。原生版本名为三段数字，Dart 版本保留 RC 后缀；构建号沿用主线并递增。第一个包含 HAP 的标签构建号至少为 **244**，不回填 `v1.18.2` 等旧 Release。
 
 每次发布必须包含：
 
@@ -35,13 +30,13 @@
 - `harmonyos-install.zh.md`
 - `harmonyos-install.en.md`
 
-HAP 采用 `com.github.cyrilpeng.veneranext.harmony` 包名和 `VeneraNext (HarmonyOS Beta)` 显示名，最低／目标 SDK 为 API 26。复核真实 `module.json`、AArch64 ELF、原生库精确摘要、完整 Dart／资源源码清单和包内版本，安装指南来自固定鸿蒙提交。下载页须继续明确未签名及测试版身份，不能把编译通过说成真机升级或续签验收。
+HAP 采用 `com.github.cyrilpeng.veneranext.harmony` 包名和 `VeneraNext (HarmonyOS Beta)` 显示名，最低／目标 SDK 为 API 26。复核真实 `module.json`、AArch64 ELF、原生库精确摘要、完整 Dart／资源源码清单和包内版本，安装指南来自准确构建提交。下载页须继续明确未签名及测试版身份，不能把编译通过说成真机升级或续签验收。
 
 ## 发布门禁与无发布验证
 
 完整构建的 `Release` 同时依赖 Quality、原平台 Build 与 HarmonyOS。HAP 缺失、内容损坏、源码过期或摘要错误都不得 `continue-on-error`。先创建草稿并上传，再从 GitHub API 核对全部五项鸿蒙资产的名称、大小、上传状态和 SHA-256；通过后才公开，公开后再复核一次。任一阶段失败须查看日志，不允许静默去掉鸿蒙包后继续。
 
-`HarmonyOS Release HAP` 的分支手动运行和目标主线的 PR 运行只产出下一候选的 Actions artifacts，不创建标签或 Release；鸿蒙分支 PR 使用独立候选流程核验其准确 head。常用检查：
+`HarmonyOS Release HAP` 的分支手动运行和目标主线的 PR 运行只产出下一候选的 Actions artifacts，不创建标签或 Release；主线相关 PR／push 使用同一候选流程核验普通平台与鸿蒙的准确源码 SHA。常用检查：
 
 ```bash
 python3 -m unittest discover -s .github/scripts/tests -p test_harmonyos_release.py -v
@@ -50,4 +45,4 @@ python3 .github/scripts/harmonyos_release.py config --preview-next
 gh workflow run harmonyos-release.yml --ref main
 ```
 
-平台脚本与 SDK 基线见 `HarmonyOS` 分支的 `tool/harmonyos/README.md`。商业 API 26 SDK 从受摘要固定的社区 CI 镜像获取，不冒充官方校验；主线脚本不会读取签名密钥。安装与不支持的功能见[用户指南](../distribution/harmonyos-reader.zh.md)。本流程不评论、关闭、重开或跟踪 issue。
+平台脚本与 SDK 基线见主线的 `tool/harmonyos/README.md`。商业 API 26 SDK 从受摘要固定的社区 CI 镜像获取，不冒充官方校验；主线脚本不会读取签名密钥。安装与不支持的功能见[用户指南](../distribution/harmonyos-reader.zh.md)。本流程不评论、关闭、重开或跟踪 issue。

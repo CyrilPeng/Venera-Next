@@ -1,0 +1,221 @@
+import 'dart:async';
+import 'dart:ffi';
+import 'dart:io' as io;
+import 'dart:typed_data';
+
+import 'package:flutter_qjs/flutter_qjs.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show ExternalLibrary;
+import 'package:rhttp/rhttp.dart';
+// Explicit loading avoids changing FRB-generated code or the production loader.
+// ignore: implementation_imports
+import 'package:rhttp/src/rust/frb_generated.dart';
+import 'package:sqlite3/open.dart';
+import 'package:sqlite3/sqlite3.dart';
+
+final class ProbeFailure implements Exception {
+  const ProbeFailure(this.check);
+  final String check;
+}
+
+void require(bool condition, String message) {
+  if (!condition) throw ProbeFailure(message);
+}
+
+Future<String> checkQuickJs() async {
+  for (var i = 0; i < 3; i++) {
+    final engine = FlutterQjs(timeout: 3000, memoryLimit: 32 * 1024 * 1024);
+    final dispatch = engine.dispatch();
+    try {
+      require(engine.evaluate('21 * 2') == 42, 'JavaScript evaluation');
+      require(
+        await engine.evaluate('Promise.resolve(42)') == 42,
+        'Promise dispatch',
+      );
+      final bytes = engine.evaluate('new Uint8Array([0, 127, 255]).buffer');
+      require(
+        bytes is Uint8List && bytes.join(',') == '0,127,255',
+        'ArrayBuffer conversion',
+      );
+      final dynamic callback = engine.evaluate('(callback) => callback(41)');
+      try {
+        final dynamic result = callback.invoke([
+          (dynamic value, {dynamic thisVal}) => (value as int) + 1,
+        ]);
+        require(await result == 42, 'JavaScript to Dart callback');
+      } finally {
+        callback.free();
+      }
+      var rejected = false;
+      try {
+        engine.evaluate('throw new Error("probe error")');
+      } on JSError {
+        rejected = true;
+      }
+      require(rejected, 'JavaScript exceptions must not be swallowed');
+    } finally {
+      engine.port.close();
+      engine.close();
+      await dispatch;
+    }
+  }
+  return 'Worker-isolate evaluation, Promise, callback, bytes, exception and 3 create/close cycles';
+}
+
+Future<String> checkRhttp({String libraryPath = 'librhttp.so'}) async {
+  await RustLib.init(externalLibrary: ExternalLibrary.open(libraryPath));
+  final server = await io.HttpServer.bind(io.InternetAddress.loopbackIPv4, 0);
+  final cancelArrived = Completer<void>();
+  final releaseCancelled = Completer<void>();
+  final payload = List<int>.generate(128 * 1024, (index) => index % 251);
+  final handlers = <Future<void>>[];
+  final subscription = server.listen((request) {
+    final handler = () async {
+      try {
+        if (request.uri.path == '/cancel') {
+          cancelArrived.complete();
+          await releaseCancelled.future;
+        } else if (request.uri.path == '/redirect') {
+          await request.response.redirect(Uri.parse('/bytes'));
+          return;
+        } else {
+          for (var offset = 0; offset < payload.length; offset += 16384) {
+            request.response.add(payload.sublist(offset, offset + 16384));
+            await request.response.flush();
+          }
+        }
+        await request.response.close();
+      } on io.SocketException {
+        // The cancellation probe intentionally closes its connection.
+      } on io.HttpException {
+        if (request.uri.path != '/cancel') rethrow;
+      }
+    }();
+    handlers.add(handler);
+  });
+  RhttpClient? client;
+  try {
+    client = await RhttpClient.create(
+      settings: const ClientSettings(
+        proxySettings: ProxySettings.noProxy(),
+        httpVersionPref: HttpVersionPref.http1_1,
+        timeoutSettings: TimeoutSettings(
+          timeout: Duration(seconds: 8),
+          connectTimeout: Duration(seconds: 3),
+        ),
+      ),
+    );
+    final base = 'http://127.0.0.1:${server.port}';
+    final response = await client.getBytes('$base/redirect');
+    require(
+      response.statusCode == 200 && _sameBytes(response.body, payload),
+      'FRB bytes and redirect',
+    );
+    final streamed = await client.getStream('$base/stream');
+    final collected = BytesBuilder(copy: false);
+    await for (final chunk in streamed.body) {
+      collected.add(chunk);
+    }
+    require(_sameBytes(collected.takeBytes(), payload), 'FRB streaming bytes');
+    final token = CancelToken();
+    final cancelled = client
+        .getText('$base/cancel', cancelToken: token)
+        .then(
+          (_) => false,
+          onError: (Object error) {
+            if (error is RhttpCancelException) return true;
+            throw error;
+          },
+        );
+    await cancelArrived.future.timeout(const Duration(seconds: 8));
+    await token.cancel();
+    require(await cancelled, 'Cancellation must return RhttpCancelException');
+  } finally {
+    if (!releaseCancelled.isCompleted) releaseCancelled.complete();
+    await server.close(force: true);
+    await subscription.cancel();
+    await Future.wait(handlers);
+    client?.dispose();
+  }
+  return 'Production Rust/FRB: loopback HTTP/1.1, redirect, 128 KiB bytes/stream and cancellation';
+}
+
+bool _sameBytes(List<int> first, List<int> second) {
+  if (first.length != second.length) return false;
+  for (var i = 0; i < first.length; i++) {
+    if (first[i] != second[i]) return false;
+  }
+  return true;
+}
+
+Future<bool> checkSqlite(
+  String directory,
+  String launchId, {
+  String libraryPath = 'libsqlite3.so',
+}) async {
+  open.overrideForAll(() => DynamicLibrary.open(libraryPath));
+  final sandbox = io.Directory('$directory/venera-core-probe');
+  await sandbox.create(recursive: true);
+  final path = '${sandbox.path}/probe.sqlite3';
+  var db = sqlite3.open(path);
+  var previousLaunch = false;
+  try {
+    require(
+      db.select('SELECT sqlite_version() AS version').single['version'] ==
+          '3.52.0',
+      'SQLite version differs from pinned source',
+    );
+    db.execute(
+      'CREATE TABLE IF NOT EXISTS probe_state (id INTEGER PRIMARY KEY, launch TEXT NOT NULL)',
+    );
+    final previous = db.select('SELECT launch FROM probe_state WHERE id = 1');
+    previousLaunch =
+        previous.isNotEmpty && previous.single['launch'] != launchId;
+    db.execute('BEGIN IMMEDIATE');
+    try {
+      db.execute('INSERT OR REPLACE INTO probe_state VALUES (2, ?)', [
+        launchId,
+      ]);
+    } finally {
+      db.execute('ROLLBACK');
+    }
+    require(
+      db.select('SELECT * FROM probe_state WHERE id = 2').isEmpty,
+      'Transaction rollback',
+    );
+    db.execute('CREATE VIRTUAL TABLE temp.probe_fts USING fts5(text)');
+    db.execute("INSERT INTO temp.probe_fts VALUES ('reader offline probe')");
+    require(
+      db
+              .select("SELECT * FROM temp.probe_fts WHERE text MATCH 'offline'")
+              .length ==
+          1,
+      'FTS5 query',
+    );
+    db.execute('BEGIN IMMEDIATE');
+    try {
+      db.execute('INSERT OR REPLACE INTO probe_state VALUES (1, ?)', [
+        launchId,
+      ]);
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+  } finally {
+    db.dispose();
+  }
+  db = sqlite3.open(path);
+  try {
+    require(
+      db
+              .select('SELECT launch FROM probe_state WHERE id = 1')
+              .single['launch'] ==
+          launchId,
+      'Committed record must survive closing/reopening database',
+    );
+  } finally {
+    db.dispose();
+  }
+  return previousLaunch;
+}

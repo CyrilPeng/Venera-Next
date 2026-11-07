@@ -34,8 +34,10 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 - [Android TV 安装与分发](distribution/android_tv.zh.md) / [Android TV Distribution](distribution/android_tv.en.md)
 - [鸿蒙测试版安装与升级](distribution/harmonyos-reader.zh.md) / [HarmonyOS Beta Installation](distribution/harmonyos-reader.en.md)
 - [鸿蒙随版构建](development/harmonyos_releases.zh.md) / [HarmonyOS Release Builds](development/harmonyos_releases.en.md)
+- [HarmonyOS mainline implementation (Chinese)](development/harmonyos_mainline_20261107.zh.md): one source commit, platform build gates and branch archives.
 - [Windows 分发](distribution/windows.zh.md) / [Windows Distribution](distribution/windows.en.md)
 - [Linux 安装与分发](distribution/linux.zh.md) / [Linux Installation and Distribution](distribution/linux.en.md)
+- [HarmonyOS 实验签装与升级验证](distribution/harmonyos.zh.md) / [HarmonyOS Experimental Sideload Checks](distribution/harmonyos.en.md): diagnostic probes only, not a reader release.
 
 ## User And CLI
 

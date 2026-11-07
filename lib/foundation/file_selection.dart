@@ -17,12 +17,24 @@ class FileSelection {
     : identifier = uri,
       _isDocument = true;
 
+  FileSelection.ownedCopy({
+    required String path,
+    required this.name,
+    required String token,
+    required Future<void> Function(Map<String, String> receipt) release,
+  }) : identifier = path,
+       _isDocument = false,
+       _file = File(path),
+       _receipt = {'path': path, 'token': token},
+       _releaseCopy = release;
+
   static const _channel = MethodChannel('venera/select_file');
   final String identifier;
   final String name;
   final bool _isDocument;
   File? _file;
   Map<String, String>? _receipt;
+  Future<void> Function(Map<String, String> receipt)? _releaseCopy;
   Future<File>? _preparing;
   Future<void>? _closing;
   bool _closed = false;
@@ -135,7 +147,12 @@ class FileSelection {
       await Future.wait(_uses.toList());
     }
     if (_receipt != null) {
-      await _channel.invokeMethod<void>('releaseFile', _receipt);
+      final release = _releaseCopy;
+      if (release != null) {
+        await release(_receipt!);
+      } else {
+        await _channel.invokeMethod<void>('releaseFile', _receipt);
+      }
     }
     _receipt = null;
     _file = null;

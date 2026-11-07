@@ -1,0 +1,270 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:isolate';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:harmonyos_probe/main.dart';
+import 'package:harmonyos_probe/probe_runner.dart';
+
+void completeWorker(List<Object> args) {
+  (args.first as SendPort).send(<String, Object?>{
+    'type': 'done',
+    'status': 'fake_test_only',
+  });
+}
+
+void crashWorker(List<Object> _) => throw StateError('synthetic crash');
+void exitWorker(List<Object> _) {}
+void hungWorker(List<Object> args) => ReceivePort().listen((_) {});
+
+ProbeApp uiFixture() => ProbeApp(
+  buildIdentity: Future.value({
+    'stage': 'baseline',
+    'version_name': '0.3.0',
+    'version_code': 4,
+    'minimum_sdk': '26.0.0',
+    'device_types': ['phone', 'tablet'],
+    'pair_id': List.filled(64, 'a').join(),
+  }),
+);
+
+void main() {
+  test('worker completion is delivered', () async {
+    final events = <ProbeEvent>[];
+    await runProbeWorker(
+      directory: 'unused',
+      launchId: 'test',
+      onEvent: events.add,
+      worker: completeWorker,
+    );
+    expect(events.single['status'], 'fake_test_only');
+  });
+
+  test('crash cannot become a passing result', () async {
+    await expectLater(
+      runProbeWorker(
+        directory: 'unused',
+        launchId: 'test',
+        onEvent: (_) {},
+        worker: crashWorker,
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('exit without completion is a failure', () async {
+    await expectLater(
+      runProbeWorker(
+        directory: 'unused',
+        launchId: 'test',
+        onEvent: (_) {},
+        worker: exitWorker,
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('deadline kills worker and never reports a pass', () async {
+    final events = <ProbeEvent>[];
+    await expectLater(
+      runProbeWorker(
+        directory: 'unused',
+        launchId: 'test',
+        onEvent: events.add,
+        worker: hungWorker,
+        deadline: const Duration(milliseconds: 100),
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
+    expect(events, isEmpty);
+  });
+
+  test('host cannot be mistaken for OHOS runtime', () async {
+    await expectLater(
+      runProbeWorker(directory: 'unused', launchId: 'test', onEvent: (_) {}),
+      throwsStateError,
+    );
+  });
+
+  testWidgets('narrow screen and large text retain actions and scope', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(uiFixture());
+    await tester.pumpAndSettle();
+    final identity = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableText &&
+          (widget.data ?? '').contains('Sideload stage:'),
+    );
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(identity, 150, scrollable: scrollable);
+    expect(identity, findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Run core checks'),
+      180,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Run core checks'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Run core checks'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Incomplete / failed'),
+      -180,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Incomplete / failed'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Run core checks'),
+      180,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('landscape retains scrollable build identity and scope', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 360);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(uiFixture());
+    await tester.pumpAndSettle();
+    final identity = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableText &&
+          (widget.data ?? '').contains('Sideload stage:'),
+    );
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(identity, 150, scrollable: scrollable);
+    expect(identity, findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Run core checks'),
+      150,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(
+      find.text('Outside this result'),
+      150,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Outside this result'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final scenario in {
+    'tablet portrait': const Size(1024, 1366),
+    'tablet landscape': const Size(1366, 1024),
+    'tablet split pane': const Size(600, 900),
+  }.entries) {
+    testWidgets('${scenario.key} retains report copy and state after resize', (
+      tester,
+    ) async {
+      tester.view.physicalSize = scenario.value;
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      String? copied;
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      await tester.pumpWidget(uiFixture());
+      await tester.pumpAndSettle();
+      final scrollable = find.byType(Scrollable).first;
+      expect(
+        tester.getSize(find.byType(ListView)).width,
+        lessThanOrEqualTo(760),
+      );
+      final identity = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableText &&
+            (widget.data ?? '').contains('ARM64 phone / tablet'),
+      );
+      await tester.scrollUntilVisible(identity, 180, scrollable: scrollable);
+      expect(identity, findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Run core checks'),
+        180,
+        scrollable: scrollable,
+      );
+      // A host attempt deliberately fails: this exercises report export, not OHOS.
+      await tester.tap(find.text('Run core checks'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Copy report'),
+        180,
+        scrollable: scrollable,
+      );
+      await tester.pumpAndSettle();
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Copy report')),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Copy report').hitTestable(), findsOneWidget);
+      await tester.tap(find.text('Copy report'));
+      await tester.pumpAndSettle();
+      final first = jsonDecode(copied!) as Map<String, dynamic>;
+      expect(first['status'], 'Incomplete / failed');
+      expect(first['runtime_platform'], isNot('ohos'));
+      tester.view.physicalSize = Size(
+        scenario.value.height,
+        scenario.value.width,
+      );
+      await tester.pumpAndSettle();
+      // Reflow can move controls above the retained viewport offset.
+      tester.state<ScrollableState>(scrollable).position.jumpTo(0);
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Copy report'),
+        180,
+        scrollable: scrollable,
+      );
+      await tester.pumpAndSettle();
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Copy report')),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Copy report').hitTestable(), findsOneWidget);
+      copied = null;
+      await tester.tap(find.text('Copy report'));
+      await tester.pumpAndSettle();
+      expect(copied, isNotNull);
+      expect((jsonDecode(copied!) as Map)['launch_id'], first['launch_id']);
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNull,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+}

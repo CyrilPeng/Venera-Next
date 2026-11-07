@@ -1,7 +1,6 @@
 {
-  "schema": 2,
-  "source_commit": "ca5f7ef98ec03872d087f0b691e40f0de0080939",
-  "main_baseline": "c16e3545e17e12b68296ec125c8702430a6617bd",
+  "schema": 3,
+  "source_mode": "release_commit",
   "first_release_build": 245,
   "release_enabled": false
 }

@@ -1,6 +1,6 @@
 # HarmonyOS Beta Installation and Upgrades
 
-The HarmonyOS beta builds the full Flutter/Dart reader from the independent `HarmonyOS` branch and SDK, distributing an unsigned HAP alongside mainline releases. It retains the original sources, reader, favorites, history, downloads and WebDAV implementation, rather than the old blank app or diagnostic probe. **Distribution alongside a release does not imply complete platform support or device acceptance.**
+The HarmonyOS beta shares the complete mainline Flutter/Dart reader with other platforms and uses an independent HarmonyOS SDK to produce an unsigned HAP alongside mainline releases. It retains the existing sources, reader, favorites, history, downloads and WebDAV implementation. **Distribution alongside a release does not imply complete platform support or device acceptance.**
 
 This stage provides the application for ordinary use. **No repeated probe test or private attachment is requested.** Report actual problems in later versions through new issues if they arise.
 

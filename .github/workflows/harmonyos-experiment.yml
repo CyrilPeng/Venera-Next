@@ -1,0 +1,54 @@
+name: HarmonyOS Mainline Candidate HAP
+run-name: "HarmonyOS mainline unsigned candidate / ${{ github.sha }}"
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/harmonyos-*.yml
+      - .github/workflows/main.yml
+      - .github/scripts/harmonyos_release.py
+      - .github/scripts/tests/test_harmonyos_release.py
+      - .github/harmonyos-*.json
+      - tool/harmonyos/**
+      - doc/distribution/harmonyos-reader.*.md
+      - lib/**
+      - assets/**
+      - test/**
+      - packages/**
+      - pubspec.yaml
+      - pubspec.lock
+      - release.json
+      - CHANGELOG.md
+      - rust-toolchain.toml
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/harmonyos-*.yml
+      - .github/workflows/main.yml
+      - .github/scripts/harmonyos_release.py
+      - .github/scripts/tests/test_harmonyos_release.py
+      - .github/harmonyos-*.json
+      - tool/harmonyos/**
+      - doc/distribution/harmonyos-reader.*.md
+      - lib/**
+      - assets/**
+      - test/**
+      - packages/**
+      - pubspec.yaml
+      - pubspec.lock
+      - release.json
+      - CHANGELOG.md
+      - rust-toolchain.toml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: harmonyos-mainline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  candidate:
+    uses: ./.github/workflows/harmonyos-release.yml

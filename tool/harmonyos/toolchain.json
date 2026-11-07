@@ -1,0 +1,54 @@
+{
+  "branch": "main",
+  "flutter": {
+    "repository": "https://gitcode.com/CPF-Flutter/flutter_flutter.git",
+    "tag": "3.41.9+ohos-1.0.2",
+    "revision": "62357a93d653bf844f730bb1f4b7cc9e2139d14e",
+    "dart": "3.11.5"
+  },
+  "nativeSdk": {
+    "version": "6.0.0.47",
+    "api": 20,
+    "windowsLinuxArchive": "https://repo.huaweicloud.com/openharmony/os/6.0-Release/ohos-sdk-windows_linux-public.tar.gz",
+    "sha256": "a315834ac133625efc912bd078f3e2b2550868d04aef1b5aa4f9679c8b3c9d8e"
+  },
+  "harmonyCiSdk": {
+    "version": "26.0.0.851",
+    "nativeVersion": "26.0.0.105",
+    "api": 26,
+    "targetSdk": "26.0.0",
+    "source": "https://github.com/zhongdaiqi/command-line-tools-for-hmos/releases/tag/clt-26.0.0.851",
+    "reference": "https://github.com/zhongdaiqi/flutter-ohos-builder/blob/57bedeac638fe8b517cfa16dd6b10a1209104f69/Dockerfile",
+    "checksumSource": "GitHub release asset digests; community CI mirror, not Huawei-published checksums",
+    "joinedArchive": "commandline-tools-linux-x64-26.0.0.851.zip",
+    "joinedSha256": "ab604bd92721d5cbcafd154e6461d46b9f1b105e7b89eab04a9d046681198082",
+    "archives": [
+      {
+        "name": "commandline-tools-linux-x64-26.0.0.851.part_aa",
+        "url": "https://github.com/zhongdaiqi/command-line-tools-for-hmos/releases/download/clt-26.0.0.851/commandline-tools-linux-x64-26.0.0.851.part_aa",
+        "bytes": 1610612736,
+        "sha256": "58cf09ea8882785fba6f7156a6be426b27390ad113cc1506c86bd25616fdb805"
+      },
+      {
+        "name": "commandline-tools-linux-x64-26.0.0.851.part_ab",
+        "url": "https://github.com/zhongdaiqi/command-line-tools-for-hmos/releases/download/clt-26.0.0.851/commandline-tools-linux-x64-26.0.0.851.part_ab",
+        "bytes": 737450573,
+        "sha256": "c454ffa7ebb318dbf70dff8b7a1281de565cec3751c5b498f40f7f9500872fe6"
+      }
+    ]
+  },
+  "rust": {
+    "version": "1.92.0",
+    "target": "aarch64-unknown-linux-ohos",
+    "flutterRustBridge": "2.11.1"
+  },
+  "quickjs": {
+    "repository": "https://github.com/CyrilPeng/flutter_qjs.git",
+    "revision": "f5a1f20d08c33b0a6b3e38eda2a7b27705420620"
+  },
+  "sqlite": {
+    "version": "3.52.0",
+    "archive": "https://sqlite.org/2026/sqlite-autoconf-3520000.tar.gz",
+    "amalgamationSha256": "a503acc9fe98f628eed36eb2aa2116a26f2541270d757f9b7cdbc2f19eb72b8f"
+  }
+}

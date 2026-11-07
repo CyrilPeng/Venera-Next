@@ -1,0 +1,30 @@
+import {
+  FlutterAbility, FlutterEngine, MethodCall, MethodCallHandler,
+  MethodChannel, MethodResult
+} from '@ohos/flutter_ohos';
+import { GeneratedPluginRegistrant } from '../plugins/GeneratedPluginRegistrant';
+
+export default class EntryAbility extends FlutterAbility implements MethodCallHandler {
+  private probeChannel: MethodChannel | null = null;
+
+  configureFlutterEngine(flutterEngine: FlutterEngine): void {
+    super.configureFlutterEngine(flutterEngine);
+    GeneratedPluginRegistrant.registerWith(flutterEngine);
+    this.probeChannel = new MethodChannel(flutterEngine.getDartExecutor(), 'venera/harmonyos_probe');
+    this.probeChannel.setMethodCallHandler(this);
+  }
+
+  onMethodCall(call: MethodCall, result: MethodResult): void {
+    if (call.method === 'filesDir') {
+      result.success(this.context.filesDir);
+    } else {
+      result.notImplemented();
+    }
+  }
+
+  cleanUpFlutterEngine(flutterEngine: FlutterEngine): void {
+    this.probeChannel?.setMethodCallHandler(null);
+    this.probeChannel = null;
+    super.cleanUpFlutterEngine(flutterEngine);
+  }
+}
