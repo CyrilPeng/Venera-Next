@@ -2,17 +2,18 @@
 
 Default Chinese version: [dependencies.zh.md](dependencies.zh.md)
 
-See the [2026-11-06 complete audit](remaining_git_audit_20261106.en.md) for the two remaining Git origins, licenses, candidate probes and advisory assessments. Preserve the QuickJS wrapper contract while prioritizing the recorded core security fixes. The next HarmonyOS pin permits preview only; core remediation and platform review precede tag distribution. Keep current SHAs and all eight local packages controlled, and update provenance, complete locks, audit and platform overlays together.
-
 This document records governance rules for VeneraNext's Git dependencies and repository-local source packages. `pubspec.lock` is part of reproducible builds, but it does not replace documenting dependency provenance and maintenance responsibility.
+
+See the [2026-11-07 audit and proposal](official_dependency_plan_20261107.zh.md) for the pre-migration snapshot, and the [implementation record](official_dependency_implementation_20261107.zh.md) for current sources, rejected candidates and validation evidence.
 
 ## Rules
 
 See the [dependency audit](dependency_audit.en.md) for ownership and replacement decisions. The [combined inventory](git_dependencies.json) keeps active Git origins and all transitive Git packages in `repositories`; `local_packages` records local paths, versions, upstreams, immutable source baselines, licenses and patch notes. Update it with every Git or local dependency change and run `dart tool/check_git_dependencies.dart`.
 
 - Commit related changes to both `pubspec.yaml` and `pubspec.lock`.
-- Prefer stable pub.dev packages. Every Git fork must have a documented reason.
-- Prefer keeping necessary application-specific source patches under `packages/`, fixed by the application commit, instead of creating an independent fork for each small package. Consider a shared dependency repository when multiple applications need the same patches.
+- Prefer an official stable release that satisfies functionality, SDK, licensing and security requirements; next use a verified official full commit when the release lacks a required fix; retain necessary local patches or an existing fork only when neither meets those requirements.
+- Prefer application adapters and public upstream interfaces to eliminate customization. When dependency source changes remain necessary, keep only their required scope, fixed by the application commit, instead of creating independent forks. Treat project-authored modules separately from same-name third-party packages.
+- Every third-party local or fork exception must record the compared official release and commit, required patches, failure/validation evidence, exit conditions and maintenance responsibility. Reevaluate official sources after upstream covers the patches and acceptance passes; preserve existing security fixes during the transition.
 - Each local package must identify its original upstream, complete source commit or archive SHA-256, version, retained license and checksum, maintenance reason and `LOCAL_PATCHES.md`. Switching to `path` must not bypass provenance review.
 - Pin Git dependencies to immutable commits. Do not use a default branch, `main`, or `HEAD`.
 - Tools installed with `dart pub global activate` in release workflows must use the same pinned commit.
@@ -21,16 +22,16 @@ See the [dependency audit](dependency_audit.en.md) for ownership and replacement
 
 ## Current Git Dependencies
 
-2026-09-28: `flutter_qjs`, `photo_view`, `flutter.widgets`, `flutter_inappwebview`, and `webdav_client` moved to existing forks under `CyrilPeng`, without changing pins. The six platform subpackages of `flutter_inappwebview` resolve through repository-relative paths to the same fork. `photo_view` became local on 2026-10-05; `scrollable_positioned_list`, `webdav_client` and then `desktop_webview_window` became local on 2026-11-06, followed by project-authored `venera_native` replacing PNG/7z wrappers and `venera_saf` replacing SAF. Two independent Git origins, eight Git packages and eight local packages remain in the combined inventory. Roll back declarations, lockfile and inventory together.
+Five dependencies moved to existing forks under `CyrilPeng` on 2026-09-28 without changing pins. PhotoView became local on 2026-10-05; scrolling, WebDAV and desktop WebView became local on 2026-11-06, alongside project-authored native/SAF modules. On 2026-11-07 scrolling returns to official pub.dev 0.3.8 and six InAppWebView packages use one official commit; Windows instance ownership alone remains local. There are now two independent Git sources, seven Git packages and eight local packages. QuickJS is the only remaining personal Git source. Roll back declarations, lockfile and inventory together.
 
-VeneraNext maintainers own patch selection, upstream review, and validation for these forks. Preserve original copyrights and licenses. Mirroring does not replace ongoing maintenance or resolve missing licenses.
+VeneraNext maintainers own necessary fork/local patches, upstream review and validation. Official Git sources also require checking the actual checkout HEAD, package directory and clean source. Preserve original copyrights and licenses; source ownership does not replace safety validation.
 
-| Dependency | Commit | Upstream / license | Immediate reason for retaining the customized repository |
+| Dependency | Commit | Upstream / license | Source decision and necessary patches |
 |---|---|---|---|
-| `flutter_qjs` | `295f77421eedff356a02e92987181b525970c780` | Fork upstream not recorded / MIT | Retains NDK r28 support and skips numeric-buffer reference walks for asynchronous byte results; replacement requires runtime and native platform verification |
-| `flutter_inappwebview` | `3ef899b3db57c911b080979f1392253b835f98ab` | `pichillilorenzo/flutter_inappwebview` / Apache-2.0 | The pinned revision fixes `GraphicsContext` deallocation; embedded WebView and Cloudflare flows rely on this branch behavior |
+| `flutter_qjs` | `f5a1f20d08c33b0a6b3e38eda2a7b27705420620` | `ekibun/flutter_qjs` / MIT | Existing necessary fork retains Map/TypedData/dispatch/port contracts and backports applicable d07 core safety fixes. Official 0.4.0 fails current resolution and the Map probe |
+| `flutter_inappwebview` | `0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676` | `pichillilorenzo/flutter_inappwebview` / Apache-2.0 | Six packages directly use official source; stable 6.1.5 lacks the browser-exit event. Windows instance ownership alone remains a local platform override |
 
-The table uses commit messages to explain why the project cannot immediately switch back to upstream. It is not a complete diff audit. Every Git dependency update must document the upstream repository, comparison range, all custom changes, upstream PR if any, security impact, and rollback path.
+The table summarizes current source decisions; the official-source audit and its pinned mainline audit link contain the comparisons and candidate evidence. Every Git dependency update must document the upstream repository, comparison range, all custom changes, upstream PR if any, security impact, exit conditions and rollback path.
 
 The `desktop_webview_window` package directory already contains Apache-2.0 LICENSE; the previous repository-root lookup missed it. Its local source retains third-party notices. PNG/7z now use project-authored bridges with explicitly licensed official cores. Project-authored `venera_saf` replaces the former placeholder-license wrapper without retaining its source, preserving stored paths and system-persisted grants.
 
@@ -51,13 +52,13 @@ This is not a QuickJS engine security upgrade and does not resolve the existing 
 | `photo_view` | 0.14.0 | `packages/photo_view` | Former fork commit `a1255d1b5945aad4b7323303ec2ecdf0c90ffc4c` |
 | `share_plus` | 12.0.2 | `packages/share_plus` | pub.dev 12.0.2 archive and SHA-256 |
 | `rhttp` | 0.15.1 | `packages/rhttp` | pub.dev 0.15.1 archive and SHA-256 |
-| `scrollable_positioned_list` | 0.3.8+1 | `packages/scrollable_positioned_list` | Same-named package directory at former fork commit `09e756b1f1b04e6298318d99ec20a787fb360f59` |
+| `flutter_inappwebview_windows` | 0.7.0-beta.3 | `packages/flutter_inappwebview_windows` | Official commit `0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676` and necessary instance ownership fix |
 | `webdav_client` | 1.2.2 | `packages/webdav_client` | Former fork commit `2f669c98fb81cff1c64fee93466a1475c77e4273` |
 | `desktop_webview_window` | 0.2.4 | `packages/desktop_webview_window` | Package directory at fork commit `7801fc582ecf5a7351632887891ecf309a7b2583` |
 | `venera_native` | 1.0.0 | `packages/venera_native` | Application commit pins project-authored bridges; third-party cores have separate official pins |
 | `venera_saf` | 1.0.0 | `packages/venera_saf` | Project commit fixes authored Dart/Kotlin/JNI and descriptor source |
 
-The first migration retains both packages' runtime sources, manifests, original BSD-3-Clause licenses and copyrights, README and CHANGELOG. Examples, upstream test projects and build outputs are omitted. Reader scroll interfaces and WebDAV adapter, authentication, redirect and upload behavior retain their existing implementations. Each `LOCAL_PATCHES.md` documents current-SDK equivalents, explicit dynamic types, unreferenced private helpers and package analysis policies. Package versions, unrelated dependencies and native toolchains are not upgraded together.
+The table shows current local packages. The initial scrolling package was retired on 2026-11-07; historical commits retain its source and checksums. The 2026-11-06 migration retained scrolling/WebDAV runtime sources and original BSD licenses. Current scrolling uses application adapters and official public interfaces; WebDAV retains its necessary authentication, redirect, adapter and upload patches.
 
 Both new `UPSTREAM_MANIFEST.json` files record canonical LF Git blob SHA-256 hashes and reviewed local file hashes. The checker validates matching source provenance, local file hashes and registration of every Dart file under `lib/`. The three previously local packages retain their detailed patch/archive records and gain combined declaration, provenance, license and documentation checks.
 

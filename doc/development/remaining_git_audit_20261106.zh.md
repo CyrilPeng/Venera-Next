@@ -48,7 +48,7 @@
 | 公告 | 当前源码判断 | 后续处理 |
 |---|---|---|
 | [GHSA-m53g-qx47-3h38](https://github.com/quickjs-ng/quickjs/security/advisories/GHSA-m53g-qx47-3h38) | 四个数组 copy constructor 在 getter 重入前发布未初始化 slots 的 count；对应模式存在。 | 优先同步初始化／GC 所有权修复，并以受控 getter／GC 原生 sanitizer 回归验证。 |
-| [GHSA-r6vf-p8wr-4vg9](https://github.com/quickjs-ng/quickjs/security/advisories/GHSA-r6vf-p8wr-4vg9) | shrink／grow 后 push 快速路径缺少上游 `array_len == count` 条件。 | 比较上游 `d98ff101c631cfd0d9270738ecb8d6f43a2a703f`，验证空洞、push 和 GC。 |
+| [GHSA-r6vf-p8wr-4vg9](https://github.com/quickjs-ng/quickjs/security/advisories/GHSA-r6vf-p8wr-4vg9) | 2026-11-07 更正：当前 d07 核心使用泛型 `JS_SetPropertyInt64`，没有后来引入的 push 快速路径，原“缺少条件”的判断不适用。 | 不回移不适用的 `d98ff101` 条件；保留 shrink／grow、空洞、push 和 GC 回归。 |
 | [GHSA-v647-xff9-jxf7](https://github.com/quickjs-ng/quickjs/security/advisories/GHSA-v647-xff9-jxf7) | CallSite 插入失败重复释放已转移的值，原记录仍进入 cleanup。 | 比较 `c846cb1364272de07bcc42e5a385ccdadf6b8409` 的值转移与 OOM 修复。 |
 | [GHSA-crgj-9jv8-xfhq](https://github.com/quickjs-ng/quickjs/security/advisories/GHSA-crgj-9jv8-xfhq) | Promise reject function 分配失败时释放 resolve function 后未清空调用方 slot。 | 比较 `776d724cfa46a3b5bb045012ef4c838eae71ebaf`，同时检查 async function／generator 的同类 cleanup。 |
 | [GHSA-wm7w-r6qf-3c9w](https://github.com/quickjs-ng/quickjs/security/advisories/GHSA-wm7w-r6qf-3c9w) | Atomics.store 在缓冲失效的错误返回中未释放转换值。 | 修复错误路径，验证 detach／转换／重试和内存所有权。 |
