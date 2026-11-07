@@ -8,6 +8,7 @@
 
 - 官方滚动列表首次布局尚未发布页码边界时，连续阅读的像素滚动代理立即绑定唯一活动列表，避免菜单焦点切换后读取滚动偏移时没有客户端；双列表远距离动画仍按发布的页码几何选择归属。增加无边界通知的实际列表初始化、像素滚动及退役回归，并纳入公共依赖基线与鸿蒙来源。
 - Android／TV CI 确认 dynamic_color 1.9.0 的发布脚本没有应用 Kotlin Android 插件，调用 kotlin／compilerOptions 时无法编译；回退并精确固定已兼容的官方 1.8.1，不为该候选扩大构建工具变更。独立 Provider 的模拟器启动失败另行复核，主线对应 Provider 回归已通过。
+- 以 `274ae716` 为保留边界，直接将后续 18 条可达提交压缩重排为两条单父主线记录：依赖与自管原生模块实现、治理文档与候选来源记录；移除合并父带入的重复历史，本次整理直接更新主分支。第一组保持已审核公共基线的完整 Git 树，鸿蒙 245 候选固定 `ca5f7ef` 并直接承接新公共基线 `c16e354`，候选 Git 树与此前审核版本一致；244 冻结来源以独立 `codex/harmonyos-frozen-244` 引用保留，已发布 tag 不变，旧历史另存可恢复 bundle。
 - 汇总既有依赖收纳阶段：保留 PhotoView、SharePlus、Rhttp、WebDAV 和桌面 WebView 的必要补丁，以自编 venera_native／venera_saf 替代许可证不完整的原生包装层；来源、许可证、完整摘要和平台门禁随代码管理。提交整理保留冻结鸿蒙基线与已发布版本的可达性。
 - 按官方稳定版、官方完整 commit、必要补丁的顺序重选依赖：滚动列表回归 pub.dev 0.3.8，以应用适配器保留像素滚动、自动阅读及远距离跳页的活动列表归属；InAppWebView 六包改为原 fork 的官方父提交，仅 Windows 单包保留 GraphicsContext 实例所有权补丁。SQLite 更新到 2.9.4，shimmer_animation 到 2.2.2+1；dynamic_color 1.9.0 的 Android 发布脚本失败后精确固定兼容官方 1.8.1，网格 5.10.0 的拖动负约束回归失败后固定兼容官方 5.7.0，pdfrx 2.4.8 与当前 SDK 的 meta 约束冲突，继续使用 2.4.7。
 - QuickJS 固定到必要核心安全回移提交 `f5a1f20`，保留 Map／TypedData／dispatch／port 契约和包版本；Linux 64／32 位 ASan／UBSan 与 Windows 64／32 位 ASan 均通过，应用新增真实 Map、数值、Promise 缓冲与反复退出回归。更正旧 d07 核心不含后来 push 优化缺陷的审计判断，核心基线、补丁及完整摘要独立记录。

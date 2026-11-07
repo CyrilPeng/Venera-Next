@@ -223,7 +223,7 @@
     {
       "package": "dynamic_color",
       "version": "1.9.0",
-      "reason": "Published Android Gradle Kotlin script does not apply the Kotlin Android plugin; Android and TV compilation fail. Retain exact official 1.8.1."
+      "reason": "Published Android Gradle Kotlin script does not apply the Kotlin Android plugin, so kotlin/compilerOptions cannot compile in Android and TV CI; retain exact official 1.8.1."
     },
     {
       "package": "flutter_reorderable_grid_view",
@@ -278,6 +278,20 @@
       "finished_at": "2026-11-07T05:55:36.479316+00:00",
       "log": "architecture-dependencies.log",
       "log_sha256": "fc7ee4bce805c3828b61e6572c33f1533b574396513e9ee15cb88d0860d8c1ca"
+    },
+    {
+      "name": "final-color-analysis",
+      "command": [
+        "D:/soft/flutter/bin/flutter.bat",
+        "analyze",
+        "--fatal-infos",
+        "--fatal-warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 97.48,
+      "finished_at": "2026-11-07T06:59:35.555570+00:00",
+      "log": "final-color-analysis.log",
+      "log_sha256": "21bbe09174caef062ad70c71bd18e5a39af39e47e7c57a5e03815212d540526d"
     },
     {
       "name": "final-dart-analysis",
@@ -339,6 +353,19 @@
       "log_sha256": "abc2048ee46cec107126a4f1215a4abdafaa965108e3c4d7440d8abaf7259790"
     },
     {
+      "name": "next-pin-source-check",
+      "command": [
+        "python",
+        "build\\official-dependency-implementation-20261107\\finalize_main_history.py"
+      ],
+      "exit_code": 0,
+      "log": "next-pin-source-check.log",
+      "main_head": "3bcca490083884208096901e80e1b9d0946fc809",
+      "harmony_head": "59401dccc7e30f431b02c254af68fafcbb3f02a2",
+      "baseline": "d5b1b740c3bded00d90a09925b94711f19ff6d39",
+      "log_sha256": "4b5670a5665ae4902e899aa88e8af3bdc89482fec092307c38f0a0e7004b621c"
+    },
+    {
       "name": "patched-core-application-tests",
       "command": [
         "D:/soft/flutter/bin/flutter.bat",
@@ -375,6 +402,19 @@
       "finished_at": "2026-11-07T06:09:31.511963+00:00",
       "log": "precommit-check.log",
       "log_sha256": "7977c7337421cfc606a73968aa7c2231f67ff791cb189bda1055e963fa91bd33"
+    },
+    {
+      "name": "pub-get-compatible-color",
+      "command": [
+        "D:/soft/flutter/bin/flutter.bat",
+        "pub",
+        "get"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 7.87,
+      "finished_at": "2026-11-07T06:42:25.296607+00:00",
+      "log": "pub-get-compatible-color.log",
+      "log_sha256": "df6acfc92c4ee9f5aaa9b1607d1515c031583d5f3d4e849dc6e15f063109d5d4"
     },
     {
       "name": "pub-get-core-patch",
@@ -459,6 +499,35 @@
       "finished_at": "2026-11-07T04:01:54.956500+00:00",
       "log": "reader-and-source-tests.log",
       "log_sha256": "6020395c0f8a0b274ec3f7538ac1004545111f10f406a07873fd08b9aed1ba3c"
+    },
+    {
+      "name": "reader-initial-position-regressions",
+      "command": [
+        "D:/soft/flutter/bin/flutter.bat",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded",
+        "test/features/reader/continuous_input_test.dart",
+        "test/features/reader/reader_exit_integration_test.dart"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 137.48,
+      "finished_at": "2026-11-07T07:20:36.193602+00:00",
+      "log": "reader-initial-position-regressions.log",
+      "log_sha256": "ab76642c6ead3652560b4d293b708a13fe2a940805f67952194886b1f8a12147"
+    },
+    {
+      "name": "reader-initial-position-reproduction",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "build/official-dependency-implementation-20261107/reproduce_initial_attachment.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 9.84,
+      "finished_at": "2026-11-07T07:21:50.135720+00:00",
+      "log": "reader-initial-position-reproduction.log",
+      "log_sha256": "6bd442978dc9938a1ab12a33d7d110dff041dd70b17dcb5b9813aa67a4e64b80"
     },
     {
       "name": "source-inventory",
@@ -602,37 +671,358 @@
       "log": "windows-startup-ctest.log",
       "scope": "Native C++ startup, heartbeat and hotkey components; no visible application launch.",
       "log_sha256": "9d0ed7023baca5f74d4127c53144d5bbc982f268c5fa55188b1fc375fd06c15e"
-    },
-    {
-      "name": "reader-initial-position-regressions",
-      "command": [
-        "D:/soft/flutter/bin/flutter.bat",
-        "test",
-        "--no-pub",
-        "--reporter",
-        "expanded",
-        "test/features/reader/continuous_input_test.dart",
-        "test/features/reader/reader_exit_integration_test.dart"
-      ],
-      "exit_code": 0,
-      "elapsed_seconds": 137.48,
-      "finished_at": "2026-11-07T07:20:36.193602+00:00",
-      "log": "reader-initial-position-regressions.log",
-      "log_sha256": "ab76642c6ead3652560b4d293b708a13fe2a940805f67952194886b1f8a12147"
-    },
-    {
-      "name": "reader-initial-position-reproduction",
-      "command": [
-        "C:/soft/Python314/python.exe",
-        "build/official-dependency-implementation-20261107/reproduce_initial_attachment.py"
-      ],
-      "exit_code": 0,
-      "elapsed_seconds": 9.84,
-      "finished_at": "2026-11-07T07:21:50.135720+00:00",
-      "log": "reader-initial-position-reproduction.log",
-      "log_sha256": "6bd442978dc9938a1ab12a33d7d110dff041dd70b17dcb5b9813aa67a4e64b80"
     }
   ],
-  "integration_status": "platform CI and final history/pin verification pending",
-  "runtime_scope": "No signing, device runtime, tag or Release publication is claimed."
+  "integration_status": "Implementation measurements and PR checks describe the original reviewed trees. The direct linear main rewrite retains those code trees; current history and source pins are recorded below.",
+  "runtime_scope": "No signing, device runtime, tag or Release publication is claimed.",
+  "history": {
+    "method": "Direct linear rewrite of main; existing Git trees are reused, without merge parents or a new pull request.",
+    "stage_before": "274ae716e32ec88b02a310fb754b6c9bb2c9dcfb",
+    "rewritten_from": "1f9c14dcf8fe493b311a9b86d8ebe420f943f176",
+    "shared_baseline": "c16e3545e17e12b68296ec125c8702430a6617bd",
+    "shared_baseline_tree": "340da81504776c4d89154196f6cfcd54816365a2",
+    "harmony_source": "ca5f7ef98ec03872d087f0b691e40f0de0080939",
+    "harmony_source_tree": "119138da9b5ed0e5a13b7d08fcb2aa1f82dd58a0",
+    "previous_harmony_source": "d842be19c826d43cf64f3c4a131fd5742466c37f",
+    "main_reachable_count": 2,
+    "main_first_parent_groups": 2,
+    "main_merge_count": 0,
+    "old_main_reachable_count": 18,
+    "old_main_merge_count": 5,
+    "harmony_commits_after_shared_baseline": 1,
+    "all_changes_after_shared_baseline_release_only": true,
+    "force_push_required": true,
+    "frozen_harmony_reference": "refs/heads/codex/harmonyos-frozen-244",
+    "frozen_harmony_source": "3e1be1391ba784bb228803525696d38c208f471f",
+    "external_pull_requests_created": false,
+    "backup": "Verified complete Git bundle retained outside the repository before any ref update.",
+    "governance_commit": "This history/documentation commit; its own hash is not embedded in its inputs.",
+    "previous_integration": {
+      "old_main": "08b1ff40e5b16c9d6cc14c9fd4be4ad5f2785c63",
+      "stage_before": "274ae716e32ec88b02a310fb754b6c9bb2c9dcfb",
+      "frozen_baseline": "55c7c4401d88c2388116d963f3568f6be58d3677",
+      "checkpoint": "5a87524464c6c86357faf264fffab698f54ba908",
+      "local_and_native": "9d0d99e323468ff10e0a81c2df8f725a2b687d4d",
+      "official_and_core": "5f7c572e1f1d048e4fe773a06ce3000dcd0b6cdd",
+      "old_stage_reachable_count": 11,
+      "harmony_implementation": "7877f3910cae8bef03943b921ad6c368d650b826",
+      "harmony_source": "d842be19c826d43cf64f3c4a131fd5742466c37f",
+      "harmony_previous_source": "be8fd7f340110292a12c6bf9c9480f52f039c4a2",
+      "harmony_checkpoint": "87e6f49748b8e7869745d491570432d2d72ad2de",
+      "harmony_previous_base": "2a04b040cb129a54822f9e006c702d12d5a6b93e",
+      "harmony_first_parent_groups": 1,
+      "main_first_parent_groups": 3,
+      "original_main_first_parent_groups": 5,
+      "changes_after_shared_baseline": [
+        ".github/harmonyos-next.json",
+        "CHANGELOG.md",
+        "doc/development/dependency_audit.en.md",
+        "doc/development/dependency_audit.zh.md",
+        "doc/development/harmonyos_releases.en.md",
+        "doc/development/harmonyos_releases.zh.md",
+        "doc/development/official_dependency_implementation_20261107.json",
+        "doc/development/official_dependency_implementation_20261107.zh.md"
+      ],
+      "all_changes_after_shared_baseline_release_only": true,
+      "force_push_required": false,
+      "previous_main_head": "3bcca490083884208096901e80e1b9d0946fc809",
+      "previous_shared_baseline": "d5b1b740c3bded00d90a09925b94711f19ff6d39",
+      "color_checkpoint": "cde29eaf8b8fdb985988d0955a7beed76e1d62e4",
+      "harmony_previous_color_source": "3f90bc351dc5bd45c719a15e1ac2e6950a5d20a6",
+      "harmony_color_checkpoint": "c39eb4f52b70d32974dd19940b41f0f2476bb55f",
+      "reader_checkpoint": "15ae4ed155fe9798a2a6272a38b95847abdd061a",
+      "harmony_previous_reader_source": "59401dccc7e30f431b02c254af68fafcbb3f02a2",
+      "harmony_reader_checkpoint": "2f752751bc5f7c69e2d3e55fc6b1e4289319d283",
+      "governance_commit": "The final reviewed pull request head; no self-referential commit hash is embedded in this snapshot.",
+      "method": "Reordered first-parent commits, preserving published history and frozen ancestry through merge parents; normal fast-forward integration."
+    }
+  },
+  "harmony_checks": [
+    {
+      "name": "harmony-architecture-final",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        ".github/scripts/check_architecture_dependencies.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.61,
+      "finished_at": "2026-11-07T05:59:59.491797+00:00",
+      "log": "harmony-architecture-final.log",
+      "log_sha256": "b63423affb47944bfe5e9634593eaba15148e762ce3e3d7b99cb5fc196e2f4ad"
+    },
+    {
+      "name": "harmony-color-lock-check",
+      "command": [
+        "D:/soft/flutter_ohos/bin/cache/dart-sdk/bin/dart.exe",
+        "pub",
+        "get",
+        "--enforce-lockfile",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 15.63,
+      "finished_at": "2026-11-07T06:46:41.441598+00:00",
+      "log": "harmony-color-lock-check.log",
+      "log_sha256": "3157b6f4c8087a3711dba9e19c8453ab7c37457c33f54a20558e13f5a4782fa3"
+    },
+    {
+      "name": "harmony-dependency-export",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "tool/harmonyos/prepare_full_app.py",
+        "deps",
+        "--qjs-source",
+        "C:/Users/pengs/.codex/worktrees/quickjs-core-safety/audit-qjs"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 142.62,
+      "finished_at": "2026-11-07T06:15:40.332629+00:00",
+      "log": "harmony-dependency-export.log",
+      "log_sha256": "3c1a5aef859b07fa20d71a2dc2a4301308bd08ed7e93d3c418b92d183f4ccabd"
+    },
+    {
+      "name": "harmony-extra-native",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "tool/harmonyos/full_native_build.py",
+        "--sdk-native",
+        "D:/soft/ohos_sdk_public/20/native"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 74.58,
+      "finished_at": "2026-11-07T06:20:33.869803+00:00",
+      "log": "harmony-extra-native.log",
+      "log_sha256": "6b6815b57c45f1e22e3b93810bf322ea2c2032b874cda9c95ae74ee476154419"
+    },
+    {
+      "name": "harmony-final-generated-analysis",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "build/official-dependency-implementation-20261107/run_generated_command.py",
+        "D:/soft/flutter_ohos/bin/cache/dart-sdk/bin/dart.exe",
+        "analyze",
+        "--fatal-infos",
+        "--fatal-warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 68.77,
+      "finished_at": "2026-11-07T07:07:35.828527+00:00",
+      "log": "harmony-final-generated-analysis.log",
+      "log_sha256": "3a31dc30e56c3fcf319fcce71cf69c7369a69ea2af9508f6fb2c8e562d460969"
+    },
+    {
+      "name": "harmony-final-generated-project",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "tool/harmonyos/prepare_full_app.py",
+        "project",
+        "--flutter-sdk",
+        "D:/soft/flutter_ohos",
+        "--dart-only",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 200.18,
+      "finished_at": "2026-11-07T06:58:44.590104+00:00",
+      "log": "harmony-final-generated-project.log",
+      "log_sha256": "396f42053ba638dab72b11561a44f47bf9a85e7930a30307849dddcb936be142"
+    },
+    {
+      "name": "harmony-final-host-tests",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "build/official-dependency-implementation-20261107/test_generated_project.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 258.21,
+      "finished_at": "2026-11-07T07:15:13.295532+00:00",
+      "log": "harmony-final-host-tests.log",
+      "log_sha256": "1cda16f58fafe5dc51cf9b13a6ddbd8e7f77240aceae228746888e217e7d5e7d"
+    },
+    {
+      "name": "harmony-generated-analysis",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "build/official-dependency-implementation-20261107/run_generated_command.py",
+        "D:/soft/flutter_ohos/bin/cache/dart-sdk/bin/dart.exe",
+        "analyze",
+        "--fatal-infos",
+        "--fatal-warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 55.3,
+      "finished_at": "2026-11-07T06:36:31.787283+00:00",
+      "log": "harmony-generated-analysis.log",
+      "log_sha256": "3a31dc30e56c3fcf319fcce71cf69c7369a69ea2af9508f6fb2c8e562d460969"
+    },
+    {
+      "name": "harmony-generated-dart-resolution",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "build/official-dependency-implementation-20261107/finish_generated_project.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.14,
+      "finished_at": "2026-11-07T06:34:31.674547+00:00",
+      "log": "harmony-generated-dart-resolution.log",
+      "log_sha256": "df5a6da113c1215d28082ddb6f0e0554638d1a01d9289a776c37d1d5d4ecd815"
+    },
+    {
+      "name": "harmony-generated-lock-resolution",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "build/official-dependency-implementation-20261107/finish_generated_project.py"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 7.05,
+      "finished_at": "2026-11-07T06:30:39.946414+00:00",
+      "log": "harmony-generated-lock-resolution.log",
+      "log_sha256": "b0667383b4d806cc247bc4e14f221ab41537ccad130746bc2a25c0a9c12a3088"
+    },
+    {
+      "name": "harmony-generated-project",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "tool/harmonyos/prepare_full_app.py",
+        "project",
+        "--flutter-sdk",
+        "D:/soft/flutter_ohos",
+        "--offline"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 168.47,
+      "finished_at": "2026-11-07T06:24:58.880896+00:00",
+      "log": "harmony-generated-project.log",
+      "log_sha256": "48ea882c0ff74726aca8720e14b7bb5b44ddced02e303eeaee406152b79aa5b0"
+    },
+    {
+      "name": "harmony-platform-tool-tests",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tool/harmonyos",
+        "-p",
+        "test_*.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 6.15,
+      "finished_at": "2026-11-07T06:19:25.436221+00:00",
+      "log": "harmony-platform-tool-tests.log",
+      "log_sha256": "be9d5d153e50fb9784e9715740ef234e9bb9ec39a5a5a7c146f31738c8bc122d"
+    },
+    {
+      "name": "harmony-public-native",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "tool/harmonyos/native_build.py",
+        "--sdk-native",
+        "D:/soft/ohos_sdk_public/20/native",
+        "--qjs-source",
+        "C:/Users/pengs/.codex/worktrees/quickjs-core-safety/audit-qjs",
+        "--sqlite-source",
+        "C:/Users/pengs/.codex/worktrees/favorites-navigation/venera_next/build/windows/x64/_deps/sqlite3-src/sqlite3.c",
+        "--component",
+        "all"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 65.68,
+      "finished_at": "2026-11-07T06:08:32.834305+00:00",
+      "log": "harmony-public-native.log",
+      "log_sha256": "4778ceb380af464ba85101dee4ed9c09650bdb49731f5f46ffcb8e9f51bcb7da"
+    },
+    {
+      "name": "harmony-root-pub-get",
+      "command": [
+        "D:/soft/flutter_ohos/bin/flutter.bat",
+        "pub",
+        "get",
+        "--enforce-lockfile"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 9.37,
+      "finished_at": "2026-11-07T05:36:56.439428+00:00",
+      "log": "harmony-root-pub-get.log",
+      "log_sha256": "3f4f7e69ee96666986307ab22058ba3b1e5a992650a0056e426e7f813cbeb19c"
+    },
+    {
+      "name": "harmony-root-source-inventory",
+      "command": [
+        "D:/soft/flutter_ohos/bin/cache/dart-sdk/bin/dart.exe",
+        "tool/check_git_dependencies.dart"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.27,
+      "finished_at": "2026-11-07T05:48:44.308224+00:00",
+      "log": "harmony-root-source-inventory.log",
+      "log_sha256": "a189f2723051b224cc635ab11ef258e0cc87588b23f53134fc496f0d8e3cc1ab"
+    },
+    {
+      "name": "harmony-tools-final-tests",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tool/harmonyos",
+        "-p",
+        "test_*.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 5.75,
+      "finished_at": "2026-11-07T05:48:50.205444+00:00",
+      "log": "harmony-tools-final-tests.log",
+      "log_sha256": "5896832f936583e7126eb11738190840a8987d021e147860789b4ce7043934c3"
+    },
+    {
+      "name": "harmony-tools-tests",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tool/harmonyos",
+        "-p",
+        "test_*.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 7.08,
+      "finished_at": "2026-11-07T05:37:03.662765+00:00",
+      "log": "harmony-tools-tests.log",
+      "log_sha256": "b8ec7d0a240259297f2612079d64bb2166683550abd2c06f91986a9cd3172d67"
+    },
+    {
+      "name": "precommit-check",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "C:/Users/pengs/.codex/worktrees/favorites-navigation/venera_next/build/official-dependency-implementation-20261107/check_before_commit.py",
+        "D:/soft/flutter_ohos/bin/cache/dart-sdk/bin/dart.exe"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 5.8,
+      "finished_at": "2026-11-07T06:09:31.398323+00:00",
+      "log": "precommit-check.log",
+      "log_sha256": "8496c04c6467b0ea91ac46f61b9d2c36109c48cda6043cce4994ec45971a564f"
+    }
+  ],
+  "quickjs_integration": {
+    "head": "f5a1f20d08c33b0a6b3e38eda2a7b27705420620",
+    "merge_commit": "d318b3f2c0cb30f819923f20c20e633ecd9a1983",
+    "state": "merged",
+    "url": "https://github.com/CyrilPeng/flutter_qjs/pull/1",
+    "target_branch": "venera-next-pinned"
+  },
+  "harmony_candidate_pr": "https://github.com/CyrilPeng/Venera-Next/pull/153",
+  "next_pin": {
+    "schema": 2,
+    "source_commit": "ca5f7ef98ec03872d087f0b691e40f0de0080939",
+    "main_baseline": "c16e3545e17e12b68296ec125c8702430a6617bd",
+    "first_release_build": 245,
+    "release_enabled": false
+  },
+  "previous_integration_status": "Implementation snapshot before final platform CI; final checks and integration are recorded on the reviewed PR."
 }
