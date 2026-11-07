@@ -7,6 +7,7 @@
 ### 仓库维护
 
 - Android／TV CI 确认 dynamic_color 1.9.0 的发布脚本没有应用 Kotlin Android 插件，调用 kotlin／compilerOptions 时无法编译；回退并精确固定已兼容的官方 1.8.1，不为该候选扩大构建工具变更。独立 Provider 的模拟器启动失败另行复核，主线对应 Provider 回归已通过。
+- 将既有依赖阶段与本轮调整整理为三组主线首父记录：本地补丁／自编模块、官方来源／核心修复、治理／CI／鸿蒙 pin；原阶段 11 条可达提交和冻结来源由合并父保留，使用正常快进集成。鸿蒙候选汇总为一组首父记录，下一 pin 固定 `59401dc` 和含全部公共运行代码的 `d5b1b74` 基线，244 来源及资产继续冻结；Git 对象采用保留 reflog 和历史对象的安全打包，空间效果单独实测。
 - 汇总既有依赖收纳阶段：保留 PhotoView、SharePlus、Rhttp、WebDAV 和桌面 WebView 的必要补丁，以自编 venera_native／venera_saf 替代许可证不完整的原生包装层；来源、许可证、完整摘要和平台门禁随代码管理。提交整理保留冻结鸿蒙基线与已发布版本的可达性。
 - 按官方稳定版、官方完整 commit、必要补丁的顺序重选依赖：滚动列表回归 pub.dev 0.3.8，以应用适配器保留像素滚动、自动阅读及远距离跳页的活动列表归属；InAppWebView 六包改为原 fork 的官方父提交，仅 Windows 单包保留 GraphicsContext 实例所有权补丁。SQLite 更新到 2.9.4，shimmer_animation 到 2.2.2+1；dynamic_color 1.9.0 的 Android 发布脚本失败后精确固定兼容官方 1.8.1，网格 5.10.0 的拖动负约束回归失败后固定兼容官方 5.7.0，pdfrx 2.4.8 与当前 SDK 的 meta 约束冲突，继续使用 2.4.7。
 - QuickJS 固定到必要核心安全回移提交 `f5a1f20`，保留 Map／TypedData／dispatch／port 契约和包版本；Linux 64／32 位 ASan／UBSan 与 Windows 64／32 位 ASan 均通过，应用新增真实 Map、数值、Promise 缓冲与反复退出回归。更正旧 d07 核心不含后来 push 优化缺陷的审计判断，核心基线、补丁及完整摘要独立记录。

@@ -5,7 +5,8 @@
 本轮依照“兼容的官方稳定版 → 已验证的官方完整 commit → 必要本地补丁”执行。
 当前根锁文件仍有 156 项：136 hosted、7 Git、8 path、5 SDK。直接声明中的
 滚动列表已回归 pub.dev；个人 Git 来源只剩确有包装层与核心补丁的 QuickJS。
-完整平台 CI 和鸿蒙下一候选的结果将在集成记录中补齐；本文不代表真机验收。
+本文记录实施时的本地验证，最终平台门禁与集成结果由 PR 检查和审核记录保存；
+鸿蒙候选见 [PR #153](https://github.com/CyrilPeng/Venera-Next/pull/153)。本文不代表真机验收。
 
 | 调整 | 已采用来源 | 依据 |
 | --- | --- | --- |
@@ -14,7 +15,7 @@
 | InAppWebView Windows | 本地 0.7.0-beta.3 | 203 个上游文件保留原许可证与摘要，仅实例所有权、独立 interface 声明及必要分析／格式适配；删除补丁的条件是官方来源覆盖修复并通过同等验证。 |
 | flutter_qjs | 既有 fork 的 `f5a1f20d08c33b0a6b3e38eda2a7b27705420620` | 官方稳定包装层不兼容现有 SDK/API，官方 0.4.0 候选在解析和真实 Map 探针中失败；保留 Map／TypedData／dispatch／port，独立回移适用的核心修复。 |
 | sqlite3 | 官方 2.9.4 | 保留 2.x 加载与数据库 API，完成现有数据库／持久化回归；3.x 及旧原生库包的退出另行验证。 |
-| dynamic_color | 官方精确 1.8.1 | 1.9.0 的 Android 发布脚本未应用 Kotlin Android 插件，kotlin／compilerOptions 在 Android 和 TV CI 中失败；回退兼容官方稳定版。 |
+| dynamic_color | 官方精确 1.8.1 | 1.9.0 可解析，但其 Android 发布脚本未应用 Kotlin Android 插件，kotlin／compilerOptions 在 Android 和 TV 构建中失败；回退到已兼容的官方稳定版。 |
 | shimmer_animation | 官方 2.2.2+1 | 发布补丁与实际归档摘要固定在 lock。 |
 | flutter_reorderable_grid_view | 官方精确 5.7.0 | 5.10.0 在鼠标／触摸自适应列拖动中产生负 BoxConstraints；回退后 6 项回归通过。 |
 | pdfrx | 官方 2.4.7 | 2.4.8 的 pdfrx_engine ^0.4.7 要求 meta ^1.18，与当前 Flutter 的 meta 1.17 冲突，未采用该候选。 |
@@ -60,6 +61,10 @@ Windows CI／构建任务使用进程级 core.longpaths。遇到该诊断应使�
 拒绝重复 YAML key。滚动列表由 path 变为 hosted，生成锁文件为 130 hosted、21 path、
 5 SDK；Windows 本地输入仍纳入项目来源摘要，HAP 的 Windows Dart 包采用 CPF 覆盖。
 schema 1 的 244 来源继续冻结，245 下一 pin 保持 release_enabled:false。
+候选为 `59401dccc7e30f431b02c254af68fafcbb3f02a2`，实际合并并保留公共基线
+`d5b1b740c3bded00d90a09925b94711f19ff6d39` 的祖先关系。本机已全量重建七个
+ARM64 原生库并检查 ELF、导出与摘要；它们使用公开 API 20 SDK，API 26 HAP 由 CI
+重新编译及验包。生成工程同时重定位新增来源回归的工具 import，保持严格分析。
 
 本地 Windows 首次整包构建遇到宿主 stable Rust 缺 rustc，采用任务目录内真实 Rust
 1.92.0 副本处理 Cargokit 的固定 stable 调用；第二次遇到旧 CMake cache 的安装目录
@@ -67,6 +72,12 @@ schema 1 的 244 来源继续冻结，245 下一 pin 保持 release_enabled:fals
 共享源码缓存没有被更改。Windows 完整 bundle 验证通过；鸿蒙 API 26 HAP 和准确
 CI Flutter 版本的结果以集成记录为准。
 
-提交整理目标为三组首父记录：既有本地补丁与自编模块、本轮官方来源与核心修复、
-治理／CI／鸿蒙 pin。保留冻结构建所需 ancestry，再对共享 Git 对象安全打包；
-首父记录减少和实际磁盘占用分别测量，不将仍可达旧源码视为已删除。
+提交整理采用三组主线首父记录：既有本地补丁与自编模块、本轮官方来源与核心修复、
+治理／CI／鸿蒙 pin。原依赖阶段从 `274ae71` 到 `08b1ff4` 有 11 条可达提交、5 组
+首父记录；整理后主线为 3 组首父记录，鸿蒙本轮为 1 组。旧 main 通过最后一组的
+合并父保留，冻结基线通过第一组的合并父保留，集成可正常快进。
+
+全部运行代码、锁文件、来源工具和测试都在第二组 `d5b1b74`，第三组仅调整文档、
+changelog 与下一候选 pin，满足共同基线后的源码门禁。安全 Git 打包保留 reflog、
+历史对象及各工作区；首父记录减少和实际磁盘占用分别测量，不将仍可达旧源码
+视为已删除。最终空间指标和平台 CI 结果见 PR 审核记录。

@@ -21,7 +21,7 @@ Mainline PRs and branch dispatches use `--preview-next`. While main remains at 2
 
 Source and project-package fingerprints use committed canonical Git blobs, retaining original binary bytes independently of checkout CRLF rules for PowerShell and similar files. Manifest preparation rejects both working-tree and staged source drift so committed fingerprints cannot conceal changed build inputs.
 
-The next pin currently has `release_enabled: false`. Tag distribution is blocked until the [audited QuickJS core findings](remaining_git_audit_20261106.en.md) are remediated and platform review completes. Preview assets and schema 2 assets without a verified tag context are rejected by Release verification; passing a preview never changes publication readiness automatically.
+The next pin remains `release_enabled: false`. Applicable QuickJS core fixes are pinned at `f5a1f20`; Linux and Windows 32/64-bit memory checks passed and the necessary patch PR was merged. The [implementation record](official_dependency_implementation_20261107.zh.md) distinguishes core, application and platform validation. The next candidate pins HarmonyOS `59401dccc7e30f431b02c254af68fafcbb3f02a2` and shared baseline `d5b1b740c3bded00d90a09925b94711f19ff6d39`, which contains all shared runtime code, dependencies, tools and tests. Platform review and device signing remain separate acceptance steps; passing a preview never enables tag distribution. Release verification rejects preview assets and schema 2 assets without a verified tag context.
 
 ## Versions and Assets
 
