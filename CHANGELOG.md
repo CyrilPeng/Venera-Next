@@ -6,6 +6,30 @@
 
 ### 仓库维护
 
+- 官方滚动列表首次布局尚未发布页码边界时，连续阅读的像素滚动代理立即绑定唯一活动列表，避免菜单焦点切换后读取滚动偏移时没有客户端；双列表远距离动画仍按发布的页码几何选择归属。增加无边界通知的实际列表初始化、像素滚动及退役回归，并纳入公共依赖基线与鸿蒙来源。
+- Android／TV CI 确认 dynamic_color 1.9.0 的发布脚本没有应用 Kotlin Android 插件，调用 kotlin／compilerOptions 时无法编译；回退并精确固定已兼容的官方 1.8.1，不为该候选扩大构建工具变更。独立 Provider 的模拟器启动失败另行复核，主线对应 Provider 回归已通过。
+- 汇总既有依赖收纳阶段：保留 PhotoView、SharePlus、Rhttp、WebDAV 和桌面 WebView 的必要补丁，以自编 venera_native／venera_saf 替代许可证不完整的原生包装层；来源、许可证、完整摘要和平台门禁随代码管理。提交整理保留冻结鸿蒙基线与已发布版本的可达性。
+- 按官方稳定版、官方完整 commit、必要补丁的顺序重选依赖：滚动列表回归 pub.dev 0.3.8，以应用适配器保留像素滚动、自动阅读及远距离跳页的活动列表归属；InAppWebView 六包改为原 fork 的官方父提交，仅 Windows 单包保留 GraphicsContext 实例所有权补丁。SQLite 更新到 2.9.4，shimmer_animation 到 2.2.2+1；dynamic_color 1.9.0 的 Android 发布脚本失败后精确固定兼容官方 1.8.1，网格 5.10.0 的拖动负约束回归失败后固定兼容官方 5.7.0，pdfrx 2.4.8 与当前 SDK 的 meta 约束冲突，继续使用 2.4.7。
+- QuickJS 固定到必要核心安全回移提交 `f5a1f20`，保留 Map／TypedData／dispatch／port 契约和包版本；Linux 64／32 位 ASan／UBSan 与 Windows 64／32 位 ASan 均通过，应用新增真实 Map、数值、Promise 缓冲与反复退出回归。更正旧 d07 核心不含后来 push 优化缺陷的审计判断，核心基线、补丁及完整摘要独立记录。
+- 来源治理要求记录官方稳定候选、完整官方 SHA、必要补丁、验证证据和退出条件；除了锁文件，还核对实际 Git 检出 HEAD、子目录和源码状态，拒绝长路径失败后留下的错误缓存。Windows 构建通过进程级 Git longpaths 配置完整检出官方 WebView；不修改全局缓存或工具链。迁移前方案作为历史快照，另记录本轮实施结果。
+- 完成剩余 QuickJS／InAppWebView 的上游差异审计，记录完整比较 SHA、2092 条变化路径、许可摘要与隔离候选实测。官方未发布 QuickJS 0.4.0 已支持 Dart 3，但当前应用解析仍与 Flutter 的 meta 锁定冲突，原生契约实测丢失 JS Map；官方 WebView master 严格分析通过，尚未包含 Windows GraphicsContext 实例所有权补丁及原生生命周期验收。保留两个固定 Git 来源与八个本地包，不升级 SDK 或其余依赖。
+- 将固定 QuickJS 的内嵌核心匹配到 QuickJS-NG `d07f6b5` 的 18 个源码／头文件，纠正旧 VERSION 标签；逐项核对 10 项公开 GHSA，记录数组初始化／增长、CallSite／Promise OOM、Atomics、32 位分配及外部缓冲转移的源码模式与当前 API 暴露限制。核心修复须独立验证，普通生命周期回归不作为安全缺陷已修复的证据。
+- 保留 `1.18.3+244` 鸿蒙 schema 1 来源与历史资产，另加 schema 2 下一候选 pin。主线仍为 244 时，PR／手动运行验证候选自身的 `1.18.3+245` 版本、changelog、八个项目包、七个受管原生库及九个 PNG／7z 导出和 NOTICE，保留真实调用方与运行上下文；pin 必须来自已提交 Git 输入，源码及包摘要统一使用 canonical Git blob 并拒绝工作区／暂存漂移，避免 CRLF 检出规则改变跨平台摘要。预览及未绑定实际 tag 的下一候选产物禁止发布。下一候选保持 `release_enabled: false`，完成 QuickJS 核心修复与平台审核前拒绝 tag 分发；随版 PR 检查限定主线，QuickJS 下载 URL 从所选来源工具清单读取，并说明既有 Rhttp 鸿蒙平台变体。
+- 鸿蒙 CI 的宿主依赖安装使用 Ubuntu 官方 HTTPS 镜像，限定 Ubuntu 软件源刷新、20 秒连接超时、两次重试和 8 分钟步骤预算；处理 Azure 镜像连续下载超时，完整构建与资产审核仍为必需门禁。
+- Linux 原生平台门禁同样使用 Ubuntu 官方 HTTPS 镜像，限定软件源刷新、20 秒连接超时、两次重试及 8 分钟安装预算；Rust 工具链准备拆为独立步骤，便于定位宿主下载与原生编译问题。
+- Ubuntu 官方镜像配置直接设置并核对软件源的 `URIs` 字段，兼容 CI 的 `mirror+file` 镜像列表入口，确保鸿蒙与 Linux 原生依赖实际通过官方源下载。
+- 鸿蒙下一候选重新固定到修正 TV 横屏／大字体更新检查按钮定位并稳定 Linux 构建依赖下载的 `db77548`；回归先滚动构建按钮再点击，保留完整签名说明和取消断言，245 候选继续仅供无发布预览。
+- 新增自编 `venera_saf 1.0.0` 替代占位许可证的 SAF 包装层，保留 Android 既有目录路径与系统持久授权；以最长完整根 ID 解析含 `/` 的授权，较长授权撤销、provider 不可用、authority 歧义和文件不存在分别报错，中文、emoji、冒号及 `|` 名称使用 UTF-8 JSON 传递。
+- 原 `ParcelFileDescriptor` 持有到最终关闭，采用原生 64 位读写、定位、长度、截断与 flush；generation token、两阶段 isolate 交接及 worker drain 防止句柄复用与提前关闭，显式关闭传播 provider 错误。流取消和 PDF worker 失败路径完整清理并保留主错误；创建已有文件不截断，复制前拒绝规范化自身路径及不同授权下的同一文档，同目录重命名检查目标，授权根及不支持的原子接口明确保护。
+- SAF 迁移后统一管理 2 个 Git 来源、8 个 Git 包和 8 个本地包，其余 155 项锁定记录及 SDK 不变；新增完整项目源码／许可证清单、200 轮 C++ 句柄与 >2 GiB 稀疏文件回归、Linux ASan／UBSan，以及隔离 Android DocumentsProvider／混淆 Release／重启验证，CI 使用显式 Android SDK 工具路径。Android 与 TV 构建核对全部 SAF 原生／JNI 导出、ABI 与随包声明。
+- 新增自管 `venera_native 1.0.0`，以项目自编的 Dart／FFI 桥接与平台构建替代许可证仍为占位内容的 `lodepng_flutter` 和 `flutter_7zip` 包装层；分别收纳官方 LodePNG 20241015 的 Zlib 源码与 7-Zip 24.09 明确声明 public domain 的 C 解码子集，保留原算法、版权、独立来源和随包声明。
+- PNG 编码校验尺寸、字节视图与原生错误，复制结果后立即释放原生缓冲；7z 在单个后台 isolate 内持有并关闭归档、复用 solid block，核对 Unicode 路径、CRC、长度、重复名、目录越界与链接，缺失文件名元数据时安全失败。保留 ZIP／7z／Dart ZIP 兼容回退；新增独立归档夹具、原生内存安全和真实图片生命周期回归。
+- 根据 Linux UBSan 检查修复 7-Zip 核心的未对齐整数访问，各平台统一启用原核心的逐字节读取路径并保留上游与本地摘要；Android 冒烟构建与应用拆分配置统一覆盖 ARM32、ARM64 和 x86_64，继续严格核验引擎／原生库 ABI、导出和随包声明。
+- 本地来源清单区分项目自编代码和独立固定的第三方核心，阻止重新标注第三方来源、遗漏目录及许可证漂移；迁移后统一管理 3 个 Git 来源、9 个 Git 包及 7 个本地包，其余 155 项依赖记录与 SDK 锁定不变。平台 CI 增加 Android ABI／导出、Windows 实际编码与导入、Linux／macOS／iOS 构建及随包声明核验，并提供宿主 PNG A/B/A 探针。
+- 将 `desktop_webview_window 0.2.4` 收入 `packages/`，保留桌面代理、Linux WebKit／libsoup 与 Windows ARM64 的固定实现。纠正仓库根目录许可证检查遗漏：原包目录已有 Apache-2.0 许可证；补齐 Microsoft WebView2 加载器的官方归档来源、摘要及许可证／NOTICE，保留 WIL 等第三方声明。比较官方 0.4.2 的 Flutter 3.44 与配置 API 要求，维持当前 SDK 和包版本。
+- 本地源码清单支持二进制摘要与原生源码目录检查，阻止未登记的原生文件和加载器变更；桌面 WebView 迁移后统一管理 5 个 Git 来源、11 个 Git 包及 6 个本地包，仅改变该包的锁文件来源。原生依赖或桌面源码变更增加 Linux／macOS Debug 构建门禁，Flutter SDK 匹配 Linux x64 与 macOS ARM64 宿主架构；必需构建被跳过、取消或失败时拒绝通过，Windows 构建核对随包分发的第三方声明。
+- 将 `scrollable_positioned_list 0.3.8+1` 与 `webdav_client 1.2.2` 从个人 Git fork 迁至仓库内 `packages/`，保留原固定提交的定制接口、BSD-3-Clause 许可证和版权；记录原始文件与审核后源码校验值，仅同步两项锁文件来源，继续保留历史 fork 供旧版本构建与回滚。补充当前 SDK 等价调用、原有分析策略与迁移维护说明。
+- 扩展依赖清单和 CI 检查，统一管理 6 个 Git 来源及 5 个本地包，检查完整来源 SHA／发布归档摘要、声明与锁文件路径／版本、本地 manifest、许可证校验与补丁记录；首批迁移包额外检查源码清单和文件摘要，拒绝未登记的本地依赖、覆盖项、传递包及目录越界。
 - 将 Issue 入口分为崩溃／启动、阅读性能、本地导入／数据、网络／WebDAV、界面／其他缺陷与功能建议，统一版本、平台、设备、复现和结果字段。崩溃、数据、网络、扩展运行时与其他缺陷要求脱敏日志；阅读性能要求手动诊断摘要，无法取得时需原因与替代证据，纯界面和建议不强制日志。
 - 新增不依赖 AI Secrets 的固定格式校验，随正文和评论变化复查；维护分类与 `needs: information` 标签，补齐后更新同一条提示，保留旧报告和人工跟进状态，不自动关闭 Issue。日志片段兼容通用 `Exception`／`Error`、简短 HTTP 错误与原生崩溃信息，避免有效错误正文被误判为未提供。可选 AI 仅在材料齐全后生成辅助摘要，重复检查更新原评论；补充中英文采集指南和维护说明。
 

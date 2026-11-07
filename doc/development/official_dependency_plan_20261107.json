@@ -1,0 +1,2034 @@
+{
+  "schema": 1,
+  "kind": "audit-and-proposal",
+  "reviewed_on": "2026-11-07",
+  "implemented_dependency_migrations": false,
+  "queried_at_utc": "2026-11-07T02:49:07.271953+00:00",
+  "source_preference": [
+    "compatible-official-stable",
+    "verified-official-commit",
+    "necessary-local-patch"
+  ],
+  "baseline": {
+    "main_head": "de2e0a9f397a0d06e727d3fde2dc54c95c50e39f",
+    "harmonyos_head": "db77548bbf944da3f6b0233174b11df060a33d2b",
+    "main_version": "1.18.3+244",
+    "harmonyos_version": "1.18.3+245",
+    "dependency_sections_equal": true,
+    "locked_package_records_equal": true,
+    "root_source_counts": {
+      "sdk": 3,
+      "hosted": 36,
+      "git": 2,
+      "path": 8
+    },
+    "locked_source_counts": {
+      "hosted": 135,
+      "path": 8,
+      "sdk": 5,
+      "git": 8
+    },
+    "ci_flutter": "3.41.4",
+    "local_analysis_flutter": "3.41.6",
+    "local_analysis_dart": "3.11.4",
+    "harmonyos_sdk": {
+      "repository": "https://gitcode.com/CPF-Flutter/flutter_flutter.git",
+      "tag": "3.41.9+ohos-1.0.2",
+      "revision": "62357a93d653bf844f730bb1f4b7cc9e2139d14e",
+      "dart": "3.11.5"
+    },
+    "git_input_sha256": {
+      "pubspec.yaml": "5e81c9dbc59caadb68d82e3401312658365615655632473fbc4788696e767bc5",
+      "pubspec.lock": "bbdf3e4f1722351190ac674f23e27c4f10cecb6bcf367c5b7d3cfb4f09dd2391",
+      "packages/rhttp/rust/Cargo.lock": "b4eb9da6fa40f129f05a4ae26b4b9052dee21a961f2a9a015bf4c2f872238879",
+      "doc/development/git_dependencies.json": "34b83b70827088f187d6792178acc80dfd1a53a83ed0099c0a2959e15ead1096"
+    }
+  },
+  "direct_dependencies": [
+    {
+      "package": "flutter",
+      "section": "dependencies",
+      "current_source": "sdk",
+      "current_version": "0.0.0",
+      "declaration": {
+        "sdk": "flutter"
+      },
+      "latest_stable": null,
+      "official_metadata_url": null,
+      "latest_environment": null,
+      "recommended_source": "随平台 SDK",
+      "reason": "Flutter / localizations / test 随对应 SDK 固定，不复制到个人仓库。"
+    },
+    {
+      "package": "path_provider",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "2.1.6",
+      "declaration": "^2.1.6",
+      "latest_stable": "2.1.6",
+      "official_metadata_url": "https://pub.dev/api/packages/path_provider",
+      "latest_environment": {
+        "sdk": "^3.10.0",
+        "flutter": ">=3.38.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "intl",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "0.20.2",
+      "declaration": "^0.20.2",
+      "latest_stable": "0.20.3",
+      "official_metadata_url": "https://pub.dev/api/packages/intl",
+      "latest_environment": {
+        "sdk": "^3.9.0"
+      },
+      "recommended_source": "官方稳定版 0.20.2",
+      "reason": "跟随 Flutter localizations 的固定版本；0.20.3 不能单独强制升级。"
+    },
+    {
+      "package": "window_manager",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "0.5.2",
+      "declaration": "^0.5.2",
+      "latest_stable": "0.6.0",
+      "official_metadata_url": "https://pub.dev/api/packages/window_manager",
+      "latest_environment": {
+        "sdk": "^3.13.0",
+        "flutter": ">=3.47.0"
+      },
+      "recommended_source": "官方稳定版 0.5.2",
+      "reason": "最新 0.6.0 要求 Flutter >=3.47 / Dart ^3.13；当前保留兼容版。"
+    },
+    {
+      "package": "sqlite3",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "2.7.4",
+      "declaration": "^2.7.4",
+      "latest_stable": "3.9.0",
+      "official_metadata_url": "https://pub.dev/api/packages/sqlite3",
+      "latest_environment": {
+        "sdk": ">=3.10.0 <4.0.0"
+      },
+      "recommended_source": "官方稳定版；先评估 2.9.4",
+      "reason": "2.x 更新与数据库回归单独进行；3.9.0 的 hooks 2.2 链需要当前图中没有的 meta ^1.19。"
+    },
+    {
+      "package": "sqlite3_flutter_libs",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "0.5.42",
+      "declaration": "^0.5.42",
+      "latest_stable": "0.6.0+eol",
+      "official_metadata_url": "https://pub.dev/api/packages/sqlite3_flutter_libs",
+      "latest_environment": {
+        "sdk": ">=3.10.0 <4.0.0"
+      },
+      "recommended_source": "官方稳定版 0.5.42",
+      "reason": "0.6.0+eol 已不提供原生库；SQLite 3.x 验收后删除本包，不能在 2.x 下直接升级它。"
+    },
+    {
+      "package": "flutter_qjs",
+      "section": "dependencies",
+      "current_source": "git",
+      "current_version": "0.3.7",
+      "declaration": {
+        "git": {
+          "url": "https://github.com/CyrilPeng/flutter_qjs",
+          "ref": "295f77421eedff356a02e92987181b525970c780"
+        }
+      },
+      "latest_stable": "0.3.7",
+      "official_metadata_url": "https://pub.dev/api/packages/flutter_qjs",
+      "latest_environment": {
+        "sdk": ">=2.12.0-0 <3.0.0",
+        "flutter": ">=1.20.0"
+      },
+      "recommended_source": "目标官方固定 commit；暂保留必要定制",
+      "reason": "0.3.7 稳定版的 SDK/API 不满足项目；官方 0.4.0 commit 有解析、Map 与生命周期差异。先独立修复旧核心安全问题。"
+    },
+    {
+      "package": "crypto",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "3.0.8",
+      "declaration": "^3.0.8",
+      "latest_stable": "3.0.8",
+      "official_metadata_url": "https://pub.dev/api/packages/crypto",
+      "latest_environment": {
+        "sdk": "^3.4.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "dio",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "5.11.1",
+      "declaration": "^5.11.1",
+      "latest_stable": "5.11.1",
+      "official_metadata_url": "https://pub.dev/api/packages/dio",
+      "latest_environment": {
+        "sdk": ">=2.18.0 <4.0.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "html",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "0.15.7",
+      "declaration": "^0.15.7",
+      "latest_stable": "0.15.7",
+      "official_metadata_url": "https://pub.dev/api/packages/html",
+      "latest_environment": {
+        "sdk": "^3.6.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "pointycastle",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "4.0.0",
+      "declaration": "^4.0.0",
+      "latest_stable": "4.0.0",
+      "official_metadata_url": "https://pub.dev/api/packages/pointycastle",
+      "latest_environment": {
+        "sdk": "^3.2.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "url_launcher",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "6.3.3",
+      "declaration": "^6.3.3",
+      "latest_stable": "6.3.3",
+      "official_metadata_url": "https://pub.dev/api/packages/url_launcher",
+      "latest_environment": {
+        "sdk": "^3.11.0",
+        "flutter": ">=3.41.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "path",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "1.9.1",
+      "declaration": "^1.9.0",
+      "latest_stable": "1.9.1",
+      "official_metadata_url": "https://pub.dev/api/packages/path",
+      "latest_environment": {
+        "sdk": "^3.4.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "photo_view",
+      "section": "dependencies",
+      "current_source": "path",
+      "current_version": "0.14.0",
+      "declaration": {
+        "path": "packages/photo_view"
+      },
+      "latest_stable": "0.15.0",
+      "official_metadata_url": "https://pub.dev/api/packages/photo_view",
+      "latest_environment": {
+        "sdk": ">=2.12.0 <4.0.0",
+        "flutter": ">=1.6.0"
+      },
+      "recommended_source": "必要本地补丁；目标官方稳定版",
+      "reason": "官方 0.15.0 仍有图片引用释放问题，并缺缩放/动画接口；真实应用替换有 15 个 API 错误。"
+    },
+    {
+      "package": "mime",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "2.1.0",
+      "declaration": "^2.1.0",
+      "latest_stable": "2.1.0",
+      "official_metadata_url": "https://pub.dev/api/packages/mime",
+      "latest_environment": {
+        "sdk": "^3.2.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "share_plus",
+      "section": "dependencies",
+      "current_source": "path",
+      "current_version": "12.0.2",
+      "declaration": {
+        "path": "packages/share_plus"
+      },
+      "latest_stable": "13.3.1",
+      "official_metadata_url": "https://pub.dev/api/packages/share_plus",
+      "latest_environment": {
+        "sdk": ">=3.10.0 <4.0.0",
+        "flutter": ">=3.38.1"
+      },
+      "recommended_source": "必要本地原生补丁；目标官方稳定版",
+      "reason": "官方 13.3.1 已含新修复，但 Windows 回调/数据所有权和 Android 已分享文件保留问题仍未覆盖。"
+    },
+    {
+      "package": "scrollable_positioned_list",
+      "section": "dependencies",
+      "current_source": "path",
+      "current_version": "0.3.8+1",
+      "declaration": {
+        "path": "packages/scrollable_positioned_list"
+      },
+      "latest_stable": "0.3.8",
+      "official_metadata_url": "https://pub.dev/api/packages/scrollable_positioned_list",
+      "latest_environment": {
+        "sdk": ">=2.15.0 <4.0.0",
+        "flutter": ">=2.12.0"
+      },
+      "recommended_source": "优先迁回官方稳定版 0.3.8",
+      "reason": "先以官方像素滚动接口、滚动通知和 ScrollConfiguration 承接原始控制器/行为接口；不是直接改声明。"
+    },
+    {
+      "package": "flutter_reorderable_grid_view",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "5.7.0",
+      "declaration": "^5.7.0",
+      "latest_stable": "5.10.0",
+      "official_metadata_url": "https://pub.dev/api/packages/flutter_reorderable_grid_view",
+      "latest_environment": {
+        "sdk": ">=3.3.1 <4.0.0",
+        "flutter": ">=3.3.0"
+      },
+      "recommended_source": "官方稳定版；评估 5.10.0",
+      "reason": "已经使用官方来源；新版本需独立解析并验证网格排序的现有调用。"
+    },
+    {
+      "package": "uuid",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "4.6.0",
+      "declaration": "^4.6.0",
+      "latest_stable": "4.6.0",
+      "official_metadata_url": "https://pub.dev/api/packages/uuid",
+      "latest_environment": {
+        "sdk": ">=3.0.0 <4.0.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "desktop_webview_window",
+      "section": "dependencies",
+      "current_source": "path",
+      "current_version": "0.2.4",
+      "declaration": {
+        "path": "packages/desktop_webview_window"
+      },
+      "latest_stable": "0.4.2",
+      "official_metadata_url": "https://pub.dev/api/packages/desktop_webview_window",
+      "latest_environment": {
+        "sdk": ">=3.5.0 <4.0.0",
+        "flutter": ">=3.44.0"
+      },
+      "recommended_source": "必要本地平台补丁；目标官方稳定版",
+      "reason": "兼容 SDK 的 0.3.2 也缺 proxy 和 setOnNavigation；最新 0.4.2 另要求 Flutter >=3.44。"
+    },
+    {
+      "package": "flutter_inappwebview",
+      "section": "dependencies",
+      "current_source": "git",
+      "current_version": "6.2.0-beta.3",
+      "declaration": {
+        "git": {
+          "url": "https://github.com/CyrilPeng/flutter_inappwebview",
+          "path": "flutter_inappwebview",
+          "ref": "3ef899b3db57c911b080979f1392253b835f98ab"
+        }
+      },
+      "latest_stable": "6.1.5",
+      "official_metadata_url": "https://pub.dev/api/packages/flutter_inappwebview",
+      "latest_environment": {
+        "sdk": "^3.5.0",
+        "flutter": ">=3.24.0"
+      },
+      "recommended_source": "目标官方固定 commit + 必要 Windows 本地包",
+      "reason": "稳定版 6.1.5 缺退出事件；官方 commit 有 API，但仍缺 Windows context 所有权修复。"
+    },
+    {
+      "package": "app_links",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "7.0.0",
+      "declaration": "^7.0.0",
+      "latest_stable": "7.2.2",
+      "official_metadata_url": "https://pub.dev/api/packages/app_links",
+      "latest_environment": {
+        "sdk": "^3.12.0",
+        "flutter": ">=3.44.0"
+      },
+      "recommended_source": "官方稳定版 7.0.0",
+      "reason": "最新 7.2.2 要求 Flutter >=3.44 / Dart ^3.12；跟随 SDK 升级。"
+    },
+    {
+      "package": "sliver_tools",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "0.2.12",
+      "declaration": "^0.2.12",
+      "latest_stable": "0.2.12",
+      "official_metadata_url": "https://pub.dev/api/packages/sliver_tools",
+      "latest_environment": {
+        "sdk": ">=2.12.0 <4.0.0",
+        "flutter": ">=1.17.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "flutter_file_dialog",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "3.0.3",
+      "declaration": "^3.0.3",
+      "latest_stable": "3.3.6",
+      "official_metadata_url": "https://pub.dev/api/packages/flutter_file_dialog",
+      "latest_environment": {
+        "sdk": "^3.12.0",
+        "flutter": ">=3.44.0"
+      },
+      "recommended_source": "官方稳定版 3.0.3",
+      "reason": "最新 3.3.6 要求 Flutter >=3.44 / Dart ^3.12；跟随 SDK 升级。"
+    },
+    {
+      "package": "file_selector",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "1.1.0",
+      "declaration": "^1.1.0",
+      "latest_stable": "1.1.0",
+      "official_metadata_url": "https://pub.dev/api/packages/file_selector",
+      "latest_environment": {
+        "sdk": "^3.9.0",
+        "flutter": ">=3.35.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "zip_flutter",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "0.0.13",
+      "declaration": "^0.0.13",
+      "latest_stable": "0.0.13",
+      "official_metadata_url": "https://pub.dev/api/packages/zip_flutter",
+      "latest_environment": {
+        "sdk": ">=3.1.0 <4.0.0",
+        "flutter": ">=3.3.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "venera_native",
+      "section": "dependencies",
+      "current_source": "path",
+      "current_version": "1.0.0",
+      "declaration": {
+        "path": "packages/venera_native"
+      },
+      "latest_stable": null,
+      "official_metadata_url": null,
+      "latest_environment": null,
+      "recommended_source": "项目代码保留本地",
+      "reason": "项目自编 PNG/7z 桥接；官方核心分别登记固定来源，不能用旧同名包装包替代。"
+    },
+    {
+      "package": "rhttp",
+      "section": "dependencies",
+      "current_source": "path",
+      "current_version": "0.15.1",
+      "declaration": {
+        "path": "packages/rhttp"
+      },
+      "latest_stable": "0.18.0",
+      "official_metadata_url": "https://pub.dev/api/packages/rhttp",
+      "latest_environment": {
+        "sdk": "^3.9.0",
+        "flutter": ">=3.35.0"
+      },
+      "recommended_source": "必要本地安全补丁；目标官方稳定版 0.18.0",
+      "reason": "新 bridge 已改掉旧发送 panic 路径，但稳定版和当前官方 Git 的 Rust 锁文件都命中公告；鸿蒙还需显式库加载适配。"
+    },
+    {
+      "package": "flutter_rust_bridge",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "2.11.1",
+      "declaration": "2.11.1",
+      "latest_stable": "2.13.0",
+      "official_metadata_url": "https://pub.dev/api/packages/flutter_rust_bridge",
+      "latest_environment": {
+        "sdk": ">=3.9.2 <4.0.0"
+      },
+      "recommended_source": "官方稳定版；与 Rust 生成代码成组固定",
+      "reason": "当前 Dart/Rust 为 2.11.1；评估 rhttp 0.18.0 时先对齐 2.12.0，不能独立跳到最新 2.13.0。"
+    },
+    {
+      "package": "webdav_client",
+      "section": "dependencies",
+      "current_source": "path",
+      "current_version": "1.2.2",
+      "declaration": {
+        "path": "packages/webdav_client"
+      },
+      "latest_stable": "1.2.2",
+      "official_metadata_url": "https://pub.dev/api/packages/webdav_client",
+      "latest_environment": {
+        "sdk": ">=2.12.0 <4.0.0"
+      },
+      "recommended_source": "必要本地补丁；目标官方稳定版/修复 commit",
+      "reason": "adapter 可在创建后设置，但认证、301、上传和取消处理仍有差异；官方包还调用 Dio 内部接口。"
+    },
+    {
+      "package": "battery_plus",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "7.1.2",
+      "declaration": "^7.1.2",
+      "latest_stable": "7.1.2",
+      "official_metadata_url": "https://pub.dev/api/packages/battery_plus",
+      "latest_environment": {
+        "sdk": ">=3.4.0 <4.0.0",
+        "flutter": ">=3.22.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "local_auth",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "3.0.2",
+      "declaration": "^3.0.2",
+      "latest_stable": "3.0.2",
+      "official_metadata_url": "https://pub.dev/api/packages/local_auth",
+      "latest_environment": {
+        "sdk": "^3.10.0",
+        "flutter": ">=3.38.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "venera_saf",
+      "section": "dependencies",
+      "current_source": "path",
+      "current_version": "1.0.0",
+      "declaration": {
+        "path": "packages/venera_saf"
+      },
+      "latest_stable": null,
+      "official_metadata_url": null,
+      "latest_environment": null,
+      "recommended_source": "项目代码保留本地",
+      "reason": "项目自编 Android 持久授权与文件访问；原占位许可证包装层不再作为来源。"
+    },
+    {
+      "package": "dynamic_color",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "1.8.1",
+      "declaration": "^1.8.1",
+      "latest_stable": "2.1.0",
+      "official_metadata_url": "https://pub.dev/api/packages/dynamic_color",
+      "latest_environment": {
+        "sdk": ">=2.16.0 <4.0.0",
+        "flutter": ">=3.4.0-17.0.pre"
+      },
+      "recommended_source": "官方稳定版；评估 1.9.0/2.1.0",
+      "reason": "已经使用官方来源；需核对新的 material_ui 依赖、颜色行为与原生构建要求。"
+    },
+    {
+      "package": "shimmer_animation",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "2.2.2",
+      "declaration": "^2.1.0",
+      "latest_stable": "2.2.2+1",
+      "official_metadata_url": "https://pub.dev/api/packages/shimmer_animation",
+      "latest_environment": {
+        "sdk": ">=3.4.3 <4.0.0"
+      },
+      "recommended_source": "官方稳定版；评估 2.2.2+1",
+      "reason": "已使用官方来源，当前锁定 2.2.2；补丁更新与其他迁移分开验证。"
+    },
+    {
+      "package": "flutter_memory_info",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "0.0.3",
+      "declaration": "^0.0.3",
+      "latest_stable": "0.0.3",
+      "official_metadata_url": "https://pub.dev/api/packages/flutter_memory_info",
+      "latest_environment": {
+        "sdk": "^3.5.4",
+        "flutter": ">=3.3.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "syntax_highlight",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "0.5.0",
+      "declaration": "^0.5.0",
+      "latest_stable": "0.5.0",
+      "official_metadata_url": "https://pub.dev/api/packages/syntax_highlight",
+      "latest_environment": {
+        "sdk": ">=3.0.5 <4.0.0",
+        "flutter": ">=1.17.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "flex_seed_scheme",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "4.0.1",
+      "declaration": "^4.0.1",
+      "latest_stable": "5.0.1",
+      "official_metadata_url": "https://pub.dev/api/packages/flex_seed_scheme",
+      "latest_environment": {
+        "sdk": ">=3.13.0 <4.0.0",
+        "flutter": ">=3.47.0"
+      },
+      "recommended_source": "官方稳定版 4.0.1",
+      "reason": "最新 5.0.1 要求 Flutter >=3.47 / Dart >=3.13；当前保留兼容版。"
+    },
+    {
+      "package": "flutter_localizations",
+      "section": "dependencies",
+      "current_source": "sdk",
+      "current_version": "0.0.0",
+      "declaration": {
+        "sdk": "flutter"
+      },
+      "latest_stable": null,
+      "official_metadata_url": null,
+      "latest_environment": null,
+      "recommended_source": "随平台 SDK",
+      "reason": "Flutter / localizations / test 随对应 SDK 固定，不复制到个人仓库。"
+    },
+    {
+      "package": "yaml",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "3.1.4",
+      "declaration": "^3.1.4",
+      "latest_stable": "3.1.4",
+      "official_metadata_url": "https://pub.dev/api/packages/yaml",
+      "latest_environment": {
+        "sdk": "^3.4.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "enough_convert",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "1.7.1",
+      "declaration": "^1.7.1",
+      "latest_stable": "1.7.1",
+      "official_metadata_url": "https://pub.dev/api/packages/enough_convert",
+      "latest_environment": {
+        "sdk": ">=3.11.0 <4.0.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "display_mode",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "0.0.2",
+      "declaration": "^0.0.2",
+      "latest_stable": "0.0.2",
+      "official_metadata_url": "https://pub.dev/api/packages/display_mode",
+      "latest_environment": {
+        "sdk": "^3.6.1",
+        "flutter": ">=3.3.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "flutter_staggered_grid_view",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "0.7.0",
+      "declaration": "^0.7.0",
+      "latest_stable": "0.7.0",
+      "official_metadata_url": "https://pub.dev/api/packages/flutter_staggered_grid_view",
+      "latest_environment": {
+        "sdk": ">=2.12.0 <3.0.0",
+        "flutter": ">=3.7.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "archive",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "4.6.0",
+      "declaration": "^4.6.0",
+      "latest_stable": "4.6.0",
+      "official_metadata_url": "https://pub.dev/api/packages/archive",
+      "latest_environment": {
+        "sdk": ">=3.0.0 <4.0.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "image",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "4.12.0",
+      "declaration": "^4.12.0",
+      "latest_stable": "4.12.0",
+      "official_metadata_url": "https://pub.dev/api/packages/image",
+      "latest_environment": {
+        "sdk": "^3.0.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    },
+    {
+      "package": "pdfrx",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "2.4.7",
+      "declaration": "^2.4.7",
+      "latest_stable": "2.12.0",
+      "official_metadata_url": "https://pub.dev/api/packages/pdfrx",
+      "latest_environment": {
+        "sdk": "^3.13.0",
+        "flutter": ">=3.47.0"
+      },
+      "recommended_source": "官方稳定版；先评估 2.4.8",
+      "reason": "最新 2.12.0 要求 Flutter >=3.47 / Dart ^3.13；2.4.8 仍需验证引擎及 PDFium 关联依赖。"
+    },
+    {
+      "package": "xml",
+      "section": "dependencies",
+      "current_source": "hosted",
+      "current_version": "6.6.1",
+      "declaration": "^6.6.1",
+      "latest_stable": "7.1.0",
+      "official_metadata_url": "https://pub.dev/api/packages/xml",
+      "latest_environment": {
+        "sdk": "^3.13.0"
+      },
+      "recommended_source": "官方稳定版 6.6.1",
+      "reason": "最新 7.1.0 要求 Dart ^3.12；7.0.1 也不在当前 WebDAV 的 ^6.2.2 范围内。"
+    },
+    {
+      "package": "flutter_test",
+      "section": "dev_dependencies",
+      "current_source": "sdk",
+      "current_version": "0.0.0",
+      "declaration": {
+        "sdk": "flutter"
+      },
+      "latest_stable": null,
+      "official_metadata_url": null,
+      "latest_environment": null,
+      "recommended_source": "随平台 SDK",
+      "reason": "Flutter / localizations / test 随对应 SDK 固定，不复制到个人仓库。"
+    },
+    {
+      "package": "flutter_lints",
+      "section": "dev_dependencies",
+      "current_source": "hosted",
+      "current_version": "6.0.0",
+      "declaration": "^6.0.0",
+      "latest_stable": "6.0.0",
+      "official_metadata_url": "https://pub.dev/api/packages/flutter_lints",
+      "latest_environment": {
+        "sdk": "^3.8.0"
+      },
+      "recommended_source": "保留官方稳定版",
+      "reason": "当前已直接使用 pub.dev；不新增 fork 或本地源码副本。"
+    }
+  ],
+  "official_repository_snapshots": {
+    "photo_view": {
+      "repository": "https://github.com/bluefireteam/photo_view",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "a13ca2fc387a3fb1276126959e092c44d0029987",
+      "head_date": "2024-09-04T06:46:41Z",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "url": "https://api.github.com/licenses/mit",
+        "node_id": "MDc6TGljZW5zZTEz"
+      }
+    },
+    "scrollable_positioned_list": {
+      "repository": "https://github.com/google/flutter.widgets",
+      "archived": true,
+      "default_branch": "master",
+      "head_sha": "494c6abd3de44a92d34c5cbc424db2eefe3915cf",
+      "head_date": "2023-12-15T20:24:29Z",
+      "license": {
+        "key": "bsd-3-clause",
+        "name": "BSD 3-Clause \"New\" or \"Revised\" License",
+        "spdx_id": "BSD-3-Clause",
+        "url": "https://api.github.com/licenses/bsd-3-clause",
+        "node_id": "MDc6TGljZW5zZTU="
+      }
+    },
+    "webdav_client": {
+      "repository": "https://github.com/flymzero/webdav_client",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "5a8dd0d9a82bac86e5ed326f648c2b0871478d8f",
+      "head_date": "2024-05-12T15:03:51Z",
+      "license": {
+        "key": "bsd-3-clause",
+        "name": "BSD 3-Clause \"New\" or \"Revised\" License",
+        "spdx_id": "BSD-3-Clause",
+        "url": "https://api.github.com/licenses/bsd-3-clause",
+        "node_id": "MDc6TGljZW5zZTU="
+      }
+    },
+    "share_plus": {
+      "repository": "https://github.com/fluttercommunity/plus_plugins",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "907994b0e52c2c11ae2f2ccc08d0658e1c73dbaf",
+      "head_date": "2026-10-08T10:06:56Z",
+      "license": {
+        "key": "bsd-3-clause",
+        "name": "BSD 3-Clause \"New\" or \"Revised\" License",
+        "spdx_id": "BSD-3-Clause",
+        "url": "https://api.github.com/licenses/bsd-3-clause",
+        "node_id": "MDc6TGljZW5zZTU="
+      }
+    },
+    "desktop_webview_window": {
+      "repository": "https://github.com/MixinNetwork/flutter-plugins",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "d70d8d040730819a1f8b700fd8068eab1ef09d66",
+      "head_date": "2026-11-06T01:41:33Z",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "url": "https://api.github.com/licenses/mit",
+        "node_id": "MDc6TGljZW5zZTEz"
+      }
+    },
+    "flutter_qjs": {
+      "repository": "https://github.com/ekibun/flutter_qjs",
+      "archived": false,
+      "default_branch": "master",
+      "head_sha": "12a393bd22529753935705b2a8f5db636e93d37f",
+      "head_date": "2026-10-19T10:34:12Z",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "url": "https://api.github.com/licenses/mit",
+        "node_id": "MDc6TGljZW5zZTEz"
+      }
+    },
+    "flutter_inappwebview": {
+      "repository": "https://github.com/pichillilorenzo/flutter_inappwebview",
+      "archived": false,
+      "default_branch": "master",
+      "head_sha": "17527cae5a3371c1e87f9c1df4281a7710debf28",
+      "head_date": "2026-02-10T13:47:56Z",
+      "license": {
+        "key": "apache-2.0",
+        "name": "Apache License 2.0",
+        "spdx_id": "Apache-2.0",
+        "url": "https://api.github.com/licenses/apache-2.0",
+        "node_id": "MDc6TGljZW5zZTI="
+      }
+    },
+    "rhttp": {
+      "repository": "https://codeberg.org/Tienisto/rhttp",
+      "head_sha": "39a3d766139c34c672561b13877438994afbb4cd",
+      "head_date": "2026-09-20T03:20:08+02:00",
+      "package_path": "rhttp",
+      "verification": "Fetched Git commit and canonical Git blobs; the package lives under rhttp/ rather than the repository root.",
+      "files": [
+        {
+          "path": "rhttp/pubspec.yaml",
+          "git_blob": "00ea05d814e234001ff1b8eab38925c3d3c3baee",
+          "sha256": "a77dbdd3f64042195b1c5e3a1e4be5a9eb7683713572fb6ebbd7052510296b89"
+        },
+        {
+          "path": "rhttp/rust/Cargo.lock",
+          "git_blob": "e310eef9f04cae12e70dbc02b16de33ccf16e679",
+          "sha256": "b2883174e6832cbc4341ba45bd560924e53de4bd1c43ed19d9eb643b9a3ac577"
+        },
+        {
+          "path": "rhttp/rust/src/api/http.rs",
+          "git_blob": "6cf36c9ad3a3f351f62d51025956a267f228dc37",
+          "sha256": "7cc8cc6bc014188378d4f52c6e06e4a0ac657bf7ff1a9a8ef951afe9e94437c8"
+        },
+        {
+          "path": "rhttp/lib/src/rhttp.dart",
+          "git_blob": "648e3000f83f256a0143620ac598b378094142c4",
+          "sha256": "37034bb5cd4f0601ac85796df8c4e88aa56a83850d70a36877ef14a8144437f3"
+        }
+      ],
+      "version": "0.18.0",
+      "native_versions": {
+        "flutter_rust_bridge": [
+          "2.12.0"
+        ],
+        "tokio": [
+          "1.52.3"
+        ],
+        "rustls": [
+          "0.23.40"
+        ],
+        "rustls-webpki": [
+          "0.103.13"
+        ],
+        "webpki-root-certs": [
+          "1.0.7"
+        ],
+        "libc": [
+          "0.2.186"
+        ]
+      },
+      "cargo_lock_equals_stable_0_18_0": true
+    }
+  },
+  "verified_release_archives": [
+    {
+      "package": "photo_view",
+      "version": "0.15.0",
+      "archive_url": "https://pub.dev/api/archives/photo_view-0.15.0.tar.gz",
+      "sha256": "1fc3d970a91295fbd1364296575f854c9863f225505c28c46e0a03e48960c75e",
+      "bytes": 16605447
+    },
+    {
+      "package": "scrollable_positioned_list",
+      "version": "0.3.8",
+      "archive_url": "https://pub.dev/api/archives/scrollable_positioned_list-0.3.8.tar.gz",
+      "sha256": "1b54d5f1329a1e263269abc9e2543d90806131aa14fe7c6062a8054d57249287",
+      "bytes": 302990
+    },
+    {
+      "package": "webdav_client",
+      "version": "1.2.2",
+      "archive_url": "https://pub.dev/api/archives/webdav_client-1.2.2.tar.gz",
+      "sha256": "682fffc50b61dc0e8f46717171db03bf9caaa17347be41c0c91e297553bf86b2",
+      "bytes": 218010
+    },
+    {
+      "package": "share_plus",
+      "version": "13.3.1",
+      "archive_url": "https://pub.dev/api/archives/share_plus-13.3.1.tar.gz",
+      "sha256": "db40767f130189d53f3ae8a6393c217ff4a492da1baff718a9873679c0c00224",
+      "bytes": 293486
+    },
+    {
+      "package": "rhttp",
+      "version": "0.18.0",
+      "archive_url": "https://pub.dev/api/archives/rhttp-0.18.0.tar.gz",
+      "sha256": "954d5a9aa5a4f1e2a8612e8cb9ecbe4fc0826fcbf0406f40115573e2e92b7dde",
+      "bytes": 385086
+    },
+    {
+      "package": "desktop_webview_window",
+      "version": "0.4.2",
+      "archive_url": "https://pub.dev/api/archives/desktop_webview_window-0.4.2.tar.gz",
+      "sha256": "22f23a8b88753f39207a112791eaf42ff7cf4726432f95ceab12e222ea002d46",
+      "bytes": 985803
+    },
+    {
+      "package": "sqlite3",
+      "version": "3.9.0",
+      "archive_url": "https://pub.dev/api/archives/sqlite3-3.9.0.tar.gz",
+      "sha256": "b1ec21d306ddbec59a88ae3682ad81728561f7105db78fea0fdd67f06911a519",
+      "bytes": 182904
+    },
+    {
+      "package": "sqlite3_flutter_libs",
+      "version": "0.6.0+eol",
+      "archive_url": "https://pub.dev/api/archives/sqlite3_flutter_libs-0.6.0%2Beol.tar.gz",
+      "sha256": "3ed7553eee7bb368f8950f58ba29f634e06e813c029aff6a0d60862b96de8454",
+      "bytes": 2745
+    },
+    {
+      "package": "flutter_qjs",
+      "version": "0.3.7",
+      "archive_url": "https://pub.dev/api/archives/flutter_qjs-0.3.7.tar.gz",
+      "sha256": "123b6a2c95ceb4343a15a2bf4eb8e22f6f30d17c291b7a6c71f759906f817525",
+      "bytes": 790566
+    },
+    {
+      "package": "flutter_inappwebview",
+      "version": "6.1.5",
+      "archive_url": "https://pub.dev/api/archives/flutter_inappwebview-6.1.5.tar.gz",
+      "sha256": "80092d13d3e29b6227e25b67973c67c7210bd5e35c4b747ca908e31eb71a46d5",
+      "bytes": 2767434
+    },
+    {
+      "package": "dynamic_color",
+      "version": "2.1.0",
+      "archive_url": "https://pub.dev/api/archives/dynamic_color-2.1.0.tar.gz",
+      "sha256": "869b3bce0100eb519768ecd71c0111f0b5ea679f5f62e1f59c49d80067e730c5",
+      "bytes": 1006701
+    },
+    {
+      "package": "flutter_rust_bridge",
+      "version": "2.13.0",
+      "archive_url": "https://pub.dev/api/archives/flutter_rust_bridge-2.13.0.tar.gz",
+      "sha256": "ec69331e2335ab4d456c0a9fc700892c2c85b72b9c0cb39df3ecfe8833d5d5c8",
+      "bytes": 80388
+    },
+    {
+      "package": "rhttp",
+      "version": "0.16.0",
+      "url": "https://pub.dev/api/archives/rhttp-0.16.0.tar.gz",
+      "sha256": "32482042b007474f287f843c298d46a5589aaf8db9603ff78527b5e0bcbee40a",
+      "environment": {
+        "sdk": "^3.9.0",
+        "flutter": ">=3.35.0"
+      },
+      "dependencies": {
+        "flutter": {
+          "sdk": "flutter"
+        },
+        "flutter_rust_bridge": "^2.12.0",
+        "freezed_annotation": "^3.0.0",
+        "http": "^1.5.0",
+        "http_profile": "^0.1.0",
+        "meta": "^1.12.0"
+      }
+    },
+    {
+      "package": "desktop_webview_window",
+      "version": "0.3.2",
+      "url": "https://pub.dev/api/archives/desktop_webview_window-0.3.2.tar.gz",
+      "sha256": "20c3ac0f0404f72a0ce76f6f729f4dc656c04747f42e0a38d9553855b1d6012e",
+      "environment": {
+        "sdk": ">=3.5.0 <4.0.0",
+        "flutter": ">=2.5.0"
+      },
+      "dependencies": {
+        "flutter": {
+          "sdk": "flutter"
+        },
+        "path": "^1.8.0"
+      }
+    },
+    {
+      "package": "flutter_rust_bridge",
+      "version": "2.12.0",
+      "url": "https://pub.dev/api/archives/flutter_rust_bridge-2.12.0.tar.gz",
+      "sha256": "e87d6b9ee934dcd24a128ccb2bd91905d2d5fe5c06245d6a8f5477d4907a437a",
+      "environment": {
+        "sdk": ">=3.4.0 <4.0.0"
+      },
+      "dependencies": {
+        "args": "^2.3.1",
+        "async": "^2.11.0",
+        "build_cli_annotations": "^2.1.0",
+        "meta": "^1.3.0",
+        "path": "^1.8.1",
+        "web": ">=0.5.0 <2.0.0"
+      }
+    }
+  ],
+  "source_comparisons": [
+    {
+      "package": "photo_view",
+      "normalization": "Same Dart 3.11 formatter; equality is a source comparison, not behavioral proof.",
+      "runtime_files": 16,
+      "equal_runtime_files": 6,
+      "files": [
+        {
+          "path": "lib/photo_view.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "e673cf64556db05b4b4302314bc98befab620143fe78dab4086b3887d1db8f65",
+          "local_sha256": "7ef24379c411709e4a24b83cf072913ca212eee31f8ab210850634999df8513d"
+        },
+        {
+          "path": "lib/photo_view_gallery.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "e0964384715c49609ff314e2b72e8af59c07f0da99d1ac1cb2ee513dc5cd6b49",
+          "local_sha256": "bfda84d3f47d1f4a1a53701c6b6a11a956cea8e17a59696ea758f64a21904537"
+        },
+        {
+          "path": "lib/src/controller/photo_view_controller.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "79f99263b46c192939be38185782581ccd6c4ce3ab4186d50edef13299a6dc93",
+          "local_sha256": "5bbe347d574b160934499a7c1f7ca44272c41655ebdfad0c6a818ed1a7151625"
+        },
+        {
+          "path": "lib/src/controller/photo_view_controller_delegate.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "314aa59eb4ab6b345704232fe1748a8b4a92e8e7b45f33962343cf0e3e66e7c9",
+          "local_sha256": "086378244d8b8e42825998d05f7bee620a7b03da93bdf419b2aae4cf53cdeb24"
+        },
+        {
+          "path": "lib/src/controller/photo_view_scalestate_controller.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "2e017a617ba07b5914dc4ce928d1c8de2802ecd1ef12c7c3382928663c485308",
+          "local_sha256": "2e017a617ba07b5914dc4ce928d1c8de2802ecd1ef12c7c3382928663c485308"
+        },
+        {
+          "path": "lib/src/core/image.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": null,
+          "local_sha256": "5da99e73224b7a707cc602a0ed3f2a1afd7267c538e61bdd7c459f94a03d787a"
+        },
+        {
+          "path": "lib/src/core/photo_view_core.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "9d8a03faab9cfb0e8ec997b99f966839e71a77b91e841a4f61e61fedbc6571ce",
+          "local_sha256": "9ea11f2e0cc7b2df4df8f1329a98fe36574be3dbb95e3bfeb481318c7a28c955"
+        },
+        {
+          "path": "lib/src/core/photo_view_gesture_detector.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "ddb2b34977fd7bd2be3e8f859bce020142ccdda8ca93db74cd2e2ec3a7390407",
+          "local_sha256": "cb558d1fdfc8ae6eabcad3afcc4985df6a1c82b5c4e92a20e2aebf7c764c5371"
+        },
+        {
+          "path": "lib/src/core/photo_view_hit_corners.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "ea15fdf87af8dfe928cd5effc33614f03d81244df8d410d7859e133c09a9bff4",
+          "local_sha256": "e3ce7c8569cee8b1dad57be469939061a6e52225e86e7ace37747facfb530731"
+        },
+        {
+          "path": "lib/src/photo_view_computed_scale.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "31d5a1cbd447380e08d5445cded81e409b3ecab13cab873e9dc7eab154502e1d",
+          "local_sha256": "31d5a1cbd447380e08d5445cded81e409b3ecab13cab873e9dc7eab154502e1d"
+        },
+        {
+          "path": "lib/src/photo_view_default_widgets.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "bd49798c95a98a91d73b6e7728d28da694e38dcebb552ed86f5b5846fe54dfd6",
+          "local_sha256": "bd49798c95a98a91d73b6e7728d28da694e38dcebb552ed86f5b5846fe54dfd6"
+        },
+        {
+          "path": "lib/src/photo_view_scale_state.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "5827fe5e2c9ac0ff6ee792f4941349b101eeb03b88a342b45f254f292b2ae48f",
+          "local_sha256": "5827fe5e2c9ac0ff6ee792f4941349b101eeb03b88a342b45f254f292b2ae48f"
+        },
+        {
+          "path": "lib/src/photo_view_wrappers.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "cb61c52dc834fd8a81233c53073cb58269044d5cca9ffb08fdabfd7400aa2c7c",
+          "local_sha256": "c749c1d46979160210268098fb5fed8de4df281e71540373ff28c7225eaf811c"
+        },
+        {
+          "path": "lib/src/utils/ignorable_change_notifier.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "6f6f004f1f8242d615f52784d97fe0ca5e48d71e15491ef2382e0d295af8a8f8",
+          "local_sha256": "6f6f004f1f8242d615f52784d97fe0ca5e48d71e15491ef2382e0d295af8a8f8"
+        },
+        {
+          "path": "lib/src/utils/photo_view_hero_attributes.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "16dec42902a9197c45dcfa9762c87b1856cd5e8cf683996e9197267c719a41a0",
+          "local_sha256": "16dec42902a9197c45dcfa9762c87b1856cd5e8cf683996e9197267c719a41a0"
+        },
+        {
+          "path": "lib/src/utils/photo_view_utils.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "e79048a4f347ace87806e47d1b70be8b657767014aec870a0e2e3b064213e1ba",
+          "local_sha256": "07af92e6906edcadc3c506c82fad6b82f1ea4f64bd9fbafc2af468d5efe172e9"
+        }
+      ]
+    },
+    {
+      "package": "scrollable_positioned_list",
+      "normalization": "Same Dart 3.11 formatter; equality is a source comparison, not behavioral proof.",
+      "runtime_files": 12,
+      "equal_runtime_files": 7,
+      "files": [
+        {
+          "path": "lib/scrollable_positioned_list.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "51d87d0e36be45d396e85eb4a4c60be9f57912c3c62491cd6c8763620d0c845f",
+          "local_sha256": "51d87d0e36be45d396e85eb4a4c60be9f57912c3c62491cd6c8763620d0c845f"
+        },
+        {
+          "path": "lib/src/element_registry.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "d6bcdeabb98d784dc5abc12474041c956c80c3395b49b1958825c2f2304c5f20",
+          "local_sha256": "d6bcdeabb98d784dc5abc12474041c956c80c3395b49b1958825c2f2304c5f20"
+        },
+        {
+          "path": "lib/src/item_positions_listener.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "3356ebc211af01e30447105dfc23e193c12dd5f113745aca96510fa6a7e188d5",
+          "local_sha256": "361b5a26f48e1c4667cbb2c66a8bd7809a8f67fd093c592802d4fb055084c339"
+        },
+        {
+          "path": "lib/src/item_positions_notifier.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "6c0d81f9fdf545e80f96eae0756b7709db3dbb83dc26d70757999be578014a5a",
+          "local_sha256": "6c0d81f9fdf545e80f96eae0756b7709db3dbb83dc26d70757999be578014a5a"
+        },
+        {
+          "path": "lib/src/positioned_list.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "3b8ecfda677f7a1b2b2f64b6cf65772e768cdfb61a7fd2263ce5240c08217e0e",
+          "local_sha256": "b8c428acd36f5824ddc519d9eea37d03d19be4555d640b4f8797638ff31558a3"
+        },
+        {
+          "path": "lib/src/post_mount_callback.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "0f44710e08f6ea17c46fe30a0b169143221e48892039e824bb3c61ffc2b572be",
+          "local_sha256": "0f44710e08f6ea17c46fe30a0b169143221e48892039e824bb3c61ffc2b572be"
+        },
+        {
+          "path": "lib/src/scroll_offset_listener.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "adee5e10ec76ea5116730e3a5d511845bcefb565614d6fd5f2afe266113def21",
+          "local_sha256": "adee5e10ec76ea5116730e3a5d511845bcefb565614d6fd5f2afe266113def21"
+        },
+        {
+          "path": "lib/src/scroll_offset_notifier.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "b37c7e2ab1afdda00415748c08da6e7a0a82ae4dda281c0d939dd1f5f136d8eb",
+          "local_sha256": "b37c7e2ab1afdda00415748c08da6e7a0a82ae4dda281c0d939dd1f5f136d8eb"
+        },
+        {
+          "path": "lib/src/scroll_view.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "9aef02bce2b4e6401ad1072fcf0ca1e4604983528d8dc5600ab9b598f2a799bd",
+          "local_sha256": "dc75eb3379810aabc396076e6f6f9afa5002b7c656de310ff16e4cc15d3b1585"
+        },
+        {
+          "path": "lib/src/scrollable_positioned_list.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "6fa58bb6e4ef4c73a26559a81dbd750d76555487ada55ed78eddb52974779107",
+          "local_sha256": "ebb2a0b3ad110e54e526110db232a2cca64d296c047f4d48c70397e0322f0156"
+        },
+        {
+          "path": "lib/src/viewport.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "7fcc6dbfc4584829288bd84ea405a836a81878cb211604a012bcbc7351109390",
+          "local_sha256": "7fcc6dbfc4584829288bd84ea405a836a81878cb211604a012bcbc7351109390"
+        },
+        {
+          "path": "lib/src/wrapping.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "33936149e5467b2b17301f2f868a2a7d77794428a398ce9bdc5237720e9468f0",
+          "local_sha256": "bf2927d4d3161bba6656cf0979078db9147199d1e1a328ebd0dc29e8d804aa9e"
+        }
+      ]
+    },
+    {
+      "package": "webdav_client",
+      "normalization": "Same Dart 3.11 formatter; equality is a source comparison, not behavioral proof.",
+      "runtime_files": 11,
+      "equal_runtime_files": 6,
+      "files": [
+        {
+          "path": "lib/src/adapter/adapter_mobile.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "c4a4d636e88b17156c38f0fb1e5ad9d4ec2fa3d50efb18338ac34ab6bd403e1f",
+          "local_sha256": "c4a4d636e88b17156c38f0fb1e5ad9d4ec2fa3d50efb18338ac34ab6bd403e1f"
+        },
+        {
+          "path": "lib/src/adapter/adapter_stub.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "d63f1f426cbe7292840facf34f0fde406872d9eafcde13738aeb40c06feb16e9",
+          "local_sha256": "d63f1f426cbe7292840facf34f0fde406872d9eafcde13738aeb40c06feb16e9"
+        },
+        {
+          "path": "lib/src/adapter/adapter_web.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "56d4d6d0f92b3926ee384c331a508ba4962544a5513a28fb512a562ebe112932",
+          "local_sha256": "56d4d6d0f92b3926ee384c331a508ba4962544a5513a28fb512a562ebe112932"
+        },
+        {
+          "path": "lib/src/auth.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "258a8a21207179fa60520dd57caacc7dd9313c24b99869706014ba56db848833",
+          "local_sha256": "258a8a21207179fa60520dd57caacc7dd9313c24b99869706014ba56db848833"
+        },
+        {
+          "path": "lib/src/client.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "d8e8d9f7718f5858f535179932100141958de595f0e1b30c679da3472e35fc5c",
+          "local_sha256": "d23226fd8fc80e1c686758bbe5f157f2470529fc8b1245bdb459033758226cfb"
+        },
+        {
+          "path": "lib/src/file.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "240b7a3027af4196d28fd33d17ba609dd4f209b20d22865057eeca30967664a7",
+          "local_sha256": "240b7a3027af4196d28fd33d17ba609dd4f209b20d22865057eeca30967664a7"
+        },
+        {
+          "path": "lib/src/md5.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "3c0dbc9143b342d466ad527d6d8c3a1fb199a5f1cc52631dc35af615afb67d2d",
+          "local_sha256": "e31086cc8f2226db84d0babbe50306b22d26a93be1e48737e09c966da0009157"
+        },
+        {
+          "path": "lib/src/utils.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "ea09a4612d3fd4f7addfc22a50fc10ea52bf51c5ef9d0be036fcdde87b826c74",
+          "local_sha256": "0a9ce4eb9dfad5877d018b2d3e4a3175fb1cdeb04f5504d1837b24acf5b4de73"
+        },
+        {
+          "path": "lib/src/webdav_dio.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "26afa85a624d3ad8e18d77507ebf1e1b5edb93e0ed85038164cb5f81e21d3818",
+          "local_sha256": "5dc61f886b1d91e7b0d065d6d8c97242909a1952b2a2abb1d6645a263ebbe242"
+        },
+        {
+          "path": "lib/src/xml.dart",
+          "equal_after_same_format": false,
+          "stable_sha256": "1522f2b16e3a5bcfbb87b31d4ba6fbf753633ba877e558e8402dcd33195e056d",
+          "local_sha256": "aff1fa0cbe0dc5d0104225a0a68efea14f9ef827df91925736a1ad23eb56a546"
+        },
+        {
+          "path": "lib/webdav_client.dart",
+          "equal_after_same_format": true,
+          "stable_sha256": "85e2a79f6d2817eecb40639db81c4d1ed481e3ace5b79d1392d116ab4037f0ea",
+          "local_sha256": "85e2a79f6d2817eecb40639db81c4d1ed481e3ace5b79d1392d116ab4037f0ea"
+        }
+      ]
+    }
+  ],
+  "source_analysis": [
+    {
+      "label": "baseline-application",
+      "exit_code": 0,
+      "diagnostics": [],
+      "log_sha256": "6b7a8871da280b2b7725a31509a42d0e66de8a6281e319414cfeb7d46b48d2ed",
+      "scope": "API/source analysis using the existing locked package graph. No Pub solver, SDK upgrade, native build or runtime acceptance is claimed."
+    },
+    {
+      "label": "photo_view-application",
+      "exit_code": 3,
+      "diagnostics": [
+        "  error - features\\reader\\continuous_view.dart:1158:9 - The named parameter 'onScaleUpdate' isn't defined. Try correcting the name to an existing named parameter's name, or defining a named parameter with the name 'onScaleUpdate'. - undefined_named_parameter",
+        "  error - features\\reader\\continuous_view.dart:1201:41 - The getter 'getInitialScale' isn't defined for the type 'PhotoViewController'. Try importing the library that defines 'getInitialScale', correcting the name to the name of an existing getter, or defining a getter or field named 'getInitialScale'. - undefined_getter",
+        "  error - features\\reader\\continuous_view.dart:1210:25 - The getter 'animateScale' isn't defined for the type 'PhotoViewController'. Try importing the library that defines 'animateScale', correcting the name to the name of an existing getter, or defining a getter or field named 'animateScale'. - undefined_getter",
+        "  error - features\\reader\\continuous_view.dart:1223:41 - The getter 'getInitialScale' isn't defined for the type 'PhotoViewController'. Try importing the library that defines 'getInitialScale', correcting the name to the name of an existing getter, or defining a getter or field named 'getInitialScale'. - undefined_getter",
+        "  error - features\\reader\\continuous_view.dart:1236:25 - The getter 'animateScale' isn't defined for the type 'PhotoViewController'. Try importing the library that defines 'animateScale', correcting the name to the name of an existing getter, or defining a getter or field named 'animateScale'. - undefined_getter",
+        "  error - features\\reader\\continuous_view.dart:1247:40 - The getter 'getInitialScale' isn't defined for the type 'PhotoViewController'. Try importing the library that defines 'getInitialScale', correcting the name to the name of an existing getter, or defining a getter or field named 'getInitialScale'. - undefined_getter",
+        "  error - features\\reader\\continuous_view.dart:1250:25 - The getter 'animateScale' isn't defined for the type 'PhotoViewController'. Try importing the library that defines 'animateScale', correcting the name to the name of an existing getter, or defining a getter or field named 'animateScale'. - undefined_getter",
+        "  error - features\\reader\\gallery_view.dart:157:33 - The getter 'getInitialScale' isn't defined for the type 'PhotoViewController'. Try importing the library that defines 'getInitialScale', correcting the name to the name of an existing getter, or defining a getter or field named 'getInitialScale'. - undefined_getter",
+        "  error - features\\reader\\gallery_view.dart:376:13 - The named parameter 'fit' isn't defined. Try correcting the name to an existing named parameter's name, or defining a named parameter with the name 'fit'. - undefined_named_parameter",
+        "  error - features\\reader\\gallery_view.dart:378:27 - The argument type 'NetworkError Function(BuildContext, Object, StackTrace?, dynamic)' can't be assigned to the parameter type 'ImageErrorWidgetBuilder?'.  - argument_type_not_assignable",
+        "  error - features\\reader\\gallery_view.dart:528:33 - The getter 'onDoubleClick' isn't defined for the type 'PhotoViewController'. Try importing the library that defines 'onDoubleClick', correcting the name to the name of an existing getter, or defining a getter or field named 'onDoubleClick'. - undefined_getter",
+        "  error - features\\reader\\gallery_view.dart:537:42 - The getter 'getInitialScale' isn't defined for the type 'PhotoViewController'. Try importing the library that defines 'getInitialScale', correcting the name to the name of an existing getter, or defining a getter or field named 'getInitialScale'. - undefined_getter",
+        "  error - features\\reader\\gallery_view.dart:551:25 - The getter 'animateScale' isn't defined for the type 'PhotoViewController'. Try importing the library that defines 'animateScale', correcting the name to the name of an existing getter, or defining a getter or field named 'animateScale'. - undefined_getter",
+        "  error - features\\reader\\gallery_view.dart:566:29 - The getter 'getInitialScale' isn't defined for the type 'PhotoViewController'. Try importing the library that defines 'getInitialScale', correcting the name to the name of an existing getter, or defining a getter or field named 'getInitialScale'. - undefined_getter",
+        "  error - features\\reader\\gallery_view.dart:567:34 - The getter 'animateScale' isn't defined for the type 'PhotoViewController'. Try importing the library that defines 'animateScale', correcting the name to the name of an existing getter, or defining a getter or field named 'animateScale'. - undefined_getter"
+      ],
+      "log_sha256": "64ba8a6545af1a5b338531213fb3a32a2d0175144f1a233ca45a8af6325d22c3",
+      "scope": "API/source analysis using the existing locked package graph. No Pub solver, SDK upgrade, native build or runtime acceptance is claimed."
+    },
+    {
+      "label": "scrollable_positioned_list-application",
+      "exit_code": 3,
+      "diagnostics": [
+        "  error - features\\reader\\continuous_view.dart:908:7 - The named parameter 'scrollControllerCallback' isn't defined. Try correcting the name to an existing named parameter's name, or defining a named parameter with the name 'scrollControllerCallback'. - undefined_named_parameter",
+        "  error - features\\reader\\continuous_view.dart:986:7 - The named parameter 'scrollBehavior' isn't defined. Try correcting the name to an existing named parameter's name, or defining a named parameter with the name 'scrollBehavior'. - undefined_named_parameter"
+      ],
+      "log_sha256": "e965f07a0b471620ab265f29e9af9f322b30e3ad3907a5354c9223c5d9865746",
+      "scope": "API/source analysis using the existing locked package graph. No Pub solver, SDK upgrade, native build or runtime acceptance is claimed."
+    },
+    {
+      "label": "webdav_client-application",
+      "exit_code": 3,
+      "diagnostics": [
+        "  error - network\\webdav.dart:36:7 - The named parameter 'adapter' isn't defined. Try correcting the name to an existing named parameter's name, or defining a named parameter with the name 'adapter'. - undefined_named_parameter"
+      ],
+      "log_sha256": "159a9227972f38c31c5f66b3a5f03504307994ce1c49ec34b09aa94a87fe182b",
+      "scope": "API/source analysis using the existing locked package graph. No Pub solver, SDK upgrade, native build or runtime acceptance is claimed."
+    },
+    {
+      "label": "webdav_client-package",
+      "exit_code": 2,
+      "diagnostics": [
+        "warning - src\\webdav_dio.dart:447:20 - The member 'listenCancelForAsyncTask' can only be used within its package. - invalid_use_of_internal_member",
+        "   info - src\\utils.dart:57:1 - 'DioError' is deprecated and shouldn't be used. Use DioException instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\utils.dart:58:10 - 'DioError' is deprecated and shouldn't be used. Use DioException instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\utils.dart:61:13 - 'DioErrorType' is deprecated and shouldn't be used. Use DioExceptionType instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\utils.dart:66:1 - 'DioError' is deprecated and shouldn't be used. Use DioException instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\utils.dart:67:10 - 'DioError' is deprecated and shouldn't be used. Use DioException instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\utils.dart:69:11 - 'DioErrorType' is deprecated and shouldn't be used. Use DioExceptionType instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\webdav_dio.dart:311:10 - 'DioError' is deprecated and shouldn't be used. Use DioException instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\webdav_dio.dart:312:21 - 'DioErrorType' is deprecated and shouldn't be used. Use DioExceptionType instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\webdav_dio.dart:387:37 - 'DioError' is deprecated and shouldn't be used. Use DioException instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\webdav_dio.dart:401:35 - 'DioError' is deprecated and shouldn't be used. Use DioException instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\webdav_dio.dart:411:35 - 'DioError' is deprecated and shouldn't be used. Use DioException instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\webdav_dio.dart:436:17 - 'DioError' is deprecated and shouldn't be used. Use DioException instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\webdav_dio.dart:440:19 - 'DioErrorType' is deprecated and shouldn't be used. Use DioExceptionType instead. This will be removed in 6.0.0. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\xml.dart:39:67 - 'text' is deprecated and shouldn't be used. Use [value] to access the textual content of this node, or [innerText] to access the textual content of its descendants. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\xml.dart:46:53 - 'text' is deprecated and shouldn't be used. Use [value] to access the textual content of this node, or [innerText] to access the textual content of its descendants. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\xml.dart:68:71 - 'text' is deprecated and shouldn't be used. Use [value] to access the textual content of this node, or [innerText] to access the textual content of its descendants. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\xml.dart:75:51 - 'text' is deprecated and shouldn't be used. Use [value] to access the textual content of this node, or [innerText] to access the textual content of its descendants. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\xml.dart:82:63 - 'text' is deprecated and shouldn't be used. Use [value] to access the textual content of this node, or [innerText] to access the textual content of its descendants. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\xml.dart:87:55 - 'text' is deprecated and shouldn't be used. Use [value] to access the textual content of this node, or [innerText] to access the textual content of its descendants. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use",
+        "   info - src\\xml.dart:93:54 - 'text' is deprecated and shouldn't be used. Use [value] to access the textual content of this node, or [innerText] to access the textual content of its descendants. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use"
+      ],
+      "log_sha256": "9094f4b0be47d99bfeeca5ccc7dc2a939096786ed05300fe4f0ea361c7bf5205",
+      "scope": "API/source analysis using the existing locked package graph. No Pub solver, SDK upgrade, native build or runtime acceptance is claimed."
+    },
+    {
+      "label": "rhttp-0.16.0-application",
+      "exit_code": 3,
+      "diagnostics": [
+        "  error - foundation\\harmonyos.dart:49:20 - The named parameter 'externalLibrary' isn't defined. Try correcting the name to an existing named parameter's name, or defining a named parameter with the name 'externalLibrary'. - undefined_named_parameter"
+      ],
+      "log_sha256": "71af8e507a17e6d64c45880b52ab80561e32e6ad69ce5274809419ebfeb843ab",
+      "scope": "API/source analysis using the existing locked package graph. No Pub solver, SDK upgrade, native build or runtime acceptance is claimed.",
+      "replacements": {
+        "rhttp": "additional-stable/rhttp-0.16.0",
+        "flutter_rust_bridge": "additional-stable/flutter_rust_bridge-2.12.0"
+      }
+    },
+    {
+      "label": "rhttp-0.18.0-application",
+      "exit_code": 3,
+      "diagnostics": [
+        "  error - foundation\\harmonyos.dart:49:20 - The named parameter 'externalLibrary' isn't defined. Try correcting the name to an existing named parameter's name, or defining a named parameter with the name 'externalLibrary'. - undefined_named_parameter"
+      ],
+      "log_sha256": "71af8e507a17e6d64c45880b52ab80561e32e6ad69ce5274809419ebfeb843ab",
+      "scope": "API/source analysis using the existing locked package graph. No Pub solver, SDK upgrade, native build or runtime acceptance is claimed.",
+      "replacements": {
+        "rhttp": "stable/rhttp",
+        "flutter_rust_bridge": "additional-stable/flutter_rust_bridge-2.12.0"
+      }
+    },
+    {
+      "label": "desktop_webview_window-0.3.2-application",
+      "exit_code": 3,
+      "diagnostics": [
+        "  error - routing\\webview.dart:438:9 - The named parameter 'proxy' isn't defined. Try correcting the name to an existing named parameter's name, or defining a named parameter with the name 'proxy'. - undefined_named_parameter",
+        "  error - routing\\webview.dart:449:15 - The method 'setOnNavigation' isn't defined for the type 'Webview'. Try correcting the name to the name of an existing method, or defining a method named 'setOnNavigation'. - undefined_method"
+      ],
+      "log_sha256": "d48d43964468ec03347b56c5f0f72b7c00138392941ffd346410c94f97ae12a6",
+      "scope": "API/source analysis using the existing locked package graph. No Pub solver, SDK upgrade, native build or runtime acceptance is claimed.",
+      "replacements": {
+        "desktop_webview_window": "additional-stable/desktop_webview_window-0.3.2"
+      }
+    },
+    {
+      "label": "rhttp-0.18.0-main",
+      "exit_code": 0,
+      "diagnostics": [],
+      "log_sha256": "6b7a8871da280b2b7725a31509a42d0e66de8a6281e319414cfeb7d46b48d2ed",
+      "scope": "API/source analysis using the existing locked package graph. No Pub solver, SDK upgrade, native build or runtime acceptance is claimed."
+    },
+    {
+      "label": "rhttp-0.18.0-harmonyos-adapted",
+      "exit_code": 1,
+      "diagnostics": [
+        "   info - foundation\\harmonyos.dart:10:8 - Import of a library in the 'lib/src' directory of another package. Try importing a public library that exports this library, or removing the import. - implementation_imports"
+      ],
+      "log_sha256": "98326983937cb36b893508182ac6d462f0e45f6f0e395a9ea114f73cffbd5b54",
+      "scope": "API/source analysis using the existing locked package graph. No Pub solver, SDK upgrade, native build or runtime acceptance is claimed.",
+      "application_only_adaptation": "OHOS initializes the official generated RustLib entrypoint with an explicit library, preserving upstream Rhttp.init's initialization and codegen option. No package source is modified."
+    }
+  ],
+  "rust_advisory_matching": {
+    "query_url": "https://api.osv.dev/v1/querybatch",
+    "scope": "OSV's version-based advisory matching across complete Cargo locks. This does not replace the repository's required cargo audit --deny unsound or platform/native acceptance.",
+    "current": {
+      "package_versions": 242,
+      "findings": [
+        {
+          "package": "pin-utils",
+          "version": "0.1.0",
+          "advisory_ids": [
+            "RUSTSEC-2026-0441"
+          ]
+        }
+      ]
+    },
+    "official_rhttp_0_16_0": {
+      "package_versions": 245,
+      "findings": [
+        {
+          "package": "anyhow",
+          "version": "1.0.102",
+          "advisory_ids": [
+            "RUSTSEC-2026-0190"
+          ]
+        },
+        {
+          "package": "h2",
+          "version": "0.4.13",
+          "advisory_ids": [
+            "RUSTSEC-2026-0258"
+          ]
+        },
+        {
+          "package": "quinn-proto",
+          "version": "0.11.14",
+          "advisory_ids": [
+            "GHSA-4w2j-m93h-cj5j",
+            "RUSTSEC-2026-0185",
+            "RUSTSEC-2026-0338",
+            "RUSTSEC-2026-0339",
+            "RUSTSEC-2026-0340",
+            "RUSTSEC-2026-0342"
+          ]
+        },
+        {
+          "package": "rand",
+          "version": "0.9.2",
+          "advisory_ids": [
+            "GHSA-cq8v-f236-94qc",
+            "RUSTSEC-2026-0097"
+          ]
+        },
+        {
+          "package": "rustls",
+          "version": "0.23.37",
+          "advisory_ids": [
+            "GHSA-2mjx-qc3c-rqvc",
+            "GHSA-c8m5-c952-6cm4",
+            "GHSA-h2v8-394m-p7vv",
+            "GHSA-w44r-93j7-qv28",
+            "RUSTSEC-2026-0285",
+            "RUSTSEC-2026-0346",
+            "RUSTSEC-2026-0348",
+            "RUSTSEC-2026-0349"
+          ]
+        },
+        {
+          "package": "rustls-webpki",
+          "version": "0.103.10",
+          "advisory_ids": [
+            "GHSA-82j2-j2ch-gfr8",
+            "GHSA-965h-392x-2mh5",
+            "GHSA-xgp8-3hg3-c2mh",
+            "RUSTSEC-2026-0098",
+            "RUSTSEC-2026-0099",
+            "RUSTSEC-2026-0104",
+            "RUSTSEC-2026-0382"
+          ]
+        },
+        {
+          "package": "tokio",
+          "version": "1.50.0",
+          "advisory_ids": [
+            "RUSTSEC-2026-0386"
+          ]
+        },
+        {
+          "package": "webpki-roots",
+          "version": "1.0.6",
+          "advisory_ids": [
+            "RUSTSEC-2026-0381"
+          ]
+        }
+      ]
+    },
+    "official_rhttp_0_18_0": {
+      "package_versions": 275,
+      "findings": [
+        {
+          "package": "anyhow",
+          "version": "1.0.102",
+          "advisory_ids": [
+            "RUSTSEC-2026-0190"
+          ]
+        },
+        {
+          "package": "h2",
+          "version": "0.4.14",
+          "advisory_ids": [
+            "RUSTSEC-2026-0258"
+          ]
+        },
+        {
+          "package": "quinn-proto",
+          "version": "0.11.14",
+          "advisory_ids": [
+            "GHSA-4w2j-m93h-cj5j",
+            "RUSTSEC-2026-0185",
+            "RUSTSEC-2026-0338",
+            "RUSTSEC-2026-0339",
+            "RUSTSEC-2026-0340",
+            "RUSTSEC-2026-0342"
+          ]
+        },
+        {
+          "package": "rustls",
+          "version": "0.23.40",
+          "advisory_ids": [
+            "GHSA-2mjx-qc3c-rqvc",
+            "GHSA-c8m5-c952-6cm4",
+            "GHSA-h2v8-394m-p7vv",
+            "GHSA-w44r-93j7-qv28",
+            "RUSTSEC-2026-0285",
+            "RUSTSEC-2026-0346",
+            "RUSTSEC-2026-0348",
+            "RUSTSEC-2026-0349"
+          ]
+        },
+        {
+          "package": "rustls-webpki",
+          "version": "0.103.13",
+          "advisory_ids": [
+            "RUSTSEC-2026-0382"
+          ]
+        },
+        {
+          "package": "tokio",
+          "version": "1.52.3",
+          "advisory_ids": [
+            "RUSTSEC-2026-0386"
+          ]
+        },
+        {
+          "package": "webpki-root-certs",
+          "version": "1.0.7",
+          "advisory_ids": [
+            "RUSTSEC-2026-0383"
+          ]
+        },
+        {
+          "package": "zstd",
+          "version": "0.13.3",
+          "advisory_ids": [
+            "RUSTSEC-2026-0391"
+          ]
+        },
+        {
+          "package": "zstd-safe",
+          "version": "7.2.4",
+          "advisory_ids": [
+            "RUSTSEC-2026-0395",
+            "RUSTSEC-2026-0396",
+            "RUSTSEC-2026-0397",
+            "RUSTSEC-2026-0398",
+            "RUSTSEC-2026-0399",
+            "RUSTSEC-2026-0400",
+            "RUSTSEC-2026-0401",
+            "RUSTSEC-2026-0402",
+            "RUSTSEC-2026-0403",
+            "RUSTSEC-2026-0404",
+            "RUSTSEC-2026-0405",
+            "RUSTSEC-2026-0406"
+          ]
+        },
+        {
+          "package": "zstd-sys",
+          "version": "2.0.16+zstd.1.5.7",
+          "advisory_ids": [
+            "RUSTSEC-2026-0410"
+          ]
+        }
+      ]
+    }
+  },
+  "rust_advisory_summaries": {
+    "GHSA-2mjx-qc3c-rqvc": {
+      "summary": "Rustls: TLS 1.3 handshake messages incorrectly accepted across encryption level boundaries",
+      "aliases": [
+        "RUSTSEC-2026-0285"
+      ],
+      "url": "https://osv.dev/vulnerability/GHSA-2mjx-qc3c-rqvc"
+    },
+    "GHSA-4w2j-m93h-cj5j": {
+      "summary": "Quinn: Remote memory exhaustion in quinn-proto from unbounded out-of-order stream reassembly",
+      "aliases": [
+        "CVE-2026-25800",
+        "RUSTSEC-2026-0185"
+      ],
+      "url": "https://osv.dev/vulnerability/GHSA-4w2j-m93h-cj5j"
+    },
+    "GHSA-82j2-j2ch-gfr8": {
+      "summary": "rustls-webpki: Denial of service via panic on malformed CRL BIT STRING",
+      "aliases": [
+        "CVE-2026-93599",
+        "RUSTSEC-2026-0104"
+      ],
+      "url": "https://osv.dev/vulnerability/GHSA-82j2-j2ch-gfr8"
+    },
+    "GHSA-965h-392x-2mh5": {
+      "summary": "webpki: Name constraints for URI names were incorrectly accepted",
+      "aliases": [
+        "CVE-2026-93600",
+        "RUSTSEC-2026-0098"
+      ],
+      "url": "https://osv.dev/vulnerability/GHSA-965h-392x-2mh5"
+    },
+    "GHSA-c8m5-c952-6cm4": {
+      "summary": "Rustls: Session Debug formatting exposes TLS master secrets and resumption PSKs",
+      "aliases": [
+        "RUSTSEC-2026-0346"
+      ],
+      "url": "https://osv.dev/vulnerability/GHSA-c8m5-c952-6cm4"
+    },
+    "GHSA-cq8v-f236-94qc": {
+      "summary": "Rand is unsound with a custom logger using rand::rng()",
+      "aliases": [
+        "RUSTSEC-2026-0097"
+      ],
+      "url": "https://osv.dev/vulnerability/GHSA-cq8v-f236-94qc"
+    },
+    "GHSA-h2v8-394m-p7vv": {
+      "summary": "Rustls: Brotli certificate decompression can allocate an attacker-controlled amount of memory up to 1 GiB before authentication.",
+      "aliases": [
+        "RUSTSEC-2026-0348"
+      ],
+      "url": "https://osv.dev/vulnerability/GHSA-h2v8-394m-p7vv"
+    },
+    "GHSA-w44r-93j7-qv28": {
+      "summary": "rustls: An unauthenticated ServerHello poisons the per-name key-exchange record, so later ClientHellos carry only a classical X25519 share",
+      "aliases": [
+        "RUSTSEC-2026-0349"
+      ],
+      "url": "https://osv.dev/vulnerability/GHSA-w44r-93j7-qv28"
+    },
+    "GHSA-xgp8-3hg3-c2mh": {
+      "summary": "webpki: Name constraints were accepted for certificates asserting a wildcard name",
+      "aliases": [
+        "CVE-2026-93601",
+        "RUSTSEC-2026-0099"
+      ],
+      "url": "https://osv.dev/vulnerability/GHSA-xgp8-3hg3-c2mh"
+    },
+    "RUSTSEC-2026-0097": {
+      "summary": "Rand is unsound with a custom logger using `rand::rng()`",
+      "aliases": [
+        "GHSA-cq8v-f236-94qc"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0097"
+    },
+    "RUSTSEC-2026-0098": {
+      "summary": "Name constraints for URI names were incorrectly accepted",
+      "aliases": [
+        "CVE-2026-93600",
+        "GHSA-965h-392x-2mh5"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0098"
+    },
+    "RUSTSEC-2026-0099": {
+      "summary": "Name constraints were accepted for certificates asserting a wildcard name",
+      "aliases": [
+        "CVE-2026-93601",
+        "GHSA-xgp8-3hg3-c2mh"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0099"
+    },
+    "RUSTSEC-2026-0104": {
+      "summary": "Reachable panic in certificate revocation list parsing",
+      "aliases": [
+        "CVE-2026-93599",
+        "GHSA-82j2-j2ch-gfr8"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0104"
+    },
+    "RUSTSEC-2026-0185": {
+      "summary": " Remote memory exhaustion in quinn-proto from unbounded out-of-order stream reassembly",
+      "aliases": [
+        "CVE-2026-25800",
+        "GHSA-4w2j-m93h-cj5j"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0185"
+    },
+    "RUSTSEC-2026-0190": {
+      "summary": "Unsoundness in `Error::downcast_mut()`",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0190"
+    },
+    "RUSTSEC-2026-0258": {
+      "summary": "h2 unbounded empty DATA frames",
+      "aliases": [
+        "GHSA-q83h-524g-xf6h"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0258"
+    },
+    "RUSTSEC-2026-0285": {
+      "summary": "TLS 1.3 handshake messages incorrectly accepted across encryption level boundaries",
+      "aliases": [
+        "GHSA-2mjx-qc3c-rqvc"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0285"
+    },
+    "RUSTSEC-2026-0338": {
+      "summary": "Remote peer can panic quinn-proto with zero-length STREAM frames during unordered reads",
+      "aliases": [
+        "GHSA-465w-v9q3-7j98"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0338"
+    },
+    "RUSTSEC-2026-0339": {
+      "summary": "Unbounded growth of pending connection ID retirements in quinn-proto",
+      "aliases": [
+        "GHSA-hmxj-32vh-65vr"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0339"
+    },
+    "RUSTSEC-2026-0340": {
+      "summary": "Peer minimum ACK delay can panic quinn-proto when ACK_FREQUENCY transmission is enabled",
+      "aliases": [
+        "GHSA-3g6h-r5qx-f6hq"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0340"
+    },
+    "RUSTSEC-2026-0342": {
+      "summary": "Zero-length DATAGRAM frames bypass the receive buffer limit in quinn-proto",
+      "aliases": [
+        "GHSA-2hv7-gw8g-gpq5"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0342"
+    },
+    "RUSTSEC-2026-0346": {
+      "summary": "`Debug` impls for client session values expose TLS secrets",
+      "aliases": [
+        "GHSA-c8m5-c952-6cm4"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0346"
+    },
+    "RUSTSEC-2026-0348": {
+      "summary": "Brotli certificate decompression can allocate up to 1 GiB before authentication",
+      "aliases": [
+        "GHSA-h2v8-394m-p7vv"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0348"
+    },
+    "RUSTSEC-2026-0349": {
+      "summary": "Unauthenticated ServerHello can downgrade later connections to classical key exchange",
+      "aliases": [
+        "GHSA-w44r-93j7-qv28"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0349"
+    },
+    "RUSTSEC-2026-0381": {
+      "summary": "Bundled root certificates allow trust in distrusted emSign intermediates",
+      "aliases": [
+        "BIT-golang-2026-111943",
+        "CVE-2026-111943",
+        "GO-2026-6809",
+        "RUSTSEC-2026-0382",
+        "RUSTSEC-2026-0383"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0381"
+    },
+    "RUSTSEC-2026-0382": {
+      "summary": "Certificate verification may accept distrusted intermediates",
+      "aliases": [
+        "BIT-golang-2026-111943",
+        "CVE-2026-111943",
+        "GO-2026-6809",
+        "RUSTSEC-2026-0381",
+        "RUSTSEC-2026-0383"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0382"
+    },
+    "RUSTSEC-2026-0383": {
+      "summary": "Bundled root certificates allow trust in distrusted emSign intermediates",
+      "aliases": [
+        "BIT-golang-2026-111943",
+        "CVE-2026-111943",
+        "GO-2026-6809",
+        "RUSTSEC-2026-0381",
+        "RUSTSEC-2026-0382"
+      ],
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0383"
+    },
+    "RUSTSEC-2026-0386": {
+      "summary": "`AsyncFd::new` and related constructors violate I/O safety",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0386"
+    },
+    "RUSTSEC-2026-0391": {
+      "summary": "Data from an abandoned stream leaks into the next stream on a reused context",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0391"
+    },
+    "RUSTSEC-2026-0395": {
+      "summary": "Use-after-free with `CParameter::StableInBuffer`",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0395"
+    },
+    "RUSTSEC-2026-0396": {
+      "summary": "`Seekable` reads a NULL or out-of-bounds seek table",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0396"
+    },
+    "RUSTSEC-2026-0397": {
+      "summary": "`OutBuffer::around_pos` exposes uninitialized memory",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0397"
+    },
+    "RUSTSEC-2026-0398": {
+      "summary": "`Seekable::decompress` sets a `Vec` length beyond its capacity for offsets past the end",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0398"
+    },
+    "RUSTSEC-2026-0399": {
+      "summary": "Use-after-free through `init_using_cdict` and `init_using_ddict`",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0399"
+    },
+    "RUSTSEC-2026-0400": {
+      "summary": "Use-after-free of a dictionary after a one-shot call on a context with an open stream",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0400"
+    },
+    "RUSTSEC-2026-0401": {
+      "summary": "Out-of-bounds read in `train_from_buffer` when sample sizes overflow",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0401"
+    },
+    "RUSTSEC-2026-0402": {
+      "summary": "Heap buffer overflow in `CCtx::try_clone` on a multithreaded context",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0402"
+    },
+    "RUSTSEC-2026-0403": {
+      "summary": "Uninitialized memory exposed when streaming decompression of a legacy frame fails",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0403"
+    },
+    "RUSTSEC-2026-0404": {
+      "summary": "Double free in `DCtx::try_clone`",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0404"
+    },
+    "RUSTSEC-2026-0405": {
+      "summary": "Out-of-bounds read with an out-of-range `InBuffer::pos`",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0405"
+    },
+    "RUSTSEC-2026-0406": {
+      "summary": "Use-after-free when changing a multithreaded context with an unfinished frame",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0406"
+    },
+    "RUSTSEC-2026-0410": {
+      "summary": "WebAssembly allocator shim corrupts memory on allocation failure",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0410"
+    },
+    "RUSTSEC-2026-0441": {
+      "summary": "`pin-utils` is unmaintained",
+      "aliases": null,
+      "url": "https://osv.dev/vulnerability/RUSTSEC-2026-0441"
+    }
+  },
+  "native_third_party_sources": [
+    {
+      "id": "lodepng",
+      "directory": "third_party/lodepng",
+      "upstream": "https://github.com/lvandeve/lodepng",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/lvandeve/lodepng",
+        "commit": "79a61c79cc62814f315661f53a026004bac80614",
+        "path": "."
+      },
+      "license": {
+        "spdx": "Zlib",
+        "file": "third_party/lodepng/LICENSE",
+        "sha256": "5dd8e1ee4d5313d81bb1c6e04e0b5a8baf746d44887c9a3fd6337e563f3e04d7"
+      }
+    },
+    {
+      "id": "lzma",
+      "directory": "third_party/lzma",
+      "upstream": "https://github.com/ip7z/7zip",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/ip7z/7zip",
+        "commit": "e5431fa6f5505e385c6f9367260717e9c47dc2ee",
+        "path": "C"
+      },
+      "license": {
+        "spdx": "LicenseRef-LZMA-SDK-Public-Domain",
+        "file": "third_party/lzma/7zVersion.h",
+        "sha256": "b2b1f2e5cb73afb74ca9800e23df6876c4457f88402de4de447c613a7f902a0c"
+      }
+    }
+  ],
+  "evidence": {
+    "inventory.json": {
+      "path": "build/official-dependency-audit-20261107/inventory.json",
+      "sha256": "a392f4d0a3164230edff50e426f2eaa478b29cc72d594de079fcdef960538e47"
+    },
+    "candidate_sources.json": {
+      "path": "build/official-dependency-audit-20261107/candidate_sources.json",
+      "sha256": "d50b4f2917997f5a2c61394c59580a66c51421ae006c32c158d2f5b4680bd6ba"
+    },
+    "official_git_files.json": {
+      "path": "build/official-dependency-audit-20261107/official_git_files.json",
+      "sha256": "30f4cb3e16aa2c1c0d075f6a65d0488e1c60662c430a6eb295c0b3f49a5eb35c"
+    },
+    "additional_candidates.json": {
+      "path": "build/official-dependency-audit-20261107/additional_candidates.json",
+      "sha256": "7a563ea92a6f6159dc715d05162203c8e4ba5d3d06022cc7117c9ddd2f2a4494"
+    },
+    "stable_source_comparisons.json": {
+      "path": "build/official-dependency-audit-20261107/stable_source_comparisons.json",
+      "sha256": "d98e3edb8168b8135e6c99b447787d99c84f8b022912398b0925224d10708f36"
+    },
+    "candidate_analysis.json": {
+      "path": "build/official-dependency-audit-20261107/candidate_analysis.json",
+      "sha256": "587dedddb0258836e3755f16d1432e5eb5c73109e898fca46c6229ca6246b377"
+    },
+    "additional_analysis.json": {
+      "path": "build/official-dependency-audit-20261107/additional_analysis.json",
+      "sha256": "75ec13ea97de56a1952ed4e9d7bb696547003087351c716e611e7f6f913c4cfa"
+    },
+    "rhttp_adaptation_analysis.json": {
+      "path": "build/official-dependency-audit-20261107/rhttp_adaptation_analysis.json",
+      "sha256": "173a9330f245b3dfe7df3ba0fe230448a3129a480efb72250c141f43171e514e"
+    },
+    "rust_candidate_advisories.json": {
+      "path": "build/official-dependency-audit-20261107/rust_candidate_advisories.json",
+      "sha256": "f60aad428ebce3e483f3c81efa07618e2ab6273ec7923917ae63f34cfe3a1467"
+    },
+    "rhttp_official_git.json": {
+      "path": "build/official-dependency-audit-20261107/rhttp_official_git.json",
+      "sha256": "c5195a3fca98c24f18783573b24a2537324e25ee36139de89069c7a63382c4ae"
+    }
+  },
+  "limits": [
+    "Candidate source analyses reused the locked package graph and did not run Pub's solver.",
+    "Local analysis used Flutter 3.41.6 / Dart 3.11.4, not the CI's exact Flutter 3.41.4.",
+    "OSV matches are package/version findings, not proof that every affected path is compiled or reachable on each platform; required RustSec CI remains in force.",
+    "No migrated dependency, native device acceptance, tag or release is claimed."
+  ]
+}

@@ -9,12 +9,56 @@ import 'package:image/image.dart' as img;
 import 'package:photo_view/photo_view.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:venera_next/features/reader/continuous_data.dart';
+import 'package:venera_next/features/reader/continuous_scroll.dart';
 import 'package:venera_next/features/reader/continuous_view.dart';
 import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
 
 void main() {
+  testWidgets(
+    'continuous pixel scrolling attaches before item bounds are published',
+    (tester) async {
+      final items = ValueNotifier<Iterable<ItemPosition>>(const []);
+      final controller = ContinuousScrollController(
+        items,
+        onPositionChanged: () {},
+      );
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ScrollablePositionedList.builder(
+              itemCount: 30,
+              itemBuilder: (_, index) => ContinuousScrollAnchor(
+                controller: controller,
+                index: index,
+                child: const SizedBox(height: 200),
+              ),
+            ),
+          ),
+        );
+        expect(items.value, isEmpty);
+        expect(controller.hasClients, isTrue);
+        final scrollable = tester.state<ScrollableState>(
+          find.byType(Scrollable),
+        );
+        expect(controller.position, same(scrollable.position));
+        controller.jumpTo(80);
+        await tester.pump();
+        expect(controller.offset, 80);
+        expect(scrollable.position.pixels, 80);
+        expect(items.value, isEmpty);
+        await tester.pumpWidget(const SizedBox());
+        expect(controller.hasClients, isFalse);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+        items.dispose();
+      }
+    },
+  );
+
   for (final mode in ['ltr', 'rtl', 'vertical', 'waterfall']) {
     testWidgets(
       'continuous view mounts with explicit dependencies ($mode)',
@@ -31,14 +75,14 @@ void main() {
         final loads = <int>[];
         final lifecycle = <bool>[];
         final navigation = ReaderController(
-          pageCount: () => 3,
+          pageCount: () => 30,
           chapterCount: () => 2,
           animationEnabled: () => false,
           viewport: () => binding.current,
           onChanged: () {},
           onPageChanged: () {},
           onError: (error, stack) => fail('$error'),
-        )..replaceChapterImages(List.filled(3, imageKey));
+        )..replaceChapterImages(List.filled(30, imageKey));
         var margin = 0.0;
         var limitImageWidth = false;
         Widget build() => MaterialApp(
@@ -184,6 +228,33 @@ void main() {
                 reason: 'trackpad at x=$x ($mode, $layout)',
               );
             }
+          }
+          if (mode != 'waterfall') {
+            final oldPosition = state.scrollController.position;
+            state.smoothTo(200);
+            await tester.pump(const Duration(milliseconds: 20));
+            var finished = false;
+            final moving = state
+                .animateToPage(30)
+                .whenComplete(() => finished = true);
+            for (var i = 0; i < 100 && !finished; i++) {
+              await tester.pump(const Duration(milliseconds: 20));
+              await tester.runAsync(() => pumpEventQueue());
+            }
+            expect(finished, isTrue, reason: 'distant item animation ($mode)');
+            await moving;
+            await tester.pump();
+            expect(state.scrollController.position, isNot(same(oldPosition)));
+            final before = state.scrollController.offset;
+            state.smoothTo(-60);
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 200));
+            expect(state.scrollController.offset, closeTo(before - 60, 0.1));
+            expect(
+              state.scrollController.positions.contains(oldPosition),
+              isFalse,
+            );
+            expect(tester.takeException(), isNull);
           }
           final beforeZoom = state.scrollController.offset;
           await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);

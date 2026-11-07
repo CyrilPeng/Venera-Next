@@ -1,0 +1,10 @@
+VeneraNext Android document-provider integration
+
+Copyright (C) 2026 VeneraNext contributors.
+SPDX-License-Identifier: GPL-3.0-or-later
+Source: https://github.com/CyrilPeng/Venera-Next/tree/main/packages/venera_saf
+
+The Dart IO adapters, Kotlin ContentResolver integration, JNI bridge and native
+descriptor ownership implementation were authored for VeneraNext. No source
+from the former Flutter SAF wrapper with a placeholder license is included.
+The complete GPL-3.0-or-later license is retained in the package's LICENSE file.

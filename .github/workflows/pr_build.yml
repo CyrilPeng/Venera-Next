@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       platform: ${{ steps.changed.outputs.platform }}
+      desktop: ${{ steps.changed.outputs.desktop }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,6 +36,12 @@ jobs:
             echo "platform=true" >> "$GITHUB_OUTPUT"
           else
             echo "platform=false" >> "$GITHUB_OUTPUT"
+          fi
+          if printf '%s\n' "$changed_files" | grep -Eq \
+            '^(packages/[^/]+/(linux|macos|windows|src)/|linux/|macos/|pubspec\.(yaml|lock)$)'; then
+            echo "desktop=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "desktop=false" >> "$GITHUB_OUTPUT"
           fi
 
   android:
@@ -91,7 +98,15 @@ jobs:
       - name: 构建 Android Debug APK
         env:
           ANDROID_FLAVOR: ${{ matrix.flavor }}
-        run: flutter build apk --debug --flavor "$ANDROID_FLAVOR" --target-platform android-arm64
+        run: flutter build apk --debug --flavor "$ANDROID_FLAVOR" --target-platform android-arm,android-arm64,android-x64
+      - name: 验证 Android 原生编码包与第三方声明
+        env:
+          ANDROID_FLAVOR: ${{ matrix.flavor }}
+        run: python3 .github/scripts/check_native_codec_bundle.py --platform android --root "build/app/outputs/apk/$ANDROID_FLAVOR/debug"
+      - name: 验证 Android 文档存储 ABI 与声明
+        env:
+          ANDROID_FLAVOR: ${{ matrix.flavor }}
+        run: python3 .github/scripts/check_saf_bundle.py --root "build/app/outputs/apk/$ANDROID_FLAVOR/debug"
 
   windows:
     name: Windows 冒烟构建
@@ -99,6 +114,10 @@ jobs:
     if: ${{ needs.changes.outputs.platform == 'true' }}
     runs-on: windows-2025
     timeout-minutes: 35
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: 'true'
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
@@ -110,6 +129,32 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - name: 构建 Windows Debug 应用
         run: flutter build windows --debug
+      - name: 验证桌面 WebView 第三方声明随应用分发
+        shell: pwsh
+        run: |
+          $source = 'packages/desktop_webview_window/WINDOWS_THIRD_PARTY_NOTICES.txt'
+          $packaged = 'build/windows/x64/runner/Debug/WINDOWS_THIRD_PARTY_NOTICES.txt'
+          if (!(Test-Path -LiteralPath $packaged) -or
+              (Get-FileHash -LiteralPath $source).Hash -ne
+              (Get-FileHash -LiteralPath $packaged).Hash) {
+            throw '桌面 WebView 第三方声明缺失或与审核源码不一致。'
+          }
+      - name: 验证 Windows 原生编码包、声明与实际导入
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python .github/scripts/check_native_codec_bundle.py --platform windows --root build/windows/x64/runner/Debug
+          $env:VENERA_NATIVE_TEST_DIRECTORY = Join-Path $PWD 'build/windows/x64/runner/Debug'
+          $env:PATH = $env:VENERA_NATIVE_TEST_DIRECTORY + ';' + $env:PATH
+          $env:VENERA_NATIVE_TEST_LIBRARY = Join-Path $PWD 'build/windows/x64/runner/Debug/venera_native.dll'
+          flutter test --no-pub --reporter expanded `
+            test/foundation/native_codecs_test.dart `
+            test/foundation/image_processing_native_test.dart `
+            test/foundation/reader_image_processing_native_test.dart `
+            test/foundation/js_engine_lifecycle_test.dart `
+            test/foundation/js_native_contract_test.dart `
+            test/foundation/js_owned_result_test.dart `
+            test/foundation/js_result_descendants_test.dart
       - name: 验证 Windows 网页代理与登录生命周期
         shell: pwsh
         timeout-minutes: 5
@@ -141,9 +186,84 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  desktop:
+    name: ${{ matrix.platform }} 原生构建
+    needs: changes
+    if: ${{ needs.changes.outputs.desktop == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            runner: ubuntu-24.04
+            target: linux
+            architecture: x64
+          - platform: macOS
+            runner: macos-15
+            target: macos
+            architecture: arm64
+          - platform: iOS
+            runner: macos-15
+            target: ios
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+          architecture: ${{ matrix.architecture }}
+          cache: true
+      - name: 准备 Linux 原生构建依赖
+        if: ${{ matrix.target == 'linux' }}
+        timeout-minutes: 8
+        run: |
+          sudo sed -i 's|^URIs:.*|URIs: https://archive.ubuntu.com/ubuntu|' \
+            /etc/apt/sources.list.d/ubuntu.sources
+          test "$(awk '/^URIs:/ {print $2}' /etc/apt/sources.list.d/ubuntu.sources | sort -u)" \
+            = 'https://archive.ubuntu.com/ubuntu'
+          sudo apt-get -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources \
+            -o Dir::Etc::sourceparts=- -o Acquire::Retries=2 \
+            -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 \
+            -o Acquire::https::Timeout=20 install -y --no-install-recommends \
+            ninja-build pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libsqlite3-dev
+      - name: 准备 Linux Rust 工具链
+        if: ${{ matrix.target == 'linux' }}
+        run: python3 .github/scripts/prepare_rust_toolchain.py
+      - name: 准备 macOS 原生工具链
+        if: ${{ matrix.target != 'linux' }}
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_16.4.app
+          python3 .github/scripts/prepare_rust_toolchain.py \
+            --target aarch64-apple-darwin --target x86_64-apple-darwin \
+            --target aarch64-apple-ios --target aarch64-apple-ios-sim --target x86_64-apple-ios
+          install "$(command -v rustup)" "$RUNNER_TEMP/rustup"
+          mkdir -p "$HOME/.cargo/bin"
+          rm -f "$HOME/.cargo/bin/rustup"
+          install .github/scripts/serialized_rustup.py "$HOME/.cargo/bin/rustup"
+          chmod +x "$HOME/.cargo/bin/rustup"
+          echo "RUSTUP_REAL_BINARY=$RUNNER_TEMP/rustup" >> "$GITHUB_ENV"
+          echo "RUSTUP_LOCK_FILE=$RUNNER_TEMP/venera-rustup.lock" >> "$GITHUB_ENV"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - run: flutter pub get --enforce-lockfile
+      - name: 编译桌面应用及全部原生插件
+        if: ${{ matrix.target != 'ios' }}
+        run: flutter build ${{ matrix.target }} --debug
+      - name: 编译 iOS 模拟器应用及全部原生插件
+        if: ${{ matrix.target == 'ios' }}
+        run: flutter build ios --simulator --debug --no-codesign
+      - name: 验证原生编码导出与随包声明
+        env:
+          BUNDLE_PLATFORM: ${{ matrix.target }}
+          BUNDLE_ROOT: ${{ matrix.target == 'linux' && 'build/linux/x64/debug/bundle' || matrix.target == 'macos' && 'build/macos/Build/Products/Debug' || 'build/ios/iphonesimulator' }}
+        run: python3 .github/scripts/check_native_codec_bundle.py --platform "$BUNDLE_PLATFORM" --root "$BUNDLE_ROOT"
+
   platform_gate:
     name: 平台冒烟构建门禁
-    needs: [changes, android, windows]
+    needs: [changes, android, windows, desktop]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -151,13 +271,19 @@ jobs:
       - name: 汇总平台构建结果
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}
+          PLATFORM_REQUIRED: ${{ needs.changes.outputs.platform }}
+          DESKTOP_REQUIRED: ${{ needs.changes.outputs.desktop }}
           ANDROID_RESULT: ${{ needs.android.result }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
+          DESKTOP_RESULT: ${{ needs.desktop.result }}
         run: |
           if [[ "$CHANGES_RESULT" != "success" || \
+                ("$PLATFORM_REQUIRED" == "true" && ("$ANDROID_RESULT" != "success" || "$WINDOWS_RESULT" != "success")) || \
+                ("$DESKTOP_REQUIRED" == "true" && "$DESKTOP_RESULT" != "success") || \
                 ("$ANDROID_RESULT" != "success" && "$ANDROID_RESULT" != "skipped") || \
-                ("$WINDOWS_RESULT" != "success" && "$WINDOWS_RESULT" != "skipped") ]]; then
-            echo "平台冒烟构建未通过：changes=$CHANGES_RESULT android=$ANDROID_RESULT windows=$WINDOWS_RESULT"
+                ("$WINDOWS_RESULT" != "success" && "$WINDOWS_RESULT" != "skipped") || \
+                ("$DESKTOP_RESULT" != "success" && "$DESKTOP_RESULT" != "skipped") ]]; then
+            echo "平台冒烟构建未通过：changes=$CHANGES_RESULT android=$ANDROID_RESULT windows=$WINDOWS_RESULT desktop=$DESKTOP_RESULT"
             exit 1
           fi
-          echo "平台冒烟构建通过：Android 手机版与 TV 版=$ANDROID_RESULT Windows=$WINDOWS_RESULT"
+          echo "平台冒烟构建通过：Android 手机版与 TV 版=$ANDROID_RESULT Windows=$WINDOWS_RESULT Linux／macOS／iOS=$DESKTOP_RESULT"

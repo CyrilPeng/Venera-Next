@@ -1,0 +1,638 @@
+{
+  "schema": 1,
+  "kind": "dependency-implementation",
+  "reviewed_on": "2026-11-07",
+  "baseline": "08b1ff40e5b16c9d6cc14c9fd4be4ad5f2785c63",
+  "historical_proposal": "official_dependency_plan_20261107.json",
+  "source_preference": [
+    "compatible-official-stable",
+    "verified-official-commit",
+    "necessary-local-patch"
+  ],
+  "locked_packages": 156,
+  "source_counts": {
+    "hosted": 136,
+    "git": 7,
+    "path": 8,
+    "sdk": 5
+  },
+  "changes": {
+    "flutter_inappwebview": {
+      "before": {
+        "source": "git",
+        "version": "6.2.0-beta.3",
+        "lock_block_sha256": "425a73d609d7de75b1ebf1b577f792a9b0e23b8e8b654c238f8dd9296d4437c7"
+      },
+      "after": {
+        "source": "git",
+        "version": "6.2.0-beta.3",
+        "lock_block_sha256": "85993b9034bf2ad708b00735f82a0a548cc5d18880349c6beaeecc3cc3b75ede"
+      }
+    },
+    "flutter_inappwebview_android": {
+      "before": {
+        "source": "git",
+        "version": "1.2.0-beta.3",
+        "lock_block_sha256": "7c221e6fe64ea89d661592dc1b370cc93bd2a93aafc190cf72467ac8780df068"
+      },
+      "after": {
+        "source": "git",
+        "version": "1.2.0-beta.3",
+        "lock_block_sha256": "44047853186395b68556865cb5ade4bfb9adebbcf4941aff393b5dcb23358e1e"
+      }
+    },
+    "flutter_inappwebview_ios": {
+      "before": {
+        "source": "git",
+        "version": "1.2.0-beta.3",
+        "lock_block_sha256": "bb5366be681bdf248bbe9eacd3a33e8b08091bf63c14053eeb22ebb80a28a8e3"
+      },
+      "after": {
+        "source": "git",
+        "version": "1.2.0-beta.3",
+        "lock_block_sha256": "156ce404ab4af68fac46be05e2d8fb8b6be762ff95664058b0d754f61ac14f93"
+      }
+    },
+    "flutter_inappwebview_macos": {
+      "before": {
+        "source": "git",
+        "version": "1.2.0-beta.3",
+        "lock_block_sha256": "ff70abce926cf56eab4363d8dbcc58cb55cd5d7f136334c837464dd0a7efdb84"
+      },
+      "after": {
+        "source": "git",
+        "version": "1.2.0-beta.3",
+        "lock_block_sha256": "dc56946775d6cac94fc3a6284faf1f43322cb1eb251d49b154302ca51ef1510d"
+      }
+    },
+    "flutter_inappwebview_platform_interface": {
+      "before": {
+        "source": "git",
+        "version": "1.4.0-beta.3",
+        "lock_block_sha256": "96b058ef84526461e6b0382fa7a861f8b1ea2a4d488e1b316f9b547e879a362b"
+      },
+      "after": {
+        "source": "git",
+        "version": "1.4.0-beta.3",
+        "lock_block_sha256": "8c326c136a9bae05efca2c175069f164323b1c3449228f1b33c7d6187cee9961"
+      }
+    },
+    "flutter_inappwebview_web": {
+      "before": {
+        "source": "git",
+        "version": "1.2.0-beta.3",
+        "lock_block_sha256": "4a04c4ea6e1f0f760f86d7ce325e2020059aeb5932f799d795bc255348ae5b30"
+      },
+      "after": {
+        "source": "git",
+        "version": "1.2.0-beta.3",
+        "lock_block_sha256": "82e272e0a3a4d77a3140b8955978b57a345f0a9c4f6ad6042f3bc70dfe3a91e6"
+      }
+    },
+    "flutter_inappwebview_windows": {
+      "before": {
+        "source": "git",
+        "version": "0.7.0-beta.3",
+        "lock_block_sha256": "958b56d731ba1e717fae2e5fd61bcaf040e9ef20f1881fb57f94c32ec474f5b3"
+      },
+      "after": {
+        "source": "path",
+        "version": "0.7.0-beta.3",
+        "lock_block_sha256": "dc36adb710c08822b80f5706613dad79dbfe6c2cfba537b814a528c7a2d385e6"
+      }
+    },
+    "flutter_qjs": {
+      "before": {
+        "source": "git",
+        "version": "0.3.7",
+        "lock_block_sha256": "32ed2fe174d955d2118b36ce23b698a4cda7972e1a9e800ac541683ed77c7f22"
+      },
+      "after": {
+        "source": "git",
+        "version": "0.3.7",
+        "lock_block_sha256": "7879eceed0010abffe1189413abc9831fbfb4814b0f1f64ef33b27bb3588cf77"
+      }
+    },
+    "scrollable_positioned_list": {
+      "before": {
+        "source": "path",
+        "version": "0.3.8+1",
+        "lock_block_sha256": "7719b9648dd728a5892faba3c4137ba1bb8f9d4f6077b9e0639672bb09c468a0"
+      },
+      "after": {
+        "source": "hosted",
+        "version": "0.3.8",
+        "lock_block_sha256": "128f0acdd97334dd9136591af2e7db9ec3b9fc9b467179bc009fe4738bfcbb0c"
+      }
+    },
+    "shimmer_animation": {
+      "before": {
+        "source": "hosted",
+        "version": "2.2.2",
+        "lock_block_sha256": "4b56c0faa057bc9f41b620f02b09370e555011862f79013414617c3b9f58b2b6"
+      },
+      "after": {
+        "source": "hosted",
+        "version": "2.2.2+1",
+        "lock_block_sha256": "f83594f0993397db89b6e2b576156e75261f7e4c48ab5ddde5856bfc3944bbc4"
+      }
+    },
+    "sqlite3": {
+      "before": {
+        "source": "hosted",
+        "version": "2.7.4",
+        "lock_block_sha256": "55456c428340ca2a7e441c80fb229dd2c55f8e19e497f1b9e4dbbb78389075b5"
+      },
+      "after": {
+        "source": "hosted",
+        "version": "2.9.4",
+        "lock_block_sha256": "c2a4505b6c9c759a0b3c006397442304f37009246436a213ec0e9659da51a005"
+      }
+    }
+  },
+  "git_repositories": [
+    {
+      "dependency": "flutter_qjs",
+      "url": "https://github.com/CyrilPeng/flutter_qjs",
+      "commit": "f5a1f20d08c33b0a6b3e38eda2a7b27705420620",
+      "status": "maintained-fork",
+      "reason": "Keep the Dart/FFI, Map, TypedData and lifecycle contract: official unpublished 0.4.0 fails application resolution and its native Map probe. This pin backports applicable safety fixes to the matched d07f6b5 QuickJS-NG core without changing wrapper APIs.",
+      "packages": {
+        "flutter_qjs": "."
+      },
+      "audit": "doc/development/remaining_git_audit_20261106.json",
+      "official_review": {
+        "stable_version": "0.3.7",
+        "commit": "12a393bd22529753935705b2a8f5db636e93d37f",
+        "required_patches": [
+          "Map/TypedData conversion and dispatch/port lifetime contract",
+          "Current platform build and integer/NaN API compatibility",
+          "Applicable d07f6b5 core memory-safety backports"
+        ],
+        "validation": "Official 0.4.0 commit fails current meta/hook resolution and the Map native probe. The retained core now has bounded native GC, allocation-failure and transfer regressions; Linux ASan/UBSan and application platform checks remain required.",
+        "exit_condition": "Adopt official source after solver, Map/TypedData, Promise/cancellation, secure native core and platform acceptance pass.",
+        "maintainer": "VeneraNext maintainers"
+      },
+      "upstream": "https://github.com/ekibun/flutter_qjs",
+      "core_patch_manifest": "https://github.com/CyrilPeng/flutter_qjs/blob/f5a1f20d08c33b0a6b3e38eda2a7b27705420620/CORE_PATCHES.json"
+    },
+    {
+      "dependency": "flutter_inappwebview",
+      "url": "https://github.com/pichillilorenzo/flutter_inappwebview",
+      "commit": "0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676",
+      "status": "official-commit",
+      "reason": "Official stable 6.1.5 lacks the browser-exit event. Use the exact official parent of the previous fork; Windows instance ownership alone remains a local override.",
+      "packages": {
+        "flutter_inappwebview": "flutter_inappwebview",
+        "flutter_inappwebview_android": "flutter_inappwebview_android",
+        "flutter_inappwebview_ios": "flutter_inappwebview_ios",
+        "flutter_inappwebview_macos": "flutter_inappwebview_macos",
+        "flutter_inappwebview_platform_interface": "flutter_inappwebview_platform_interface",
+        "flutter_inappwebview_web": "flutter_inappwebview_web"
+      },
+      "audit": "doc/development/remaining_git_audit_20261106.json",
+      "upstream": "https://github.com/pichillilorenzo/flutter_inappwebview",
+      "official_review": {
+        "stable_version": "6.1.5",
+        "commit": "0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676",
+        "required_patches": [],
+        "validation": "Selected official parent and previous fork differ only in the two Windows ownership files; the six official Git packages keep the existing APIs and dependencies.",
+        "exit_condition": "Prefer a stable release once it exposes the required browser-exit API; update all platform sources together.",
+        "maintainer": "VeneraNext maintainers"
+      }
+    }
+  ],
+  "local_packages": [
+    "photo_view",
+    "share_plus",
+    "rhttp",
+    "webdav_client",
+    "desktop_webview_window",
+    "venera_native",
+    "venera_saf",
+    "flutter_inappwebview_windows"
+  ],
+  "quickjs_core_ci": {
+    "head": "f5a1f20d08c33b0a6b3e38eda2a7b27705420620",
+    "url": "https://github.com/CyrilPeng/flutter_qjs/actions/runs/42342818783",
+    "conclusion": "success",
+    "linux_32_64": "ASan and UBSan, Atomics enabled",
+    "windows_32_64": "MSVC ASan; Atomics unavailable in this compiler configuration"
+  },
+  "rejected_candidates": [
+    {
+      "package": "dynamic_color",
+      "version": "1.9.0",
+      "reason": "Published Android Gradle Kotlin script does not apply the Kotlin Android plugin; Android and TV compilation fail. Retain exact official 1.8.1."
+    },
+    {
+      "package": "flutter_reorderable_grid_view",
+      "version": "5.10.0",
+      "reason": "Mouse/touch adaptive-grid drag produces negative BoxConstraints; exact 5.7.0 passes six regressions."
+    },
+    {
+      "package": "pdfrx",
+      "version": "2.4.8",
+      "reason": "pdfrx_engine ^0.4.7 requires meta ^1.18, while current Flutter pins meta 1.17."
+    }
+  ],
+  "host_flutter": "3.41.6 / Dart 3.11.4",
+  "ci_flutter": "3.41.4",
+  "checks": [
+    {
+      "name": "adaptive-grid-compatible-tests",
+      "command": [
+        "D:\\soft\\flutter\\bin\\flutter.bat",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded",
+        "test/features/favorites/favorites_reorder_test.dart"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 49.8,
+      "finished_at": "2026-11-07T04:55:13.615280+00:00",
+      "log": "adaptive-grid-compatible-tests.log",
+      "log_sha256": "e1714d684f38a8a5b741f632e2e9b75d2fba74b8e886f6220be19d8005711bb2"
+    },
+    {
+      "name": "architecture-dependencies-final",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        ".github/scripts/check_architecture_dependencies.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.34,
+      "finished_at": "2026-11-07T05:59:56.996857+00:00",
+      "log": "architecture-dependencies-final.log",
+      "log_sha256": "b63423affb47944bfe5e9634593eaba15148e762ce3e3d7b99cb5fc196e2f4ad"
+    },
+    {
+      "name": "architecture-dependencies",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        ".github/scripts/check_architecture_dependencies.py"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 4.04,
+      "finished_at": "2026-11-07T05:55:36.479316+00:00",
+      "log": "architecture-dependencies.log",
+      "log_sha256": "fc7ee4bce805c3828b61e6572c33f1533b574396513e9ee15cb88d0860d8c1ca"
+    },
+    {
+      "name": "final-dart-analysis",
+      "command": [
+        "D:/soft/flutter/bin/cache/dart-sdk/bin/dart.exe",
+        "analyze",
+        "--fatal-infos",
+        "--fatal-warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 48.27,
+      "finished_at": "2026-11-07T05:40:17.006814+00:00",
+      "log": "final-dart-analysis.log",
+      "log_sha256": "085af64aa453ae946f6d784bdc03c7bbebab4dd39f2be1396578bf54dee06184"
+    },
+    {
+      "name": "final-source-inventory",
+      "command": [
+        "D:/soft/flutter/bin/cache/dart-sdk/bin/dart.exe",
+        "tool/check_git_dependencies.dart"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.7,
+      "finished_at": "2026-11-07T05:30:26.167507+00:00",
+      "log": "final-source-inventory.log",
+      "log_sha256": "a189f2723051b224cc635ab11ef258e0cc87588b23f53134fc496f0d8e3cc1ab"
+    },
+    {
+      "name": "final-source-tool-tests",
+      "command": [
+        "D:/soft/flutter/bin/flutter.bat",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded",
+        "test/tool/git_dependencies_test.dart",
+        "test/tool/resolved_git_dependencies_test.dart"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 21.09,
+      "finished_at": "2026-11-07T05:40:38.236946+00:00",
+      "log": "final-source-tool-tests.log",
+      "log_sha256": "a40bcb949433cc63938fa8d2e828dc726bc8addc87a16cf195724f6b5ba6dc96"
+    },
+    {
+      "name": "native-wrapper-contract",
+      "command": [
+        "D:/soft/flutter/bin/flutter.bat",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded",
+        "test/foundation/js_native_contract_test.dart"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 7.74,
+      "finished_at": "2026-11-07T05:37:04.851138+00:00",
+      "log": "native-wrapper-contract.log",
+      "log_sha256": "abc2048ee46cec107126a4f1215a4abdafaa965108e3c4d7440d8abaf7259790"
+    },
+    {
+      "name": "patched-core-application-tests",
+      "command": [
+        "D:/soft/flutter/bin/flutter.bat",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded",
+        "test/foundation/js_engine_lifecycle_test.dart",
+        "test/foundation/js_owned_result_test.dart",
+        "test/foundation/js_result_descendants_test.dart",
+        "test/foundation/image_processing_test.dart",
+        "test/foundation/image_processing_native_test.dart",
+        "test/foundation/reader_image_processing_native_test.dart",
+        "test/routing/windows_webview_environment_test.dart",
+        "test/routing/windows_webview_proxy_test.dart",
+        "test/routing/webview_menu_test.dart",
+        "test/features/comic_source/source_web_login_test.dart"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 91.79,
+      "finished_at": "2026-11-07T05:31:52.719865+00:00",
+      "log": "patched-core-application-tests.log",
+      "log_sha256": "c5cb623381e2ed5658a4f61dac0764a170339a992d7480a4b72ea6f9d5f63036"
+    },
+    {
+      "name": "precommit-check",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "build/official-dependency-implementation-20261107/check_before_commit.py",
+        "D:/soft/flutter/bin/cache/dart-sdk/bin/dart.exe"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 5.94,
+      "finished_at": "2026-11-07T06:09:31.511963+00:00",
+      "log": "precommit-check.log",
+      "log_sha256": "7977c7337421cfc606a73968aa7c2231f67ff791cb189bda1055e963fa91bd33"
+    },
+    {
+      "name": "pub-get-core-patch",
+      "command": [
+        "D:/soft/flutter/bin/flutter.bat",
+        "pub",
+        "get"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 11.54,
+      "finished_at": "2026-11-07T05:29:23.166848+00:00",
+      "log": "pub-get-core-patch.log",
+      "log_sha256": "6232cbf9b6a9098016a97442f9f1a477999434b97a7a5c44cd9aa542c5772e5a"
+    },
+    {
+      "name": "pub-get-reorder-compatible",
+      "command": [
+        "D:\\soft\\flutter\\bin\\flutter.bat",
+        "pub",
+        "get"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 11.68,
+      "finished_at": "2026-11-07T04:54:23.387963+00:00",
+      "log": "pub-get-reorder-compatible.log",
+      "log_sha256": "9c1933a794cb12e25602878e3159a150dc0ed7b6e8a47028648b65989972e934"
+    },
+    {
+      "name": "pub-get",
+      "command": [
+        "D:\\soft\\flutter\\bin\\flutter.bat",
+        "pub",
+        "get"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 12.13,
+      "finished_at": "2026-11-07T03:57:31.031865+00:00",
+      "log": "pub-get.log",
+      "log_sha256": "1ef573a5de209e46faec4a9d73b1e08a54bc0faebfed974772aad4601991ab38"
+    },
+    {
+      "name": "python-repository-tests",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        ".github/scripts/tests",
+        "-p",
+        "test_*.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 214.41,
+      "finished_at": "2026-11-07T05:59:23.574417+00:00",
+      "log": "python-repository-tests.log",
+      "log_sha256": "f1777401665ba3adcb2733d3f6310c20fb2e27ace9f00c2043eaffc74e01245f"
+    },
+    {
+      "name": "reader-and-source-tests",
+      "command": [
+        "D:\\soft\\flutter\\bin\\flutter.bat",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded",
+        "test/features/reader/continuous_input_test.dart",
+        "test/features/reader/continuous_owner_test.dart",
+        "test/features/reader/scroll_aware_display_image_test.dart",
+        "test/components/smooth_scroll_lifecycle_test.dart",
+        "test/tool/git_dependencies_test.dart",
+        "test/tool/resolved_git_dependencies_test.dart",
+        "test/foundation/sqlite_connection_test.dart",
+        "test/foundation/sqlite_snapshot_test.dart",
+        "test/foundation/sqlite_transaction_test.dart",
+        "test/features/favorites/comic_reorder_persistence_test.dart",
+        "test/features/favorites/comic_reorder_ownership_test.dart",
+        "test/features/favorites/favorites_reorder_test.dart"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 79.37,
+      "finished_at": "2026-11-07T04:01:54.956500+00:00",
+      "log": "reader-and-source-tests.log",
+      "log_sha256": "6020395c0f8a0b274ec3f7538ac1004545111f10f406a07873fd08b9aed1ba3c"
+    },
+    {
+      "name": "source-inventory",
+      "command": [
+        "D:\\soft\\flutter\\bin\\cache\\dart-sdk\\bin\\dart.exe",
+        "tool/check_git_dependencies.dart"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 5.07,
+      "finished_at": "2026-11-07T04:01:50.184022+00:00",
+      "log": "source-inventory.log",
+      "log_sha256": "a189f2723051b224cc635ab11ef258e0cc87588b23f53134fc496f0d8e3cc1ab"
+    },
+    {
+      "name": "strict-analysis",
+      "command": [
+        "D:\\soft\\flutter\\bin\\cache\\dart-sdk\\bin\\dart.exe",
+        "analyze",
+        "--fatal-infos",
+        "--fatal-warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 68.66,
+      "finished_at": "2026-11-07T04:01:44.894135+00:00",
+      "log": "strict-analysis.log",
+      "log_sha256": "085af64aa453ae946f6d784bdc03c7bbebab4dd39f2be1396578bf54dee06184"
+    },
+    {
+      "name": "structure-imports",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        ".github/scripts/check_structure_imports.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 12.39,
+      "finished_at": "2026-11-07T05:55:49.024598+00:00",
+      "log": "structure-imports.log",
+      "log_sha256": "0679d701bd27497c4d73963c5331354b16cf23bc14062cc18f0dae94fb31ebe5"
+    },
+    {
+      "name": "windows-bundle-audit",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        ".github/scripts/check_native_codec_bundle.py",
+        "--platform",
+        "windows",
+        "--root",
+        "build/windows/x64/runner/Debug"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.21,
+      "finished_at": "2026-11-07T05:56:31.905151+00:00",
+      "log": "windows-bundle-audit.log",
+      "log_sha256": "5589c1d08df34f70fb6061538cb38ee49fd662842393552bed74530e8098ef68"
+    },
+    {
+      "name": "windows-bundle-runtime-tests",
+      "command": [
+        "D:/soft/flutter/bin/flutter.bat",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded",
+        "test/foundation/js_native_contract_test.dart",
+        "test/foundation/js_engine_lifecycle_test.dart",
+        "test/foundation/js_owned_result_test.dart",
+        "test/foundation/js_result_descendants_test.dart",
+        "test/foundation/native_codecs_test.dart",
+        "test/foundation/image_processing_native_test.dart",
+        "test/foundation/reader_image_processing_native_test.dart",
+        "test/routing/windows_webview_environment_test.dart",
+        "test/routing/windows_webview_proxy_test.dart",
+        "test/routing/webview_menu_test.dart",
+        "test/features/comic_source/source_web_login_test.dart"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 24.08,
+      "finished_at": "2026-11-07T05:56:56.395490+00:00",
+      "log": "windows-bundle-runtime-tests.log",
+      "log_sha256": "5a9ffb86c9e3c85399cd172e07f26e572df2db99e4a8018c6032d4f3a309b139"
+    },
+    {
+      "name": "windows-debug-build",
+      "command": [
+        "D:/soft/flutter/bin/flutter.bat",
+        "build",
+        "windows",
+        "--debug",
+        "--no-pub"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 524.76,
+      "finished_at": "2026-11-07T05:39:05.417323+00:00",
+      "log": "windows-debug-build.log",
+      "log_sha256": "b4819fe1b930015153d3e2cfdd7efa5d1dd3a738a4b827b74dd4c4ebe41486c0"
+    },
+    {
+      "name": "windows-debug-bundle",
+      "command": [
+        "D:/soft/flutter/bin/flutter.bat",
+        "build",
+        "windows",
+        "--debug",
+        "--no-pub"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 38.42,
+      "finished_at": "2026-11-07T05:51:34.915512+00:00",
+      "log": "windows-debug-bundle.log",
+      "log_sha256": "66890ab3ce58e9dc1d93cc7bc74b6f297a8bd3c0b95fd3a1f79035ec493ecdb5"
+    },
+    {
+      "name": "windows-debug-private-rust",
+      "command": [
+        "D:/soft/flutter/bin/flutter.bat",
+        "build",
+        "windows",
+        "--debug",
+        "--no-pub"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 100.63,
+      "finished_at": "2026-11-07T05:45:53.893155+00:00",
+      "log": "windows-debug-private-rust.log",
+      "log_sha256": "74cddfd6b4a87561960beb89253245880a3f402387c5d96391892d0fc63c38db"
+    },
+    {
+      "name": "windows-startup-ctest",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "C:\\Users\\pengs\\.codex\\worktrees\\favorites-navigation\\venera_next\\build\\official-dependency-implementation-20261107\\windows-startup-tests",
+        "-C",
+        "Debug",
+        "--output-on-failure"
+      ],
+      "exit_code": 0,
+      "passed": 3,
+      "failed": 0,
+      "finished_at": "2026-11-07T06:00:12.611629+00:00",
+      "log": "windows-startup-ctest.log",
+      "scope": "Native C++ startup, heartbeat and hotkey components; no visible application launch.",
+      "log_sha256": "9d0ed7023baca5f74d4127c53144d5bbc982f268c5fa55188b1fc375fd06c15e"
+    },
+    {
+      "name": "reader-initial-position-regressions",
+      "command": [
+        "D:/soft/flutter/bin/flutter.bat",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded",
+        "test/features/reader/continuous_input_test.dart",
+        "test/features/reader/reader_exit_integration_test.dart"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 137.48,
+      "finished_at": "2026-11-07T07:20:36.193602+00:00",
+      "log": "reader-initial-position-regressions.log",
+      "log_sha256": "ab76642c6ead3652560b4d293b708a13fe2a940805f67952194886b1f8a12147"
+    },
+    {
+      "name": "reader-initial-position-reproduction",
+      "command": [
+        "C:/soft/Python314/python.exe",
+        "build/official-dependency-implementation-20261107/reproduce_initial_attachment.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 9.84,
+      "finished_at": "2026-11-07T07:21:50.135720+00:00",
+      "log": "reader-initial-position-reproduction.log",
+      "log_sha256": "6bd442978dc9938a1ab12a33d7d110dff041dd70b17dcb5b9813aa67a4e64b80"
+    }
+  ],
+  "integration_status": "platform CI and final history/pin verification pending",
+  "runtime_scope": "No signing, device runtime, tag or Release publication is claimed."
+}
