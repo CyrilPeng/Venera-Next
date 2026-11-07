@@ -21,7 +21,7 @@
 
 源码及项目包摘要使用已提交的 canonical Git blob；二进制原字节保持一致，PowerShell 等文件的 CRLF 检出规则不参与摘要。生成清单前拒绝工作区及暂存源码漂移，避免固定提交的摘要掩盖实际构建输入变更。
 
-下一 pin 当前为 `release_enabled: false`。完成[QuickJS 核心审计中的修复](remaining_git_audit_20261106.zh.md)和平台审核前，tag 构建不得启用下一候选分发。预览和未绑定实际 tag 的 schema 2 产物均拒绝 Release 验证；通过预览不会自动改变发布状态。
+下一 pin 当前为 `release_enabled: false`。适用的 QuickJS 核心修复已固定到 `f5a1f20`，Linux／Windows 32／64 位内存检查通过，必要补丁 PR 已合并；[实施记录](official_dependency_implementation_20261107.zh.md)区分核心、应用与平台验证。下一候选固定鸿蒙 `3f90bc351dc5bd45c719a15e1ac2e6950a5d20a6` 和公共基线 `79e6dd5f70a73a8fb7ebd136f6846015aaa8b2e0`，该基线包含全部运行代码、依赖、工具和测试。平台审核和真机签装分别验收，预览不会自动启用 tag 分发；预览和未绑定实际 tag 的 schema 2 产物均拒绝 Release 验证。
 
 ## 版本与产物
 

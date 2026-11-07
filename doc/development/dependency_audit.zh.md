@@ -2,6 +2,8 @@
 
 [English](dependency_audit.en.md) · [治理规则](dependencies.zh.md) · [机器可读清单](git_dependencies.json)
 
+最新实施见[2026-11-07 记录](official_dependency_implementation_20261107.zh.md)：当前为 2 个 Git 来源、7 个 Git 包、8 个本地包，个人 Git 来源仅剩必要 QuickJS 补丁；下文按日期保留各阶段决策。
+
 本轮目标是控制依赖来源、减少不必要的 fork，并明确其余依赖的替换条件。基线为接管前的 `pubspec.lock`；当前 Git 依赖的完整 commit、仓库 URL 和包路径以机器可读清单为准。本地 path 包见后续更新和[治理规则](dependencies.zh.md)。审计使用固定 commit 的本地源码和 Git 历史、GitHub 仓库信息，以及当天 pub.dev 最新稳定版的发布归档。下面保留 2026-09-28 的迁移决策和已确认的不兼容项，不是完整安全审计或逐行等价证明。
 
 ## 已完成的变更

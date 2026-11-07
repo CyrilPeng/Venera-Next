@@ -2,6 +2,8 @@
 
 [简体中文](dependency_audit.zh.md) · [Rules](dependencies.en.md) · [Inventory](git_dependencies.json)
 
+The latest [2026-11-07 implementation record](official_dependency_implementation_20261107.zh.md) has two Git origins, seven Git packages and eight local packages. Only the necessary QuickJS patch remains at a personal Git origin. The dated decisions below remain historical evidence.
+
 The baseline is the pre-migration lockfile. The inventory records exact current Git URLs, commits, and package paths. Local path packages are documented in subsequent updates and the [governance rules](dependencies.en.md). Evidence includes pinned local source and Git history, GitHub repository metadata, and the latest stable pub.dev archives available on the review date. The original 2026-09-28 decisions remain below as a historical record of confirmed incompatibilities, not a complete security audit or proof of behavioral equivalence.
 
 ## Completed changes
