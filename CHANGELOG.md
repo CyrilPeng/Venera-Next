@@ -6,6 +6,8 @@
 
 ### 仓库维护
 
+- 合并审定主线基线 `79e6dd5f70a73a8fb7ebd136f6846015aaa8b2e0`，保留鸿蒙平台实现、独立 245 版本与锁模板；同步来源工具、发布 selector 和平台 CI，Windows 检出启用进程级 longpaths 并增加真实 JS 原生契约门禁。共同基线包含本轮全部运行代码、依赖和测试，下一候选仍禁止发布。
+- 来源治理要求记录官方稳定候选、完整官方 SHA、必要补丁、验证证据和退出条件；除了锁文件，还核对实际 Git 检出 HEAD、子目录和源码状态，拒绝长路径失败后留下的错误缓存。Windows 构建通过进程级 Git longpaths 配置完整检出官方 WebView；不修改全局缓存或工具链。迁移前方案作为历史快照，另记录本轮实施结果。
 - 同步官方依赖方案的实际调整：滚动列表回归 pub.dev 0.3.8，以应用公开接口适配器保留像素滚动、自动阅读和远距离跳页；主线 InAppWebView 六包固定官方父提交，Windows 所有权补丁保留在单个本地包。SQLite 更新到 2.9.4、dynamic_color 到 1.9.0、shimmer_animation 到 2.2.2+1；固定已通过拖动回归的官方网格 5.7.0，保留与当前 SDK 兼容的 pdfrx 2.4.7。
 - QuickJS 固定到 `f5a1f20` 的适用核心安全回移；Linux 64／32 位 ASan／UBSan 和 Windows 64／32 位 ASan 已通过，新增真实 Map、数值、Promise 缓冲与反复退出契约。完整阅读器 CI 纳入 JS 生命周期与连续阅读输入回归；宿主回归、原生交叉编译、API 26 HAP 和真机签装分别记录。
 - 鸿蒙导出浏览器退出事件的 API 来源改为官方固定提交；生成前移除同名主线 overrides，再插入协调 CPF path 组并拒绝重复 YAML key。Windows 本地输入仍纳入八个项目包摘要，HAP 实际 Windows Dart 包由 CPF 覆盖；独立锁模板为 130 hosted、21 path、5 SDK，候选继续仅供无发布预览。

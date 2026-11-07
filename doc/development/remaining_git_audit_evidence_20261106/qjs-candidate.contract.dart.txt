@@ -1,0 +1,81 @@
+import 'dart:typed_data';
+
+import 'package:flutter_qjs/flutter_qjs.dart';
+import 'package:test/test.dart';
+
+FlutterQjs openEngine() {
+  final engine = FlutterQjs();
+  try {
+    (engine as dynamic).dispatch();
+  } on NoSuchMethodError {
+    // The 0.4.0 candidate starts its event loop internally.
+  }
+  return engine;
+}
+
+void closeEngine(FlutterQjs engine) {
+  try {
+    (engine as dynamic).port.close();
+  } on NoSuchMethodError {
+    // The 0.4.0 candidate closes its private port in close().
+  }
+  engine.close();
+}
+
+void main() {
+  test('JS numeric values retain finite values, NaN and infinities', () {
+    final engine = openEngine();
+    try {
+      for (final number in [0, -1, 2147483647]) {
+        final result = engine.evaluate('$number');
+        expect(result, number);
+        expect(result, isA<int>());
+      }
+      expect(engine.evaluate('-2147483648'), -2147483648);
+      expect(engine.evaluate('4294967297'), 4294967297);
+      expect((engine.evaluate('NaN') as double).isNaN, isTrue);
+      expect(engine.evaluate('Infinity'), double.infinity);
+      expect(engine.evaluate('-Infinity'), double.negativeInfinity);
+      final zero = engine.evaluate('-0') as num;
+      expect(zero, 0);
+      print('QJS_NEGATIVE_ZERO type=${zero.runtimeType} negative=${zero.isNegative}');
+    } finally {
+      closeEngine(engine);
+    }
+  });
+
+  test('JS Map entries remain visible to the application bridge', () {
+    final engine = openEngine();
+    try {
+      final result = engine.evaluate('new Map([["中文", 7], ["second", 9]])');
+      expect(result, {'中文': 7, 'second': 9});
+      JSRef.freeRecursive(result);
+    } finally {
+      closeEngine(engine);
+    }
+  });
+
+  test('Promise, callbacks and copied buffers survive repeated engine teardown', () async {
+    for (var iteration = 0; iteration < 30; iteration++) {
+      final engine = openEngine();
+      JSInvokable? callback;
+      try {
+        final bytes = engine.evaluate('new Uint8Array([1, 2, 255]).buffer');
+        expect(bytes, Uint8List.fromList([1, 2, 255]));
+        callback = engine.evaluate('(fn, bytes) => Promise.resolve(fn(bytes))') as JSInvokable;
+        final source = Uint8List.fromList([9, 4, 5, 8]);
+        final result = await callback.invoke([
+          (Uint8List data) => data.map((value) => value + 1).toList(),
+          Uint8List.sublistView(source, 1, 3),
+        ]);
+        expect(result, [5, 6]);
+        expect(source, [9, 4, 5, 8]);
+        JSRef.freeRecursive(result);
+        expect(() => engine.evaluate('throw new Error("probe failure")'), throwsA(isA<JSError>()));
+      } finally {
+        callback?.free();
+        closeEngine(engine);
+      }
+    }
+  });
+}

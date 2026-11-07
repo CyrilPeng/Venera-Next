@@ -1,0 +1,84 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <application-workspace>/build/dependency-followup/candidates/qjs-fork-contract_test.dart
+00:00 +0: <application-workspace>/build/dependency-followup/candidates/qjs-fork-contract_test.dart: JS numeric values retain finite values, NaN and infinities
+QJS_NEGATIVE_ZERO type=int negative=false
+00:00 +1: <application-workspace>/build/dependency-followup/candidates/qjs-fork-contract_test.dart: JS Map entries remain visible to the application bridge
+00:00 +2: <application-workspace>/build/dependency-followup/candidates/qjs-fork-contract_test.dart: Promise, callbacks and copied buffers survive repeated engine teardown
+00:03 +3: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: old disposal cannot clear the replacement singleton
+00:03 +4: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: native JS resource ownership independent engines keep their original UI handler and identity
+00:03 +5: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: native JS resource ownership shutdown ends a pending UI bridge before its late result; failure=false
+00:03 +6: <application-workspace>/test/foundation/js_reference_bytes_test.dart: reference walks preserve typed buffers and their subviews
+00:03 +7: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: native JS resource ownership shutdown ends a pending UI bridge before its late result; failure=true
+00:03 +8: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: native JS resource ownership shutdown ends a pending UI bridge before its late result; failure=true
+00:03 +9: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: native JS resource ownership closing JS cancels its delay timers before disposing the native bridge
+00:03 +10: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: native JS resource ownership final close joins retired native clients without cancelling the parent scope
+00:03 +11: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: native JS resource ownership close after synchronous disposal preserves both close and native drain errors
+00:03 +12: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: native JS resource ownership final close waits for a pending initialization to relinquish its resources
+00:03 +13: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: native JS resource ownership real RHttp cleanup outlives the disposed JS result
+Shell: [31mJS Engine Init Error:
+Shell: Error: worker startup failed
+Shell:     at <eval> (<init>:1:10)
+Shell:
+Shell: #0      FlutterQjs.evaluate (package:flutter_qjs/src/engine.dart:176:7)
+Shell: #1      JsEngine.doInit (package:venera_next/foundation/js_engine.dart:571:16)
+Shell: <asynchronous suspension>
+Shell: #2      Init.init.<anonymous closure> (package:venera_next/foundation/init.dart:29:7)
+Shell: <asynchronous suspension>
+Shell: [0m
+00:03 +13: <application-workspace>/test/foundation/js_pool_native_test.dart: failed native worker initialization finishes cleanup before exit
+[31mException: JS worker failed: Error: worker startup failed
+    at <eval> (<init>:1:10)
+
+#0      FlutterQjs.evaluate (package:flutter_qjs/src/engine.dart:176:7)
+#1      JsEngine.doInit (package:venera_next/foundation/js_engine.dart:571:16)
+<asynchronous suspension>
+#2      Init.init.<anonymous closure> (package:venera_next/foundation/init.dart:29:7)
+<asynchronous suspension>
+[0m
+00:03 +14: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: native JS resource ownership real RHttp cleanup outlives the disposed JS result
+Shell: Fail to post message to Dart. (If happen during Flutter hot restart, this may not be a problem.)
+00:03 +15: <application-workspace>/test/foundation/js_pool_native_test.dart: native pool executes across close and reopen
+00:03 +16: <application-workspace>/test/foundation/js_pool_native_test.dart: native pool executes across close and reopen
+00:03 +16: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: native JS resource ownership temporary dart IO request releases its keep-alive connection
+*** Request ***
+uri: http://127.0.0.1:13524/
+method: GET
+responseType: ResponseType.plain
+followRedirects: true
+persistentConnection: true
+connectTimeout: null
+sendTimeout: null
+receiveTimeout: null
+transformTimeout: null
+receiveDataWhenStatusError: true
+extra: {}
+headers:
+ http_client: dart:io
+ User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36
+
+*** Response ***
+uri: http://127.0.0.1:13524/
+00:03 +17: <application-workspace>/test/foundation/js_engine_lifecycle_test.dart: native JS resource ownership temporary dart IO request releases its keep-alive connection
+statusCode: 200
+statusMessage: OK
+headers:
+ connection: keep-alive
+ content-length: 2
+
+00:03 +18: <application-workspace>/test/foundation/js_pool_native_test.dart: async compute resolves and close joins accepted work
+00:03 +19: <application-workspace>/test/foundation/js_pool_native_test.dart: async compute resolves and close joins accepted work
+00:03 +20: <application-workspace>/test/foundation/js_pool_native_test.dart: async compute resolves and close joins accepted work
+00:04 +21: <application-workspace>/test/foundation/js_pool_native_test.dart: async compute resolves and close joins accepted work
+00:04 +22: <application-workspace>/test/foundation/js_pool_native_test.dart: async compute resolves and close joins accepted work
+00:04 +23: <application-workspace>/test/foundation/js_pool_native_test.dart: async compute resolves and close joins accepted work
+00:04 +23: <application-workspace>/test/foundation/js_promise_lifecycle_test.dart: native Promise ownership settled values and errors retain normal Promise semantics
+[31mUnhandled promise rejection: Error: original failure
+    at <eval> (<eval>:1:19)
+[0m
+00:04 +24: <application-workspace>/test/foundation/js_pool_native_test.dart: async compute resolves and close joins accepted work
+00:04 +25: <application-workspace>/test/foundation/js_pool_native_test.dart: sync and async failures leave the worker usable
+00:04 +26: <application-workspace>/test/foundation/js_pool_native_test.dart: native callback arguments stay in their owning isolate
+00:04 +27: <application-workspace>/test/foundation/js_pool_native_test.dart: unsendable arguments release task admission before close
+00:04 +28: <application-workspace>/test/foundation/js_pool_native_test.dart: close before spawn completion joins its late handle
+00:04 +29: <application-workspace>/test/foundation/js_pool_native_test.dart: (tearDownAll)
+00:04 +29: All tests passed!
