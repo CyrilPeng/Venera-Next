@@ -22,7 +22,7 @@ Canonical committed Git blobs identify runtime source and all eight project pack
 
 ## Versions and Assets
 
-The caller's Git commit, version, build number, run ID and changelog digest are validated. Only the owned generated project receives the caller's version and changelog; the source checkout is unchanged. Native versions have three numeric components, while Dart versions retain RC suffixes. Build numbers follow mainline monotonically. The first mainline release with a HAP is `v1.18.3-rc.1`, build **246**. Schema 3 permits builds from 245 onward; build 244 retains its historical source for verification only. Existing releases such as `v1.18.2` are not backfilled.
+The caller's Git commit, version, build number, run ID and changelog digest are validated. Only the owned generated project receives the caller's version and changelog; the source checkout is unchanged. Native versions have three numeric components, while Dart versions retain RC suffixes. Build numbers follow mainline monotonically. The first public mainline release with a HAP is `v1.18.3-rc.2`, build **247**; RC1 retains its built tag and Actions record only. Schema 3 permits builds from 245 onward; build 244 retains its historical source for verification only. Existing releases such as `v1.18.2` are not backfilled.
 
 Every release requires:
 
@@ -37,6 +37,8 @@ The bundle is `com.github.cyrilpeng.veneranext.harmony`, with label `VeneraNext 
 ## Publication Gates and Build-Only Verification
 
 The full workflow's `Release` requires Quality, the existing platform Build and HarmonyOS. Missing, damaged, stale or mismatched HAP assets must never use `continue-on-error`. Upload to a draft first, then verify all five HarmonyOS assets through the GitHub API: names, sizes, upload state and SHA-256. Publish only after verification, then check the public assets again. Investigate failures rather than silently omitting HarmonyOS.
+
+The publishing job checks out the two source trees into sibling `release-source/` and `harmonyos-source/` directories. Generated notes and packages live alongside them in `release_notes.md` and `outputs/`. Scripts run from `release-source/`; generated inputs remain outside both source directories, which still reject untracked and uncommitted inputs.
 
 Branch dispatches and mainline PR runs of `HarmonyOS Release HAP` create next-candidate Actions artifacts only, never tags or releases. Relevant mainline PRs/pushes use the candidate workflow with the same exact source SHA as standard-platform checks:
 

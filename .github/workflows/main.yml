@@ -55,6 +55,9 @@ jobs:
     timeout-minutes: 15
     needs: [Release_Metadata, Quality, Build, HarmonyOS]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    defaults:
+      run:
+        working-directory: release-source
     permissions:
       contents: write
     steps:
@@ -62,8 +65,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          path: release-source
       - name: 校验发布元数据
-        run: python3 .github/scripts/validate_release.py --write-notes release_notes.md
+        run: python3 .github/scripts/validate_release.py --write-notes ../release_notes.md
       - name: 读取同提交鸿蒙构建来源
         id: harmonyos_pin
         run: python3 .github/scripts/harmonyos_release.py config --github-output "$GITHUB_OUTPUT"
@@ -80,7 +84,7 @@ jobs:
       - name: 核验鸿蒙版本、源码、原生库及资产
         run: |
           python3 .github/scripts/harmonyos_release.py verify \
-            --source-root harmonyos-source --artifacts outputs/harmonyos
+            --source-root ../harmonyos-source --artifacts ../outputs/harmonyos
       - uses: actions/download-artifact@v8
         with:
           name: macos_build
@@ -105,7 +109,7 @@ jobs:
           path: outputs
           merge-multiple: true
       - name: 核验手机版与 TV 版完整性、签名及构建来源
-        run: python3 .github/scripts/android_tv_build.py verify-release
+        run: python3 .github/scripts/android_tv_build.py verify-release --directory ../outputs
       - uses: actions/download-artifact@v8
         with:
           name: windows_build
@@ -133,9 +137,9 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           python3 .github/scripts/generate_winget_manifest.py \
             --version "$version" \
-            --installer "outputs/VeneraNext-${version}-windows-installer.exe" \
+            --installer "../outputs/VeneraNext-${version}-windows-installer.exe" \
             --release-date "$(date -u +%F)" \
-            --output outputs/winget \
+            --output ../outputs/winget \
             --print-path
       - uses: actions/upload-artifact@v7
         if: ${{ !contains(github.ref_name, '-') }}
@@ -150,17 +154,17 @@ jobs:
         run: |
           shopt -s nullglob
           files=(
-            outputs/harmonyos/*
-            outputs/*.ipa
-            outputs/*.dmg
-            outputs/*.apk
-            outputs/android-*-manifest.json
-            outputs/*.zip
-            outputs/*.exe
-            outputs/*.deb
-            outputs/*.rpm
-            outputs/*.zst
-            outputs/*.AppImage
+            ../outputs/harmonyos/*
+            ../outputs/*.ipa
+            ../outputs/*.dmg
+            ../outputs/*.apk
+            ../outputs/android-*-manifest.json
+            ../outputs/*.zip
+            ../outputs/*.exe
+            ../outputs/*.deb
+            ../outputs/*.rpm
+            ../outputs/*.zst
+            ../outputs/*.AppImage
           )
           if (( ${#files[@]} == 0 )); then
             echo "没有找到可发布的构建产物。" >&2
@@ -170,7 +174,7 @@ jobs:
           args=(
             --verify-tag
             --title "${GITHUB_REF_NAME}"
-            --notes-file release_notes.md
+            --notes-file ../release_notes.md
             --draft
           )
           if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
@@ -182,7 +186,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 .github/scripts/harmonyos_release.py verify-draft \
-            --source-root harmonyos-source --artifacts outputs/harmonyos
+            --source-root ../harmonyos-source --artifacts ../outputs/harmonyos
       - name: 发布草稿 Release
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -192,7 +196,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 .github/scripts/harmonyos_release.py verify-published \
-            --source-root harmonyos-source --artifacts outputs/harmonyos
+            --source-root ../harmonyos-source --artifacts ../outputs/harmonyos
       - name: 清理 jsDelivr CDN 缓存
         run: |
           curl -s "https://purge.jsdelivr.net/gh/CyrilPeng/venera-next@main/pubspec.yaml" | jq '.status'

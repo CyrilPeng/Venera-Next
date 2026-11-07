@@ -535,6 +535,24 @@ class HarmonyReleaseTests(unittest.TestCase):
             with self.subTest(asset=name), self.assertRaisesRegex(ValueError, 'HarmonyOS release assets'):
                 release.check_remote_release(damaged, expected, assets, published=False)
 
+    def test_tagged_ci_staging_keeps_notes_outputs_and_both_checkouts_separate(self):
+        fixture = self.fixture
+        fixture.unified_mainline(release_enabled=True)
+        fixture.preview_next = False
+        git(fixture.root, 'tag', '-a', 'v1.18.3', '-m', 'reviewed release')
+        write(fixture.root, 'release_notes.md', 'generated release notes')
+        with self.assertRaisesRegex(ValueError, 'untracked inputs'):
+            fixture.context(tagged=True)
+        (fixture.root / 'release_notes.md').unlink()
+        write(fixture.directory, 'release_notes.md', 'generated release notes')
+        fixture.output = fixture.directory / 'outputs/harmonyos'
+        fixture.output.parent.mkdir()
+        expected = fixture.bundle(tagged=True)
+        assets = self.verify(expected)
+        self.assertEqual(len(assets), 5)
+        self.assertFalse(git(fixture.root, 'ls-files', '--others', '--exclude-standard'))
+        self.assertFalse(git(fixture.source, 'ls-files', '--others', '--exclude-standard'))
+
     def test_mainline_bundle_still_rejects_rewritten_project_code_and_native_libraries(self):
         fixture = self.fixture
         fixture.unified_mainline()
@@ -689,6 +707,14 @@ class HarmonyReleaseTests(unittest.TestCase):
         self.assertIn('uses: ./.github/workflows/harmonyos-release.yml', harmony_job)
         self.assertNotRegex(harmony_job, r'(?m)^    (?:if|continue-on-error):')
         self.assertIn('outputs/harmonyos/*', workflow)
+        publish_job = workflow.split('\n  Release:\n', 1)[1]
+        self.assertIn('working-directory: release-source', publish_job)
+        self.assertIn('path: release-source', publish_job)
+        self.assertIn('path: harmonyos-source', publish_job)
+        self.assertIn('--write-notes ../release_notes.md', publish_job)
+        self.assertIn('--source-root ../harmonyos-source --artifacts ../outputs/harmonyos', publish_job)
+        self.assertIn('verify-release --directory ../outputs', publish_job)
+        self.assertIn('--notes-file ../release_notes.md', publish_job)
         self.assertIn('--verify-tag', workflow)
         self.assertLess(workflow.index('verify-draft'), workflow.index('--draft=false'))
         self.assertGreater(workflow.index('verify-published'), workflow.index('--draft=false'))

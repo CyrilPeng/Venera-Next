@@ -8,7 +8,7 @@ defines the current release scope; older candidate sections are historical.
 ## Required HarmonyOS candidate release (2026-11-07)
 
 The maintainer explicitly requires HarmonyOS in every subsequent package
-release. Prepare `v1.18.3-rc.1`, build 246, from unified `main`; standard
+release. Prepare `v1.18.3-rc.2`, build 247, from unified `main`; standard
 platforms and the unsigned HarmonyOS beta must identify the same commit.
 The earlier build-244 and two-development-branch sections below are historical.
 
@@ -20,6 +20,11 @@ The earlier build-244 and two-development-branch sections below are historical.
   iOS, Linux x64/ARM64 and the real API-26 ARM64 HAP. Keep official Flutter and
   the root lock separate from the pinned Flutter OH SDK and controlled overlays.
   Preserve all quality, native, license and dependency gates.
+- Keep the publishing checkouts in sibling `release-source/` and
+  `harmonyos-source/` directories, with notes and outputs outside both Git
+  trees. RC1 completed its builds but publication rejected generated untracked
+  inputs; retain that tag and Actions record. RC2 corrects the workspace layout
+  without relaxing source-cleanliness checks.
 - Require 26 public assets: 19 standard-platform packages, the unsigned HAP,
   two Android provenance manifests and four HarmonyOS companions. Verify the
   HAP, manifest, checksum and both guides before upload, through the draft API,

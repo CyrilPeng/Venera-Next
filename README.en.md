@@ -124,7 +124,7 @@ See [TV remote controls and low-memory reading](#tv-remote-controls-and-low-memo
 
 ### HarmonyOS (Beta)
 
-Download a HarmonyOS package from the [release page](https://github.com/CyrilPeng/Venera-Next/releases). Starting with `v1.18.3-rc.1`, every prerelease and stable release includes the matching HarmonyOS beta:
+Download a HarmonyOS package from the [release page](https://github.com/CyrilPeng/Venera-Next/releases). Starting with `v1.18.3-rc.2`, every prerelease and stable release includes the matching HarmonyOS beta:
 
 | File | Description | Recommended for |
 |---|---|---|
