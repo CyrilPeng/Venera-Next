@@ -33,12 +33,12 @@ Future<void> _openReorder(WidgetTester tester) async {
   final menu = find.byWidgetPredicate(
     (widget) =>
         widget is MenuButton &&
-        widget.entries.any((entry) => entry.text == 'Reorder'),
+        widget.entries.any((entry) => entry.text == 'Reorder comics'),
   );
   tester
       .widget<MenuButton>(menu)
       .entries
-      .singleWhere((entry) => entry.text == 'Reorder')
+      .singleWhere((entry) => entry.text == 'Reorder comics')
       .onClick();
   await tester.pumpAndSettle();
   expect(find.byType(ReorderableBuilder<FavoriteItem>), findsOneWidget);

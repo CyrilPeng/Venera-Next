@@ -32,10 +32,10 @@ English index: [README.en.md](README.en.md)
 ## 分发和发布
 
 - [Android TV 安装与分发](distribution/android_tv.zh.md) / [Android TV Distribution](distribution/android_tv.en.md)
+- [Windows 分发](distribution/windows.zh.md) / [Windows Distribution](distribution/windows.en.md)
 - [鸿蒙测试版安装与升级](distribution/harmonyos-reader.zh.md) / [HarmonyOS Beta Installation](distribution/harmonyos-reader.en.md)
 - [鸿蒙随版构建](development/harmonyos_releases.zh.md) / [HarmonyOS Release Builds](development/harmonyos_releases.en.md)
 - [鸿蒙统一主线实施记录](development/harmonyos_mainline_20261107.zh.md)：同一提交的多平台构建、来源门禁与分支归档。
-- [Windows 分发](distribution/windows.zh.md) / [Windows Distribution](distribution/windows.en.md)
 - [Linux 安装与分发](distribution/linux.zh.md) / [Linux Installation and Distribution](distribution/linux.en.md)
 - [HarmonyOS 实验签装与升级验证](distribution/harmonyos.zh.md) / [HarmonyOS Experimental Sideload Checks](distribution/harmonyos.en.md)：仅诊断探针，不是阅读器发行版。
 
@@ -43,7 +43,7 @@ English index: [README.en.md](README.en.md)
 
 - [Issue 分类与诊断采集](user/issue_reporting.zh.md) / [Issue reporting and diagnostics](user/issue_reporting.en.md)
 - [应用数据同步](user/data_sync.zh.md) / [App-data synchronization](user/data_sync.en.md)
-- [两级本地收藏目录（待发布）](user/favorite_folders.zh.md) / [Two-Level Local Favorite Folders](user/favorite_folders.en.md)
+- [两级本地收藏目录与批量管理](user/favorite_folders.zh.md) / [Two-Level Local Favorite Folders](user/favorite_folders.en.md)
 - [自动选择阅读模式](user/automatic_reader_mode.zh.md) / [Automatic Reader Mode](user/automatic_reader_mode.en.md)
 - [自动阅读与不可用图片处理](user/automatic_reading.zh.md)
 - [条漫左右边距](user/reader_width.zh.md) / [Reader side margins](user/reader_width.en.md)

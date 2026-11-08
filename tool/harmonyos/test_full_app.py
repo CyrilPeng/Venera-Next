@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from ci_full_app import ASSET_PREFIX, METADATA_ASSET, audit_full_hap
+from ci_full_app import ASSET_PREFIX, METADATA_ASSET, audit_full_hap, export_install_guides
 from prepare_full_app import (EXTRA_LIBRARIES, FULL_CONFIG, ROOT, PROJECT_PACKAGES,
                               NATIVE_NOTICE_ASSET, NATIVE_NOTICE_SOURCE, check_hosted_baseline,
                               configure_pubspec, patch_pdfium_hook, patch_so_loader,
@@ -18,6 +18,7 @@ from prepare_probe import LIBRARIES
 from release_context import build_inputs, validate_context, validate_version
 import prepare_full_app
 import full_native_build
+import ci_full_app
 
 
 def elf():
@@ -28,6 +29,28 @@ def elf():
 
 
 class FullAppTests(unittest.TestCase):
+    def test_repository_guides_are_not_exported_but_legacy_snapshots_remain_available(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            guides = root / 'doc/distribution'
+            guides.mkdir(parents=True)
+            for language in ('zh', 'en'):
+                (guides / f'harmonyos-reader.{language}.md').write_text(
+                    '# Guide\n[English](harmonyos-reader.en.md)\n', encoding='utf-8')
+            with patch.object(ci_full_app, 'ROOT', root):
+                for mode, release, expected in (
+                    ('repository', {'guide_delivery': 'repository'}, set()),
+                    ('legacy', {}, {'harmonyos-install.zh.md', 'harmonyos-install.en.md'}),
+                    ('branch', None, {'install.zh.md', 'install.en.md'}),
+                ):
+                    with self.subTest(mode=mode):
+                        destination = root / mode
+                        destination.mkdir()
+                        export_install_guides(destination, release)
+                        self.assertEqual({path.name for path in destination.iterdir()}, expected)
+                        for path in destination.iterdir():
+                            self.assertNotIn('](harmonyos-reader.', path.read_text(encoding='utf-8'))
+
     def test_mainline_context_requires_one_commit_and_one_version_even_for_preview(self):
         changelog = '# Changes\n\n## v1.18.3\n\nMainline notes.\n'
         context = {'schema': 3, 'source_mode': 'release_commit', 'channel': 'harmonyos-beta',
@@ -37,6 +60,11 @@ class FullAppTests(unittest.TestCase):
                    'changelog': changelog, 'changelog_sha256': hashlib.sha256(changelog.encode()).hexdigest()}
         environment = {'GITHUB_SHA': '1' * 40, 'GITHUB_RUN_ID': '123', 'GITHUB_REF_TYPE': 'branch'}
         self.assertEqual(validate_context(context, '1' * 40, environment), context)
+        repository_guides = context | {'guide_delivery': 'repository'}
+        self.assertEqual(validate_context(repository_guides, '1' * 40, environment), repository_guides)
+        for invalid in ('disabled', '', False, None):
+            with self.assertRaises(ValueError):
+                validate_context(context | {'guide_delivery': invalid}, '1' * 40, environment)
         for change in ({'source_commit': '2' * 40}, {'release_commit': '2' * 40},
                        {'source_mode': 'main'}, {'main_baseline': '1' * 40},
                        {'caller_build': 246}, {'caller_version': '1.18.2'}, {'schema': True}):

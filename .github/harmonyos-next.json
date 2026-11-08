@@ -2,5 +2,6 @@
   "schema": 3,
   "source_mode": "release_commit",
   "first_release_build": 245,
-  "release_enabled": true
+  "release_enabled": true,
+  "guide_delivery": "repository"
 }

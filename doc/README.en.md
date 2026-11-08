@@ -32,10 +32,10 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 ## Distribution
 
 - [Android TV 安装与分发](distribution/android_tv.zh.md) / [Android TV Distribution](distribution/android_tv.en.md)
+- [Windows 分发](distribution/windows.zh.md) / [Windows Distribution](distribution/windows.en.md)
 - [鸿蒙测试版安装与升级](distribution/harmonyos-reader.zh.md) / [HarmonyOS Beta Installation](distribution/harmonyos-reader.en.md)
 - [鸿蒙随版构建](development/harmonyos_releases.zh.md) / [HarmonyOS Release Builds](development/harmonyos_releases.en.md)
 - [HarmonyOS mainline implementation (Chinese)](development/harmonyos_mainline_20261107.zh.md): one source commit, platform build gates and branch archives.
-- [Windows 分发](distribution/windows.zh.md) / [Windows Distribution](distribution/windows.en.md)
 - [Linux 安装与分发](distribution/linux.zh.md) / [Linux Installation and Distribution](distribution/linux.en.md)
 - [HarmonyOS 实验签装与升级验证](distribution/harmonyos.zh.md) / [HarmonyOS Experimental Sideload Checks](distribution/harmonyos.en.md): diagnostic probes only, not a reader release.
 
@@ -43,7 +43,7 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 
 - [Issue 分类与诊断采集](user/issue_reporting.zh.md) / [Issue reporting and diagnostics](user/issue_reporting.en.md)
 - [应用数据同步](user/data_sync.zh.md) / [App-data synchronization](user/data_sync.en.md)
-- [两级本地收藏目录](user/favorite_folders.zh.md) / [Two-Level Local Favorite Folders (unreleased)](user/favorite_folders.en.md)
+- [两级本地收藏目录与批量管理](user/favorite_folders.zh.md) / [Two-Level Local Favorite Folders and Batch Management](user/favorite_folders.en.md)
 - [自动选择阅读模式](user/automatic_reader_mode.zh.md) / [Automatic Reader Mode](user/automatic_reader_mode.en.md)
 - [Automatic reading and unavailable images](user/automatic_reading.en.md)
 - [条漫左右边距](user/reader_width.zh.md) / [Reader side margins](user/reader_width.en.md)

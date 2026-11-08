@@ -132,6 +132,27 @@ class ValidateReleaseTests(unittest.TestCase):
         )
         self.assertEqual(target.read_text(encoding="utf-8"), "- Release notes\n")
 
+    def test_repository_install_guides_link_to_the_release_tag(self):
+        policy = self.root / '.github/harmonyos-next.json'
+        policy.parent.mkdir()
+        policy.write_text('{"guide_delivery": "repository"}', encoding='utf-8')
+        for language in ('zh', 'en'):
+            guide = self.root / f'doc/distribution/harmonyos-reader.{language}.md'
+            guide.parent.mkdir(parents=True, exist_ok=True)
+            guide.write_text('# Installation\n', encoding='utf-8')
+        target = self.root / 'notes.md'
+        self.invoke('--write-notes', str(target), ref='refs/tags/v1.2.3', ref_type='tag')
+        notes = target.read_text(encoding='utf-8')
+        self.assertIn('- Release notes', notes)
+        for language in ('zh', 'en'):
+            self.assertIn(f'/blob/v1.2.3/doc/distribution/harmonyos-reader.{language}.md', notes)
+        self.assertNotIn('/blob/main/', notes)
+        self.assertNotIn('harmonyos-install.', notes)
+        guide.write_text(' \n', encoding='utf-8')
+        target.unlink()
+        self.invoke('--write-notes', str(target), ref='refs/tags/v1.2.3', ref_type='tag', status=1)
+        self.assertFalse(target.exists())
+
     def test_branch_mode_keeps_all_metadata_guards(self):
         invalid = {
             "release.json": '{}\n',

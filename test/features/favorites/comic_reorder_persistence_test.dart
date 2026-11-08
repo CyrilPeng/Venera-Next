@@ -211,7 +211,7 @@ void main() {
         tester
             .widgetList<MenuButton>(find.byType(MenuButton))
             .expand((menu) => menu.entries)
-            .singleWhere((entry) => entry.text == 'Reorder')
+            .singleWhere((entry) => entry.text == 'Reorder comics')
             .onClick();
         await pumpSidebar(tester);
         final editor = _saveOwner(tester);

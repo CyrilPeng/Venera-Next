@@ -23,9 +23,37 @@
 
 ---
 
-## Introduction
+<details>
+<summary>Contents</summary>
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, iOS, Windows, Linux, and macOS**, with a **HarmonyOS beta** distributed alongside each release.
+- [1. Introduction](#introduction)
+- [2. Highlights](#highlights)
+- [3. Download and installation](#download-and-installation)
+  - [3.1 Android phones and tablets](#android-phones-and-tablets)
+  - [3.2 Android TV](#android-tv)
+  - [3.3 Windows](#windows)
+  - [3.4 HarmonyOS (Beta)](#harmonyos-beta)
+  - [3.5 Linux](#linux)
+  - [3.6 iOS](#ios)
+  - [3.7 macOS](#macos)
+- [4. Quick start](#quick-start)
+- [5. Usage guide](#usage-guide)
+- [6. Developing comic sources](#developing-comic-sources)
+- [7. FAQ](#faq)
+- [8. Developer resources](#developer-resources)
+- [9. Star history](#star-history)
+- [10. Statement](#statement)
+- [11. Sponsors](#sponsors)
+- [12. Acknowledgements](#acknowledgements)
+- [13. License](#license)
+- [14. Community Links](#community-links)
+
+</details>
+
+<a id="introduction"></a>
+## 1. Introduction
+
+[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, Windows, Linux, iOS, and macOS**, with a **HarmonyOS beta** distributed alongside each release.
 
 This fork focuses on fewer interruptions and more reading: Waterfall mode scrolls across chapters without leaving the reader, long-pressing Favorite skips the folder picker, and nighttime and E-Ink devices get their own reading adjustments. Local import, offline downloads, reading statistics, and multi-device sync make finding comics, reading them, and following ongoing series easier.
 
@@ -47,7 +75,8 @@ Venera's JavaScript extensions, local reading, search and categories, favorites,
 
 ---
 
-## Screenshots
+<a id="screenshots"></a>
+### 1.1 Screenshots
 
 | Home: history, Read Later, and update tracking | Comic details |
 |---|---|
@@ -55,15 +84,18 @@ Venera's JavaScript extensions, local reading, search and categories, favorites,
 
 ---
 
-## Highlights
+<a id="highlights"></a>
+## 2. Highlights
 
-### Track updates with one long-press
+<a id="track-updates-with-one-long-press"></a>
+### 2.1 Track updates with one long-press
 
 With the default settings, **long-press Favorite** on a comic's details page to add it straight to the Follow Updates folder, without opening the folder picker. The app checks for updates automatically and shows update counts and comic covers on Home. Tap a cover to open the details page, then choose Read or Continue to start reading.
 
 A fresh install creates this folder automatically (named "追更" by default). To change the quick-favorite or update-tracking folder, see [Favorites, Read Later, and update tracking](#favorites-read-later-and-update-tracking).
 
-### Reading experience
+<a id="reading-experience"></a>
+### 2.2 Reading experience
 
 - **Waterfall reading across chapters (non-TV default)**: finish a chapter and keep going — the next chapter loads automatically near the end, and you can scroll back to a previously loaded chapter. Progress is recorded where you actually stopped.
 - **Android TV and boxes**: a separate TV package with a landscape launcher, directional remote navigation, visible focus, and single-page low-memory reading by default. It can coexist with the mobile app.
@@ -72,7 +104,8 @@ A fresh install creates this folder automatically (named "追更" by default). T
 - **E-Ink refresh**: Gallery mode can flash the screen at a page-turn interval to help reduce ghosting, with adjustable intervals and styles.
 - **A handier details page**: Download and Read/Continue are easier to find, chapter progress and update indicators are visible at a glance, and your last chapter sort choice is remembered.
 
-### Discovery, favorites, and data
+<a id="discovery-favorites-and-data"></a>
+### 2.3 Discovery, favorites, and data
 
 - **Read Later**: keep comics you plan to read in their own list, ready to find on Home.
 - **Local library**: import image folders, CBZ/ZIP/7Z/CB7, PDF, and image-based EPUB and read them right away, with chapter subfolders and natural sorting; local comics can also be exported as CBZ.
@@ -80,7 +113,8 @@ A fresh install creates this folder automatically (named "追更" by default). T
 - **Reading statistics**: track the time you spend reading; History shows total time, comics read, and time rankings.
 - **Favorites gallery and search shortcuts**: switch favorites to a cover gallery, save frequent author/tag searches as shortcuts, and browse saved images per comic.
 
-### Core Venera capabilities retained
+<a id="core-venera-capabilities-retained"></a>
+### 2.4 Core Venera capabilities retained
 
 - **Extensible sources:** use JavaScript to provide search, aggregate search, exploration pages, categories, rankings, and tag translation.
 - **Flexible reading:** Gallery pagination, scrolling within a chapter, zoom, and multi-image layouts, with touch, keyboard, and mobile volume-key controls.
@@ -90,9 +124,11 @@ A fresh install creates this folder automatically (named "追更" by default). T
 
 ---
 
-## Download and installation
+<a id="download-and-installation"></a>
+## 3. Download and installation
 
-### Android phones and tablets
+<a id="android-phones-and-tablets"></a>
+### 3.1 Android phones and tablets
 
 Download an APK from the [latest stable release](https://github.com/CyrilPeng/Venera-Next/releases/latest):
 
@@ -105,7 +141,8 @@ Download an APK from the [latest stable release](https://github.com/CyrilPeng/Ve
 
 When in doubt, use the universal `VeneraNext-xxx-android.apk` package.
 
-### Android TV
+<a id="android-tv"></a>
+### 3.2 Android TV
 
 Download a TV APK from the [latest stable release](https://github.com/CyrilPeng/venera-next/releases/latest):
 
@@ -122,21 +159,8 @@ Transfer the APK to the TV and sideload it. Its launcher name is **VeneraNext TV
 
 See [TV remote controls and low-memory reading](#tv-remote-controls-and-low-memory-reading) for usage and [Android TV Distribution](doc/distribution/android_tv.en.md) for installation and upgrade details.
 
-### HarmonyOS (Beta)
-
-Download a HarmonyOS package from the [release page](https://github.com/CyrilPeng/Venera-Next/releases). Starting with `v1.18.3-rc.3`, every prerelease and stable release includes the matching HarmonyOS beta:
-
-| File | Description | Recommended for |
-|---|---|---|
-| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | Unsigned ARM64 beta | HarmonyOS phones and tablets meeting API 26 requirements |
-
-Sign and sideload it yourself. Keep the original signing key for upgrades; do not uninstall or clear data. See the [HarmonyOS beta installation guide](doc/distribution/harmonyos-reader.en.md) for instructions and limitations.
-
-### iOS
-
-Download the IPA from the [latest stable release](https://github.com/CyrilPeng/Venera-Next/releases/latest) and sideload it with AltStore.
-
-### Windows
+<a id="windows"></a>
+### 3.3 Windows
 
 winget is recommended because the same package ID can be used for future upgrades:
 
@@ -149,7 +173,19 @@ You can also download `VeneraNext-xxx-windows-installer.exe` or the portable ZIP
 
 See [Windows Distribution](doc/distribution/windows.en.md) for installer, portable build, and winget maintenance details.
 
-### Linux
+<a id="harmonyos-beta"></a>
+### 3.4 HarmonyOS (Beta)
+
+Download a HarmonyOS package from the [release page](https://github.com/CyrilPeng/Venera-Next/releases). Starting with `v1.18.3-rc.3`, every prerelease and stable release includes the matching HarmonyOS beta:
+
+| File | Description | Recommended for |
+|---|---|---|
+| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | Unsigned ARM64 beta | HarmonyOS phones and tablets meeting API 26 requirements |
+
+Sign and sideload it yourself. Keep the original signing key for upgrades; do not uninstall or clear data. See the [HarmonyOS beta installation guide](doc/distribution/harmonyos-reader.en.md) for instructions and limitations.
+
+<a id="linux"></a>
+### 3.5 Linux
 
 Download the package matching your distribution and architecture from the [latest stable release](https://github.com/CyrilPeng/venera-next/releases/latest):
 
@@ -164,21 +200,30 @@ Replace `xxx` with the actual version in the downloaded filename. RPM and AppIma
 
 Linux packages are built on Ubuntu 22.04 with a glibc 2.35 baseline. The current stable AppImage includes GTK 3 and WebKitGTK 4.1, so no separate GTK/WebKit installation is needed. It still requires host glibc 2.35 or newer and compatible OpenGL/EGL graphics drivers. See [Linux Installation and Distribution](doc/distribution/linux.en.md) for dependencies, FUSE troubleshooting, and distribution compatibility.
 
-### macOS
+<a id="ios"></a>
+### 3.6 iOS
+
+Download the IPA from the [latest stable release](https://github.com/CyrilPeng/Venera-Next/releases/latest) and sideload it with AltStore.
+
+<a id="macos"></a>
+### 3.7 macOS
 
 Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.com/CyrilPeng/Venera-Next/releases/latest).
 
 ---
 
-## Quick start
+<a id="quick-start"></a>
+## 4. Quick start
 
 1. **Install** the build for your platform from the [latest stable release](https://github.com/CyrilPeng/venera-next/releases/latest); on a TV, choose the separate package described under [Android TV](#android-tv).
 2. **Add content** (any one of these is enough to get started): existing comic files → Local → Import; network series → install an extension in Comic Source management; a NAS folder → Settings → APP → WebDAV Comic Library.
 3. **Start reading**: phones and desktops default to Waterfall reading across chapters, while TV defaults to single-page low-memory reading. When you find a series to follow, try long-pressing the Favorite button on its details page. Reading mode, split spreads, night dimming, and more can be adjusted anytime in Settings → Reading or inside the reader.
 
-## Usage guide
+<a id="usage-guide"></a>
+## 5. Usage guide
 
-### Reading modes and progress
+<a id="reading-modes-and-progress"></a>
+### 5.1 Reading modes and progress
 
 | Mode | Directions | Best for |
 |---|---|---|
@@ -194,19 +239,24 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 |---|---|
 | <a href="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Single%20Page%20View.jpg"><img src="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Single%20Page%20View.jpg" alt="A wide page before splitting" width="100%" /></a> | <a href="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Double%20Page%20View.jpg"><img src="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Double%20Page%20View.jpg" alt="The same spread with double-page splitting enabled" width="100%" /></a> |
 
-### TV remote controls and low-memory reading
+<a id="tv-remote-controls-and-low-memory-reading"></a>
+### 5.2 TV remote controls and low-memory reading
 
 - **Main UI:** use direction keys to move focus and Select / gamepad A to activate; Back / gamepad B returns. Remotes with a menu key can open context menus on supported controls.
 - **Reading surface:** direction keys turn pages or scroll; Select opens the reader menu. While the menu is open, direction keys navigate controls without turning pages in the background. Back closes the menu first, then saves progress and exits the reader.
 - **Low-memory defaults:** single-page reading, one-page preloading, a 64 MiB decoded-image cache, and an approximately 2.07-megapixel decode budget. Disable Settings → Reading → TV low-memory mode to restore previous settings and use modes such as Waterfall. This switch is device-local and excluded from backups and synchronization.
 - **Usage notes:** low-memory mode leaves originals unchanged, but long strips and zoomed details may look softer. Web login, CAPTCHA, file pickers, and similar flows may need an input method or companion device.
 
-### Nighttime and E-Ink reading
+<a id="nighttime-and-e-ink-reading"></a>
+### 5.3 Nighttime and E-Ink reading
 
 - **Night dimming:** turn it on inside the reader (reader settings or the bottom quick panel) and dim from 20% to 100%; it affects only the in-app image. Choose the app's light/dark/system theme in Settings → Appearance.
 - **E-Ink:** enable E-Ink refresh in Gallery mode and choose a flash every 1–10 page turns, a duration of 100–1500 ms, and a black, white, or white-then-black style. Continuous and Waterfall do not trigger it.
 
-### Favorites, Read Later, and update tracking
+<a id="favorites-read-later-and-update-tracking"></a>
+### 5.4 Favorites, Read Later, and update tracking
+
+New on main, pending the next release: Select comics is available in the wide-screen toolbar or the narrow-screen More menu. Sort subfolders opens the current parent's children, while Reorder comics manages comics directly in that folder. See [favorite folders and bulk actions](doc/user/favorite_folders.en.md).
 
 - **Favorites:** tap Favorite on the details page to open the panel and pick a local folder or the source account (extension-dependent). The favorites page supports list and cover-gallery layouts (auto or 2–6 columns).
 - **Quick Favorite:** long-press Favorite on the details page to add the comic directly to the selected local folder, which defaults to the Follow Updates folder. Change the target in Settings → Local Favorites → Quick Favorite.
@@ -215,7 +265,8 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 - **Reading statistics:** History shows total reading time, comics read, and time rankings; history can be cleaned by retention period.
 - **Search shortcuts:** save frequent author/tag searches as shortcuts and reuse them from the search page.
 
-### Local comics and offline downloads
+<a id="local-comics-and-offline-downloads"></a>
+### 5.5 Local comics and offline downloads
 
 | Content | Import and reading behavior |
 |---|---|
@@ -227,13 +278,15 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 
 CBZ export, scanning to recover downloads, chapter deletion, and storage migration are available. PDF/EPUB imports consume additional storage; text-only EPUB, directly drawn SVG pages, encrypted PDF, and MOBI/AZW/AZW3 are not supported. See [local import, CBZ, and WebDAV library rules](doc/user/import_comic.en.md) for folder examples, archive compatibility, and metadata templates.
 
-### Network comic extensions
+<a id="network-comic-extensions"></a>
+### 5.6 Network comic extensions
 
 User-installed JavaScript extensions provide network content. Search, exploration, categories, accounts, favorites, and comment capabilities vary by extension.
 
 Add a compatible script link or file in Comic Source management. To write an extension, start with [Developing comic sources](#developing-comic-sources).
 
-### WebDAV data sync, archives, and online library
+<a id="webdav-data-sync-archives-and-online-library"></a>
+### 5.7 WebDAV data sync, archives, and online library
 
 These are configured separately:
 
@@ -247,7 +300,8 @@ The online library accepts image folders, chapter subfolders, and extracted CBZ 
 
 Remote CBZ/ZIP/7Z/CB7 archives must be extracted on the server or restored locally before reading. See [folder and metadata rules](doc/user/import_comic.en.md#webdav-online-library).
 
-## Developing comic sources
+<a id="developing-comic-sources"></a>
+## 6. Developing comic sources
 
 **Start here when writing a third-party extension:**
 
@@ -262,31 +316,38 @@ Chinese editions: [漫画源编写指南](doc/api/comic_source.zh.md) · [JavaSc
 
 This fork continues to maintain Venera-compatible extension interfaces. Waterfall, split spreads, and night dimming are reader responsibilities. Extensions supply stable comic/chapter IDs, correctly ordered chapters and images, and valid update dates; they do not need separate rules for every reader mode.
 
-## FAQ
+<a id="faq"></a>
+## 7. FAQ
 
-### Does VeneraNext include comic sources?
+<a id="does-veneranext-include-comic-sources"></a>
+### 7.1 Does VeneraNext include comic sources?
 
 No source or recommended catalog is bundled. Import local comics or configure a legal compatible extension or WebDAV library.
 
-### Why are search results or images missing?
+<a id="why-are-search-results-or-images-missing"></a>
+### 7.2 Why are search results or images missing?
 
 Check the comic source extension, login status (cookies), service availability, and network first. Contact the relevant extension maintainer for site and content issues. Reader or extension-runtime problems reproducible independently of a particular site can be reported under the [contribution guidelines](CONTRIBUTING.en.md).
 
-### How often are updates checked, and why are some updates not flagged?
+<a id="how-often-are-updates-checked-and-why-are-some-updates-not-flagged"></a>
+### 7.3 How often are updates checked, and why are some updates not flagged?
 
 - **Automatic checks:** while the app is running, checks run every 10 minutes and skip comics successfully checked within the past 24 hours. Select Check Now on the Follow Updates page to refresh immediately.
 - **Update detection:** a comic is flagged when the extension returns a changed, valid update time. A new chapter without a changed update time may not be flagged.
 - **Update indicators:** Settings → Explore → Show update status on comic tile controls indicators on comic thumbnails, not update checking or the count on the Home card.
 
-### How do I shrink strip comics on a tablet?
+<a id="how-do-i-shrink-strip-comics-on-a-tablet"></a>
+### 7.4 How do I shrink strip comics on a tablet?
 
 Select vertical continuous or waterfall reading in reader settings, then adjust **Shrink strip comics (margin per side)**. At 20% per side, image width becomes 60% of its original size, with proportional height and the same reading progress. See [strip comic size and side margins](doc/user/reader_width.en.md).
 
-### How do I update on Windows?
+<a id="how-do-i-update-on-windows"></a>
+### 7.5 How do I update on Windows?
 
 Run `winget upgrade --id CyrilPeng.VeneraNext --exact`. Public-source availability may lag behind GitHub Release; try `winget source update` first. Portable installations require downloading and applying an update manually.
 
-## Developer resources
+<a id="developer-resources"></a>
+## 8. Developer resources
 
 - [Build and Development](doc/development/build.en.md): Flutter/Rust, locked dependencies, tests, and releases.
 - [HarmonyOS Release Builds](doc/development/harmonyos_releases.en.md): pinned branch source, independent SDK, unsigned HAP and publication gates.
@@ -296,7 +357,8 @@ Run `winget upgrade --id CyrilPeng.VeneraNext --exact`. Public-source availabili
 
 ---
 
-## Star history
+<a id="star-history"></a>
+## 9. Star history
 
 <a href="https://www.star-history.com/?repos=CyrilPeng%2Fvenera-next&type=date&legend=top-left">
  <picture>
@@ -308,7 +370,8 @@ Run `winget upgrade --id CyrilPeng.VeneraNext --exact`. Public-source availabili
 
 ---
 
-## Statement
+<a id="statement"></a>
+## 10. Statement
 
 This repository maintains the VeneraNext comic reader itself. It **does not provide, bundle, host, or recommend any comic source and does not handle source-site content**.
 
@@ -318,7 +381,8 @@ Network reading uses extensions compatible with the JavaScript API. Users are re
 
 ---
 
-## Sponsors
+<a id="sponsors"></a>
+## 11. Sponsors
 
 VeneraNext is maintained as a personal-interest project and is not operated for profit. If it helps with your daily reading, you can support ongoing maintenance through [Afdian](https://ifdian.net/a/cyril).
 
@@ -328,16 +392,19 @@ See [SPONSORS.md](SPONSORS.md) for the sponsor list and display policy.
 
 ---
 
-## Acknowledgements
+<a id="acknowledgements"></a>
+## 12. Acknowledgements
 
 Thanks to [Venera](https://github.com/venera-app/venera) for the reader and extension foundation, and [EhTagTranslation](https://github.com/EhTagTranslation/Database) for Chinese tag translations. Thanks also to all contributors and sponsors.
 
-## License
+<a id="license"></a>
+## 13. License
 
 This project is licensed under GPL-3.0.
 
 ---
 
-## Community Links
+<a id="community-links"></a>
+## 14. Community Links
 
 - [LINUX DO](https://linux.do/)

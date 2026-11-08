@@ -5,6 +5,31 @@ not mark unresolved reports as fixed. Dated verification records and the
 original device acceptance checklist remain below. The newest dated section
 defines the current release scope; older candidate sections are historical.
 
+## Post-v1.18.3 maintenance (2026-11-08)
+
+The following mainline changes are unreleased. Keep the published `v1.18.3`
+tag, version metadata and assets intact, and combine the favorites fixes and
+documentation updates in one Chinese conventional commit.
+
+- #152 gains an explicit comic-selection entry, including a compact-layout
+  menu action. Select all and invert selection respect the visible search,
+  reading-status and keyword filters; batch mutations require a nonempty
+  selection. #155 gains a subfolder-sort entry for the current parent, separate
+  from comic sorting. Verify actual menu clicks, selection lifecycle, folder
+  identity and persisted ordering before marking the implementation ready.
+- Number both README heading hierarchies and preserve old anchors. Put Android
+  mobile/TV first, followed by Windows, HarmonyOS, Linux, iOS and macOS. Keep
+  detailed installation instructions in the paired repository documents.
+- The committed schema-3 `guide_delivery: repository` policy requires the HAP,
+  manifest and SHA256SUMS as release assets. Generated release notes link to
+  nonempty guides at the exact release tag. Configurations without this field
+  retain the historical five-asset validation; do not rewrite older records or
+  weaken source, native-library, checksum, draft or published-asset checks.
+- Run favorites regressions, strict analysis and release/tooling checks. This
+  maintenance commit does not publish a new version. #152 and #155 still need
+  delivery and user acceptance in the next release; the older issue status
+  below describes the scope of `v1.18.3`.
+
 ## Stable release preparation (2026-11-08)
 
 The maintainer authorized publishing `v1.18.3`, build **249**, and testing the

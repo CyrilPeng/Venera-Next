@@ -14,7 +14,7 @@ The mainline candidate workflow listens to relevant source, dependency, tool and
 
 Build 244 retains the schema 1 `.github/harmonyos-release.json`, immutable Git inputs and historical assets. The `harmonyos-frozen-244` archive tag keeps its source reachable; `harmonyos-branch-final-245` preserves the final two-branch candidate. Development continues only on `main`. Legacy schema 2 parsing remains available for historical verification; current mainline uses schema 3.
 
-On 2026-11-07 the maintainer explicitly required HarmonyOS in every subsequent release. Mainline now sets `release_enabled: true`. Every prerelease and stable release must rebuild the unsigned ARM64 beta HAP from the same commit and include all five HarmonyOS assets. Disabling the switch fails the tag metadata gate before the full builds; publishing only the other platforms is not allowed.
+On 2026-11-07 the maintainer explicitly required HarmonyOS in every subsequent release. Mainline now sets `release_enabled: true`. Every prerelease and stable release must rebuild the unsigned ARM64 beta HAP from the same commit and include every HarmonyOS asset required by that commit's configuration. Disabling the switch fails the tag metadata gate before the full builds; publishing only the other platforms is not allowed.
 
 The switch authorizes unsigned beta distribution after source, build and asset review. It does not claim device signing, upgrade or feature acceptance. The manifest retains `signed: false` and `runtime_verified: false`, and the installation guides describe the actual verification limits. Release verification rejects schema 2/3 previews and assets without a verified tag context. Archive tags do not match the `v*` release trigger.
 
@@ -26,13 +26,15 @@ The caller's Git commit, version, build number, run ID and changelog digest are 
 
 Stable `v1.18.3` uses build **249** and rebuilds alongside the other platforms from the same stable release commit; accepted candidate artifacts are not renamed into stable packages. The stable release still includes the unsigned Beta HAP and four companions. HarmonyOS device signing, reading, real-data upgrades and signing renewal remain explicit follow-up acceptance.
 
-Every release requires:
+Starting with the next release, the mainline schema-3 configuration uses `guide_delivery: repository` and requires three HarmonyOS release assets:
 
 - `VeneraNext-VERSION-harmonyos-arm64-unsigned.hap`
 - `harmonyos-manifest.json`
 - `harmonyos-SHA256SUMS`
-- `harmonyos-install.zh.md`
-- `harmonyos-install.en.md`
+
+The Chinese and English installation guides live at `doc/distribution/harmonyos-reader.*.md`. README links are relative, and generated release notes link to the guides at the exact release tag. Both guides must exist and be nonempty in the source commit. Checksums are generated for each HAP, so `harmonyos-SHA256SUMS` remains a release asset.
+
+Historical configurations without `guide_delivery` still require those three files plus `harmonyos-install.zh.md` and `harmonyos-install.en.md`, with guide contents checked against the original commit. Published versions such as `v1.18.3` retain their five assets and tags; the new policy does not rewrite historical assets. Unknown policy values are rejected.
 
 The bundle is `com.github.cyrilpeng.veneranext.harmony`, with label `VeneraNext (HarmonyOS Beta)` and minimum/target API 26. Checks inspect the actual `module.json`, AArch64 ELF libraries and exact hashes, complete Dart/asset source inventory, and embedded versions. Guides come from the exact build commit. Keep unsigned/beta labeling explicit; successful compilation is not device upgrade or certificate-renewal acceptance.
 
@@ -40,7 +42,7 @@ The bundle is `com.github.cyrilpeng.veneranext.harmony`, with label `VeneraNext 
 
 GitHub's release-by-tag endpoint returns published releases only. Draft verification searches the authenticated, fully paginated release list for exactly one matching tag and fetches its current assets by numeric release ID. Missing or ambiguous drafts, changed IDs/tags and unexpected states stop publication. Published verification uses the public tag endpoint, and creation explicitly targets the caller's source SHA. RC2 uploaded all 26 assets as a draft, but the old lookup received HTTP 404; RC3 reruns the complete release path with the corrected lookup.
 
-The full workflow's `Release` requires Quality, the existing platform Build and HarmonyOS. Missing, damaged, stale or mismatched HAP assets must never use `continue-on-error`. Upload to a draft first, then verify all five HarmonyOS assets through the GitHub API: names, sizes, upload state and SHA-256. Publish only after verification, then check the public assets again. Investigate failures rather than silently omitting HarmonyOS.
+The full workflow's `Release` requires Quality, the existing platform Build and HarmonyOS. Missing, damaged, stale or mismatched HAP assets must never use `continue-on-error`. Upload to a draft first, then verify every HarmonyOS asset required by the release commit's configuration through the GitHub API: names, sizes, upload state and SHA-256. Publish only after verification, then check the public assets again. Investigate failures rather than silently omitting HarmonyOS.
 
 The publishing job checks out the two source trees into sibling `release-source/` and `harmonyos-source/` directories. Generated notes and packages live alongside them in `release_notes.md` and `outputs/`. Scripts run from `release-source/`; generated inputs remain outside both source directories, which still reject untracked and uncommitted inputs.
 

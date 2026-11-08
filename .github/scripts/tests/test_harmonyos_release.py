@@ -104,12 +104,14 @@ class Fixture:
         self.release_commit = commit(self.root)
         self.preview_next = True
 
-    def unified_mainline(self, *, release_enabled=False):
+    def unified_mainline(self, *, release_enabled=False, guide_delivery=None):
         self.next_candidate()
         for name in release.tracked(self.source, self.source_commit):
             write(self.root, name, release.blob(self.source, self.source_commit, name))
         self.next_pin = {'schema': 3, 'source_mode': 'release_commit',
                          'first_release_build': 245, 'release_enabled': release_enabled}
+        if guide_delivery is not None:
+            self.next_pin['guide_delivery'] = guide_delivery
         write(self.root, release.NEXT_PIN, json.dumps(self.next_pin))
         self.release_commit = commit(self.root)
         self.sync_mainline_source()
@@ -138,7 +140,7 @@ class Fixture:
         expected = self.context(tagged=tagged)
         next_candidate = expected['schema'] >= 2
         native_names = release.NEXT_NATIVE if next_candidate else release.NATIVE
-        names = release.asset_names(expected['version'])
+        names = release.asset_names(expected['version'], guide_delivery=expected.get('guide_delivery'))
         source_files = {
             name: release.sha256(release.blob(self.source, self.source_commit, name))
             for name in release.tracked(self.source, self.source_commit)
@@ -202,6 +204,8 @@ class Fixture:
         write(self.output, names['manifest'], json.dumps(report))
         self.refresh_package_digest(expected)
         for language in ('zh', 'en'):
+            if language not in names:
+                continue
             text = release.blob(self.source, self.source_commit, f'doc/distribution/harmonyos-reader.{language}.md').decode()
             for companion in ('zh', 'en'):
                 text = text.replace(f'harmonyos-reader.{companion}.md', f'harmonyos-install.{companion}.md')
@@ -209,7 +213,7 @@ class Fixture:
         return expected
 
     def refresh_package_digest(self, expected):
-        names = release.asset_names(expected['version'])
+        names = release.asset_names(expected['version'], guide_delivery=expected.get('guide_delivery'))
         hap = self.output / names['hap']
         report = json.loads((self.output / names['manifest']).read_text())
         report.update(bytes=hap.stat().st_size, sha256=release.sha256(hap.read_bytes()))
@@ -225,6 +229,57 @@ class HarmonyReleaseTests(unittest.TestCase):
 
     def verify(self, expected):
         return release.verify_bundle(self.fixture.output, expected, self.fixture.source)
+
+    def test_repository_guides_keep_all_three_assets_required_locally_and_remotely(self):
+        fixture = self.fixture
+        fixture.unified_mainline(release_enabled=True, guide_delivery='repository')
+        fixture.preview_next = False
+        git(fixture.root, 'tag', '-a', 'v1.18.3', '-m', 'reviewed release')
+        expected = fixture.bundle(tagged=True)
+        self.assertEqual(expected['guide_delivery'], 'repository')
+        assets = self.verify(expected)
+        self.assertEqual(set(assets), {
+            'VeneraNext-1.18.3-harmonyos-arm64-unsigned.hap',
+            'harmonyos-manifest.json', 'harmonyos-SHA256SUMS',
+        })
+        remote = {'tag_name': 'v1.18.3', 'draft': True, 'prerelease': False,
+                  'assets': [{'name': name, 'size': item['bytes'],
+                              'digest': 'sha256:' + item['sha256'], 'state': 'uploaded'}
+                             for name, item in assets.items()]}
+        release.check_remote_release(remote, expected, assets, published=False)
+        release.check_remote_release(remote | {'draft': False}, expected, assets, published=True)
+        for name in assets:
+            with self.subTest(missing=name):
+                original = (fixture.output / name).read_bytes()
+                (fixture.output / name).unlink()
+                with self.assertRaisesRegex(ValueError, 'Missing or unexpected'):
+                    self.verify(expected)
+                write(fixture.output, name, original)
+                incomplete = remote | {'assets': [item for item in remote['assets'] if item['name'] != name]}
+                with self.assertRaisesRegex(ValueError, 'Unexpected or duplicated'):
+                    release.check_remote_release(incomplete, expected, assets, published=False)
+        write(fixture.output, 'harmonyos-install.zh.md', '# Unrequested duplicate guide\n')
+        with self.assertRaisesRegex(ValueError, 'Missing or unexpected'):
+            self.verify(expected)
+
+    def test_repository_guide_mode_still_requires_both_guides_in_exact_source(self):
+        fixture = self.fixture
+        fixture.unified_mainline(guide_delivery='repository')
+        write(fixture.root, 'doc/distribution/harmonyos-reader.en.md', ' \n')
+        fixture.release_commit = commit(fixture.root)
+        fixture.sync_mainline_source()
+        expected = fixture.bundle()
+        with self.assertRaisesRegex(ValueError, 'guide is empty'):
+            self.verify(expected)
+
+    def test_unknown_guide_modes_cannot_relax_release_validation(self):
+        fixture = self.fixture
+        fixture.unified_mainline()
+        for value in ('disabled', 'assets', '', False, None):
+            with self.subTest(value=value):
+                write(fixture.root, release.NEXT_PIN, json.dumps(fixture.next_pin | {'guide_delivery': value}))
+                with self.assertRaisesRegex(ValueError, 'Invalid immutable'):
+                    release.load_pin(fixture.root, next_candidate=True)
 
     def test_release_only_changes_preserve_a_common_immutable_baseline(self):
         fixture = self.fixture

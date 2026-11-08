@@ -245,7 +245,7 @@ class _Host {
 VoidCallback _menu(WidgetTester tester) => tester
     .widgetList<MenuButton>(find.byType(MenuButton))
     .expand((menu) => menu.entries)
-    .singleWhere((entry) => entry.text == 'Reorder')
+    .singleWhere((entry) => entry.text == 'Reorder comics')
     .onClick;
 
 Future<void> _open(WidgetTester tester) async {

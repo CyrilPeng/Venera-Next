@@ -148,7 +148,7 @@ jobs:
       - name: Analyze test build and audit the real reader HAP
         run: python3 tool/harmonyos/ci_full_app.py --flutter-sdk "$FLUTTER_OH_SDK"
 
-      - name: Independently verify all five release assets
+      - name: Independently verify the required release assets and repository guides
         working-directory: release
         run: |
           options=()

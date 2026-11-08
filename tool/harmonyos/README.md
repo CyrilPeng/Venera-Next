@@ -2,16 +2,16 @@
 
 鸿蒙平台适配与完整阅读器统一维护在 `main`，使用独立 Flutter OH SDK 从同一主线提交生成 HAP。普通平台保留官方 Flutter、根 pubspec／lock；鸿蒙依赖覆盖、受控锁、ArkTS 模板与原生工具集中在本目录。用户入口见[测试版安装指南](../../doc/distribution/harmonyos-reader.zh.md)；早期探针记录见[实验记录](../../doc/experiments/harmonyos.zh.md)。
 
-当前主线候选为 **`1.18.3+245`**，包含收藏导航、依赖治理及官方来源调整；
-schema 3 的下一配置从调用方 checkout 选择准确主线 SHA，所有平台使用同一来源。
+已发布的主线正式版为 **`1.18.3+249`**，鸿蒙以未签名 Beta HAP 随版分发。
+后续构建使用 schema 3 配置，从调用方 checkout 选择准确主线 SHA，所有平台使用同一来源。
 既有 `1.18.3+244` 继续使用提交 `3e1be1391ba784bb228803525696d38c208f471f`
 和原锁文件、原生库及 Release 资产；不以新 HAP 覆盖这些历史产物。
 后续候选的读者版本门禁为 `>=245`，与主线的冻结 pin 分开验证。
 
-本候选只用于无发布预览。2026-11-06 审计发现的适用 QuickJS-NG 核心缺陷已在
+分支候选构建只用于无发布预览。2026-11-06 审计发现的适用 QuickJS-NG 核心缺陷已在
 `f5a1f20` 中回移修复；Linux 64／32 位 ASan／UBSan 与 Windows 64／32 位 ASan
 均已通过，来源和边界见依赖的 CORE_PATCHES.md／JSON。旧 d07 的泛型 push 没有
-后来引入的优化缺陷。主线下一 pin 的 `release_enabled` 保持 false，完整平台构建
+后来引入的优化缺陷。主线配置已启用 `release_enabled: true`，每次发版必须包含鸿蒙包；完整平台构建
 与签装、真机运行分别验证，宿主安全回归不作为鸿蒙运行验收。
 
 完整阅读器记录仓库内八个包的输入摘要；滚动列表已回归官方 pub.dev 0.3.8。
@@ -28,7 +28,9 @@ PNG／7z 由 `packages/venera_native` 的自编桥接和独立固定的官方核
 
 `release_context.py` 验证准确来源提交、版本、构建号、运行号和 changelog 摘要。`prepare_full_app.py` 只在 `build/harmonyos/full-app` 注入版本与 changelog，运行源码与主线 canonical Git blob 一致；本地构建读取同一源码的 `release.json`。`app/pubspec.lock.template` 是独立 OH SDK 的受控锁，CI 使用 `--enforce-lockfile`。
 
-`ci_full_app.py` 在独立工程中执行严格分析、宿主回归、真实 ARM64 HAP 构建及 ELF／资产审计。发布模式输出 `VeneraNext-版本-harmonyos-arm64-unsigned.hap`、`harmonyos-manifest.json`、`harmonyos-SHA256SUMS` 和两份 `harmonyos-install.*.md`；主线再次核对固定 Git 源码清单、包内版本及全部五项资产，草稿上传核验通过后才发布。失败不允许静默略过 HAP。
+`ci_full_app.py` 在独立工程中执行严格分析、宿主回归、真实 ARM64 HAP 构建及 ELF／资产审计。当前 `guide_delivery: repository` 配置输出 `VeneraNext-版本-harmonyos-arm64-unsigned.hap`、`harmonyos-manifest.json` 和 `harmonyos-SHA256SUMS` 三项附件；中英文指南保存在仓库，Release 正文链接到准确发布 tag。主线再次核对固定 Git 源码清单、包内版本、仓库指南及全部规定附件，草稿上传核验通过后才发布。失败不允许静默略过 HAP。
+
+未声明 `guide_delivery` 的历史发布配置仍输出并严格校验两份 `harmonyos-install.*.md`，保留原五附件格式；无发布上下文的手动构建仍附带 `install.*.md`。已发布的 `v1.18.3` 附件保持原样，新策略从下一次发布开始使用。
 
 CPF WebView 保留其 OHOS 实现，并从主线固定的官方 `0aaf7a0` 导出浏览器退出事件 Dart 接口与类型，补齐 Windows 专用代码的静态依赖。生成时先替换主线同名 Git／Windows 本地 overrides，再插入协调的 CPF path 组，拒绝重复 YAML key。覆盖层不改写应用代理逻辑、不生成退出事件；生成工程用于 HAP，Windows 发行使用主线自己的来源。复制的上游类型与生成文件保持原字节，原始和适配后的依赖树均记录摘要。
 

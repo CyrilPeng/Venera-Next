@@ -17,12 +17,15 @@ def validate_context(value, source_commit, environ):
     fields = {"schema", "channel", "source_commit", "release_commit", "version", "build",
               "tag", "run_id", "tagged", "changelog_sha256", "changelog", "preview", "caller_version", "caller_build"}
     fields.add("source_mode" if unified else "main_baseline")
+    if unified and "guide_delivery" in value:
+        fields.add("guide_delivery")
     hashes = ("source_commit", "release_commit") if unified else ("source_commit", "main_baseline", "release_commit")
     if (set(value) != fields or type(value["schema"]) is not int or value["schema"] not in (2, 3) or value["channel"] != "harmonyos-beta"
             or type(value["tagged"]) is not bool or type(value["preview"]) is not bool
             or any(not isinstance(value[key], str) or not re.fullmatch(r"[0-9a-f]{40}", value[key])
                    for key in hashes)
             or (unified and (value["source_mode"] != "release_commit" or value["source_commit"] != value["release_commit"]))
+            or ("guide_delivery" in value and value["guide_delivery"] != "repository")
             or value["source_commit"] != source_commit
             or value["release_commit"] != environ.get("GITHUB_SHA", value["release_commit"])
             or not isinstance(value["changelog"], str)

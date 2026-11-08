@@ -15,8 +15,16 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 import 'favorite_folder_browser.dart';
 
-Future<void> sortFolders(BuildContext context) {
-  final result = _sortFolders(context);
+Future<void> sortFolders(
+  BuildContext context, {
+  String? initialParentId,
+  bool Function()? isCurrent,
+}) {
+  final result = _sortFolders(
+    context,
+    initialParentId: initialParentId,
+    isCurrent: isCurrent,
+  );
   unawaited(
     result.then<void>(
       (_) {},
@@ -28,8 +36,12 @@ Future<void> sortFolders(BuildContext context) {
   return result;
 }
 
-Future<void> _sortFolders(BuildContext context) async {
-  if (!context.mounted) return;
+Future<void> _sortFolders(
+  BuildContext context, {
+  String? initialParentId,
+  bool Function()? isCurrent,
+}) async {
+  if (!context.mounted || isCurrent?.call() == false) return;
   final owner = WindowSelectionTask(context);
   if (!owner.canPresent) return;
   final parentPopup = context
@@ -46,8 +58,9 @@ Future<void> _sortFolders(BuildContext context) async {
     for (final root in tree.roots)
       root.id: tree.childrenOf(root.id).map((folder) => folder.name).toList(),
   };
-  String? parentId;
-  var folders = groups[null]!;
+  if (!groups.containsKey(initialParentId)) return;
+  String? parentId = initialParentId;
+  var folders = groups[parentId]!;
   final navigator = Navigator.of(context, rootNavigator: true);
   bool isCurrentDatabase() =>
       store.isCurrent &&
@@ -88,6 +101,7 @@ Future<void> _sortFolders(BuildContext context) async {
       bool canEdit(BuildContext view) =>
           view.mounted &&
           owner.canPresent &&
+          isCurrent?.call() != false &&
           parentPopup?.isActive != false &&
           canDismiss() &&
           isCurrentDatabase();

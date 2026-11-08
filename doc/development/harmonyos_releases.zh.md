@@ -14,7 +14,7 @@ PR 校验使用 Actions 的准确合并候选 SHA，push 和手动构建使用�
 
 244 的 schema 1 `.github/harmonyos-release.json`、固定 Git 输入和历史资产保留。`harmonyos-frozen-244` 归档标签保留原来源的可达性；`harmonyos-branch-final-245` 保存最后一次双分支候选。后续开发只使用 `main`。旧 schema 2 解析保留用于历史验证，当前主线使用 schema 3。
 
-维护者于 2026-11-07 明确要求此后每次发包都包含鸿蒙版，主线配置已启用 `release_enabled: true`。候选版和正式版均必须重新构建同提交的未签名 ARM64 测试版 HAP，并携带全部五项鸿蒙分发资产；不能只发布其他平台。发布开关在标签元数据阶段检查，禁用时立即阻止整次发布。
+维护者于 2026-11-07 明确要求此后每次发包都包含鸿蒙版，主线配置已启用 `release_enabled: true`。候选版和正式版均必须重新构建同提交的未签名 ARM64 测试版 HAP，并携带该提交配置要求的全部鸿蒙分发资产；不能只发布其他平台。发布开关在标签元数据阶段检查，禁用时立即阻止整次发布。
 
 开关授权的是经过源码、构建及资产审核的未签名测试版分发。它不表示设备签装、覆盖升级或功能验收已完成；manifest 中的 `signed: false`、`runtime_verified: false` 与安装指南继续准确记录验证范围。schema 2／3 的预览或未绑定实际 tag 的产物均拒绝 Release 验证，归档标签也不会触发 `v*` 发布。
 
@@ -26,19 +26,21 @@ PR 校验使用 Actions 的准确合并候选 SHA，push 和手动构建使用�
 
 正式版 `v1.18.3` 使用构建号 **249**，与其他平台从同一正式版提交重新构建；候选验收产物不重命名为正式包。正式版仍随包提供未签名 Beta HAP 和四项伴随文件，继续保留尚未完成的鸿蒙真机签装、阅读、真实数据升级与续签验收边界。
 
-每次发布必须包含：
+从下一次发布起，主线 schema 3 配置使用 `guide_delivery: repository`，Release 必须包含三项鸿蒙附件：
 
 - `VeneraNext-版本-harmonyos-arm64-unsigned.hap`
 - `harmonyos-manifest.json`
 - `harmonyos-SHA256SUMS`
-- `harmonyos-install.zh.md`
-- `harmonyos-install.en.md`
+
+中英文安装指南维护在 `doc/distribution/harmonyos-reader.*.md`，README 使用相对链接，Release 正文自动链接到该次发布 tag 下的指南。指南必须存在于准确源码提交且内容非空；校验值随 HAP 生成，`harmonyos-SHA256SUMS` 继续放在 Release。
+
+未声明 `guide_delivery` 的历史配置继续要求上述三项及 `harmonyos-install.zh.md`、`harmonyos-install.en.md`，并逐字核对指南附件与原提交。`v1.18.3` 等已发布版本保留原五附件及标签；新策略不追改历史资产。未知配置值直接拒绝。
 
 HAP 采用 `com.github.cyrilpeng.veneranext.harmony` 包名和 `VeneraNext (HarmonyOS Beta)` 显示名，最低／目标 SDK 为 API 26。复核真实 `module.json`、AArch64 ELF、原生库精确摘要、完整 Dart／资源源码清单和包内版本，安装指南来自准确构建提交。下载页须继续明确未签名及测试版身份，不能把编译通过说成真机升级或续签验收。
 
 ## 发布门禁与无发布验证
 
-完整构建的 `Release` 同时依赖 Quality、原平台 Build 与 HarmonyOS。HAP 缺失、内容损坏、源码过期或摘要错误都不得 `continue-on-error`。先创建草稿并上传，再从 GitHub API 核对全部五项鸿蒙资产的名称、大小、上传状态和 SHA-256；通过后才公开，公开后再复核一次。任一阶段失败须查看日志，不允许静默去掉鸿蒙包后继续。
+完整构建的 `Release` 同时依赖 Quality、原平台 Build 与 HarmonyOS。HAP 缺失、内容损坏、源码过期或摘要错误都不得 `continue-on-error`。先创建草稿并上传，再从 GitHub API 按发布提交的配置核对全部鸿蒙资产的名称、大小、上传状态和 SHA-256；通过后才公开，公开后再复核一次。任一阶段失败须查看日志，不允许静默去掉鸿蒙包后继续。
 
 GitHub 按标签查询的 Release 接口只返回已公开版本。草稿阶段使用鉴权发布列表的完整分页定位唯一同标签草稿，再按其数字 ID 重新读取附件；缺失、重名、状态或 ID／标签变化都停止发布。公开后改用标签接口复核，创建 Release 时显式绑定调用方源码 SHA。RC2 的 26 项附件已上传为草稿，但旧查询接口返回 404；本修复由 RC3 重新验证完整发布链路。
 

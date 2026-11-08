@@ -197,19 +197,24 @@ def build(flutter_sdk):
                       sha256=digest(exported), packaged_app=audit, build=metadata, expected_assets=expected_assets)
         (artifacts / ("harmonyos-manifest.json" if release else "full-app-manifest.json")).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         (artifacts / ("harmonyos-SHA256SUMS" if release else "SHA256SUMS")).write_text(f"{digest(exported)}  {exported.name}\n", encoding="utf-8")
-        guide_prefix = "harmonyos-install" if release else "install"
-        for language in ("zh", "en"):
-            guide = ROOT / f"doc/distribution/harmonyos-reader.{language}.md"
-            text = guide.read_text(encoding="utf-8")
-            for companion in ("zh", "en"):
-                text = text.replace(f"harmonyos-reader.{companion}.md", f"{guide_prefix}.{companion}.md")
-            (artifacts / f"{guide_prefix}.{language}.md").write_text(text, encoding="utf-8")
+        export_install_guides(artifacts, metadata["release"])
     except Exception as error:
         report.update(status="failed", error_type=type(error).__name__)
         raise
     finally:
         (CI / "full-app-build.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"Audited and exported {report['hap']}; no signing or device runtime is claimed.")
+
+
+def export_install_guides(artifacts, release):
+    if release is not None and release.get("guide_delivery") == "repository":
+        return
+    prefix = "harmonyos-install" if release is not None else "install"
+    for language in ("zh", "en"):
+        text = (ROOT / f"doc/distribution/harmonyos-reader.{language}.md").read_text(encoding="utf-8")
+        for companion in ("zh", "en"):
+            text = text.replace(f"harmonyos-reader.{companion}.md", f"{prefix}.{companion}.md")
+        (artifacts / f"{prefix}.{language}.md").write_text(text, encoding="utf-8")
 
 
 def main():

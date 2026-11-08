@@ -4,14 +4,17 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:venera_next/components/button.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/favorites/favorite_models.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/favorites/favorites_scope.dart';
+import 'package:venera_next/features/favorites/favorite_folder_browser.dart';
 import 'package:venera_next/features/favorites/local_favorites_page.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/history/history_scope.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/foundation/comic_type.dart';
@@ -34,6 +37,8 @@ class _Fixture {
   final manager = LocalFavoritesManager.independent();
   final history = HistoryManager.create();
   final navigator = GlobalKey<NavigatorState>();
+  double textScale = 1;
+  bool dark = false;
 
   Widget host({String folder = 'B'}) => FavoritesScope(
     manager: manager,
@@ -41,6 +46,14 @@ class _Fixture {
       manager: history,
       child: MaterialApp(
         navigatorKey: navigator,
+        theme: dark ? ThemeData.dark() : ThemeData.light(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(textScale),
+            disableAnimations: true,
+          ),
+          child: child!,
+        ),
         home: Scaffold(
           body: LocalFavoritesPage(
             folder: folder,
@@ -148,30 +161,309 @@ Future<void> _settle(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _chooseAction(WidgetTester tester, String label) async {
+  final menu = find.byWidgetPredicate(
+    (widget) =>
+        widget is MenuButton &&
+        widget.entries.any((entry) => entry.text == label),
+  );
+  await tester.tap(menu);
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(find.text(label).last);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   App.dataPath = Directory.systemTemp.path;
   App.cachePath = Directory.systemTemp.path;
 
+  for (final size in [
+    const Size(375, 800),
+    const Size(812, 375),
+    const Size(1024, 600),
+  ]) {
+    testWidgets(
+      'page menu opens current subfolders and persists only their order at $size',
+      (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final count = size.width == 1024 ? 1 : 0;
+        final fixture = await _prepare(tester, count);
+        fixture.textScale = count == 0 ? 2 : 1;
+        fixture.dark = size.width == 375;
+        final manager = fixture.manager;
+        final parent = manager.folderTree.named('B')!;
+        await tester.runAsync(() async {
+          await manager.createChildFolder('First child', parent.id);
+          await manager.createChildFolder('Second child', parent.id);
+          await manager.addComic(
+            'First child',
+            _comic('child-comic', 'Child comic'),
+          );
+        });
+        final roots = manager.folderTree.roots
+            .map((folder) => folder.id)
+            .toList();
+        final identities = {
+          for (final folder in manager.folderTree.flattened)
+            folder.name: (folder.id, folder.parentId),
+        };
+        await tester.pumpWidget(fixture.host());
+        await _settle(tester);
+        await _chooseAction(tester, 'Sort subfolders');
+        expect(
+          tester
+              .widget<FavoriteFolderSelect>(find.byType(FavoriteFolderSelect))
+              .current,
+          'B',
+        );
+        expect(
+          tester
+              .widget<ReorderableListView>(find.byType(ReorderableListView))
+              .itemCount,
+          2,
+        );
+        await tester.tap(find.byTooltip('Move down').first);
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.widgetWithIcon(IconButton, Icons.arrow_back_sharp),
+        );
+        await tester.pumpAndSettle();
+        await tester.runAsync(
+          () => AppDataOperations.instance.run(() async {}),
+        );
+        await _settle(tester);
+        expect(
+          manager.folderTree.childrenOf(parent.id).map((folder) => folder.name),
+          ['Second child', 'First child'],
+        );
+        expect(manager.folderTree.roots.map((folder) => folder.id), roots);
+        expect({
+          for (final folder in manager.folderTree.flattened)
+            folder.name: (folder.id, folder.parentId),
+        }, identities);
+        expect(
+          manager.getFolderComics('B').map((comic) => comic.id),
+          count == 0 ? isEmpty : ['seed-0'],
+        );
+        expect(manager.getFolderComics('First child').single.id, 'child-comic');
+        await tester.pumpWidget(const SizedBox());
+        await tester.runAsync(() async {
+          await manager.closeAndWait();
+          await manager.init();
+        });
+        expect(
+          manager.folderTree.childrenOf(parent.id).map((folder) => folder.name),
+          ['Second child', 'First child'],
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('old folder action cannot open a different page hierarchy', (
+    tester,
+  ) async {
+    final fixture = await _prepare(tester, 1);
+    await tester.runAsync(
+      () => fixture.manager.createChildFolder(
+        'Child',
+        fixture.manager.folderTree.named('B')!.id,
+      ),
+    );
+    await tester.pumpWidget(fixture.host());
+    await _settle(tester);
+    final retained = tester
+        .widget<MenuButton>(find.byType(MenuButton))
+        .entries
+        .singleWhere((entry) => entry.text == 'Sort subfolders')
+        .onClick;
+    await tester.pumpWidget(fixture.host(folder: 'A'));
+    await _settle(tester);
+    retained();
+    await tester.pumpAndSettle();
+    expect(find.byType(ReorderableListView), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final size in [const Size(375, 800), const Size(1024, 600)]) {
+    testWidgets('explicit selection entry and confirmed deletion at $size', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final fixture = await _prepare(tester, 3);
+      await tester.pumpWidget(fixture.host());
+      await _settle(tester);
+      if (size.width < 600) {
+        await _chooseAction(tester, 'Select comics');
+      } else {
+        await tester.tap(find.byTooltip('Select comics'));
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('Selected 0 comics'), findsOneWidget);
+      expect(
+        tester
+            .widget<MenuButton>(find.byType(MenuButton))
+            .entries
+            .any((entry) => entry.text == 'Delete Comic'),
+        isFalse,
+      );
+      await _chooseAction(tester, 'Select All');
+      expect(find.text('Selected 3 comics'), findsOneWidget);
+      await _chooseAction(tester, 'Delete Comic');
+      expect(find.text('Delete 3 comics?'), findsOneWidget);
+      expect(fixture.manager.getFolderComics('B'), hasLength(3));
+      await tester.tap(find.text('Cancel').last);
+      await tester.pumpAndSettle();
+      expect(fixture.manager.getFolderComics('B'), hasLength(3));
+      expect(find.text('Selected 3 comics'), findsOneWidget);
+      await _chooseAction(tester, 'Delete Comic');
+      await tester.tap(find.text('Confirm').last);
+      await _settle(tester);
+      expect(fixture.manager.getFolderComics('B'), isEmpty);
+      expect(find.text('Selected 3 comics'), findsNothing);
+      expect(find.text('Selected 0 comics'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('select all and invert use only visible favorite records', (
+    tester,
+  ) async {
+    final fixture = await _prepare(tester, 3);
+    appdata.settings[KeywordPreferences.comics.key] = <String>['Existing 1'];
+    await tester.pumpWidget(fixture.host());
+    await _settle(tester);
+    await tester.tap(find.byTooltip('Select comics'));
+    await tester.pumpAndSettle();
+    await _chooseAction(tester, 'Select All');
+    expect(find.text('Selected 2 comics'), findsOneWidget);
+    final grid = tester.widget<SliverGridComics>(find.byType(SliverGridComics));
+    expect(
+      grid.selections!.keys.map((comic) => comic.id),
+      unorderedEquals(['seed-0', 'seed-2']),
+    );
+    await _chooseAction(tester, 'Invert Selection');
+    expect(find.text('Selected 0 comics'), findsOneWidget);
+    await _chooseAction(tester, 'Invert Selection');
+    expect(find.text('Selected 2 comics'), findsOneWidget);
+    await tester.tap(_tile('seed-0'));
+    await tester.pumpAndSettle();
+    expect(find.text('Selected 1 comics'), findsOneWidget);
+    appdata.settings[KeywordPreferences.comics.key] = <String>['Existing 2'];
+    await tester.pumpAndSettle();
+    expect(find.text('Selected 1 comics'), findsNothing);
+    expect(
+      tester.widget<SliverGridComics>(find.byType(SliverGridComics)).selections,
+      isEmpty,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('selection entry clears on back and on folder changes', (
+    tester,
+  ) async {
+    final fixture = await _prepare(tester, 2);
+    await tester.pumpWidget(fixture.host());
+    await _settle(tester);
+    await tester.tap(find.byTooltip('Select comics'));
+    await tester.pumpAndSettle();
+    expect(find.text('Selected 0 comics'), findsOneWidget);
+    await fixture.navigator.currentState!.maybePop();
+    await tester.pumpAndSettle();
+    expect(find.text('Selected 0 comics'), findsNothing);
+    await tester.tap(find.byTooltip('Select comics'));
+    await tester.pumpAndSettle();
+    await tester.tap(_tile('seed-0'));
+    await tester.pumpAndSettle();
+    expect(find.text('Selected 1 comics'), findsOneWidget);
+    await tester.pumpWidget(fixture.host(folder: 'A'));
+    await _settle(tester);
+    expect(find.text('Selected 1 comics'), findsNothing);
+    await tester.pumpWidget(fixture.host());
+    await _settle(tester);
+    expect(find.text('Selected 1 comics'), findsNothing);
+    expect(
+      tester.widget<SliverGridComics>(find.byType(SliverGridComics)).selections,
+      isEmpty,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('long-press range selection skips hidden comics', (tester) async {
+    final fixture = await _prepare(tester, 3);
+    appdata.settings[KeywordPreferences.comics.key] = <String>['Existing 1'];
+    await tester.pumpWidget(fixture.host());
+    await _settle(tester);
+    await tester.longPress(_tile('seed-0'));
+    await tester.pumpAndSettle();
+    await tester.longPress(_tile('seed-2'));
+    await tester.pumpAndSettle();
+    expect(find.text('Selected 2 comics'), findsOneWidget);
+    expect(
+      tester
+          .widget<SliverGridComics>(find.byType(SliverGridComics))
+          .selections!
+          .keys
+          .map((comic) => comic.id),
+      unorderedEquals(['seed-0', 'seed-2']),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
-    'reading-status exclusions are explained without bypassing the filter',
+    'reading-status exclusions and active search constrain selection',
     (tester) async {
-      final fixture = await _prepare(tester, 1);
+      final fixture = await _prepare(tester, 3);
       appdata.implicitData['local_favorites_read_filter'] = 'Completed';
       await tester.pumpWidget(fixture.host());
       await _settle(tester);
       expect(_tile('seed-0'), findsNothing);
       expect(
-        find.text('Hidden by reading-status filter: 1 comics'),
+        find.text('Hidden by reading-status filter: 3 comics'),
         findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.checklist_rounded),
+            )
+            .onPressed,
+        isNull,
       );
       await tester.tap(find.byTooltip('Search'));
       await tester.pumpAndSettle();
       expect(_tile('seed-0'), findsOneWidget);
       expect(
-        find.text('Hidden by reading-status filter: 1 comics'),
+        find.text('Hidden by reading-status filter: 3 comics'),
         findsNothing,
       );
+      await tester.enterText(find.byType(TextField), 'Existing 1');
+      await tester.pumpAndSettle();
+      await tester.longPress(_tile('seed-1'));
+      await tester.pumpAndSettle();
+      await _chooseAction(tester, 'Select All');
+      expect(find.text('Selected 1 comics'), findsOneWidget);
+      expect(
+        tester
+            .widget<SliverGridComics>(find.byType(SliverGridComics))
+            .selections!
+            .keys
+            .single
+            .id,
+        'seed-1',
+      );
+      await _chooseAction(tester, 'Invert Selection');
+      expect(find.text('Selected 0 comics'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 

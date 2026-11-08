@@ -1,5 +1,8 @@
 {
   "zh_CN": {
+    "Select comics": "多选漫画",
+    "Reorder comics": "漫画排序",
+    "Sort subfolders": "子目录排序",
     "Preparing selected folder": "正在复制所选文件夹",
     "Scanning and importing comics": "正在扫描漫画",
     "Scanned @a folders; preparing import": "已扫描 @a 个文件夹，正在准备导入",
@@ -1012,6 +1015,9 @@
     "Unable to copy report.": "无法复制报告，请重试。"
   },
   "zh_TW": {
+    "Select comics": "多選漫畫",
+    "Reorder comics": "漫畫排序",
+    "Sort subfolders": "子目錄排序",
     "Preparing selected folder": "正在複製所選資料夾",
     "Scanning and importing comics": "正在掃描漫畫",
     "Scanned @a folders; preparing import": "已掃描 @a 個資料夾，正在準備匯入",

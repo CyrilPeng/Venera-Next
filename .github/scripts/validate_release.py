@@ -1,4 +1,5 @@
 ﻿import argparse
+import json
 import os
 import re
 import sys
@@ -34,6 +35,22 @@ def extract_release_notes(tag: str) -> str:
     if not body:
         fail(f"CHANGELOG.md section for {tag} is empty")
     return body
+
+
+def include_installation_guide_links(notes: str, tag: str) -> str:
+    try:
+        policy = json.loads(read_text(".github/harmonyos-next.json"))
+    except FileNotFoundError:
+        return notes
+    if policy.get("guide_delivery") != "repository":
+        return notes
+    links = []
+    for language, label in (("zh", "简体中文"), ("en", "English")):
+        path = f"doc/distribution/harmonyos-reader.{language}.md"
+        if not read_text(path).strip():
+            fail(f"Installation guide is empty: {path}")
+        links.append(f"[{label}](https://github.com/CyrilPeng/Venera-Next/blob/{tag}/{path})")
+    return notes + "\n\n鸿蒙安装指南 / HarmonyOS installation: " + " · ".join(links)
 
 
 def validate_pubspec_version(tag: str) -> None:
@@ -124,6 +141,7 @@ def main() -> None:
     notes = extract_release_notes(tag)
 
     if args.write_notes:
+        notes = include_installation_guide_links(notes, tag)
         Path(args.write_notes).write_text(notes + "\n", encoding="utf-8")
 
     kind = "Build" if args.build_only else "Release"

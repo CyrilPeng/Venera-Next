@@ -1,6 +1,6 @@
 # Two-Level Local Favorite Folders
 
-> Two-level folders shipped in `v1.18.2+243` for #123. Parent-back navigation and clickable paths described below are subsequent unreleased improvements; the `1.18.3+244` candidate does not include those two navigation changes.
+> Two-level folders shipped in `v1.18.2+243` for #123; parent-back navigation and clickable paths shipped in `v1.18.3+249`. The new selection entry and in-page subfolder sorting described below are on main and await the next release (#152, #155).
 
 Local favorites support at most two levels. Both root folders and child folders can contain comics directly. Network favorites remain managed by their comic sources. Folder names must still be globally unique, even under different parents.
 
@@ -17,7 +17,7 @@ Local favorites support at most two levels. Both root folders and child folders 
 
 In the favorites sidebar, select a folder name to open it. Use the separate arrow to expand or collapse its children. Search matches folder names and `Parent / Child` paths; clearing search does not change the saved hierarchy.
 
-Subsequent unreleased improvements: Back in a child folder first exits search or multi-selection, then opens its parent. Root folders and All retain the existing app-back behavior. An open folder picker or other dialog closes first. Select the parent name in the toolbar path to jump directly; a full-size parent button replaces that label in narrow titles, with the complete name available in its tooltip. The current label can still open the picker on narrow screens. A `/` inside a name is text, not another hierarchy level. The resulting folder selection is saved and restored after restart.
+Back in a child folder first exits search or multi-selection, then opens its parent. Root folders and All retain the existing app-back behavior. An open folder picker or other dialog closes first. Select the parent name in the toolbar path to jump directly; a full-size parent button replaces that label in narrow titles, with the complete name available in its tooltip. The current label can still open the picker on narrow screens. A `/` inside a name is text, not another hierarchy level. The resulting folder selection is saved and restored after restart.
 
 A root folder page provides links to its children, but its comic list and count show **direct favorites only**, not an aggregate of child contents. Comic search, reading-status filters, and blocked keywords continue to apply to the current comic list. All includes favorites from both levels and deduplicates comic identities. A comic can still belong to multiple folders.
 
@@ -25,12 +25,18 @@ Comic-detail favorites, bulk add/transfer, Quick Favorite settings, and update-t
 
 On TV, use direction keys to move focus and Select to activate a folder or its separate expansion arrow. Back closes the picker and returns focus to its opening control. In folder search, Up/Down leave text input while Left/Right still edit the caret. Sorting offers Move up/Move down buttons without dragging. These controls do not change TV's separate data or low-memory policy; an actual device's input method may still require a companion input device.
 
+## Bulk Actions (Pending Release)
+
+Use Select comics in the favorites toolbar on wide screens or in the More menu on narrow screens. The existing long-press entry also remains available. Once selection mode is open, click comics to select them; the More menu offers Select All, Invert Selection, and move, copy, delete, and download actions for the current selection.
+
+Select All, inversion, and long-press range selection include only comics visible under the current search, reading-status filter, and blocked-keyword rules. They exclude subfolders and their contents. Empty selections offer selection controls only. Bulk deletion first confirms the number of comics; cancelling keeps favorites, and confirmation removes only those favorite records from the current folder. Back or Cancel exits selection, and switching folders clears it.
+
 ## Creating, Moving And Sorting
 
 - New Folder lets you choose First-level folder or a root folder as the parent. A root folder's menu also offers Create subfolder. A child cannot have another level beneath it.
 - Move folder changes ancestry only. Comics and folder names stay in place, as do Quick Favorite, Read Later, update-tracking, and network-favorite references.
 - A root without children can move under another root. A child can change parents or return to the root level. A root with children cannot move under another folder, preventing a third level.
-- Sorting defaults to root folders. When children exist, choose a parent to sort its children. Dragging and Move up/Move down buttons are available. Closing the sorting window saves the order without changing ancestry.
+- Sidebar Sort defaults to root folders; choose a parent to sort its children. The new Sort subfolders action in the folder page's More menu opens the current parent's children directly. Reorder comics affects only comics directly in that folder, keeping folder and comic ordering separate. Folder sorting supports dragging and Move up/Move down buttons; closing the window saves the order while retaining folder IDs, ancestry, and comic contents.
 - A root with children cannot be deleted directly. Move or delete its children first. Deleting a folder removes its favorite records, not the original comic files or membership in other folders.
 
 ## Backups And Synchronization

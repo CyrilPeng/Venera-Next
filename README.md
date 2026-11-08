@@ -23,9 +23,37 @@
 
 ---
 
-## 项目介绍
+<details>
+<summary>章节目录</summary>
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) 是基于 [Venera](https://github.com/venera-app/venera) 持续开发的 Flutter 漫画阅读器，支持 **Android、Android TV、iOS、Windows、Linux 和 macOS**，另提供 **HarmonyOS 测试版**。
+- [1. 项目介绍](#项目介绍)
+- [2. 功能亮点](#功能亮点)
+- [3. 下载安装](#下载安装)
+  - [3.1 Android 手机与平板](#android-手机与平板)
+  - [3.2 Android TV](#android-tv)
+  - [3.3 Windows](#windows)
+  - [3.4 HarmonyOS（测试版）](#harmonyos测试版)
+  - [3.5 Linux](#linux)
+  - [3.6 iOS](#ios)
+  - [3.7 macOS](#macos)
+- [4. 快速上手](#快速上手)
+- [5. 使用说明](#使用说明)
+- [6. 漫画源开发](#漫画源开发)
+- [7. FAQ](#faq)
+- [8. 开发者入口](#开发者入口)
+- [9. 星标历史](#星标历史)
+- [10. 声明](#声明)
+- [11. 赞助](#赞助)
+- [12. 致谢](#致谢)
+- [13. 许可](#许可)
+- [14. 友情链接](#友情链接)
+
+</details>
+
+<a id="项目介绍"></a>
+## 1. 项目介绍
+
+[VeneraNext](https://github.com/CyrilPeng/venera-next) 是基于 [Venera](https://github.com/venera-app/venera) 持续开发的 Flutter 漫画阅读器，支持 **Android、Android TV、Windows、Linux、iOS 和 macOS**，另提供 **HarmonyOS 测试版**。
 
 本分支围绕“少一点打断，多一点阅读”打磨日常体验：瀑布流跨章连读不用退出，长按收藏省去选择收藏夹的步骤，夜间和墨水屏设备各有阅读设置。本地导入、离线下载、阅读统计与多设备同步，让找书、看漫画和追连载更方便。
 
@@ -45,7 +73,8 @@
 
 ---
 
-## 软件截图
+<a id="软件截图"></a>
+### 1.1 软件截图
 
 | 主页：阅读历史、稍后阅读与追更 | 漫画详情页 |
 |---|---|
@@ -53,15 +82,18 @@
 
 ---
 
-## 功能亮点
+<a id="功能亮点"></a>
+## 2. 功能亮点
 
-### 一键追更
+<a id="一键追更"></a>
+### 2.1 一键追更
 
 默认设置下，在漫画详情页**长按“收藏”按钮**，作品就会加入“追更”收藏夹，不用再选文件夹。应用会自动检查更新，在首页集中显示更新数量和作品封面；点封面进入详情，再点“阅读”或“继续阅读”即可开读。
 
 新装应用会自动建好“追更”收藏夹。想更换快捷收藏或追更的目标收藏夹，具体入口见[收藏、稍后阅读与追更](#收藏稍后阅读与追更)。
 
-### 阅读体验
+<a id="阅读体验"></a>
+### 2.2 阅读体验
 
 - **瀑布流跨章阅读（非 TV 默认模式）**：看完整章不用退出再选下一章——接近章末自动接上下一章，往上滚也能回到已加载的上一章，进度记录在你实际看到的位置。
 - **Android TV 与盒子**：独立电视安装包、横屏启动入口、遥控器方向键导航与可见焦点；默认启用单页低内存阅读，可与手机版共存。
@@ -70,7 +102,8 @@
 - **电子墨水屏刷新**：画廊模式按翻页间隔闪屏，帮助减少残影，间隔和样式可调。
 - **更顺手的详情页**：下载、阅读/继续阅读更好找，章节进度与更新提示一目了然，上次选择的章节正序/倒序也会保留。
 
-### 找书、收藏与数据
+<a id="找书收藏与数据"></a>
+### 2.3 找书、收藏与数据
 
 - **稍后阅读**：把准备以后看的漫画放进单独列表，首页就能找到。
 - **本地漫画库**：图片文件夹、CBZ/ZIP/7Z/CB7、PDF、图片型 EPUB 导入即可阅读，支持章节子目录和自然排序，本地漫画还能导出成 CBZ 备份。
@@ -78,7 +111,8 @@
 - **阅读统计**：记录你实际看漫画的时间，历史页查看累计时长、读过的作品数和时长排行。
 - **收藏画廊与搜索快捷方式**：收藏页可切换封面画廊，常搜的作者/标签可保存为快捷方式，收藏的图片也能按漫画浏览。
 
-### 延续 Venera 的核心能力
+<a id="延续-venera-的核心能力"></a>
+### 2.4 延续 Venera 的核心能力
 
 - **开放的扩展接口**：用 JavaScript 对接漫画服务，按源提供搜索、聚合搜索、探索页、分类、排行和标签翻译。
 - **多种阅读方式**：画廊分页、章节内连续滚动、缩放与多图布局，支持触摸、键盘及移动端音量键操作。
@@ -88,9 +122,11 @@
 
 ---
 
-## 下载安装
+<a id="下载安装"></a>
+## 3. 下载安装
 
-### Android 手机与平板
+<a id="android-手机与平板"></a>
+### 3.1 Android 手机与平板
 
 从 [最新稳定版](https://github.com/CyrilPeng/venera-next/releases/latest) 下载 APK 安装包：
 
@@ -103,7 +139,8 @@
 
 **推荐**：如果不确定应该下载哪个，选择通用版 `VeneraNext-xxx-android.apk`。
 
-### Android TV
+<a id="android-tv"></a>
+### 3.2 Android TV
 
 从 [最新稳定版](https://github.com/CyrilPeng/venera-next/releases/latest) 下载 TV APK 安装包：
 
@@ -120,21 +157,8 @@
 
 操作说明见 [TV 遥控器与低内存阅读](#tv-遥控器与低内存阅读)，安装与升级详情见 [Android TV 分发说明](doc/distribution/android_tv.zh.md)。
 
-### HarmonyOS（测试版）
-
-从 [发布页](https://github.com/CyrilPeng/Venera-Next/releases) 下载鸿蒙安装包。自 `v1.18.3-rc.3` 起，每次候选版和正式版发布均提供同版本的鸿蒙测试版：
-
-| 文件名 | 说明 | 适用场景 |
-|---|---|---|
-| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | 未签名 ARM64 测试版 | 满足 API 26 要求的鸿蒙手机与平板 |
-
-需自行签名侧载；升级时沿用原签名密钥，不卸载或清空数据。安装步骤与功能限制见 [鸿蒙测试版安装指南](doc/distribution/harmonyos-reader.zh.md)。
-
-### iOS
-
-从 [最新稳定版](https://github.com/CyrilPeng/venera-next/releases/latest) 下载 ipa 安装包，使用 AltStore 旁加载。
-
-### Windows
+<a id="windows"></a>
+### 3.3 Windows
 
 推荐通过 winget 安装，后续可以直接使用同一包 ID 升级：
 
@@ -147,7 +171,19 @@ winget upgrade --id CyrilPeng.VeneraNext --exact
 
 Windows 安装器、便携包和 winget manifest 维护说明见 [doc/distribution/windows.zh.md](doc/distribution/windows.zh.md)。
 
-### Linux
+<a id="harmonyos测试版"></a>
+### 3.4 HarmonyOS（测试版）
+
+从 [发布页](https://github.com/CyrilPeng/Venera-Next/releases) 下载鸿蒙安装包。自 `v1.18.3-rc.3` 起，每次候选版和正式版发布均提供同版本的鸿蒙测试版：
+
+| 文件名 | 说明 | 适用场景 |
+|---|---|---|
+| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | 未签名 ARM64 测试版 | 满足 API 26 要求的鸿蒙手机与平板 |
+
+需自行签名侧载；升级时沿用原签名密钥，不卸载或清空数据。安装步骤与功能限制见 [鸿蒙测试版安装指南](doc/distribution/harmonyos-reader.zh.md)。
+
+<a id="linux"></a>
+### 3.5 Linux
 
 从 [最新稳定版](https://github.com/CyrilPeng/venera-next/releases/latest) 下载对应架构的安装包：
 
@@ -162,21 +198,30 @@ Windows 安装器、便携包和 winget manifest 维护说明见 [doc/distributi
 
 Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定版 AppImage 已包含 GTK 3 和 WebKitGTK 4.1，无需额外安装 GTK/WebKit；仍需系统提供 glibc 2.35 或更新版本及兼容的 OpenGL/EGL 显卡驱动。依赖安装、FUSE 问题及发行版兼容范围见 [Linux 安装与分发](doc/distribution/linux.zh.md)。
 
-### macOS
+<a id="ios"></a>
+### 3.6 iOS
+
+从 [最新稳定版](https://github.com/CyrilPeng/venera-next/releases/latest) 下载 ipa 安装包，使用 AltStore 旁加载。
+
+<a id="macos"></a>
+### 3.7 macOS
 
 从 [最新稳定版](https://github.com/CyrilPeng/venera-next/releases/latest) 下载 `VeneraNext-xxx.dmg`。
 
 ---
 
-## 快速上手
+<a id="快速上手"></a>
+## 4. 快速上手
 
 1. **安装**：从[最新稳定版](https://github.com/CyrilPeng/venera-next/releases/latest)安装当前平台的版本；电视按 [Android TV](#android-tv) 说明选择独立 TV 包。
 2. **添加内容**（三选一即可开始）：已有漫画文件 → “本地 → 导入”；网络连载 → 在漫画源管理页安装扩展；NAS 目录 → “设置 → 应用 → WebDAV 漫画库”。
 3. **开始阅读**：手机与桌面默认的瀑布流模式可以直接跨章连读，TV 默认采用单页低内存阅读；遇到想追的连载，试试在详情页长按“收藏”按钮。阅读模式、拆分双页、夜间调光等可在“设置 → 阅读器”或阅读器内随时调整。
 
-## 使用说明
+<a id="使用说明"></a>
+## 5. 使用说明
 
-### 阅读模式与进度
+<a id="阅读模式与进度"></a>
+### 5.1 阅读模式与进度
 
 | 模式 | 方向 | 适合 |
 |---|---|---|
@@ -192,19 +237,24 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 |---|---|
 | <a href="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Single%20Page%20View.jpg"><img src="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Single%20Page%20View.jpg" alt="未拆分的单页阅读画面" width="100%" /></a> | <a href="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Double%20Page%20View.jpg"><img src="https://git-pictures.cyrilworkshop.dpdns.org/veneranext/Double%20Page%20View.jpg" alt="开启拆分双页后的阅读画面" width="100%" /></a> |
 
-### TV 遥控器与低内存阅读
+<a id="tv-遥控器与低内存阅读"></a>
+### 5.2 TV 遥控器与低内存阅读
 
 - **主界面**：方向键移动焦点，确定键／手柄 A 激活；返回键／手柄 B 返回。支持菜单键的遥控器可打开部分控件的上下文菜单。
 - **阅读画面**：方向键翻页或滚动，确定键打开阅读菜单；菜单打开后方向键只选择菜单控件，不会在背景翻页。返回先收起菜单，再保存进度并退出阅读器。
 - **默认低内存模式**：单页阅读、预加载 1 页、64 MiB 解码图片缓存和约 207 万像素解码预算。可在“设置 → 阅读器 → TV 低内存模式”关闭，恢复原有阅读配置并使用瀑布流等模式；这个开关仅保存在当前设备，不参与备份或同步。
 - **使用提示**：低内存模式不修改原文件，但长条图和放大细节可能变糊。网页登录、验证码和文件选择器等可能需要输入法或配套输入设备。
 
-### 夜间与墨水屏阅读
+<a id="夜间与墨水屏阅读"></a>
+### 5.3 夜间与墨水屏阅读
 
 - **夜间调光**：在阅读器内开启（阅读设置或底部快捷面板均可），亮度 20%–100% 可调，只作用于应用内画面；应用本身的浅色/深色/跟随系统主题在“设置 → 外观”选择。
 - **墨水屏**：使用画廊模式并开启“电子墨水屏刷新”，可设置每 1–10 次翻页闪屏一次，时长为 100–1500 毫秒，样式有黑、白、先白后黑三种。连续与瀑布流模式不触发闪屏。
 
-### 收藏、稍后阅读与追更
+<a id="收藏稍后阅读与追更"></a>
+### 5.4 收藏、稍后阅读与追更
+
+主线新增、待下版发布：收藏页提供「多选漫画」入口（宽屏工具栏／窄屏更多菜单），更多菜单中的「子目录排序」直接管理当前父目录的子目录，「漫画排序」管理本目录直接收藏的漫画。详见[收藏目录与批量管理](doc/user/favorite_folders.zh.md)。
 
 - **收藏**：点详情页“收藏”打开面板，可选择本地收藏夹，或收藏到源站账号（视扩展支持）。收藏页支持列表与封面画廊切换（自动或 2–6 列）。
 - **快捷收藏**：在详情页长按“收藏”，直接加入指定的本地收藏夹，默认是“追更”。在“设置 → 本地收藏 → 快速收藏”更换目标。
@@ -213,7 +263,8 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 - **阅读统计**：历史页查看累计阅读时长、读过的作品数和时长排行，可按保留天数清理历史。
 - **搜索快捷方式**：常搜的作者/标签可保存为快捷方式，在搜索页一键复用。
 
-### 本地漫画与离线下载
+<a id="本地漫画与离线下载"></a>
+### 5.5 本地漫画与离线下载
 
 | 内容 | 导入与阅读方式 |
 |---|---|
@@ -225,13 +276,15 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 
 支持导出 CBZ、扫描恢复下载内容、删除章节和迁移存储位置。PDF/EPUB 导入会占用额外空间；文字型 EPUB、直接绘制的 SVG 页面、加密 PDF 和 MOBI/AZW/AZW3 暂不支持。目录示例、压缩包兼容规则及元数据模板见[本地漫画导入、CBZ 与 WebDAV 漫画库](doc/user/import_comic.zh.md)。
 
-### 网络漫画源
+<a id="网络漫画源"></a>
+### 5.6 网络漫画源
 
 网络内容由用户添加的 JavaScript 扩展提供，不同扩展支持的搜索、探索、分类、账号、收藏和评论入口可能不同。
 
 在漫画源管理页添加兼容的脚本链接或文件。想编写自己的扩展，见下方[漫画源开发](#漫画源开发)。
 
-### WebDAV 数据同步、归档与在线漫画库
+<a id="webdav-数据同步归档与在线漫画库"></a>
+### 5.7 WebDAV 数据同步、归档与在线漫画库
 
 三类能力分别配置：
 
@@ -245,7 +298,8 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 
 远端 CBZ/ZIP/7Z/CB7 压缩包需要先在服务端解压，或通过归档恢复到本地后再阅读。详见[目录与元数据规则](doc/user/import_comic.zh.md#webdav-在线漫画库)。
 
-## 漫画源开发
+<a id="漫画源开发"></a>
+## 6. 漫画源开发
 
 **第三方源开发者从这里开始：**
 
@@ -260,31 +314,38 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 
 本分支继续维护兼容 Venera 的扩展接口。瀑布流、拆分双页和夜间调光由阅读器处理；扩展应提供稳定的漫画/章节标识、正确的章节与图片顺序、有效的更新日期，无需为每一种阅读模式另写一套规则。
 
-## FAQ
+<a id="faq"></a>
+## 7. FAQ
 
-### VeneraNext 自带漫画源吗？
+<a id="veneranext-自带漫画源吗"></a>
+### 7.1 VeneraNext 自带漫画源吗？
 
 不自带，也不提供推荐源列表。可以先导入本地漫画，或自行合法配置兼容扩展、WebDAV 漫画库。
 
-### 搜索不到内容或图片加载失败怎么办？
+<a id="搜索不到内容或图片加载失败怎么办"></a>
+### 7.2 搜索不到内容或图片加载失败怎么办？
 
 先检查漫画源扩展、登录状态（Cookie）、源站状态和网络。具体站点和内容问题请联系相应扩展的维护者；可脱离具体站点复现的阅读器或扩展运行时问题，欢迎按[贡献指南](CONTRIBUTING.md)反馈。
 
-### 追更多久检查一次？为什么没有更新提示？
+<a id="追更多久检查一次为什么没有更新提示"></a>
+### 7.3 追更多久检查一次？为什么没有更新提示？
 
 - **自动检查**：应用运行时每 10 分钟检查一轮，最近 24 小时内已成功检查的作品会跳过；想马上刷新，可在追更页点“立即检查”。
 - **更新依据**：扩展返回的有效更新时间发生变化后才会标记更新。只新增章节、更新时间没变化时，可能不会提示。
 - **更新标记**：“设置 → 发现 → 在漫画缩略图上显示更新提示”控制缩略图上的标记，不影响追更检查和首页更新数量。
 
-### 平板上怎样缩小条漫？
+<a id="平板上怎样缩小条漫"></a>
+### 7.4 平板上怎样缩小条漫？
 
 在阅读器设置中选择纵向连续或瀑布流模式，调整「条漫缩小（每侧边距）」。每侧设为 20% 时，图片宽度缩小到原来的 60%，高度按比例变化，并保留阅读进度。详见[条漫缩小与左右边距](doc/user/reader_width.zh.md)。
 
-### Windows 怎样更新？
+<a id="windows-怎样更新"></a>
+### 7.5 Windows 怎样更新？
 
 使用 `winget upgrade --id CyrilPeng.VeneraNext --exact`。公共源收录新版本可能晚于 GitHub Release，可先运行 `winget source update`。便携版需要下载新版本手动覆盖更新。
 
-## 开发者入口
+<a id="开发者入口"></a>
+## 8. 开发者入口
 
 - [构建与开发](doc/development/build.zh.md)：Flutter/Rust 环境、依赖锁定、测试和发布。
 - [鸿蒙随版构建](doc/development/harmonyos_releases.zh.md)：固定分支来源、独立 SDK、未签名 HAP 与发布门禁。
@@ -294,7 +355,8 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 
 ---
 
-## 星标历史
+<a id="星标历史"></a>
+## 9. 星标历史
 
 <a href="https://www.star-history.com/?repos=CyrilPeng%2FVenera-Next&type=date&legend=top-left">
  <picture>
@@ -306,7 +368,8 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 
 ---
 
-## 声明
+<a id="声明"></a>
+## 10. 声明
 
 
 本仓库只维护 VeneraNext 漫画阅读器本体，**不提供、内置、托管或推荐任何漫画源，也不处理任何源站内容**。
@@ -317,7 +380,8 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 
 ---
 
-## 赞助
+<a id="赞助"></a>
+## 11. 赞助
 
 [![爱发电](https://img.shields.io/badge/爱发电-支持我-ff69b4?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyMS4zNWwtMS40NS0xLjMyQzUuNCAxNS4zNiAyIDEyLjI4IDIgOC41IDIgNS40MiA0LjQyIDMgNy41IDNjMS43NCAwIDMuNDEuODEgNC41IDIuMDlDMTMuMDkgMy44MSAxNC43NiAzIDE2LjUgMyAxOS41OCAzIDIyIDUuNDIgMjIgOC41YzAgMy43OC0zLjQgNi44Ni04LjU1IDExLjU0TDEyIDIxLjM1eiIvPjwvc3ZnPg==)](https://ifdian.net/a/cyril)
 
@@ -329,16 +393,19 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 
 ---
 
-## 致谢
+<a id="致谢"></a>
+## 12. 致谢
 
 感谢 [Venera](https://github.com/venera-app/venera) 提供的阅读器与扩展基础，以及 [EhTagTranslation](https://github.com/EhTagTranslation/Database) 的中文标签翻译数据。也感谢所有贡献者与赞助者。
 
-## 许可
+<a id="许可"></a>
+## 13. 许可
 
 本项目遵循 GPL-3.0 许可。
 
 ---
 
-## 友情链接
+<a id="友情链接"></a>
+## 14. 友情链接
 
 - [LINUX DO](https://linux.do/)

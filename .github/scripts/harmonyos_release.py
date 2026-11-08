@@ -54,10 +54,13 @@ def load_pin(root, *, next_candidate=False):
               else {"schema", "source_commit", "main_baseline", "first_release_build"})
     if next_candidate:
         fields.add("release_enabled")
+    if unified and "guide_delivery" in value:
+        fields.add("guide_delivery")
     if (set(value) != fields
             or type(value["schema"]) is not int
             or value["schema"] not in ((2, 3) if next_candidate else (1,))
             or (unified and value["source_mode"] != "release_commit")
+            or ("guide_delivery" in value and value["guide_delivery"] != "repository")
             or (not unified and any(not isinstance(value[key], str) or not SHA.fullmatch(value[key])
                                     for key in ("source_commit", "main_baseline")))
             or type(value["first_release_build"]) is not int
@@ -176,6 +179,8 @@ def context(root, source, environ, *, preview_next=False):
             "changelog_sha256": sha256(changelog.encode()), "changelog": changelog}
     if pin["schema"] == 3:
         value["source_mode"] = "release_commit"
+        if "guide_delivery" in pin:
+            value["guide_delivery"] = pin["guide_delivery"]
     else:
         value["main_baseline"] = pin["main_baseline"]
     if next_candidate:
@@ -187,10 +192,14 @@ def public_context(value):
     return {key: item for key, item in value.items() if key != "changelog"}
 
 
-def asset_names(version):
-    return {"hap": f"VeneraNext-{version}-harmonyos-arm64-unsigned.hap",
-            "manifest": "harmonyos-manifest.json", "checksums": "harmonyos-SHA256SUMS",
-            "zh": "harmonyos-install.zh.md", "en": "harmonyos-install.en.md"}
+def asset_names(version, *, guide_delivery=None):
+    if guide_delivery not in (None, "repository"):
+        raise ValueError("Invalid HarmonyOS installation guide delivery")
+    names = {"hap": f"VeneraNext-{version}-harmonyos-arm64-unsigned.hap",
+             "manifest": "harmonyos-manifest.json", "checksums": "harmonyos-SHA256SUMS"}
+    if guide_delivery is None:
+        names.update(zh="harmonyos-install.zh.md", en="harmonyos-install.en.md")
+    return names
 
 
 def elf(data):
@@ -234,7 +243,7 @@ def verify_next_dependencies(metadata, source, commit, files):
 
 
 def verify_bundle(directory, expected, source):
-    names = asset_names(expected["version"])
+    names = asset_names(expected["version"], guide_delivery=expected.get("guide_delivery"))
     actual = {p.name for p in directory.iterdir()}
     if actual != set(names.values()) or any(not p.is_file() or p.is_symlink() for p in directory.iterdir()):
         raise ValueError("Missing or unexpected HarmonyOS release assets")
@@ -270,9 +279,11 @@ def verify_bundle(directory, expected, source):
         verify_next_dependencies(metadata, source, commit, source_names)
     for language in ("zh", "en"):
         guide = blob(source, commit, f"doc/distribution/harmonyos-reader.{language}.md").decode("utf-8").replace("\r\n", "\n")
+        if not guide.strip():
+            raise ValueError("Installation guide is empty in the reviewed source")
         for companion in ("zh", "en"):
             guide = guide.replace(f"harmonyos-reader.{companion}.md", f"harmonyos-install.{companion}.md")
-        if (directory / names[language]).read_text(encoding="utf-8") != guide:
+        if language in names and (directory / names[language]).read_text(encoding="utf-8") != guide:
             raise ValueError("Installation guide differs from the reviewed source")
     native = metadata["native_libraries"]
     if set(native) != native_names:
@@ -418,7 +429,7 @@ def main():
         published = args.action == "verify-published"
         release = read_remote_release(expected["tag"], published=published)
         check_remote_release(release, expected, assets, published=published)
-    print("Verified HarmonyOS source, version, native libraries and all five release assets")
+    print(f"Verified HarmonyOS source, version, native libraries and all {len(assets)} release assets")
 
 
 if __name__ == "__main__":
