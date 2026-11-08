@@ -14,6 +14,7 @@ import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/keyword_filter.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/local_comics/downloading_page.dart';
@@ -48,8 +49,12 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
 
   Map<LocalComic, bool> selectedComics = {};
 
-  List<LocalComic> get visibleComics =>
-      comics.where((comic) => isBlocked(comic) == null).toList();
+  List<LocalComic> get visibleComics {
+    final filter = KeywordFilter.fromSettings(appdata.settings);
+    return comics
+        .where((comic) => isBlocked(comic, filter: filter) == null)
+        .toList();
+  }
 
   void reconcileSelection() {
     // Queries create new LocalComic instances; retain only visible identities

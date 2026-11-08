@@ -174,7 +174,11 @@ abstract final class DiscoveryPreferences {
 abstract final class KeywordPreferences {
   static const comics = StringListPreference('blockedWords');
   static const comments = StringListPreference('blockedCommentWords');
+  static const comicRules = StringMapPreference('blockedWordRules');
+  static const commentRules = StringMapPreference('blockedCommentWordRules');
+  // Keep legacy lists independently readable by existing consumers/backups.
   static const all = [comics, comments];
+  static const ruleOptions = [comicRules, commentRules];
 }
 
 abstract final class FavoritePreferences {
@@ -262,6 +266,7 @@ Map<String, Object?> get applicationPreferenceDefaults => {
     ...AppearancePreferences.all,
     ...DiscoveryPreferences.all,
     ...KeywordPreferences.all,
+    ...KeywordPreferences.ruleOptions,
     ...FavoritePreferences.all,
     ...ImageProcessingPreferences.all,
   ])

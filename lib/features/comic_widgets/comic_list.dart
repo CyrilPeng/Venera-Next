@@ -21,6 +21,7 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 import 'comic_tile.dart';
+import 'keyword_hidden_notice.dart';
 
 class SliverGridComics extends StatefulWidget {
   const SliverGridComics({
@@ -33,7 +34,7 @@ class SliverGridComics extends StatefulWidget {
     this.onLongPressed,
     this.selections,
     this.useFavoriteDisplaySettings = false,
-    this.showHiddenCount = false,
+    this.showHiddenCount = true,
   });
 
   final List<Comic> comics;
@@ -68,7 +69,10 @@ class _SliverGridComicsState extends State<SliverGridComics> {
     for (var i = 0; i < comics.length; i++) {
       (previousIDs[(comics[i].sourceKey, comics[i].id)] ??= []).add(heroIDs[i]);
     }
-    comics = widget.comics.where((comic) => isBlocked(comic) == null).toList();
+    final filter = KeywordFilter.fromSettings(appdata.settings);
+    comics = widget.comics
+        .where((comic) => isBlocked(comic, filter: filter) == null)
+        .toList();
     heroIDs = [
       for (final comic in comics)
         switch (previousIDs[(comic.sourceKey, comic.id)]) {
@@ -137,11 +141,9 @@ class _SliverGridComicsState extends State<SliverGridComics> {
     return SliverMainAxisGroup(
       slivers: [
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              'Hidden by keyword filters: @a comics'.tlParams({'a': hidden}),
-            ),
+          child: KeywordHiddenNotice(
+            count: hidden,
+            comics: () => mounted ? widget.comics : const [],
           ),
         ),
         grid,
@@ -239,15 +241,14 @@ class _SliverGridComics extends StatelessWidget {
 }
 
 /// return the first blocked keyword, or null if not blocked
-String? isBlocked(Comic item) {
-  return KeywordFilter(
-    GlobalPreferenceStore(appdata.settings).read(KeywordPreferences.comics),
-  ).firstComicMatch(
-    title: item.title,
-    subtitle: item.subtitle,
-    description: item.description,
-    tags: item.tags ?? const [],
-  );
+String? isBlocked(Comic item, {KeywordFilter? filter}) {
+  return (filter ?? KeywordFilter.fromSettings(appdata.settings))
+      .firstComicMatch(
+        title: item.title,
+        subtitle: item.subtitle,
+        description: item.description,
+        tags: item.tags ?? const [],
+      );
 }
 
 class ComicList extends StatefulWidget {

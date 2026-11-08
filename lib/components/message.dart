@@ -500,6 +500,7 @@ class ContentDialog extends StatelessWidget {
               ? Appbar(
                   leading: IconButton(
                     icon: const Icon(Icons.close),
+                    tooltip: 'Close'.tl,
                     onPressed: dismissible
                         ? () {
                             if (NavigationAdmission.allows(context) &&
@@ -523,6 +524,20 @@ class ContentDialog extends StatelessWidget {
         ],
       ),
     );
+    final sizedContent = IntrinsicWidth(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 600,
+          minWidth: math.min(400, context.width - 16),
+        ),
+        child: MediaQuery.removePadding(
+          removeTop: true,
+          removeBottom: true,
+          context: context,
+          child: content,
+        ),
+      ),
+    );
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
@@ -536,24 +551,13 @@ class ContentDialog extends StatelessWidget {
       elevation: 2,
       shadowColor: context.colorScheme.shadow,
       backgroundColor: context.colorScheme.surface,
-      child: AnimatedSize(
-        duration: const Duration(milliseconds: 200),
-        alignment: Alignment.topCenter,
-        child: IntrinsicWidth(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: 600,
-              minWidth: math.min(400, context.width - 16),
+      child: MediaQuery.disableAnimationsOf(context)
+          ? sizedContent
+          : AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              alignment: Alignment.topCenter,
+              child: sizedContent,
             ),
-            child: MediaQuery.removePadding(
-              removeTop: true,
-              removeBottom: true,
-              context: context,
-              child: content,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

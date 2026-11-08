@@ -300,6 +300,13 @@ The online library accepts image folders, chapter subfolders, and extracted CBZ 
 
 Remote CBZ/ZIP/7Z/CB7 archives must be extracted on the server or restored locally before reading. See [folder and metadata rules](doc/user/import_comic.en.md#webdav-online-library).
 
+<a id="keyword-blocking"></a>
+### 5.8 Keyword blocking
+
+Manage comic and comment keywords separately in **Settings → Explore**. The unreleased version on `main` adds **Contains text**, **Whole word**, **Exact tag**, and per-rule case settings. Try sample text before saving, or click a comic list's hidden count to view reasons and edit a rule. **Whole word** is recommended for short abbreviations such as `BL` to avoid matching `black`; existing rules retain their original behavior.
+
+See [keyword blocking and match reasons](doc/user/keyword_blocking.en.md) for examples and backup compatibility. The current stable release, `v1.18.3`, does not yet include these new controls.
+
 <a id="developing-comic-sources"></a>
 ## 6. Developing comic sources
 

@@ -21,8 +21,25 @@ const appDataDeviceOnlyFields = {'windowsWindowHotkey', 'tvLowMemoryMode'};
 
 const appDataOptionalArchiveFields = {'backupWebdav', 'backupWebdavPath'};
 
-List<String> splitAppDataFields(String value) => value
-    .split(',')
-    .map((field) => field.trim())
-    .where((field) => field.isNotEmpty)
-    .toList();
+/// Keywords and their match options form one portable setting. Excluding either
+/// half must also exclude the other in uploads, imports and content fingerprints.
+const appDataKeywordOptionFields = {
+  'blockedWords': 'blockedWordRules',
+  'blockedCommentWords': 'blockedCommentWordRules',
+};
+
+const _linkedAppDataFields = {
+  ...appDataKeywordOptionFields,
+  'blockedWordRules': 'blockedWords',
+  'blockedCommentWordRules': 'blockedCommentWords',
+};
+
+List<String> splitAppDataFields(String value) {
+  final fields = value
+      .split(',')
+      .map((field) => field.trim())
+      .where((field) => field.isNotEmpty)
+      .toList();
+  final linked = {for (final field in fields) ?_linkedAppDataFields[field]};
+  return [...fields, ...linked.where((field) => !fields.contains(field))];
+}

@@ -261,6 +261,15 @@ class Appdata with Init {
             draft[key] = settings[key];
           }
         }
+        // Older backups contain only the words. Their original policy must not
+        // accidentally inherit a newer local rule with the same spelling.
+        for (final entry in appDataKeywordOptionFields.entries) {
+          if (settings.containsKey(entry.key) &&
+              !settings.containsKey(entry.value) &&
+              !customDisableSync.contains(entry.key)) {
+            draft[entry.value] = <String, String>{};
+          }
+        }
       }
       history
         ..clear()

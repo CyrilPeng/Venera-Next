@@ -2,6 +2,7 @@ import 'package:venera_next/features/history/history_scope.dart';
 import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
+import 'package:venera_next/foundation/keyword_filter.dart';
 import 'package:venera_next/components/file_save_task.dart';
 import 'favorite_models.dart';
 import 'favorite_folder.dart';
@@ -154,10 +155,12 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     _reconcileSelection();
   }
 
-  List<FavoriteItem> get _visibleComics =>
-      (searchMode ? searchResults : filterComics(comics))
-          .where((comic) => isBlocked(comic) == null)
-          .toList();
+  List<FavoriteItem> get _visibleComics {
+    final filter = KeywordFilter.fromSettings(appdata.settings);
+    return (searchMode ? searchResults : filterComics(comics))
+        .where((comic) => isBlocked(comic, filter: filter) == null)
+        .toList();
+  }
 
   void _reconcileSelection() {
     lastSelectedIndex = null;

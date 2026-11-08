@@ -16,6 +16,7 @@ import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/foundation/keyword_filter.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -62,6 +63,7 @@ void main() {
     final previous = appdata.captureImportCheckpoint();
     App.dataPath = root.path;
     appdata.settings['blockedWords'] = ['old', 'old'];
+    appdata.settings['blockedWordRules'] = <String, String>{};
     appdata.settings['blockedCommentWords'] = ['comment'];
     appdata.settings['extension'] = {'keep': true};
     messages = [];
@@ -80,6 +82,8 @@ void main() {
     VoidCallback? onExit,
     bool dark = false,
     double scale = 1,
+    Comic comic = _comic,
+    String? select = 'alpha',
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -103,7 +107,7 @@ void main() {
               builder: (context) => Center(
                 child: TextButton(
                   onPressed: () => ComicTile(
-                    comic: _comic,
+                    comic: comic,
                     onBlocked: onBlocked,
                   ).block(context),
                   child: const Text('Open'),
@@ -116,9 +120,77 @@ void main() {
     );
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(OptionChip, 'alpha'));
-    await tester.pumpAndSettle();
+    if (select != null) {
+      final chip = find.widgetWithText(OptionChip, select);
+      await tester.ensureVisible(chip);
+      await tester.tap(chip);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Block'));
+      await tester.pumpAndSettle();
+    }
   }
+
+  testWidgets(
+    'quick blocking recommends word and tag rules while preserving existing options',
+    (tester) async {
+      appdata.settings['blockedWords'] = ['old', 'old', 'alpha'];
+      appdata.settings['blockedWordRules'] = {'alpha': 'contains:sensitive'};
+      var callbacks = 0;
+      await open(
+        tester,
+        () => callbacks++,
+        comic: const Comic(
+          'bl, alpha',
+          '',
+          'id',
+          null,
+          ['group:tag'],
+          '',
+          'source',
+          null,
+          null,
+        ),
+        select: null,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Block'))
+            .onPressed,
+        isNull,
+      );
+      for (final word in ['bl', 'alpha', 'group:tag']) {
+        await tester.tap(find.widgetWithText(OptionChip, word));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.widgetWithText(FilledButton, 'Block'));
+      await tester.pump();
+      await _flush(tester, appdata.saveData(false));
+      await tester.pumpAndSettle();
+      final saved = jsonDecode(
+        File('${root.path}/appdata.json').readAsStringSync(),
+      )['settings'];
+      expect(saved['blockedWords'], ['old', 'old', 'alpha', 'bl', 'group:tag']);
+      expect(saved['blockedWordRules'], {
+        'alpha': 'contains:sensitive',
+        'bl': 'wholeWord:insensitive',
+        'group:tag': 'exactTag:insensitive',
+      });
+      final filter = KeywordFilter.fromSettings(appdata.settings);
+      expect(filter.firstComicMatch(title: 'black', description: ''), isNull);
+      expect(filter.firstComicMatch(title: '[BL]', description: ''), 'bl');
+      expect(
+        filter.firstComicMatch(title: 'group:tag', description: ''),
+        isNull,
+      );
+      expect(
+        filter.firstComicMatch(title: '', description: '', tags: ['group:TAG']),
+        'group:tag',
+      );
+      expect(callbacks, 1);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   testWidgets(
     'failed save retains selection and retry does not duplicate or overwrite other words',

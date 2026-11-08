@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/keyword_settings_store.dart';
+import 'package:venera_next/foundation/keyword_rule.dart';
 import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/components/settings_save_state.dart';
 
@@ -39,6 +40,8 @@ typedef ComicTileImageProviderResolver = ImageProvider? Function(Comic comic);
 typedef ComicWidgetListenerRegistrar = void Function(VoidCallback listener);
 typedef ComicFavoriteDisplayStateResolver =
     ComicFavoriteDisplayState Function();
+typedef ComicKeywordRuleEditor =
+    Future<void> Function(BuildContext context, KeywordRule rule);
 
 class ComicTileState {
   const ComicTileState({
@@ -80,6 +83,7 @@ ComicTileImageProviderResolver? _comicTileImageProviderResolver;
 ComicWidgetListenerRegistrar? _addComicWidgetStateListener;
 ComicWidgetListenerRegistrar? _removeComicWidgetStateListener;
 ComicFavoriteDisplayStateResolver? _comicFavoriteDisplayStateResolver;
+ComicKeywordRuleEditor? _comicKeywordRuleEditor;
 
 void configureComicWidgets({
   ComicPageBuilder? comicPageBuilder,
@@ -89,6 +93,7 @@ void configureComicWidgets({
   ComicWidgetListenerRegistrar? addStateListener,
   ComicWidgetListenerRegistrar? removeStateListener,
   ComicFavoriteDisplayStateResolver? favoriteDisplayStateResolver,
+  ComicKeywordRuleEditor? keywordRuleEditor,
 }) {
   _comicPageBuilder = comicPageBuilder;
   _addComicFavoriteHandler = addFavorite;
@@ -97,7 +102,10 @@ void configureComicWidgets({
   _addComicWidgetStateListener = addStateListener;
   _removeComicWidgetStateListener = removeStateListener;
   _comicFavoriteDisplayStateResolver = favoriteDisplayStateResolver;
+  _comicKeywordRuleEditor = keywordRuleEditor;
 }
+
+ComicKeywordRuleEditor? get comicKeywordRuleEditor => _comicKeywordRuleEditor;
 
 void addComicWidgetStateListener(VoidCallback listener) {
   _addComicWidgetStateListener?.call(listener);
@@ -795,14 +803,18 @@ class _BlockComicDialogState extends SettingsSaveState<_BlockComicDialog> {
     if (!acceptsSettingsChanges ||
         savingSettings ||
         hasSettingsSaveError ||
+        _words.isEmpty ||
         !widget.ownerCurrent()) {
       return;
     }
-    final words = List<String>.unmodifiable(_words);
+    final rules = List<KeywordRule>.unmodifiable([
+      for (final word in _words)
+        KeywordRule.suggested(word, tag: widget.tags.contains(word)),
+    ]);
     final callback = widget.onBlocked;
     saveSetting(
       BlockedKeywordList.comics,
-      () => _settings.blockAll(BlockedKeywordList.comics, words),
+      () => _settings.blockRules(BlockedKeywordList.comics, rules),
       onSaved: () {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted ||
@@ -834,23 +846,36 @@ class _BlockComicDialogState extends SettingsSaveState<_BlockComicDialog> {
             absorbing: savingSettings || hasSettingsSaveError,
             child: ExcludeFocus(
               excluding: savingSettings || hasSettingsSaveError,
-              child: Wrap(
-                runSpacing: 8,
-                spacing: 8,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final word in widget.words)
-                    OptionChip(
-                      text: widget.tags.contains(word)
-                          ? word.translateTagIfNeed
-                          : word,
-                      isSelected: _words.contains(word),
-                      onTap: () {
-                        if (savingSettings || hasSettingsSaveError) return;
-                        setState(() {
-                          if (!_words.remove(word)) _words.add(word);
-                        });
-                      },
-                    ),
+                  Text(
+                    'New tags use Exact tag; short English abbreviations use Whole word. Existing rules are kept. Edit rules in Keyword blocking.'
+                        .tl,
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    runSpacing: 8,
+                    spacing: 8,
+                    children: [
+                      for (final word in widget.words)
+                        if (word.trim().isNotEmpty)
+                          OptionChip(
+                            text: widget.tags.contains(word)
+                                ? word.translateTagIfNeed
+                                : word,
+                            isSelected: _words.contains(word),
+                            onTap: () {
+                              if (savingSettings || hasSettingsSaveError) {
+                                return;
+                              }
+                              setState(() {
+                                if (!_words.remove(word)) _words.add(word);
+                              });
+                            },
+                          ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -860,7 +885,9 @@ class _BlockComicDialogState extends SettingsSaveState<_BlockComicDialog> {
       actions: [
         settingsSaveStatus,
         FilledButton(
-          onPressed: savingSettings || hasSettingsSaveError ? null : _block,
+          onPressed: savingSettings || hasSettingsSaveError || _words.isEmpty
+              ? null
+              : _block,
           child: Text('Block'.tl),
         ),
       ],
