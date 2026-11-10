@@ -2,6 +2,7 @@
 """Bind an unsigned HarmonyOS beta to its exact mainline or frozen source."""
 
 import argparse
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -21,6 +22,12 @@ VERSION = re.compile(r"\d+\.\d+\.\d+(?:-rc\.\d+)?")
 ASSETS = "resources/rawfile/flutter_assets/"
 METADATA = ASSETS + "assets/harmonyos-app-build.json"
 BUNDLE = "com.github.cyrilpeng.veneranext.harmony"
+RUNTIME_REPORT = "harmonyos-runtime-acceptance.json"
+RUNTIME_CHECKS = (
+    "startup", "source_and_reading", "archive_import", "directory_import",
+    "download", "backup_export_import", "same_key_upgrade", "cold_restart_reading",
+    "ui_and_capabilities",
+)
 NATIVE = {"librhttp.so", "libqjs.so", "libsqlite3.so", "libc++_shared.so",
           "liblodepng_flutter.so", "libzip_flutter.so", "libflutter_7zip.so", "libinappwebview.so"}
 NEXT_NATIVE = NATIVE - {"liblodepng_flutter.so", "libflutter_7zip.so"} | {"libvenera_native.so"}
@@ -56,11 +63,14 @@ def load_pin(root, *, next_candidate=False):
         fields.add("release_enabled")
     if unified and "guide_delivery" in value:
         fields.add("guide_delivery")
+    if unified and "runtime_acceptance" in value:
+        fields.add("runtime_acceptance")
     if (set(value) != fields
             or type(value["schema"]) is not int
             or value["schema"] not in ((2, 3) if next_candidate else (1,))
             or (unified and value["source_mode"] != "release_commit")
             or ("guide_delivery" in value and value["guide_delivery"] != "repository")
+            or ("runtime_acceptance" in value and value["runtime_acceptance"] != "required")
             or (not unified and any(not isinstance(value[key], str) or not SHA.fullmatch(value[key])
                                     for key in ("source_commit", "main_baseline")))
             or type(value["first_release_build"]) is not int
@@ -181,6 +191,8 @@ def context(root, source, environ, *, preview_next=False):
         value["source_mode"] = "release_commit"
         if "guide_delivery" in pin:
             value["guide_delivery"] = pin["guide_delivery"]
+        if "runtime_acceptance" in pin:
+            value["runtime_acceptance"] = pin["runtime_acceptance"]
     else:
         value["main_baseline"] = pin["main_baseline"]
     if next_candidate:
@@ -336,19 +348,29 @@ def verify_bundle(directory, expected, source):
     return {p.name: {"bytes": p.stat().st_size, "sha256": sha256(p.read_bytes())} for p in directory.iterdir()}
 
 
-def check_remote_release(release, expected, assets, *, published):
+def check_publish_context(expected):
     if expected.get("preview"):
         raise ValueError("Next-candidate preview assets cannot be published to a release")
     if expected.get("schema", 1) >= 2 and expected.get("tagged") is not True:
         raise ValueError("Next reader assets require a verified release-tag context before publication")
+
+
+def check_remote_release(release, expected, assets, *, published):
+    check_publish_context(expected)
     if (release.get("tag_name") != expected["tag"] or release.get("draft") is not (not published)
             or release.get("prerelease") is not ("-" in expected["version"])):
         raise ValueError("Wrong release tag/state/channel")
     remote = release.get("assets", [])
     if not isinstance(remote, list) or any(not isinstance(item, dict) for item in remote):
         raise ValueError("Invalid remote release asset inventory")
+    reports = [item for item in remote if item.get("name") == RUNTIME_REPORT]
+    if reports and (expected.get("runtime_acceptance") != "required" or len(reports) != 1):
+        raise ValueError("Unexpected or duplicated HarmonyOS runtime acceptance report")
+    if published and expected.get("runtime_acceptance") == "required" and not reports:
+        raise ValueError("Published release is missing its required runtime acceptance report")
     harmony_names = [item.get("name", "") for item in remote
                      if isinstance(item.get("name"), str)
+                     and item["name"] != RUNTIME_REPORT
                      and (item["name"].lower().endswith(".hap") or "harmonyos" in item["name"].lower())]
     if set(harmony_names) != set(assets) or len(harmony_names) != len(assets):
         raise ValueError("Unexpected or duplicated HarmonyOS release assets")
@@ -364,7 +386,7 @@ def gh(*args):
     return subprocess.check_output(["gh", *args], timeout=120).decode("utf-8")
 
 
-def read_remote_release(tag, *, published):
+def read_remote_release(tag, *, published, allow_missing=False):
     if published:
         remote = json.loads(gh("api", f"repos/{REPOSITORY}/releases/tags/{tag}"))
         if not isinstance(remote, dict):
@@ -378,6 +400,8 @@ def read_remote_release(tag, *, published):
             or any(not isinstance(item, dict) for page in pages for item in page)):
         raise ValueError("Invalid release list response")
     matches = [item for page in pages for item in page if item.get("tag_name") == tag]
+    if not matches and allow_missing:
+        return None
     if len(matches) != 1:
         raise ValueError("Expected exactly one release draft for tag: " + tag)
     identifier = matches[0].get("id")
@@ -391,17 +415,174 @@ def read_remote_release(tag, *, published):
     return remote
 
 
+def release_file_records(files):
+    records = {}
+    for path in files:
+        if not path.is_file() or path.is_symlink() or path.name in records or path.stat().st_size <= 0:
+            raise ValueError("Missing, duplicate, linked or empty release file: " + path.name)
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        records[path.name] = {"bytes": path.stat().st_size, "sha256": digest.hexdigest()}
+    if not records:
+        raise ValueError("No release files supplied")
+    return records
+
+
+def check_draft_files(remote, expected, files):
+    assets = remote.get("assets")
+    if not isinstance(assets, list) or any(not isinstance(item, dict) for item in assets):
+        raise ValueError("Invalid draft asset inventory")
+    if any(not isinstance(item.get("name"), str) or not item["name"] for item in assets):
+        raise ValueError("Invalid draft asset name")
+    names = [item.get("name") for item in assets if item.get("name") != RUNTIME_REPORT]
+    if len(names) != len(files) or set(names) != set(files):
+        raise ValueError("Existing draft files differ; do not replace packages already under device review")
+    for name, record in files.items():
+        asset = next(item for item in assets if item.get("name") == name)
+        if (asset.get("state") != "uploaded" or asset.get("size") != record["bytes"]
+                or asset.get("digest") != "sha256:" + record["sha256"]):
+            raise ValueError("Existing draft package differs from the original build: " + name)
+    reports = [item for item in assets if item.get("name") == RUNTIME_REPORT]
+    if reports and (expected.get("runtime_acceptance") != "required" or len(reports) != 1):
+        raise ValueError("Unexpected or duplicated runtime report")
+
+
+def prepare_draft(expected, files, notes):
+    check_publish_context(expected)
+    if not notes.is_file() or notes.is_symlink() or not notes.read_text(encoding="utf-8").strip():
+        raise ValueError("Missing or empty release notes")
+    records = release_file_records(files)
+    remote = read_remote_release(expected["tag"], published=False, allow_missing=True)
+    if remote is None:
+        arguments = ["release", "create", expected["tag"], *(str(path) for path in files),
+                     "--repo", REPOSITORY, "--verify-tag", "--target", expected["release_commit"],
+                     "--title", expected["tag"], "--notes-file", str(notes), "--draft"]
+        if "-" in expected["version"]:
+            arguments.append("--prerelease")
+        gh(*arguments)
+        remote = read_remote_release(expected["tag"], published=False)
+    if (remote.get("tag_name") != expected["tag"] or remote.get("draft") is not True
+            or remote.get("prerelease") is not ("-" in expected["version"])):
+        raise ValueError("Wrong release draft identity/channel")
+    check_draft_files(remote, expected, records)
+    print("Verified every draft package against the original build; existing packages were preserved")
+
+
+def runtime_template(manifest):
+    metadata = manifest.get("build") if isinstance(manifest, dict) else None
+    release = metadata.get("release") if isinstance(metadata, dict) else None
+    if (not isinstance(release, dict) or manifest.get("status") != "packaging_pass"
+            or manifest.get("signed") is not False or manifest.get("runtime_verified") is not False
+            or manifest.get("reader_integrated") is not True
+            or not isinstance(release.get("source_commit"), str) or not SHA.fullmatch(release["source_commit"])
+            or manifest.get("commit") != release["source_commit"]
+            or not isinstance(release.get("version"), str) or not VERSION.fullmatch(release["version"])
+            or type(release.get("build")) is not int or not 245 <= release["build"] <= 2147483647
+            or manifest.get("hap") != asset_names(release["version"])["hap"]
+            or type(manifest.get("bytes")) is not int or manifest["bytes"] <= 0
+            or not isinstance(manifest.get("sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", manifest["sha256"])):
+        raise ValueError("A runtime template requires an audited, source-bound unsigned reader manifest")
+    return {
+        "schema": 1, "source_commit": release["source_commit"],
+        "version": release["version"], "build": release["build"],
+        "hap_sha256": manifest["sha256"], "device_model": "", "os_version": "",
+        "tested_at": "",
+        "checks": {name: {"status": "not_run", "detail": ""} for name in RUNTIME_CHECKS},
+    }
+
+
+def validate_runtime_report(report, expected, assets, *, now=None):
+    fields = {"schema", "source_commit", "version", "build", "hap_sha256",
+              "device_model", "os_version", "tested_at", "checks"}
+    hap = asset_names(expected["version"])["hap"]
+    if (not isinstance(report, dict) or set(report) != fields or type(report["schema"]) is not int
+            or report["schema"] != 1 or type(report["build"]) is not int
+            or report["source_commit"] != expected["source_commit"]
+            or (report["version"], report["build"]) != (expected["version"], expected["build"])
+            or report["hap_sha256"] != assets[hap]["sha256"]):
+        raise ValueError("Runtime report does not identify this exact source, version and unsigned HAP")
+    for field in ("device_model", "os_version"):
+        if not isinstance(report[field], str) or not report[field].strip() or report[field].strip().lower() in {
+                "unknown", "todo", "tbd", "n/a", "not_run"}:
+            raise ValueError("Runtime report needs actual device and OS information")
+    try:
+        tested = datetime.fromisoformat(report["tested_at"])
+    except (TypeError, ValueError) as error:
+        raise ValueError("Runtime report needs an actual timezone-qualified test time") from error
+    if tested.tzinfo is None or tested > (now or datetime.now(timezone.utc)) + timedelta(minutes=5):
+        raise ValueError("Runtime report test time is missing a timezone or is in the future")
+    checks = report["checks"]
+    if not isinstance(checks, dict) or set(checks) != set(RUNTIME_CHECKS):
+        raise ValueError("Runtime report must cover every required device workflow")
+    for name, result in checks.items():
+        allowed = {"pass", "unsupported"} if name == "directory_import" else {"pass"}
+        if (not isinstance(result, dict) or set(result) != {"status", "detail"}
+                or not isinstance(result["status"], str) or result["status"] not in allowed
+                or not isinstance(result["detail"], str) or not result["detail"].strip()
+                or result["detail"].strip().lower() in {"unknown", "todo", "tbd", "not_run", "pending", "n/a"}):
+            raise ValueError("Device check is incomplete or failed: " + name)
+    return report
+
+
+def check_runtime(expected, assets, *, allow_pending=False, published=False):
+    if expected.get("runtime_acceptance") != "required":
+        return True
+    remote = read_remote_release(expected["tag"], published=published)
+    check_remote_release(remote, expected, assets, published=published)
+    reports = [item for item in remote["assets"] if item.get("name") == RUNTIME_REPORT]
+    if not reports:
+        if allow_pending and not published:
+            print("Device acceptance is pending. Keep this draft and its packages; upload the reviewed "
+                  + RUNTIME_REPORT + " and rerun only the Release job after testing.")
+            return False
+        raise ValueError("Missing exact-HAP device acceptance report; publication is blocked")
+    asset = reports[0]
+    identifier = asset.get("id")
+    uploader = asset.get("uploader")
+    login = uploader.get("login") if isinstance(uploader, dict) else None
+    if (type(identifier) is not int or identifier <= 0 or asset.get("state") != "uploaded"
+            or type(asset.get("size")) is not int or not 0 < asset["size"] <= 65536
+            or not isinstance(login, str) or not re.fullmatch(r"[A-Za-z0-9-]{1,39}", login)
+            or uploader.get("type") != "User"):
+        raise ValueError("Invalid runtime acceptance asset or uploader")
+    permission = json.loads(gh("api", f"repos/{REPOSITORY}/collaborators/{login}/permission"))
+    if not isinstance(permission, dict) or permission.get("permission") not in {"admin", "maintain", "write"}:
+        raise ValueError("Runtime acceptance must be reviewed and uploaded by a repository maintainer")
+    raw = gh("api", f"repos/{REPOSITORY}/releases/assets/{identifier}", "-H", "Accept: application/octet-stream")
+    data = raw.encode("utf-8")
+    if len(data) != asset["size"] or asset.get("digest") != "sha256:" + sha256(data):
+        raise ValueError("Runtime acceptance asset size or SHA-256 differs")
+    validate_runtime_report(json.loads(raw.removeprefix("\ufeff")), expected, assets)
+    print("Verified maintainer-reviewed native-device acceptance for this exact HAP")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("config", "prepare", "verify", "verify-draft", "verify-published"))
+    parser.add_argument("action", choices=("config", "prepare", "verify", "verify-draft", "verify-published",
+                                          "prepare-draft", "runtime-template", "verify-runtime"))
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--source-root", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--artifacts", type=Path)
     parser.add_argument("--github-output", type=Path)
+    parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--notes-file", type=Path)
+    parser.add_argument("--release-files", type=Path, nargs="+")
+    parser.add_argument("--allow-pending", action="store_true")
     parser.add_argument("--preview-next", action="store_true",
                         help="Verify the reviewed >=245 candidate without rebuilding or publishing 244")
     args = parser.parse_args()
+    if args.action == "runtime-template":
+        if args.manifest is None or args.output is None:
+            parser.error("--manifest and --output are required")
+        value = runtime_template(json.loads(args.manifest.read_text(encoding="utf-8")))
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print("Created a source/HAP-bound template; every device check remains not_run")
+        return
     if args.action == "config":
         if args.preview_next and os.environ.get("GITHUB_REF_TYPE") == "tag":
             raise ValueError("A release tag cannot use the next-candidate preview")
@@ -425,10 +606,30 @@ def main():
     if args.artifacts is None:
         parser.error("--artifacts is required")
     assets = verify_bundle(args.artifacts, expected, args.source_root)
+    if args.action == "prepare-draft":
+        if not args.release_files or args.notes_file is None:
+            parser.error("--release-files and --notes-file are required")
+        prepare_draft(expected, args.release_files, args.notes_file)
+        return
+    if args.action == "verify-runtime":
+        ready = check_runtime(expected, assets, allow_pending=args.allow_pending)
+        if args.github_output:
+            with args.github_output.open("a", encoding="utf-8") as output:
+                output.write(f"ready={str(ready).lower()}\n")
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary and not ready:
+            with Path(summary).open("a", encoding="utf-8") as output:
+                output.write("## HarmonyOS device acceptance pending\n\n"
+                             "All packages remain in the release draft. Test the exact unsigned HAP, "
+                             "upload the maintainer-reviewed `harmonyos-runtime-acceptance.json`, "
+                             "then rerun only the Release job. Do not rebuild or replace the tested packages.\n")
+        return
     if args.action in ("verify-draft", "verify-published"):
         published = args.action == "verify-published"
         release = read_remote_release(expected["tag"], published=published)
         check_remote_release(release, expected, assets, published=published)
+        if published:
+            check_runtime(expected, assets, published=True)
     print(f"Verified HarmonyOS source, version, native libraries and all {len(assets)} release assets")
 
 

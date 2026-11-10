@@ -40,7 +40,7 @@ body:
   id: platform
   attributes:
     label: 平台 / Platform
-    description: 选择适用平台，通用建议选择所有支持的平台 / Select relevant platforms or all supported platforms
+    description: 选择适用平台；鸿蒙 4.x 或卓易通中的 APK 选择 Android，原生 HAP 选择 HarmonyOS。 / Select relevant platforms; choose Android for APKs on HarmonyOS 4.x or in an Android compatibility environment, and HarmonyOS for native HAPs.
     options:
     - 所有支持的平台 / All supported platforms
     - Android 手机／平板 / Android phone or tablet
@@ -49,7 +49,7 @@ body:
     - macOS
     - Linux
     - iOS
-    - HarmonyOS / 鸿蒙
+    - HarmonyOS 原生 HAP / Native HarmonyOS HAP
     - 其他（请说明） / Other (please specify)
     multiple: true
   validations:

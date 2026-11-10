@@ -94,11 +94,21 @@ FEATURE_AREAS = {
     "安装、启动或平台支持 / Installation, startup or platform support": "area: startup",
     "其他 / Other": "area: other",
 }
-PLATFORMS = {
-    "Android 手机／平板 / Android phone or tablet", "Android TV", "Windows", "macOS",
-    "Linux", "iOS", "HarmonyOS / 鸿蒙", "其他（请说明） / Other (please specify)",
-    "所有支持的平台 / All supported platforms",
+NATIVE_HARMONYOS = "HarmonyOS 原生 HAP / Native HarmonyOS HAP"
+PLATFORM_LABELS = {
+    "Android 手机／平板 / Android phone or tablet": "platform: android",
+    "Android TV": "platform: android-tv",
+    "Windows": "platform: windows",
+    "macOS": "platform: macos",
+    "Linux": "platform: linux",
+    "iOS": "platform: ios",
+    NATIVE_HARMONYOS: "platform: harmonyos-hap",
+    # Keep reports submitted before the form clarified HAP vs APK valid.
+    "HarmonyOS / 鸿蒙": "platform: harmonyos-hap",
+    "其他（请说明） / Other (please specify)": "platform: other",
+    "所有支持的平台 / All supported platforms": "platform: all",
 }
+PLATFORMS = set(PLATFORM_LABELS)
 BUG_FIELDS = (VERSION, PLATFORM, DEVICE, STEPS, EXPECTED, ACTUAL)
 FEATURE_FIELDS = (PLATFORM, FEATURE_AREA, "需求场景 / Use case", "建议方案 / Proposed solution", "验收标准 / Acceptance criteria")
 KNOWN_FIELDS = {
@@ -116,6 +126,15 @@ LABELS = {
     "area: extensions": ("bfdadc", "应用的扩展运行时与接口"),
     "area: other": ("ededed", "待进一步归类的应用问题"),
     "needs: information": ("fbca04", "结构化报告缺少必要信息或诊断证据；补齐后自动移除"),
+    "platform: android": ("3ddc84", "Android 手机／平板 APK，含鸿蒙 4.x 兼容环境"),
+    "platform: android-tv": ("3ddc84", "Android TV APK"),
+    "platform: windows": ("0078d4", "Windows"),
+    "platform: macos": ("c5def5", "macOS"),
+    "platform: linux": ("fbca04", "Linux"),
+    "platform: ios": ("c5def5", "iOS"),
+    "platform: harmonyos-hap": ("0052cc", "鸿蒙原生 HAP，与 Android APK 运行环境区分"),
+    "platform: other": ("ededed", "表单明确选择的其他平台"),
+    "platform: all": ("bfdadc", "适用于所有平台的功能建议"),
 }
 
 
@@ -235,6 +254,7 @@ class Validation:
     category: str | None
     missing: tuple[str, ...]
     area: str = ""
+    platforms: frozenset[str] = frozenset()
 
     @property
     def valid(self) -> bool:
@@ -245,6 +265,7 @@ class Validation:
         labels = {"enhancement" if self.category == "enhancement" else "bug"} if self.category else set()
         if self.area:
             labels.add(self.area)
+        labels.update(self.platforms)
         if not self.valid:
             labels.add("needs: information")
         return labels
@@ -269,10 +290,13 @@ def validate(title: str, body: str, *, comments: list[str] | None = None) -> Val
         version = fields[VERSION]
         if not re.search(r"\bv?\d+\.\d+\.\d+\b|\b(?:commit|revision)\s*[:：]?\s*[0-9a-f]{7,40}\b", version, re.IGNORECASE):
             missing.append(f"{VERSION}：填写具体版本／构建号；自编译包填写 commit。")
+    platforms = {part.strip() for part in fields.get(PLATFORM, "").split(",")}
+    platform_labels = frozenset()
     if has_information(fields.get(PLATFORM, "")):
-        platforms = {part.strip() for part in fields[PLATFORM].split(",")}
         if not platforms <= PLATFORMS or (not category.enhancement and "所有支持的平台 / All supported platforms" in platforms):
-            missing.append(f"{PLATFORM}：从表单列出的平台中选择，TV 和鸿蒙单独列出。")
+            missing.append(f"{PLATFORM}：选择实际运行平台；鸿蒙 4.x APK 选 Android，原生 HAP 选 HarmonyOS。")
+        else:
+            platform_labels = frozenset(PLATFORM_LABELS[item] for item in platforms)
     area = category.area
     if category.enhancement:
         area = FEATURE_AREAS.get(fields.get(FEATURE_AREA, ""), "")
@@ -310,7 +334,7 @@ def validate(title: str, body: str, *, comments: list[str] | None = None) -> Val
                     if category.reader_report else "粘贴带时间、错误或调用栈的脱敏日志片段，或上传日志附件。"
                 )
                 missing.append(f"{DIAGNOSTICS}：{detail}")
-    return Validation(category_key, tuple(missing), area)
+    return Validation(category_key, tuple(missing), area, platform_labels)
 
 
 def render_comment(result: Validation) -> str:

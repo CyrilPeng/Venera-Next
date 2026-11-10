@@ -60,6 +60,9 @@ final _directoryDialogs = PlatformDialogQueue();
 class DirectoryPicker {
   static const _channel = MethodChannel('venera/method_channel');
 
+  /// Copy import does not grant a persistent external library location.
+  static bool get supportsPersistentDirectories => !App.isHarmonyOS;
+
   Future<DirectorySelection?> pickDirectory({
     bool directAccess = false,
     // OHOS import copies cannot become persistent storage locations.

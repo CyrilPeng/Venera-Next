@@ -113,7 +113,11 @@ class Select extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final naturalLimit = menuBuilder == null
+        ? MediaQuery.sizeOf(context).width * 0.45
+        : math.min(240.0, MediaQuery.sizeOf(context).width * 0.45);
     return Container(
+      constraints: BoxConstraints(minHeight: App.isMobile ? 48 : 40),
       decoration: BoxDecoration(
         border: Border.all(color: context.colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(4),
@@ -161,24 +165,25 @@ class Select extends StatelessWidget {
                   }
                 });
               },
+        // Dialogs measure intrinsic sizes, so keep this subtree measurable.
+        // Flex uses the field's width; LimitedBox only caps unbounded rows.
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                minWidth: minWidth != null ? (minWidth! - 32) : 0,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: menuBuilder == null
-                      ? MediaQuery.sizeOf(context).width * 0.45
-                      : math.min(240, MediaQuery.sizeOf(context).width * 0.45),
-                ),
-                child: Text(
-                  labels?[current] ?? current ?? ' ',
-                  style: ts.s14,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+            Flexible(
+              child: LimitedBox(
+                maxWidth: naturalLimit,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: math.max(0.0, (minWidth ?? 32) - 32),
+                  ),
+                  child: Text(
+                    labels?[current] ?? current ?? ' ',
+                    style: ts.s14,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ),

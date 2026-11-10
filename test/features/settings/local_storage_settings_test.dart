@@ -7,14 +7,19 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/local_comics/local.dart';
+import 'package:venera_next/features/settings/app_controls.dart';
 import 'package:venera_next/features/settings/local_storage_settings.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/harmonyos.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/translations.dart';
+
+import '../../support/ui_regression_capture.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
+    await loadUiRegressionFonts();
     final font = Platform.environment['STORAGE_AUTHORITY_QA_FONT'];
     if (font != null) {
       await (FontLoader(
@@ -46,6 +51,7 @@ void main() {
     double scale = 1,
     Brightness brightness = Brightness.light,
     GlobalKey? boundary,
+    bool includeAppLock = false,
   }) => tester.pumpWidget(
     RepaintBoundary(
       key: boundary,
@@ -54,7 +60,9 @@ void main() {
         theme: ThemeData(
           brightness: brightness,
           fontFamily:
-              Platform.environment.containsKey('STORAGE_AUTHORITY_QA_FONT')
+              Platform.environment.containsKey('UI_REGRESSION_QA_DIRECTORY')
+              ? uiRegressionFont
+              : Platform.environment.containsKey('STORAGE_AUTHORITY_QA_FONT')
               ? 'StorageQA'
               : null,
         ),
@@ -68,13 +76,133 @@ void main() {
         home: Scaffold(
           body: SafeArea(
             child: SingleChildScrollView(
-              child: LocalStorageSettings(manager: manager),
+              child: Column(
+                children: [
+                  LocalStorageSettings(manager: manager),
+                  if (includeAppLock) const AuthorizationRequiredSetting(),
+                ],
+              ),
             ),
           ),
         ),
       ),
     ),
   );
+
+  testWidgets(
+    'HarmonyOS explains unavailable external storage without opening a picker',
+    (tester) async {
+      HarmonyOS.debugIsCurrent = true;
+      addTearDown(() => HarmonyOS.debugIsCurrent = null);
+      final calls = <MethodCall>[];
+      const channel = HarmonyOS.channel;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final manager = _Manager()..blocked = false;
+      await host(tester, manager);
+      final action = tester.widget<TextButton>(find.byType(TextButton));
+      expect(action.onPressed, isNull);
+      expect(
+        find.text(
+          'HarmonyOS currently stores comics inside the app. Import external folders by copying their contents.'
+              .tl,
+        ),
+        findsOneWidget,
+      );
+      final setting = tester.widget<ListTile>(
+        find.widgetWithText(ListTile, 'Set New Storage Path'.tl),
+      );
+      expect(setting.onTap, isNull);
+      expect(setting.enabled, isFalse);
+      await tester.tap(find.byType(TextButton));
+      await tester.pumpAndSettle();
+      expect(calls, isEmpty);
+      expect(manager.calls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'HarmonyOS still permits recovery and disables relocation after recovery',
+    (tester) async {
+      HarmonyOS.debugIsCurrent = true;
+      addTearDown(() => HarmonyOS.debugIsCurrent = null);
+      final manager = _Manager();
+      manager.recover = () async => manager.blocked = false;
+      await host(tester, manager);
+      expect(manager.pathReads, 0);
+      await tester.tap(find.byType(TextButton));
+      await tester.pumpAndSettle();
+      expect(manager.calls, 1);
+      expect(find.text('/moved/library'), findsOneWidget);
+      expect(
+        tester.widget<TextButton>(find.byType(TextButton)).onPressed,
+        isNull,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final spec in [
+    (const Size(375, 667), 1.0, Brightness.light),
+    (const Size(667, 375), 3.2, Brightness.dark),
+    (const Size(1024, 768), 2.0, Brightness.light),
+  ]) {
+    testWidgets(
+      'HarmonyOS storage and app-lock explanations fit at ${spec.$1}, scale ${spec.$2}',
+      (tester) async {
+        HarmonyOS.debugIsCurrent = true;
+        addTearDown(() => HarmonyOS.debugIsCurrent = null);
+        final previousLock = appdata.settings['authorizationRequired'];
+        appdata.settings['authorizationRequired'] = false;
+        addTearDown(
+          () => appdata.settings['authorizationRequired'] = previousLock,
+        );
+        tester.view.physicalSize = spec.$1;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final boundary = GlobalKey();
+        await host(
+          tester,
+          _Manager()..blocked = false,
+          scale: spec.$2,
+          brightness: spec.$3,
+          boundary: boundary,
+          includeAppLock: true,
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(
+          tester.widget<TextButton>(find.byType(TextButton)).onPressed,
+          isNull,
+        );
+        expect(
+          tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged,
+          isNull,
+        );
+        await captureUiRegression(
+          tester,
+          boundary,
+          'settings-storage-${spec.$1.width.toInt()}-${spec.$2}',
+        );
+        await tester.ensureVisible(find.byType(SwitchListTile));
+        await tester.pumpAndSettle();
+        expect(find.byType(SwitchListTile).hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await captureUiRegression(
+          tester,
+          boundary,
+          'settings-lock-${spec.$1.width.toInt()}-${spec.$2}',
+        );
+      },
+    );
+  }
 
   testWidgets(
     'failed storage recovery keeps retry available without reading an unknown path',

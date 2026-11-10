@@ -164,6 +164,21 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Generate an exact-HAP device acceptance template with no passing claims
+        working-directory: release
+        run: |
+          python3 .github/scripts/harmonyos_release.py runtime-template \
+            --manifest ../harmonyos/build/harmonyos/ci/release-artifacts/harmonyos-manifest.json \
+            --output ../harmonyos/build/harmonyos/ci/runtime-acceptance/harmonyos-runtime-acceptance.json
+
+      - name: Upload the separate device acceptance template
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: harmonyos-runtime-acceptance-template
+          path: harmonyos/build/harmonyos/ci/runtime-acceptance/harmonyos-runtime-acceptance.json
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Record the packaging outcome without claiming device acceptance
         if: always()
         run: |

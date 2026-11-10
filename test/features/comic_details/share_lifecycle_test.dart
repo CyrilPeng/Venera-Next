@@ -15,6 +15,7 @@ import 'package:venera_next/features/comic_details/actions.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/harmonyos.dart';
 import 'package:venera_next/foundation/file_interaction.dart' show Share;
 import 'package:venera_next/foundation/log.dart';
 import 'package:window_manager/window_manager.dart';
@@ -131,6 +132,42 @@ void main() {
   void close(WidgetTester tester) =>
       (tester.state(find.byType(WindowFrame)) as WindowListener)
           .onWindowClose();
+
+  testWidgets(
+    'HarmonyOS copies the comic link without dispatching unsupported sharing',
+    (tester) async {
+      HarmonyOS.debugIsCurrent = true;
+      addTearDown(() => HarmonyOS.debugIsCurrent = null);
+      final clipboard = <String>[];
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          clipboard.add((call.arguments as Map)['text'] as String);
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      late _Actions actions;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              actions = _Actions(context);
+              return const Scaffold(body: Text('Comic page'));
+            },
+          ),
+        ),
+      );
+      final copying = (await _start(tester, actions.share)).done;
+      await tester.runAsync(() => copying);
+      await tester.pump();
+      expect(clipboard, ['One\nhttps://example.test/one']);
+      expect(calls, isEmpty);
+      expect(messages.single.message, 'Copied');
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'duplicate actions share original Future and snapshot queued title, URL and origin',

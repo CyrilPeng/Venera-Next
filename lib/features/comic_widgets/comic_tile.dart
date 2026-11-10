@@ -337,7 +337,7 @@ class ComicTile extends StatelessWidget {
         final separateProgress =
             historyDescription != null &&
             state.historyCompactDescription != null;
-        // Keep multi-line progress over the cover, not over the comic title.
+        // Every detailed-mode status is confined to the cover.
         return Stack(
           children: [
             Positioned.fill(child: child),
@@ -349,18 +349,21 @@ class ComicTile extends StatelessWidget {
                   : 6,
               top: compact ? 6 : 8,
               right: type == 'detailed'
-                  ? separateProgress
-                        ? math.max(
-                            16.0,
-                            constraints.maxWidth -
-                                16 -
-                                (constraints.maxHeight - 16) * 0.68,
-                          )
-                        : 16
+                  ? math.max(
+                      16.0,
+                      constraints.maxWidth -
+                          16 -
+                          (constraints.maxHeight - 16) * 0.68,
+                    )
                   : compact
                   ? 4
                   : 6,
               child: Container(
+                constraints: type == 'detailed'
+                    ? BoxConstraints(
+                        maxHeight: math.max(0.0, constraints.maxHeight - 16),
+                      )
+                    : null,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(4),
                 ),
@@ -411,10 +414,13 @@ class ComicTile extends StatelessWidget {
                         ],
                       ),
                     if (separateProgress)
-                      _ReadingProgressBadge(
-                        historyDescription,
-                        tooltip: state.historyTooltipDescription,
-                        compactDescription: state.historyCompactDescription,
+                      Flexible(
+                        fit: FlexFit.loose,
+                        child: _ReadingProgressBadge(
+                          historyDescription,
+                          tooltip: state.historyTooltipDescription,
+                          compactDescription: state.historyCompactDescription,
+                        ),
                       ),
                   ],
                 ),
@@ -919,15 +925,83 @@ class _ComicDescription extends StatelessWidget {
   final double? rating;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: _buildDescription);
+
+  Widget _buildDescription(BuildContext context, BoxConstraints constraints) {
     final displayTags = [
       for (final tag in tags ?? const <String>[])
         if (tag.removeAllBlank.isNotEmpty) tag.replaceAll('\n', ' '),
     ];
+    double textHeight(String value, TextStyle style, int lines) {
+      if (value.isEmpty) return 0;
+      final painter = TextPainter(
+        text: TextSpan(
+          text: value,
+          style: DefaultTextStyle.of(context).style.merge(style),
+        ),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+        maxLines: lines,
+      )..layout(maxWidth: constraints.maxWidth);
+      final height = painter.height;
+      painter.dispose();
+      return height;
+    }
+
+    const titleStyle = TextStyle(fontWeight: FontWeight.w500, fontSize: 14);
+    const descriptionStyle = TextStyle(fontSize: 12);
+    final lineHeight = textHeight('Mg', descriptionStyle, 1);
+    final badgeText = badge == null || badge!.isEmpty
+        ? null
+        : '${badge![0].toUpperCase()}${badge!.substring(1).toLowerCase()}';
+    final badgeHeight = badgeText == null
+        ? 0.0
+        : textHeight(badgeText, descriptionStyle, 1) + 8;
+    final minimumDescriptionHeight = description.isEmpty ? 0.0 : lineHeight;
+    final minimumFooterHeight = math.max(minimumDescriptionHeight, badgeHeight);
+    var titleLines = maxLines;
+    var titleHeight = textHeight(title.trim(), titleStyle, titleLines);
+    while (titleLines > 1 &&
+        titleHeight + 4 + minimumFooterHeight > constraints.maxHeight) {
+      titleLines--;
+      titleHeight = textHeight(title.trim(), titleStyle, titleLines);
+    }
+    final subtitleHeight = textHeight(
+      subtitle,
+      const TextStyle(fontSize: 10),
+      1,
+    );
+    final showSubtitle =
+        subtitle.isNotEmpty &&
+        titleHeight + subtitleHeight + 4 + minimumFooterHeight <=
+            constraints.maxHeight;
+    final gap = math.min(
+      4.0,
+      math.max(0.0, constraints.maxHeight - titleHeight),
+    );
+    final footerSpace = math.max(
+      0.0,
+      constraints.maxHeight -
+          titleHeight -
+          (showSubtitle ? subtitleHeight : 0) -
+          gap,
+    );
+    final showRating =
+        rating != null &&
+        footerSpace >=
+            math.max(minimumFooterHeight, minimumDescriptionHeight + 18);
+    final availableLines = footerSpace.isFinite && lineHeight > 0
+        ? ((footerSpace - (showRating ? 18 : 0)) / lineHeight).floor()
+        : 3;
+    final descriptionLines = description.isEmpty
+        ? 0
+        : math.max(0, math.min(availableLines, displayTags.isEmpty ? 3 : 2));
+    final showBadge = badgeText != null && footerSpace >= badgeHeight;
     Widget descriptionText = Text(
       description,
-      style: const TextStyle(fontSize: 12.0),
-      maxLines: displayTags.isEmpty ? 3 : 2,
+      style: descriptionStyle,
+      maxLines: math.max(1, descriptionLines),
       overflow: TextOverflow.ellipsis,
     );
     if (descriptionTooltip != null) {
@@ -946,14 +1020,17 @@ class _ComicDescription extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          title.trim(),
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14.0),
-          maxLines: maxLines,
-          overflow: TextOverflow.ellipsis,
-          softWrap: true,
+        ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: constraints.maxHeight),
+          child: Text(
+            title.trim(),
+            style: titleStyle,
+            maxLines: titleLines,
+            overflow: TextOverflow.ellipsis,
+            softWrap: true,
+          ),
         ),
-        if (subtitle != "")
+        if (showSubtitle)
           Text(
             subtitle,
             style: TextStyle(
@@ -964,7 +1041,7 @@ class _ComicDescription extends StatelessWidget {
             softWrap: true,
             overflow: TextOverflow.ellipsis,
           ),
-        const SizedBox(height: 4),
+        SizedBox(height: gap),
         if (displayTags.isNotEmpty)
           Expanded(
             child: LayoutBuilder(
@@ -1019,34 +1096,35 @@ class _ComicDescription extends StatelessWidget {
           )
         else
           const Spacer(),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (rating != null) StarRating(value: rating!, size: 18),
-                  descriptionText,
-                ],
-              ),
-            ),
-            if (badge != null)
-              Container(
-                padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.tertiaryContainer,
-                  borderRadius: const BorderRadius.all(Radius.circular(8)),
+        if (descriptionLines > 0 || showRating || showBadge)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (showRating) StarRating(value: rating!, size: 18),
+                    if (descriptionLines > 0) descriptionText,
+                  ],
                 ),
-                child: Center(
-                  child: Text(
-                    "${badge![0].toUpperCase()}${badge!.substring(1).toLowerCase()}",
-                    style: const TextStyle(fontSize: 12),
+              ),
+              if (showBadge)
+                Container(
+                  padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.tertiaryContainer,
+                    borderRadius: const BorderRadius.all(Radius.circular(8)),
+                  ),
+                  child: Center(
+                    child: Text(
+                      badgeText,
+                      style: const TextStyle(fontSize: 12),
+                    ),
                   ),
                 ),
-              ),
-          ],
-        ),
+            ],
+          ),
       ],
     );
   }
@@ -1156,13 +1234,16 @@ class _ReadingProgressBadge extends StatelessWidget {
             for (final line
                 in compactDescription?.split('\n') ??
                     [description.replaceAll('\n', ' ')])
-              Text(
-                line,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.colorScheme.onPrimaryContainer,
+              Flexible(
+                fit: FlexFit.loose,
+                child: Text(
+                  line,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.colorScheme.onPrimaryContainer,
+                  ),
                 ),
               ),
           ],

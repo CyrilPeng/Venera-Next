@@ -25,6 +25,7 @@ import 'package:venera_next/features/search/search_shortcut.dart';
 import 'package:venera_next/features/search/search_shortcuts.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
+import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
@@ -197,6 +198,14 @@ abstract mixin class ComicPageActions {
     final window = owner.getInheritedWidgetOfExactType<WindowFrameController>();
     final operation = () async {
       try {
+        if (App.isHarmonyOS) {
+          if (!isCurrentOwner() || window?.isClosing == true) return;
+          await Clipboard.setData(ClipboardData(text: text));
+          if (owner.mounted && isCurrentOwner() && window?.isClosing != true) {
+            owner.showMessage(message: 'Copied'.tl);
+          }
+          return;
+        }
         await Share.shareText(
           text,
           resolveOrigin: () => owner.sharePositionOrigin,

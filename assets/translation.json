@@ -1,5 +1,8 @@
 {
   "zh_CN": {
+    "HarmonyOS currently stores comics inside the app. Import external folders by copying their contents.": "当前鸿蒙版将漫画保存在应用内，暂不支持更改存储目录。外部文件夹可通过复制导入。",
+    "App lock is not available on HarmonyOS. An imported lock can still be turned off.": "当前鸿蒙版暂不支持应用身份验证，仍可关闭从其他设备导入的应用锁。",
+    "System sharing is not available on HarmonyOS. Save the image to Files instead.": "当前鸿蒙版暂不支持系统分享，请先将图片保存到「文件」后分享。",
     "Select comics": "多选漫画",
     "Reorder comics": "漫画排序",
     "Sort subfolders": "子目录排序",
@@ -1049,6 +1052,9 @@
     "Unable to copy report.": "无法复制报告，请重试。"
   },
   "zh_TW": {
+    "HarmonyOS currently stores comics inside the app. Import external folders by copying their contents.": "目前鴻蒙版將漫畫儲存在應用程式內，暫不支援變更儲存目錄。外部資料夾可透過複製匯入。",
+    "App lock is not available on HarmonyOS. An imported lock can still be turned off.": "目前鴻蒙版暫不支援應用程式身分驗證，仍可關閉從其他裝置匯入的應用程式鎖。",
+    "System sharing is not available on HarmonyOS. Save the image to Files instead.": "目前鴻蒙版暫不支援系統分享，請先將圖片儲存到「檔案」後分享。",
     "Select comics": "多選漫畫",
     "Reorder comics": "漫畫排序",
     "Sort subfolders": "子目錄排序",

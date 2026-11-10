@@ -98,6 +98,38 @@ class PolicyValidationTests(unittest.TestCase):
         self.assertTrue(policy.validate("跨平台症状", body_for("data", {policy.PLATFORM: "Android TV, Windows"})).valid)
         self.assertFalse(policy.validate("跨平台症状", body_for("data", {policy.PLATFORM: "所有支持的平台 / All supported platforms"})).valid)
 
+    def test_harmonyos_apks_are_classified_as_android_by_the_selected_platform(self):
+        result = policy.validate("UI 遮挡", body_for("ui", {
+            policy.PLATFORM: "Android 手机／平板 / Android phone or tablet",
+            policy.DEVICE: "鸿蒙 4.2，Mate 40 Pro，APK",
+        }))
+        self.assertTrue(result.valid, result.missing)
+        self.assertIn("platform: android", result.labels)
+        self.assertNotIn("platform: harmonyos-hap", result.labels)
+
+    def test_native_hap_and_legacy_harmonyos_reports_share_the_precise_platform_label(self):
+        for platform in (policy.NATIVE_HARMONYOS, "HarmonyOS / 鸿蒙"):
+            with self.subTest(platform=platform):
+                result = policy.validate("存储目录报错", body_for("data", {
+                    policy.PLATFORM: platform,
+                    policy.DEVICE: "MatePad mini，HarmonyOS 7.0，HAP",
+                }))
+                self.assertTrue(result.valid, result.missing)
+                self.assertIn("platform: harmonyos-hap", result.labels)
+                self.assertNotIn("platform: android", result.labels)
+
+    def test_platform_labels_are_exact_multiselections_and_do_not_guess_from_brand(self):
+        result = policy.validate("跨平台症状", body_for("ui", {
+            policy.PLATFORM: "Android TV, Windows",
+            policy.DEVICE: "华为设备",
+        }))
+        self.assertEqual(result.platforms, {"platform: android-tv", "platform: windows"})
+        result = policy.validate("未知平台", body_for("ui", {
+            policy.PLATFORM: "Huawei / 鸿蒙 Android",
+        }))
+        self.assertFalse(result.valid)
+        self.assertEqual(result.platforms, frozenset())
+
     def test_unchecked_and_fake_checklists_are_rejected(self):
         for checklist in ("- [X] done", "\n".join(f"- [ ] {item}" for item in policy.AGREEMENTS)):
             with self.subTest(checklist=checklist):
@@ -225,7 +257,7 @@ class PolicyEventTests(unittest.TestCase):
         client, _, outputs = self.run_event()
         self.assertEqual(outputs, "valid=true\n")
         client.ensure_labels.assert_called_once()
-        self.assertEqual(client.sync_labels.call_args.kwargs["wanted"], {"bug", "area: data"})
+        self.assertEqual(client.sync_labels.call_args.kwargs["wanted"], {"bug", "area: data", "platform: android"})
 
     def test_opened_unstructured_reports_need_the_current_form(self):
         client, _, outputs = self.run_event("It broke")

@@ -3,6 +3,7 @@ import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/components/file_save_task.dart';
 import 'package:venera_next/network/request_scope.dart';
 import 'dart:async';
+import 'package:venera_next/foundation/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shimmer_animation/shimmer_animation.dart';
@@ -464,8 +465,8 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
                   iconColor: context.useTextColor(Colors.green),
                 ),
               ComicDetailActionButton(
-                icon: const Icon(Icons.share),
-                text: 'Share'.tl,
+                icon: Icon(App.isHarmonyOS ? Icons.copy : Icons.share),
+                text: App.isHarmonyOS ? 'Copy'.tl : 'Share'.tl,
                 onPressed: share,
                 iconColor: context.useTextColor(Colors.blue),
               ),

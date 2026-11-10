@@ -326,7 +326,7 @@ class AndroidTvBuildTest(unittest.TestCase):
         self.assertIn("quality_checked: true", release)
         for pattern in ("apk-*", "tv-apk-*", "android-*-manifest"):
             self.assertIn("pattern: " + pattern, release)
-        self.assertLess(release.index("android_tv_build.py verify-release"), release.index("gh release create"))
+        self.assertLess(release.index("android_tv_build.py verify-release"), release.index("harmonyos_release.py prepare-draft"))
         smoke = (workflows / "pr_build.yml").read_text(encoding="utf-8")
         self.assertIn("flavor: [mobile, tv]", smoke)
         gate = smoke.split("\n  platform_gate:", 1)[1]

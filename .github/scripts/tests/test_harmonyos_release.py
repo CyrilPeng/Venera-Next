@@ -1,5 +1,6 @@
 import contextlib
 import copy
+from datetime import datetime, timedelta, timezone
 import importlib.util
 import io
 import json
@@ -104,7 +105,7 @@ class Fixture:
         self.release_commit = commit(self.root)
         self.preview_next = True
 
-    def unified_mainline(self, *, release_enabled=False, guide_delivery=None):
+    def unified_mainline(self, *, release_enabled=False, guide_delivery=None, runtime_acceptance=None):
         self.next_candidate()
         for name in release.tracked(self.source, self.source_commit):
             write(self.root, name, release.blob(self.source, self.source_commit, name))
@@ -112,6 +113,8 @@ class Fixture:
                          'first_release_build': 245, 'release_enabled': release_enabled}
         if guide_delivery is not None:
             self.next_pin['guide_delivery'] = guide_delivery
+        if runtime_acceptance is not None:
+            self.next_pin['runtime_acceptance'] = runtime_acceptance
         write(self.root, release.NEXT_PIN, json.dumps(self.next_pin))
         self.release_commit = commit(self.root)
         self.sync_mainline_source()
@@ -278,6 +281,23 @@ class HarmonyReleaseTests(unittest.TestCase):
         for value in ('disabled', 'assets', '', False, None):
             with self.subTest(value=value):
                 write(fixture.root, release.NEXT_PIN, json.dumps(fixture.next_pin | {'guide_delivery': value}))
+                with self.assertRaisesRegex(ValueError, 'Invalid immutable'):
+                    release.load_pin(fixture.root, next_candidate=True)
+
+    def test_required_runtime_acceptance_is_bound_to_the_committed_context_and_hap(self):
+        fixture = self.fixture
+        fixture.unified_mainline(runtime_acceptance='required')
+        expected = fixture.bundle()
+        self.assertEqual(expected['runtime_acceptance'], 'required')
+        self.verify(expected)
+        manifest = json.loads((fixture.output / 'harmonyos-manifest.json').read_text())
+        template = release.runtime_template(manifest)
+        self.assertEqual(template['source_commit'], fixture.source_commit)
+        self.assertEqual(template['hap_sha256'], manifest['sha256'])
+        self.assertTrue(all(item['status'] == 'not_run' for item in template['checks'].values()))
+        for invalid in ('disabled', '', False, None):
+            with self.subTest(invalid=invalid):
+                write(fixture.root, release.NEXT_PIN, json.dumps(fixture.next_pin | {'runtime_acceptance': invalid}))
                 with self.assertRaisesRegex(ValueError, 'Invalid immutable'):
                     release.load_pin(fixture.root, next_candidate=True)
 
@@ -770,9 +790,12 @@ class HarmonyReleaseTests(unittest.TestCase):
         self.assertIn('--source-root ../harmonyos-source --artifacts ../outputs/harmonyos', publish_job)
         self.assertIn('verify-release --directory ../outputs', publish_job)
         self.assertIn('--notes-file ../release_notes.md', publish_job)
-        self.assertIn('--verify-tag', workflow)
-        self.assertIn('--target "${GITHUB_SHA}"', publish_job)
+        self.assertIn('prepare-draft', publish_job)
+        self.assertIn('--release-files "${files[@]}"', publish_job)
         self.assertLess(workflow.index('verify-draft'), workflow.index('--draft=false'))
+        self.assertLess(workflow.index('verify-runtime'), workflow.index('--draft=false'))
+        self.assertIn('--allow-pending --github-output "$GITHUB_OUTPUT"', publish_job)
+        self.assertEqual(publish_job.count("if: steps.harmonyos_runtime.outputs.ready == 'true'"), 3)
         self.assertGreater(workflow.index('verify-published'), workflow.index('--draft=false'))
         hap = (ROOT / '.github/workflows/harmonyos-release.yml').read_text(encoding='utf-8')
         self.assertIn('ref: ${{ steps.pin.outputs.source_commit }}', hap)
@@ -782,6 +805,8 @@ class HarmonyReleaseTests(unittest.TestCase):
         self.assertNotIn('contents: write', hap)
         self.assertNotIn('secrets: inherit', hap)
         self.assertNotIn('gh issue', workflow + hap)
+        self.assertIn('name: harmonyos-runtime-acceptance-template', hap)
+        self.assertIn('ci/runtime-acceptance/harmonyos-runtime-acceptance.json', hap)
 
 
 class HarmonyRemoteReleaseTests(unittest.TestCase):
@@ -841,6 +866,234 @@ class HarmonyRemoteReleaseTests(unittest.TestCase):
         with patch.object(release, 'gh', return_value=json.dumps(remote)) as github:
             self.assertEqual(release.read_remote_release(self.expected['tag'], published=True), remote)
         github.assert_called_once_with('api', f"repos/{release.REPOSITORY}/releases/tags/{self.expected['tag']}")
+
+    def test_draft_preparation_can_distinguish_absence_from_a_published_or_duplicate_release(self):
+        with patch.object(release, 'gh', return_value=json.dumps([[]])):
+            self.assertIsNone(release.read_remote_release(self.expected['tag'], published=False, allow_missing=True))
+        for pages in ([[self.remote | {'draft': False}]], [[self.remote, self.remote]]):
+            with self.subTest(pages=pages), patch.object(release, 'gh', return_value=json.dumps(pages)), \
+                    self.assertRaises(ValueError):
+                release.read_remote_release(self.expected['tag'], published=False, allow_missing=True)
+
+
+class HarmonyRuntimeAcceptanceTests(unittest.TestCase):
+    def setUp(self):
+        self.expected = {'schema': 3, 'version': '1.18.4', 'build': 250, 'tag': 'v1.18.4',
+                         'source_commit': 'a' * 40, 'release_commit': 'a' * 40,
+                         'preview': False, 'tagged': True, 'guide_delivery': 'repository',
+                         'runtime_acceptance': 'required'}
+        self.assets = {name: {'bytes': 2, 'sha256': 'd' * 64}
+                       for name in release.asset_names('1.18.4', guide_delivery='repository').values()}
+        self.remote = {'id': 123, 'tag_name': 'v1.18.4', 'draft': True, 'prerelease': False,
+                       'assets': [{'name': name, 'size': record['bytes'], 'state': 'uploaded',
+                                   'digest': 'sha256:' + record['sha256']}
+                                  for name, record in self.assets.items()]}
+        self.manifest = {'status': 'packaging_pass', 'signed': False, 'runtime_verified': False,
+                         'reader_integrated': True, 'commit': 'a' * 40,
+                         'hap': release.asset_names('1.18.4')['hap'], 'bytes': 2, 'sha256': 'd' * 64,
+                         'build': {'release': self.expected}}
+        self.report = release.runtime_template(self.manifest)
+        self.now = datetime.now(timezone.utc)
+        self.report.update(device_model='MatePad mini', os_version='HarmonyOS 7.0 API 26',
+                           tested_at=self.now.isoformat())
+        for item in self.report['checks'].values():
+            item.update(status='pass', detail='Tested the described workflow on the recorded native HAP device.')
+        self.report['checks']['directory_import'].update(
+            status='unsupported', detail='Folder picker is absent; multi-archive import passed and the UI explains the limit.')
+
+    def report_asset(self, report=None):
+        raw = json.dumps(report if report is not None else self.report, ensure_ascii=False)
+        data = raw.encode('utf-8')
+        asset = {'name': release.RUNTIME_REPORT, 'id': 456, 'state': 'uploaded', 'size': len(data),
+                 'digest': 'sha256:' + release.sha256(data), 'uploader': {'login': 'CyrilPeng', 'type': 'User'}}
+        return raw, asset
+
+    def test_a_template_cannot_claim_device_success_and_needs_a_real_build_manifest(self):
+        template = release.runtime_template(self.manifest)
+        self.assertEqual(template['tested_at'], '')
+        with self.assertRaises(ValueError):
+            release.validate_runtime_report(template, self.expected, self.assets, now=self.now)
+        for change in ({'runtime_verified': True}, {'signed': True}, {'commit': 'b' * 40},
+                       {'sha256': 'short'}, {'hap': 'probe.hap'}, {'bytes': False}, {'build': {}}):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'audited'):
+                release.runtime_template(self.manifest | change)
+
+    def test_acceptance_requires_exact_source_version_build_and_original_hap(self):
+        self.assertEqual(release.validate_runtime_report(self.report, self.expected, self.assets, now=self.now), self.report)
+        for change in ({'source_commit': 'b' * 40}, {'version': '1.18.3'}, {'build': 249}, {'build': True},
+                       {'schema': True}, {'hap_sha256': '0' * 64}, {'extra': 'unreviewed'}):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'exact source'):
+                release.validate_runtime_report(self.report | change, self.expected, self.assets, now=self.now)
+
+    def test_real_device_os_and_timezone_qualified_time_are_required(self):
+        for field in ('device_model', 'os_version'):
+            for invalid in ('', ' ', 'unknown', 'todo', None, []):
+                with self.subTest(field=field, invalid=invalid), self.assertRaisesRegex(ValueError, 'device and OS'):
+                    release.validate_runtime_report(self.report | {field: invalid}, self.expected, self.assets, now=self.now)
+        for invalid in ('', 'not_run', None, self.now.replace(tzinfo=None).isoformat(),
+                        (self.now + timedelta(days=1)).isoformat()):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, 'time|future'):
+                release.validate_runtime_report(self.report | {'tested_at': invalid}, self.expected, self.assets, now=self.now)
+
+    def test_every_workflow_needs_a_result_and_only_directory_import_can_be_unsupported(self):
+        for name in release.RUNTIME_CHECKS:
+            for result in ({'status': 'not_run', 'detail': 'Not tested'}, {'status': 'failed', 'detail': 'Actual failure'},
+                           {'status': [], 'detail': 'Malformed status'}, {'status': 'pass', 'detail': ''},
+                           {'status': 'pass', 'detail': 'pending'}):
+                report = copy.deepcopy(self.report)
+                report['checks'][name] = result
+                with self.subTest(name=name, result=result), self.assertRaisesRegex(ValueError, name):
+                    release.validate_runtime_report(report, self.expected, self.assets, now=self.now)
+            report = copy.deepcopy(self.report)
+            report['checks'][name]['status'] = 'unsupported'
+            if name == 'directory_import':
+                release.validate_runtime_report(report, self.expected, self.assets, now=self.now)
+            else:
+                with self.subTest(name=name), self.assertRaisesRegex(ValueError, name):
+                    release.validate_runtime_report(report, self.expected, self.assets, now=self.now)
+        for checks in ({}, self.report['checks'] | {'unreviewed': {'status': 'pass', 'detail': 'Extra'}}):
+            with self.assertRaisesRegex(ValueError, 'every required'):
+                release.validate_runtime_report(self.report | {'checks': checks}, self.expected, self.assets, now=self.now)
+
+    def test_missing_acceptance_keeps_only_a_draft_pending_without_requesting_or_fabricating_success(self):
+        with patch.object(release, 'read_remote_release', return_value=self.remote), \
+                patch.object(release, 'gh') as github, contextlib.redirect_stdout(io.StringIO()):
+            self.assertFalse(release.check_runtime(self.expected, self.assets, allow_pending=True))
+            with self.assertRaisesRegex(ValueError, 'publication is blocked'):
+                release.check_runtime(self.expected, self.assets)
+            github.assert_not_called()
+        with patch.object(release, 'read_remote_release', return_value=self.remote | {'draft': False}), \
+                self.assertRaisesRegex(ValueError, 'missing its required'):
+            release.check_runtime(self.expected, self.assets, allow_pending=True, published=True)
+        with patch.object(release, 'read_remote_release') as lookup:
+            legacy = {key: value for key, value in self.expected.items() if key != 'runtime_acceptance'}
+            self.assertTrue(release.check_runtime(legacy, self.assets))
+            lookup.assert_not_called()
+
+    def test_only_maintainer_reviewed_original_report_bytes_are_accepted(self):
+        self.report['checks']['startup']['detail'] = '真机冷启动通过，进入漫画列表。'
+        raw, asset = self.report_asset()
+        remote = self.remote | {'assets': [*self.remote['assets'], asset]}
+        for permission in ('admin', 'maintain', 'write', 'read', 'none'):
+            with self.subTest(permission=permission), patch.object(release, 'read_remote_release', return_value=remote), \
+                    patch.object(release, 'gh', side_effect=[json.dumps({'permission': permission}), raw]) as github, \
+                    contextlib.redirect_stdout(io.StringIO()):
+                if permission in {'admin', 'maintain', 'write'}:
+                    self.assertTrue(release.check_runtime(self.expected, self.assets))
+                    self.assertEqual(github.call_args_list[-1].args,
+                                     ('api', f'repos/{release.REPOSITORY}/releases/assets/456', '-H', 'Accept: application/octet-stream'))
+                else:
+                    with self.assertRaisesRegex(ValueError, 'repository maintainer'):
+                        release.check_runtime(self.expected, self.assets, allow_pending=True)
+                    self.assertEqual(github.call_count, 1)
+
+    def test_duplicate_malformed_changed_or_failed_reports_never_become_pending_success(self):
+        raw, asset = self.report_asset()
+        for change in ({'state': 'starter'}, {'id': True}, {'size': 0}, {'size': 65537},
+                       {'uploader': {'login': 'github-actions[bot]', 'type': 'Bot'}}, {'uploader': None}):
+            remote = self.remote | {'assets': [*self.remote['assets'], asset | change]}
+            with self.subTest(change=change), patch.object(release, 'read_remote_release', return_value=remote), \
+                    patch.object(release, 'gh') as github, self.assertRaises(ValueError):
+                release.check_runtime(self.expected, self.assets, allow_pending=True)
+            github.assert_not_called()
+        duplicate = self.remote | {'assets': [*self.remote['assets'], asset, asset]}
+        with patch.object(release, 'read_remote_release', return_value=duplicate), self.assertRaisesRegex(ValueError, 'duplicated'):
+            release.check_runtime(self.expected, self.assets, allow_pending=True)
+        for change in ({'size': asset['size'] - 1}, {'digest': 'sha256:' + '0' * 64}):
+            remote = self.remote | {'assets': [*self.remote['assets'], asset | change]}
+            with self.subTest(change=change), patch.object(release, 'read_remote_release', return_value=remote), \
+                    patch.object(release, 'gh', side_effect=[json.dumps({'permission': 'write'}), raw]), \
+                    self.assertRaisesRegex(ValueError, 'size or SHA-256'):
+                release.check_runtime(self.expected, self.assets, allow_pending=True)
+        failed = copy.deepcopy(self.report)
+        failed['checks']['same_key_upgrade']['status'] = 'failed'
+        failed_raw, failed_asset = self.report_asset(failed)
+        remote = self.remote | {'assets': [*self.remote['assets'], failed_asset]}
+        with patch.object(release, 'read_remote_release', return_value=remote), \
+                patch.object(release, 'gh', side_effect=[json.dumps({'permission': 'write'}), failed_raw]), \
+                self.assertRaisesRegex(ValueError, 'same_key_upgrade'):
+            release.check_runtime(self.expected, self.assets, allow_pending=True)
+
+    def test_cli_writes_pending_output_and_summary_without_publishing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output, summary = Path(temporary) / 'output.txt', Path(temporary) / 'summary.md'
+            argv = ['harmonyos_release.py', 'verify-runtime', '--source-root', str(ROOT),
+                    '--artifacts', temporary, '--allow-pending', '--github-output', str(output)]
+            with patch.object(sys, 'argv', argv), patch.object(release, 'context', return_value=self.expected), \
+                    patch.object(release, 'verify_bundle', return_value=self.assets), \
+                    patch.object(release, 'read_remote_release', return_value=self.remote), \
+                    patch.dict(os.environ, {'GITHUB_STEP_SUMMARY': str(summary)}), \
+                    patch.object(release, 'gh') as github, contextlib.redirect_stdout(io.StringIO()):
+                release.main()
+            self.assertEqual(output.read_text(), 'ready=false\n')
+            self.assertIn('Do not rebuild or replace', summary.read_text())
+            github.assert_not_called()
+
+    def test_published_cli_rechecks_report_contents_and_rejects_a_failed_upgrade(self):
+        failed = copy.deepcopy(self.report)
+        failed['checks']['same_key_upgrade']['status'] = 'failed'
+        raw, asset = self.report_asset(failed)
+        remote = self.remote | {'draft': False, 'assets': [*self.remote['assets'], asset]}
+        argv = ['harmonyos_release.py', 'verify-published', '--source-root', str(ROOT), '--artifacts', 'unused']
+        with patch.object(sys, 'argv', argv), patch.object(release, 'context', return_value=self.expected), \
+                patch.object(release, 'verify_bundle', return_value=self.assets), \
+                patch.object(release, 'read_remote_release', return_value=remote), \
+                patch.object(release, 'gh', side_effect=[json.dumps({'permission': 'write'}), raw]), \
+                self.assertRaisesRegex(ValueError, 'same_key_upgrade'):
+            release.main()
+
+    def test_reusing_a_draft_preserves_every_original_platform_package_and_the_report(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            files = [root / name for name in (*self.assets, 'android.apk', 'windows.zip', 'linux.deb')]
+            for path in files:
+                path.write_bytes(('Original package: ' + path.name).encode())
+            records = release.release_file_records(files)
+            raw, report_asset = self.report_asset()
+            remote = self.remote | {'assets': [
+                *({'name': name, 'size': item['bytes'], 'digest': 'sha256:' + item['sha256'], 'state': 'uploaded'}
+                  for name, item in records.items()), report_asset]}
+            notes = root / 'notes.md'
+            notes.write_text('Reviewed release notes')
+            with patch.object(release, 'read_remote_release', return_value=remote), patch.object(release, 'gh') as github, \
+                    contextlib.redirect_stdout(io.StringIO()):
+                release.prepare_draft(self.expected, files, notes)
+                github.assert_not_called()
+            files[-1].write_bytes(b'A replacement build must not overwrite an accepted package')
+            with patch.object(release, 'read_remote_release', return_value=remote), patch.object(release, 'gh') as github, \
+                    self.assertRaisesRegex(ValueError, 'differs from the original build'):
+                release.prepare_draft(self.expected, files, notes)
+            github.assert_not_called()
+
+    def test_new_draft_is_tag_bound_and_does_not_create_preview_or_branch_releases(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, notes = root / 'android.apk', root / 'notes.md'
+            package.write_bytes(b'Original build')
+            notes.write_text('Reviewed release notes')
+            records = release.release_file_records([package])
+            remote = self.remote | {'assets': [
+                {'name': name, 'size': item['bytes'], 'digest': 'sha256:' + item['sha256'], 'state': 'uploaded'}
+                for name, item in records.items()]}
+            with patch.object(release, 'read_remote_release', side_effect=[None, remote]), \
+                    patch.object(release, 'gh') as github, contextlib.redirect_stdout(io.StringIO()):
+                release.prepare_draft(self.expected, [package], notes)
+                args = github.call_args.args
+                self.assertEqual(args[:3], ('release', 'create', 'v1.18.4'))
+                self.assertIn('--verify-tag', args)
+                self.assertEqual(args[args.index('--target') + 1], self.expected['release_commit'])
+                self.assertIn('--draft', args)
+            for change in ({'preview': True}, {'tagged': False}):
+                with self.subTest(change=change), patch.object(release, 'read_remote_release') as lookup, \
+                        patch.object(release, 'gh') as github, self.assertRaises(ValueError):
+                    release.prepare_draft(self.expected | change, [package], notes)
+                lookup.assert_not_called()
+                github.assert_not_called()
+            with self.assertRaisesRegex(ValueError, 'duplicate'):
+                release.release_file_records([package, package])
+            notes.write_text('')
+            with self.assertRaisesRegex(ValueError, 'release notes'):
+                release.prepare_draft(self.expected, [package], notes)
 
 
 if __name__ == '__main__':

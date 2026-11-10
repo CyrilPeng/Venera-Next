@@ -40,7 +40,7 @@ HAP 采用 `com.github.cyrilpeng.veneranext.harmony` 包名和 `VeneraNext (Harm
 
 ## 发布门禁与无发布验证
 
-完整构建的 `Release` 同时依赖 Quality、原平台 Build 与 HarmonyOS。HAP 缺失、内容损坏、源码过期或摘要错误都不得 `continue-on-error`。先创建草稿并上传，再从 GitHub API 按发布提交的配置核对全部鸿蒙资产的名称、大小、上传状态和 SHA-256；通过后才公开，公开后再复核一次。任一阶段失败须查看日志，不允许静默去掉鸿蒙包后继续。
+完整构建的 `Release` 同时依赖 Quality、原平台 Build 与 HarmonyOS。HAP 缺失、内容损坏、源码过期或摘要错误都不得 `continue-on-error`。先创建或复用草稿，再从 GitHub API 按发布提交的配置核对全部鸿蒙资产的名称、大小、上传状态和 SHA-256，并完成下述真机验收检查；通过后才公开，公开后复核资产及验收报告。任一阶段失败须查看日志，不允许静默去掉鸿蒙包后继续。
 
 GitHub 按标签查询的 Release 接口只返回已公开版本。草稿阶段使用鉴权发布列表的完整分页定位唯一同标签草稿，再按其数字 ID 重新读取附件；缺失、重名、状态或 ID／标签变化都停止发布。公开后改用标签接口复核，创建 Release 时显式绑定调用方源码 SHA。RC2 的 26 项附件已上传为草稿，但旧查询接口返回 404；本修复由 RC3 重新验证完整发布链路。
 
@@ -56,3 +56,34 @@ gh workflow run harmonyos-release.yml --ref main
 ```
 
 平台脚本与 SDK 基线见主线的 `tool/harmonyos/README.md`。商业 API 26 SDK 从受摘要固定的社区 CI 镜像获取，不冒充官方校验；主线脚本不会读取签名密钥。安装与不支持的功能见[用户指南](../distribution/harmonyos-reader.zh.md)。本流程不评论、关闭、重开或跟踪 issue。
+
+## 准确 HAP 的真机验收
+
+当前 schema 3 配置新增 `runtime_acceptance: required`。历史没有此字段的标签仍按原流程验证，不追改已发布包。构建清单继续保留 `runtime_verified: false`；独立的 `harmonyos-runtime-acceptance.json` 记录实际设备验收，不能把构建通过改写成真机通过。
+
+HAP 工作流在完整包审核后生成单独的 `harmonyos-runtime-acceptance-template` artifact。模板绑定准确 `source_commit`、版本、构建号与未签名原始 HAP SHA-256；设备、系统和测试时间留空，所有检查为 `not_run`。模板不放入三项构建资产目录，也不会自动上传为通过报告。
+
+| 检查字段 | 真机完成条件 |
+| --- | --- |
+| `startup` | 原生 HAP 自行签装后冷启动，正常进入完整应用 |
+| `source_and_reading` | 添加一个可用源，搜索／打开详情并阅读多个章节，记录测试范围 |
+| `archive_import` | 多选归档与漫画合集 ZIP 实际入库并可阅读，取消和失败有正确结果 |
+| `directory_import` | 有目录能力时复制导入并阅读；系统未提供时可填 `unsupported`，记录限制提示与归档替代的实测结果 |
+| `download` | 下载章节到应用内漫画库，完成后离线阅读；失败与取消不会显示成功 |
+| `backup_export_import` | 导出另存完整备份，再在可恢复的测试数据上导入，核对收藏、历史和设置；保留原备份 |
+| `same_key_upgrade` | 从已安装版沿用原签名身份／密钥覆盖升级，核对旧漫画和数据；不卸载／清库替代 |
+| `cold_restart_reading` | 完全退出后重新启动，旧漫画仍可读取，进度与数据可恢复 |
+| `ui_and_capabilities` | 窄屏、横屏、大字号下标题／进度／收藏选择框可用；存储迁移和开启应用锁被禁用，关闭导入锁、复制链接及保存图片正常 |
+
+除上述目录能力缺失外，每项均须为 `pass`，并填写实际操作、结果或限制的 `detail`。填写实际 `device_model`、`os_version` 与带时区的 `tested_at`；不要填占位值，不包含账号、设备标识、私人书名或签名材料。报告只证明所列设备与系统，手机、平板和不同系统仍需逐步扩大验证范围。
+
+维护者完成测试并审核报告后，上传到该版本的准确草稿（示例中的版本和路径需替换）：
+
+```bash
+gh release upload vX.Y.Z /path/to/harmonyos-runtime-acceptance.json --repo CyrilPeng/Venera-Next
+gh run rerun RUN_ID --job RELEASE_JOB_ID --repo CyrilPeng/Venera-Next
+```
+
+只重跑原 run 的 `Release` 任务，使用原构建 artifacts。草稿复用时核对**所有平台**包的名称、大小和 SHA-256，拒绝新编译或替换的包；验收报告是唯一允许额外上传的文件。报告须由具有 write／maintain／admin 权限的人类维护者上传，脚本复核上传者、文件大小与摘要、准确源码和 HAP、每项结果及测试时间。错误／失败报告直接停止发布，不能以“待验收”绕过。
+
+没有报告时任务明确输出 `ready=false`，全部平台草稿保留，公开与 CDN 步骤跳过；任务构建成功不代表已经发布。报告通过后输出 `ready=true`，公开后再次验证原报告内容。请在 Actions artifacts 保留期内（目前 14 天）完成验收并重跑；过期也保留草稿原包，不替换已测试的包。本轮未连接鸿蒙真机，设备验收仍未完成；问题与长期外部目录评估见[跟进记录](harmonyos_issue_followup_20261110.zh.md)。

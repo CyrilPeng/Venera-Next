@@ -21,6 +21,8 @@ All diagnostic categories accept unavailable diagnostics with a concrete reason 
 
 Bug reports require specific version/build and variant, platform, device/OS, steps, expected and actual behavior. Custom builds can provide `commit <revision>`. “Latest,” “there is a bug” and “will add later” are insufficient. Intermittent reports may describe the last occurrence and time; repeatedly causing a crash is unnecessary.
 
+Choose the platform by the installed package: use **Native HarmonyOS HAP** for a native `.hap`, and **Android phone or tablet** for an `.apk` installed on HarmonyOS 4.x or within an Android compatibility environment. Record the HarmonyOS version and compatibility environment under device/OS. A Huawei device name alone does not identify a native HAP. Multiple platforms are allowed; general proposals may select all platforms. Existing forms remain accepted without resubmission.
+
 ## App logs
 
 1. Reproduce once in the existing environment and note the time and action. Do not repeat supplied comparisons, clear caches/data or reimport a library for collection.
@@ -61,6 +63,6 @@ Forms enforce nonempty fields; deterministic rules check categories, placeholder
 
 Missing information adds `needs: information` and a single bot comment listing omissions. Supplying it updates that comment and removes the label. Reporter comments may supply logs/reports; maintainer evidence also counts. Unrelated commenters and bots are not treated as evidence providers.
 
-Automation manages `bug`/`enhancement`, the primary `area: …` and `needs: information` labels, preserving human investigation/planning/post-release-feedback statuses. It never closes or reopens Issues and does not impose new forms on historical reports. Existing follow-up and acceptance arrangements continue.
+Automation manages `bug`/`enhancement`, the primary `area: …`, selected `platform: …`, and `needs: information` labels, preserving human investigation/planning/post-release-feedback statuses. Native HAP uses `platform: harmonyos-hap`; APKs running on HarmonyOS use `platform: android`. Platform labels follow the form selection, not guesses from device brands. Automation never closes or reopens Issues and does not impose new forms on historical reports. Existing follow-up and acceptance arrangements continue.
 
 Forms cannot conditionally require another field based on a dropdown. Four diagnostic forms require evidence directly; runtime/other choices in the UI form and both unavailable-evidence fields are enforced after submission. Text or attachment references do not establish valid contents. Automation does not download attachments or replace maintainer diagnosis, and cannot reliably detect intentionally misclassified reports.

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'platform_effects_controller.dart';
 import 'image_favorite_controller.dart';
@@ -141,8 +142,14 @@ List<Widget> buildReaderBottomActions(
       child: IconButton(icon: const Icon(Icons.download), onPressed: onSave),
     ),
     Tooltip(
-      message: "Share".tl,
-      child: IconButton(icon: const Icon(Icons.share), onPressed: onShare),
+      message: App.isHarmonyOS
+          ? 'System sharing is not available on HarmonyOS. Save the image to Files instead.'
+                .tl
+          : 'Share'.tl,
+      child: IconButton(
+        icon: const Icon(Icons.share),
+        onPressed: App.isHarmonyOS ? null : onShare,
+      ),
     ),
   ];
 }

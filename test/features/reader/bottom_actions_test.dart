@@ -9,6 +9,7 @@ import 'package:venera_next/features/reader/bottom_actions.dart';
 import 'package:venera_next/features/reader/image_favorite_controller.dart';
 import 'package:venera_next/features/reader/platform_effects_controller.dart';
 import 'package:venera_next/features/reader/progress_bar.dart';
+import 'package:venera_next/foundation/harmonyos.dart';
 
 void main() {
   testWidgets('closing bottom controls cancels an in-flight progress drag', (
@@ -393,6 +394,40 @@ void main() {
       });
     }
   }
+
+  testWidgets(
+    'HarmonyOS disables system sharing while image saving remains usable',
+    (tester) async {
+      HarmonyOS.debugIsCurrent = true;
+      addTearDown(() => HarmonyOS.debugIsCurrent = null);
+      final calls = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) =>
+                Scaffold(body: Wrap(children: actions(context, calls))),
+          ),
+        ),
+      );
+      final share = tester.widget<IconButton>(
+        find.ancestor(
+          of: find.byIcon(Icons.share),
+          matching: find.byType(IconButton),
+        ),
+      );
+      expect(share.onPressed, isNull);
+      expect(
+        find.byTooltip(
+          'System sharing is not available on HarmonyOS. Save the image to Files instead.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byIcon(Icons.share));
+      expect(calls, isEmpty);
+      await tester.tap(find.byIcon(Icons.download));
+      expect(calls, ['save']);
+    },
+  );
 
   testWidgets(
     'capabilities control visibility and each action dispatches once',

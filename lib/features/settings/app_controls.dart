@@ -245,7 +245,7 @@ class _AuthorizationRequiredSettingState
   }
 
   Future<void> _change(bool value) async {
-    if (!acceptsSettingsChanges) return;
+    if (!acceptsSettingsChanges || (value && App.isHarmonyOS)) return;
     final request = ++_request;
     final checkSupport = widget.checkSupport;
     Future<bool>? checked;
@@ -285,23 +285,35 @@ class _AuthorizationRequiredSettingState
   }
 
   @override
-  Widget build(BuildContext context) => protectSettings(
-    Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SwitchListTile(
-          title: Text('Authorization Required'.tl),
-          value:
-              _preview ??
-              GlobalPreferenceStore(
-                appdata.settings,
-              ).read(AppPreferences.authorizationRequired),
-          onChanged: _change,
-        ),
-        settingsSaveStatus,
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final bool value =
+        _preview ??
+        GlobalPreferenceStore(
+          appdata.settings,
+        ).read(AppPreferences.authorizationRequired);
+    return protectSettings(
+      Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SwitchListTile(
+            title: Text('Authorization Required'.tl),
+            subtitle: App.isHarmonyOS
+                ? Text(
+                    'App lock is not available on HarmonyOS. An imported lock can still be turned off.'
+                        .tl,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  )
+                : null,
+            value: value,
+            onChanged: App.isHarmonyOS && !value ? null : _change,
+          ),
+          settingsSaveStatus,
+        ],
+      ),
+    );
+  }
 
   @override
   void dispose() {

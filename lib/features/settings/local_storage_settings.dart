@@ -21,6 +21,7 @@ class _LocalStorageSettingsState extends State<LocalStorageSettings> {
 
   Future<void> _run(LocalManager manager) async {
     final recovering = manager.requiresStorageRecovery;
+    if (!recovering && !DirectoryPicker.supportsPersistentDirectories) return;
     await _tasks.run(
       context,
       task: (operation) async {
@@ -57,6 +58,7 @@ class _LocalStorageSettingsState extends State<LocalStorageSettings> {
   Widget build(BuildContext context) {
     final manager = widget.manager ?? LocalManager();
     final recovering = manager.requiresStorageRecovery;
+    final canSetPath = DirectoryPicker.supportsPersistentDirectories;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -80,14 +82,24 @@ class _LocalStorageSettingsState extends State<LocalStorageSettings> {
           ),
         ),
         ListTile(
+          enabled: recovering || canSetPath,
           title: Text(
             recovering ? 'Recover Local Storage'.tl : 'Set New Storage Path'.tl,
           ),
+          subtitle: !recovering && !canSetPath
+              ? Text(
+                  'HarmonyOS currently stores comics inside the app. Import external folders by copying their contents.'
+                      .tl,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                )
+              : null,
           trailing: TextButton(
-            onPressed: () => _run(manager),
+            onPressed: recovering || canSetPath ? () => _run(manager) : null,
             child: Text(recovering ? 'Retry'.tl : 'Set'.tl),
           ),
-          onTap: () => _run(manager),
+          onTap: recovering || canSetPath ? () => _run(manager) : null,
         ),
       ],
     );

@@ -38,7 +38,7 @@ body:
   id: platform
   attributes:
     label: 平台 / Platform
-    description: 选择实际发生问题的平台 / Select the affected platforms
+    description: 按安装包选择：鸿蒙 4.x 上的 APK 选 Android，鸿蒙原生 HAP 选 HarmonyOS；填写 HAP 的下载来源。 / Select Android for APKs, including HarmonyOS 4.x; select HarmonyOS for native HAPs.
     options:
     - Android 手机／平板 / Android phone or tablet
     - Android TV
@@ -46,7 +46,7 @@ body:
     - macOS
     - Linux
     - iOS
-    - HarmonyOS / 鸿蒙
+    - HarmonyOS 原生 HAP / Native HarmonyOS HAP
     - 其他（请说明） / Other (please specify)
     multiple: true
   validations:

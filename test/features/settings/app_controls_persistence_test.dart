@@ -13,6 +13,7 @@ import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/harmonyos.dart';
 import 'package:window_manager/window_manager.dart';
 
 Directory _prepare() {
@@ -139,6 +140,69 @@ void main() {
     expect(_saved(root)['cacheSize'], 128);
     expect(find.byType(TextField), findsNothing);
   });
+
+  testWidgets(
+    'HarmonyOS cannot enable an unavailable lock or query a native provider',
+    (tester) async {
+      final root = _prepare();
+      HarmonyOS.debugIsCurrent = true;
+      addTearDown(() => HarmonyOS.debugIsCurrent = null);
+      var checks = 0;
+      await tester.pumpWidget(
+        _host(
+          AuthorizationRequiredSetting(
+            checkSupport: () async {
+              checks++;
+              return true;
+            },
+          ),
+        ),
+      );
+      final toggle = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
+      expect(toggle.value, isFalse);
+      expect(toggle.onChanged, isNull);
+      expect(
+        find.text(
+          'App lock is not available on HarmonyOS. An imported lock can still be turned off.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+      expect(checks, 0);
+      expect(appdata.settings['authorizationRequired'], isFalse);
+      expect(File('${root.path}/appdata.json').existsSync(), isFalse);
+    },
+  );
+
+  testWidgets(
+    'HarmonyOS can persist turning off an imported lock and cannot reenable it',
+    (tester) async {
+      final root = _prepare();
+      HarmonyOS.debugIsCurrent = true;
+      addTearDown(() => HarmonyOS.debugIsCurrent = null);
+      appdata.settings['authorizationRequired'] = true;
+      var checks = 0;
+      await tester.pumpWidget(
+        _host(
+          AuthorizationRequiredSetting(
+            checkSupport: () async {
+              checks++;
+              return true;
+            },
+          ),
+        ),
+      );
+      _toggle(tester, false);
+      await _flush(tester, _authOwner(tester).waitForSettingsSave());
+      expect(_saved(root)['authorizationRequired'], isFalse);
+      expect(checks, 0);
+      expect(
+        tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged,
+        isNull,
+      );
+    },
+  );
 
   testWidgets(
     'authorization survives removal and window waits for support and save',

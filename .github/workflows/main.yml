@@ -148,9 +148,9 @@ jobs:
           path: outputs/winget/manifests
           if-no-files-found: error
           retention-days: 14
-      - name: 创建草稿 Release 并上传资产
+      - name: 创建或复用草稿 Release，核对并保留原构建资产
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           shopt -s nullglob
           files=(
@@ -171,34 +171,37 @@ jobs:
             exit 1
           fi
 
-          args=(
-            --verify-tag
-            --target "${GITHUB_SHA}"
-            --title "${GITHUB_REF_NAME}"
-            --notes-file ../release_notes.md
-            --draft
-          )
-          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
-            args+=(--prerelease)
-          fi
-          gh release create "${GITHUB_REF_NAME}" "${files[@]}" "${args[@]}"
+          python3 .github/scripts/harmonyos_release.py prepare-draft \
+            --source-root ../harmonyos-source --artifacts ../outputs/harmonyos \
+            --notes-file ../release_notes.md --release-files "${files[@]}"
       - name: 核验草稿中鸿蒙资产的实际大小与摘要
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 .github/scripts/harmonyos_release.py verify-draft \
             --source-root ../harmonyos-source --artifacts ../outputs/harmonyos
+      - name: 核验准确 HAP 的维护者真机验收，缺报告时保留草稿
+        id: harmonyos_runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/scripts/harmonyos_release.py verify-runtime \
+            --source-root ../harmonyos-source --artifacts ../outputs/harmonyos \
+            --allow-pending --github-output "$GITHUB_OUTPUT"
       - name: 发布草稿 Release
+        if: steps.harmonyos_runtime.outputs.ready == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: gh release edit "${GITHUB_REF_NAME}" --draft=false
       - name: 复核已发布鸿蒙资产
+        if: steps.harmonyos_runtime.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 .github/scripts/harmonyos_release.py verify-published \
             --source-root ../harmonyos-source --artifacts ../outputs/harmonyos
       - name: 清理 jsDelivr CDN 缓存
+        if: steps.harmonyos_runtime.outputs.ready == 'true'
         run: |
           curl -s "https://purge.jsdelivr.net/gh/CyrilPeng/venera-next@main/pubspec.yaml" | jq '.status'
           curl -s "https://purge.jsdelivr.net/gh/CyrilPeng/venera-next@main/CHANGELOG.md" | jq '.status'
