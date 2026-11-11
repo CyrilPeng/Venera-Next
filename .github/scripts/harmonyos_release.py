@@ -446,8 +446,20 @@ def release_file_records(files):
     return records
 
 
+def github_release_file_records(files):
+    """Map GitHub's tilde normalization without accepting ambiguous assets."""
+    records = {}
+    for name, record in files.items():
+        remote_name = name.replace("~", ".")
+        if remote_name in records:
+            raise ValueError("Release filenames collide after GitHub normalization: " + remote_name)
+        records[remote_name] = record
+    return records
+
+
 def check_draft_files(remote, expected, files):
     policy = runtime_acceptance_policy(expected)
+    files = github_release_file_records(files)
     assets = remote.get("assets")
     if not isinstance(assets, list) or any(not isinstance(item, dict) for item in assets):
         raise ValueError("Invalid draft asset inventory")
@@ -471,6 +483,7 @@ def prepare_draft(expected, files, notes):
     if not notes.is_file() or notes.is_symlink() or not notes.read_text(encoding="utf-8").strip():
         raise ValueError("Missing or empty release notes")
     records = release_file_records(files)
+    github_release_file_records(records)
     remote = read_remote_release(expected["tag"], published=False, allow_missing=True)
     if remote is None:
         arguments = ["release", "create", expected["tag"], *(str(path) for path in files),

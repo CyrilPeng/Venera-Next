@@ -1,0 +1,80 @@
+name: 复用原包完成发布
+run-name: 复用原构建 ${{ inputs.source_run }} 完成发布
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: 原标签完整构建的运行号，仅发布阶段失败时使用
+        required: true
+        type: string
+
+concurrency:
+  group: resume-release-${{ inputs.source_run }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  resume:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: ${{ inputs.source_run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: tooling
+          fetch-depth: 0
+          persist-credentials: false
+      - name: 验证发布修复工具与文件名冲突保护
+        working-directory: tooling
+        run: |
+          python3 -m unittest discover -s .github/scripts/tests -p test_resume_release.py -v
+          python3 -m unittest discover -s .github/scripts/tests -p test_harmonyos_release.py -v
+      - name: 校验原标签来源及全部构建门禁
+        id: source
+        run: python3 tooling/.github/scripts/resume_release.py source --run "$SOURCE_RUN" --github-output "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.source.outputs.source_commit }}
+          path: original-source
+          fetch-depth: 0
+          persist-credentials: false
+      - name: 从准确原标签生成发布说明
+        working-directory: original-source
+        env:
+          SOURCE_TAG: ${{ steps.source.outputs.tag }}
+        run: python3 .github/scripts/validate_release.py --tag "$SOURCE_TAG" --write-notes ../release_notes.md
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: '*'
+          path: original-artifacts
+          run-id: ${{ inputs.source_run }}
+          github-token: ${{ github.token }}
+      - name: 收集原构建安装包与 Android 清单
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'tooling/.github/scripts')
+          from resume_release import collect_artifacts
+          collect_artifacts(Path('original-artifacts'), Path('outputs'))
+          PY
+      - name: 核验并复用全部原包，公开后复核
+        run: |
+          shopt -s nullglob
+          files=(outputs/harmonyos/* outputs/*.ipa outputs/*.dmg outputs/*.apk outputs/android-*-manifest.json outputs/*.zip outputs/*.exe outputs/*.deb outputs/*.rpm outputs/*.zst outputs/*.AppImage)
+          python3 tooling/.github/scripts/resume_release.py publish --run "$SOURCE_RUN" \
+            --source-root original-source --artifacts outputs/harmonyos \
+            --notes-file release_notes.md --release-files "${files[@]}" --receipt release-recovery.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-recovery-receipt
+          path: release-recovery.json
+          if-no-files-found: error
+          retention-days: 30

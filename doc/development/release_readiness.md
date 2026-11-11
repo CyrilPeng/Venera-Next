@@ -5,6 +5,34 @@ not mark unresolved reports as fixed. Dated verification records and the
 original device acceptance checklist remain below. The newest dated section
 defines the current release scope; older candidate sections are historical.
 
+## RC1 publishing recovery (2026-11-11)
+
+The exact tag `v1.18.4-rc.1` points to
+`9103ce1bca93ab11b23c6ec27ca0e37996b15f2a`. Its full build run
+`42935322644` passed all fifteen required quality/platform jobs, then failed
+in `Release` after uploading all 24 files to draft `441141139`. GitHub replaced
+`~` with `.` in the four DEB/RPM asset names, including when an API rename was
+attempted. Package bytes and digests were preserved.
+
+The publishing fix accepts only that filename conversion and rejects collisions
+before uploading. The manual `resume-release.yml` workflow runs on `main`, checks
+every original build gate, and permits only publishing-tool and record changes
+relative to the original source. It downloads the original run's artifacts,
+collects the named release packages, verifies all draft filenames, sizes and
+digests, and checks the original tag's notes, HAP and Android provenance. Existing
+runtime acceptance rules still apply. It publishes the existing draft and checks
+all public files again, producing a `release-recovery-receipt` artifact with both
+source and tooling commits and the original/recovery run IDs. No compiler job or
+tag is replaced. An RC is explicitly published with `--latest=false`.
+
+```bash
+gh workflow run resume-release.yml --ref main -f source_run=42935322644
+```
+
+Independent public-download verification and the five Issue notices remain the
+completion criteria after the recovery job succeeds. Original build failure is
+kept as historical evidence; a successful recovery does not rewrite that run.
+
 ## v1.18.4 first prerelease (2026-11-11)
 
 The maintainer authorized a public prerelease followed by testing notices to

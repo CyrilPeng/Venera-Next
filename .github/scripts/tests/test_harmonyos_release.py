@@ -1193,6 +1193,42 @@ class HarmonyRuntimeAcceptanceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'release notes'):
                 release.prepare_draft(self.expected, [package], notes)
 
+    def test_github_normalized_linux_rc_names_preserve_original_package_checks(self):
+        files = {
+            'venera-next_1.18.4~rc.1_amd64.deb': {'bytes': 17, 'sha256': 'a' * 64},
+            'venera-next_1.18.4~rc.1_arm64.deb': {'bytes': 18, 'sha256': 'b' * 64},
+            'venera-next-1.18.4~rc.1-250.x86_64.rpm': {'bytes': 19, 'sha256': 'c' * 64},
+            'venera-next-1.18.4~rc.1-250.aarch64.rpm': {'bytes': 20, 'sha256': 'd' * 64},
+            'VeneraNext-1.18.4-rc.1-windows.zip': {'bytes': 21, 'sha256': 'e' * 64},
+        }
+        remote = {'assets': [
+            {'name': name.replace('~', '.'), 'size': item['bytes'],
+             'digest': 'sha256:' + item['sha256'], 'state': 'uploaded'}
+            for name, item in files.items()]}
+        release.check_draft_files(remote, self.expected, files)
+        for change in ({'size': 1}, {'digest': 'sha256:' + '0' * 64}, {'state': 'starter'}):
+            changed = copy.deepcopy(remote)
+            changed['assets'][0].update(change)
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'differs from the original build'):
+                release.check_draft_files(changed, self.expected, files)
+        for assets in (remote['assets'][1:], remote['assets'] + [remote['assets'][0]]):
+            with self.subTest(assets=assets), self.assertRaisesRegex(ValueError, 'files differ'):
+                release.check_draft_files({'assets': assets}, self.expected, files)
+
+    def test_normalized_filename_collisions_fail_before_creating_or_editing_a_release(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            files = [root / 'linux~rc.deb', root / 'linux.rc.deb']
+            for path in files:
+                path.write_bytes(b'Original package')
+            notes = root / 'notes.md'
+            notes.write_text('Original release notes')
+            with patch.object(release, 'read_remote_release') as lookup, patch.object(release, 'gh') as github, \
+                    self.assertRaisesRegex(ValueError, 'collide after GitHub normalization'):
+                release.prepare_draft(self.expected, files, notes)
+            lookup.assert_not_called()
+            github.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()
