@@ -301,6 +301,16 @@ class HarmonyReleaseTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'Invalid immutable'):
                     release.load_pin(fixture.root, next_candidate=True)
 
+    def test_stable_runtime_policy_is_bound_to_the_committed_context_and_hap(self):
+        fixture = self.fixture
+        fixture.unified_mainline(runtime_acceptance='stable_required')
+        expected = fixture.bundle()
+        self.assertEqual(expected['runtime_acceptance'], 'stable_required')
+        self.verify(expected)
+        manifest = json.loads((fixture.output / 'harmonyos-manifest.json').read_text())
+        self.assertEqual(manifest['build']['release']['runtime_acceptance'], 'stable_required')
+        self.assertFalse(manifest['runtime_verified'])
+
     def test_release_only_changes_preserve_a_common_immutable_baseline(self):
         fixture = self.fixture
         context = fixture.context()
@@ -907,6 +917,94 @@ class HarmonyRuntimeAcceptanceTests(unittest.TestCase):
         asset = {'name': release.RUNTIME_REPORT, 'id': 456, 'state': 'uploaded', 'size': len(data),
                  'digest': 'sha256:' + release.sha256(data), 'uploader': {'login': 'CyrilPeng', 'type': 'User'}}
         return raw, asset
+
+    def select_version(self, version, policy):
+        self.expected.update(version=version, tag='v' + version, runtime_acceptance=policy)
+        self.assets = {name: {'bytes': 2, 'sha256': 'd' * 64}
+                       for name in release.asset_names(version, guide_delivery='repository').values()}
+        self.remote.update(tag_name='v' + version, prerelease='-' in version, assets=[
+            {'name': name, 'size': record['bytes'], 'state': 'uploaded', 'digest': 'sha256:' + record['sha256']}
+            for name, record in self.assets.items()])
+        self.manifest['hap'] = release.asset_names(version)['hap']
+        self.report['version'] = version
+
+    def test_stable_required_prerelease_can_publish_for_testing_without_claiming_device_acceptance(self):
+        self.select_version('1.18.4-rc.1', 'stable_required')
+        for published in (False, True):
+            remote = self.remote | {'draft': not published}
+            with self.subTest(published=published), patch.object(release, 'read_remote_release', return_value=remote), \
+                    patch.object(release, 'gh') as github, contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertTrue(release.check_runtime(self.expected, self.assets, published=published))
+                self.assertIn('native-device acceptance remains pending', output.getvalue())
+                github.assert_not_called()
+        self.assertFalse(self.manifest['runtime_verified'])
+        self.assertFalse(self.manifest['signed'])
+
+    def test_stable_required_stable_and_legacy_required_prerelease_still_need_acceptance(self):
+        for version, policy in (('1.18.4', 'stable_required'), ('1.18.4-rc.1', 'required')):
+            self.select_version(version, policy)
+            with self.subTest(version=version, policy=policy), \
+                    patch.object(release, 'read_remote_release', return_value=self.remote), \
+                    patch.object(release, 'gh') as github, contextlib.redirect_stdout(io.StringIO()):
+                self.assertFalse(release.check_runtime(self.expected, self.assets, allow_pending=True))
+                with self.assertRaisesRegex(ValueError, 'publication is blocked'):
+                    release.check_runtime(self.expected, self.assets)
+                github.assert_not_called()
+            with patch.object(release, 'read_remote_release', return_value=self.remote | {'draft': False}), \
+                    self.assertRaisesRegex(ValueError, 'missing its required'):
+                release.check_runtime(self.expected, self.assets, allow_pending=True, published=True)
+
+    def test_prerelease_device_testing_policy_keeps_source_channel_and_asset_checks(self):
+        self.select_version('1.18.4-rc.1', 'stable_required')
+        invalid_releases = (
+            self.remote | {'tag_name': 'v1.18.3'},
+            self.remote | {'prerelease': False},
+            self.remote | {'assets': self.remote['assets'][1:]},
+            self.remote | {'assets': [self.remote['assets'][0] | {'digest': 'sha256:' + '0' * 64},
+                                     *self.remote['assets'][1:]]},
+        )
+        for remote in invalid_releases:
+            with self.subTest(remote=remote), patch.object(release, 'read_remote_release', return_value=remote), \
+                    self.assertRaises(ValueError):
+                release.check_runtime(self.expected, self.assets, allow_pending=True)
+        for change in ({'tagged': False}, {'preview': True}, {'runtime_acceptance': 'disabled'}):
+            with self.subTest(change=change), patch.object(release, 'read_remote_release', return_value=self.remote), \
+                    self.assertRaises(ValueError):
+                release.check_runtime(self.expected | change, self.assets, allow_pending=True)
+
+    def test_prerelease_validates_any_attached_report_and_rejects_wrong_or_failed_results(self):
+        self.select_version('1.18.4-rc.1', 'stable_required')
+        for published in (False, True):
+            for result in ('pass', 'wrong_hap', 'failed', 'not_run'):
+                report = copy.deepcopy(self.report)
+                if result == 'wrong_hap':
+                    report['hap_sha256'] = '0' * 64
+                elif result != 'pass':
+                    report['checks']['startup']['status'] = result
+                raw, asset = self.report_asset(report)
+                remote = self.remote | {'draft': not published, 'assets': [*self.remote['assets'], asset]}
+                with self.subTest(published=published, result=result), \
+                        patch.object(release, 'read_remote_release', return_value=remote), \
+                        patch.object(release, 'gh', side_effect=[json.dumps({'permission': 'write'}), raw]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    if result == 'pass':
+                        self.assertTrue(release.check_runtime(self.expected, self.assets, published=published))
+                    else:
+                        with self.assertRaises(ValueError):
+                            release.check_runtime(self.expected, self.assets, allow_pending=True, published=published)
+
+    def test_prerelease_cli_marks_publication_ready_when_device_acceptance_is_pending(self):
+        self.select_version('1.18.4-rc.1', 'stable_required')
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / 'github-output'
+            argv = ['harmonyos_release.py', 'verify-runtime', '--source-root', str(ROOT), '--artifacts', 'unused',
+                    '--allow-pending', '--github-output', str(output)]
+            with patch.object(sys, 'argv', argv), patch.object(release, 'context', return_value=self.expected), \
+                    patch.object(release, 'verify_bundle', return_value=self.assets), \
+                    patch.object(release, 'read_remote_release', return_value=self.remote), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                release.main()
+            self.assertEqual(output.read_text(encoding='utf-8'), 'ready=true\n')
 
     def test_a_template_cannot_claim_device_success_and_needs_a_real_build_manifest(self):
         template = release.runtime_template(self.manifest)

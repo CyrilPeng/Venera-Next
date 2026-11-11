@@ -1,6 +1,6 @@
 # Two-Level Local Favorite Folders
 
-> Two-level folders shipped in `v1.18.2+243` for #123; parent-back navigation and clickable paths shipped in `v1.18.3+249`. The new selection entry and in-page subfolder sorting described below are on main and await the next release (#152, #155).
+> Two-level folders shipped in `v1.18.2+243` for #123; parent-back navigation and clickable paths shipped in `v1.18.3+249`. The new selection entry and in-page subfolder sorting are available for testing in `v1.18.4-rc.1+250` (#152, #155).
 
 Local favorites support at most two levels. Both root folders and child folders can contain comics directly. Network favorites remain managed by their comic sources. Folder names must still be globally unique, even under different parents.
 
@@ -25,7 +25,7 @@ Comic-detail favorites, bulk add/transfer, Quick Favorite settings, and update-t
 
 On TV, use direction keys to move focus and Select to activate a folder or its separate expansion arrow. Back closes the picker and returns focus to its opening control. In folder search, Up/Down leave text input while Left/Right still edit the caret. Sorting offers Move up/Move down buttons without dragging. These controls do not change TV's separate data or low-memory policy; an actual device's input method may still require a companion input device.
 
-## Bulk Actions (Pending Release)
+## Bulk Actions (v1.18.4-rc.1)
 
 Use Select comics in the favorites toolbar on wide screens or in the More menu on narrow screens. The existing long-press entry also remains available. Once selection mode is open, click comics to select them; the More menu offers Select All, Invert Selection, and move, copy, delete, and download actions for the current selection.
 

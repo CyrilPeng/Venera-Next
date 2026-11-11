@@ -23,6 +23,7 @@ ASSETS = "resources/rawfile/flutter_assets/"
 METADATA = ASSETS + "assets/harmonyos-app-build.json"
 BUNDLE = "com.github.cyrilpeng.veneranext.harmony"
 RUNTIME_REPORT = "harmonyos-runtime-acceptance.json"
+RUNTIME_ACCEPTANCE_POLICIES = ("required", "stable_required")
 RUNTIME_CHECKS = (
     "startup", "source_and_reading", "archive_import", "directory_import",
     "download", "backup_export_import", "same_key_upgrade", "cold_restart_reading",
@@ -70,7 +71,7 @@ def load_pin(root, *, next_candidate=False):
             or value["schema"] not in ((2, 3) if next_candidate else (1,))
             or (unified and value["source_mode"] != "release_commit")
             or ("guide_delivery" in value and value["guide_delivery"] != "repository")
-            or ("runtime_acceptance" in value and value["runtime_acceptance"] != "required")
+            or ("runtime_acceptance" in value and value["runtime_acceptance"] not in RUNTIME_ACCEPTANCE_POLICIES)
             or (not unified and any(not isinstance(value[key], str) or not SHA.fullmatch(value[key])
                                     for key in ("source_commit", "main_baseline")))
             or type(value["first_release_build"]) is not int
@@ -355,8 +356,23 @@ def check_publish_context(expected):
         raise ValueError("Next reader assets require a verified release-tag context before publication")
 
 
+def runtime_acceptance_policy(expected):
+    if "runtime_acceptance" not in expected:
+        return None
+    policy = expected["runtime_acceptance"]
+    if policy not in RUNTIME_ACCEPTANCE_POLICIES:
+        raise ValueError("Invalid HarmonyOS runtime acceptance policy")
+    return policy
+
+
+def runtime_report_required(expected):
+    policy = runtime_acceptance_policy(expected)
+    return policy == "required" or (policy == "stable_required" and "-" not in expected["version"])
+
+
 def check_remote_release(release, expected, assets, *, published):
     check_publish_context(expected)
+    policy = runtime_acceptance_policy(expected)
     if (release.get("tag_name") != expected["tag"] or release.get("draft") is not (not published)
             or release.get("prerelease") is not ("-" in expected["version"])):
         raise ValueError("Wrong release tag/state/channel")
@@ -364,9 +380,9 @@ def check_remote_release(release, expected, assets, *, published):
     if not isinstance(remote, list) or any(not isinstance(item, dict) for item in remote):
         raise ValueError("Invalid remote release asset inventory")
     reports = [item for item in remote if item.get("name") == RUNTIME_REPORT]
-    if reports and (expected.get("runtime_acceptance") != "required" or len(reports) != 1):
+    if reports and (policy is None or len(reports) != 1):
         raise ValueError("Unexpected or duplicated HarmonyOS runtime acceptance report")
-    if published and expected.get("runtime_acceptance") == "required" and not reports:
+    if published and runtime_report_required(expected) and not reports:
         raise ValueError("Published release is missing its required runtime acceptance report")
     harmony_names = [item.get("name", "") for item in remote
                      if isinstance(item.get("name"), str)
@@ -431,6 +447,7 @@ def release_file_records(files):
 
 
 def check_draft_files(remote, expected, files):
+    policy = runtime_acceptance_policy(expected)
     assets = remote.get("assets")
     if not isinstance(assets, list) or any(not isinstance(item, dict) for item in assets):
         raise ValueError("Invalid draft asset inventory")
@@ -445,7 +462,7 @@ def check_draft_files(remote, expected, files):
                 or asset.get("digest") != "sha256:" + record["sha256"]):
             raise ValueError("Existing draft package differs from the original build: " + name)
     reports = [item for item in assets if item.get("name") == RUNTIME_REPORT]
-    if reports and (expected.get("runtime_acceptance") != "required" or len(reports) != 1):
+    if reports and (policy is None or len(reports) != 1):
         raise ValueError("Unexpected or duplicated runtime report")
 
 
@@ -527,12 +544,15 @@ def validate_runtime_report(report, expected, assets, *, now=None):
 
 
 def check_runtime(expected, assets, *, allow_pending=False, published=False):
-    if expected.get("runtime_acceptance") != "required":
+    if runtime_acceptance_policy(expected) is None:
         return True
     remote = read_remote_release(expected["tag"], published=published)
     check_remote_release(remote, expected, assets, published=published)
     reports = [item for item in remote["assets"] if item.get("name") == RUNTIME_REPORT]
     if not reports:
+        if not runtime_report_required(expected):
+            print("Release policy allows this prerelease for device testing; native-device acceptance remains pending.")
+            return True
         if allow_pending and not published:
             print("Device acceptance is pending. Keep this draft and its packages; upload the reviewed "
                   + RUNTIME_REPORT + " and rerun only the Release job after testing.")

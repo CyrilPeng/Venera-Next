@@ -2,7 +2,7 @@
 
 [简体中文](keyword_blocking.zh.md)
 
-> This guide describes unreleased features on `main`. The current stable release, `v1.18.3+249`, still uses the original keyword matching and does not include match modes, trial matching, or editing from the reasons dialog.
+> These features are available for testing in `v1.18.4-rc.1+250`. The current stable release, `v1.18.3+249`, still uses the original keyword matching and does not include match modes, trial matching, or editing from the reasons dialog.
 
 ## 1. Add or edit a rule
 

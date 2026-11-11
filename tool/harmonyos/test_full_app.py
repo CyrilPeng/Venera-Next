@@ -62,8 +62,10 @@ class FullAppTests(unittest.TestCase):
         self.assertEqual(validate_context(context, '1' * 40, environment), context)
         repository_guides = context | {'guide_delivery': 'repository'}
         self.assertEqual(validate_context(repository_guides, '1' * 40, environment), repository_guides)
-        device_acceptance = repository_guides | {'runtime_acceptance': 'required'}
-        self.assertEqual(validate_context(device_acceptance, '1' * 40, environment), device_acceptance)
+        for policy in ('required', 'stable_required'):
+            with self.subTest(runtime_acceptance=policy):
+                device_acceptance = repository_guides | {'runtime_acceptance': policy}
+                self.assertEqual(validate_context(device_acceptance, '1' * 40, environment), device_acceptance)
         for invalid in ('disabled', '', False, None):
             with self.subTest(runtime_acceptance=invalid), self.assertRaisesRegex(ValueError, 'source-bound'):
                 validate_context(context | {'runtime_acceptance': invalid}, '1' * 40, environment)

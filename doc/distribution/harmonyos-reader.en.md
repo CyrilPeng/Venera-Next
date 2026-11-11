@@ -17,7 +17,7 @@ Before upgrading an earlier reader build, export a separate backup. Keep the sam
 
 The build declares ARM64 `phone` and `tablet` targets, with minimum/target SDK `26.0.0`. One MatePad / HarmonyOS 7.0 volunteer completed the core probe and reported no other problems during ordinary use of the initial full reader beyond missing folder import. This records only that person's usage, not full-feature, other-device/system, real-data migration or certificate-renewal acceptance. Do not repeatedly authorize or weaken security settings if an unsupported device cannot install it.
 
-Future public releases require maintainer-reviewed device acceptance of the exact HAP. Without that report, packages remain in a release draft or Actions artifacts. A report covers its recorded device and OS, not every HarmonyOS device. See [maintainer release instructions](../development/harmonyos_releases.en.md#device-acceptance-for-the-exact-hap).
+Starting with `v1.18.4-rc.1+250`, prereleases may be published for device testing after source, build and package checks, with unverified behavior stated explicitly when no acceptance report exists. Stable releases still require maintainer-reviewed device acceptance of their exact HAP and remain drafts without it. Stable packages are rebuilt, so an RC report cannot replace acceptance of the stable HAP. A report covers its recorded device and OS, not every HarmonyOS device. See [maintainer release instructions](../development/harmonyos_releases.en.md#device-acceptance-for-the-exact-hap).
 
 ## Ordinary Use
 
@@ -34,7 +34,7 @@ Future public releases require maintainer-reviewed device acceptance of the exac
 ## Explicit Experimental Limitations
 
 - Folders support copy import only, not persistent external references or custom storage locations. Actual device folder-selection support still needs ordinary-use feedback; declaring phone/tablet targets is not device acceptance. System sharing, biometric app lock, and Android volume keys / SAF / foreground services remain unimplemented; save files and share through Files, or copy text. Unimplemented actions do not report success.
-- Upcoming builds disable Set New Storage Path on HarmonyOS and explain app-owned storage and copy import; storage recovery remains retryable. App lock cannot be enabled, while an imported enabled lock can still be turned off. Comic details copy the title and URL. Image sharing is unavailable while Save Image remains usable. These UI fixes are not part of `v1.18.3`.
+- `v1.18.4-rc.1` disables Set New Storage Path on HarmonyOS and explains app-owned storage and copy import; storage recovery remains retryable. App lock cannot be enabled, while an imported enabled lock can still be turned off. Comic details copy the title and URL. Image sharing is unavailable while Save Image remains usable. These UI fixes are not part of `v1.18.3`.
 - **PDF import is unavailable** because PDFium has no OHOS build. Existing Dart PDF export remains. The build does not substitute Android/Linux PDFium binaries. PNG, ZIP and 7Z use real OHOS cross-compiles of the application's locked sources.
 - Imported app-lock settings display an explicit warning and let the user continue without app authentication or exit; they do not silently pass biometric authentication. Turn off the imported app-lock setting if desired.
 - WebView proxy override, platform image codecs, full-app network/TLS/login, large-file migration, device frame times/power use, full-app upgrades and certificate renewal remain unverified. Do not count #91 power savings as measured.

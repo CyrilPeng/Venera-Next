@@ -180,7 +180,7 @@ jobs:
         run: |
           python3 .github/scripts/harmonyos_release.py verify-draft \
             --source-root ../harmonyos-source --artifacts ../outputs/harmonyos
-      - name: 核验准确 HAP 的维护者真机验收，缺报告时保留草稿
+      - name: 核验鸿蒙验收策略，正式版缺报告时保留草稿
         id: harmonyos_runtime
         env:
           GH_TOKEN: ${{ github.token }}

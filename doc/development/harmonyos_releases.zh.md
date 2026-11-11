@@ -40,7 +40,7 @@ HAP 采用 `com.github.cyrilpeng.veneranext.harmony` 包名和 `VeneraNext (Harm
 
 ## 发布门禁与无发布验证
 
-完整构建的 `Release` 同时依赖 Quality、原平台 Build 与 HarmonyOS。HAP 缺失、内容损坏、源码过期或摘要错误都不得 `continue-on-error`。先创建或复用草稿，再从 GitHub API 按发布提交的配置核对全部鸿蒙资产的名称、大小、上传状态和 SHA-256，并完成下述真机验收检查；通过后才公开，公开后复核资产及验收报告。任一阶段失败须查看日志，不允许静默去掉鸿蒙包后继续。
+完整构建的 `Release` 同时依赖 Quality、原平台 Build 与 HarmonyOS。HAP 缺失、内容损坏、源码过期或摘要错误都不得 `continue-on-error`。先创建或复用草稿，再从 GitHub API 按发布提交的配置核对全部鸿蒙资产的名称、大小、上传状态和 SHA-256，并满足下述对应版本的真机验收策略；通过后才公开，公开后复核资产及已有的验收报告。任一阶段失败须查看日志，不允许静默去掉鸿蒙包后继续。
 
 GitHub 按标签查询的 Release 接口只返回已公开版本。草稿阶段使用鉴权发布列表的完整分页定位唯一同标签草稿，再按其数字 ID 重新读取附件；缺失、重名、状态或 ID／标签变化都停止发布。公开后改用标签接口复核，创建 Release 时显式绑定调用方源码 SHA。RC2 的 26 项附件已上传为草稿，但旧查询接口返回 404；本修复由 RC3 重新验证完整发布链路。
 
@@ -59,7 +59,9 @@ gh workflow run harmonyos-release.yml --ref main
 
 ## 准确 HAP 的真机验收
 
-当前 schema 3 配置新增 `runtime_acceptance: required`。历史没有此字段的标签仍按原流程验证，不追改已发布包。构建清单继续保留 `runtime_verified: false`；独立的 `harmonyos-runtime-acceptance.json` 记录实际设备验收，不能把构建通过改写成真机通过。
+从 `v1.18.4-rc.1+250` 起，schema 3 配置使用 `runtime_acceptance: stable_required`。候选版在完整源码、构建及资产审核通过后可公开供实际设备测试，尚无报告时不声称已完成真机验收；正式版必须有合格报告后才能公开。候选版若已有报告，同样严格验证，错误或失败不能忽略。历史 `required` 策略继续要求候选版和正式版均有报告，没有此字段的旧标签仍按原流程验证，不追改已发布包；未知值拒绝。
+
+构建清单继续保留 `runtime_verified: false`；独立的 `harmonyos-runtime-acceptance.json` 记录实际设备验收，不能把构建通过或候选版公开改写成真机通过。
 
 HAP 工作流在完整包审核后生成单独的 `harmonyos-runtime-acceptance-template` artifact。模板绑定准确 `source_commit`、版本、构建号与未签名原始 HAP SHA-256；设备、系统和测试时间留空，所有检查为 `not_run`。模板不放入三项构建资产目录，也不会自动上传为通过报告。
 
@@ -77,13 +79,13 @@ HAP 工作流在完整包审核后生成单独的 `harmonyos-runtime-acceptance-
 
 除上述目录能力缺失外，每项均须为 `pass`，并填写实际操作、结果或限制的 `detail`。填写实际 `device_model`、`os_version` 与带时区的 `tested_at`；不要填占位值，不包含账号、设备标识、私人书名或签名材料。报告只证明所列设备与系统，手机、平板和不同系统仍需逐步扩大验证范围。
 
-维护者完成测试并审核报告后，上传到该版本的准确草稿（示例中的版本和路径需替换）：
+维护者完成测试并审核报告后，上传到该版本的准确草稿或已公开候选版（示例中的版本和路径需替换；正式版报告必须绑定正式版重新构建的 HAP，不能沿用 RC 报告）：
 
 ```bash
 gh release upload vX.Y.Z /path/to/harmonyos-runtime-acceptance.json --repo CyrilPeng/Venera-Next
 gh run rerun RUN_ID --job RELEASE_JOB_ID --repo CyrilPeng/Venera-Next
 ```
 
-只重跑原 run 的 `Release` 任务，使用原构建 artifacts。草稿复用时核对**所有平台**包的名称、大小和 SHA-256，拒绝新编译或替换的包；验收报告是唯一允许额外上传的文件。报告须由具有 write／maintain／admin 权限的人类维护者上传，脚本复核上传者、文件大小与摘要、准确源码和 HAP、每项结果及测试时间。错误／失败报告直接停止发布，不能以“待验收”绕过。
+草稿补齐报告后只重跑原 run 的 `Release` 任务，使用原构建 artifacts。草稿复用时核对**所有平台**包的名称、大小和 SHA-256，拒绝新编译或替换的包；验收报告是唯一允许额外上传的文件。报告须由具有 write／maintain／admin 权限的人类维护者上传，脚本复核上传者、文件大小与摘要、准确源码和 HAP、每项结果及测试时间。错误／失败报告直接停止发布，不能以“待验收”绕过。已公开候选版补充报告后对原包运行 `verify-published`，不把公开候选版重新当作草稿发布。
 
-没有报告时任务明确输出 `ready=false`，全部平台草稿保留，公开与 CDN 步骤跳过；任务构建成功不代表已经发布。报告通过后输出 `ready=true`，公开后再次验证原报告内容。请在 Actions artifacts 保留期内（目前 14 天）完成验收并重跑；过期也保留草稿原包，不替换已测试的包。本轮未连接鸿蒙真机，设备验收仍未完成；问题与长期外部目录评估见[跟进记录](harmonyos_issue_followup_20261110.zh.md)。
+在 `stable_required` 策略下，候选版无报告时输出 `ready=true` 并明确设备验收仍待完成；正式版无报告时输出 `ready=false`，全部平台草稿保留，公开与 CDN 步骤跳过。旧 `required` 策略下两类版本无报告均保留草稿。合格报告通过后输出 `ready=true`，公开后再次验证已有报告内容；任务构建成功本身不代表已经公开或完成设备验收。草稿须在 Actions artifacts 保留期内（目前 14 天）完成验收并重跑；过期也保留原包，不替换已测试的包。本轮未连接鸿蒙真机，设备验收仍未完成；问题与长期外部目录评估见[跟进记录](harmonyos_issue_followup_20261110.zh.md)。

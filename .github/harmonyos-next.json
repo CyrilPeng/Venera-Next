@@ -4,5 +4,5 @@
   "first_release_build": 245,
   "release_enabled": true,
   "guide_delivery": "repository",
-  "runtime_acceptance": "required"
+  "runtime_acceptance": "stable_required"
 }
