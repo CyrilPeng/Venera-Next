@@ -59,6 +59,66 @@ Widget _host(Widget child, {ImageWork? work}) => MaterialApp(
 );
 
 void main() {
+  for (final comicScoped in [false, true]) {
+    testWidgets(
+      'white border crop is persisted through its active scope: comicScoped=$comicScoped',
+      (tester) async {
+        final root = _prepare();
+        appdata.settings['readerMode'] = 'continuousTopToBottom';
+        appdata.settings['language'] = 'en-US';
+        appdata.settings['cropWhiteBorders'] = false;
+        if (comicScoped) {
+          appdata.settings.setEnabledComicSpecificSettings(
+            'crop-book',
+            'local',
+            true,
+          );
+        }
+        String? changed;
+        await tester.pumpWidget(
+          _host(
+            ReaderSettings(
+              comicId: comicScoped ? 'crop-book' : null,
+              comicSource: comicScoped ? 'local' : null,
+              currentReaderMode: () => 'continuousTopToBottom',
+              onChanged: (key) => changed = key,
+            ),
+          ),
+        );
+        final setting = find.widgetWithText(
+          SwitchSetting,
+          'Crop white side borders',
+        );
+        await tester.scrollUntilVisible(
+          setting,
+          400,
+          maxScrolls: 30,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await Scrollable.ensureVisible(tester.element(setting), alignment: 0.5);
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.descendant(of: setting, matching: find.byType(Switch)),
+        );
+        await _flush(tester, appdata.saveData(false));
+        expect(changed, 'cropWhiteBorders');
+        final saved = jsonDecode(
+          File('${root.path}/appdata.json').readAsStringSync(),
+        )['settings'];
+        if (comicScoped) {
+          expect(
+            saved['comicSpecificSettings']['crop-book@local']['cropWhiteBorders'],
+            isTrue,
+          );
+          expect(saved['cropWhiteBorders'], isFalse);
+        } else {
+          expect(saved['cropWhiteBorders'], isTrue);
+        }
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
   testWidgets(
     'device scope saves and clears only this device while preserving global values',
     (tester) async {
@@ -326,6 +386,8 @@ void main() {
         of: find.text('Show Chapter Comments'),
         matching: find.byType(SwitchSetting),
       );
+      await Scrollable.ensureVisible(tester.element(control), alignment: 0.5);
+      await tester.pumpAndSettle();
       final release = Completer<void>();
       final exclusive = AppDataOperations.instance.run(() => release.future);
       await tester.tap(

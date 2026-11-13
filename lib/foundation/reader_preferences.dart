@@ -225,6 +225,7 @@ abstract final class ReaderPreferences {
     false,
   );
   static const splitDualPage = BoolPreference('splitDualPage', false);
+  static const cropWhiteBorders = BoolPreference('cropWhiteBorders', false);
   static const splitDualPageInvert = BoolPreference(
     'splitDualPageInvert',
     false,
@@ -272,6 +273,7 @@ abstract final class ReaderPreferences {
     showChapterComments,
     showChapterCommentsAtEnd,
     splitDualPage,
+    cropWhiteBorders,
     splitDualPageInvert,
   ];
   static Map<String, Object?> get storageDefaults => {

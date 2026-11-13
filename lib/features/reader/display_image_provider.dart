@@ -64,11 +64,15 @@ class ReaderDisplayImageProvider extends ImageProvider<ReaderImageProvider> {
 }
 
 class _ReaderDisplayStream extends ImageStreamCompleter
-    implements OriginalImageSize {
+    implements OriginalImageSize, ImageDecodeInfo {
   _ReaderDisplayStream(this.image, this.work, this.configuration);
 
   @override
   Size? originalImageSize;
+  @override
+  int? frameCount;
+  @override
+  Object? decodeIdentity;
 
   final ReaderImageProvider image;
   final ImageWork work;
@@ -165,6 +169,11 @@ class _DisplayImageAttempt {
           owner.originalImageSize = stream.completer is OriginalImageSize
               ? (stream.completer as OriginalImageSize).originalImageSize
               : null;
+          final decoded = stream.completer is ImageDecodeInfo
+              ? stream.completer as ImageDecodeInfo
+              : null;
+          owner.frameCount = decoded?.frameCount;
+          owner.decodeIdentity = decoded?.decodeIdentity;
           _diagnostic?.finish(
             width: info.image.width,
             height: info.image.height,

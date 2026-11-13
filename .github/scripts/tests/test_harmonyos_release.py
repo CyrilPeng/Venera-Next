@@ -17,6 +17,8 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / 'tool/harmonyos'))
+from test_app_labels import label_index, label_module
 SPEC = importlib.util.spec_from_file_location('harmonyos_release', ROOT / '.github/scripts/harmonyos_release.py')
 release = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(release)
@@ -150,6 +152,7 @@ class Fixture:
             if name in {'pubspec.yaml', 'pubspec.lock', 'CHANGELOG.md'}
             or name.startswith('assets/') or (name.startswith('lib/') and name.endswith('.dart'))
             or (next_candidate and (name == 'release.json' or name.startswith('packages/')))
+            or name == release.LABEL_SOURCE
         }
         native = bytearray(64)
         native[:6] = b'\x7fELF\x02\x01'
@@ -188,6 +191,14 @@ class Fixture:
             release.ASSETS + 'CHANGELOG.md': expected['changelog'].encode(),
             **{'libs/arm64-v8a/' + name: bytes(native) for name in native_names | {'libapp.so', 'libflutter.so'}},
         }
+        if release.LABEL_SOURCE in source_files:
+            metadata.setdefault('app_label', release.APP_LABEL)
+            module = label_module()
+            module['app'].update(app)
+            module['module']['deviceTypes'] = ['phone', 'tablet']
+            members['module.json'] = json.dumps(module).encode()
+            members['resources.index'] = label_index()
+            members[release.METADATA] = json.dumps(metadata).encode()
         if next_candidate:
             members[release.ASSETS + release.NOTICE] = release.blob(self.source, self.source_commit, release.NOTICE_SOURCE)
         expected_assets = {name: release.sha256(members[release.ASSETS + name])
@@ -202,6 +213,8 @@ class Fixture:
         report = {'status': 'packaging_pass', 'signed': False, 'runtime_verified': False,
                   'reader_integrated': True, 'commit': self.source_commit, 'hap': names['hap'],
                   'build': metadata, 'expected_assets': expected_assets}
+        if release.LABEL_SOURCE in source_files:
+            report['packaged_app'] = {'app_label': release.APP_LABEL}
         if report_change:
             report_change(report)
         write(self.output, names['manifest'], json.dumps(report))
@@ -232,6 +245,45 @@ class HarmonyReleaseTests(unittest.TestCase):
 
     def verify(self, expected):
         return release.verify_bundle(self.fixture.output, expected, self.fixture.source)
+
+    def enable_label_policy(self):
+        fixture = self.fixture
+        fixture.unified_mainline()
+        write(fixture.root, release.LABEL_SOURCE, (ROOT / release.LABEL_SOURCE).read_bytes())
+        fixture.release_commit = commit(fixture.root)
+        fixture.sync_mainline_source()
+
+    def test_new_source_checks_compiled_launcher_labels_in_every_language(self):
+        self.enable_label_policy()
+        fixture = self.fixture
+        expected = fixture.bundle()
+        self.assertEqual(len(self.verify(expected)), 5)
+        for value in ('venera_next', 'VeneraNext (HarmonyOS Beta)'):
+            expected = fixture.bundle(members_change=lambda members: members.update(
+                {'resources.index': label_index(translated=value)}))
+            with self.subTest(label=value), self.assertRaisesRegex(ValueError, 'across languages'):
+                self.verify(expected)
+
+    def test_new_label_policy_cannot_be_skipped_by_removing_metadata_or_source_fingerprint(self):
+        self.enable_label_policy()
+        fixture = self.fixture
+        for mutate in (
+            lambda metadata: metadata.update(app_label=None),
+            lambda metadata: metadata.update(app_label='venera_next'),
+            lambda metadata: metadata['source_files'].pop(release.LABEL_SOURCE),
+            lambda metadata: metadata['source_files'].update({release.LABEL_SOURCE: '0' * 64}),
+        ):
+            expected = fixture.bundle(metadata_change=mutate)
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                self.verify(expected)
+        expected = fixture.bundle(report_change=lambda report: report['packaged_app'].update(app_label='venera_next'))
+        with self.assertRaisesRegex(ValueError, 'Packaged native launcher'):
+            self.verify(expected)
+
+    def test_historical_assets_without_label_policy_remain_verifiable(self):
+        expected = self.fixture.bundle(members_change=lambda members: members.update(
+            {'resources.index': label_index(translated='venera_next')}))
+        self.assertEqual(len(self.verify(expected)), 5)
 
     def test_repository_guides_keep_all_three_assets_required_locally_and_remotely(self):
         fixture = self.fixture

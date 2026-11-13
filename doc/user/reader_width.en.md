@@ -18,3 +18,11 @@ If **Limit image width** is enabled, that limit is applied first, then the side 
 Both margins and the width limit follow comic-specific, device-specific, then global settings in priority order. Adjusting margins during reading updates the layout immediately. Set the value back to 0% to remove the extra margins; the existing width limit still applies.
 
 The current chapter and page are retained. Pinch zoom remains available for temporarily viewing details; use side margins for a persistent smaller strip layout.
+
+## Crop white side borders (unreleased)
+
+In vertical Continuous or Waterfall mode, enable Crop white side borders in reader settings. It is off by default. Detection removes continuous near-white empty columns on the left and right so content can use more width; the top and bottom remain intact. Side margins and the width limit can still be used together with cropping.
+
+The detector checks each complete column and retains a buffer. Any distinct text or image pixel limits cropping at that edge. Tiny margins, margins wider than one quarter per side, blank pages, animated images, and images beyond the detection memory budget retain their original display. Some borders will consequently remain. Double-page splitting keeps the original center and half-page order.
+
+The image is displayed first; detection then runs in the background and updates its layout. Turn the option off to restore the complete display. Comic files, downloads, saved images, and exports retain their originals. The option follows global, device, and per-comic settings and their existing backup and synchronization rules.

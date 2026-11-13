@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:venera_next/foundation/file_selection.dart';
 import 'package:venera_next/foundation/harmonyos.dart';
+import 'package:venera_next/foundation/file_interaction.dart';
+import 'package:venera_next/foundation/log.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +45,61 @@ void main() {
     'name': name,
     'token': token,
   };
+
+  test(
+    'system storage capability evidence does not authorize an external library',
+    () async {
+      HarmonyOS.debugIsCurrent = true;
+      for (final selection in [false, true]) {
+        for (final authorization in [false, true]) {
+          mock(
+            (_) async => {
+              'folderSelection': selection,
+              'folderAuthorization': authorization,
+            },
+          );
+          final report = await HarmonyOS.storageCapabilities();
+          expect(report, (
+            folderSelection: selection,
+            folderAuthorization: authorization,
+          ));
+          expect(DirectoryPicker.supportsPersistentDirectories, isFalse);
+        }
+      }
+      expect(
+        calls.every(
+          (call) =>
+              call.method == 'storageCapabilities' && call.arguments == null,
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'unknown capability reports remain unknown and cannot fail startup',
+    () async {
+      HarmonyOS.debugIsCurrent = true;
+      for (final response in [
+        null,
+        <String, Object?>{},
+        {'folderSelection': true, 'folderAuthorization': 'true'},
+      ]) {
+        mock((_) async => response);
+        await expectLater(HarmonyOS.storageCapabilities(), throwsStateError);
+        await HarmonyOS.logStorageCapabilities();
+        expect(Log.logs.last.content, contains('unknown'));
+        expect(DirectoryPicker.supportsPersistentDirectories, isFalse);
+      }
+      mock((_) async => throw MissingPluginException());
+      await HarmonyOS.logStorageCapabilities();
+      expect(Log.logs.last.content, contains('older HAP'));
+      HarmonyOS.debugIsCurrent = false;
+      calls.clear();
+      await HarmonyOS.logStorageCapabilities();
+      expect(calls, isEmpty);
+    },
+  );
 
   test(
     'directory cancellation and unavailable capability do not create copies',

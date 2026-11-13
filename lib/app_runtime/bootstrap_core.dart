@@ -133,6 +133,7 @@ CoreBootstrap createCoreBootstrap({
       await initializeCoreInfrastructure(
         directory: App.dataPath,
         services: [
+          HarmonyOS.logStorageCapabilities,
           HarmonyOS.initializeHttp,
           if (!App.isHarmonyOS)
             () => _optional('SAF worker', () => SAFTaskWorker().init()),

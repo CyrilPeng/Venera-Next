@@ -1,5 +1,9 @@
 {
   "zh_CN": {
+    "Crop white side borders": "自动裁剪左右白边",
+    "Only changes Continuous and Waterfall display. Original images are kept.": "仅调整连续阅读和瀑布流的显示，保留完整原图。",
+    "Lock reader menu": "锁定阅读菜单",
+    "Unlock reader menu": "解锁阅读菜单",
     "HarmonyOS currently stores comics inside the app. Import external folders by copying their contents.": "当前鸿蒙版将漫画保存在应用内，暂不支持更改存储目录。外部文件夹可通过复制导入。",
     "App lock is not available on HarmonyOS. An imported lock can still be turned off.": "当前鸿蒙版暂不支持应用身份验证，仍可关闭从其他设备导入的应用锁。",
     "System sharing is not available on HarmonyOS. Save the image to Files instead.": "当前鸿蒙版暂不支持系统分享，请先将图片保存到「文件」后分享。",
@@ -1052,6 +1056,10 @@
     "Unable to copy report.": "无法复制报告，请重试。"
   },
   "zh_TW": {
+    "Crop white side borders": "自動裁切左右白邊",
+    "Only changes Continuous and Waterfall display. Original images are kept.": "僅調整連續閱讀和瀑布流的顯示，保留完整原圖。",
+    "Lock reader menu": "鎖定閱讀選單",
+    "Unlock reader menu": "解鎖閱讀選單",
     "HarmonyOS currently stores comics inside the app. Import external folders by copying their contents.": "目前鴻蒙版將漫畫儲存在應用程式內，暫不支援變更儲存目錄。外部資料夾可透過複製匯入。",
     "App lock is not available on HarmonyOS. An imported lock can still be turned off.": "目前鴻蒙版暫不支援應用程式身分驗證，仍可關閉從其他裝置匯入的應用程式鎖。",
     "System sharing is not available on HarmonyOS. Save the image to Files instead.": "目前鴻蒙版暫不支援系統分享，請先將圖片儲存到「檔案」後分享。",

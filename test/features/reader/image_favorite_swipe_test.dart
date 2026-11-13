@@ -24,6 +24,8 @@ class _Port implements ReaderGesturePort {
   void clearIgnoreNextTap() {}
   @override
   void cancelPendingTap() {}
+  @override
+  void cancelMenuRequests() {}
   void drag(Offset offset) {
     for (final listener in List.of(listeners)) {
       listener.onStart?.call(Offset.zero);

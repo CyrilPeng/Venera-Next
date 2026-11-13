@@ -25,6 +25,7 @@ import 'continuous_data.dart';
 import 'continuous_scroll.dart';
 import 'current_image.dart';
 import 'display_image_provider.dart';
+import 'white_border_crop.dart';
 import 'reader_controller.dart';
 import 'reader_viewport.dart';
 import 'package:venera_next/network/request_scope.dart';
@@ -86,6 +87,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
         AutoReadingViewport,
         AutoReadingImageViewport {
   late var _imageDownloads = ReaderImageDownloads(work: widget.imageWork);
+  late var _whiteBorderCrop = ReaderWhiteBorderCrop(widget.imageWork);
 
   @override
   (int, int)? get currentImageRange => (currentPage - 1, currentPage);
@@ -385,6 +387,12 @@ class ContinuousModeState extends State<ReaderContinuousView>
   void didUpdateWidget(covariant ReaderContinuousView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.imageWork, widget.imageWork) ||
+        oldWidget.data.comicId != data.comicId ||
+        oldWidget.data.sourceKey != data.sourceKey) {
+      _whiteBorderCrop.dispose();
+      _whiteBorderCrop = ReaderWhiteBorderCrop(widget.imageWork);
+    }
+    if (!identical(oldWidget.imageWork, widget.imageWork) ||
         !identical(oldWidget.navigation, widget.navigation) ||
         oldWidget.data.comicId != data.comicId ||
         oldWidget.data.sourceKey != data.sourceKey ||
@@ -408,6 +416,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
   @override
   void dispose() {
     _disposed = true;
+    _whiteBorderCrop.dispose();
     _smoothGeneration++;
     _smoothPosition = null;
     _initialCacheTimer?.cancel();
@@ -984,6 +993,10 @@ class ContinuousModeState extends State<ReaderContinuousView>
         splitWideImage: _splitWideImages,
         splitWideImageInvert: _splitWideImagesInvert,
         showImageDimensions: data.showImageDimensions,
+        whiteBorderCrop: data.vertical && data.cropWhiteBorders
+            ? _whiteBorderCrop
+            : null,
+        cropIdentity: image.key,
         onInit: (state) => imageStates.add(state),
         onDispose: (state) => imageStates.remove(state),
       ),

@@ -24,8 +24,17 @@ abstract interface class OriginalImageSize {
   Size? get originalImageSize;
 }
 
+/// Decode metadata is available before the first frame, including cache hits.
+/// Consumers must not infer animation from repeated delivery of a still image.
+abstract interface class ImageDecodeInfo {
+  int? get frameCount;
+  Object? get decodeIdentity;
+}
+
 class _ImageDimensions {
   Size? size;
+  int? frameCount;
+  final decodeIdentity = Object();
 }
 
 abstract class BaseImageProvider<T extends BaseImageProvider<T>>
@@ -204,6 +213,7 @@ abstract class BaseImageProvider<T extends BaseImageProvider<T>>
           );
           consumer.loading = (load: loading, attempt: attempt);
           final codec = await loading;
+          dimensions.frameCount = codec.frameCount;
           if (attempt.isCancelled) {
             codec.dispose();
             attempt.check();
@@ -663,7 +673,7 @@ Future<void> _joinReleasedImageWork(Iterable<Future<void>> work) async {
 
 /// Cancellation is expected after the final consumer releases an image.
 class _CancellableImageStreamCompleter extends MultiFrameImageStreamCompleter
-    implements OriginalImageSize {
+    implements OriginalImageSize, ImageDecodeInfo {
   _CancellableImageStreamCompleter({
     required _ImageConsumer consumer,
     required _ImageDimensions dimensions,
@@ -683,6 +693,10 @@ class _CancellableImageStreamCompleter extends MultiFrameImageStreamCompleter
   final _ImageDimensions _dimensions;
   @override
   Size? get originalImageSize => _dimensions.size;
+  @override
+  int? get frameCount => _dimensions.frameCount;
+  @override
+  Object get decodeIdentity => _dimensions.decodeIdentity;
   late final VoidCallback _unlisten;
   ImageInfo? _heldImage;
   bool _disposed = false;

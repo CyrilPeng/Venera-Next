@@ -23,6 +23,7 @@ class ReaderGestureDetector extends StatefulWidget {
     required this.createRequest,
     required this.onPortChanged,
     required this.isMenuOpen,
+    required this.isMenuLocked,
     required this.toggleMenu,
     required this.openSettings,
     required this.openChapters,
@@ -33,6 +34,7 @@ class ReaderGestureDetector extends StatefulWidget {
   final ReaderGestureRequest? Function() createRequest;
   final void Function(ReaderGesturePort port, bool attached) onPortChanged;
   final bool Function() isMenuOpen;
+  final bool Function() isMenuLocked;
   final VoidCallback toggleMenu, openSettings, openChapters;
   final Widget child;
   @override
@@ -193,6 +195,13 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
     _tapTimer?.cancel();
     _tapTimer = null;
     _pendingTap = null;
+  }
+
+  @override
+  void cancelMenuRequests() {
+    cancelPendingTap();
+    _tapTarget = null;
+    _contextMenus.close();
   }
 
   @override
@@ -423,13 +432,14 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
         return;
       }
     }
-    widget.toggleMenu();
+    if (!widget.isMenuLocked()) widget.toggleMenu();
   }
 
   void _showMenu(ReaderGestureRequest request, Offset location) {
+    if (!_accepts(request) || widget.isMenuLocked()) return;
     final settings = widget.openSettings, chapters = widget.openChapters;
     void invoke(VoidCallback action) {
-      if (_accepts(request)) action();
+      if (_accepts(request) && !widget.isMenuLocked()) action();
     }
 
     _contextMenus.show(
@@ -455,7 +465,9 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
           icon: Icons.exit_to_app,
           text: 'Exit'.tl,
           onClick: () {
-            if (_accepts(request)) unawaited(request.exit());
+            if (_accepts(request) && !widget.isMenuLocked()) {
+              unawaited(request.exit());
+            }
           },
         ),
         if (App.isDesktop && request.canUseImage)
@@ -482,7 +494,11 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
           ),
       ],
       isValid: () =>
-          mounted && !_inactive && !_disposed && request.isTargetCurrent(),
+          mounted &&
+          !_inactive &&
+          !_disposed &&
+          !widget.isMenuLocked() &&
+          request.isTargetCurrent(),
       changes: Listenable.merge([widget.changes, request.targetChanges]),
     );
   }
@@ -493,6 +509,7 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
     Future<void> Function(Uint8List) consume,
   ) async {
     if (!_accepts(request) ||
+        widget.isMenuLocked() ||
         !request.canUseImage ||
         request.viewport == null) {
       return;

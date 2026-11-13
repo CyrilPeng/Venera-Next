@@ -10,6 +10,7 @@ import 'package:rhttp/rhttp.dart';
 
 import 'file_selection.dart';
 import 'directory_selection.dart';
+import 'log.dart';
 
 /// The experimental HAP owns this channel; other platforms never call it.
 abstract final class HarmonyOS {
@@ -48,6 +49,44 @@ abstract final class HarmonyOS {
   static Future<void> initializeHttp() => isCurrent
       ? Rhttp.init(externalLibrary: ExternalLibrary.open('librhttp.so'))
       : Rhttp.init();
+
+  /// Reports system capabilities only. It neither obtains a URI grant nor
+  /// enables this application's not-yet-implemented persistent library bridge.
+  static Future<({bool folderSelection, bool folderAuthorization})>
+  storageCapabilities() async {
+    final result = await channel.invokeMapMethod<String, Object?>(
+      'storageCapabilities',
+    );
+    final selection = result?['folderSelection'];
+    final authorization = result?['folderAuthorization'];
+    if (selection is! bool || authorization is! bool) {
+      throw StateError('Invalid HarmonyOS storage capability report');
+    }
+    return (folderSelection: selection, folderAuthorization: authorization);
+  }
+
+  static Future<void> logStorageCapabilities() async {
+    if (!isCurrent) return;
+    try {
+      final capabilities = await storageCapabilities();
+      Log.info(
+        'HarmonyOS storage',
+        'system_folder_selection=${capabilities.folderSelection}; '
+            'system_folder_authorization=${capabilities.folderAuthorization}; '
+            'persistent_library_bridge=not_implemented',
+      );
+    } on MissingPluginException {
+      Log.info(
+        'HarmonyOS storage',
+        'System capabilities are unknown: older HAP bridge',
+      );
+    } catch (error) {
+      Log.warning(
+        'HarmonyOS storage',
+        'System capabilities are unknown: $error',
+      );
+    }
+  }
 
   static Future<DirectorySelection?> selectDirectory({
     required String cachePath,

@@ -4,6 +4,7 @@
 import argparse
 from datetime import datetime, timedelta, timezone
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -21,6 +22,8 @@ SHA = re.compile(r"[0-9a-f]{40}")
 VERSION = re.compile(r"\d+\.\d+\.\d+(?:-rc\.\d+)?")
 ASSETS = "resources/rawfile/flutter_assets/"
 METADATA = ASSETS + "assets/harmonyos-app-build.json"
+LABEL_SOURCE = "tool/harmonyos/app_labels.py"
+APP_LABEL = "VeneraNext"
 BUNDLE = "com.github.cyrilpeng.veneranext.harmony"
 RUNTIME_REPORT = "harmonyos-runtime-acceptance.json"
 RUNTIME_ACCEPTANCE_POLICIES = ("required", "stable_required")
@@ -279,10 +282,15 @@ def verify_bundle(directory, expected, source):
     next_candidate = expected["schema"] >= 2
     native_names = NEXT_NATIVE if next_candidate else NATIVE
     source_names = tracked(source, commit)
+    labels_required = LABEL_SOURCE in source_names or "app_label" in metadata
+    if labels_required and metadata.get("app_label") != APP_LABEL:
+        raise ValueError("Missing or incorrect native launcher label policy")
     files = {n for n in source_names if n in {"pubspec.yaml", "pubspec.lock", "CHANGELOG.md"}
              or n.startswith("assets/") or (n.startswith("lib/") and n.endswith(".dart"))}
     if next_candidate:
         files |= {n for n in source_names if n == "release.json" or n.startswith("packages/")}
+    if LABEL_SOURCE in source_names:
+        files.add(LABEL_SOURCE)
     if set(metadata["source_files"]) != files:
         raise ValueError("Incomplete real reader source inventory")
     for name, digest in metadata["source_files"].items():
@@ -327,6 +335,16 @@ def verify_bundle(directory, expected, source):
                 or app.get("minAPIVersion") != 260000026 or app.get("targetAPIVersion") != 260000026
                 or sorted(module["module"].get("deviceTypes", [])) != ["phone", "tablet"]):
             raise ValueError("Actual HAP identity/version/API differs")
+        if labels_required:
+            # Historical source and manifests without this policy remain
+            # eligible for exact-asset recovery; new builds cannot omit it.
+            spec = importlib.util.spec_from_file_location(
+                "harmonyos_app_labels", Path(__file__).resolve().parents[2] / LABEL_SOURCE)
+            labels = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(labels)
+            if (labels.audit_hap_labels(archive) != APP_LABEL
+                    or report.get("packaged_app", {}).get("app_label") != APP_LABEL):
+                raise ValueError("Packaged native launcher label differs")
         libraries = {n for n in members if n.startswith("libs/") and n.endswith(".so")}
         if libraries != {"libs/arm64-v8a/" + n for n in native_names | {"libapp.so", "libflutter.so"}}:
             raise ValueError("Missing/unreviewed/wrong-architecture native libraries")

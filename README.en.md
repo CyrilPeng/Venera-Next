@@ -234,6 +234,7 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 - **Preloading:** adjust the image preload count in Settings → Reading to prepare upcoming images and reduce waits. Loading more images also uses more data and memory.
 - **Resume:** progress stores the chapter and page, and Waterfall records the chapter you are actually reading. Ascending/descending on the details page only changes the list display.
 - **Separate reader settings:** enable device-specific or per-comic settings so you do not have to readjust them each time.
+- **Unreleased on main:** lock the reader menu from its toolbar and unlock with the small edge lock; page turns, scrolling, and zoom remain available. Vertical Continuous and Waterfall add Crop white side borders, off by default. Turning it off restores the complete display; original files, downloads, and exports remain intact. See [side margins and cropping](doc/user/reader_width.en.md).
 
 | Single-page view | Split double-page view |
 |---|---|
@@ -256,7 +257,7 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 <a id="favorites-read-later-and-update-tracking"></a>
 ### 5.4 Favorites, Read Later, and update tracking
 
-New on main, pending the next release: Select comics is available in the wide-screen toolbar or the narrow-screen More menu. Sort subfolders opens the current parent's children, while Reorder comics manages comics directly in that folder. See [favorite folders and bulk actions](doc/user/favorite_folders.en.md).
+`v1.18.4-rc.1` provides Select comics in the wide-screen toolbar or narrow-screen More menu and adds Sort subfolders. Unreleased improvements on main put Select All, Invert Selection, and Deselect in the toolbar when space permits and let desktop Escape exit selection or search. The comic-detail favorite panel uses the full available height and keeps New Folder on the right of its fixed toolbar. See [favorite folders and bulk actions](doc/user/favorite_folders.en.md).
 
 - **Favorites:** tap Favorite on the details page to open the panel and pick a local folder or the source account (extension-dependent). The favorites page supports list and cover-gallery layouts (auto or 2–6 columns).
 - **Quick Favorite:** long-press Favorite on the details page to add the comic directly to the selected local folder, which defaults to the Follow Updates folder. Change the target in Settings → Local Favorites → Quick Favorite.

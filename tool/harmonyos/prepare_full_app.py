@@ -14,6 +14,7 @@ from native_build import CONFIG, ROOT, digest, require_within
 from prepare_probe import (BASE, command, configure_device_types, configure_profile,
                            export_qjs, verify_native_report)
 from release_context import build_inputs
+from app_labels import APP_LABEL, configure_app_labels
 
 
 FULL_CONFIG_PATH = Path(__file__).with_name("full_app_config.json")
@@ -27,6 +28,7 @@ GIT_DEPENDENCIES = ("webview", "webview_api", "code_assets")
 PROJECT_PACKAGES = tuple(FULL_CONFIG["project_packages"])
 NATIVE_NOTICE_ASSET = "assets/notices/VENERA_NATIVE_THIRD_PARTY_NOTICES.txt"
 NATIVE_NOTICE_SOURCE = ROOT / "packages/venera_native/notices/VENERA_NATIVE_THIRD_PARTY_NOTICES.txt"
+LABEL_SOURCE = "tool/harmonyos/app_labels.py"
 WEBVIEW_API_TYPES = ("browser_process_exit_kind.dart", "browser_process_exit_kind.g.dart",
                      "browser_process_exited_detail.dart", "browser_process_exited_detail.g.dart", "enum_method.dart")
 WEBVIEW_TYPES = Path("flutter_inappwebview_platform_interface/lib/src/types")
@@ -338,8 +340,9 @@ def configure_pubspec(text, identity=None):
 
 def app_source_manifest():
     require_committed_inputs("pubspec.yaml", "pubspec.lock", "CHANGELOG.md", "release.json",
-                             "lib", "assets", "packages")
+                             "lib", "assets", "packages", LABEL_SOURCE)
     files = [ROOT / "pubspec.yaml", ROOT / "pubspec.lock", ROOT / "CHANGELOG.md", ROOT / "release.json"]
+    files.append(ROOT / LABEL_SOURCE)
     files.extend(sorted((ROOT / "lib").rglob("*.dart")))
     files.extend(sorted(path for path in (ROOT / "assets").rglob("*") if path.is_file()))
     packages = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-z", "--", "packages/"]).split(b"\0")
@@ -419,13 +422,8 @@ def prepare_project(args):
     entry_profile.write_text(json.dumps({"apiType": "stageMode", "buildOption": {
         "nativeLib": {"debugSymbol": {"strip": False, "exclude": []}}}, "targets": [
         {"name": "default", "runtimeOS": "HarmonyOS"}, {"name": "ohosTest"}]}, indent=2) + "\n", encoding="utf-8")
+    configure_app_labels(project)
     for root in (project / "ohos/AppScope/resources/base", project / "ohos/entry/src/main/resources/base"):
-        strings = root / "element/string.json"
-        data = json.loads(strings.read_text(encoding="utf-8"))
-        for item in data["string"]:
-            if item["name"] in ("app_name", "EntryAbility_label"):
-                item["value"] = "VeneraNext (HarmonyOS Beta)"
-        strings.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         for name in ("app_icon.png", "icon.png"):
             if (root / "media" / name).exists():
                 shutil.copy2(ROOT / "assets/app_icon.png", root / "media" / name)
@@ -451,7 +449,7 @@ def prepare_project(args):
     metadata = {
         "schema": 1, "purpose": "full_reader_experiment", "branch": "main",
         "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-        "bundle_name": FULL_CONFIG["bundle_name"], "version_name": identity["version_name"],
+        "bundle_name": FULL_CONFIG["bundle_name"], "app_label": APP_LABEL, "version_name": identity["version_name"],
         "hap_version_name": identity["hap_version_name"],
         "version_code": identity["version_code"], "device_types": ["phone", "tablet"],
         "release": identity["release"],

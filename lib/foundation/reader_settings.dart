@@ -135,5 +135,6 @@ class ReaderSettings {
   bool get showChapterCommentsAtEnd =>
       _values['showChapterCommentsAtEnd'] as bool;
   bool get splitDualPage => _values['splitDualPage'] as bool;
+  bool get cropWhiteBorders => _values['cropWhiteBorders'] as bool;
   bool get splitDualPageInvert => _values['splitDualPageInvert'] as bool;
 }

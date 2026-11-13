@@ -125,6 +125,7 @@ class _Fixture {
               createRequest: request,
               onPortChanged: attach,
               isMenuOpen: () => menu,
+              isMenuLocked: () => false,
               toggleMenu: () {
                 menu = !menu;
                 calls.add('menu');

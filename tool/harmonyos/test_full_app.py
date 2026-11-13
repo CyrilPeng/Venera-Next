@@ -19,6 +19,8 @@ from release_context import build_inputs, validate_context, validate_version
 import prepare_full_app
 import full_native_build
 import ci_full_app
+from app_labels import APP_LABEL
+from test_app_labels import label_index, label_module
 
 
 def elf():
@@ -108,6 +110,7 @@ class FullAppTests(unittest.TestCase):
                         'pubspec.yaml': b'name: fixture\n', 'pubspec.lock': b'packages: {}\n',
                         'CHANGELOG.md': b'# Fixture changes\n', 'release.json': b'{}\n',
                         'lib/main.dart': b'void main() {}\n', 'assets/init.js': b'const fixture = true;\n',
+                        prepare_full_app.LABEL_SOURCE: b'APP_LABEL = "VeneraNext"\n',
                         'packages/example/tool.ps1': b'Write-Output reviewed\r\n',
                         'packages/example/data.bin': b'\x00\xff\r\n\x80'}
             for name, data in fixtures.items():
@@ -130,6 +133,12 @@ class FullAppTests(unittest.TestCase):
                 digest = prepare_full_app.project_tree_digest(root / 'packages/example')
                 self.assertEqual(digest, expected.hexdigest())
                 self.assertEqual(prepare_full_app.app_source_manifest()[script], hashlib.sha256(canonical).hexdigest())
+                label = prepare_full_app.LABEL_SOURCE
+                self.assertEqual(prepare_full_app.app_source_manifest()[label], hashlib.sha256(fixtures[label]).hexdigest())
+                (root / label).write_text('APP_LABEL = "changed"\n')
+                with self.assertRaisesRegex(ValueError, 'Uncommitted'):
+                    prepare_full_app.app_source_manifest()
+                (root / label).write_bytes(fixtures[label])
                 (root / script).write_bytes(canonical)
                 self.assertEqual(prepare_full_app.project_tree_digest(root / 'packages/example'), digest)
                 self.assertEqual(prepare_full_app.app_source_manifest()[script], hashlib.sha256(canonical).hexdigest())
@@ -276,14 +285,19 @@ class FullAppTests(unittest.TestCase):
                     'bundle_name': FULL_CONFIG['bundle_name'], 'version_name': identity['version_name'],
                     'hap_version_name': identity['hap_version_name'],
                     'version_code': identity['version_code'], 'device_types': ['phone', 'tablet'],
+                    'app_label': APP_LABEL,
                     'native_libraries': {name: checksum for name in (*LIBRARIES, *EXTRA_LIBRARIES)}}
         packed = {**metadata, **(metadata_change or {})}
         app = {'bundleName': metadata['bundle_name'], 'versionName': metadata['hap_version_name'],
                'versionCode': metadata['version_code'], 'minAPIVersion': 260000026, 'targetAPIVersion': 260000026}
         app.update(app_change or {})
+        labels = label_module()
+        app.update(labels['app'])
         path = root / 'reader-unsigned.hap'
         with zipfile.ZipFile(path, 'w') as archive:
-            archive.writestr('module.json', json.dumps({'app': app, 'module': {'deviceTypes': ['phone', 'tablet']}}))
+            archive.writestr('module.json', json.dumps({'app': app, 'module': {
+                **labels['module'], 'deviceTypes': ['phone', 'tablet']}}))
+            archive.writestr('resources.index', label_index())
             archive.writestr(METADATA_ASSET, json.dumps(packed))
             archive.writestr(ASSET_PREFIX + 'assets/init.js', b'real source asset')
             if omit != NATIVE_NOTICE_ASSET:

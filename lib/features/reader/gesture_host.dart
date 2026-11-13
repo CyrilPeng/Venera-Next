@@ -21,6 +21,7 @@ class ReaderGestureHost extends StatelessWidget {
       createRequest: reader.createGestureRequest,
       onPortChanged: shell.onGesturePortChanged,
       isMenuOpen: () => shell.mounted && shell.isOpen,
+      isMenuLocked: () => !shell.mounted || shell.isMenuLocked,
       toggleMenu: () {
         if (shell.mounted) shell.openOrClose();
       },

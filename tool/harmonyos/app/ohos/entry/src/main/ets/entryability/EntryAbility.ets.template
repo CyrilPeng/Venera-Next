@@ -67,6 +67,14 @@ export default class EntryAbility extends FlutterAbility implements MethodCallHa
             ['cache', this.context.cacheDir + '/venera_next']
           ]));
           break;
+        case 'storageCapabilities':
+          // Read-only system capability evidence, not a picker grant or a
+          // declaration that the reader's persistent storage adapter exists.
+          result.success(new Map<string, boolean>([
+            ['folderSelection', canIUse('SystemCapability.FileManagement.UserFileService.FolderSelection')],
+            ['folderAuthorization', canIUse('SystemCapability.FileManagement.AppFileService.FolderAuthorization')]
+          ]));
+          break;
         case 'selectFiles':
           result.success(await this.selectFiles(call));
           break;

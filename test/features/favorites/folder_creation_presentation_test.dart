@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -16,6 +18,7 @@ import 'package:venera_next/features/favorites/create_favorite_folder_dialog.dar
 import 'package:venera_next/features/favorites/favorite_actions.dart';
 import 'package:venera_next/features/favorites/favorite_transfer_dialog.dart';
 import 'package:venera_next/features/favorites/favorite_models.dart';
+import 'package:venera_next/features/favorites/favorite_folder_browser.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/favorites/favorites_page.dart';
 import 'package:venera_next/features/favorites/local_favorites_page.dart';
@@ -23,10 +26,12 @@ import 'package:venera_next/features/favorites/side_bar.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
+import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -34,11 +39,50 @@ import '../../components/sidebar_presentation_test.dart'
     show pumpSidebar, settleSidebarWork, sidebarCauses;
 
 class _Source extends Fake implements ComicSource {
+  _Source({this.network});
+  final FavoriteData? network;
   @override
   final key = 'favorite-creation-test-source';
   @override
-  FavoriteData? get favoriteData => null;
+  FavoriteData? get favoriteData => network;
+  @override
+  bool get isLogged => network != null;
 }
+
+void _registerSource(_Source source) {
+  configureComicSourceRegistry(
+    all: () => [source],
+    find: (key) => key == source.key ? source : null,
+    fromIntKey: (key) => key == source.key.hashCode ? source : null,
+    isEmpty: () => false,
+  );
+  addTearDown(
+    () => configureComicSourceRegistry(
+      all: () => [],
+      find: (_) => null,
+      fromIntKey: (_) => null,
+      isEmpty: () => true,
+    ),
+  );
+}
+
+ComicFavoritePanel _detailPanel(
+  _Source source, {
+  void Function(bool?, bool?)? onFavorite,
+}) => ComicFavoritePanel(
+  cid: 'qa-comic',
+  type: ComicType(source.key.hashCode),
+  isFavorite: false,
+  onFavorite: onFavorite ?? (_, _) {},
+  favoriteItem: FavoriteItem(
+    id: 'qa-comic',
+    name: 'Synthetic comic',
+    coverPath: '',
+    author: '',
+    type: ComicType(source.key.hashCode),
+    tags: [],
+  ),
+);
 
 class _Navigator extends Navigator {
   const _Navigator({super.key, super.onGenerateRoute});
@@ -68,32 +112,45 @@ class _FolderCreationHost {
   bool window = false;
   int exits = 0;
   Widget? content;
+  double textScale = 1;
+  final repaint = GlobalKey();
   _NavigatorState get navigator =>
       appNavigation.rootNavigatorKey.currentState! as _NavigatorState;
 
   Widget tree() => MaterialApp(
-    builder: (_, _) {
+    builder: (context, _) {
       Widget child = _Navigator(
         key: appNavigation.rootNavigatorKey,
         onGenerateRoute: (_) => MaterialPageRoute<void>(
           builder: (value) {
-            context = value;
+            this.context = value;
             return Scaffold(body: content ?? const Text('Original home'));
           },
         ),
       );
       if (window) child = WindowFrame(child, onExit: () => exits++);
-      return SelectionTasksScope(
-        registry: registry,
-        child: NavigationAdmission(
-          allowsNavigation: () => allowed,
-          child: child,
+      return MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: RepaintBoundary(
+          key: repaint,
+          child: SelectionTasksScope(
+            registry: registry,
+            child: NavigationAdmission(
+              allowsNavigation: () => allowed,
+              child: child,
+            ),
+          ),
         ),
       );
     },
   );
 
-  Future<void> mount(WidgetTester tester) async {
+  Future<void> mount(
+    WidgetTester tester, {
+    List<String> folders = const [],
+  }) async {
     root = Directory.systemTemp.createTempSync('venera-favorite-create-');
     final previousData = App.dataPath;
     final previousCache = App.cachePath;
@@ -125,7 +182,12 @@ class _FolderCreationHost {
       expect(p.basename(owned), startsWith('venera-favorite-create-'));
       root.deleteSync(recursive: true);
     });
-    await tester.runAsync(manager.init);
+    await tester.runAsync(() async {
+      await manager.init();
+      for (final name in folders) {
+        await manager.createFolder(name);
+      }
+    });
     await tester.pumpWidget(tree());
   }
 
@@ -779,7 +841,9 @@ void main() {
           ),
         );
         await host.mount(tester);
-        await tester.tap(find.widgetWithText(ListTile, 'New Folder'));
+        await tester.tap(
+          find.byKey(const ValueKey('comic-favorite-new-folder')),
+        );
         await pumpSidebar(tester);
         await tester.enterText(
           find.byKey(const ValueKey('favorite-folder-name')),
@@ -812,6 +876,177 @@ void main() {
           find.widgetWithText(ListTile, 'Created for original'),
           retarget ? findsNothing : findsOneWidget,
         );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  for (final scenario in [
+    (size: const Size(375, 812), scale: 1.0),
+    (size: const Size(812, 375), scale: 1.0),
+    (size: const Size(1024, 768), scale: 1.0),
+    (size: const Size(375, 812), scale: 2.0),
+    (size: const Size(1024, 768), scale: 2.0),
+  ]) {
+    testWidgets(
+      'detail favorites fill the viewport and keep folder creation visible: $scenario',
+      (tester) async {
+        tester.view.physicalSize = scenario.size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final source = _Source();
+        _registerSource(source);
+        final localChanges = <bool?>[];
+        final host = _FolderCreationHost()
+          ..textScale = scenario.scale
+          ..content = _detailPanel(
+            source,
+            onFavorite: (local, _) => localChanges.add(local),
+          );
+        await host.mount(
+          tester,
+          folders: List.generate(10, (i) => 'QA Folder ${i + 1}'),
+        );
+        appdata.settings[FavoritePreferences.autoCloseFavoritePanel.key] =
+            false;
+        await pumpSidebar(tester);
+        final browser = find.byType(FavoriteFolderBrowser);
+        expect(
+          tester.getBottomLeft(browser).dy,
+          closeTo(scenario.size.height, 0.01),
+        );
+        expect(
+          tester.getSize(browser).height,
+          greaterThan(scenario.size.height - 64),
+        );
+        final button = find.byKey(const ValueKey('comic-favorite-new-folder'));
+        final position = tester.getCenter(button);
+        expect(position.dy, lessThan(56));
+        expect(position.dx, greaterThan(scenario.size.width - 64));
+        final scrolling = find.byWidgetPredicate(
+          (widget) =>
+              widget is Scrollable &&
+              widget.axisDirection == AxisDirection.down,
+        );
+        expect(scrolling, findsOneWidget);
+        final last = find.widgetWithText(ListTile, 'QA Folder 10');
+        await tester.scrollUntilVisible(
+          last,
+          250,
+          scrollable: scrolling,
+          maxScrolls: 20,
+        );
+        await Scrollable.ensureVisible(tester.element(last), alignment: 0.5);
+        await tester.pumpAndSettle();
+        expect(last.hitTestable(), findsOneWidget);
+        expect(tester.getCenter(button), position);
+        expect(tester.takeException(), isNull);
+        await tester.runAsync(() async {
+          final boundary =
+              host.repaint.currentContext!.findRenderObject()!
+                  as RenderRepaintBoundary;
+          final image = await boundary.toImage(pixelRatio: 1);
+          try {
+            final bytes = (await image.toByteData(
+              format: ui.ImageByteFormat.png,
+            ))!;
+            final directory = Directory('build/issues-ui-qa')
+              ..createSync(recursive: true);
+            File(
+              '${directory.path}/favorite-panel-${scenario.size.width.toInt()}x${scenario.size.height.toInt()}-${scenario.scale}.png',
+            ).writeAsBytesSync(
+              bytes.buffer.asUint8List(
+                bytes.offsetInBytes,
+                bytes.lengthInBytes,
+              ),
+            );
+          } finally {
+            image.dispose();
+          }
+        });
+        await tester.tap(last);
+        await settleSidebarWork(
+          tester,
+          () => AppDataOperations.instance.run(() async {}),
+        );
+        expect(host.manager.find('qa-comic', ComicType(source.key.hashCode)), [
+          'QA Folder 10',
+        ]);
+        expect(localChanges, [true]);
+        await tester.tap(button);
+        await pumpSidebar(tester);
+        await _create(tester, 'Created from fixed toolbar');
+        final search = find.byKey(const ValueKey('favorite-folder-search'));
+        await tester.scrollUntilVisible(
+          search,
+          -300,
+          maxScrolls: 12,
+          scrollable: scrolling,
+        );
+        await tester.enterText(search, 'Created from fixed toolbar');
+        await tester.pumpAndSettle();
+        expect(
+          find.widgetWithText(ListTile, 'Created from fixed toolbar'),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  for (final localFirst in [false, true]) {
+    testWidgets(
+      'detail favorites retain section ordering and network mutations: localFirst=$localFirst',
+      (tester) async {
+        var mutations = 0;
+        final source = _Source(
+          network: FavoriteData(
+            key: 'qa-network',
+            title: 'Remote',
+            multiFolder: false,
+            loadComic: null,
+            loadNext: null,
+            addOrDelFavorite: (_, _, _, _) async {
+              mutations++;
+              return const Res(true);
+            },
+          ),
+        );
+        _registerSource(source);
+        final networkChanges = <bool?>[];
+        final host = _FolderCreationHost()
+          ..content = _detailPanel(
+            source,
+            onFavorite: (_, network) => networkChanges.add(network),
+          );
+        final previous =
+            appdata.settings[FavoritePreferences.localFavoritesFirst.key];
+        appdata.settings[FavoritePreferences.localFavoritesFirst.key] =
+            localFirst;
+        addTearDown(
+          () => appdata.settings[FavoritePreferences.localFavoritesFirst.key] =
+              previous,
+        );
+        await host.mount(tester, folders: ['Local QA']);
+        appdata.settings[FavoritePreferences.autoCloseFavoritePanel.key] =
+            false;
+        await tester.pumpAndSettle();
+        final localY = tester.getTopLeft(find.text('Local Favorites')).dy;
+        final networkY = tester
+            .getTopLeft(find.text('Network Favorites').first)
+            .dy;
+        expect(localFirst ? localY < networkY : networkY < localY, isTrue);
+        await tester.tap(
+          find.descendant(
+            of: find.byType(NetworkFavoriteSection),
+            matching: find.text('Add'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(mutations, 1);
+        expect(networkChanges, [true]);
+        expect(find.text('Remove'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );

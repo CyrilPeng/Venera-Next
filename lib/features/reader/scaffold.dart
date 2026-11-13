@@ -102,6 +102,8 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
 
   bool _isOpen = false;
 
+  bool _isMenuLocked = false;
+
   bool _brightnessPanelOpen = false;
 
   final EInkRefreshController _eInkRefreshController = EInkRefreshController();
@@ -109,6 +111,8 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   static const kTopBarHeight = 56.0;
 
   bool get isOpen => _isOpen;
+
+  bool get isMenuLocked => _isMenuLocked;
 
   ReaderGesturePort? _gesturePort;
   ReaderGesturePort? get gestureDetectorState => _gesturePort;
@@ -163,6 +167,8 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
         oldWidget.data.sourceKey != widget.data.sourceKey ||
         !identical(oldWidget.imageWork, widget.imageWork)) {
       _replaceBrightnessPreview();
+      _isMenuLocked = false;
+      _gesturePort?.cancelMenuRequests();
     }
     if (oldWidget.data.swipeToCollect != widget.data.swipeToCollect) {
       addDragListener();
@@ -186,6 +192,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   }
 
   void openOrClose() {
+    if (!mounted || _isMenuLocked) return;
     setState(() {
       _isOpen = !_isOpen;
       if (!_isOpen) {
@@ -193,6 +200,33 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
       }
     });
     _applySystemUiMode();
+  }
+
+  void lockMenu() {
+    if (!mounted || _isMenuLocked) return;
+    setState(() {
+      _isMenuLocked = true;
+      _isOpen = false;
+      _brightnessPanelOpen = false;
+    });
+    _gesturePort?.cancelMenuRequests();
+    _sidebarBinding.close();
+    _applySystemUiMode();
+  }
+
+  void unlockMenu() {
+    if (!mounted || !_isMenuLocked) return;
+    // A tap accepted while locked must not open a menu after unlocking.
+    _gesturePort?.cancelMenuRequests();
+    setState(() => _isMenuLocked = false);
+  }
+
+  void _toggleMenuFromRemote() {
+    if (_isMenuLocked) {
+      unlockMenu();
+    } else {
+      openOrClose();
+    }
   }
 
   void update() {
@@ -235,7 +269,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
     return TvReaderInput(
       menuOpen: _isOpen,
       contentInteractive: isOnChapterCommentsPage,
-      onToggleMenu: openOrClose,
+      onToggleMenu: _toggleMenuFromRemote,
       onReadKey: widget.onRemoteKey ?? (_) {},
       onCancelReadKeys: widget.onCancelRemoteKeys ?? () {},
       onExit: widget.onExit,
@@ -297,6 +331,38 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
               child: buildBrightnessPanel(),
             ),
           ),
+          if (_isMenuLocked)
+            Positioned.fill(
+              child: SafeArea(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Material(
+                    color: context.colorScheme.surface.withValues(alpha: 0.9),
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(24),
+                    ),
+                    elevation: 2,
+                    child: IconButton(
+                      key: const ValueKey('reader-menu-unlock'),
+                      constraints: const BoxConstraints.tightFor(
+                        width: 48,
+                        height: 48,
+                      ),
+                      iconSize: 22,
+                      icon: Semantics(
+                        label: 'Unlock reader menu'.tl,
+                        child: Tooltip(
+                          message: 'Unlock reader menu'.tl,
+                          excludeFromSemantics: true,
+                          child: const Icon(Icons.lock_outline),
+                        ),
+                      ),
+                      onPressed: unlockMenu,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           Positioned.fill(
             child: EInkRefreshOverlay(controller: _eInkRefreshController),
           ),
@@ -347,6 +413,14 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
             onPressed: openChapterComments,
           ),
         ),
+      Tooltip(
+        message: 'Lock reader menu'.tl,
+        child: IconButton(
+          key: const ValueKey('reader-menu-lock'),
+          icon: const Icon(Icons.lock_outline),
+          onPressed: lockMenu,
+        ),
+      ),
       Tooltip(
         message: "Settings".tl,
         child: IconButton(
@@ -528,6 +602,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   }
 
   void openChapterDrawer() {
+    if (!mounted || _isMenuLocked) return;
     final request = widget.createChapterMenu();
     if (request == null) return;
     ReaderSidebarHandle? handle;
@@ -559,6 +634,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   void share() => unawaited(_imageExporter.export(sharing: true));
 
   void openSetting() {
+    if (!mounted || _isMenuLocked) return;
     widget.imageWork.diagnostics?.stop(ReaderDiagnosticStop.interrupted);
     final request = widget.createSettings();
     if (request == null || !request.isCurrent()) return;
@@ -606,7 +682,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   }
 
   late final _sidebarBinding = ReaderSidebarBinding(
-    canOpen: () => mounted,
+    canOpen: () => mounted && !_isMenuLocked,
     acquireInteraction: () {
       final releasePause = widget.acquireSidebarPause();
       final gesture = gestureDetectorState;
@@ -633,6 +709,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   }
 
   void openChapterComments() {
+    if (!mounted || _isMenuLocked) return;
     final request = widget.createChapterComments();
     if (request == null || !request.isCurrent()) return;
     ReaderSidebarHandle? handle;

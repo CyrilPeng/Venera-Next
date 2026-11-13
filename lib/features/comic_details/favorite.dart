@@ -70,20 +70,17 @@ class _FavoritePanelState extends State<ComicFavoritePanel>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: Appbar(title: Text("Favorite".tl)),
-      body: _FavoriteList(
-        cid: widget.cid,
-        type: widget.type,
-        isFavorite: widget.isFavorite,
-        onFavorite: widget.onFavorite,
-        favoriteItem: widget.favoriteItem,
-        updateTime: widget.updateTime,
-        comicSource: comicSource,
-        hasNetwork: hasNetwork,
-        localFolders: localFolders,
-        added: added,
-      ),
+    return _FavoriteList(
+      cid: widget.cid,
+      type: widget.type,
+      isFavorite: widget.isFavorite,
+      onFavorite: widget.onFavorite,
+      favoriteItem: widget.favoriteItem,
+      updateTime: widget.updateTime,
+      comicSource: comicSource,
+      hasNetwork: hasNetwork,
+      localFolders: localFolders,
+      added: added,
     );
   }
 }
@@ -124,18 +121,6 @@ class _FavoriteListState extends State<_FavoriteList> {
       appdata.settings,
     ).read(FavoritePreferences.localFavoritesFirst);
 
-    final localSection = _LocalSection(
-      cid: widget.cid,
-      type: widget.type,
-      favoriteItem: widget.favoriteItem,
-      updateTime: widget.updateTime,
-      localFolders: widget.localFolders,
-      added: widget.added,
-      onFavorite: (local) {
-        widget.onFavorite(local, null);
-      },
-    );
-
     final networkSection = widget.hasNetwork
         ? NetworkFavoriteSection(
             cid: widget.cid,
@@ -155,16 +140,20 @@ class _FavoriteListState extends State<_FavoriteList> {
           )
         : null;
 
-    return ListView(
-      children: [
-        if (localFavoritesFirst) ...[
-          localSection,
-          if (widget.hasNetwork) ...[divider!, networkSection!],
-        ] else ...[
-          if (widget.hasNetwork) ...[networkSection!, divider!],
-          localSection,
-        ],
-      ],
+    return _LocalSection(
+      cid: widget.cid,
+      type: widget.type,
+      favoriteItem: widget.favoriteItem,
+      updateTime: widget.updateTime,
+      localFolders: widget.localFolders,
+      added: widget.added,
+      headers: !localFavoritesFirst && widget.hasNetwork
+          ? [networkSection!, divider!]
+          : const [],
+      footers: localFavoritesFirst && widget.hasNetwork
+          ? [divider!, networkSection!]
+          : const [],
+      onFavorite: (local) => widget.onFavorite(local, null),
     );
   }
 }
@@ -485,6 +474,8 @@ class _LocalSection extends StatefulWidget {
     required this.localFolders,
     required this.added,
     required this.onFavorite,
+    this.headers = const [],
+    this.footers = const [],
   });
 
   final String cid;
@@ -494,6 +485,7 @@ class _LocalSection extends StatefulWidget {
   final List<String> localFolders;
   final List<String> added;
   final void Function(bool) onFavorite;
+  final List<Widget> headers, footers;
 
   @override
   State<_LocalSection> createState() => _LocalSectionState();
@@ -578,63 +570,59 @@ class _LocalSectionState extends State<_LocalSection> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            "Local Favorites".tl,
-            style: ts.s14.copyWith(
-              fontWeight: FontWeight.w600,
-              color: context.colorScheme.primary,
+    return Scaffold(
+      appBar: Appbar(
+        title: Text('Favorite'.tl),
+        actions: [
+          IconButton(
+            key: const ValueKey('comic-favorite-new-folder'),
+            tooltip: 'New Folder'.tl,
+            icon: const Icon(Icons.create_new_folder_outlined),
+            onPressed: saving || !_current
+                ? null
+                : () {
+                    final target = widget;
+                    newFolder(
+                      context,
+                      onChanged: (folders) {
+                        if (!mounted ||
+                            widget.cid != target.cid ||
+                            widget.type != target.type) {
+                          return;
+                        }
+                        _refreshFolders();
+                      },
+                    );
+                  },
+          ),
+        ],
+      ),
+      body: FavoriteFolderBrowser(
+        tree: _tree,
+        selected: Set.of(localAdded),
+        enabled: !saving && _current,
+        onSelected: (folder) =>
+            changeFavorite(folder, localAdded.contains(folder)),
+        trailingBuilder: (folder) => _HoverButton(
+          isFavorite: localAdded.contains(folder),
+          enabled: !saving && _current,
+          onTap: () => changeFavorite(folder, localAdded.contains(folder)),
+        ),
+        headers: [
+          ...widget.headers,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'Local Favorites'.tl,
+              style: ts.s14.copyWith(
+                fontWeight: FontWeight.w600,
+                color: context.colorScheme.primary,
+              ),
             ),
           ),
-        ),
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: math.min(360, MediaQuery.sizeOf(context).height * 0.5),
-          ),
-          child: FavoriteFolderBrowser(
-            tree: _tree,
-            shrinkWrap: true,
-            selected: Set.of(localAdded),
-            enabled: !saving && _current,
-            onSelected: (folder) =>
-                changeFavorite(folder, localAdded.contains(folder)),
-            trailingBuilder: (folder) => _HoverButton(
-              isFavorite: localAdded.contains(folder),
-              enabled: !saving && _current,
-              onTap: () => changeFavorite(folder, localAdded.contains(folder)),
-            ),
-          ),
-        ),
-        // New folder button
-        ListTile(
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.add, size: 20),
-              const SizedBox(width: 4),
-              Text("New Folder".tl),
-            ],
-          ),
-          onTap: () {
-            final target = widget;
-            newFolder(
-              context,
-              onChanged: (folders) {
-                if (!mounted ||
-                    widget.cid != target.cid ||
-                    widget.type != target.type) {
-                  return;
-                }
-                _refreshFolders();
-              },
-            );
-          },
-        ),
-      ],
+        ],
+        footers: widget.footers,
+      ),
     );
   }
 }

@@ -200,6 +200,7 @@ class ReaderImagesHost extends StatelessWidget {
           scrollSpeed: preferences.readerScrollSpeed,
           limitImageWidth: preferences.limitImageWidth == true,
           sideMargin: preferences.readerSideMargin,
+          cropWhiteBorders: preferences.cropWhiteBorders,
           showImageDimensions: preferences.showImageDimensions,
           doubleTapCollect:
               appdata.settings.globalReaderSettings.quickCollectImage ==

@@ -9,7 +9,7 @@
 1. 在 [GitHub Releases](https://github.com/CyrilPeng/Venera-Next/releases) 选择提供鸿蒙包的版本，下载 `VeneraNext-版本-harmonyos-arm64-unsigned.hap`，不要使用 APK 或诊断探针。未提供 HAP 的历史版本不适用本指南；开发分支 Actions 产物也不等于已经发布。
 2. 同一发布页还提供 `harmonyos-manifest.json` 和 `harmonyos-SHA256SUMS`。安装前按摘要文件核对原始 HAP；签名会改变包体，原始摘要不能用于验证重签后的包。不要下载未知来源的重签名包。安装指南统一保存在仓库，后续 Release 正文链接到对应版本标签下的中英文指南；`v1.18.3` 等历史版本附带的指南副本保留。
 3. 已有鸿蒙端小白调试助手的用户可沿用其现有环境，导入该 **未签名 HAP** 后由自己完成账号登录、设备授权、签名和安装。维护者不收集账号、设备标识、调试授权、证书或私钥；不附签名密钥、不绕过鸿蒙安全策略、不承诺自动续签。
-4. 应用显示名为 `VeneraNext (HarmonyOS Beta)`，独立包名仍为 `com.github.cyrilpeng.veneranext.harmony`。它与旧诊断探针、卓易通内的 Android 包使用不同沙箱，不会自动共享那些应用的数据。
+4. 包含 [#162](https://github.com/CyrilPeng/Venera-Next/issues/162) 修复的后续 HAP 将桌面名称统一为 `VeneraNext`。已发布的 `v1.18.3` 和 `v1.18.4-rc.1` 尚无此修复，按系统语言可能显示 `venera_next` 或 `VeneraNext (HarmonyOS Beta)`。独立包名仍为 `com.github.cyrilpeng.veneranext.harmony`；它与旧诊断探针、卓易通内的 Android 包使用不同沙箱，不会自动共享那些应用的数据。
 
 应用内版本及构建号与所在 Release 一致，可在 manifest 的 `build` 中核对。鸿蒙安装器显示三段数字版本名；若是 RC，完整预发布后缀保留在应用内，递增构建号用于区分升级。
 
