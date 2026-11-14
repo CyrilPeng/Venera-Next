@@ -14,6 +14,29 @@ permissions:
   contents: read
 
 jobs:
+  android-jvm:
+    name: Android 原生会话与文件所有权
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: oracle
+          java-version: '17'
+      - name: 运行与生产 primitive 同源的 Kotlin 回归
+        run: python3 .github/scripts/run_android_jvm_tests.py
+      - name: 保存 JVM 编译与运行证据
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-jvm-test-runs
+          path: |
+            build/test-audit/android-jvm/*.log
+            build/test-audit/android-jvm/summary.json
+          if-no-files-found: error
+          retention-days: 14
+
   apple-directory-access:
     name: Apple 目录授权与跨会话恢复
     runs-on: macos-15
@@ -75,7 +98,17 @@ jobs:
       - run: python3 .github/scripts/release_version.py --check
       - run: python3 .github/scripts/check_structure_imports.py
       - run: python3 .github/scripts/check_architecture_dependencies.py
+      - name: 核对测试文件与执行清单
+        run: python3 .github/scripts/test_suites.py --strict-imports --output build/test-audit/inventory.json
       - run: python3 -m unittest discover -s .github/scripts/tests -p "test_*.py"
+      - name: 保存测试清单
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-suite-inventory
+          path: build/test-audit/inventory.json
+          if-no-files-found: error
+          retention-days: 14
       - run: flutter pub get --enforce-lockfile
       - name: 准备并验证独立代码审查工具
         working-directory: tool/code_audit
@@ -101,13 +134,44 @@ jobs:
             exit 0
           fi
           dart format --output=none --set-exit-if-changed "${dart_files[@]}"
-      - run: flutter analyze --fatal-infos --fatal-warnings
+      - run: flutter analyze --no-pub --fatal-infos --fatal-warnings
 
-  flutter-tests:
-    name: Flutter 测试与覆盖率
+  flutter-fast:
+    name: 快速 Flutter 回归
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VENERA_REQUIRE_NATIVE_TEST_LIBRARIES: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          flutter-version-file: pubspec.yaml
+          architecture: x64
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: 提早运行不依赖原生库的完整快速组
+        run: >-
+          python3 .github/scripts/run_flutter_tests.py --partition fast --concurrency 4
+          --coverage --coverage-path build/test-audit/fast/lcov.info
+          --output build/test-audit/fast
+      - name: 保存快速组的原始事件与覆盖率
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: flutter-default-fast
+          path: build/test-audit/fast/
+          if-no-files-found: error
+          retention-days: 14
+
+  flutter-native:
+    name: Flutter 原生库与内存安全
     needs: rhttp-native
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    env:
+      VENERA_REQUIRE_NATIVE_TEST_LIBRARIES: '1'
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
@@ -124,7 +188,7 @@ jobs:
       - name: 准备 Linux 原生测试库
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build g++ libsqlite3-dev
+          sudo apt-get install -y cmake ninja-build g++ pkg-config libsqlite3-dev
           python3 .github/scripts/prepare_linux_test_libraries.py
       - name: 验证原生编码与归档 ABI 的内存安全
         env:
@@ -150,28 +214,124 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
           cmake --build build/saf-sanitizers --parallel 2
           ctest --test-dir build/saf-sanitizers --output-on-failure
-      - run: flutter test --coverage
+      - name: 保存已验证的共享测试库
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-flutter-test-libraries
+          path: build/test-native/lib/
+          if-no-files-found: error
+          retention-days: 1
+
+  flutter-full:
+    name: Flutter 全量回归（${{ matrix.partition }}）
+    needs: flutter-native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [shard-1, shard-2, shard-3]
+    env:
+      VENERA_REQUIRE_NATIVE_TEST_LIBRARIES: '1'
+      LD_LIBRARY_PATH: ${{ github.workspace }}/build/test-native/lib
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          flutter-version-file: pubspec.yaml
+          architecture: x64
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux-flutter-test-libraries
+          path: build/test-native/lib
+      - name: 核对实际库文件与摘要并加载必需 ABI
+        run: python3 .github/scripts/prepare_linux_test_libraries.py --verify-only
+      - name: 运行完整分片并保留独立覆盖率
+        run: >-
+          python3 .github/scripts/run_flutter_tests.py --partition "${{ matrix.partition }}" --concurrency 4
+          --coverage --coverage-path "build/test-audit/${{ matrix.partition }}/lcov.info"
+          --output "build/test-audit/${{ matrix.partition }}"
+      - name: 保存每个分片的原始事件与覆盖率
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: flutter-default-${{ matrix.partition }}
+          path: build/test-audit/${{ matrix.partition }}/
+          if-no-files-found: error
+          retention-days: 14
+
+  flutter-tv:
+    name: TV 编译身份、遥控器与低内存策略
+    needs: flutter-native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VENERA_REQUIRE_NATIVE_TEST_LIBRARIES: '1'
+      LD_LIBRARY_PATH: ${{ github.workspace }}/build/test-native/lib
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          flutter-version-file: pubspec.yaml
+          architecture: x64
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux-flutter-test-libraries
+          path: build/test-native/lib
+      - name: 核对实际库文件与摘要并加载必需 ABI
+        run: python3 .github/scripts/prepare_linux_test_libraries.py --verify-only
+      - name: 使用真实 TV flavor 及清单参数执行
+        run: python3 .github/scripts/run_flutter_tests.py --suite tv --output build/test-audit/tv
+      - name: 保存独立 TV 运行证据
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: flutter-tv-test-runs
+          path: build/test-audit/tv/
+          if-no-files-found: error
+          retention-days: 14
+
+  flutter-tests:
+    name: Flutter 测试与覆盖率
+    if: ${{ always() }}
+    needs: [flutter-fast, flutter-native, flutter-full, flutter-tv]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: flutter-default-*
+          path: build/test-audit/collected
+          merge-multiple: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: flutter-tv-test-runs
+          path: build/test-audit/collected/flutter-tv-test-runs
+      - name: 严格核对全部结果、完整并集及合并覆盖率
+        if: ${{ always() }}
         env:
-          LD_LIBRARY_PATH: ${{ github.workspace }}/build/test-native/lib
-      - name: 验证 TV 编译身份、遥控器与低内存策略
-        env:
-          LD_LIBRARY_PATH: ${{ github.workspace }}/build/test-native/lib
-        run: |
-          flutter test --no-pub --flavor tv \
-            --dart-define=EXPECT_TV=true \
-            --dart-define=TV_BUILD=ci-test --dart-define=TV_REVISION=tv-test \
-            test/app_runtime/tv_build_profile_test.dart \
-            test/components/tv_navigation_test.dart \
-            test/components/application_update_prompt_test.dart \
-            test/features/favorites/favorite_folder_browser_test.dart \
-            test/features/favorites/favorite_hierarchy_tv_test.dart \
-            test/features/favorites/favorite_hierarchy_management_test.dart \
-            test/features/reader/tv_input_test.dart \
-            test/foundation/tv_reader_policy_test.dart \
-            test/foundation/application_update_service_test.dart
-      - name: 汇总 Dart 覆盖率
+          REQUIRED_RESULTS: ${{ toJSON(needs) }}
+        run: >-
+          python3 .github/scripts/aggregate_flutter_tests.py --reports build/test-audit/collected
+          --coverage-output coverage/lcov.info --github-summary
+      - name: 保存普通平台原始记录与完整汇总
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: flutter-test-runs
+          path: build/test-audit/
+          if-no-files-found: error
+          retention-days: 14
+      - name: 汇总合并后的 Dart 覆盖率
         run: python3 .github/scripts/report_dart_coverage.py coverage/lcov.info --github-summary
-      - name: 上传 Dart 覆盖率报告
+      - name: 上传完整 Dart 覆盖率报告
         uses: actions/upload-artifact@v7
         with:
           name: dart-coverage

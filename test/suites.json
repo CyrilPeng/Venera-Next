@@ -1,0 +1,500 @@
+{
+  "schema_version": 1,
+  "suites": {
+    "default": {
+      "description": "All application Flutter regressions; native libraries are prepared by the host job.",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "include": [
+        "test/**/*_test.dart"
+      ],
+      "arguments": [],
+      "ci": ".github/workflows/analyze.yml / flutter-fast + flutter-full; flutter-tests complete gate"
+    },
+    "windows": {
+      "description": "Windows branches, platform-bound cases and the existing native/WebView contracts.",
+      "platforms": [
+        "windows"
+      ],
+      "include": [
+        "test/**/*windows*_test.dart",
+        "test/foundation/native_codecs_test.dart",
+        "test/foundation/image_processing_native_test.dart",
+        "test/foundation/reader_image_processing_native_test.dart",
+        "test/foundation/js_engine_lifecycle_test.dart",
+        "test/foundation/js_native_contract_test.dart",
+        "test/foundation/js_owned_result_test.dart",
+        "test/foundation/js_result_descendants_test.dart",
+        "test/routing/webview_menu_test.dart",
+        "test/features/comic_source/source_web_login_test.dart",
+        "test/network/rhttp_active_cancellation_test.dart"
+      ],
+      "source_matches": [
+        "Platform\\.isWindows",
+        "native_test_environment\\.dart"
+      ],
+      "arguments": []
+    },
+    "harmonyos-host": {
+      "description": "Host regressions for the independently pinned HarmonyOS SDK and controlled dependency overlays; not device acceptance.",
+      "platforms": [
+        "linux"
+      ],
+      "include": [
+        "test/components/context_menu_test.dart",
+        "test/components/application_update_prompt_test.dart",
+        "test/components/select_layout_test.dart",
+        "test/foundation/application_update_service_test.dart",
+        "test/foundation/harmonyos_test.dart",
+        "test/foundation/directory_selection_test.dart",
+        "test/foundation/selection_operation_test.dart",
+        "test/foundation/file_selection_test.dart",
+        "test/foundation/file_selection_lifecycle_test.dart",
+        "test/foundation/image_processing_test.dart",
+        "test/foundation/image_processing_native_test.dart",
+        "test/foundation/native_codecs_test.dart",
+        "test/foundation/js_native_contract_test.dart",
+        "test/foundation/js_engine_lifecycle_test.dart",
+        "test/foundation/js_owned_result_test.dart",
+        "test/foundation/js_result_descendants_test.dart",
+        "test/foundation/saf_test.dart",
+        "test/features/local_comics/import_export/directory_copy_test.dart",
+        "test/features/local_comics/import_export/pdf_export_lifecycle_test.dart",
+        "test/features/favorites/favorite_folder_path_test.dart",
+        "test/features/favorites/favorite_folder_browser_test.dart",
+        "test/features/sync/app_data_archive_test.dart",
+        "test/features/sync/favorite_hierarchy_transfer_test.dart",
+        "test/features/favorites/favorite_hierarchy_test.dart",
+        "test/features/favorites/favorites_manager_test.dart",
+        "test/features/favorites/folder_name_case_test.dart",
+        "test/features/favorites/folder_creation_presentation_test.dart",
+        "test/features/favorites/folder_rename_ownership_test.dart",
+        "test/features/favorites/favorite_folder_import_test.dart",
+        "test/features/favorites/read_later_service_test.dart",
+        "test/features/comic_source/source_web_login_test.dart",
+        "test/routing/webview_menu_test.dart",
+        "test/routing/windows_webview_environment_test.dart",
+        "test/routing/windows_webview_proxy_test.dart",
+        "test/features/sync/comic_archive_batch_test.dart",
+        "test/features/sync/comic_archive_transfer_dialog_test.dart",
+        "test/features/sync/comic_backup_test.dart",
+        "test/features/sync/comic_backup_transport_test.dart",
+        "test/features/sync/comic_backup_i18n_test.dart",
+        "test/features/local_comics/import_export/cbz_compatibility_test.dart",
+        "test/features/local_comics/import_export/cbz_import_lifecycle_test.dart",
+        "test/features/local_comics/import_export/epub_import_test.dart",
+        "test/features/local_comics/import_export/comic_import_service_test.dart",
+        "test/features/local_comics/import_export/import_identity_allocation_test.dart",
+        "test/features/local_comics/import_export/import_registration_failure_test.dart",
+        "test/features/local_comics/import_export/comic_collection_archive_test.dart",
+        "test/features/local_comics/import_export/collection_layout_dialog_test.dart",
+        "test/features/local_comics/import_export/copy_cleanup_test.dart",
+        "test/features/local_comics/import_export/import_presentation_test.dart",
+        "test/features/local_comics/harmonyos_import_test.dart",
+        "test/features/local_comics/local_archive_visibility_test.dart",
+        "test/features/local_comics/local_registration_storage_test.dart",
+        "test/features/local_comics/local_repository_test.dart",
+        "test/features/comic_widgets/reading_status_layout_test.dart",
+        "test/features/comic_widgets/reading_progress_test.dart",
+        "test/features/comic_widgets/detailed_reading_progress_test.dart",
+        "test/features/settings/local_storage_settings_test.dart",
+        "test/features/settings/app_controls_persistence_test.dart",
+        "test/features/comic_details/share_lifecycle_test.dart",
+        "test/features/reader/bottom_actions_test.dart",
+        "test/features/reader/platform_effects_controller_test.dart",
+        "test/features/reader/platform_effects_test.dart",
+        "test/features/reader/reader_exit_integration_test.dart",
+        "test/features/reader/continuous_input_test.dart",
+        "test/features/reader/display_image_provider_test.dart",
+        "test/features/reader/scroll_aware_display_image_test.dart",
+        "test/features/reader/white_border_crop_test.dart",
+        "test/features/favorites/local_favorites_refresh_test.dart",
+        "test/features/reader/reader_layout_integration_test.dart",
+        "test/features/reader/reader_navigation_integration_test.dart",
+        "test/features/reader/reader_menu_integration_test.dart",
+        "test/features/reader/reader_comments_integration_test.dart",
+        "test/features/reader/reader_export_integration_test.dart",
+        "test/features/reader/reader_settings_integration_test.dart",
+        "test/features/reader/reader_platform_exit_integration_test.dart",
+        "test/features/reader/reader_window_exit_integration_test.dart",
+        "test/features/reader/reader_image_exit_integration_test.dart",
+        "test/features/favorites/favorites_manager_lifecycle_test.dart",
+        "test/features/favorites/favorites_manager_compatibility_test.dart",
+        "test/features/favorites/favorites_manager_tracking_test.dart"
+      ],
+      "arguments": []
+    },
+    "tv": {
+      "description": "The actual TV flavor, compilation identity, remote input and low-memory policy.",
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "include": [
+        "test/app_runtime/tv_build_profile_test.dart",
+        "test/components/tv_navigation_test.dart",
+        "test/components/application_update_prompt_test.dart",
+        "test/features/favorites/favorite_folder_browser_test.dart",
+        "test/features/favorites/favorite_hierarchy_tv_test.dart",
+        "test/features/favorites/favorite_hierarchy_management_test.dart",
+        "test/features/reader/tv_input_test.dart",
+        "test/foundation/tv_reader_policy_test.dart",
+        "test/foundation/application_update_service_test.dart"
+      ],
+      "arguments": [
+        "--flavor",
+        "tv",
+        "--dart-define=EXPECT_TV=true",
+        "--dart-define=TV_BUILD=ci-test",
+        "--dart-define=TV_REVISION=tv-test"
+      ],
+      "ci": ".github/workflows/analyze.yml / flutter-tv"
+    },
+    "fast": {
+      "platforms": [
+        "linux",
+        "windows",
+        "macos"
+      ],
+      "include": [
+        "test/app_runtime/core_bootstrap_shutdown_test.dart",
+        "test/app_runtime/core_bootstrap_test.dart",
+        "test/app_runtime/headless_shutdown_test.dart",
+        "test/app_runtime/headless_source_update_command_test.dart",
+        "test/app_runtime/headless_subscription_command_test.dart",
+        "test/app_runtime/headless_sync_command_test.dart",
+        "test/app_runtime/interactive_bindings_test.dart",
+        "test/app_runtime/interactive_window_hotkey_test.dart",
+        "test/app_runtime/source_installation_shutdown_test.dart",
+        "test/features/comic_source/chapter_position_test.dart",
+        "test/features/comic_source/source_catalog_test.dart",
+        "test/features/comic_source/source_installation_test.dart",
+        "test/features/comic_source/source_summary_snapshot_test.dart",
+        "test/features/reader/chapter_request_test.dart",
+        "test/features/reader/comic_layout_test.dart",
+        "test/features/reader/current_image_test.dart",
+        "test/features/reader/dual_page_split_test.dart",
+        "test/features/reader/history_progress_test.dart",
+        "test/features/reader/image_cache_policy_test.dart",
+        "test/features/reader/image_favorite_swipe_test.dart",
+        "test/features/reader/loading_history_test.dart",
+        "test/features/reader/reading_session_test.dart",
+        "test/features/search/search_shortcuts_test.dart",
+        "test/features/settings/keyword_settings_store_test.dart",
+        "test/features/settings/setting_field_test.dart",
+        "test/features/sync/data_sync_archive_order_test.dart",
+        "test/features/sync/data_sync_configuration_persistence_test.dart",
+        "test/features/sync/data_sync_controller_test.dart",
+        "test/features/sync/data_sync_exit_test.dart",
+        "test/features/sync/data_sync_operation_test.dart",
+        "test/features/sync/data_sync_recovery_test.dart",
+        "test/features/sync/data_sync_test.dart",
+        "test/features/sync/data_sync_upload_recovery_test.dart",
+        "test/foundation/app_data_operations_test.dart",
+        "test/foundation/app_data_preparation_test.dart",
+        "test/foundation/app_profile_test.dart",
+        "test/foundation/discovery_preferences_test.dart",
+        "test/foundation/event_subscription_test.dart",
+        "test/foundation/favorite_preferences_test.dart",
+        "test/foundation/file_selection_lifecycle_test.dart",
+        "test/foundation/file_selection_test.dart",
+        "test/foundation/file_system_test.dart",
+        "test/foundation/file_type_test.dart",
+        "test/foundation/image_copy_test.dart",
+        "test/foundation/image_processing_test.dart",
+        "test/foundation/image_work_test.dart",
+        "test/foundation/keyword_filter_test.dart",
+        "test/foundation/reader_gesture_settings_test.dart",
+        "test/foundation/reader_mode_settings_test.dart",
+        "test/foundation/reader_settings_snapshot_test.dart",
+        "test/foundation/res_failure_test.dart",
+        "test/foundation/startup_update_check_test.dart",
+        "test/foundation/throttled_task_runner_test.dart",
+        "test/foundation/window_hotkey_test.dart",
+        "test/network/cache_test.dart",
+        "test/network/image_stream_test.dart",
+        "test/network/owned_dio_client_test.dart",
+        "test/network/request_scope_test.dart",
+        "test/network/shared_image_requests_test.dart",
+        "test/network/webdav_diagnostics_test.dart",
+        "test/network/webdav_test.dart",
+        "test/tool/ci_workflow_contract_test.dart"
+      ],
+      "arguments": [],
+      "ci": ".github/workflows/analyze.yml / flutter-fast",
+      "purpose": "Early verified logic and component feedback without waiting for custom native-library builds."
+    }
+  },
+  "test_entrypoints": [
+    {
+      "path": "test/foundation/photo_view_controller_lifecycle_test.dart",
+      "target": "packages/photo_view/test/controller_lifecycle_test.dart",
+      "reason": "Runs the vendored package's ownership contracts in the application's locked Flutter environment."
+    }
+  ],
+  "external": [
+    {
+      "id": "python-ci",
+      "include": [
+        ".github/scripts/tests/test_*.py"
+      ],
+      "kind": "script-behavior",
+      "entry": "python -m unittest discover -s .github/scripts/tests -p test_*.py",
+      "ci": ".github/workflows/analyze.yml / analyze"
+    },
+    {
+      "id": "apple-directory",
+      "include": [
+        "apple/*Tests.swift"
+      ],
+      "kind": "native",
+      "entry": "swift test --package-path apple",
+      "ci": ".github/workflows/analyze.yml / apple-directory-access"
+    },
+    {
+      "id": "rhttp-native",
+      "include": [
+        "packages/rhttp/rust/src/**/*.rs"
+      ],
+      "kind": "native-inline",
+      "entry": "cargo test --locked --manifest-path packages/rhttp/rust/Cargo.toml --lib",
+      "ci": ".github/workflows/analyze.yml / rhttp-native"
+    },
+    {
+      "id": "photo-view",
+      "include": [
+        "packages/photo_view/test/*_test.dart"
+      ],
+      "kind": "application-entrypoint",
+      "entry": "test/foundation/photo_view_controller_lifecycle_test.dart",
+      "ci": ".github/workflows/analyze.yml / flutter-full via the default partition owning its application wrapper"
+    },
+    {
+      "id": "native-codecs",
+      "include": [
+        "packages/venera_native/test/native_test.cpp"
+      ],
+      "kind": "native",
+      "entry": "ctest with VENERA_NATIVE_BUILD_TESTS=ON",
+      "ci": ".github/workflows/analyze.yml / flutter-native"
+    },
+    {
+      "id": "saf-descriptors",
+      "include": [
+        "packages/venera_saf/test/descriptor_test.cpp"
+      ],
+      "kind": "native",
+      "entry": "ctest with VENERA_SAF_BUILD_TESTS=ON",
+      "ci": ".github/workflows/analyze.yml / flutter-native"
+    },
+    {
+      "id": "windows-startup",
+      "include": [
+        "windows/tests/*_test.cpp"
+      ],
+      "kind": "native",
+      "entry": "ctest --test-dir build/windows/startup_tests",
+      "ci": ".github/workflows/pr_build.yml / windows; .github/workflows/build.yml / Windows"
+    },
+    {
+      "id": "share-windows",
+      "include": [
+        "packages/share_plus/windows/tests/*_test.cpp"
+      ],
+      "kind": "native",
+      "entry": "ctest --test-dir build/share-plus-tests",
+      "ci": ".github/workflows/pr_build.yml / windows; .github/workflows/build.yml / Windows"
+    },
+    {
+      "id": "share-android",
+      "include": [
+        "packages/share_plus/android/src/test/**/*.kt"
+      ],
+      "kind": "native-jvm",
+      "entry": "python .github/scripts/run_android_jvm_tests.py; android/gradlew :share_plus:testShareOwnership",
+      "ci": ".github/workflows/analyze.yml / android-jvm; .github/workflows/build.yml / Android",
+      "jvm_groups": [
+        {
+          "test": "packages/share_plus/android/src/test/kotlin/dev/fluttercommunity/plus/share/ShareOwnershipTest.kt",
+          "sources": [
+            "packages/share_plus/android/src/main/kotlin/dev/fluttercommunity/plus/share/ShareFileSession.kt",
+            "packages/share_plus/android/src/main/kotlin/dev/fluttercommunity/plus/share/ShareRequestCoordinator.kt"
+          ],
+          "main": "dev.fluttercommunity.plus.share.ShareOwnershipTest"
+        }
+      ]
+    },
+    {
+      "id": "android-jvm",
+      "include": [
+        "test/native/*_test.kt"
+      ],
+      "kind": "native-jvm",
+      "entry": "python .github/scripts/run_android_jvm_tests.py (Linux / Java 17 / Kotlin 2.1.0)",
+      "ci": ".github/workflows/analyze.yml / android-jvm",
+      "jvm_groups": [
+        {
+          "test": "test/native/download_session_state_test.kt",
+          "sources": [
+            "android/app/src/main/kotlin/com/github/cyrilpeng/veneranext/DownloadSessionState.kt"
+          ],
+          "main": "com.github.cyrilpeng.veneranext.Download_session_state_testKt"
+        },
+        {
+          "test": "test/native/selected_file_storage_test.kt",
+          "sources": [
+            "android/app/src/main/kotlin/com/github/cyrilpeng/veneranext/SelectedFileStorage.kt"
+          ],
+          "main": "Selected_file_storage_testKt"
+        },
+        {
+          "test": "test/native/volume_key_subscriptions_test.kt",
+          "sources": [
+            "android/app/src/main/kotlin/com/github/cyrilpeng/veneranext/VolumeKeySubscriptions.kt"
+          ],
+          "main": "com.github.cyrilpeng.veneranext.Volume_key_subscriptions_testKt"
+        }
+      ]
+    },
+    {
+      "id": "harmonyos-python",
+      "include": [
+        "tool/harmonyos/test_*.py"
+      ],
+      "kind": "script-behavior",
+      "entry": "python -m unittest discover -s tool/harmonyos -p test_*.py",
+      "ci": ".github/workflows/harmonyos-release.yml / unsigned-hap"
+    },
+    {
+      "id": "harmonyos-node",
+      "include": [
+        "tool/harmonyos/test_*.mjs"
+      ],
+      "kind": "bridge-behavior",
+      "entry": "node --test tool/harmonyos/test_directory_bridge.mjs",
+      "ci": ".github/workflows/harmonyos-release.yml / unsigned-hap"
+    },
+    {
+      "id": "harmonyos-templates",
+      "include": [
+        "tool/harmonyos/probe/test/*.dart.template"
+      ],
+      "kind": "generated-probe",
+      "entry": "tool/harmonyos/prepare_probe.py; sideload probe/device acceptance",
+      "ci": null,
+      "manual": "These templates target the diagnostic probe, not the main reader HAP's runtime acceptance."
+    },
+    {
+      "id": "code-audit",
+      "include": [
+        "tool/code_audit/bin/self_check.dart"
+      ],
+      "kind": "tool-self-check",
+      "entry": "dart run bin/self_check.dart in tool/code_audit",
+      "ci": ".github/workflows/analyze.yml / analyze"
+    },
+    {
+      "id": "saf-provider",
+      "include": [
+        "tool/saf_provider_probe/Provider.kt",
+        "tool/saf_provider_probe/ConsumerActivity.kt"
+      ],
+      "kind": "emulator-provider",
+      "entry": "tool/saf_provider_probe/prepare_probe.py --build / --run",
+      "ci": ".github/workflows/analyze.yml / android-saf-provider"
+    },
+    {
+      "id": "appimage-smoke",
+      "include": [
+        ".github/scripts/test_appimage.sh"
+      ],
+      "kind": "packaged-smoke",
+      "entry": "bash .github/scripts/test_appimage.sh <architecture>",
+      "ci": ".github/workflows/build.yml / Linux and Linux-arm64"
+    },
+    {
+      "id": "windows-smoke",
+      "include": [
+        ".github/scripts/test_windows_startup.ps1"
+      ],
+      "kind": "packaged-smoke",
+      "entry": "PowerShell startup smoke with the built app or installer",
+      "ci": ".github/workflows/pr_build.yml / windows; .github/workflows/build.yml / Windows"
+    },
+    {
+      "id": "manual-probes",
+      "include": [
+        "tool/*_probe.dart"
+      ],
+      "kind": "manual-diagnostics",
+      "entry": "The corresponding doc/experiments or development guide",
+      "ci": null,
+      "manual": "Codec, reader processing and pipeline measurements are host-specific diagnostics; they are not device acceptance results."
+    }
+  ],
+  "default_execution": {
+    "fast_suite": "fast",
+    "shards": 3,
+    "default_weight_ms": 2000,
+    "weights_ms": {
+      "test/features/comic_source/source_data_crash_test.dart": 8681,
+      "test/features/comic_source/source_data_widget_test.dart": 5899,
+      "test/features/comic_source/source_editor_ownership_test.dart": 24814,
+      "test/features/comic_source/source_mutation_recovery_test.dart": 17612,
+      "test/features/comic_source/source_preferences_widget_test.dart": 6506,
+      "test/features/comic_source/source_transaction_crash_test.dart": 26489,
+      "test/features/comic_source/source_update_ownership_test.dart": 18911,
+      "test/features/comic_widgets/comic_block_persistence_test.dart": 5450,
+      "test/features/favorites/comic_reorder_ownership_test.dart": 11780,
+      "test/features/favorites/favorite_confirmation_ownership_test.dart": 11765,
+      "test/features/favorites/favorite_transfer_ownership_test.dart": 7369,
+      "test/features/favorites/favorites_reorder_test.dart": 6201,
+      "test/features/favorites/favorites_view_persistence_test.dart": 12233,
+      "test/features/favorites/folder_creation_presentation_test.dart": 9571,
+      "test/features/favorites/folder_order_ownership_test.dart": 5327,
+      "test/features/favorites/folder_rename_ownership_test.dart": 8667,
+      "test/features/favorites/local_favorites_refresh_test.dart": 8116,
+      "test/features/follow_updates/follow_updates_folder_persistence_test.dart": 5552,
+      "test/features/image_favorites/time_filter_widget_test.dart": 7941,
+      "test/features/local_comics/local_archive_visibility_test.dart": 5494,
+      "test/features/reader/auto_reading_viewport_test.dart": 33503,
+      "test/features/reader/continuous_input_test.dart": 5318,
+      "test/features/reader/reader_comments_integration_test.dart": 7066,
+      "test/features/reader/reader_exit_integration_test.dart": 8951,
+      "test/features/reader/reader_export_integration_test.dart": 11043,
+      "test/features/reader/reader_layout_integration_test.dart": 36676,
+      "test/features/reader/reader_menu_integration_test.dart": 10800,
+      "test/features/reader/reader_navigation_integration_test.dart": 20539,
+      "test/features/reader/reader_platform_exit_integration_test.dart": 9003,
+      "test/features/reader/reader_window_exit_integration_test.dart": 5911,
+      "test/features/settings/custom_settings_persistence_test.dart": 10672,
+      "test/features/settings/explore_settings_test.dart": 5185,
+      "test/features/settings/keyword_display_persistence_test.dart": 8618,
+      "test/features/settings/keyword_rules_widget_test.dart": 10353,
+      "test/features/settings/pages_reorder_test.dart": 5295,
+      "test/features/settings/reader_settings_persistence_test.dart": 6869,
+      "test/features/settings/webdav_settings_persistence_test.dart": 5841,
+      "test/features/sync/app_data_import_crash_test.dart": 67554,
+      "test/features/sync/data_sync_content_crash_test.dart": 7891,
+      "test/features/sync/data_sync_content_recovery_crash_test.dart": 12049,
+      "test/features/sync/data_sync_upload_crash_test.dart": 115462,
+      "test/foundation/file_save_test.dart": 5195,
+      "test/routing/cloudflare_cookie_admission_test.dart": 6558,
+      "test/routing/desktop_webview_lifecycle_test.dart": 7248
+    },
+    "weights_reference": {
+      "source_commit": "9054677215cbe02f5fca685890285d4011bf88bb",
+      "checkout_commit": "29c3b0202b01d06f849fc0f0eec1cca3bce52d1f",
+      "source_tree_sha": "e88f2572ce359b4af8d2cb5859fa902aad249ebe",
+      "quality_run": "43434471214",
+      "metric": "suite_span_ms",
+      "include_above_ms": 5000,
+      "note": "Measured slow files drive LPT assignment; other and new files use a conservative two-second weight. Concurrent spans are not a wall-time estimate."
+    }
+  },
+  "platform_skips": "test/platform_skips.json"
+}

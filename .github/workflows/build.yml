@@ -221,6 +221,23 @@ jobs:
         run: |
           flutter pub get --enforce-lockfile
           python windows/build.py
+      - name: 验证 Windows 平台、原生与窗口生命周期
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $env:VENERA_NATIVE_TEST_DIRECTORY = Join-Path $PWD 'build/windows/x64/runner/Release'
+          $env:VENERA_NATIVE_TEST_LIBRARY = Join-Path $env:VENERA_NATIVE_TEST_DIRECTORY 'venera_native.dll'
+          $env:VENERA_REQUIRE_NATIVE_TEST_LIBRARIES = '1'
+          $env:PATH = $env:VENERA_NATIVE_TEST_DIRECTORY + ';' + $env:PATH
+          python .github/scripts/run_flutter_tests.py --suite windows --output build/test-audit/windows
+      - name: 保存 Windows 平台测试事件
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-release-test-runs
+          path: build/test-audit/windows/
+          if-no-files-found: error
+          retention-days: 14
       - name: 验证 Windows 分享请求与 COM 归属
         shell: pwsh
         run: |

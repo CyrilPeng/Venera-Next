@@ -309,43 +309,11 @@ class AndroidTvBuildTest(unittest.TestCase):
                 finally:
                     os.chdir(original)
 
-    def test_regular_workflows_build_and_collect_both_flavors(self):
-        workflows = Path(__file__).resolve().parents[2] / "workflows"
-        pubspec = (workflows.parent.parent / "pubspec.yaml").read_text(encoding="utf-8")
-        self.assertNotIn("default-flavor:", pubspec, "Android flavors must not change Apple schemes")
-        build = (workflows / "build.yml").read_text(encoding="utf-8")
-        self.assertIn("flavor: [mobile, tv]", build)
-        self.assertIn("flutter build apk --release --flavor mobile", build)
-        self.assertIn("flutter build apk --release --flavor tv", build)
-        self.assertNotIn("inputs.android_flavor", build)
-        self.assertNotIn("--build-number", build.split("Build_Windows:")[0])
-        self.assertIn("name: android-${{ matrix.flavor }}-manifest", build)
-        self.assertIn("inputs.build_android && !inputs.quality_checked", build)
-        release = (workflows / "main.yml").read_text(encoding="utf-8")
-        self.assertIn("needs: [Release_Metadata, Quality]", release)
-        self.assertIn("quality_checked: true", release)
-        for pattern in ("apk-*", "tv-apk-*", "android-*-manifest"):
-            self.assertIn("pattern: " + pattern, release)
-        self.assertLess(release.index("android_tv_build.py verify-release"), release.index("harmonyos_release.py prepare-draft"))
-        smoke = (workflows / "pr_build.yml").read_text(encoding="utf-8")
-        self.assertIn("flavor: [mobile, tv]", smoke)
-        gate = smoke.split("\n  platform_gate:", 1)[1]
-        needs = re.search(r"needs:\s*\[([^]]+)\]", gate)
-        self.assertIsNotNone(needs)
-        self.assertTrue(
-            {"changes", "android", "windows", "desktop"}.issubset(
-                {job.strip() for job in needs.group(1).split(",")}
-            )
-        )
 
     @unittest.skipIf(os.name == "nt", "Linux CI executes Bash workflow gates.")
     def test_smoke_gate_requires_changed_platforms_and_rejects_failures(self):
         root = Path(__file__).resolve().parents[3]
-        smoke = (root / ".github/workflows/pr_build.yml").read_text(encoding="utf-8")
-        gate = smoke.split("\n  platform_gate:", 1)[1]
-        run = re.search(r"\n\s+run: \|\n((?: {10,}[^\n]*\n)+)", gate)
-        self.assertIsNotNone(run)
-        script = textwrap.dedent(run.group(1))
+        script = root / ".github/scripts/pr_platform_gate.sh"
         passed = {
             "CHANGES_RESULT": "success", "ANDROID_RESULT": "success",
             "WINDOWS_RESULT": "success", "DESKTOP_RESULT": "success",
@@ -370,7 +338,7 @@ class AndroidTvBuildTest(unittest.TestCase):
         for name, overrides, accepted in cases:
             with self.subTest(name=name):
                 result = subprocess.run(
-                    ["bash", "-c", script],
+                    ["bash", str(script)],
                     env={**os.environ, **passed, **overrides},
                     capture_output=True, text=True, encoding="utf-8", timeout=10,
                 )

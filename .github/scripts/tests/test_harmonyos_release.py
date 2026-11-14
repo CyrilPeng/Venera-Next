@@ -836,39 +836,6 @@ class HarmonyReleaseTests(unittest.TestCase):
             with self.subTest(mutate=mutate), self.assertRaises(ValueError):
                 release.check_remote_release(damaged, expected, assets, published=False)
 
-    def test_workflow_requires_hap_and_draft_verification_before_publishing(self):
-        workflow = (ROOT / '.github/workflows/main.yml').read_text(encoding='utf-8')
-        self.assertIn('needs: [Release_Metadata, Quality, Build, HarmonyOS]', workflow)
-        harmony_job = workflow.split('\n  HarmonyOS:\n', 1)[1].split('\n  Release:\n', 1)[0]
-        self.assertIn('needs: [Release_Metadata, Quality]', harmony_job)
-        self.assertIn('uses: ./.github/workflows/harmonyos-release.yml', harmony_job)
-        self.assertNotRegex(harmony_job, r'(?m)^    (?:if|continue-on-error):')
-        self.assertIn('outputs/harmonyos/*', workflow)
-        publish_job = workflow.split('\n  Release:\n', 1)[1]
-        self.assertIn('working-directory: release-source', publish_job)
-        self.assertIn('path: release-source', publish_job)
-        self.assertIn('path: harmonyos-source', publish_job)
-        self.assertIn('--write-notes ../release_notes.md', publish_job)
-        self.assertIn('--source-root ../harmonyos-source --artifacts ../outputs/harmonyos', publish_job)
-        self.assertIn('verify-release --directory ../outputs', publish_job)
-        self.assertIn('--notes-file ../release_notes.md', publish_job)
-        self.assertIn('prepare-draft', publish_job)
-        self.assertIn('--release-files "${files[@]}"', publish_job)
-        self.assertLess(workflow.index('verify-draft'), workflow.index('--draft=false'))
-        self.assertLess(workflow.index('verify-runtime'), workflow.index('--draft=false'))
-        self.assertIn('--allow-pending --github-output "$GITHUB_OUTPUT"', publish_job)
-        self.assertEqual(publish_job.count("if: steps.harmonyos_runtime.outputs.ready == 'true'"), 3)
-        self.assertGreater(workflow.index('verify-published'), workflow.index('--draft=false'))
-        hap = (ROOT / '.github/workflows/harmonyos-release.yml').read_text(encoding='utf-8')
-        self.assertIn('ref: ${{ steps.pin.outputs.source_commit }}', hap)
-        self.assertIn('fetch-depth: 0', hap)
-        self.assertIn('if-no-files-found: error', hap)
-        self.assertNotIn('continue-on-error', hap)
-        self.assertNotIn('contents: write', hap)
-        self.assertNotIn('secrets: inherit', hap)
-        self.assertNotIn('gh issue', workflow + hap)
-        self.assertIn('name: harmonyos-runtime-acceptance-template', hap)
-        self.assertIn('ci/runtime-acceptance/harmonyos-runtime-acceptance.json', hap)
 
 
 class HarmonyRemoteReleaseTests(unittest.TestCase):

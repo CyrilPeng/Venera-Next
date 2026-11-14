@@ -32,13 +32,13 @@ jobs:
           changed_files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" --)"
           printf '%s\n' "$changed_files"
           if printf '%s\n' "$changed_files" | grep -Eq \
-            '^(lib/|packages/|assets/|android/|apple/|windows/|ios/|macos/|linux/|debian/|patch/|\.github/workflows/|\.github/scripts/|pubspec\.yaml$|pubspec\.lock$|rust-toolchain\.toml$|analysis_options\.yaml$)'; then
+            '^(lib/|test/|packages/|assets/|android/|apple/|windows/|ios/|macos/|linux/|debian/|patch/|\.github/workflows/|\.github/scripts/|pubspec\.yaml$|pubspec\.lock$|rust-toolchain\.toml$|analysis_options\.yaml$)'; then
             echo "platform=true" >> "$GITHUB_OUTPUT"
           else
             echo "platform=false" >> "$GITHUB_OUTPUT"
           fi
           if printf '%s\n' "$changed_files" | grep -Eq \
-            '^(packages/[^/]+/(linux|macos|windows|src)/|linux/|macos/|pubspec\.(yaml|lock)$)'; then
+            '^(packages/[^/]+/(linux|macos|windows|src|rust)/|linux/|macos/|pubspec\.(yaml|lock)$)'; then
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"
@@ -139,7 +139,7 @@ jobs:
               (Get-FileHash -LiteralPath $packaged).Hash) {
             throw '桌面 WebView 第三方声明缺失或与审核源码不一致。'
           }
-      - name: 验证 Windows 原生编码包、声明与实际导入
+      - name: 验证 Windows 平台、原生与窗口生命周期
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
@@ -147,25 +147,16 @@ jobs:
           $env:VENERA_NATIVE_TEST_DIRECTORY = Join-Path $PWD 'build/windows/x64/runner/Debug'
           $env:PATH = $env:VENERA_NATIVE_TEST_DIRECTORY + ';' + $env:PATH
           $env:VENERA_NATIVE_TEST_LIBRARY = Join-Path $PWD 'build/windows/x64/runner/Debug/venera_native.dll'
-          flutter test --no-pub --reporter expanded `
-            test/foundation/native_codecs_test.dart `
-            test/foundation/image_processing_native_test.dart `
-            test/foundation/reader_image_processing_native_test.dart `
-            test/foundation/js_engine_lifecycle_test.dart `
-            test/foundation/js_native_contract_test.dart `
-            test/foundation/js_owned_result_test.dart `
-            test/foundation/js_result_descendants_test.dart
-      - name: 验证 Windows 网页代理与登录生命周期
-        shell: pwsh
-        timeout-minutes: 5
-        run: |
-          $PSNativeCommandUseErrorActionPreference = $true
-          $env:PATH = (Join-Path $PWD 'build/windows/x64/runner/Debug') + ';' + $env:PATH
-          flutter test --no-pub --reporter expanded `
-            test/routing/windows_webview_environment_test.dart `
-            test/routing/windows_webview_proxy_test.dart `
-            test/routing/webview_menu_test.dart `
-            test/features/comic_source/source_web_login_test.dart
+          $env:VENERA_REQUIRE_NATIVE_TEST_LIBRARIES = '1'
+          python .github/scripts/run_flutter_tests.py --suite windows --output build/test-audit/windows
+      - name: 保存 Windows 平台测试事件
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-pr-test-runs
+          path: build/test-audit/windows/
+          if-no-files-found: error
+          retention-days: 14
       - name: 编译并运行 Windows 原生启动测试
         shell: pwsh
         run: |
@@ -173,6 +164,13 @@ jobs:
           cmake -S windows/tests -B build/windows/startup_tests -A x64
           cmake --build build/windows/startup_tests --config Debug
           ctest --test-dir build/windows/startup_tests -C Debug --output-on-failure
+      - name: 验证 Windows 分享文件与结果所有权
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          cmake -S packages/share_plus/windows/tests -B build/share-plus-tests -A x64
+          cmake --build build/share-plus-tests --config Debug
+          ctest --test-dir build/share-plus-tests -C Debug --output-on-failure
       - name: 验证 Windows 首次启动、重复启动和失败诊断
         shell: pwsh
         timeout-minutes: 5
@@ -268,6 +266,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v7
       - name: 汇总平台构建结果
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}
@@ -276,14 +275,4 @@ jobs:
           ANDROID_RESULT: ${{ needs.android.result }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
           DESKTOP_RESULT: ${{ needs.desktop.result }}
-        run: |
-          if [[ "$CHANGES_RESULT" != "success" || \
-                ("$PLATFORM_REQUIRED" == "true" && ("$ANDROID_RESULT" != "success" || "$WINDOWS_RESULT" != "success")) || \
-                ("$DESKTOP_REQUIRED" == "true" && "$DESKTOP_RESULT" != "success") || \
-                ("$ANDROID_RESULT" != "success" && "$ANDROID_RESULT" != "skipped") || \
-                ("$WINDOWS_RESULT" != "success" && "$WINDOWS_RESULT" != "skipped") || \
-                ("$DESKTOP_RESULT" != "success" && "$DESKTOP_RESULT" != "skipped") ]]; then
-            echo "平台冒烟构建未通过：changes=$CHANGES_RESULT android=$ANDROID_RESULT windows=$WINDOWS_RESULT desktop=$DESKTOP_RESULT"
-            exit 1
-          fi
-          echo "平台冒烟构建通过：Android 手机版与 TV 版=$ANDROID_RESULT Windows=$WINDOWS_RESULT Linux／macOS／iOS=$DESKTOP_RESULT"
+        run: bash .github/scripts/pr_platform_gate.sh

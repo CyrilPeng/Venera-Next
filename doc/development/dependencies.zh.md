@@ -20,6 +20,8 @@ English version: [dependencies.en.md](dependencies.en.md)
 - 升级依赖时检查上游变更、安全公告、许可证、平台构建和相关测试。
 - 发布到 pub.dev 不能替代安全维护；发布前仍需完成差异审计和上游同步计划。
 
+独立 Android JVM 回归使用 [JetBrains 官方 Kotlin 编译器](https://github.com/JetBrains/kotlin/releases)，许可证为 Apache-2.0。应用 profile 固定为 2.1.0，归档 SHA-256 为 `b6698d5728ad8f9edcdd01617d638073191d8a03139cc538a391b4e3759ad297`；分享包 profile 固定为 2.2.0，SHA-256 为 `1adb6f1a5845ba0aa5a59e412e44c8e405236b957de1a9683619f1dca3b16932`。执行器同时核对生产 Gradle 声明、归档摘要、实际编译器版本和 Java 17；应用编译集合包含分享 primitive，分享 `main()` 再按包自身版本独立运行。工具保存在忽略的 `build/test-tools/`，没有新增应用或测试框架依赖；更新版本时必须同步生产声明、profile 和来源校验，宿主结果不作为设备验收。
+
 ## 当前 Git 依赖
 
 2026-09-28：五个依赖曾改用 `CyrilPeng` 下的现有 fork，固定 commit 不变。2026-10-05 起，PhotoView 改为本地包；2026-11-06，滚动列表、WebDAV 和桌面 WebView 也曾收纳为本地包，PNG／7z 和 SAF 包装层由自编模块替代。2026-11-07，滚动列表回归官方 pub.dev 0.3.8，InAppWebView 六包改为同一官方完整 commit，Windows 单包保留实例所有权补丁。当前为 2 个独立 Git 来源、7 个 Git 包、8 个本地包；个人 Git 来源只剩必要的 QuickJS。回滚时同步恢复声明、锁文件和对应清单记录。

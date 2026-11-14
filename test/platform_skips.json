@@ -1,0 +1,812 @@
+{
+  "schema_version": 1,
+  "evidence": {
+    "linux": {
+      "kind": "executed",
+      "source_commit": "9054677215cbe02f5fca685890285d4011bf88bb",
+      "checkout_commit": "29c3b0202b01d06f849fc0f0eec1cca3bce52d1f",
+      "source_tree_sha": "e88f2572ce359b4af8d2cb5859fa902aad249ebe",
+      "quality_run": "43434471214",
+      "expected_skips": 154
+    },
+    "windows": {
+      "kind": "executed",
+      "source_commit": "9054677215cbe02f5fca685890285d4011bf88bb",
+      "checkout_commit": "29c3b0202b01d06f849fc0f0eec1cca3bce52d1f",
+      "source_tree_sha": "e88f2572ce359b4af8d2cb5859fa902aad249ebe",
+      "platform_run": "43434471155",
+      "expected_skips": 3
+    },
+    "macos": {
+      "kind": "source_review",
+      "source_commit": "9054677215cbe02f5fca685890285d4011bf88bb",
+      "expected_skips": 181,
+      "runtime_verified": false,
+      "note": "Reviewed explicit Platform conditions and actual parameter names; no macOS Flutter run is claimed."
+    }
+  },
+  "platforms": {
+    "linux": [
+      {
+        "path": "test/app_runtime/application_host_integration_test.dart",
+        "cases": [
+          "application final admission saves state and releases actual core stores"
+        ],
+        "reason": "源码明确限定 Windows host 的 application host integration 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/bootstrap_cookie_ownership_integration_test.dart",
+        "cases": [
+          "real core closes its cookie jar but preserves a different database owner"
+        ],
+        "reason": "源码明确限定 Windows host 的 bootstrap cookie ownership integration 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/bootstrap_core_integration_test.dart",
+        "cases": [
+          "real core closes native resources and a replaced cookie connection"
+        ],
+        "reason": "源码明确限定 Windows host 的 bootstrap core integration 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/bootstrap_import_recovery_test.dart",
+        "cases": [
+          "core recovers interrupted import before settings and databases open"
+        ],
+        "reason": "源码明确限定 Windows host 的 bootstrap import recovery 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/bootstrap_pending_failure_test.dart",
+        "cases": [
+          "reports a store startup failure before joining a pending source init"
+        ],
+        "reason": "源码明确限定 Windows host 的 bootstrap pending failure 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/bootstrap_source_rollback_test.dart",
+        "cases": [
+          "later store failure closes source manager and JS runtime"
+        ],
+        "reason": "源码明确限定 Windows host 的 bootstrap source rollback 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/interactive_window_placement_test.dart",
+        "cases": [
+          "window waits for placement before preparing application services"
+        ],
+        "reason": "源码明确限定 Windows host 的 interactive window placement 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/sync_window_binding_test.dart",
+        "cases": [
+          "WebDAV settles after follow updates and before storage; detach=false",
+          "WebDAV settles after follow updates and before storage; detach=true",
+          "exit drains imports and releases when download preparation fails or detaches: false",
+          "exit drains imports and releases when download preparation fails or detaches: true",
+          "exit waits for downloads and releases on history failure: false",
+          "exit waits for downloads and releases on history failure: true",
+          "explicit forced exit bypasses an upload only once",
+          "failed WebDAV preparation releases owners and permits retry",
+          "failed image preparation restores earlier holds and permits another close",
+          "failed imports preparation releases owners and permits retry",
+          "follow updates settle before storage preparation; detach=false",
+          "follow updates settle before storage preparation; detach=true",
+          "idle close waits for persistence, releases on failure and retries",
+          "images drain after downloads and before persistence; detach=false",
+          "images drain after downloads and before persistence; detach=true",
+          "late write failure restores every prepared service",
+          "native close shares shutdown waiting and detaches its listener",
+          "platform events drain before services and recover; detach=false",
+          "platform events drain before services and recover; detach=true",
+          "shutdown drains reader then history then upload; detached=false",
+          "shutdown drains reader then history then upload; detached=true",
+          "window close waits for an active download and persistence",
+          "window close waits for upload; removed=false",
+          "window close waits for upload; removed=true",
+          "window drains placement reads and saves, resumes after failure and retries",
+          "window shutdown feedback and exit guards: detach",
+          "window shutdown feedback and exit guards: failure",
+          "window shutdown feedback and exit guards: no-root",
+          "window shutdown feedback and exit guards: success"
+        ],
+        "reason": "源码明确限定 Windows host 的 窗口 placement、平台事件排空、失败恢复及宿主退出 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/comic_source/source_initialization_queue_test.dart",
+        "cases": [
+          "reload waits for initial loading before replacing JS registry"
+        ],
+        "reason": "源码明确限定 Windows host 的 source initialization queue 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/comic_source/source_inspection_native_test.dart",
+        "cases": [
+          "native inspection cancellation waits upload cleanup: preview=false",
+          "native inspection cancellation waits upload cleanup: preview=true"
+        ],
+        "reason": "源码明确限定 Windows host 的 source inspection native 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/comic_source/source_installation_native_test.dart",
+        "cases": [
+          "native installation shutdown joins delayed upload subscription cleanup"
+        ],
+        "reason": "源码明确限定 Windows host 的 source installation native 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/comic_source/source_manager_close_test.dart",
+        "cases": [
+          "source manager close accepted install finishes before close releases its source",
+          "source manager close close drains background init, detaches listeners and frees callbacks",
+          "source manager close close drains saves started by a completed source init",
+          "source manager close close retains pending persistence from a removed source",
+          "source manager close close still waits for a Promise after the init wait times out",
+          "source manager close manager retains native callbacks until runtime cleanup finishes",
+          "source manager close save failure still drains other sources and releases registrations",
+          "source manager close synchronous save-close failure cannot skip source release"
+        ],
+        "reason": "源码明确限定 Windows host 的 source manager close 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/comic_source/source_update_shutdown_test.dart",
+        "cases": [
+          "real native cancellation waits for the upload subscription to release"
+        ],
+        "reason": "源码明确限定 Windows host 的 source update shutdown 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/comic_source/source_web_login_test.dart",
+        "cases": [
+          "late web login success never pops an unrelated top route",
+          "retired web login cannot save cookies or data after a late read",
+          "web login coalesces callbacks and retries only the captured save"
+        ],
+        "reason": "本组真实桌面 WebView 登录所有权回归明确 skip: io.Platform.isLinux；Windows 实际执行，macOS 源码仍允许执行。"
+      },
+      {
+        "path": "test/features/reader/reader_exit_integration_test.dart",
+        "cases": [
+          "native window close waits for the current reader save before leaving its route",
+          "reader offers explicit leave after an uncertain duration save without replaying it",
+          "reader toolbar retains a failed save, then saves newer progress before pop",
+          "root reader drains progress arriving after its exit task; late failure=false",
+          "root reader drains progress arriving after its exit task; late failure=true",
+          "root reader freezes before old saves drain and resumes after a later exit failure"
+        ],
+        "reason": "源码明确限定 Windows host 的 阅读进度保存与真实窗口关闭 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/reader/reader_export_integration_test.dart",
+        "cases": [
+          "disposed reader retains pending platform delivery until final host exit",
+          "root reader waits for platform delivery and admits new exports after later exit failure"
+        ],
+        "reason": "源码明确限定 Windows host 的 原生图片交付与最终宿主退出 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/reader/reader_image_exit_integration_test.dart",
+        "cases": [
+          "mounted continuous ComicImage resumes after later window exit failure",
+          "mounted single PhotoView resumes after later window exit failure",
+          "prefetch cleanup blocks reader back",
+          "prefetch cleanup blocks window exit after forced unmount",
+          "reader back joins layout cleanup after its cancelled result has returned",
+          "reader back waits for a cancelled original image read",
+          "reader window close waits for a cancelled original image read",
+          "real reader dimming previews while saving and blocks back",
+          "real reader dimming previews while saving and blocks window after removal",
+          "visible PhotoView file read blocks reader back",
+          "visible PhotoView file read blocks window exit after forced unmount",
+          "visible PhotoView native frame blocks reader back",
+          "visible PhotoView native frame blocks window exit after forced unmount",
+          "window waits for layout settings save handed off by an unmounted reader",
+          "window waits for layout settings save in its root reader"
+        ],
+        "reason": "源码明确限定 Windows host 的 真实阅读器图片处理、设置保存及窗口退出 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/sync/app_data_import_result_test.dart",
+        "cases": [
+          "aliased import cache source directory import uses the same physical staging root",
+          "source reload publication with real app observer: applied, favorites=false",
+          "source reload publication with real app observer: applied, favorites=true",
+          "source reload publication with real app observer: local edit, favorites=false",
+          "source reload publication with real app observer: local edit, favorites=true",
+          "source reload publication with real app observer: rolled back, favorites=false",
+          "source reload publication with real app observer: rolled back, favorites=true"
+        ],
+        "reason": "源码明确限定 Windows host 的 app data import result 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/sync/data_sync_upload_integration_test.dart",
+        "cases": [
+          "v1.17 SDK upload and redirected download use the real native rhttp adapter"
+        ],
+        "reason": "源码明确限定 Windows host 的 data sync upload integration 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/webdav_library/webdav_library_transport_test.dart",
+        "cases": [
+          "native SDK GET HTTP error stays on request and drains normally",
+          "native SDK GET joins chunked metadata across UTF-8 byte boundaries",
+          "native SDK PROPFIND HTTP error stays on request and drains normally",
+          "native SDK PROPFIND sends finite XML and preserves Chinese properties",
+          "native SDK cancellation and resume; partial response=false",
+          "native SDK cancellation and resume; partial response=true"
+        ],
+        "reason": "源码明确限定 Windows host 的 webdav library transport 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/application_update_native_test.dart",
+        "cases": [
+          "native update request shutdown joins delayed upload subscription cleanup"
+        ],
+        "reason": "源码明确限定 Windows host 的 application update native 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/image_processing_native_test.dart",
+        "cases": [
+          "native async-result failure releases runtime before another task",
+          "native bridge failure releases runtime before another task",
+          "native result-reference failure releases runtime before another task",
+          "native script failure releases runtime before another task",
+          "native script transforms pixels and closes runtime and dispatch per task",
+          "native startup failure releases runtime before another task",
+          "native thrown-reference failure releases runtime before another task",
+          "production isolate pipeline remains usable after script failure"
+        ],
+        "reason": "源码明确限定 Windows host 的 image processing native 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/js_compute_owner_test.dart",
+        "cases": [
+          "engine-owned compute close during pool startup blocks admission and releases created workers",
+          "engine-owned compute close rejects delivery but waits for actual compute and worker cleanup",
+          "engine-owned compute closing an unused runtime does not create a compute pool",
+          "engine-owned compute disposing one engine does not close another engine compute workers",
+          "engine-owned compute independent runtimes preserve their own initialization images",
+          "engine-owned compute initialization failure waits for compute cleanup despite HTTP close failure",
+          "engine-owned compute nested compute uses the same initialization image and drains every level",
+          "engine-owned compute partial pool startup finishes cleanup before allowing a retry",
+          "engine-owned compute synchronous HTTP close failure cannot hide asynchronous compute cleanup failure",
+          "engine-owned compute worker close failure is retained after all sibling cleanup finishes",
+          "engine-owned compute worker image is captured once and cannot be changed by the loader caller"
+        ],
+        "reason": "源码明确限定 Windows host 的 js compute owner 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/js_engine_lifecycle_test.dart",
+        "cases": [
+          "native JS resource ownership real RHttp cleanup outlives the disposed JS result"
+        ],
+        "reason": "源码明确限定 Windows host 的 js engine lifecycle 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/js_pool_native_test.dart",
+        "cases": [
+          "async compute resolves and close joins accepted work",
+          "close before spawn completion joins its late handle",
+          "failed native worker initialization finishes cleanup before exit",
+          "native callback arguments stay in their owning isolate",
+          "native pool executes across close and reopen",
+          "sync and async failures leave the worker usable",
+          "unsendable arguments release task admission before close"
+        ],
+        "reason": "源码明确限定 Windows host 的 js pool native 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/js_promise_lifecycle_test.dart",
+        "cases": [
+          "native Promise ownership engine disposal settles evaluation and child callback waits",
+          "native Promise ownership scope closure discards late results without closing sibling work",
+          "native Promise ownership settled values and errors retain normal Promise semantics"
+        ],
+        "reason": "源码明确限定 Windows host 的 js promise lifecycle 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/share_file_test.dart",
+        "cases": [
+          "cancelled queued file never dispatches and removes only undispatched source; write=false",
+          "cancelled queued file never dispatches and removes only undispatched source; write=true",
+          "file and text share one queue and await original native Future",
+          "file dispatch resolves resized origin after real staged write completes",
+          "native error retains diagnostics and Windows source",
+          "real serializer carries name, MIME and origin while Windows retains independent sources"
+        ],
+        "reason": "分享消息、通道队列及清理的这六项按源码限定 Windows 或排除 Linux；Linux 拒绝分享的独立用例仍实际执行。"
+      },
+      {
+        "path": "test/network/app_dio_lifecycle_test.dart",
+        "cases": [
+          "native request cancellation closes peer; partial body=false",
+          "native request cancellation closes peer; partial body=true",
+          "native successful upload returns complete bytes",
+          "native upload cancellation waits for upstream release"
+        ],
+        "reason": "源码明确限定 Windows host 的 app dio lifecycle 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/network/cache_revalidation_test.dart",
+        "cases": [
+          "native cache revalidation uses and releases its original adapter: changed",
+          "native cache revalidation uses and releases its original adapter: close",
+          "native cache revalidation uses and releases its original adapter: match"
+        ],
+        "reason": "源码明确限定 Windows host 的 cache revalidation 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/network/image_http_lifecycle_test.dart",
+        "cases": [
+          "production image transport comic exit preparation waits for native upload release before config disposal",
+          "production image transport native cleanup failure blocks fallback and survives exit cancellation",
+          "production image transport retry starts only after previous native upload cleanup finishes",
+          "production image transport thumbnail exit preparation waits for native upload release before config disposal",
+          "production image transport unwrapped exit preparation waits for native upload release before config disposal"
+        ],
+        "reason": "源码明确限定 Windows host 的 image http lifecycle 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/network/rhttp_redirect_test.dart",
+        "cases": [
+          "native request redirect policy DELETE returns 302 without contacting redirect target",
+          "native request redirect policy DELETE returns 307 without contacting redirect target",
+          "native request redirect policy GET returns 302 without contacting redirect target",
+          "native request redirect policy GET returns 307 without contacting redirect target",
+          "native request redirect policy PUT returns 302 without contacting redirect target",
+          "native request redirect policy PUT returns 307 without contacting redirect target",
+          "native request redirect policy WebDAV sync follows native CDN redirects without forwarding authentication",
+          "native request redirect policy default GET policy follows a redirect",
+          "native request redirect policy request maxRedirects zero does not contact the destination"
+        ],
+        "reason": "源码明确限定 Windows host 的 rhttp redirect 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/network/rhttp_stream_callback_test.dart",
+        "cases": [
+          "native cancellation retains response callback until Dart acknowledges"
+        ],
+        "reason": "源码明确限定 Windows host 的 rhttp stream callback 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/network/webdav_client_lifecycle_test.dart",
+        "cases": [
+          "native WebDAV failure waits for delayed upload subscription release"
+        ],
+        "reason": "源码明确限定 Windows host 的 webdav client lifecycle 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/routing/windows_webview_proxy_test.dart",
+        "cases": [
+          "Windows modes create a view without any Android feature query",
+          "a different proxy cannot create a conflicting live browser",
+          "initialization errors stop loading, remain readable, and allow retry",
+          "late native callbacks cannot publish after the webview closes",
+          "unmount during creation does not publish a controller or hold a lease"
+        ],
+        "reason": "源码明确限定 Windows host 的 Windows WebView 创建、代理和实例所有权 回归，由 Windows 清单实际执行；此平台不适用。"
+      }
+    ],
+    "windows": [
+      {
+        "path": "test/foundation/native_codecs_test.dart",
+        "cases": [
+          "existing output link cannot redirect an archive write"
+        ],
+        "reason": "输出符号链接写入保护仅在 Linux 执行（skip: !Platform.isLinux）。"
+      },
+      {
+        "path": "test/foundation/share_file_test.dart",
+        "cases": [
+          "Linux rejects file sharing without creating source or invoking plugin"
+        ],
+        "reason": "Linux 拒绝系统文件分享的独立平台分支，仅在 Linux 执行。"
+      },
+      {
+        "path": "test/tool/git_dependencies_test.dart",
+        "cases": [
+          "local files rejects a symlink outside the reviewed package"
+        ],
+        "reason": "Windows 创建真实符号链接需要宿主权限；Linux 全量实际执行该源码路径保护。具备权限时允许实际执行。"
+      }
+    ],
+    "macos": [
+      {
+        "path": "test/app_runtime/application_host_integration_test.dart",
+        "cases": [
+          "application final admission saves state and releases actual core stores"
+        ],
+        "reason": "源码明确限定 Windows host 的 application host integration 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/bootstrap_cookie_ownership_integration_test.dart",
+        "cases": [
+          "real core closes its cookie jar but preserves a different database owner"
+        ],
+        "reason": "源码明确限定 Windows host 的 bootstrap cookie ownership integration 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/bootstrap_core_integration_test.dart",
+        "cases": [
+          "real core closes native resources and a replaced cookie connection"
+        ],
+        "reason": "源码明确限定 Windows host 的 bootstrap core integration 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/bootstrap_import_recovery_test.dart",
+        "cases": [
+          "core recovers interrupted import before settings and databases open"
+        ],
+        "reason": "源码明确限定 Windows host 的 bootstrap import recovery 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/bootstrap_pending_failure_test.dart",
+        "cases": [
+          "reports a store startup failure before joining a pending source init"
+        ],
+        "reason": "源码明确限定 Windows host 的 bootstrap pending failure 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/bootstrap_source_rollback_test.dart",
+        "cases": [
+          "later store failure closes source manager and JS runtime"
+        ],
+        "reason": "源码明确限定 Windows host 的 bootstrap source rollback 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/interactive_window_placement_test.dart",
+        "cases": [
+          "window waits for placement before preparing application services"
+        ],
+        "reason": "源码明确限定 Windows host 的 interactive window placement 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/app_runtime/sync_window_binding_test.dart",
+        "cases": [
+          "WebDAV settles after follow updates and before storage; detach=false",
+          "WebDAV settles after follow updates and before storage; detach=true",
+          "exit drains imports and releases when download preparation fails or detaches: false",
+          "exit drains imports and releases when download preparation fails or detaches: true",
+          "exit waits for downloads and releases on history failure: false",
+          "exit waits for downloads and releases on history failure: true",
+          "explicit forced exit bypasses an upload only once",
+          "failed WebDAV preparation releases owners and permits retry",
+          "failed image preparation restores earlier holds and permits another close",
+          "failed imports preparation releases owners and permits retry",
+          "follow updates settle before storage preparation; detach=false",
+          "follow updates settle before storage preparation; detach=true",
+          "idle close waits for persistence, releases on failure and retries",
+          "images drain after downloads and before persistence; detach=false",
+          "images drain after downloads and before persistence; detach=true",
+          "late write failure restores every prepared service",
+          "native close shares shutdown waiting and detaches its listener",
+          "platform events drain before services and recover; detach=false",
+          "platform events drain before services and recover; detach=true",
+          "shutdown drains reader then history then upload; detached=false",
+          "shutdown drains reader then history then upload; detached=true",
+          "window close waits for an active download and persistence",
+          "window close waits for upload; removed=false",
+          "window close waits for upload; removed=true",
+          "window drains placement reads and saves, resumes after failure and retries",
+          "window shutdown feedback and exit guards: detach",
+          "window shutdown feedback and exit guards: failure",
+          "window shutdown feedback and exit guards: no-root",
+          "window shutdown feedback and exit guards: success"
+        ],
+        "reason": "源码明确限定 Windows host 的 窗口 placement、平台事件排空、失败恢复及宿主退出 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/components/smooth_scroll_lifecycle_test.dart",
+        "cases": [
+          "ambiguous shared controller does not move either viewport",
+          "detaching a viewport while the provider survives is safe",
+          "moving a hovered child releases the old parent wheel block",
+          "new viewport starts wheel accumulation from its own position",
+          "removing a scrolling provider ignores animation completion",
+          "replacing the borrowed controller during wheel animation keeps new input",
+          "wheel burst, bounds and Shift behavior on Axis.horizontal",
+          "wheel burst, bounds and Shift behavior on Axis.vertical",
+          "wheel with no attached viewport is ignored"
+        ],
+        "reason": "macOS 使用自身滚动策略；这九项 Windows/Linux 自定义 wheel 与动画生命周期回归明确 skip: Platform.isMacOS。三个通用 controller 所有权用例仍可执行。"
+      },
+      {
+        "path": "test/features/comic_source/source_initialization_queue_test.dart",
+        "cases": [
+          "reload waits for initial loading before replacing JS registry"
+        ],
+        "reason": "源码明确限定 Windows host 的 source initialization queue 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/comic_source/source_inspection_native_test.dart",
+        "cases": [
+          "native inspection cancellation waits upload cleanup: preview=false",
+          "native inspection cancellation waits upload cleanup: preview=true"
+        ],
+        "reason": "源码明确限定 Windows host 的 source inspection native 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/comic_source/source_installation_native_test.dart",
+        "cases": [
+          "native installation shutdown joins delayed upload subscription cleanup"
+        ],
+        "reason": "源码明确限定 Windows host 的 source installation native 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/comic_source/source_manager_close_test.dart",
+        "cases": [
+          "source manager close accepted install finishes before close releases its source",
+          "source manager close close drains background init, detaches listeners and frees callbacks",
+          "source manager close close drains saves started by a completed source init",
+          "source manager close close retains pending persistence from a removed source",
+          "source manager close close still waits for a Promise after the init wait times out",
+          "source manager close manager retains native callbacks until runtime cleanup finishes",
+          "source manager close save failure still drains other sources and releases registrations",
+          "source manager close synchronous save-close failure cannot skip source release"
+        ],
+        "reason": "源码明确限定 Windows host 的 source manager close 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/comic_source/source_update_shutdown_test.dart",
+        "cases": [
+          "real native cancellation waits for the upload subscription to release"
+        ],
+        "reason": "源码明确限定 Windows host 的 source update shutdown 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/reader/clipboard_image_test.dart",
+        "cases": [
+          "desktop clipboard image ownership copies raw RGBA and releases each native image after completion",
+          "desktop clipboard image ownership keeps the image alive until an asynchronous platform call finishes",
+          "desktop clipboard image ownership rejects frame decode failures before calling the platform",
+          "desktop clipboard image ownership rejects invalid encoded bytes before calling the platform",
+          "desktop clipboard image ownership releases native images after platform failures and can retry"
+        ],
+        "reason": "本组五项原始 RGBA 剪贴板宿主契约明确限定 Windows/Linux；macOS 的平台实现和设备验收分别登记。"
+      },
+      {
+        "path": "test/features/reader/reader_exit_integration_test.dart",
+        "cases": [
+          "native window close waits for the current reader save before leaving its route",
+          "reader offers explicit leave after an uncertain duration save without replaying it",
+          "reader toolbar retains a failed save, then saves newer progress before pop",
+          "root reader drains progress arriving after its exit task; late failure=false",
+          "root reader drains progress arriving after its exit task; late failure=true",
+          "root reader freezes before old saves drain and resumes after a later exit failure"
+        ],
+        "reason": "源码明确限定 Windows host 的 阅读进度保存与真实窗口关闭 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/reader/reader_export_integration_test.dart",
+        "cases": [
+          "disposed reader retains pending platform delivery until final host exit",
+          "root reader waits for platform delivery and admits new exports after later exit failure"
+        ],
+        "reason": "源码明确限定 Windows host 的 原生图片交付与最终宿主退出 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/reader/reader_image_exit_integration_test.dart",
+        "cases": [
+          "mounted continuous ComicImage resumes after later window exit failure",
+          "mounted single PhotoView resumes after later window exit failure",
+          "prefetch cleanup blocks reader back",
+          "prefetch cleanup blocks window exit after forced unmount",
+          "reader back joins layout cleanup after its cancelled result has returned",
+          "reader back waits for a cancelled original image read",
+          "reader window close waits for a cancelled original image read",
+          "real reader dimming previews while saving and blocks back",
+          "real reader dimming previews while saving and blocks window after removal",
+          "visible PhotoView file read blocks reader back",
+          "visible PhotoView file read blocks window exit after forced unmount",
+          "visible PhotoView native frame blocks reader back",
+          "visible PhotoView native frame blocks window exit after forced unmount",
+          "window waits for layout settings save handed off by an unmounted reader",
+          "window waits for layout settings save in its root reader"
+        ],
+        "reason": "源码明确限定 Windows host 的 真实阅读器图片处理、设置保存及窗口退出 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/sync/app_data_import_result_test.dart",
+        "cases": [
+          "aliased import cache source directory import uses the same physical staging root",
+          "source reload publication with real app observer: applied, favorites=false",
+          "source reload publication with real app observer: applied, favorites=true",
+          "source reload publication with real app observer: local edit, favorites=false",
+          "source reload publication with real app observer: local edit, favorites=true",
+          "source reload publication with real app observer: rolled back, favorites=false",
+          "source reload publication with real app observer: rolled back, favorites=true"
+        ],
+        "reason": "源码明确限定 Windows host 的 app data import result 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/sync/data_sync_upload_integration_test.dart",
+        "cases": [
+          "v1.17 SDK upload and redirected download use the real native rhttp adapter"
+        ],
+        "reason": "源码明确限定 Windows host 的 data sync upload integration 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/features/webdav_library/webdav_library_transport_test.dart",
+        "cases": [
+          "native SDK GET HTTP error stays on request and drains normally",
+          "native SDK GET joins chunked metadata across UTF-8 byte boundaries",
+          "native SDK PROPFIND HTTP error stays on request and drains normally",
+          "native SDK PROPFIND sends finite XML and preserves Chinese properties",
+          "native SDK cancellation and resume; partial response=false",
+          "native SDK cancellation and resume; partial response=true"
+        ],
+        "reason": "源码明确限定 Windows host 的 webdav library transport 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/application_update_native_test.dart",
+        "cases": [
+          "native update request shutdown joins delayed upload subscription cleanup"
+        ],
+        "reason": "源码明确限定 Windows host 的 application update native 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/image_processing_native_test.dart",
+        "cases": [
+          "native PNG encoding reads only the typed view and returns owned bytes",
+          "native async-result failure releases runtime before another task",
+          "native bridge failure releases runtime before another task",
+          "native result-reference failure releases runtime before another task",
+          "native script failure releases runtime before another task",
+          "native script transforms pixels and closes runtime and dispatch per task",
+          "native startup failure releases runtime before another task",
+          "native thrown-reference failure releases runtime before another task",
+          "production isolate pipeline remains usable after script failure"
+        ],
+        "reason": "PNG typed-view 回归定义 Windows/Linux 宿主，另外八项真实 JS/图片流水线回归限定 Windows 宿主。"
+      },
+      {
+        "path": "test/foundation/js_compute_owner_test.dart",
+        "cases": [
+          "engine-owned compute close during pool startup blocks admission and releases created workers",
+          "engine-owned compute close rejects delivery but waits for actual compute and worker cleanup",
+          "engine-owned compute closing an unused runtime does not create a compute pool",
+          "engine-owned compute disposing one engine does not close another engine compute workers",
+          "engine-owned compute independent runtimes preserve their own initialization images",
+          "engine-owned compute initialization failure waits for compute cleanup despite HTTP close failure",
+          "engine-owned compute nested compute uses the same initialization image and drains every level",
+          "engine-owned compute partial pool startup finishes cleanup before allowing a retry",
+          "engine-owned compute synchronous HTTP close failure cannot hide asynchronous compute cleanup failure",
+          "engine-owned compute worker close failure is retained after all sibling cleanup finishes",
+          "engine-owned compute worker image is captured once and cannot be changed by the loader caller"
+        ],
+        "reason": "源码明确限定 Windows host 的 js compute owner 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/js_engine_lifecycle_test.dart",
+        "cases": [
+          "native JS resource ownership real RHttp cleanup outlives the disposed JS result"
+        ],
+        "reason": "源码明确限定 Windows host 的 js engine lifecycle 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/js_pool_native_test.dart",
+        "cases": [
+          "async compute resolves and close joins accepted work",
+          "close before spawn completion joins its late handle",
+          "failed native worker initialization finishes cleanup before exit",
+          "native callback arguments stay in their owning isolate",
+          "native pool executes across close and reopen",
+          "sync and async failures leave the worker usable",
+          "unsendable arguments release task admission before close"
+        ],
+        "reason": "源码明确限定 Windows host 的 js pool native 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/js_promise_lifecycle_test.dart",
+        "cases": [
+          "native Promise ownership engine disposal settles evaluation and child callback waits",
+          "native Promise ownership scope closure discards late results without closing sibling work",
+          "native Promise ownership settled values and errors retain normal Promise semantics"
+        ],
+        "reason": "源码明确限定 Windows host 的 js promise lifecycle 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/foundation/native_codecs_test.dart",
+        "cases": [
+          "7z archive and output paths retain Unicode on the native bridge",
+          "PNG preserves all RGBA channels, alpha and typed-view offsets",
+          "application Image encodes only its Uint32 view",
+          "existing output link cannot redirect an archive write",
+          "failed opens and reads release resources before a concurrent retry",
+          "invalid PNG input fails before another valid encoding",
+          "real non-solid 7z preserves Unicode, every byte and empty files",
+          "real solid 7z preserves Unicode, every byte and empty files",
+          "rejects absolute 7z before writing any payload",
+          "rejects bad-crc 7z before writing any payload",
+          "rejects drive 7z before writing any payload",
+          "rejects duplicate 7z before writing any payload",
+          "rejects encrypted 7z before writing any payload",
+          "rejects file-parent 7z before writing any payload",
+          "rejects missing-name 7z before writing any payload",
+          "rejects symlink 7z before writing any payload",
+          "rejects traversal 7z before writing any payload",
+          "rejects truncated 7z before writing any payload"
+        ],
+        "reason": "本组 PNG/7z 宿主 ABI 明确定义 nativeHost = Windows || Linux，输出符号链接用例另外限定 Linux；这是测试宿主范围。"
+      },
+      {
+        "path": "test/foundation/share_file_test.dart",
+        "cases": [
+          "Linux rejects file sharing without creating source or invoking plugin",
+          "native error retains diagnostics and Windows source",
+          "real serializer carries name, MIME and origin while Windows retains independent sources"
+        ],
+        "reason": "两项 Windows 分享消息/错误保留回归和一项 Linux 拒绝分享回归；其余跨平台队列与清理用例在 macOS 保持可执行。"
+      },
+      {
+        "path": "test/network/app_dio_lifecycle_test.dart",
+        "cases": [
+          "native request cancellation closes peer; partial body=false",
+          "native request cancellation closes peer; partial body=true",
+          "native successful upload returns complete bytes",
+          "native upload cancellation waits for upstream release"
+        ],
+        "reason": "源码明确限定 Windows host 的 app dio lifecycle 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/network/cache_revalidation_test.dart",
+        "cases": [
+          "native cache revalidation uses and releases its original adapter: changed",
+          "native cache revalidation uses and releases its original adapter: close",
+          "native cache revalidation uses and releases its original adapter: match"
+        ],
+        "reason": "源码明确限定 Windows host 的 cache revalidation 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/network/image_http_lifecycle_test.dart",
+        "cases": [
+          "production image transport comic exit preparation waits for native upload release before config disposal",
+          "production image transport native cleanup failure blocks fallback and survives exit cancellation",
+          "production image transport retry starts only after previous native upload cleanup finishes",
+          "production image transport thumbnail exit preparation waits for native upload release before config disposal",
+          "production image transport unwrapped exit preparation waits for native upload release before config disposal"
+        ],
+        "reason": "源码明确限定 Windows host 的 image http lifecycle 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/network/rhttp_redirect_test.dart",
+        "cases": [
+          "native request redirect policy DELETE returns 302 without contacting redirect target",
+          "native request redirect policy DELETE returns 307 without contacting redirect target",
+          "native request redirect policy GET returns 302 without contacting redirect target",
+          "native request redirect policy GET returns 307 without contacting redirect target",
+          "native request redirect policy PUT returns 302 without contacting redirect target",
+          "native request redirect policy PUT returns 307 without contacting redirect target",
+          "native request redirect policy WebDAV sync follows native CDN redirects without forwarding authentication",
+          "native request redirect policy default GET policy follows a redirect",
+          "native request redirect policy request maxRedirects zero does not contact the destination"
+        ],
+        "reason": "源码明确限定 Windows host 的 rhttp redirect 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/network/rhttp_stream_callback_test.dart",
+        "cases": [
+          "native cancellation retains response callback until Dart acknowledges"
+        ],
+        "reason": "源码明确限定 Windows host 的 rhttp stream callback 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/network/webdav_client_lifecycle_test.dart",
+        "cases": [
+          "native WebDAV failure waits for delayed upload subscription release"
+        ],
+        "reason": "源码明确限定 Windows host 的 webdav client lifecycle 回归，由 Windows 清单实际执行；此平台不适用。"
+      },
+      {
+        "path": "test/routing/windows_webview_proxy_test.dart",
+        "cases": [
+          "Windows modes create a view without any Android feature query",
+          "a different proxy cannot create a conflicting live browser",
+          "initialization errors stop loading, remain readable, and allow retry",
+          "late native callbacks cannot publish after the webview closes",
+          "unmount during creation does not publish a controller or hold a lease"
+        ],
+        "reason": "源码明确限定 Windows host 的 Windows WebView 创建、代理和实例所有权 回归，由 Windows 清单实际执行；此平台不适用。"
+      }
+    ]
+  }
+}

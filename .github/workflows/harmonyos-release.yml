@@ -206,6 +206,7 @@ jobs:
           path: |
             harmonyos/build/harmonyos/ci/*.json
             harmonyos/build/harmonyos/ci/logs/*.txt
+            harmonyos/build/harmonyos/ci/full-app-tests/*
             harmonyos/build/harmonyos/native/native-build.json
             harmonyos/build/harmonyos/full-native/extra-native-build.json
           if-no-files-found: warn

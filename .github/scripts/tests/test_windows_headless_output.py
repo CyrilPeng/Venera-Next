@@ -20,6 +20,7 @@ class HeadlessOutputTests(unittest.TestCase):
             # Parse the script, extracting only its output assertion function.
             # Never execute the installer, process launcher or profile setup.
             command = r"""
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $ErrorActionPreference = 'Stop'
 $tokens = $null
 $errors = $null
@@ -40,6 +41,10 @@ Assert-HeadlessOutput $args[1] $args[2] $args[3]
                 capture_output=True, text=True, encoding="utf-8", timeout=20,
             )
 
+    def assert_rejected(self, result, diagnostic):
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(diagnostic, result.stderr)
+
     def test_accepts_expected_final_json_with_engine_noise(self):
         result = self.check_output('engine diagnostic\n[CLI PRINT] ' + json.dumps({
             'status': 'error', 'message': 'WebDAV sync is not configured.',
@@ -47,23 +52,25 @@ Assert-HeadlessOutput $args[1] $args[2] $args[3]
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_rejects_no_protocol_output(self):
-        self.assertNotEqual(self.check_output('engine crashed\n').returncode, 0)
+        self.assert_rejected(self.check_output('engine crashed\n'),
+                             'Headless command produced no CLI JSON output.')
 
     def test_rejects_malformed_json(self):
-        self.assertNotEqual(self.check_output('[CLI PRINT] {invalid}\n').returncode, 0)
+        self.assert_rejected(self.check_output('[CLI PRINT] {invalid}\n'),
+                             'ConvertFrom-Json')
 
     def test_rejects_later_wrong_terminal_result(self):
         prefix = '[CLI PRINT] '
         good = {'status': 'error', 'message': 'WebDAV sync is not configured.'}
         wrong = {'status': 'error', 'message': 'Core initialization failed'}
         content = prefix + json.dumps(good) + '\n' + prefix + json.dumps(wrong) + '\n'
-        self.assertNotEqual(self.check_output(content).returncode, 0)
+        self.assert_rejected(self.check_output(content), 'Unexpected headless result; expected:')
 
     def test_rejects_success_with_matching_message(self):
         result = self.check_output('[CLI PRINT] ' + json.dumps({
             'status': 'success', 'message': 'WebDAV sync is not configured.',
         }) + '\n')
-        self.assertNotEqual(result.returncode, 0)
+        self.assert_rejected(result, 'Unexpected headless result; expected:')
 
     def test_accepts_success_for_empty_default_tracking_folder(self):
         result = self.check_output('[CLI PRINT] ' + json.dumps({
@@ -75,4 +82,4 @@ Assert-HeadlessOutput $args[1] $args[2] $args[3]
         result = self.check_output('[CLI PRINT] ' + json.dumps({
             'status': 'error', 'message': 'Updated comics list.', 'data': [],
         }) + '\n', 'Updated comics list.', 'success')
-        self.assertNotEqual(result.returncode, 0)
+        self.assert_rejected(result, 'Unexpected headless result; expected:')

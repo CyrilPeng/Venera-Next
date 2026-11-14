@@ -18,79 +18,18 @@ from sideload import audit_device_types
 from release_context import build_inputs
 from app_labels import APP_LABEL, audit_hap_labels
 
+sys.path.insert(0, str(ROOT / ".github/scripts"))
+from test_suites import application_tests, load_manifest, paths, select_suite
+from run_flutter_tests import run as run_flutter
+from test_execution import load_skip_policy
+
 
 ASSET_PREFIX = "resources/rawfile/flutter_assets/"
 METADATA_ASSET = ASSET_PREFIX + "assets/harmonyos-app-build.json"
-TESTS = (
-    "test/components/context_menu_test.dart",
-    "test/components/application_update_prompt_test.dart",
-    "test/components/select_layout_test.dart",
-    "test/foundation/application_update_service_test.dart",
-    "test/foundation/harmonyos_test.dart",
-    "test/foundation/directory_selection_test.dart",
-    "test/foundation/selection_operation_test.dart",
-    "test/foundation/file_selection_test.dart",
-    "test/foundation/file_selection_lifecycle_test.dart",
-    "test/foundation/image_processing_test.dart",
-    "test/foundation/image_processing_native_test.dart",
-    "test/foundation/native_codecs_test.dart",
-    "test/foundation/js_native_contract_test.dart",
-    "test/foundation/js_engine_lifecycle_test.dart",
-    "test/foundation/js_owned_result_test.dart",
-    "test/foundation/js_result_descendants_test.dart",
-    "test/foundation/saf_test.dart",
-    "test/features/local_comics/import_export/directory_copy_test.dart",
-    "test/features/local_comics/import_export/pdf_export_lifecycle_test.dart",
-    "test/features/favorites/favorite_folder_path_test.dart",
-    "test/features/favorites/favorite_folder_browser_test.dart",
-    "test/features/sync/app_data_archive_test.dart",
-    "test/features/sync/favorite_hierarchy_transfer_test.dart",
-    "test/features/favorites/favorite_hierarchy_test.dart",
-    "test/features/favorites/favorites_manager_test.dart",
-    "test/features/favorites/folder_name_case_test.dart",
-    "test/features/favorites/folder_creation_presentation_test.dart",
-    "test/features/favorites/folder_rename_ownership_test.dart",
-    "test/features/favorites/favorite_folder_import_test.dart",
-    "test/features/favorites/read_later_service_test.dart",
-    "test/features/comic_source/source_web_login_test.dart",
-    "test/routing/webview_menu_test.dart",
-    "test/routing/windows_webview_environment_test.dart",
-    "test/routing/windows_webview_proxy_test.dart",
-    "test/features/sync/comic_archive_batch_test.dart",
-    "test/features/sync/comic_archive_transfer_dialog_test.dart",
-    "test/features/sync/comic_backup_test.dart",
-    "test/features/sync/comic_backup_transport_test.dart",
-    "test/features/sync/comic_backup_i18n_test.dart",
-    "test/features/local_comics/import_export/cbz_compatibility_test.dart",
-    "test/features/local_comics/import_export/cbz_import_lifecycle_test.dart",
-    "test/features/local_comics/import_export/epub_import_test.dart",
-    "test/features/local_comics/import_export/comic_import_service_test.dart",
-    "test/features/local_comics/import_export/import_identity_allocation_test.dart",
-    "test/features/local_comics/import_export/import_registration_failure_test.dart",
-    "test/features/local_comics/import_export/comic_collection_archive_test.dart",
-    "test/features/local_comics/import_export/collection_layout_dialog_test.dart",
-    "test/features/local_comics/import_export/copy_cleanup_test.dart",
-    "test/features/local_comics/import_export/import_presentation_test.dart",
-    "test/features/local_comics/harmonyos_import_test.dart",
-    "test/features/local_comics/local_archive_visibility_test.dart",
-    "test/features/local_comics/local_registration_storage_test.dart",
-    "test/features/local_comics/local_repository_test.dart",
-    "test/features/comic_widgets/reading_status_layout_test.dart",
-    "test/features/comic_widgets/reading_progress_test.dart",
-    "test/features/comic_widgets/detailed_reading_progress_test.dart",
-    "test/features/settings/local_storage_settings_test.dart",
-    "test/features/settings/app_controls_persistence_test.dart",
-    "test/features/comic_details/share_lifecycle_test.dart",
-    "test/features/reader/bottom_actions_test.dart",
-    "test/features/reader/platform_effects_controller_test.dart",
-    "test/features/reader/platform_effects_test.dart",
-    "test/features/reader/reader_exit_integration_test.dart",
-    "test/features/reader/continuous_input_test.dart",
-    "test/features/reader/display_image_provider_test.dart",
-    "test/features/reader/scroll_aware_display_image_test.dart",
-    "test/features/reader/white_border_crop_test.dart",
-    "test/features/favorites/local_favorites_refresh_test.dart",
-)
+def host_tests():
+    manifest = load_manifest(ROOT / "test/suites.json")
+    sources = {path: (ROOT / path).read_text(encoding="utf-8") for path in application_tests(paths(ROOT))}
+    return select_suite(manifest, "harmonyos-host", sources, root=ROOT)
 
 
 def audit_full_hap(hap, metadata, expected_assets):
@@ -184,14 +123,26 @@ def build(flutter_sdk):
                     "-DCMAKE_BUILD_TYPE=Release", *[f"-D{name.upper()}_ROOT={path}" for name, path in host_sources.items()]], "full-app-host-prepare")
         run_logged(["cmake", "--build", host, "--parallel", "2"], "full-app-host-build")
         previous_path = os.environ.get("LD_LIBRARY_PATH", "")
+        previous_required = os.environ.get("VENERA_REQUIRE_NATIVE_TEST_LIBRARIES")
         os.environ["LD_LIBRARY_PATH"] = str(host / "lib") + (":" + previous_path if previous_path else "")
+        os.environ["VENERA_REQUIRE_NATIVE_TEST_LIBRARIES"] = "1"
         try:
-            run_logged([flutter, "test", "--no-pub", "--concurrency", "2", "--reporter", "expanded", *TESTS], "full-app-test", PROJECT)
+            tests = host_tests()
+            command = [str(flutter), "test", "--no-pub", "--concurrency", "2", "--machine", *tests]
+            code = run_flutter(command, CI / "full-app-tests", root=PROJECT, expected=tests,
+                               execution_group="harmonyos-host",
+                               skip_policy=load_skip_policy(load_manifest(ROOT / "test/suites.json"), root=ROOT))
+            if code:
+                raise subprocess.CalledProcessError(code, command)
         finally:
             if previous_path:
                 os.environ["LD_LIBRARY_PATH"] = previous_path
             else:
                 os.environ.pop("LD_LIBRARY_PATH", None)
+            if previous_required is None:
+                os.environ.pop("VENERA_REQUIRE_NATIVE_TEST_LIBRARIES", None)
+            else:
+                os.environ["VENERA_REQUIRE_NATIVE_TEST_LIBRARIES"] = previous_required
         run_logged([flutter, "build", "hap", "--release", "--no-codesign", "--target-platform", "ohos-arm64", "--no-pub", "--target", "lib/main.dart",
                     "--build-name", metadata["hap_version_name"], "--build-number", str(metadata["version_code"])], "full-app-build", PROJECT)
         check_real_source(metadata)
