@@ -28,13 +28,18 @@ English version: [CONTRIBUTING.en.md](CONTRIBUTING.en.md)
 flutter pub get --enforce-lockfile
 ```
 
+先按[测试执行与维护](doc/development/testing.zh.md)准备适用 host 的原生库，再按完整清单执行并核对 CI 证据。新增平台／原生用例同步执行归属和已审查的跳过声明；合并／删除说明替代保障。
+
 提交前至少运行：
 
 ```bash
+python .github/scripts/release_version.py --check
 python .github/scripts/check_structure_imports.py
+python .github/scripts/check_architecture_dependencies.py
+python .github/scripts/test_suites.py --strict-imports --output build/test-audit/inventory.json
 python -m unittest discover -s .github/scripts/tests -p "test_*.py"
-flutter analyze --no-pub
-flutter test --no-pub
+flutter analyze --no-pub --fatal-infos --fatal-warnings
+python .github/scripts/run_flutter_tests.py --suite default --coverage --output build/test-audit/default
 git diff --check
 ```
 
@@ -42,7 +47,7 @@ git diff --check
 
 新增依赖必须说明来源、版本或 commit、使用原因、许可证、上游状态和替代方案。不要提交 `any` 依赖或未固定的 Git 分支。具体规则见[依赖治理](doc/development/dependencies.zh.md)。
 
-提交应保持单一目的，提交信息使用简洁的 Conventional Commits 风格。涉及用户可见行为或仓库维护方式时同步更新 `CHANGELOG.md`。
+提交应保持单一目的，提交信息使用 `<type>(<scope>): <中文描述>` 的 Conventional Commits 格式。提交前同步更新 `CHANGELOG.md`，说明本批已完成的用户行为或仓库维护变更。
 
 ## Pull Request
 

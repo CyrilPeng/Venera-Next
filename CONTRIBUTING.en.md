@@ -28,13 +28,18 @@ Use the repository's Flutter version and resolve dependencies from the lock file
 flutter pub get --enforce-lockfile
 ```
 
+Follow [Running and Maintaining Tests](doc/development/testing.en.md) to prepare native libraries on the applicable host, run the complete ownership manifest, and read CI evidence. New platform/native cases update their execution owner and reviewed skip declarations; merges/removals identify replacement coverage.
+
 Run at least these checks before submitting:
 
 ```bash
+python .github/scripts/release_version.py --check
 python .github/scripts/check_structure_imports.py
+python .github/scripts/check_architecture_dependencies.py
+python .github/scripts/test_suites.py --strict-imports --output build/test-audit/inventory.json
 python -m unittest discover -s .github/scripts/tests -p "test_*.py"
-flutter analyze --no-pub
-flutter test --no-pub
+flutter analyze --no-pub --fatal-infos --fatal-warnings
+python .github/scripts/run_flutter_tests.py --suite default --coverage --output build/test-audit/default
 git diff --check
 ```
 
@@ -42,7 +47,7 @@ For changes limited to Issue forms, Python automation and related documentation,
 
 New dependencies must document their source, version or commit, rationale, license, upstream status, and alternatives. Do not add `any` dependencies or unfixed Git branches. See [Dependency Governance](doc/development/dependencies.en.md).
 
-Keep commits focused, use concise Conventional Commits-style messages, and update `CHANGELOG.md` for user-visible or repository-maintenance changes.
+Keep commits focused and use `<type>(<scope>): <Chinese description>` Conventional Commits messages. Update `CHANGELOG.md` before committing to describe the completed behavior or repository-maintenance changes in that batch.
 
 ## Pull Requests
 

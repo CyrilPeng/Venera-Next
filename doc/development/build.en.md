@@ -56,24 +56,22 @@ version: "2.11.1"
 
 ## Quality Checks
 
-Run at least the following before submitting code:
-
-```bash
-python .github/scripts/check_structure_imports.py
-flutter analyze --no-pub
-flutter test --no-pub
-git diff --check
-```
-
-CI runs `flutter test --coverage`, publishes line coverage in the workflow summary, and uploads `coverage/lcov.info`. Coverage is currently a visible baseline rather than a repository-wide hard threshold. Changes to critical behavior still require focused tests.
-
-Pull requests also run `依赖安全审查` and `PR 平台冒烟构建`. Dependency review blocks newly introduced dependencies with high or critical vulnerabilities. Changes to Flutter code, native platform directories, dependencies, build scripts, or workflows run Android mobile/TV Debug and Windows Debug builds; documentation-only changes skip those platform jobs. Quality checks also run navigation, input, low-memory, and update regressions with the actual TV flavor. Dart formatting is checked only for Dart files changed by the current PR, so historical formatting differences do not block new contributions. The `main` branch requires code analysis, dependency review, and the platform smoke-build gate to pass, and direct force-pushes or branch deletion are disabled.
-
-For release-related changes, also run:
+Prepare the native libraries for your host as described in [Running and Maintaining Tests](testing.en.md), then run at least:
 
 ```bash
 python .github/scripts/release_version.py --check
+python .github/scripts/check_structure_imports.py
+python .github/scripts/check_architecture_dependencies.py
+python .github/scripts/test_suites.py --strict-imports --output build/test-audit/inventory.json
+python -m unittest discover -s .github/scripts/tests -p "test_*.py"
+flutter analyze --no-pub --fatal-infos --fatal-warnings
+python .github/scripts/run_flutter_tests.py --suite default --coverage --output build/test-audit/default
+git diff --check
 ```
+
+For early feedback, run `python .github/scripts/run_flutter_tests.py --partition fast --concurrency 4`. Complete quality validation includes fast, native preparation/sanitizers, three full partitions, and the real TV flavor. The stable `Flutter 测试与覆盖率` gate verifies mandatory results, the file union, actual cases, and provenance before merging `coverage/lcov.info`. Coverage shows modules and critical paths; there is currently no global percentage gate.
+
+PRs retain `依赖安全审查` and `PR 平台冒烟构建`. Relevant Flutter, root test, native, dependency, script, and workflow changes trigger Android mobile/TV Debug builds and Windows native/window regressions; native platform paths also trigger Linux, macOS, and iOS builds. HarmonyOS retains its independently pinned SDK, host, and HAP gates. Documentation changes follow the existing platform path rules; the workflows define exact triggers. Dart formatting checks only modified files. Main continues to require the existing quality, dependency, and platform gates, with direct force-pushes and branch deletion disabled.
 
 ## Android Build
 

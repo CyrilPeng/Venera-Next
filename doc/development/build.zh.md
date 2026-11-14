@@ -56,24 +56,22 @@ version: "2.11.1"
 
 ## 质量检查
 
-提交代码前至少运行：
-
-```bash
-python .github/scripts/check_structure_imports.py
-flutter analyze --no-pub
-flutter test --no-pub
-git diff --check
-```
-
-CI 会使用 `flutter test --coverage` 生成 `coverage/lcov.info`，在工作流摘要中显示行覆盖率，并上传报告产物。当前覆盖率用于建立可见基线，尚未设置统一硬阈值；涉及关键业务路径的改动仍必须增加针对性测试。
-
-PR 还会运行 `依赖安全审查` 和 `PR 平台冒烟构建`。依赖审查会阻止引入高危或严重漏洞依赖；当改动涉及 Flutter 代码、原生平台目录、依赖、构建脚本或工作流时，平台工作流会执行 Android 手机版／TV 版 Debug 和 Windows Debug 构建，文档等不影响构建的改动会跳过这些平台任务。质量流程另运行真实 TV flavor 的导航、输入、低内存和更新回归。Dart 格式检查只针对本次修改的 Dart 文件执行，避免历史格式差异阻塞后续贡献。`main` 分支要求 PR 通过代码分析、依赖审查和平台冒烟构建门禁，并禁止直接强推或删除分支。
-
-涉及发布版本时再运行：
+先按[测试执行与维护](testing.zh.md)准备本机适用的原生库，提交代码前至少运行：
 
 ```bash
 python .github/scripts/release_version.py --check
+python .github/scripts/check_structure_imports.py
+python .github/scripts/check_architecture_dependencies.py
+python .github/scripts/test_suites.py --strict-imports --output build/test-audit/inventory.json
+python -m unittest discover -s .github/scripts/tests -p "test_*.py"
+flutter analyze --no-pub --fatal-infos --fatal-warnings
+python .github/scripts/run_flutter_tests.py --suite default --coverage --output build/test-audit/default
+git diff --check
 ```
+
+需要早期反馈时运行 `python .github/scripts/run_flutter_tests.py --partition fast --concurrency 4`。完整质量流程由快速组、原生准备与 sanitizers、三个全量分片和真实 TV flavor 组成；「Flutter 测试与覆盖率」汇总门禁核对必需状态、文件并集、实际用例及来源摘要，并合并 `coverage/lcov.info`。当前覆盖率用于观察模块与关键路径，尚未设置统一百分比硬阈值。
+
+PR 保留 `依赖安全审查` 和 `PR 平台冒烟构建`。相关 Flutter、根测试、原生、依赖、脚本及工作流变更触发 Android 手机版／TV Debug 和 Windows 原生／窗口回归；原生平台路径另触发 Linux、macOS 与 iOS 构建。鸿蒙继续使用独立固定 SDK 的 host 与 HAP 门禁。文档等不影响平台构建的改动按原路径规则跳过；具体触发以工作流为准。Dart 格式检查只检查本次修改的文件，`main` 继续要求既有质量、依赖与平台门禁，禁止直接强推或删除分支。
 
 ## Android 构建
 

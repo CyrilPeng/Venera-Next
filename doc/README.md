@@ -25,6 +25,7 @@ English index: [README.en.md](README.en.md)
 ## 开发和构建
 
 - [构建与开发](development/build.zh.md) / [Build and Development](development/build.en.md)
+- [测试执行与维护](development/testing.zh.md) / [Running and Maintaining Tests](development/testing.en.md)
 - [漫画源本地调试](development/source_debugging.zh.md) / [Local Source Debugging](development/source_debugging.en.md)
 - [磁盘日志](development/logging.zh.md) / [Disk logs](development/logging.en.md)
 - [依赖治理](development/dependencies.zh.md) / [Dependency Governance](development/dependencies.en.md)
@@ -53,6 +54,10 @@ English index: [README.en.md](README.en.md)
 
 ## 实验和任务跟踪
 
+- [测试整理实施方案（2026-11-13）](experiments/test_reorganization_plan_20261113.zh.md)：测试范围、分批顺序、平台执行保障、删除标准、验收和回滚。
+- [测试整理基线与实施记录](experiments/test_reorganization_baseline_20261113.zh.md)：原始覆盖率、实际 CI 耗时、执行缺口及逐批决策。
+- [测试整理结果与验收](experiments/test_reorganization_result_20261113.zh.md)：准确物理规模、完整用例与覆盖率、正常 CI 成本和阶段退出条件。
+- [测试整理平台与后续验收](experiments/test_reorganization_platform_acceptance_20261113.zh.md)：实际平台与原生入口、编译／设备证据边界、开放问题建议及环境失败记录。
 - [HarmonyOS 历史实验记录](experiments/harmonyos.zh.md)：完整阅读器 HAP 构建与设备反馈；当前源码与构建工具已统一到主线。
 - [Android TV Alpha 历史实验记录（已进入主线）](experiments/android_tv.zh.md)
 - [漫画源安装任务交互设计](experiments/source_installation_tasks.zh.md)

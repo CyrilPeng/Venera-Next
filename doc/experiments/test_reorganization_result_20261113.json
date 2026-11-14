@@ -1,0 +1,2778 @@
+{
+  "schema_version": 1,
+  "status": "implementation_and_three_sample_review_complete",
+  "baseline_commit": "482810df369d126e4011be31d64408e33aede76f",
+  "pre_partition_reference": "9054677215cbe02f5fca685890285d4011bf88bb",
+  "post_stability_reference": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+  "counting_method": "Git-tracked source blobs; physical lines include comments and blanks. Main _test.dart and all test Dart/support/probes are separate.",
+  "physical": {
+    "baseline": {
+      "application_tests": {
+        "files": 560,
+        "lines": 178391
+      },
+      "all_test_dart": {
+        "files": 583,
+        "lines": 179922
+      },
+      "helpers_and_probes": {
+        "files": 23,
+        "lines": 1531
+      },
+      "lib_dart": {
+        "files": 561,
+        "lines": 123994
+      },
+      "ci_python_tests": {
+        "files": 29,
+        "lines": 4974
+      }
+    },
+    "post": {
+      "application_tests": {
+        "files": 577,
+        "lines": 177380
+      },
+      "all_test_dart": {
+        "files": 616,
+        "lines": 180498
+      },
+      "helpers_and_probes": {
+        "files": 39,
+        "lines": 3118
+      },
+      "lib_dart": {
+        "files": 561,
+        "lines": 123994
+      },
+      "ci_python_tests": {
+        "files": 36,
+        "lines": 5690
+      }
+    }
+  },
+  "source_fingerprints": {
+    "root_dart_blob_sha256": "c2b95243a037f06a52260cbb36120fc1d75c1ca5d6e89ed84ac506985ed19377",
+    "lib_dart_blob_sha256": "db6a6d34d8897ca2ccad353c1e217302c09f238ce0dc3e6538551e72d323e9ae"
+  },
+  "coverage": {
+    "counting_method": "Unique normalized source path and DA line number; hits mean count > 0; ordinary Linux full union, TV separate.",
+    "baseline": {
+      "files": 525,
+      "records": 55832,
+      "hits": 45641,
+      "modules": {
+        "lib/app_runtime": {
+          "files": 30,
+          "records": 1405,
+          "hits": 1150
+        },
+        "lib/app_shell": {
+          "files": 4,
+          "records": 145,
+          "hits": 46
+        },
+        "lib/components": {
+          "files": 32,
+          "records": 4408,
+          "hits": 3749
+        },
+        "lib/features/comic_details": {
+          "files": 14,
+          "records": 2220,
+          "hits": 1447
+        },
+        "lib/features/comic_source": {
+          "files": 48,
+          "records": 6172,
+          "hits": 5310
+        },
+        "lib/features/comic_storage": {
+          "files": 3,
+          "records": 175,
+          "hits": 164
+        },
+        "lib/features/comic_widgets": {
+          "files": 4,
+          "records": 1140,
+          "hits": 868
+        },
+        "lib/features/discovery": {
+          "files": 4,
+          "records": 566,
+          "hits": 0
+        },
+        "lib/features/favorites": {
+          "files": 33,
+          "records": 4670,
+          "hits": 4144
+        },
+        "lib/features/follow_updates": {
+          "files": 7,
+          "records": 833,
+          "hits": 736
+        },
+        "lib/features/history": {
+          "files": 19,
+          "records": 1569,
+          "hits": 1311
+        },
+        "lib/features/image_favorites": {
+          "files": 6,
+          "records": 1042,
+          "hits": 593
+        },
+        "lib/features/local_comics": {
+          "files": 49,
+          "records": 5988,
+          "hits": 4715
+        },
+        "lib/features/reader": {
+          "files": 82,
+          "records": 7768,
+          "hits": 7214
+        },
+        "lib/features/search": {
+          "files": 8,
+          "records": 910,
+          "hits": 59
+        },
+        "lib/features/settings": {
+          "files": 28,
+          "records": 3375,
+          "hits": 2602
+        },
+        "lib/features/sync": {
+          "files": 30,
+          "records": 3950,
+          "hits": 3623
+        },
+        "lib/features/webdav_library": {
+          "files": 14,
+          "records": 967,
+          "hits": 924
+        },
+        "lib/foundation": {
+          "files": 82,
+          "records": 6228,
+          "hits": 5351
+        },
+        "lib/main.dart": {
+          "files": 1,
+          "records": 271,
+          "hits": 15
+        },
+        "lib/network": {
+          "files": 18,
+          "records": 1555,
+          "hits": 1383
+        },
+        "lib/routing": {
+          "files": 9,
+          "records": 475,
+          "hits": 237
+        }
+      }
+    },
+    "post_s6": {
+      "files": 525,
+      "records": 55832,
+      "hits": 45659,
+      "sha256": "b830483db6149ae413c3162c1a710ff9c9fc12cb028df259a6f39db89f40a089",
+      "modules": {
+        "lib/app_runtime": {
+          "files": 30,
+          "records": 1405,
+          "hits": 1150
+        },
+        "lib/app_shell": {
+          "files": 4,
+          "records": 145,
+          "hits": 46
+        },
+        "lib/components": {
+          "files": 32,
+          "records": 4408,
+          "hits": 3750
+        },
+        "lib/features/comic_details": {
+          "files": 14,
+          "records": 2220,
+          "hits": 1447
+        },
+        "lib/features/comic_source": {
+          "files": 48,
+          "records": 6172,
+          "hits": 5310
+        },
+        "lib/features/comic_storage": {
+          "files": 3,
+          "records": 175,
+          "hits": 164
+        },
+        "lib/features/comic_widgets": {
+          "files": 4,
+          "records": 1140,
+          "hits": 868
+        },
+        "lib/features/discovery": {
+          "files": 4,
+          "records": 566,
+          "hits": 2
+        },
+        "lib/features/favorites": {
+          "files": 33,
+          "records": 4670,
+          "hits": 4146
+        },
+        "lib/features/follow_updates": {
+          "files": 7,
+          "records": 833,
+          "hits": 736
+        },
+        "lib/features/history": {
+          "files": 19,
+          "records": 1569,
+          "hits": 1311
+        },
+        "lib/features/image_favorites": {
+          "files": 6,
+          "records": 1042,
+          "hits": 593
+        },
+        "lib/features/local_comics": {
+          "files": 49,
+          "records": 5988,
+          "hits": 4716
+        },
+        "lib/features/reader": {
+          "files": 82,
+          "records": 7768,
+          "hits": 7214
+        },
+        "lib/features/search": {
+          "files": 8,
+          "records": 910,
+          "hits": 60
+        },
+        "lib/features/settings": {
+          "files": 28,
+          "records": 3375,
+          "hits": 2603
+        },
+        "lib/features/sync": {
+          "files": 30,
+          "records": 3950,
+          "hits": 3626
+        },
+        "lib/features/webdav_library": {
+          "files": 14,
+          "records": 967,
+          "hits": 924
+        },
+        "lib/foundation": {
+          "files": 82,
+          "records": 6228,
+          "hits": 5351
+        },
+        "lib/main.dart": {
+          "files": 1,
+          "records": 271,
+          "hits": 15
+        },
+        "lib/network": {
+          "files": 18,
+          "records": 1555,
+          "hits": 1390
+        },
+        "lib/routing": {
+          "files": 9,
+          "records": 475,
+          "hits": 237
+        }
+      }
+    },
+    "post_stability": {
+      "files": 525,
+      "records": 55832,
+      "hits": 45659,
+      "sha256": "b830483db6149ae413c3162c1a710ff9c9fc12cb028df259a6f39db89f40a089",
+      "modules": {
+        "lib/app_runtime": {
+          "files": 30,
+          "records": 1405,
+          "hits": 1150
+        },
+        "lib/app_shell": {
+          "files": 4,
+          "records": 145,
+          "hits": 46
+        },
+        "lib/components": {
+          "files": 32,
+          "records": 4408,
+          "hits": 3750
+        },
+        "lib/features/comic_details": {
+          "files": 14,
+          "records": 2220,
+          "hits": 1447
+        },
+        "lib/features/comic_source": {
+          "files": 48,
+          "records": 6172,
+          "hits": 5310
+        },
+        "lib/features/comic_storage": {
+          "files": 3,
+          "records": 175,
+          "hits": 164
+        },
+        "lib/features/comic_widgets": {
+          "files": 4,
+          "records": 1140,
+          "hits": 868
+        },
+        "lib/features/discovery": {
+          "files": 4,
+          "records": 566,
+          "hits": 2
+        },
+        "lib/features/favorites": {
+          "files": 33,
+          "records": 4670,
+          "hits": 4146
+        },
+        "lib/features/follow_updates": {
+          "files": 7,
+          "records": 833,
+          "hits": 736
+        },
+        "lib/features/history": {
+          "files": 19,
+          "records": 1569,
+          "hits": 1311
+        },
+        "lib/features/image_favorites": {
+          "files": 6,
+          "records": 1042,
+          "hits": 593
+        },
+        "lib/features/local_comics": {
+          "files": 49,
+          "records": 5988,
+          "hits": 4716
+        },
+        "lib/features/reader": {
+          "files": 82,
+          "records": 7768,
+          "hits": 7214
+        },
+        "lib/features/search": {
+          "files": 8,
+          "records": 910,
+          "hits": 60
+        },
+        "lib/features/settings": {
+          "files": 28,
+          "records": 3375,
+          "hits": 2603
+        },
+        "lib/features/sync": {
+          "files": 30,
+          "records": 3950,
+          "hits": 3626
+        },
+        "lib/features/webdav_library": {
+          "files": 14,
+          "records": 967,
+          "hits": 924
+        },
+        "lib/foundation": {
+          "files": 82,
+          "records": 6228,
+          "hits": 5351
+        },
+        "lib/main.dart": {
+          "files": 1,
+          "records": 271,
+          "hits": 15
+        },
+        "lib/network": {
+          "files": 18,
+          "records": 1555,
+          "hits": 1390
+        },
+        "lib/routing": {
+          "files": 9,
+          "records": 475,
+          "hits": 237
+        }
+      }
+    }
+  },
+  "normal_ci_samples": [
+    {
+      "sample": 1,
+      "label": "Native frame wait correction",
+      "source_commit": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+      "run_attempt": 1,
+      "source_identity": {
+        "requested_head_commit": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+        "executed_checkout_commit": "0737b6add52d647f929148b55afc739365643c2e",
+        "source_tree_sha": "cd5818210e72dd044d2a64552c45c4fbb8a0cf44",
+        "checkout_tree_sha": "cd5818210e72dd044d2a64552c45c4fbb8a0cf44",
+        "tree_matches": true,
+        "pr_base_commit": "482810df369d126e4011be31d64408e33aede76f"
+      },
+      "comparison_inputs": {
+        "reference": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+        "changed_files": [],
+        "only_documentation_changes": true
+      },
+      "run_ids": {
+        "quality": 43458342695,
+        "platform": 43458343046,
+        "harmonyos": 43458343179,
+        "dependency": 43458342981
+      },
+      "metrics": {
+        "critical_path_wall_seconds": 1509,
+        "trigger_to_completion_seconds": 1512,
+        "total_runner_seconds": 7692,
+        "runner_seconds_by_os": {
+          "ubuntu": 4995,
+          "macos": 1204,
+          "windows": 1493
+        },
+        "workflow_metrics": {
+          "quality": {
+            "run_id": 43458342695,
+            "head_commit": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 656,
+            "trigger_to_completion_seconds": 659,
+            "total_runner_seconds": 2157,
+            "runner_seconds_by_os": {
+              "ubuntu": 2044,
+              "macos": 113
+            },
+            "jobs": [
+              {
+                "name": "Android 原生会话与文件所有权",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:50Z",
+                "completed_at": "2026-11-13T16:01:14Z",
+                "wall_seconds": 24
+              },
+              {
+                "name": "analyze",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:50Z",
+                "completed_at": "2026-11-13T16:02:39Z",
+                "wall_seconds": 109
+              },
+              {
+                "name": "Apple 目录授权与跨会话恢复",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:50Z",
+                "completed_at": "2026-11-13T16:01:36Z",
+                "wall_seconds": 46
+              },
+              {
+                "name": "Android 文档存储真实 Provider 回归",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:50Z",
+                "completed_at": "2026-11-13T16:05:51Z",
+                "wall_seconds": 301
+              },
+              {
+                "name": "快速 Flutter 回归",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:50Z",
+                "completed_at": "2026-11-13T16:02:51Z",
+                "wall_seconds": 121
+              },
+              {
+                "name": "iOS Rhttp 原生依赖兼容性",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:50Z",
+                "completed_at": "2026-11-13T16:01:57Z",
+                "wall_seconds": 67
+              },
+              {
+                "name": "Rhttp 原生回调生命周期",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:50Z",
+                "completed_at": "2026-11-13T16:03:25Z",
+                "wall_seconds": 155
+              },
+              {
+                "name": "Flutter 原生库与内存安全",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:03:27Z",
+                "completed_at": "2026-11-13T16:04:58Z",
+                "wall_seconds": 91
+              },
+              {
+                "name": "Flutter 全量回归（shard-1）",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:05:00Z",
+                "completed_at": "2026-11-13T16:11:33Z",
+                "wall_seconds": 393
+              },
+              {
+                "name": "Flutter 全量回归（shard-3）",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:05:00Z",
+                "completed_at": "2026-11-13T16:11:23Z",
+                "wall_seconds": 383
+              },
+              {
+                "name": "TV 编译身份、遥控器与低内存策略",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:05:01Z",
+                "completed_at": "2026-11-13T16:06:42Z",
+                "wall_seconds": 101
+              },
+              {
+                "name": "Flutter 全量回归（shard-2）",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:05:00Z",
+                "completed_at": "2026-11-13T16:10:55Z",
+                "wall_seconds": 355
+              },
+              {
+                "name": "Flutter 测试与覆盖率",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:11:35Z",
+                "completed_at": "2026-11-13T16:11:46Z",
+                "wall_seconds": 11
+              }
+            ]
+          },
+          "platform": {
+            "run_id": 43458343046,
+            "head_commit": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 1509,
+            "trigger_to_completion_seconds": 1511,
+            "total_runner_seconds": 4489,
+            "runner_seconds_by_os": {
+              "ubuntu": 1905,
+              "macos": 1091,
+              "windows": 1493
+            },
+            "jobs": [
+              {
+                "name": "检测平台构建变更",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:50Z",
+                "completed_at": "2026-11-13T16:00:56Z",
+                "wall_seconds": 6
+              },
+              {
+                "name": "macOS 原生构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:01:01Z",
+                "completed_at": "2026-11-13T16:09:15Z",
+                "wall_seconds": 494
+              },
+              {
+                "name": "Windows 冒烟构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:59Z",
+                "completed_at": "2026-11-13T16:25:52Z",
+                "wall_seconds": 1493
+              },
+              {
+                "name": "iOS 原生构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:01:00Z",
+                "completed_at": "2026-11-13T16:10:57Z",
+                "wall_seconds": 597
+              },
+              {
+                "name": "Android TV 冒烟构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:59Z",
+                "completed_at": "2026-11-13T16:12:46Z",
+                "wall_seconds": 707
+              },
+              {
+                "name": "Android 冒烟构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:59Z",
+                "completed_at": "2026-11-13T16:16:24Z",
+                "wall_seconds": 925
+              },
+              {
+                "name": "Linux 原生构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:01:00Z",
+                "completed_at": "2026-11-13T16:05:22Z",
+                "wall_seconds": 262
+              },
+              {
+                "name": "平台冒烟构建门禁",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:25:54Z",
+                "completed_at": "2026-11-13T16:25:59Z",
+                "wall_seconds": 5
+              }
+            ]
+          },
+          "harmonyos": {
+            "run_id": 43458343179,
+            "head_commit": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 829,
+            "trigger_to_completion_seconds": 831,
+            "total_runner_seconds": 829,
+            "runner_seconds_by_os": {
+              "ubuntu": 829
+            },
+            "jobs": [
+              {
+                "name": "candidate / unsigned-hap",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:50Z",
+                "completed_at": "2026-11-13T16:14:39Z",
+                "wall_seconds": 829
+              }
+            ]
+          },
+          "dependency": {
+            "run_id": 43458342981,
+            "head_commit": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 215,
+            "trigger_to_completion_seconds": 218,
+            "total_runner_seconds": 217,
+            "runner_seconds_by_os": {
+              "ubuntu": 217
+            },
+            "jobs": [
+              {
+                "name": "Rust 锁定依赖漏洞扫描",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:55Z",
+                "completed_at": "2026-11-13T16:04:25Z",
+                "wall_seconds": 210
+              },
+              {
+                "name": "依赖安全审查",
+                "conclusion": "success",
+                "started_at": "2026-11-13T16:00:50Z",
+                "completed_at": "2026-11-13T16:00:57Z",
+                "wall_seconds": 7
+              }
+            ]
+          }
+        }
+      },
+      "platforms": {
+        "linux": {
+          "schema_version": 2,
+          "files": 577,
+          "cases": 6070,
+          "passed": 5916,
+          "skipped": 154,
+          "failed": 0,
+          "elapsed_ms": null,
+          "wall_seconds": null,
+          "source_commit": "0737b6add52d647f929148b55afc739365643c2e",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        },
+        "tv": {
+          "schema_version": 2,
+          "files": 9,
+          "cases": 89,
+          "passed": 89,
+          "skipped": 0,
+          "failed": 0,
+          "elapsed_ms": 33587,
+          "wall_seconds": 51.976,
+          "source_commit": "0737b6add52d647f929148b55afc739365643c2e",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        },
+        "windows": {
+          "schema_version": 2,
+          "files": 119,
+          "cases": 1502,
+          "passed": 1499,
+          "skipped": 3,
+          "failed": 0,
+          "elapsed_ms": 512642,
+          "wall_seconds": 516.078,
+          "source_commit": "0737b6add52d647f929148b55afc739365643c2e",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        },
+        "harmonyos": {
+          "schema_version": 2,
+          "files": 80,
+          "cases": 1175,
+          "passed": 1135,
+          "skipped": 40,
+          "failed": 0,
+          "elapsed_ms": 181475,
+          "wall_seconds": 184.056,
+          "source_commit": "0737b6add52d647f929148b55afc739365643c2e",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        }
+      },
+      "partitions": {
+        "fast": {
+          "files": 62,
+          "cases": 513,
+          "passed": 513,
+          "skipped": 0,
+          "elapsed_ms": 70366,
+          "wall_seconds": 89.254
+        },
+        "shard-1": {
+          "files": 170,
+          "cases": 1797,
+          "passed": 1772,
+          "skipped": 25,
+          "elapsed_ms": 341986,
+          "wall_seconds": 360.863
+        },
+        "shard-2": {
+          "files": 172,
+          "cases": 1947,
+          "passed": 1914,
+          "skipped": 33,
+          "elapsed_ms": 304260,
+          "wall_seconds": 322.64
+        },
+        "shard-3": {
+          "files": 173,
+          "cases": 1813,
+          "passed": 1717,
+          "skipped": 96,
+          "elapsed_ms": 326072,
+          "wall_seconds": 344.745
+        }
+      },
+      "case_and_coverage_validation": {
+        "linux": [],
+        "tv": [],
+        "windows": [],
+        "harmonyos": [],
+        "coverage_vs_baseline": {
+          "missing_records": [],
+          "added_records": [],
+          "lost_hits": [],
+          "gained_hits": [
+            "lib/components/layout.dart:47",
+            "lib/features/discovery/categories_page.dart:22",
+            "lib/features/discovery/explore_page.dart:26",
+            "lib/features/favorites/favorites_page.dart:21",
+            "lib/features/favorites/read_later.dart:59",
+            "lib/features/local_comics/local_comics_summary.dart:31",
+            "lib/features/search/search_entry.dart:11",
+            "lib/features/settings/settings_page.dart:17",
+            "lib/features/sync/data_sync_content.dart:27",
+            "lib/features/sync/data_sync_remote_port.dart:9",
+            "lib/features/sync/sync_status_summary.dart:13",
+            "lib/network/rhttp_stream_request.dart:445",
+            "lib/network/rhttp_stream_request.dart:446",
+            "lib/network/rhttp_stream_request.dart:528",
+            "lib/network/rhttp_stream_request.dart:530",
+            "lib/network/rhttp_stream_request.dart:531",
+            "lib/network/rhttp_stream_request.dart:532",
+            "lib/network/rhttp_stream_request.dart:534"
+          ]
+        },
+        "coverage_vs_s6": {
+          "missing_records": [],
+          "added_records": [],
+          "lost_hits": [],
+          "gained_hits": []
+        },
+        "active_cancellation": {
+          "394": 4,
+          "396": 4,
+          "397": 6,
+          "398": 2,
+          "401": 4,
+          "403": 2
+        }
+      },
+      "coverage": {
+        "files": 525,
+        "records": 55832,
+        "hits": 45659,
+        "sha256": "d9a8b75143ce9d04b0f54389b2dcc1a221c050f99d67e99ed38ef89eb0df96b5"
+      },
+      "source_fingerprints": {
+        "root_dart_blob_sha256": "c2b95243a037f06a52260cbb36120fc1d75c1ca5d6e89ed84ac506985ed19377",
+        "lib_dart_blob_sha256": "db6a6d34d8897ca2ccad353c1e217302c09f238ce0dc3e6538551e72d323e9ae"
+      },
+      "windows_steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success",
+          "seconds": 2
+        },
+        {
+          "name": "Run actions/checkout@v7",
+          "conclusion": "success",
+          "seconds": 11
+        },
+        {
+          "name": "Run subosito/flutter-action@v2",
+          "conclusion": "success",
+          "seconds": 130
+        },
+        {
+          "name": "Run flutter pub get --enforce-lockfile",
+          "conclusion": "success",
+          "seconds": 5
+        },
+        {
+          "name": "构建 Windows Debug 应用",
+          "conclusion": "success",
+          "seconds": 755
+        },
+        {
+          "name": "验证桌面 WebView 第三方声明随应用分发",
+          "conclusion": "success",
+          "seconds": 1
+        },
+        {
+          "name": "验证 Windows 平台、原生与窗口生命周期",
+          "conclusion": "success",
+          "seconds": 519
+        },
+        {
+          "name": "保存 Windows 平台测试事件",
+          "conclusion": "success",
+          "seconds": 2
+        },
+        {
+          "name": "编译并运行 Windows 原生启动测试",
+          "conclusion": "success",
+          "seconds": 16
+        },
+        {
+          "name": "验证 Windows 分享文件与结果所有权",
+          "conclusion": "success",
+          "seconds": 18
+        },
+        {
+          "name": "验证 Windows 首次启动、重复启动和失败诊断",
+          "conclusion": "success",
+          "seconds": 25
+        },
+        {
+          "name": "上传 Windows 启动诊断",
+          "conclusion": "success",
+          "seconds": 2
+        },
+        {
+          "name": "Post Run subosito/flutter-action@v2",
+          "conclusion": "success",
+          "seconds": 2
+        },
+        {
+          "name": "Post Run actions/checkout@v7",
+          "conclusion": "success",
+          "seconds": 2
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success",
+          "seconds": 0
+        }
+      ]
+    },
+    {
+      "sample": 2,
+      "label": "Normal platform and environment acceptance documentation after retained SDK incident",
+      "source_commit": "1d61b99209ce67834f375e33fc1f2452e4a8919f",
+      "run_attempt": 1,
+      "source_identity": {
+        "requested_head_commit": "1d61b99209ce67834f375e33fc1f2452e4a8919f",
+        "executed_checkout_commit": "e2d59471dfdad04bc0e153fcf7e8e2e40ea1a79f",
+        "source_tree_sha": "e2541546509bd49ce976fafbc49a1b0691f1d8c7",
+        "checkout_tree_sha": "e2541546509bd49ce976fafbc49a1b0691f1d8c7",
+        "tree_matches": true,
+        "pr_base_commit": "482810df369d126e4011be31d64408e33aede76f"
+      },
+      "comparison_inputs": {
+        "reference": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+        "changed_files": [
+          "CHANGELOG.md",
+          "doc/README.en.md",
+          "doc/README.md",
+          "doc/experiments/test_reorganization_baseline_20261113.zh.md",
+          "doc/experiments/test_reorganization_changes_20261113.json",
+          "doc/experiments/test_reorganization_plan_20261113.zh.md",
+          "doc/experiments/test_reorganization_platform_acceptance_20261113.zh.md",
+          "doc/experiments/test_reorganization_result_20261113.json",
+          "doc/experiments/test_reorganization_result_20261113.zh.md"
+        ],
+        "only_documentation_changes": true
+      },
+      "run_ids": {
+        "quality": 43469352391,
+        "platform": 43469352350,
+        "harmonyos": 43469352584,
+        "dependency": 43469352446
+      },
+      "metrics": {
+        "critical_path_wall_seconds": 1450,
+        "trigger_to_completion_seconds": 1452,
+        "total_runner_seconds": 7887,
+        "runner_seconds_by_os": {
+          "macos": 1307,
+          "ubuntu": 5154,
+          "windows": 1426
+        },
+        "workflow_metrics": {
+          "quality": {
+            "run_id": 43469352391,
+            "head_commit": "1d61b99209ce67834f375e33fc1f2452e4a8919f",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 719,
+            "trigger_to_completion_seconds": 721,
+            "total_runner_seconds": 2243,
+            "runner_seconds_by_os": {
+              "macos": 121,
+              "ubuntu": 2122
+            },
+            "jobs": [
+              {
+                "name": "iOS Rhttp 原生依赖兼容性",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:05:57Z",
+                "completed_at": "2026-11-13T17:07:13Z",
+                "wall_seconds": 76
+              },
+              {
+                "name": "Rhttp 原生回调生命周期",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:05:57Z",
+                "completed_at": "2026-11-13T17:09:42Z",
+                "wall_seconds": 225
+              },
+              {
+                "name": "Apple 目录授权与跨会话恢复",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:05:57Z",
+                "completed_at": "2026-11-13T17:06:42Z",
+                "wall_seconds": 45
+              },
+              {
+                "name": "analyze",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:05:57Z",
+                "completed_at": "2026-11-13T17:08:15Z",
+                "wall_seconds": 138
+              },
+              {
+                "name": "快速 Flutter 回归",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:05:57Z",
+                "completed_at": "2026-11-13T17:08:02Z",
+                "wall_seconds": 125
+              },
+              {
+                "name": "Android 原生会话与文件所有权",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:05:56Z",
+                "completed_at": "2026-11-13T17:06:24Z",
+                "wall_seconds": 28
+              },
+              {
+                "name": "Android 文档存储真实 Provider 回归",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:05:56Z",
+                "completed_at": "2026-11-13T17:10:39Z",
+                "wall_seconds": 283
+              },
+              {
+                "name": "Flutter 原生库与内存安全",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:09:44Z",
+                "completed_at": "2026-11-13T17:10:53Z",
+                "wall_seconds": 69
+              },
+              {
+                "name": "TV 编译身份、遥控器与低内存策略",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:10:56Z",
+                "completed_at": "2026-11-13T17:12:25Z",
+                "wall_seconds": 89
+              },
+              {
+                "name": "Flutter 全量回归（shard-3）",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:10:56Z",
+                "completed_at": "2026-11-13T17:17:37Z",
+                "wall_seconds": 401
+              },
+              {
+                "name": "Flutter 全量回归（shard-1）",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:10:55Z",
+                "completed_at": "2026-11-13T17:17:10Z",
+                "wall_seconds": 375
+              },
+              {
+                "name": "Flutter 全量回归（shard-2）",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:10:56Z",
+                "completed_at": "2026-11-13T17:17:10Z",
+                "wall_seconds": 374
+              },
+              {
+                "name": "Flutter 测试与覆盖率",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:17:40Z",
+                "completed_at": "2026-11-13T17:17:55Z",
+                "wall_seconds": 15
+              }
+            ]
+          },
+          "platform": {
+            "run_id": 43469352350,
+            "head_commit": "1d61b99209ce67834f375e33fc1f2452e4a8919f",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 1450,
+            "trigger_to_completion_seconds": 1452,
+            "total_runner_seconds": 4676,
+            "runner_seconds_by_os": {
+              "ubuntu": 2064,
+              "macos": 1186,
+              "windows": 1426
+            },
+            "jobs": [
+              {
+                "name": "检测平台构建变更",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:05:56Z",
+                "completed_at": "2026-11-13T17:06:02Z",
+                "wall_seconds": 6
+              },
+              {
+                "name": "iOS 原生构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:06:12Z",
+                "completed_at": "2026-11-13T17:16:48Z",
+                "wall_seconds": 636
+              },
+              {
+                "name": "Windows 冒烟构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:06:04Z",
+                "completed_at": "2026-11-13T17:29:50Z",
+                "wall_seconds": 1426
+              },
+              {
+                "name": "Linux 原生构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:06:04Z",
+                "completed_at": "2026-11-13T17:10:29Z",
+                "wall_seconds": 265
+              },
+              {
+                "name": "macOS 原生构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:06:12Z",
+                "completed_at": "2026-11-13T17:15:22Z",
+                "wall_seconds": 550
+              },
+              {
+                "name": "Android TV 冒烟构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:06:05Z",
+                "completed_at": "2026-11-13T17:20:41Z",
+                "wall_seconds": 876
+              },
+              {
+                "name": "Android 冒烟构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:06:05Z",
+                "completed_at": "2026-11-13T17:21:09Z",
+                "wall_seconds": 904
+              },
+              {
+                "name": "平台冒烟构建门禁",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:29:53Z",
+                "completed_at": "2026-11-13T17:30:06Z",
+                "wall_seconds": 13
+              }
+            ]
+          },
+          "harmonyos": {
+            "run_id": 43469352584,
+            "head_commit": "1d61b99209ce67834f375e33fc1f2452e4a8919f",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 825,
+            "trigger_to_completion_seconds": 828,
+            "total_runner_seconds": 825,
+            "runner_seconds_by_os": {
+              "ubuntu": 825
+            },
+            "jobs": [
+              {
+                "name": "candidate / unsigned-hap",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:05:57Z",
+                "completed_at": "2026-11-13T17:19:42Z",
+                "wall_seconds": 825
+              }
+            ]
+          },
+          "dependency": {
+            "run_id": 43469352446,
+            "head_commit": "1d61b99209ce67834f375e33fc1f2452e4a8919f",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 136,
+            "trigger_to_completion_seconds": 138,
+            "total_runner_seconds": 143,
+            "runner_seconds_by_os": {
+              "ubuntu": 143
+            },
+            "jobs": [
+              {
+                "name": "依赖安全审查",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:05:56Z",
+                "completed_at": "2026-11-13T17:06:03Z",
+                "wall_seconds": 7
+              },
+              {
+                "name": "Rust 锁定依赖漏洞扫描",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:05:56Z",
+                "completed_at": "2026-11-13T17:08:12Z",
+                "wall_seconds": 136
+              }
+            ]
+          }
+        }
+      },
+      "platforms": {
+        "linux": {
+          "schema_version": 2,
+          "files": 577,
+          "cases": 6070,
+          "passed": 5916,
+          "skipped": 154,
+          "failed": 0,
+          "elapsed_ms": null,
+          "wall_seconds": null,
+          "source_commit": "e2d59471dfdad04bc0e153fcf7e8e2e40ea1a79f",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        },
+        "tv": {
+          "schema_version": 2,
+          "files": 9,
+          "cases": 89,
+          "passed": 89,
+          "skipped": 0,
+          "failed": 0,
+          "elapsed_ms": 26321,
+          "wall_seconds": 44.351,
+          "source_commit": "e2d59471dfdad04bc0e153fcf7e8e2e40ea1a79f",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        },
+        "windows": {
+          "schema_version": 2,
+          "files": 119,
+          "cases": 1502,
+          "passed": 1499,
+          "skipped": 3,
+          "failed": 0,
+          "elapsed_ms": 506339,
+          "wall_seconds": 509.843,
+          "source_commit": "e2d59471dfdad04bc0e153fcf7e8e2e40ea1a79f",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        },
+        "harmonyos": {
+          "schema_version": 2,
+          "files": 80,
+          "cases": 1175,
+          "passed": 1135,
+          "skipped": 40,
+          "failed": 0,
+          "elapsed_ms": 180402,
+          "wall_seconds": 183.083,
+          "source_commit": "e2d59471dfdad04bc0e153fcf7e8e2e40ea1a79f",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        }
+      },
+      "partitions": {
+        "fast": {
+          "files": 62,
+          "cases": 513,
+          "passed": 513,
+          "skipped": 0,
+          "elapsed_ms": 59727,
+          "wall_seconds": 77.852
+        },
+        "shard-1": {
+          "files": 170,
+          "cases": 1797,
+          "passed": 1772,
+          "skipped": 25,
+          "elapsed_ms": 325285,
+          "wall_seconds": 343.407
+        },
+        "shard-2": {
+          "files": 172,
+          "cases": 1947,
+          "passed": 1914,
+          "skipped": 33,
+          "elapsed_ms": 325129,
+          "wall_seconds": 343.508
+        },
+        "shard-3": {
+          "files": 173,
+          "cases": 1813,
+          "passed": 1717,
+          "skipped": 96,
+          "elapsed_ms": 350941,
+          "wall_seconds": 370.073
+        }
+      },
+      "case_and_coverage_validation": {
+        "linux": [],
+        "tv": [],
+        "windows": [],
+        "harmonyos": [],
+        "coverage_vs_baseline": {
+          "missing_records": [],
+          "added_records": [],
+          "lost_hits": [],
+          "gained_hits": [
+            "lib/components/layout.dart:47",
+            "lib/features/discovery/categories_page.dart:22",
+            "lib/features/discovery/explore_page.dart:26",
+            "lib/features/favorites/favorites_page.dart:21",
+            "lib/features/favorites/read_later.dart:59",
+            "lib/features/local_comics/local_comics_summary.dart:31",
+            "lib/features/search/search_entry.dart:11",
+            "lib/features/settings/settings_page.dart:17",
+            "lib/features/sync/data_sync_content.dart:27",
+            "lib/features/sync/data_sync_remote_port.dart:9",
+            "lib/features/sync/sync_status_summary.dart:13",
+            "lib/network/rhttp_stream_request.dart:445",
+            "lib/network/rhttp_stream_request.dart:446",
+            "lib/network/rhttp_stream_request.dart:528",
+            "lib/network/rhttp_stream_request.dart:530",
+            "lib/network/rhttp_stream_request.dart:531",
+            "lib/network/rhttp_stream_request.dart:532",
+            "lib/network/rhttp_stream_request.dart:534"
+          ]
+        },
+        "coverage_vs_s6": {
+          "missing_records": [],
+          "added_records": [],
+          "lost_hits": [],
+          "gained_hits": []
+        },
+        "active_cancellation": {
+          "394": 4,
+          "396": 4,
+          "397": 6,
+          "398": 2,
+          "401": 4,
+          "403": 2
+        }
+      },
+      "coverage": {
+        "files": 525,
+        "records": 55832,
+        "hits": 45659,
+        "sha256": "b2dd45dd8e678048d64a179722d6211ff5527aa953cc485125482c271c5d9ff4"
+      },
+      "source_fingerprints": {
+        "root_dart_blob_sha256": "c2b95243a037f06a52260cbb36120fc1d75c1ca5d6e89ed84ac506985ed19377",
+        "lib_dart_blob_sha256": "db6a6d34d8897ca2ccad353c1e217302c09f238ce0dc3e6538551e72d323e9ae"
+      },
+      "windows_steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success",
+          "seconds": 1
+        },
+        {
+          "name": "Run actions/checkout@v7",
+          "conclusion": "success",
+          "seconds": 8
+        },
+        {
+          "name": "Run subosito/flutter-action@v2",
+          "conclusion": "success",
+          "seconds": 108
+        },
+        {
+          "name": "Run flutter pub get --enforce-lockfile",
+          "conclusion": "success",
+          "seconds": 4
+        },
+        {
+          "name": "构建 Windows Debug 应用",
+          "conclusion": "success",
+          "seconds": 723
+        },
+        {
+          "name": "验证桌面 WebView 第三方声明随应用分发",
+          "conclusion": "success",
+          "seconds": 0
+        },
+        {
+          "name": "验证 Windows 平台、原生与窗口生命周期",
+          "conclusion": "success",
+          "seconds": 513
+        },
+        {
+          "name": "保存 Windows 平台测试事件",
+          "conclusion": "success",
+          "seconds": 1
+        },
+        {
+          "name": "编译并运行 Windows 原生启动测试",
+          "conclusion": "success",
+          "seconds": 16
+        },
+        {
+          "name": "验证 Windows 分享文件与结果所有权",
+          "conclusion": "success",
+          "seconds": 19
+        },
+        {
+          "name": "验证 Windows 首次启动、重复启动和失败诊断",
+          "conclusion": "success",
+          "seconds": 26
+        },
+        {
+          "name": "上传 Windows 启动诊断",
+          "conclusion": "success",
+          "seconds": 1
+        },
+        {
+          "name": "Post Run subosito/flutter-action@v2",
+          "conclusion": "success",
+          "seconds": 2
+        },
+        {
+          "name": "Post Run actions/checkout@v7",
+          "conclusion": "success",
+          "seconds": 2
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success",
+          "seconds": 0
+        }
+      ]
+    },
+    {
+      "sample": 3,
+      "label": "Normal second-sample progress and acceptance documentation; third comparable post-correction cohort",
+      "source_commit": "f07181d25b5b4ad08c7a52b5cf8deff6d2fa58fc",
+      "run_attempt": 1,
+      "source_identity": {
+        "requested_head_commit": "f07181d25b5b4ad08c7a52b5cf8deff6d2fa58fc",
+        "executed_checkout_commit": "e36d197a5155b6e8bd3f118e70aafe6f6981ab3c",
+        "source_tree_sha": "e27820eb9a9e2545421bc1b220a93f280ce32393",
+        "checkout_tree_sha": "e27820eb9a9e2545421bc1b220a93f280ce32393",
+        "tree_matches": true,
+        "pr_base_commit": "482810df369d126e4011be31d64408e33aede76f"
+      },
+      "comparison_inputs": {
+        "reference": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+        "changed_files": [
+          "CHANGELOG.md",
+          "doc/README.en.md",
+          "doc/README.md",
+          "doc/experiments/test_reorganization_baseline_20261113.zh.md",
+          "doc/experiments/test_reorganization_changes_20261113.json",
+          "doc/experiments/test_reorganization_plan_20261113.zh.md",
+          "doc/experiments/test_reorganization_platform_acceptance_20261113.zh.md",
+          "doc/experiments/test_reorganization_result_20261113.json",
+          "doc/experiments/test_reorganization_result_20261113.zh.md"
+        ],
+        "only_documentation_changes": true
+      },
+      "run_ids": {
+        "quality": 43474007522,
+        "platform": 43474007511,
+        "harmonyos": 43474007609,
+        "dependency": 43474007301
+      },
+      "metrics": {
+        "critical_path_wall_seconds": 1416,
+        "trigger_to_completion_seconds": 1418,
+        "total_runner_seconds": 7484,
+        "runner_seconds_by_os": {
+          "ubuntu": 4896,
+          "macos": 1191,
+          "windows": 1397
+        },
+        "workflow_metrics": {
+          "quality": {
+            "run_id": 43474007522,
+            "head_commit": "f07181d25b5b4ad08c7a52b5cf8deff6d2fa58fc",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 751,
+            "trigger_to_completion_seconds": 753,
+            "total_runner_seconds": 2141,
+            "runner_seconds_by_os": {
+              "ubuntu": 2041,
+              "macos": 100
+            },
+            "jobs": [
+              {
+                "name": "Android 原生会话与文件所有权",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:49Z",
+                "completed_at": "2026-11-13T17:34:12Z",
+                "wall_seconds": 23
+              },
+              {
+                "name": "Android 文档存储真实 Provider 回归",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:49Z",
+                "completed_at": "2026-11-13T17:38:31Z",
+                "wall_seconds": 282
+              },
+              {
+                "name": "Rhttp 原生回调生命周期",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:48Z",
+                "completed_at": "2026-11-13T17:37:24Z",
+                "wall_seconds": 216
+              },
+              {
+                "name": "analyze",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:49Z",
+                "completed_at": "2026-11-13T17:36:06Z",
+                "wall_seconds": 137
+              },
+              {
+                "name": "iOS Rhttp 原生依赖兼容性",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:50Z",
+                "completed_at": "2026-11-13T17:35:04Z",
+                "wall_seconds": 74
+              },
+              {
+                "name": "Apple 目录授权与跨会话恢复",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:50Z",
+                "completed_at": "2026-11-13T17:34:16Z",
+                "wall_seconds": 26
+              },
+              {
+                "name": "快速 Flutter 回归",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:48Z",
+                "completed_at": "2026-11-13T17:35:43Z",
+                "wall_seconds": 115
+              },
+              {
+                "name": "Flutter 原生库与内存安全",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:37:26Z",
+                "completed_at": "2026-11-13T17:38:34Z",
+                "wall_seconds": 68
+              },
+              {
+                "name": "TV 编译身份、遥控器与低内存策略",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:38:37Z",
+                "completed_at": "2026-11-13T17:40:10Z",
+                "wall_seconds": 93
+              },
+              {
+                "name": "Flutter 全量回归（shard-1）",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:38:36Z",
+                "completed_at": "2026-11-13T17:44:21Z",
+                "wall_seconds": 345
+              },
+              {
+                "name": "Flutter 全量回归（shard-3）",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:38:36Z",
+                "completed_at": "2026-11-13T17:43:38Z",
+                "wall_seconds": 302
+              },
+              {
+                "name": "Flutter 全量回归（shard-2）",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:38:37Z",
+                "completed_at": "2026-11-13T17:46:06Z",
+                "wall_seconds": 449
+              },
+              {
+                "name": "Flutter 测试与覆盖率",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:46:08Z",
+                "completed_at": "2026-11-13T17:46:19Z",
+                "wall_seconds": 11
+              }
+            ]
+          },
+          "platform": {
+            "run_id": 43474007511,
+            "head_commit": "f07181d25b5b4ad08c7a52b5cf8deff6d2fa58fc",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 1415,
+            "trigger_to_completion_seconds": 1418,
+            "total_runner_seconds": 4451,
+            "runner_seconds_by_os": {
+              "ubuntu": 1963,
+              "windows": 1397,
+              "macos": 1091
+            },
+            "jobs": [
+              {
+                "name": "检测平台构建变更",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:49Z",
+                "completed_at": "2026-11-13T17:33:57Z",
+                "wall_seconds": 8
+              },
+              {
+                "name": "Windows 冒烟构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:59Z",
+                "completed_at": "2026-11-13T17:57:16Z",
+                "wall_seconds": 1397
+              },
+              {
+                "name": "Linux 原生构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:59Z",
+                "completed_at": "2026-11-13T17:37:25Z",
+                "wall_seconds": 206
+              },
+              {
+                "name": "Android 冒烟构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:59Z",
+                "completed_at": "2026-11-13T17:48:33Z",
+                "wall_seconds": 874
+              },
+              {
+                "name": "macOS 原生构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:59Z",
+                "completed_at": "2026-11-13T17:42:52Z",
+                "wall_seconds": 533
+              },
+              {
+                "name": "Android TV 冒烟构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:59Z",
+                "completed_at": "2026-11-13T17:48:28Z",
+                "wall_seconds": 869
+              },
+              {
+                "name": "iOS 原生构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:34:00Z",
+                "completed_at": "2026-11-13T17:43:18Z",
+                "wall_seconds": 558
+              },
+              {
+                "name": "平台冒烟构建门禁",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:57:18Z",
+                "completed_at": "2026-11-13T17:57:24Z",
+                "wall_seconds": 6
+              }
+            ]
+          },
+          "harmonyos": {
+            "run_id": 43474007609,
+            "head_commit": "f07181d25b5b4ad08c7a52b5cf8deff6d2fa58fc",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 712,
+            "trigger_to_completion_seconds": 715,
+            "total_runner_seconds": 712,
+            "runner_seconds_by_os": {
+              "ubuntu": 712
+            },
+            "jobs": [
+              {
+                "name": "candidate / unsigned-hap",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:49Z",
+                "completed_at": "2026-11-13T17:45:41Z",
+                "wall_seconds": 712
+              }
+            ]
+          },
+          "dependency": {
+            "run_id": 43474007301,
+            "head_commit": "f07181d25b5b4ad08c7a52b5cf8deff6d2fa58fc",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 163,
+            "trigger_to_completion_seconds": 165,
+            "total_runner_seconds": 180,
+            "runner_seconds_by_os": {
+              "ubuntu": 180
+            },
+            "jobs": [
+              {
+                "name": "Rust 锁定依赖漏洞扫描",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:48Z",
+                "completed_at": "2026-11-13T17:36:31Z",
+                "wall_seconds": 163
+              },
+              {
+                "name": "依赖安全审查",
+                "conclusion": "success",
+                "started_at": "2026-11-13T17:33:48Z",
+                "completed_at": "2026-11-13T17:34:05Z",
+                "wall_seconds": 17
+              }
+            ]
+          }
+        }
+      },
+      "platforms": {
+        "linux": {
+          "schema_version": 2,
+          "files": 577,
+          "cases": 6070,
+          "passed": 5916,
+          "skipped": 154,
+          "failed": 0,
+          "elapsed_ms": null,
+          "wall_seconds": null,
+          "source_commit": "e36d197a5155b6e8bd3f118e70aafe6f6981ab3c",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        },
+        "tv": {
+          "schema_version": 2,
+          "files": 9,
+          "cases": 89,
+          "passed": 89,
+          "skipped": 0,
+          "failed": 0,
+          "elapsed_ms": 28618,
+          "wall_seconds": 46.936,
+          "source_commit": "e36d197a5155b6e8bd3f118e70aafe6f6981ab3c",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        },
+        "windows": {
+          "schema_version": 2,
+          "files": 119,
+          "cases": 1502,
+          "passed": 1499,
+          "skipped": 3,
+          "failed": 0,
+          "elapsed_ms": 514604,
+          "wall_seconds": 518.344,
+          "source_commit": "e36d197a5155b6e8bd3f118e70aafe6f6981ab3c",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        },
+        "harmonyos": {
+          "schema_version": 2,
+          "files": 80,
+          "cases": 1175,
+          "passed": 1135,
+          "skipped": 40,
+          "failed": 0,
+          "elapsed_ms": 162373,
+          "wall_seconds": 164.697,
+          "source_commit": "e36d197a5155b6e8bd3f118e70aafe6f6981ab3c",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        }
+      },
+      "partitions": {
+        "fast": {
+          "files": 62,
+          "cases": 513,
+          "passed": 513,
+          "skipped": 0,
+          "elapsed_ms": 71459,
+          "wall_seconds": 90.094
+        },
+        "shard-1": {
+          "files": 170,
+          "cases": 1797,
+          "passed": 1772,
+          "skipped": 25,
+          "elapsed_ms": 288776,
+          "wall_seconds": 306.486
+        },
+        "shard-2": {
+          "files": 172,
+          "cases": 1947,
+          "passed": 1914,
+          "skipped": 33,
+          "elapsed_ms": 387989,
+          "wall_seconds": 407.027
+        },
+        "shard-3": {
+          "files": 173,
+          "cases": 1813,
+          "passed": 1717,
+          "skipped": 96,
+          "elapsed_ms": 237777,
+          "wall_seconds": 255.436
+        }
+      },
+      "case_and_coverage_validation": {
+        "linux": [],
+        "tv": [],
+        "windows": [],
+        "harmonyos": [],
+        "coverage_vs_baseline": {
+          "missing_records": [],
+          "added_records": [],
+          "lost_hits": [],
+          "gained_hits": [
+            "lib/components/layout.dart:47",
+            "lib/features/discovery/categories_page.dart:22",
+            "lib/features/discovery/explore_page.dart:26",
+            "lib/features/favorites/favorites_page.dart:21",
+            "lib/features/favorites/read_later.dart:59",
+            "lib/features/local_comics/local_comics_summary.dart:31",
+            "lib/features/search/search_entry.dart:11",
+            "lib/features/settings/settings_page.dart:17",
+            "lib/features/sync/data_sync_content.dart:27",
+            "lib/features/sync/data_sync_remote_port.dart:9",
+            "lib/features/sync/sync_status_summary.dart:13",
+            "lib/network/rhttp_stream_request.dart:445",
+            "lib/network/rhttp_stream_request.dart:446",
+            "lib/network/rhttp_stream_request.dart:528",
+            "lib/network/rhttp_stream_request.dart:530",
+            "lib/network/rhttp_stream_request.dart:531",
+            "lib/network/rhttp_stream_request.dart:532",
+            "lib/network/rhttp_stream_request.dart:534"
+          ]
+        },
+        "coverage_vs_s6": {
+          "missing_records": [],
+          "added_records": [],
+          "lost_hits": [],
+          "gained_hits": []
+        },
+        "active_cancellation": {
+          "394": 4,
+          "396": 4,
+          "397": 6,
+          "398": 2,
+          "401": 4,
+          "403": 2
+        }
+      },
+      "coverage": {
+        "files": 525,
+        "records": 55832,
+        "hits": 45659,
+        "sha256": "b830483db6149ae413c3162c1a710ff9c9fc12cb028df259a6f39db89f40a089"
+      },
+      "source_fingerprints": {
+        "root_dart_blob_sha256": "c2b95243a037f06a52260cbb36120fc1d75c1ca5d6e89ed84ac506985ed19377",
+        "lib_dart_blob_sha256": "db6a6d34d8897ca2ccad353c1e217302c09f238ce0dc3e6538551e72d323e9ae"
+      },
+      "windows_steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success",
+          "seconds": 1
+        },
+        {
+          "name": "Run actions/checkout@v7",
+          "conclusion": "success",
+          "seconds": 8
+        },
+        {
+          "name": "Run subosito/flutter-action@v2",
+          "conclusion": "success",
+          "seconds": 131
+        },
+        {
+          "name": "Run flutter pub get --enforce-lockfile",
+          "conclusion": "success",
+          "seconds": 6
+        },
+        {
+          "name": "构建 Windows Debug 应用",
+          "conclusion": "success",
+          "seconds": 662
+        },
+        {
+          "name": "验证桌面 WebView 第三方声明随应用分发",
+          "conclusion": "success",
+          "seconds": 0
+        },
+        {
+          "name": "验证 Windows 平台、原生与窗口生命周期",
+          "conclusion": "success",
+          "seconds": 521
+        },
+        {
+          "name": "保存 Windows 平台测试事件",
+          "conclusion": "success",
+          "seconds": 2
+        },
+        {
+          "name": "编译并运行 Windows 原生启动测试",
+          "conclusion": "success",
+          "seconds": 16
+        },
+        {
+          "name": "验证 Windows 分享文件与结果所有权",
+          "conclusion": "success",
+          "seconds": 16
+        },
+        {
+          "name": "验证 Windows 首次启动、重复启动和失败诊断",
+          "conclusion": "success",
+          "seconds": 25
+        },
+        {
+          "name": "上传 Windows 启动诊断",
+          "conclusion": "success",
+          "seconds": 2
+        },
+        {
+          "name": "Post Run subosito/flutter-action@v2",
+          "conclusion": "success",
+          "seconds": 1
+        },
+        {
+          "name": "Post Run actions/checkout@v7",
+          "conclusion": "success",
+          "seconds": 3
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success",
+          "seconds": 0
+        }
+      ]
+    }
+  ],
+  "implementation_samples_before_stability": [
+    {
+      "sample": 1,
+      "label": "S6 implementation",
+      "source_commit": "ebdb307c998be0b020699867c5ce4999b80f265c",
+      "source_identity": {
+        "requested_head_commit": "ebdb307c998be0b020699867c5ce4999b80f265c",
+        "executed_checkout_commit": "3e29e563d8af864fa238db3987d93aee35a1807c",
+        "source_tree_sha": "9da3da83e0a8f7da051ff6a8683f9d7c0dca0c6d",
+        "checkout_tree_sha": "9da3da83e0a8f7da051ff6a8683f9d7c0dca0c6d",
+        "tree_matches": true,
+        "pr_base_commit": "482810df369d126e4011be31d64408e33aede76f"
+      },
+      "run_ids": {
+        "quality": 43447775607,
+        "harmonyos": 43447775898,
+        "dependency": 43447775628,
+        "platform": 43447775595
+      },
+      "metrics": {
+        "critical_path_wall_seconds": 1370,
+        "trigger_to_completion_seconds": 1373,
+        "total_runner_seconds": 7483,
+        "runner_seconds_by_os": {
+          "ubuntu": 4859,
+          "macos": 1269,
+          "windows": 1355
+        },
+        "workflow_metrics": {
+          "quality": {
+            "run_id": 43447775607,
+            "head_commit": "ebdb307c998be0b020699867c5ce4999b80f265c",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 701,
+            "trigger_to_completion_seconds": 704,
+            "total_runner_seconds": 2154,
+            "runner_seconds_by_os": {
+              "ubuntu": 2031,
+              "macos": 123
+            },
+            "jobs": [
+              {
+                "name": "快速 Flutter 回归",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:57:54Z",
+                "completed_at": "2026-11-13T14:59:49Z",
+                "wall_seconds": 115
+              },
+              {
+                "name": "Android 文档存储真实 Provider 回归",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:57:54Z",
+                "completed_at": "2026-11-13T15:02:48Z",
+                "wall_seconds": 294
+              },
+              {
+                "name": "Android 原生会话与文件所有权",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:57:54Z",
+                "completed_at": "2026-11-13T14:58:22Z",
+                "wall_seconds": 28
+              },
+              {
+                "name": "analyze",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:57:55Z",
+                "completed_at": "2026-11-13T15:00:03Z",
+                "wall_seconds": 128
+              },
+              {
+                "name": "Rhttp 原生回调生命周期",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:57:55Z",
+                "completed_at": "2026-11-13T15:00:47Z",
+                "wall_seconds": 172
+              },
+              {
+                "name": "Apple 目录授权与跨会话恢复",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:57:55Z",
+                "completed_at": "2026-11-13T14:58:36Z",
+                "wall_seconds": 41
+              },
+              {
+                "name": "iOS Rhttp 原生依赖兼容性",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:57:55Z",
+                "completed_at": "2026-11-13T14:59:17Z",
+                "wall_seconds": 82
+              },
+              {
+                "name": "Flutter 原生库与内存安全",
+                "conclusion": "success",
+                "started_at": "2026-11-13T15:00:50Z",
+                "completed_at": "2026-11-13T15:02:23Z",
+                "wall_seconds": 93
+              },
+              {
+                "name": "TV 编译身份、遥控器与低内存策略",
+                "conclusion": "success",
+                "started_at": "2026-11-13T15:02:25Z",
+                "completed_at": "2026-11-13T15:03:41Z",
+                "wall_seconds": 76
+              },
+              {
+                "name": "Flutter 全量回归（shard-3）",
+                "conclusion": "success",
+                "started_at": "2026-11-13T15:02:25Z",
+                "completed_at": "2026-11-13T15:09:19Z",
+                "wall_seconds": 414
+              },
+              {
+                "name": "Flutter 全量回归（shard-1）",
+                "conclusion": "success",
+                "started_at": "2026-11-13T15:02:25Z",
+                "completed_at": "2026-11-13T15:08:52Z",
+                "wall_seconds": 387
+              },
+              {
+                "name": "Flutter 全量回归（shard-2）",
+                "conclusion": "success",
+                "started_at": "2026-11-13T15:02:25Z",
+                "completed_at": "2026-11-13T15:07:36Z",
+                "wall_seconds": 311
+              },
+              {
+                "name": "Flutter 测试与覆盖率",
+                "conclusion": "success",
+                "started_at": "2026-11-13T15:09:22Z",
+                "completed_at": "2026-11-13T15:09:35Z",
+                "wall_seconds": 13
+              }
+            ]
+          },
+          "harmonyos": {
+            "run_id": 43447775898,
+            "head_commit": "ebdb307c998be0b020699867c5ce4999b80f265c",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 716,
+            "trigger_to_completion_seconds": 719,
+            "total_runner_seconds": 716,
+            "runner_seconds_by_os": {
+              "ubuntu": 716
+            },
+            "jobs": [
+              {
+                "name": "candidate / unsigned-hap",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:57:54Z",
+                "completed_at": "2026-11-13T15:09:50Z",
+                "wall_seconds": 716
+              }
+            ]
+          },
+          "dependency": {
+            "run_id": 43447775628,
+            "head_commit": "ebdb307c998be0b020699867c5ce4999b80f265c",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 221,
+            "trigger_to_completion_seconds": 224,
+            "total_runner_seconds": 228,
+            "runner_seconds_by_os": {
+              "ubuntu": 228
+            },
+            "jobs": [
+              {
+                "name": "Rust 锁定依赖漏洞扫描",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:57:54Z",
+                "completed_at": "2026-11-13T15:01:35Z",
+                "wall_seconds": 221
+              },
+              {
+                "name": "依赖安全审查",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:57:54Z",
+                "completed_at": "2026-11-13T14:58:01Z",
+                "wall_seconds": 7
+              }
+            ]
+          },
+          "platform": {
+            "run_id": 43447775595,
+            "head_commit": "ebdb307c998be0b020699867c5ce4999b80f265c",
+            "event": "pull_request",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_wall_seconds": 1370,
+            "trigger_to_completion_seconds": 1373,
+            "total_runner_seconds": 4385,
+            "runner_seconds_by_os": {
+              "ubuntu": 1884,
+              "macos": 1146,
+              "windows": 1355
+            },
+            "jobs": [
+              {
+                "name": "检测平台构建变更",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:57:54Z",
+                "completed_at": "2026-11-13T14:58:00Z",
+                "wall_seconds": 6
+              },
+              {
+                "name": "Android TV 冒烟构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:58:02Z",
+                "completed_at": "2026-11-13T15:12:44Z",
+                "wall_seconds": 882
+              },
+              {
+                "name": "iOS 原生构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:58:10Z",
+                "completed_at": "2026-11-13T15:07:13Z",
+                "wall_seconds": 543
+              },
+              {
+                "name": "Android 冒烟构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:58:01Z",
+                "completed_at": "2026-11-13T15:10:47Z",
+                "wall_seconds": 766
+              },
+              {
+                "name": "Windows 冒烟构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:58:02Z",
+                "completed_at": "2026-11-13T15:20:37Z",
+                "wall_seconds": 1355
+              },
+              {
+                "name": "macOS 原生构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:58:11Z",
+                "completed_at": "2026-11-13T15:08:14Z",
+                "wall_seconds": 603
+              },
+              {
+                "name": "Linux 原生构建",
+                "conclusion": "success",
+                "started_at": "2026-11-13T14:58:02Z",
+                "completed_at": "2026-11-13T15:01:47Z",
+                "wall_seconds": 225
+              },
+              {
+                "name": "平台冒烟构建门禁",
+                "conclusion": "success",
+                "started_at": "2026-11-13T15:20:39Z",
+                "completed_at": "2026-11-13T15:20:44Z",
+                "wall_seconds": 5
+              }
+            ]
+          }
+        }
+      },
+      "platforms": {
+        "linux": {
+          "schema_version": 2,
+          "files": 577,
+          "cases": 6070,
+          "passed": 5916,
+          "skipped": 154,
+          "failed": 0,
+          "elapsed_ms": null,
+          "wall_seconds": null,
+          "source_commit": "3e29e563d8af864fa238db3987d93aee35a1807c",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        },
+        "tv": {
+          "schema_version": 2,
+          "files": 9,
+          "cases": 89,
+          "passed": 89,
+          "skipped": 0,
+          "failed": 0,
+          "elapsed_ms": 31448,
+          "wall_seconds": 49.874,
+          "source_commit": "3e29e563d8af864fa238db3987d93aee35a1807c",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        },
+        "harmonyos": {
+          "schema_version": 2,
+          "files": 80,
+          "cases": 1175,
+          "passed": 1135,
+          "skipped": 40,
+          "failed": 0,
+          "elapsed_ms": 158416,
+          "wall_seconds": 160.72,
+          "source_commit": "3e29e563d8af864fa238db3987d93aee35a1807c",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        },
+        "windows": {
+          "schema_version": 2,
+          "files": 119,
+          "cases": 1502,
+          "passed": 1499,
+          "skipped": 3,
+          "failed": 0,
+          "elapsed_ms": 500442,
+          "wall_seconds": 503.75,
+          "source_commit": "3e29e563d8af864fa238db3987d93aee35a1807c",
+          "suite_manifest_sha256": "939192d5a6aaf43a96bda2422c66dcce4e9c9c9fecd84f79dcc2d1c5366d598a"
+        }
+      },
+      "partitions": {
+        "fast": {
+          "files": 62,
+          "cases": 513,
+          "passed": 513,
+          "skipped": 0,
+          "elapsed_ms": 57784,
+          "wall_seconds": 75.702
+        },
+        "shard-1": {
+          "files": 170,
+          "cases": 1797,
+          "passed": 1772,
+          "skipped": 25,
+          "elapsed_ms": 337977,
+          "wall_seconds": 356.184
+        },
+        "shard-2": {
+          "files": 172,
+          "cases": 1947,
+          "passed": 1914,
+          "skipped": 33,
+          "elapsed_ms": 258614,
+          "wall_seconds": 276.017
+        },
+        "shard-3": {
+          "files": 173,
+          "cases": 1813,
+          "passed": 1717,
+          "skipped": 96,
+          "elapsed_ms": 367384,
+          "wall_seconds": 386.586
+        }
+      },
+      "case_and_coverage_validation": {
+        "linux": [
+          {
+            "case": [
+              "test/tool/ci_workflow_contract_test.dart",
+              "default coverage keeps every group behind a stable always gate",
+              "success",
+              false
+            ],
+            "before": 0,
+            "after": 1
+          },
+          {
+            "case": [
+              "test/tool/ci_workflow_contract_test.dart",
+              "native ABI, memory safety and real TV retain verified libraries and the pinned SDK",
+              "success",
+              false
+            ],
+            "before": 0,
+            "after": 1
+          }
+        ],
+        "tv": [],
+        "windows": [],
+        "harmonyos": [],
+        "coverage_vs_baseline": {
+          "missing_records": [],
+          "added_records": [],
+          "lost_hits": [],
+          "gained_hits": [
+            "lib/components/layout.dart:47",
+            "lib/features/discovery/categories_page.dart:22",
+            "lib/features/discovery/explore_page.dart:26",
+            "lib/features/favorites/favorites_page.dart:21",
+            "lib/features/favorites/read_later.dart:59",
+            "lib/features/local_comics/local_comics_summary.dart:31",
+            "lib/features/search/search_entry.dart:11",
+            "lib/features/settings/settings_page.dart:17",
+            "lib/features/sync/data_sync_content.dart:27",
+            "lib/features/sync/data_sync_remote_port.dart:9",
+            "lib/features/sync/sync_status_summary.dart:13",
+            "lib/network/rhttp_stream_request.dart:445",
+            "lib/network/rhttp_stream_request.dart:446",
+            "lib/network/rhttp_stream_request.dart:528",
+            "lib/network/rhttp_stream_request.dart:530",
+            "lib/network/rhttp_stream_request.dart:531",
+            "lib/network/rhttp_stream_request.dart:532",
+            "lib/network/rhttp_stream_request.dart:534"
+          ]
+        },
+        "coverage_vs_pre_partition": {
+          "missing_records": [],
+          "added_records": [],
+          "lost_hits": [],
+          "gained_hits": []
+        },
+        "active_cancellation": {
+          "394": 4,
+          "396": 4,
+          "397": 6,
+          "398": 2,
+          "401": 4,
+          "403": 2
+        }
+      },
+      "coverage": {
+        "records": 55832,
+        "hits": 45659,
+        "sha256": "2ad0d59546f2c3679018d6aa99eb0cb160fa06e240afda792d371abcdf86f023"
+      },
+      "source_fingerprints": {
+        "root_dart_blob_sha256": "65c1ce2c63eeabbe296fb31d06d84cf9e7c5b645d2461db4228ab32a433b9c44",
+        "lib_dart_blob_sha256": "db6a6d34d8897ca2ccad353c1e217302c09f238ce0dc3e6538551e72d323e9ae"
+      }
+    }
+  ],
+  "stability_correction": {
+    "schema_version": 1,
+    "head_before_fix": "7a687d4d5a7f413b3d3ff24eea406c5fdb2d6e1d",
+    "working_tree": true,
+    "changed_test": "test/features/reader/display_image_provider_test.dart",
+    "production_dart_changes": false,
+    "guide_cohort": {
+      "quality": {
+        "id": 43453795583,
+        "head": "7a687d4d5a7f413b3d3ff24eea406c5fdb2d6e1d",
+        "name": "代码分析",
+        "event": "pull_request",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/43453795583",
+        "created_at": "2026-11-13T15:33:27Z",
+        "run_attempt": 1
+      },
+      "platform": {
+        "id": 43453795831,
+        "head": "7a687d4d5a7f413b3d3ff24eea406c5fdb2d6e1d",
+        "name": "PR 平台冒烟构建 #164",
+        "event": "pull_request",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/43453795831",
+        "created_at": "2026-11-13T15:33:27Z",
+        "run_attempt": 1
+      },
+      "harmonyos": {
+        "id": 43453795619,
+        "head": "7a687d4d5a7f413b3d3ff24eea406c5fdb2d6e1d",
+        "name": "HarmonyOS mainline unsigned candidate / 09b97eb7976778c1578841e4e8086609cd554ea1",
+        "event": "pull_request",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/43453795619",
+        "created_at": "2026-11-13T15:33:27Z",
+        "run_attempt": 1
+      },
+      "dependency": {
+        "id": 43453795694,
+        "head": "7a687d4d5a7f413b3d3ff24eea406c5fdb2d6e1d",
+        "name": "依赖安全审查",
+        "event": "pull_request",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/43453795694",
+        "created_at": "2026-11-13T15:33:27Z",
+        "run_attempt": 1
+      }
+    },
+    "failed_checkout": "09b97eb7976778c1578841e4e8086609cd554ea1",
+    "failed_case": "two visible listeners stay mounted while preparation joins and resumes",
+    "controlled_native_decode_delay_ms": 150,
+    "before": {
+      "cases": 13,
+      "passed": 12,
+      "failed": 1,
+      "skipped": 0,
+      "elapsed_ms": 4355,
+      "wall_seconds": 7.606
+    },
+    "after": {
+      "cases": 13,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "elapsed_ms": 4706,
+      "wall_seconds": 9.939
+    },
+    "unmodified_latency_fixed_test": {
+      "cases": 13,
+      "passed": 13,
+      "skipped": 0,
+      "elapsed_ms": 3408,
+      "wall_seconds": 6.422
+    },
+    "same_case_names": true,
+    "bounded_wait_seconds": 5,
+    "preserved_assertions": [
+      "Zero visible frames during exit hold and cancellation",
+      "Exact listener frame counts after resume",
+      "One shared source and expected load counts",
+      "Original error identity and stack",
+      "Codec and image ownership cleanup"
+    ],
+    "strict_analyze": {
+      "exit_code": 0,
+      "message": "No issues found! (ran in 22.9s)"
+    },
+    "excluded_local_attempts": [
+      "Manifest executor rejected ignored probe paths before any test execution",
+      "Direct PowerShell Flutter calls produced no machine events; no validation credit assigned"
+    ],
+    "ci_after_fix": {
+      "status": "passed",
+      "head": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+      "runs": {
+        "quality": 43458342695,
+        "platform": 43458343046,
+        "harmonyos": 43458343179,
+        "dependency": 43458342981
+      },
+      "source_identity": {
+        "requested_head_commit": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+        "executed_checkout_commit": "0737b6add52d647f929148b55afc739365643c2e",
+        "source_tree_sha": "cd5818210e72dd044d2a64552c45c4fbb8a0cf44",
+        "checkout_tree_sha": "cd5818210e72dd044d2a64552c45c4fbb8a0cf44",
+        "tree_matches": true,
+        "pr_base_commit": "482810df369d126e4011be31d64408e33aede76f"
+      },
+      "first_attempt": 1
+    },
+    "implementation_commit": "a682e0428db16df8a7afaa6198e77bdf60efccda"
+  },
+  "ci_followup_incidents": [
+    {
+      "head_commit": "58f42251936148651cfec063814e70412ed42010",
+      "quality_run": 43464188443,
+      "job_id": 132018773948,
+      "job_conclusion": "failure",
+      "first_attempt": 1,
+      "failed_step": "验证持久授权、Unicode、64 位文件与关闭协议",
+      "failure_phase": "Android SDK emulator installation before AVD creation and before Provider tests",
+      "diagnostic": "Warning: An error occurred while preparing SDK package Android Emulator: Error on ZipFile unknown archive.",
+      "secondary_failure": "Provider evidence upload had no runtime log or report because the emulator never started.",
+      "provider_runtime_executed": false,
+      "normal_sample_accepted": false,
+      "previous_same_configuration_success": {
+        "head": "a682e0428db16df8a7afaa6198e77bdf60efccda",
+        "quality_run": 43458342695,
+        "job_id": 131998345387,
+        "emulator_version": "37.2.13.0",
+        "emulator_build": 16740729,
+        "action_sha": "a421e43855164a8197daf9d8d40fe71c6996bb0d"
+      },
+      "followup": "Keep the original failed run and all actual completed results. Verify the existing SDK preparation against the prior success; continue normal CI with the next meaningful platform/failure acceptance documentation commit. Do not rerun the failed CI to select a sample.",
+      "quality_validation": {
+        "status": "Dart and coverage successful; required Provider never executed",
+        "linux": {
+          "files": 577,
+          "cases": 6070,
+          "passed": 5916,
+          "skipped": 154,
+          "failed": 0
+        },
+        "tv": {
+          "cases": 89,
+          "passed": 89,
+          "skipped": 0
+        },
+        "source_commit": "7e3e507783533ccdb8b1a2ac13dfb9e4dd502186",
+        "name_result_skip_differences": 0,
+        "coverage": {
+          "records": 55832,
+          "hits": 45659,
+          "baseline_records_missing": 0,
+          "baseline_hits_lost": 0,
+          "s6_records_missing": 0,
+          "s6_hits_lost": 0
+        },
+        "active_cancellation": {
+          "394": 4,
+          "396": 4,
+          "397": 6,
+          "398": 2,
+          "401": 4,
+          "403": 2
+        }
+      },
+      "source_identity": {
+        "head_commit": "58f42251936148651cfec063814e70412ed42010",
+        "executed_checkout": "7e3e507783533ccdb8b1a2ac13dfb9e4dd502186",
+        "head_tree": "45e07fa93f9e57e832f2036ec8ba4cfbf8fcd1a0",
+        "executed_tree": "45e07fa93f9e57e832f2036ec8ba4cfbf8fcd1a0",
+        "tree_matches": true
+      },
+      "cohort": {
+        "quality": {
+          "id": 43464188443,
+          "status": "completed",
+          "conclusion": "failure",
+          "run_attempt": 1,
+          "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/43464188443"
+        },
+        "platform": {
+          "id": 43464189482,
+          "status": "completed",
+          "conclusion": "success",
+          "run_attempt": 1,
+          "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/43464189482"
+        },
+        "harmonyos": {
+          "id": 43464188570,
+          "status": "completed",
+          "conclusion": "success",
+          "run_attempt": 1,
+          "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/43464188570"
+        },
+        "dependency": {
+          "id": 43464188425,
+          "status": "completed",
+          "conclusion": "success",
+          "run_attempt": 1,
+          "url": "https://github.com/CyrilPeng/Venera-Next/actions/runs/43464188425"
+        }
+      },
+      "harmonyos_validation": {
+        "files": 80,
+        "cases": 1175,
+        "passed": 1135,
+        "skipped": 40,
+        "failed": 0,
+        "name_result_skip_differences": [],
+        "source_commit": "7e3e507783533ccdb8b1a2ac13dfb9e4dd502186",
+        "complete": true
+      },
+      "windows_validation": {
+        "files": 119,
+        "cases": 1502,
+        "passed": 1499,
+        "skipped": 3,
+        "failed": 0,
+        "name_result_skip_differences": [],
+        "source_commit": "7e3e507783533ccdb8b1a2ac13dfb9e4dd502186",
+        "complete": true
+      },
+      "other_test_validation": true,
+      "metrics": {
+        "critical_path_wall_seconds": 1487,
+        "total_runner_seconds": 7497,
+        "workflow_metrics": {
+          "quality": {
+            "run_id": 43464188443,
+            "conclusion": "failure",
+            "workflow_wall_seconds": 690,
+            "total_runner_seconds": 2148
+          },
+          "platform": {
+            "run_id": 43464189482,
+            "conclusion": "success",
+            "workflow_wall_seconds": 1486,
+            "total_runner_seconds": 4284
+          },
+          "harmonyos": {
+            "run_id": 43464188570,
+            "conclusion": "success",
+            "workflow_wall_seconds": 839,
+            "total_runner_seconds": 839
+          },
+          "dependency": {
+            "run_id": 43464188425,
+            "conclusion": "success",
+            "workflow_wall_seconds": 218,
+            "total_runner_seconds": 226
+          }
+        }
+      },
+      "id": "android-emulator-sdk-archive-58f42251",
+      "raw_evidence": "GitHub run/job logs and artifacts, mirrored in ignored build/test-audit/s7/failed-result-report-provider/",
+      "resolution_validation": {
+        "head_commit": "1d61b99209ce67834f375e33fc1f2452e4a8919f",
+        "quality_run": 43469352391,
+        "provider_job": 132036831442,
+        "first_attempt": 1,
+        "same_workflow_configuration": true,
+        "provider_runtime_executed": true,
+        "phases": [
+          {
+            "phase": "initial",
+            "ok": true,
+            "nativeDescriptors": 0,
+            "providerStats": {
+              "opens": 23,
+              "closes": 23,
+              "offline": false
+            }
+          },
+          {
+            "phase": "resume",
+            "ok": true,
+            "nativeDescriptors": 0,
+            "providerStats": {
+              "opens": 24,
+              "closes": 24,
+              "offline": false
+            }
+          }
+        ],
+        "emulator_version_log": "2026-11-13T17:09:39.7907829Z INFO         | Android emulator version 37.2.13.0 (build_id 16740729) (CL:N/A)",
+        "original_run_rerun": false,
+        "overall_cohort": "All four first-attempt workflows succeeded; registered as normal sample 2",
+        "normal_sample": 2,
+        "source_identity": {
+          "requested_head_commit": "1d61b99209ce67834f375e33fc1f2452e4a8919f",
+          "executed_checkout_commit": "e2d59471dfdad04bc0e153fcf7e8e2e40ea1a79f",
+          "source_tree_sha": "e2541546509bd49ce976fafbc49a1b0691f1d8c7",
+          "checkout_tree_sha": "e2541546509bd49ce976fafbc49a1b0691f1d8c7",
+          "tree_matches": true,
+          "pr_base_commit": "482810df369d126e4011be31d64408e33aede76f"
+        }
+      }
+    }
+  ],
+  "performance": {
+    "quality_wall_seconds": {
+      "samples": 3,
+      "median": 719,
+      "min": 656,
+      "max": 751,
+      "values": [
+        656,
+        719,
+        751
+      ]
+    },
+    "complete_pr_wall_seconds": {
+      "samples": 3,
+      "median": 1450,
+      "min": 1416,
+      "max": 1509,
+      "values": [
+        1509,
+        1450,
+        1416
+      ]
+    },
+    "all_runner_seconds": {
+      "samples": 3,
+      "median": 7692,
+      "min": 7484,
+      "max": 7887,
+      "values": [
+        7692,
+        7887,
+        7484
+      ]
+    },
+    "quality_runner_seconds": {
+      "samples": 3,
+      "median": 2157,
+      "min": 2141,
+      "max": 2243,
+      "values": [
+        2157,
+        2243,
+        2141
+      ]
+    },
+    "original_quality_wall_seconds": {
+      "samples": 3,
+      "median": 1404,
+      "min": 1250,
+      "max": 1595,
+      "values": [
+        1595,
+        1250,
+        1404
+      ]
+    },
+    "original_quality_runner_seconds": {
+      "samples": 3,
+      "median": 1955,
+      "min": 1757,
+      "max": 2148,
+      "values": [
+        2148,
+        1757,
+        1955
+      ]
+    },
+    "pre_partition_quality_wall_seconds": 1274,
+    "pre_partition_pr_wall_seconds": 1386,
+    "pre_partition_all_runner_seconds": 6909,
+    "complete_pr_reduction_target_percent": [
+      20,
+      30
+    ],
+    "complete_pr_target_met": false,
+    "billing_multipliers_applied": false
+  },
+  "phase_exit_review": [
+    {
+      "stage": "S0",
+      "status": "complete",
+      "commits": [
+        "fe7202d3"
+      ],
+      "evidence": "跟踪文件、实际 machine 基线、逐文件耗时、覆盖率及全部独立入口已登记；待设备事项有明确归属。"
+    },
+    {
+      "stage": "S1",
+      "status": "complete",
+      "commits": [
+        "8fcaea50",
+        "61285756",
+        "d509e676"
+      ],
+      "evidence": "75 处 Windows 条件已核实，平台清单、必需库、真实临时路径和 JVM 入口生效，原两次失败及修复历史保留。"
+    },
+    {
+      "stage": "S2",
+      "status": "complete",
+      "commits": [
+        "20907e3b"
+      ],
+      "evidence": "借用 helper 的测试间导入为零；photo_view 的包内 main 包装是明确例外，681 项消费者保持一致。"
+    },
+    {
+      "stage": "S3",
+      "status": "complete",
+      "commits": [
+        "84283d19"
+      ],
+      "evidence": "阅读器原 179 项名称与行为都有去向，Windows 组和 TV 实际运行，退出、菜单锁、导航及资源所有权保留。"
+    },
+    {
+      "stage": "S4",
+      "status": "complete",
+      "commits": [
+        "30a52305",
+        "c503b134",
+        "5f7130a4",
+        "fa494135",
+        "3a82ef93"
+      ],
+      "evidence": "收藏 59 项、下载 43 项原名称保持一致；21 模块、19 helper 与 13 行为候选已核查，删除或改写均有替代依据。"
+    },
+    {
+      "stage": "S5",
+      "status": "complete",
+      "commits": [
+        "49123b45",
+        "90546772"
+      ],
+      "evidence": "工作流结构断言、两版本 Kotlin 四个入口、Windows 分享与原生契约实际执行；无效 WebView 模板有删除证据。独立 QUIC 安全修复不随测试整理回滚。"
+    },
+    {
+      "stage": "S6",
+      "status": "complete",
+      "commits": [
+        "ebdb307c"
+      ],
+      "evidence": "快速组与三分片完整并集、实际来源、skip 和 LCOV 严格汇总；必需失败、取消或缺少结果不能被接受。"
+    },
+    {
+      "stage": "S7",
+      "status": "complete",
+      "commits": [
+        "7a687d4d",
+        "a682e042"
+      ],
+      "evidence": "中英文维护、贡献与构建指南及文档索引已同步，当前本地链接检查通过；原生收帧等待竞争已由受控慢解码对照修正，原失败保留。修正后取得 3 轮完整同类 CI，最终记录提交仍接受正常 CI。"
+    }
+  ],
+  "limitations": [
+    "macOS 的 181 项条件跳过登记来自源码和环境审查，runtime_verified 为 false；本轮没有声称该 Dart 集合在 macOS 实际运行。",
+    "HAP host 测试、HAP 构建及内容审核与鸿蒙真机签装、升级、持久目录授权和真实交互分别记录；runtime_verified 为 false。",
+    "JVM primitive、Android Provider 模拟器和应用编译分别提供证据，不能替代所有 Android 设备交互。",
+    "共享 runner 与缓存未固定，当前 3 个正常样本只报告中位数和范围，不计算 P95 或推断严格因果关系。",
+    "Actions 总时长是各 job 起止时间之和，未应用不同 OS 的计费倍率，也不是 CPU 用时。",
+    "原正常质量样本的原生锁早于独立安全修复；J1 为直接分片参照，已包含补齐平台执行及相同安全补丁。",
+    "原 schema-1 Flutter 报告不含实际 checkout 字段，历史来源以 run head 和 Git blob 核查；新 schema-2 报告直接核对实际 checkout、Git tree 与清单摘要。",
+    "#163、#81、#123 的新增功能继续搁置；有效兼容和已发布行为的回归继续保留。"
+  ],
+  "final_record_commit_ci": "Required; final record push is verified separately in normal CI, with links recorded in the delivery response and raw local audit evidence."
+}

@@ -25,6 +25,7 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 ## Development and Builds
 
 - [构建与开发](development/build.zh.md) / [Build and Development](development/build.en.md)
+- [测试执行与维护](development/testing.zh.md) / [Running and Maintaining Tests](development/testing.en.md)
 - [漫画源本地调试](development/source_debugging.zh.md) / [Local Source Debugging](development/source_debugging.en.md)
 - [磁盘日志](development/logging.zh.md) / [Disk logs](development/logging.en.md)
 - [依赖治理](development/dependencies.zh.md) / [Dependency Governance](development/dependencies.en.md)
@@ -53,6 +54,10 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 
 ## Experiments
 
+- [Test suite reorganization plan, 2026-11-13 (Chinese)](experiments/test_reorganization_plan_20261113.zh.md): scope, implementation batches, platform execution, deletion criteria, acceptance and rollback.
+- [Test reorganization baseline and implementation record (Chinese)](experiments/test_reorganization_baseline_20261113.zh.md): original coverage, actual CI duration, execution gaps and batch decisions.
+- [Test reorganization results and acceptance (Chinese)](experiments/test_reorganization_result_20261113.zh.md): physical counts, complete cases and coverage, normal CI costs and phase exit review.
+- [Test platform and follow-up acceptance (Chinese)](experiments/test_reorganization_platform_acceptance_20261113.zh.md): actual platform/native execution, build and device limits, open-issue recommendations and environment failure records.
 - [Historical Android TV Alpha experiment, now integrated into main (Chinese)](experiments/android_tv.zh.md)
 - [Source installation task design (Chinese)](experiments/source_installation_tasks.zh.md)
 - [Source repository management design (Chinese)](experiments/source_repositories.zh.md)
