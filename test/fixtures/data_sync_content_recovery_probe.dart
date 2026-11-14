@@ -16,6 +16,9 @@ Future<void> main(List<String> args) async {
       '$root/recovery-ready.tmp',
     ).writeAsStringSync(jsonEncode({'pid': pid, 'phase': phase}), flush: true);
     File('$root/recovery-ready.tmp').renameSync('$root/recovery-ready');
+    // The parent may see the destination while Windows is still completing
+    // the rename. Signal only after the producer has returned from that call.
+    stdout.writeln('recovery-checkpoint:$phase');
     stdin.readLineSync();
     throw StateError('Parent must kill this process');
   }

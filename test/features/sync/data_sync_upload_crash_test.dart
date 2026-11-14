@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import '../../support/dart_vm.dart';
 
 const _operationId = '4a112222-3333-4444-8555-666666666666';
 const _snapshot = [0, 1, 127, 255, 80, 75, 3, 4, 10];
@@ -369,7 +370,7 @@ class _Fixture {
   }
 
   Future<_Probe> start(String command, [String phase = '']) async {
-    final process = await Process.start(_dartExecutable(), [
+    final process = await Process.start(dartExecutable(), [
       '--packages=${p.absolute('.dart_tool/package_config.json')}',
       'test/fixtures/data_sync_upload_crash_probe.dart',
       root.path,
@@ -476,30 +477,4 @@ class _Probe {
     await errors;
     await output;
   }
-}
-
-String _dartExecutable() {
-  final executable = Platform.isWindows ? 'dart.exe' : 'dart';
-  var directory = File(Platform.resolvedExecutable).parent;
-  while (true) {
-    for (final relative in [
-      'bin/cache/dart-sdk/bin/$executable',
-      'bin/$executable',
-    ]) {
-      final candidate = File(p.join(directory.path, relative));
-      if (candidate.existsSync()) {
-        final vm = File(
-          p.join(
-            candidate.parent.path,
-            Platform.isWindows ? 'dartvm.exe' : 'dartvm',
-          ),
-        );
-        return vm.existsSync() ? vm.path : candidate.path;
-      }
-    }
-    final parent = directory.parent;
-    if (parent.path == directory.path) break;
-    directory = parent;
-  }
-  throw StateError('Cannot locate the Dart SDK executable without a shell');
 }

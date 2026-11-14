@@ -1,6 +1,5 @@
 import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:convert';
-import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -15,28 +14,11 @@ import 'package:venera_next/foundation/init.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/request_scope.dart';
 
+import '../../support/quickjs_test_environment.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  bool nativeAvailable;
-  try {
-    if (Platform.isWindows) {
-      final build = Directory('build/windows/x64/runner/Release').absolute.path;
-      if (File('$build/flutter_windows.dll').existsSync()) {
-        DynamicLibrary.open('$build/flutter_windows.dll');
-        DynamicLibrary.open('$build/flutter_qjs_plugin.dll');
-      }
-    }
-    DynamicLibrary.open(
-      Platform.isWindows
-          ? 'flutter_qjs_plugin.dll'
-          : Platform.isLinux
-          ? 'libflutter_qjs_plugin.so'
-          : 'flutter_qjs.framework/flutter_qjs',
-    );
-    nativeAvailable = true;
-  } catch (_) {
-    nativeAvailable = false;
-  }
+  final nativeAvailable = quickJsTestAvailable();
 
   group(
     'source runtime transactions',

@@ -29,7 +29,11 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 
 import '../../support/source_data_files.dart';
-import 'source_script_editor_test.dart' show waitForEditor;
+
+import '../../support/native_test_environment.dart';
+
+import '../../support/source_editor_test_support.dart'
+    show drain, pumpUntil, waitForEditor;
 
 String script(String version, {String init = '', bool search = false}) =>
     '''
@@ -97,9 +101,7 @@ void main() {
     );
     await tester.runAsync(() async {
       if (Platform.isWindows) {
-        final native = Directory(
-          'build/windows/x64/runner/Release',
-        ).absolute.path;
+        final native = windowsNativeTestDirectory.absolute.path;
         DynamicLibrary.open('$native/flutter_windows.dll');
         DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
       }
@@ -854,32 +856,4 @@ void main() {
       },
     );
   }
-}
-
-Future<void> drain(WidgetTester tester, Future<void> Function() action) async {
-  var done = false;
-  Object? failure;
-  StackTrace? failureStack;
-  final result = action().then<void>(
-    (_) => done = true,
-    onError: (Object error, StackTrace stack) {
-      failure = error;
-      failureStack = stack;
-      done = true;
-    },
-  );
-  await pumpUntil(tester, () => done);
-  await result;
-  if (failure != null) Error.throwWithStackTrace(failure!, failureStack!);
-}
-
-Future<void> pumpUntil(WidgetTester tester, bool Function() done) async {
-  for (var i = 0; i < 500; i++) {
-    if (done()) return;
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 10)),
-    );
-    await tester.pump();
-  }
-  fail('Source editor operation did not settle.');
 }

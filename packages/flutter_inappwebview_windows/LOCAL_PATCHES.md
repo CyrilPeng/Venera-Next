@@ -27,6 +27,12 @@ is two Windows files, five insertions and two deletions.
 - `lib/src/in_app_webview/in_app_webview.dart`: remove an unused local settings
   map for pull-to-refresh, which Windows never sends to its platform view.
 
+- Remove the obsolete generated `windows/test/flutter_inappwebview_windows_plugin_test.cpp`
+  and its optional CMake/GoogleTest block. The test calls a default constructor,
+  `HandleMethodCall` and `getPlatformVersion` that the current plugin does not
+  provide. `UPSTREAM_MANIFEST.json` retains its canonical upstream checksum in
+  `removed_files`; the original LICENSE and all current implementation sources remain.
+
 `UPSTREAM_MANIFEST.json` records canonical upstream and local file checksums,
 including Dart, Windows native code, LICENSE and the manifest. Examples, Git
 metadata and build outputs are omitted. No shared Pub cache is modified.

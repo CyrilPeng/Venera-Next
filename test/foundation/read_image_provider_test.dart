@@ -11,6 +11,7 @@ import 'package:venera_next/foundation/image_provider/image_provider_lifecycle.d
 import 'package:venera_next/foundation/image_provider/read_image.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/request_scope.dart';
+import '../support/image_provider_fixture.dart';
 
 final _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==',
@@ -45,25 +46,6 @@ class _Frame implements ui.FrameInfo {
   final ui.Image image;
   @override
   Duration get duration => Duration.zero;
-}
-
-class _Codec implements ui.Codec {
-  _Codec(this.frame);
-  final Future<ui.FrameInfo> frame;
-  int reads = 0;
-  int disposals = 0;
-  @override
-  int get frameCount => 1;
-  @override
-  int get repetitionCount => 0;
-  @override
-  Future<ui.FrameInfo> getNextFrame() {
-    reads++;
-    return frame;
-  }
-
-  @override
-  void dispose() => disposals++;
 }
 
 class _StreamCompleter extends ImageStreamCompleter {
@@ -262,7 +244,7 @@ void main() {
     'cancelled native frame is joined and its late image is disposed',
     () async {
       final native = Completer<ui.FrameInfo>();
-      final codec = _Codec(native.future);
+      final codec = TrackedImageCodec(native.future);
       final provider = _ByteProvider(
         () async => _png,
         decoder: (buffer, {getTargetSize}) async {

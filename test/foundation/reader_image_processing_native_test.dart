@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:venera_next/foundation/image_provider/reader_image_processing.dart';
-import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -15,31 +14,11 @@ import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:flutter/painting.dart';
 
+import '../support/quickjs_test_environment.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  bool nativeAvailable;
-  try {
-    if (Platform.isWindows) {
-      final build = Directory(
-        Platform.environment['VENERA_NATIVE_TEST_DIRECTORY'] ??
-            'build/windows/x64/runner/Release',
-      ).absolute.path;
-      if (File('$build/flutter_windows.dll').existsSync()) {
-        DynamicLibrary.open('$build/flutter_windows.dll');
-        DynamicLibrary.open('$build/flutter_qjs_plugin.dll');
-      }
-    }
-    DynamicLibrary.open(
-      Platform.isWindows
-          ? 'flutter_qjs_plugin.dll'
-          : Platform.isLinux
-          ? 'libflutter_qjs_plugin.so'
-          : 'flutter_qjs.framework/flutter_qjs',
-    );
-    nativeAvailable = true;
-  } catch (_) {
-    nativeAvailable = false;
-  }
+  final nativeAvailable = quickJsTestAvailable();
 
   group(
     'native image processing',

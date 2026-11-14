@@ -9,6 +9,7 @@ import 'package:venera_next/foundation/image_provider/image_provider_lifecycle.d
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/image_loading_config.dart';
 import 'package:venera_next/network/image_http_client.dart';
+import '../support/image_provider_fixture.dart';
 
 class _Provider extends BaseImageProvider<_Provider> {
   _Provider(this.read);
@@ -49,17 +50,6 @@ class _Codec implements ui.Codec {
   }
 }
 
-Future<ui.Image> _image() async {
-  final recorder = ui.PictureRecorder();
-  ui.Canvas(recorder).drawColor(const ui.Color(0xff00ff00), ui.BlendMode.src);
-  final picture = recorder.endRecording();
-  try {
-    return await picture.toImage(1, 1);
-  } finally {
-    picture.dispose();
-  }
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -74,7 +64,7 @@ void main() {
       final first = BaseImageProvider.prepareForExit();
       final second = BaseImageProvider.prepareForExit();
       final provider = _Provider((_) async => Uint8List(1));
-      final frame = await _image();
+      final frame = await opaqueTestImage();
       final codec = _Codec((_) async => _Frame(frame));
       final completer = provider.loadImage(provider, (
         buffer, {
@@ -113,7 +103,7 @@ void main() {
     final provider = _Provider(
       (attempt) => attempt == 1 ? read.future : Future.value(Uint8List(1)),
     );
-    final frame = await _image();
+    final frame = await opaqueTestImage();
     var decodes = 0;
     final codec = _Codec((_) async => _Frame(frame));
     final completer = provider.loadImage(provider, (
@@ -213,7 +203,7 @@ void main() {
     'native frame decode drains and preserves the same frame for recovery',
     () async {
       final nativeFrame = Completer<ui.FrameInfo>();
-      final lateImage = await _image();
+      final lateImage = await opaqueTestImage();
       final codec = _Codec((_) => nativeFrame.future);
       final provider = _Provider((_) async => Uint8List(1));
       final completer = provider.loadImage(provider, (
@@ -255,7 +245,7 @@ void main() {
 
   test('disposing during native frame decode defers codec release', () async {
     final nativeFrame = Completer<ui.FrameInfo>();
-    final lateImage = await _image();
+    final lateImage = await opaqueTestImage();
     final codec = _Codec((_) => nativeFrame.future);
     final provider = _Provider((_) async => Uint8List(1));
     final completer = provider.loadImage(provider, (
@@ -350,7 +340,7 @@ void main() {
       Log.isMuted = true;
       addTearDown(() => Log.isMuted = muted);
       final nativeFrame = Completer<ui.FrameInfo>();
-      final image = await _image();
+      final image = await opaqueTestImage();
       final codec = _Codec(
         (_) => nativeFrame.future,
         disposeFailure: StateError('native disposal'),
@@ -383,7 +373,7 @@ void main() {
 
   test('a keep-alive owner survives temporary listener removal', () async {
     final read = Completer<Uint8List>();
-    final image = await _image();
+    final image = await opaqueTestImage();
     final codec = _Codec((_) async => _Frame(image));
     final provider = _Provider((_) => read.future);
     final completer = provider.loadImage(provider, (
@@ -487,8 +477,8 @@ void main() {
       late ui.Image secondImage;
       var received = 0;
       await tester.runAsync(() async {
-        firstImage = await _image();
-        secondImage = await _image();
+        firstImage = await opaqueTestImage();
+        secondImage = await opaqueTestImage();
         codec = _Codec(
           (attempt) async => _Frame(attempt == 1 ? firstImage : secondImage),
           frameCount: 2,

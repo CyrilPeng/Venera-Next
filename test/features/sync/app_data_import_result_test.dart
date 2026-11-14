@@ -34,6 +34,8 @@ import 'package:venera_next/features/sync/data_sync_content.dart';
 
 import '../../support/directory_alias.dart';
 
+import '../../support/native_test_environment.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory directory;
@@ -332,9 +334,7 @@ void main() {
         final previousAppVersion = App.version;
         App.version = '1.18.0';
         addTearDown(() => App.version = previousAppVersion);
-        final native = Directory(
-          'build/windows/x64/runner/Release',
-        ).absolute.path;
+        final native = windowsNativeTestDirectory.absolute.path;
         DynamicLibrary.open('$native/flutter_windows.dll');
         DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
         JsEngine.cacheJsInit(await File('assets/init.js').readAsBytes());
@@ -1258,9 +1258,7 @@ class CacheAliasSource extends ComicSource {
       test(
         'source reload publication with real app observer: $scenario, favorites=$includeFavorites',
         () async {
-          final native = Directory(
-            'build/windows/x64/runner/Release',
-          ).absolute.path;
+          final native = windowsNativeTestDirectory.absolute.path;
           DynamicLibrary.open('$native/flutter_windows.dll');
           DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
           App.version = '9.0.0';

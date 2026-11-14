@@ -10,15 +10,15 @@ import 'package:venera_next/features/sync/data_sync_ownership.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 
+import '../support/native_test_environment.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'reports a store startup failure before joining a pending source init',
     () async {
       final root = Directory.systemTemp.createTempSync('startup-pending-init-');
-      final native = Directory(
-        'build/windows/x64/runner/Release',
-      ).absolute.path;
+      final native = windowsNativeTestDirectory.absolute.path;
       DynamicLibrary.open('$native/flutter_windows.dll');
       DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
       final sources = Directory('${root.path}/comic_source')..createSync();

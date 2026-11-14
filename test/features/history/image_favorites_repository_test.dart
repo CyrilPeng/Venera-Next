@@ -5,30 +5,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/history/image_favorites_models.dart';
 import 'package:venera_next/features/history/image_favorites_repository.dart';
 
-ImageFavoritesComic comic(
-  String id, {
-  String source = 'source',
-}) => ImageFavoritesComic(
-  id,
-  [
-    ImageFavoritesEp(
-      'chapter',
-      1,
-      [ImageFavorite(1, 'image', null, 'chapter', id, 1, source, 'Chapter')],
-      'Chapter',
-      12,
-    ),
-  ],
-  'Title $id',
-  source,
-  ['Tag', '', 'more'],
-  ['translated'],
-  DateTime.fromMillisecondsSinceEpoch(1234),
-  'Author',
-  {'custom': 3},
-  'Subtitle',
-  12,
-);
+import '../../support/image_favorites_fixture.dart' show comic;
 
 void main() {
   late Database db;

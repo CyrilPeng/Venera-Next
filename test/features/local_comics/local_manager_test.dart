@@ -8,6 +8,8 @@ import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/local_comics/local_storage_guard.dart';
 
+import '../../support/sqlite_test_environment.dart';
+
 const _testComicType = ComicType(9001);
 
 LocalComic _localComic(String id, {List<String> downloaded = const []}) {
@@ -23,16 +25,6 @@ LocalComic _localComic(String id, {List<String> downloaded = const []}) {
     downloadedChapters: downloaded,
     createdAt: DateTime(2026, 1, 1),
   );
-}
-
-bool _sqliteAvailable() {
-  try {
-    final db = sqlite3.openInMemory();
-    db.dispose();
-    return true;
-  } catch (_) {
-    return false;
-  }
 }
 
 void main() {
@@ -270,7 +262,9 @@ void main() {
         '10.JPG',
       ]);
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+    skip: sqliteTestAvailable()
+        ? false
+        : 'sqlite3 native library is unavailable',
   );
 
   test(
@@ -327,6 +321,8 @@ void main() {
       expect(notifyCount, 1);
       expect(manager.find(second.id, second.comicType), isNull);
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+    skip: sqliteTestAvailable()
+        ? false
+        : 'sqlite3 native library is unavailable',
   );
 }

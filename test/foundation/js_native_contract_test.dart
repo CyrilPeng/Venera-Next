@@ -1,31 +1,9 @@
-import 'dart:ffi';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-bool _nativeAvailable() {
-  try {
-    if (Platform.isWindows) {
-      final directory = Directory(
-        Platform.environment['VENERA_NATIVE_TEST_DIRECTORY'] ??
-            'build/windows/x64/runner/Release',
-      ).absolute.path;
-      DynamicLibrary.open('$directory/flutter_windows.dll');
-      DynamicLibrary.open('$directory/flutter_qjs_plugin.dll');
-    } else {
-      DynamicLibrary.open(
-        Platform.isLinux
-            ? 'libflutter_qjs_plugin.so'
-            : 'flutter_qjs.framework/flutter_qjs',
-      );
-    }
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
+import '../support/quickjs_test_environment.dart';
 
 FlutterQjs _openEngine() => FlutterQjs()..dispatch();
 
@@ -103,6 +81,6 @@ void main() {
         },
       );
     },
-    skip: _nativeAvailable() ? false : 'QuickJS native library unavailable',
+    skip: quickJsTestAvailable() ? false : 'QuickJS native library unavailable',
   );
 }

@@ -9,7 +9,8 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/res.dart';
-import '../comic_source/source_script_editor_test.dart' show waitForEditor;
+
+import '../../support/source_editor_test_support.dart' show waitForEditor;
 
 class _AfterConfirmation extends NavigatorObserver {
   void Function()? onConfirmed;

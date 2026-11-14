@@ -11,8 +11,8 @@ import 'package:venera_next/features/history/image_favorites_statistics.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/persistence_failure.dart';
-import 'image_favorites_repository_test.dart' show comic;
-import '../reader/image_favorite_actions_test.dart' show selection;
+
+import '../../support/image_favorites_fixture.dart' show comic, selection;
 
 void main() {
   late Directory root;

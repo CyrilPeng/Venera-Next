@@ -19,6 +19,8 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/file_system.dart';
 
+import '../../../support/sqlite_test_environment.dart';
+
 void main() {
   const service = ComicImportService(
     localManager: LocalManager.new,
@@ -479,18 +481,10 @@ void main() {
         expect(manager.directory.listSync().whereType<Directory>(), isEmpty);
       });
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+    skip: sqliteTestAvailable()
+        ? false
+        : 'sqlite3 native library is unavailable',
   );
-}
-
-bool _sqliteAvailable() {
-  try {
-    final database = sqlite3.openInMemory();
-    database.dispose();
-    return true;
-  } catch (_) {
-    return false;
-  }
 }
 
 class _Document extends Fake implements PdfDocument {

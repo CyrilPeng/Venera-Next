@@ -9,7 +9,7 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 
-import 'archive_selection_ownership_test.dart' show drainArchiveWork, frames;
+import '../../support/archive_test_support.dart' show drainArchiveWork, frames;
 
 Iterable<Object> _causes(Object error) sync* {
   yield error;

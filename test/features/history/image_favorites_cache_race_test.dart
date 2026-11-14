@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/foundation/app.dart';
 
-import 'image_favorites_repository_test.dart' show comic;
+import '../../support/image_favorites_fixture.dart' show comic;
 
 void main() {
   setUpAll(() => App.cachePath = Directory.systemTemp.path);

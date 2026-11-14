@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/comic_source/source_script_editor.dart';
 import 'package:venera_next/foundation/appdata.dart';
 
+import '../../support/source_editor_test_support.dart' show waitForEditor;
+
 void main() {
   setUp(() {
     // Cached asset futures otherwise retain the previous widget test's zone.
@@ -190,13 +192,4 @@ void main() {
       },
     );
   }
-}
-
-Future<void> waitForEditor(WidgetTester tester) async {
-  for (var i = 0; i < 100; i++) {
-    if (find.byType(TextField).evaluate().isNotEmpty) return;
-    await tester.runAsync(() => pumpEventQueue());
-    await tester.pump();
-  }
-  fail('The syntax highlighter did not finish loading.');
 }

@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/sqlite_connection.dart';
 
+import '../support/sqlite_test_environment.dart';
+
 void _initializeDatabase(String path) {
   final db = sqlite3.open(path);
   try {
@@ -11,16 +13,6 @@ void _initializeDatabase(String path) {
     db.execute("INSERT INTO items (value) VALUES ('seed');");
   } finally {
     db.dispose();
-  }
-}
-
-bool _sqliteAvailable() {
-  try {
-    final db = sqlite3.openInMemory();
-    db.dispose();
-    return true;
-  } catch (_) {
-    return false;
   }
 }
 
@@ -65,7 +57,7 @@ class _SetupDatabase implements Database {
 }
 
 void main() {
-  final sqliteAvailable = _sqliteAvailable();
+  final sqliteAvailable = sqliteTestAvailable();
 
   group(
     'connection setup ownership',

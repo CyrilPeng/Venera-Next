@@ -19,15 +19,15 @@ import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/network/cookie_jar.dart';
 
+import '../support/native_test_environment.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'application final admission saves state and releases actual core stores',
     () async {
       final root = Directory.systemTemp.createTempSync('application-host-');
-      final native = Directory(
-        'build/windows/x64/runner/Release',
-      ).absolute.path;
+      final native = windowsNativeTestDirectory.absolute.path;
       DynamicLibrary.open('$native/flutter_windows.dll');
       DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
       final sync = createApplicationDataSync();

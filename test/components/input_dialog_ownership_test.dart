@@ -14,7 +14,7 @@ import 'package:venera_next/foundation/persistence_failure.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'js_ui_ownership_test.dart' show drainUi;
+import '../support/js_ui_test_support.dart' show drainUi;
 
 class _Host {
   _Host({this.window = false});

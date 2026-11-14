@@ -12,6 +12,8 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import '../../support/source_data_files.dart';
 
+import '../../support/native_test_environment.dart';
+
 const _script = '''class ClosingSource extends ComicSource {
   name = 'Closing'; key = 'closing'; version = '1.0.0'; minAppVersion = '1.0.0';
   async init() {
@@ -29,9 +31,7 @@ void main() {
     late ComicSourceManager manager;
     late ControlledSourceDataFiles files;
     setUp(() async {
-      final native = Directory(
-        'build/windows/x64/runner/Release',
-      ).absolute.path;
+      final native = windowsNativeTestDirectory.absolute.path;
       DynamicLibrary.open('$native/flutter_windows.dll');
       DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
       root = Directory.systemTemp.createTempSync('source-close-');

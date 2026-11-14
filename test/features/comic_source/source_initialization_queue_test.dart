@@ -7,6 +7,8 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 
+import '../../support/native_test_environment.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -14,9 +16,7 @@ void main() {
     'reload waits for initial loading before replacing JS registry',
     () async {
       final root = Directory.systemTemp.createTempSync('source-init-queue-');
-      final native = Directory(
-        'build/windows/x64/runner/Release',
-      ).absolute.path;
+      final native = windowsNativeTestDirectory.absolute.path;
       DynamicLibrary.open('$native/flutter_windows.dll');
       DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
       App.dataPath = root.path;

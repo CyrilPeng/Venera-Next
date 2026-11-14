@@ -1,5 +1,4 @@
 import 'package:venera_next/foundation/operation_failure.dart';
-import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter_qjs/flutter_qjs.dart';
@@ -12,24 +11,11 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/image_loading_config.dart';
 import 'package:venera_next/network/request_scope.dart';
 
+import '../../support/quickjs_test_environment.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  var nativeAvailable = true;
-  try {
-    if (Platform.isWindows) {
-      final path = Directory('build/windows/x64/runner/Release').absolute.path;
-      DynamicLibrary.open('$path/flutter_windows.dll');
-      DynamicLibrary.open('$path/flutter_qjs_plugin.dll');
-    } else {
-      DynamicLibrary.open(
-        Platform.isLinux
-            ? 'libflutter_qjs_plugin.so'
-            : 'flutter_qjs.framework/flutter_qjs',
-      );
-    }
-  } catch (_) {
-    nativeAvailable = false;
-  }
+  final nativeAvailable = quickJsTestAvailable();
 
   group(
     'native image configuration ownership',

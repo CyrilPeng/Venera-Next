@@ -20,6 +20,8 @@ import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 
+import '../../support/native_test_environment.dart';
+
 const _key = 'local_chapter_test';
 final _type = ComicType.fromKey(_key);
 const _chapters = ComicChapters({'first': 'First', 'second': 'Second'});
@@ -65,7 +67,7 @@ void main() {
   var nativeAvailable = true;
   try {
     if (Platform.isWindows) {
-      final path = Directory('build/windows/x64/runner/Release').absolute.path;
+      final path = windowsNativeTestDirectory.absolute.path;
       DynamicLibrary.open('$path/flutter_windows.dll');
       DynamicLibrary.open('$path/flutter_qjs_plugin.dll');
     } else {
@@ -76,6 +78,7 @@ void main() {
       );
     }
   } catch (_) {
+    if (requireNativeTestLibraries) rethrow;
     nativeAvailable = false;
   }
   late Directory temporary;

@@ -1,4 +1,3 @@
-import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -12,26 +11,13 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/network/request_scope.dart';
 
+import '../../support/quickjs_test_environment.dart';
+
 const _key = 'comic_completion_test';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  var nativeAvailable = true;
-  try {
-    if (Platform.isWindows) {
-      final path = Directory('build/windows/x64/runner/Release').absolute.path;
-      DynamicLibrary.open('$path/flutter_windows.dll');
-      DynamicLibrary.open('$path/flutter_qjs_plugin.dll');
-    } else {
-      DynamicLibrary.open(
-        Platform.isLinux
-            ? 'libflutter_qjs_plugin.so'
-            : 'flutter_qjs.framework/flutter_qjs',
-      );
-    }
-  } catch (_) {
-    nativeAvailable = false;
-  }
+  final nativeAvailable = quickJsTestAvailable();
 
   group(
     'owned comic details',

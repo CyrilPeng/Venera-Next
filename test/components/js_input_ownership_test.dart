@@ -14,22 +14,8 @@ import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'js_ui_ownership_test.dart' show drainUi;
-
-class _Callback extends JSInvokable {
-  _Callback(this.action);
-  final Object? Function(List<dynamic>) action;
-  int calls = 0;
-  int destroys = 0;
-  @override
-  dynamic invoke(List args, [dynamic thisVal]) {
-    calls++;
-    return action(List<dynamic>.from(args));
-  }
-
-  @override
-  void destroy() => destroys++;
-}
+import '../support/js_ui_test_support.dart' show drainUi;
+import '../support/js_ownership_fixture.dart';
 
 class _Reference extends JSRef {
   int destroys = 0;
@@ -89,7 +75,7 @@ void main() {
     );
   }
 
-  Future<String?> open(_Callback validator) {
+  Future<String?> open(OwnedJsCallback validator) {
     final message = <String, dynamic>{
       'function': 'showInputDialog',
       'title': 'Synchronous validation',
@@ -114,7 +100,7 @@ void main() {
           key: [reference, reference],
           'alias': reference,
         };
-        final validator = _Callback((_) {
+        final validator = OwnedJsCallback((_) {
           if (reject) throw graph;
           return graph;
         });
@@ -139,7 +125,7 @@ void main() {
         (tester) async {
           await host(tester, window: window);
           final pending = Completer<Object?>();
-          final validator = _Callback((_) => pending.future);
+          final validator = OwnedJsCallback((_) => pending.future);
           final reference = _Reference();
           var shownClosed = false;
           String? selected;
@@ -202,7 +188,7 @@ void main() {
         await host(tester);
         final pending = Completer<Object?>();
         final reference = _Reference();
-        final validator = _Callback((_) => pending.future);
+        final validator = OwnedJsCallback((_) => pending.future);
         unawaited(open(validator));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Confirm'));
@@ -230,9 +216,9 @@ void main() {
     tester,
   ) async {
     await host(tester);
-    late _Callback validator;
+    late OwnedJsCallback validator;
     var destroyedDuringCall = -1;
-    validator = _Callback((_) {
+    validator = OwnedJsCallback((_) {
       engine.dispose();
       destroyedDuringCall = validator.destroys;
       return null;
@@ -254,7 +240,7 @@ void main() {
       final pending = Completer<Object?>();
       var closed = false;
       Future<void>? closing;
-      final validator = _Callback((_) {
+      final validator = OwnedJsCallback((_) {
         closing = tasks.closeAndWait().then<void>((_) => closed = true);
         return pending.future;
       });

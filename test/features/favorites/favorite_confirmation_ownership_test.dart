@@ -35,7 +35,7 @@ import 'package:venera_next/foundation/persistence_failure.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 
-import '../../components/sidebar_presentation_test.dart'
+import '../../support/sidebar_test_support.dart'
     show pumpSidebar, settleSidebarWork;
 
 enum _Action { folder, comics, read }

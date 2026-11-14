@@ -11,11 +11,13 @@ import 'package:venera_next/foundation/js_pool.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/app_dio.dart';
 
+import '../support/native_test_environment.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() {
     if (!Platform.isWindows) return;
-    final native = Directory('build/windows/x64/runner/Release').absolute.path;
+    final native = windowsNativeTestDirectory.absolute.path;
     DynamicLibrary.open('$native/flutter_windows.dll');
     DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
   });

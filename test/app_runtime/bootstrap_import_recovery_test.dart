@@ -21,6 +21,8 @@ import 'package:venera_next/features/comic_source/source_transaction_journal.dar
 import 'package:venera_next/features/comic_source/source_mutation_failure.dart';
 import '../support/source_data_files.dart';
 
+import '../support/native_test_environment.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -68,9 +70,7 @@ void main() {
       final root = Directory.systemTemp.createTempSync('bootstrap-import-');
       final data = Directory('${root.path}/data')..createSync();
       final cache = Directory('${root.path}/cache')..createSync();
-      final native = Directory(
-        'build/windows/x64/runner/Release',
-      ).absolute.path;
+      final native = windowsNativeTestDirectory.absolute.path;
       DynamicLibrary.open('$native/flutter_windows.dll');
       DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
       final metadata = jsonEncode({

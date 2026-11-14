@@ -11,6 +11,8 @@ import 'package:venera_next/features/reader/platform_effects_controller.dart';
 import 'package:venera_next/features/reader/progress_bar.dart';
 import 'package:venera_next/foundation/harmonyos.dart';
 
+import '../../support/native_test_environment.dart';
+
 void main() {
   testWidgets('closing bottom controls cancels an in-flight progress drag', (
     tester,
@@ -106,7 +108,9 @@ void main() {
     )..addFont(File(font).readAsBytes().then(ByteData.sublistView))).load();
     await (FontLoader('MaterialIcons')..addFont(
           File(
-            'build/windows/x64/runner/Release/data/flutter_assets/fonts/MaterialIcons-Regular.otf',
+            windowsNativeTestFile(
+              'data/flutter_assets/fonts/MaterialIcons-Regular.otf',
+            ).path,
           ).readAsBytes().then(ByteData.sublistView),
         ))
         .load();

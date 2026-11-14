@@ -12,6 +12,9 @@ import 'package:venera_next/features/favorites/favorites.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/res.dart';
 
+import '../../support/sqlite_test_environment.dart';
+import '../../support/comic_source_fixture.dart';
+
 History _history(String id) {
   return History.fromMap({
     'type': ComicType.local.value,
@@ -25,16 +28,6 @@ History _history(String id) {
     'readEpisode': ['1'],
     'max_page': 10,
   });
-}
-
-bool _sqliteAvailable() {
-  try {
-    final db = sqlite3.openInMemory();
-    db.dispose();
-    return true;
-  } catch (_) {
-    return false;
-  }
 }
 
 HistoryManager _ownedHistory() {
@@ -169,7 +162,7 @@ void main() {
           final response = Completer<Res<ComicDetails>>();
           final requested = <String>[];
           ComicSourceManager().add(
-            _source(
+            stubComicSource(
               key,
               loadComicInfo: (id) {
                 requested.add(id);
@@ -423,7 +416,9 @@ void main() {
         },
       );
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+    skip: sqliteTestAvailable()
+        ? false
+        : 'sqlite3 native library is unavailable',
   );
 
   test(
@@ -461,7 +456,7 @@ void main() {
     const sourceKey = 'history_refresh_test_source';
     var attempts = 0;
     final retryDelays = <Duration>[];
-    final source = _source(
+    final source = stubComicSource(
       sourceKey,
       loadComicInfo: (id) async {
         attempts++;
@@ -530,7 +525,9 @@ void main() {
       expect(saved!.page, 2);
       expect(saved.maxPage, 10);
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+    skip: sqliteTestAvailable()
+        ? false
+        : 'sqlite3 native library is unavailable',
   );
 
   test(
@@ -590,7 +587,9 @@ void main() {
       expect(durationItem.readDurationMs, 0);
       expect(manager.find('different', ComicType.local), isNull);
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+    skip: sqliteTestAvailable()
+        ? false
+        : 'sqlite3 native library is unavailable',
   );
 
   test(
@@ -659,7 +658,9 @@ void main() {
         db.dispose();
       }
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+    skip: sqliteTestAvailable()
+        ? false
+        : 'sqlite3 native library is unavailable',
   );
 
   test(
@@ -729,7 +730,9 @@ void main() {
       expect(saved!.readDurationMs, 0);
       expect(manager.getTotalReadDurationMs(), 0);
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+    skip: sqliteTestAvailable()
+        ? false
+        : 'sqlite3 native library is unavailable',
   );
 
   test(
@@ -821,7 +824,9 @@ void main() {
         db.dispose();
       }
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+    skip: sqliteTestAvailable()
+        ? false
+        : 'sqlite3 native library is unavailable',
   );
 
   test(
@@ -888,44 +893,8 @@ void main() {
         'comic-second',
       ]);
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
-  );
-}
-
-ComicSource _source(String key, {LoadComicFunc? loadComicInfo}) {
-  return ComicSource(
-    'Test Source',
-    key,
-    null,
-    null,
-    null,
-    null,
-    const [],
-    null,
-    null,
-    loadComicInfo,
-    null,
-    null,
-    null,
-    null,
-    'test.js',
-    '',
-    '1.0.0',
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    false,
-    false,
-    null,
-    null,
+    skip: sqliteTestAvailable()
+        ? false
+        : 'sqlite3 native library is unavailable',
   );
 }

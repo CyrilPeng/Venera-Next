@@ -1,3 +1,4 @@
+import 'package:venera_next/features/comic_source/types.dart';
 import 'package:venera_next/features/comic_source/source.dart';
 import 'package:venera_next/features/comic_source/source_data_storage.dart';
 
@@ -45,4 +46,42 @@ class ComicSourceFixture extends ComicSource {
          initialData: initialData,
          dataStorage: dataStorage,
        );
+}
+
+ComicSource stubComicSource(String key, {LoadComicFunc? loadComicInfo}) {
+  return ComicSource(
+    'Test Source',
+    key,
+    null,
+    null,
+    null,
+    null,
+    const [],
+    null,
+    null,
+    loadComicInfo,
+    null,
+    null,
+    null,
+    null,
+    'test.js',
+    '',
+    '1.0.0',
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    false,
+    false,
+    null,
+    null,
+  );
 }

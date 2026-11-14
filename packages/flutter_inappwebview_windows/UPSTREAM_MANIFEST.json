@@ -174,7 +174,7 @@
     {
       "path": "windows/CMakeLists.txt",
       "sha256": "85e924be87f282a4b024088f11d4065c6d93af310780db71076cb581969fe072",
-      "local_sha256": "85e924be87f282a4b024088f11d4065c6d93af310780db71076cb581969fe072"
+      "local_sha256": "bab745d7fa1c44fc68364de17d0389f800712c596fdc0a7cc2ccbd701392bf2d"
     },
     {
       "path": "windows/cookie_manager.cpp",
@@ -470,11 +470,6 @@
       "path": "windows/plugin_scripts_js/plugin_scripts_util.h",
       "sha256": "ce2ff62862c6fed58534fd6aeb9c0da1d8cfb28d9062837047d51cecbeacb2d1",
       "local_sha256": "ce2ff62862c6fed58534fd6aeb9c0da1d8cfb28d9062837047d51cecbeacb2d1"
-    },
-    {
-      "path": "windows/test/flutter_inappwebview_windows_plugin_test.cpp",
-      "sha256": "2e78aeed8aca46a67af0d64e1ded63226dcbc8da8098c6e006f9c685fd82ca8a",
-      "local_sha256": "2e78aeed8aca46a67af0d64e1ded63226dcbc8da8098c6e006f9c685fd82ca8a"
     },
     {
       "path": "windows/types/accelerator_key_pressed_detail.cpp",
@@ -1020,6 +1015,13 @@
       "path": "windows/webview_environment/webview_environment_settings.h",
       "sha256": "c308acbd613e1d5271fb4e97e344e9116cc43d960be9e037538526653cc90249",
       "local_sha256": "c308acbd613e1d5271fb4e97e344e9116cc43d960be9e037538526653cc90249"
+    }
+  ],
+  "removed_files": [
+    {
+      "path": "windows/test/flutter_inappwebview_windows_plugin_test.cpp",
+      "sha256": "2e78aeed8aca46a67af0d64e1ded63226dcbc8da8098c6e006f9c685fd82ca8a",
+      "reason": "The upstream generated getPlatformVersion/HandleMethodCall test does not match the current plugin API; its optional CMake/GoogleTest runner is removed."
     }
   ]
 }

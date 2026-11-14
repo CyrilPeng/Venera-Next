@@ -11,6 +11,7 @@ import 'package:venera_next/features/sync/data_sync_remote.dart';
 import 'package:venera_next/features/sync/data_sync_remote_port.dart';
 import 'package:venera_next/network/webdav.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
+import 'support/remote_response_fixture.dart';
 
 void main() {
   late Directory directory;
@@ -41,9 +42,9 @@ void main() {
           case 'PUT':
             expect(request.options.headers[HttpHeaders.ifNoneMatchHeader], '*');
             expect(request.options.headers[HttpHeaders.ifMatchHeader], isNull);
-            if (stored != null) return _response(412);
+            if (stored != null) return dataSyncResponse(412);
             stored = request.body;
-            return _response(201);
+            return dataSyncResponse(201);
           case 'GET':
             expect(
               request.options.headers[HttpHeaders.ifNoneMatchHeader],
@@ -51,8 +52,8 @@ void main() {
             );
             expect(request.options.headers[HttpHeaders.ifMatchHeader], isNull);
             return stored == null
-                ? _response(404)
-                : _response(
+                ? dataSyncResponse(404)
+                : dataSyncResponse(
                     200,
                     bytes: stored!,
                     headers: {
@@ -69,7 +70,7 @@ void main() {
               isNull,
             );
             stored = null;
-            return _response(204);
+            return dataSyncResponse(204);
           default:
             throw StateError('Unexpected ${request.options.method}');
         }
@@ -139,7 +140,7 @@ void main() {
       var stored = bytes;
       final fixture = _Fixture((request) {
         if (request.options.method == 'GET') {
-          return _response(
+          return dataSyncResponse(
             200,
             bytes: stored,
             headers: {
@@ -149,10 +150,10 @@ void main() {
         }
         expect(request.options.method, 'DELETE');
         if (request.options.headers[HttpHeaders.ifMatchHeader] != etag) {
-          return _response(412);
+          return dataSyncResponse(412);
         }
         stored = Uint8List(0);
-        return _response(204);
+        return dataSyncResponse(204);
       });
       addTearDown(fixture.remote.dispose);
       final evidence =
@@ -184,7 +185,7 @@ void main() {
       'GET content without a usable strong ETag remains content evidence: $etags',
       () async {
         final fixture = _Fixture(
-          (_) => _response(200, bytes: bytes, headers: {'etag': ?etags}),
+          (_) => dataSyncResponse(200, bytes: bytes, headers: {'etag': ?etags}),
         );
         addTearDown(fixture.remote.dispose);
         final result =
@@ -217,7 +218,9 @@ void main() {
     test(
       'GET $status is an error, never missing or complete content',
       () async {
-        final fixture = _Fixture((_) => _response(status, bytes: [1, 2, 3]));
+        final fixture = _Fixture(
+          (_) => dataSyncResponse(status, bytes: [1, 2, 3]),
+        );
         addTearDown(fixture.remote.dispose);
         await expectLater(
           fixture.remote.probeArchive('snapshot.venera'),
@@ -239,7 +242,7 @@ void main() {
       'PUT DELETE and listing $status cannot redirect outside the endpoint',
       () async {
         final fixture = _Fixture(
-          (_) => _response(
+          (_) => dataSyncResponse(
             status,
             headers: {
               'location': ['https://other.example.com/stolen.venera'],
@@ -286,7 +289,7 @@ void main() {
   for (final status in [200, 404]) {
     test('truncated GET $status cannot produce archive evidence', () async {
       final fixture = _Fixture(
-        (_) => _response(
+        (_) => dataSyncResponse(
           status,
           bytes: [1, 2],
           headers: {
@@ -327,28 +330,28 @@ void main() {
     'GET validates encoding and Content-Length instead of trusting ETag',
     () async {
       final replies = [
-        _response(
+        dataSyncResponse(
           200,
           bytes: [1, 2],
           headers: {
             'content-length': ['1'],
           },
         ),
-        _response(
+        dataSyncResponse(
           200,
           bytes: [1, 2],
           headers: {
             'content-length': ['invalid'],
           },
         ),
-        _response(
+        dataSyncResponse(
           200,
           bytes: [1, 2],
           headers: {
             'content-length': ['2', '2'],
           },
         ),
-        _response(
+        dataSyncResponse(
           200,
           bytes: [1, 2],
           headers: {
@@ -402,7 +405,7 @@ void main() {
               // A retry must use the already verified bytes, even if the source
               // file is subsequently replaced during authentication.
               source.writeAsBytesSync([9, 8, 7]);
-              return _response(
+              return dataSyncResponse(
                 401,
                 bytes: utf8.encode('read challenge body before retry'),
                 headers: {
@@ -426,13 +429,13 @@ void main() {
                 request.options.headers[HttpHeaders.ifNoneMatchHeader],
                 '*',
               );
-              return _response(201);
+              return dataSyncResponse(201);
             }
             expect(
               request.options.headers[HttpHeaders.ifNoneMatchHeader],
               isNull,
             );
-            return _response(200, bytes: bytes);
+            return dataSyncResponse(200, bytes: bytes);
           },
           user: 'user',
           password: 'secret',
@@ -462,7 +465,7 @@ void main() {
     'unauthorized authenticated request stays failed without an infinite retry',
     () async {
       final fixture = _Fixture(
-        (_) => _response(
+        (_) => dataSyncResponse(
           401,
           headers: {
             'www-authenticate': ['Basic realm="restricted"'],
@@ -501,7 +504,7 @@ void main() {
                   as String?;
           if (calls == 1) {
             expect(auth, isNull);
-            return _response(
+            return dataSyncResponse(
               401,
               headers: {
                 'www-authenticate': [
@@ -512,7 +515,7 @@ void main() {
           }
           if (calls == 2) {
             expect(auth, contains('nonce="ExpiredNonce"'));
-            return _response(
+            return dataSyncResponse(
               401,
               headers: {
                 'www-authenticate': [
@@ -522,7 +525,7 @@ void main() {
             );
           }
           _verifyDigest(request, auth!);
-          return _response(201);
+          return dataSyncResponse(201);
         },
         user: 'user',
         password: 'secret',
@@ -566,7 +569,7 @@ void main() {
           stored = request.body;
           throw const SocketException('acknowledgement lost');
         }
-        return _response(200, bytes: stored!);
+        return dataSyncResponse(200, bytes: stored!);
       });
       addTearDown(fixture.remote.dispose);
       await expectLater(create(fixture), throwsA(isA<DioException>()));
@@ -583,7 +586,7 @@ void main() {
     'missing conditional DELETE is terminal while other server statuses are errors',
     () async {
       final statuses = [404, 202, 403, 500];
-      final fixture = _Fixture((_) => _response(statuses.removeAt(0)));
+      final fixture = _Fixture((_) => dataSyncResponse(statuses.removeAt(0)));
       addTearDown(fixture.remote.dispose);
       expect(
         await fixture.remote.removeArchiveIfUnchanged(
@@ -683,19 +686,6 @@ void main() {
     },
   );
 }
-
-ResponseBody _response(
-  int status, {
-  List<int> bytes = const [],
-  Map<String, List<String>> headers = const {},
-}) => ResponseBody(
-  Stream.value(Uint8List.fromList(bytes)),
-  status,
-  headers: {
-    'content-length': ['${bytes.length}'],
-    ...headers,
-  },
-);
 
 typedef _Request = ({RequestOptions options, Uint8List body});
 

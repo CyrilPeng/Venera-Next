@@ -284,20 +284,6 @@ void main() {
   );
 
   test(
-    'real Android adapter cleans input after native acknowledgement',
-    () async {
-      final sharing = file('android.png', 4);
-      await _until(() => calls.length == 1);
-      final input = source(0);
-      expect(input.existsSync(), isTrue);
-      replies.single.complete('native copy finished');
-      await sharing;
-      expect(input.existsSync(), isFalse);
-    },
-    skip: !Platform.isAndroid,
-  );
-
-  test(
     'Linux rejects file sharing without creating source or invoking plugin',
     () async {
       await expectLater(file('linux.png', 4), throwsUnsupportedError);

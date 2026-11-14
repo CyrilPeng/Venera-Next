@@ -64,11 +64,7 @@ void main() {
         extension: '.jpg',
       );
 
-      expect(filename.endsWith('_EP1_P1.jpg'), isTrue);
-      expect(
-        utf8.encode(filename).length,
-        lessThanOrEqualTo(maxExportFileNameUtf8Bytes),
-      );
+      expect(filename, '${'A' * 80}_EP1_P1.jpg');
     });
 
     test('handles Japanese precomposed characters', () {
@@ -79,11 +75,7 @@ void main() {
         extension: '.jpg',
       );
 
-      expect(filename.endsWith('_EP1_P1.jpg'), isTrue);
-      expect(
-        utf8.encode(filename).length,
-        lessThanOrEqualTo(maxExportFileNameUtf8Bytes),
-      );
+      expect(filename, '${'じ' * 50}_EP1_P1.jpg');
     });
 
     test('falls back when both fileName and fallback sanitize to empty', () {
@@ -91,13 +83,13 @@ void main() {
         '???',
         middle: '_EP1_P1',
         extension: '.jpg',
-        fallback: 'comic',
+        fallback: '////',
       );
 
-      expect(filename, 'comic_EP1_P1.jpg');
+      expect(filename, 'file_EP1_P1.jpg');
     });
 
-    test('handles a long extension and CJK middle', () {
+    test('preserves CJK middle under the title byte budget', () {
       const middle = '_EP第9999话_P9999';
       const extension = '.png';
       final filename = sanitizeFileNameWithSuffix(
@@ -188,18 +180,6 @@ void main() {
       );
 
       expect(utf8.encode(filename).length, lessThanOrEqualTo(50));
-    });
-
-    test('does not throw when fallback contains only invalid chars', () {
-      expect(
-        () => sanitizeFileNameWithSuffix(
-          '???',
-          middle: '_EP1_P1',
-          extension: '.jpg',
-          fallback: '////',
-        ),
-        returnsNormally,
-      );
     });
 
     test('preserves trailing whitespace inside middle byte-faithfully', () {

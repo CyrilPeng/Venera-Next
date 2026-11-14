@@ -19,7 +19,7 @@ import 'package:venera_next/network/request_scope.dart';
 import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 
-import '../../components/sidebar_presentation_test.dart'
+import '../../support/sidebar_test_support.dart'
     show pumpSidebar, settleSidebarWork;
 
 Comic comic(String id) => Comic(id, '', id, null, null, '', 'test', null, null);

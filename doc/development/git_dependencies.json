@@ -317,7 +317,7 @@
       "path": "packages/flutter_inappwebview_windows",
       "version": "0.7.0-beta.3",
       "status": "maintained-local",
-      "reason": "Retain only the two Windows GraphicsContext instance ownership changes and adapt the interface dependency to the same official SHA.",
+      "reason": "Retain the Windows GraphicsContext instance ownership fix, adapt the coordinated interface pin and remove the obsolete generated test runner.",
       "upstream": "https://github.com/pichillilorenzo/flutter_inappwebview",
       "source": {
         "type": "git",
@@ -340,7 +340,8 @@
         "stable_version": "0.6.0",
         "commit": "0aaf7a0bfc01d61a4d1453cefb57fb6783b6e676",
         "required_patches": [
-          "Instance-owned GraphicsContext and release after WebView cleanup"
+          "Instance-owned GraphicsContext and release after WebView cleanup",
+          "Remove the obsolete generated test and its optional CMake/GoogleTest runner"
         ],
         "validation": "Exact previous native ownership patch retained on the official parent. Newly resolved official interface uses the same full SHA; Windows multiwindow acceptance is required.",
         "exit_condition": "Drop the override when official source includes the ownership patch and close/recreate, proxy, Cookie and login acceptance pass.",

@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/app_runtime/window_placement.dart';
 import 'package:venera_next/foundation/window_placement.dart';
 import 'package:venera_next/foundation/window_placement_tracker.dart';
+import 'support/manual_timer.dart';
 
 const _first = WindowPlacement(Rect.fromLTWH(20, 30, 901, 602), false);
 const _latest = WindowPlacement(Rect.fromLTWH(40, 50, 1100, 750), true);
@@ -680,33 +681,19 @@ void _mockWindow(Future<Object?> Function(MethodCall) handler) {
   addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
 }
 
-Future<void> _withTimers(Future<void> Function(List<_PeriodicTimer>) action) {
-  final timers = <_PeriodicTimer>[];
+Future<void> _withTimers(
+  Future<void> Function(List<ManualPeriodicTimer>) action,
+) {
+  final timers = <ManualPeriodicTimer>[];
   return runZoned(
     () => action(timers),
     zoneSpecification: ZoneSpecification(
       createPeriodicTimer: (self, parent, zone, duration, callback) {
         expect(duration, const Duration(milliseconds: 100));
-        final timer = _PeriodicTimer(callback);
+        final timer = ManualPeriodicTimer(callback);
         timers.add(timer);
         return timer;
       },
     ),
   );
-}
-
-class _PeriodicTimer implements Timer {
-  _PeriodicTimer(this.callback);
-  final void Function(Timer) callback;
-  @override
-  bool isActive = true;
-  @override
-  int tick = 0;
-  void fire() {
-    tick++;
-    callback(this);
-  }
-
-  @override
-  void cancel() => isActive = false;
 }

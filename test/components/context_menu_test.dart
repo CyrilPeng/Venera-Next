@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/button.dart';
 
+import '../support/native_test_environment.dart';
+
 void main() {
   setUpAll(() async {
     final path = Platform.environment['WINDOW_OWNER_QA_FONT'];
@@ -16,7 +18,9 @@ void main() {
     )..addFont(File(path).readAsBytes().then(ByteData.sublistView))).load();
     await (FontLoader('MaterialIcons')..addFont(
           File(
-            'build/windows/x64/runner/Release/data/flutter_assets/fonts/MaterialIcons-Regular.otf',
+            windowsNativeTestFile(
+              'data/flutter_assets/fonts/MaterialIcons-Regular.otf',
+            ).path,
           ).readAsBytes().then(ByteData.sublistView),
         ))
         .load();

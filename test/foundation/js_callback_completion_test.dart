@@ -9,16 +9,8 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 
-class _Reference extends JSRef {
-  _Reference({this.failure});
-  final Object? failure;
-  int destroys = 0;
-  @override
-  void destroy() {
-    destroys++;
-    if (failure != null) throw failure!;
-  }
-}
+import '../support/native_test_environment.dart';
+import '../support/js_ownership_fixture.dart';
 
 class _Callback extends JSInvokable {
   _Callback(this.action, {this.failure});
@@ -61,8 +53,8 @@ void main() {
       () async {
         final engine = JsEngine.create();
         final scope = JsCallbackScope(engine: engine);
-        final reference = _Reference();
-        final second = _Reference();
+        final reference = OwnedJsReference();
+        final second = OwnedJsReference();
         final graph = <Object, Object?>{
           reference: [reference, second],
           'alias': second,
@@ -91,9 +83,9 @@ void main() {
       final scope = JsCallbackScope(engine: engine);
       final firstError = StateError('first release'),
           secondError = StateError('second release');
-      final first = _Reference(failure: firstError),
-          second = _Reference(failure: secondError);
-      final good = _Reference();
+      final first = OwnedJsReference(failure: firstError),
+          second = OwnedJsReference(failure: secondError);
+      final good = OwnedJsReference();
       final stack = StackTrace.fromString('original rejected callback');
       final callback = _Callback(
         (_) => Future<Object?>.error({
@@ -140,7 +132,7 @@ void main() {
   test(
     'plain Dart callback fallback releases rejected graph without retry',
     () async {
-      final reference = _Reference();
+      final reference = OwnedJsReference();
       final failure = {'reference': reference, 'alias': reference};
       final stack = StackTrace.fromString('plain callback stack');
       var calls = 0;
@@ -192,7 +184,7 @@ void main() {
       await pumpEventQueue();
       expect(settled, isFalse);
       expect(callback.destroys, 1);
-      final reference = _Reference();
+      final reference = OwnedJsReference();
       pending.complete(reference);
       await checked;
       expect(reference.destroys, 1);
@@ -218,7 +210,7 @@ void main() {
       final closing = engine.closeAndWait().then((_) => closed = true);
       await pumpEventQueue();
       expect(closed, isFalse);
-      final reference = _Reference();
+      final reference = OwnedJsReference();
       pending.complete(reference);
       await Future.wait([checked, closing]);
       expect(reference.destroys, 1);
@@ -230,7 +222,7 @@ void main() {
     late JsCallbackScope scope;
     setUp(() async {
       if (Platform.isWindows) {
-        final native = Directory('build/windows/x64/runner/Release').absolute;
+        final native = windowsNativeTestDirectory.absolute;
         DynamicLibrary.open('${native.path}/flutter_windows.dll');
         DynamicLibrary.open('${native.path}/flutter_qjs_plugin.dll');
       }

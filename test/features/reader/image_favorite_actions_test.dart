@@ -2,23 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/history/image_favorites_models.dart';
 import 'package:venera_next/features/history/image_favorite_actions.dart';
 
-ImageFavoriteInput selection({int page = 2, String eid = 'chapter'}) =>
-    ImageFavoriteInput(
-      id: 'comic',
-      sourceKey: 'source',
-      eid: eid,
-      ep: 1,
-      epName: 'Chapter',
-      title: 'Title',
-      subtitle: 'Subtitle',
-      author: 'Author',
-      tags: ['tag'],
-      translatedTags: ['translated'],
-      maxPage: 10,
-      page: page,
-      imageKey: 'image-$page',
-      coverKey: 'image-1',
-    );
+import '../../support/image_favorites_fixture.dart' show selection;
 
 void main() {
   late ImageFavoriteActions service;

@@ -13,7 +13,9 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 
-import 'js_ui_ownership_test.dart' show drainUi;
+import '../support/native_test_environment.dart';
+
+import '../support/js_ui_test_support.dart' show drainUi;
 
 void main() {
   late JsEngine engine;
@@ -37,7 +39,7 @@ void main() {
     tasks = SelectionTaskRegistry();
     await tester.runAsync(() async {
       if (Platform.isWindows) {
-        final release = Directory('build/windows/x64/runner/Release').absolute;
+        final release = windowsNativeTestDirectory.absolute;
         DynamicLibrary.open('${release.path}/flutter_windows.dll');
         DynamicLibrary.open('${release.path}/flutter_qjs_plugin.dll');
       }

@@ -10,6 +10,8 @@ import 'package:venera_next/features/reader/chapter_menu.dart';
 import 'package:venera_next/features/reader/chapters.dart';
 import 'package:venera_next/features/reader/sidebar_binding.dart';
 
+import '../../support/native_test_environment.dart';
+
 Widget _page(
   ReaderChapterMenuData data, {
   ValueChanged<int>? select,
@@ -32,7 +34,9 @@ void main() {
     )..addFont(File(font).readAsBytes().then(ByteData.sublistView))).load();
     await (FontLoader('MaterialIcons')..addFont(
           File(
-            'build/windows/x64/runner/Release/data/flutter_assets/fonts/MaterialIcons-Regular.otf',
+            windowsNativeTestFile(
+              'data/flutter_assets/fonts/MaterialIcons-Regular.otf',
+            ).path,
           ).readAsBytes().then(ByteData.sublistView),
         ))
         .load();

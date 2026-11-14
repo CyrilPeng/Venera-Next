@@ -9,11 +9,13 @@ import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 
+import '../support/native_test_environment.dart';
+
 void main() {
   var available = false;
   try {
     if (Platform.isWindows) {
-      final build = Directory('build/windows/x64/runner/Release').absolute.path;
+      final build = windowsNativeTestDirectory.absolute.path;
       DynamicLibrary.open('$build/flutter_windows.dll');
       DynamicLibrary.open('$build/flutter_qjs_plugin.dll');
     } else {

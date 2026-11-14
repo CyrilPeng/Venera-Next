@@ -9,16 +9,8 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 
-class _Reference extends JSRef {
-  _Reference({this.failure});
-  final Object? failure;
-  int destroys = 0;
-  @override
-  void destroy() {
-    destroys++;
-    if (failure != null) throw failure!;
-  }
-}
+import '../support/native_test_environment.dart';
+import '../support/js_ownership_fixture.dart';
 
 class _Callback extends JSInvokable {
   _Callback(this.action);
@@ -64,7 +56,7 @@ void main() {
       () async {
         final engine = JsEngine.create();
         final scope = JsCallbackScope(engine: engine);
-        final reference = _Reference();
+        final reference = OwnedJsReference();
         final graph = <Object, Object?>{
           reference: [reference],
           'message': 'original graph',
@@ -117,7 +109,7 @@ void main() {
     scope.dispose();
     await pumpEventQueue();
     expect(completed, isFalse);
-    final reference = _Reference();
+    final reference = OwnedJsReference();
     pending.complete({'ref': reference});
     await observed;
     expect(await marker, isNull);
@@ -129,7 +121,7 @@ void main() {
   test('throwing the borrowed result releases shared wrappers once', () async {
     final engine = JsEngine.create();
     final scope = JsCallbackScope(engine: engine);
-    final reference = _Reference();
+    final reference = OwnedJsReference();
     final graph = {'ref': reference, 'alias': reference};
     final stack = StackTrace.fromString('immediate conversion failed');
     final callback = _Callback(() => graph);
@@ -157,7 +149,7 @@ void main() {
       final engine = JsEngine.create();
       final scope = JsCallbackScope(engine: engine);
       final releaseError = StateError('original release');
-      final reference = _Reference(failure: releaseError);
+      final reference = OwnedJsReference(failure: releaseError);
       final graph = {'ref': reference, 'message': 'original rejection'};
       final callbackStack = StackTrace.fromString('callback origin');
       final consumerStack = StackTrace.fromString('consumer origin');
@@ -217,7 +209,7 @@ void main() {
     scope.dispose();
     await pumpEventQueue();
     expect(settled, isFalse);
-    final reference = _Reference();
+    final reference = OwnedJsReference();
     pending.complete({
       reference: [reference],
     });
@@ -232,7 +224,7 @@ void main() {
       'native immediate invocation protects reentrant shutdown; consumer=$closeInConsumer',
       () async {
         if (Platform.isWindows) {
-          final native = Directory('build/windows/x64/runner/Release').absolute;
+          final native = windowsNativeTestDirectory.absolute;
           DynamicLibrary.open('${native.path}/flutter_windows.dll');
           DynamicLibrary.open('${native.path}/flutter_qjs_plugin.dll');
         }

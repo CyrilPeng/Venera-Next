@@ -111,7 +111,16 @@ Future<void> _killAt(Directory root, String phase) async {
     root.path,
     phase,
   ]);
-  final output = child.stdout.transform(utf8.decoder).join();
+  final checkpoint = 'content-checkpoint:$phase';
+  var signalled = false;
+  final output = child.stdout
+      .transform(utf8.decoder)
+      .transform(const LineSplitter())
+      .map((line) {
+        if (line == checkpoint) signalled = true;
+        return line;
+      })
+      .join('\n');
   final errors = child.stderr.transform(utf8.decoder).join();
   var exited = false;
   final exit = child.exitCode.then((value) {
@@ -120,12 +129,10 @@ Future<void> _killAt(Directory root, String phase) async {
   });
   try {
     final deadline = DateTime.now().add(const Duration(seconds: 30));
-    while (!ready.existsSync() &&
-        !exited &&
-        DateTime.now().isBefore(deadline)) {
+    while (!signalled && !exited && DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 20));
     }
-    if (!ready.existsSync()) {
+    if (!signalled) {
       if (!exited) child.kill(ProcessSignal.sigkill);
       await exit.timeout(const Duration(seconds: 10));
       fail('Content probe did not reach $phase: ${await errors}');
@@ -137,7 +144,7 @@ Future<void> _killAt(Directory root, String phase) async {
     expect(child.kill(ProcessSignal.sigkill), isTrue);
     expect(await exit.timeout(const Duration(seconds: 10)), isNot(0));
     expect(await errors, isEmpty);
-    expect(await output, isEmpty);
+    expect(await output, checkpoint);
   } finally {
     if (!exited) child.kill(ProcessSignal.sigkill);
     await exit.timeout(const Duration(seconds: 10));

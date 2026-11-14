@@ -13,7 +13,7 @@ import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 
-import 'js_ui_ownership_test.dart' show drainUi;
+import '../support/js_ui_test_support.dart' show drainUi;
 
 void main() {
   late JsEngine engine;

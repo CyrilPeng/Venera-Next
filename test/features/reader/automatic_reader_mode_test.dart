@@ -22,6 +22,7 @@ import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/comic_layout.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'support/favorites_read_fixture.dart';
 
 void main() {
   late Directory directory;
@@ -40,7 +41,7 @@ void main() {
     App.cachePath = directory.path;
     previousSettings = jsonDecode(jsonEncode(appdata.toJson()['settings']));
     previousFavorites = _favoritesOwner;
-    _favoritesOwner = _Favorites();
+    _favoritesOwner = ReaderFavoritesStub();
     settings['autoReaderMode'] = true;
     settings['readerMode'] = 'galleryRightToLeft';
     settings['longStripReaderMode'] = 'continuousTopToBottom';
@@ -931,24 +932,6 @@ class _Controller extends Fake implements ReaderImageViewController {
 }
 
 class _History extends Fake implements History {}
-
-class _Favorites extends ChangeNotifier implements LocalFavoritesManager {
-  @override
-  int get connectionGeneration => 1;
-
-  @override
-  Future<void> onRead(
-    String id,
-    ComicType type, {
-    int? generation,
-    void Function()? checkActive,
-  }) async {
-    checkActive?.call();
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
 
 LocalFavoritesManager? _favoritesOwner;
 LocalFavoritesManager _favoritesForView() =>

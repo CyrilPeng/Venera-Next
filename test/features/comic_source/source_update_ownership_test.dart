@@ -31,6 +31,8 @@ import 'package:venera_next/routing/app_navigation.dart';
 
 import '../../support/source_data_files.dart';
 
+import '../../support/native_test_environment.dart';
+
 String script(
   String version, {
   String key = 'owned',
@@ -76,7 +78,7 @@ void main() {
     );
     await tester.runAsync(() async {
       if (Platform.isWindows) {
-        final native = Directory('build/windows/x64/runner/Release').absolute;
+        final native = windowsNativeTestDirectory.absolute;
         DynamicLibrary.open('${native.path}/flutter_windows.dll');
         DynamicLibrary.open('${native.path}/flutter_qjs_plugin.dll');
       }

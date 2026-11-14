@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/app_runtime/interactive_bindings.dart';
 import 'package:venera_next/foundation/event_subscription.dart';
+import 'support/manual_timer.dart';
 
 EventSubscription<T> bind<T>(Stream<T> stream) => EventSubscription(
   events: stream,
@@ -34,7 +35,7 @@ void main() {
         },
       );
       expect(listens, 0);
-      late _PeriodicTimer timer;
+      late ManualPeriodicTimer timer;
       runZoned(
         () {
           runtime.start();
@@ -43,7 +44,7 @@ void main() {
         zoneSpecification: ZoneSpecification(
           createPeriodicTimer: (self, parent, zone, duration, callback) {
             expect(duration, const Duration(seconds: 1));
-            return timer = _PeriodicTimer(callback);
+            return timer = ManualPeriodicTimer(callback);
           },
         ),
       );
@@ -311,32 +312,16 @@ void main() {
   });
 }
 
-_PeriodicTimer _startWithTimer(InteractiveBindings runtime) {
-  late _PeriodicTimer timer;
+ManualPeriodicTimer _startWithTimer(InteractiveBindings runtime) {
+  late ManualPeriodicTimer timer;
   runZoned(
     runtime.start,
     zoneSpecification: ZoneSpecification(
       createPeriodicTimer: (self, parent, zone, duration, callback) {
         expect(duration, const Duration(seconds: 1));
-        return timer = _PeriodicTimer(callback);
+        return timer = ManualPeriodicTimer(callback);
       },
     ),
   );
   return timer;
-}
-
-class _PeriodicTimer implements Timer {
-  _PeriodicTimer(this.callback);
-  final void Function(Timer) callback;
-  @override
-  bool isActive = true;
-  @override
-  int tick = 0;
-  void fire() {
-    tick++;
-    callback(this);
-  }
-
-  @override
-  void cancel() => isActive = false;
 }

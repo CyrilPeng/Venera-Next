@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/side_bar.dart';
 import 'package:venera_next/features/reader/sidebar_binding.dart';
 
-import '../../components/sidebar_presentation_test.dart' show pumpSidebar;
+import '../../support/sidebar_test_support.dart' show pumpSidebar;
 
 void main() {
   for (final built in [false, true]) {

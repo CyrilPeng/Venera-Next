@@ -4,12 +4,13 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/app_dio.dart';
 import 'package:venera_next/network/json_response.dart';
 import 'package:venera_next/network/cookie_jar.dart';
+
+import '../support/sqlite_test_environment.dart';
 
 void main() {
   group('JSON response validation', () {
@@ -179,18 +180,10 @@ void main() {
       expect(adapter.requestHeaders, hasLength(1));
       expect(adapter.requestHeaders.single['cookie'], 'fresh=1');
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+    skip: sqliteTestAvailable()
+        ? false
+        : 'sqlite3 native library is unavailable',
   );
-}
-
-bool _sqliteAvailable() {
-  try {
-    final db = sqlite3.openInMemory();
-    db.dispose();
-    return true;
-  } catch (_) {
-    return false;
-  }
 }
 
 class _TrackingAdapter implements HttpClientAdapter {

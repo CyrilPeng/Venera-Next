@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:ffi';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show FlutterError;
@@ -9,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
+
+import '../support/quickjs_test_environment.dart';
 
 class _Reference extends JSRef {
   _Reference({this.failure});
@@ -35,25 +35,6 @@ class _Callback extends JSInvokable {
   void destroy() {
     destroys++;
     if (failure != null) throw failure!;
-  }
-}
-
-bool _nativeAvailable() {
-  try {
-    if (Platform.isWindows) {
-      final directory = Directory('build/windows/x64/runner/Release').absolute;
-      DynamicLibrary.open('${directory.path}/flutter_windows.dll');
-      DynamicLibrary.open('${directory.path}/flutter_qjs_plugin.dll');
-    } else {
-      DynamicLibrary.open(
-        Platform.isLinux
-            ? 'libflutter_qjs_plugin.so'
-            : 'flutter_qjs.framework/flutter_qjs',
-      );
-    }
-    return true;
-  } catch (_) {
-    return false;
   }
 }
 
@@ -678,6 +659,6 @@ void main() {
         },
       );
     },
-    skip: _nativeAvailable() ? false : 'QuickJS native library unavailable',
+    skip: quickJsTestAvailable() ? false : 'QuickJS native library unavailable',
   );
 }

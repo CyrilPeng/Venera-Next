@@ -12,7 +12,7 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 
-import 'js_ui_ownership_test.dart' show drainUi;
+import '../support/js_ui_test_support.dart' show drainUi;
 
 class _Callback extends JSInvokable {
   _Callback(this.action);

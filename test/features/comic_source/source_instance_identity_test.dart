@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +14,8 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import '../../support/source_data_files.dart';
+
+import '../../support/quickjs_test_environment.dart';
 
 String script({
   String version = '1.0.0',
@@ -48,22 +49,7 @@ class IdentitySource extends ComicSource {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  var nativeAvailable = true;
-  try {
-    if (Platform.isWindows) {
-      final path = Directory('build/windows/x64/runner/Release').absolute.path;
-      DynamicLibrary.open('$path/flutter_windows.dll');
-      DynamicLibrary.open('$path/flutter_qjs_plugin.dll');
-    } else {
-      DynamicLibrary.open(
-        Platform.isLinux
-            ? 'libflutter_qjs_plugin.so'
-            : 'flutter_qjs.framework/flutter_qjs',
-      );
-    }
-  } catch (_) {
-    nativeAvailable = false;
-  }
+  final nativeAvailable = quickJsTestAvailable();
   group(
     'source instance identity',
     () {

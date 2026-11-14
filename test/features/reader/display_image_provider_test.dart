@@ -12,6 +12,7 @@ import 'package:venera_next/foundation/image_provider/base_image_provider.dart';
 import 'package:venera_next/foundation/image_provider/reader_image.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/network/image_stream.dart';
+import '../../support/image_provider_fixture.dart';
 
 final _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==',
@@ -47,29 +48,21 @@ class _Frame implements ui.FrameInfo {
   Duration get duration => Duration.zero;
 }
 
-class _Codec implements ui.Codec {
-  _Codec(this.frame);
-  final Future<ui.FrameInfo> frame;
-  int reads = 0;
-  int disposals = 0;
-  @override
-  int get frameCount => 1;
-  @override
-  int get repetitionCount => 0;
-  @override
-  Future<ui.FrameInfo> getNextFrame() {
-    reads++;
-    return frame;
-  }
-
-  @override
-  void dispose() => disposals++;
-}
-
 Future<void> _frame() async {
   SchedulerBinding.instance.handleBeginFrame(Duration.zero);
   SchedulerBinding.instance.handleDrawFrame();
   await pumpEventQueue();
+}
+
+Future<void> _framesUntil(bool Function() ready, String description) async {
+  // Native PNG decoding is not completed by draining Dart's event queue once.
+  final elapsed = Stopwatch()..start();
+  while (!ready()) {
+    if (elapsed.elapsed >= const Duration(seconds: 5)) {
+      fail('Timed out waiting for $description');
+    }
+    await _frame();
+  }
 }
 
 void main() {
@@ -187,11 +180,13 @@ void main() {
       expect(source.loads, 1);
       expect(frames, 0);
       release();
-      await pumpEventQueue();
-      await _frame();
+      await _framesUntil(
+        () => frames >= 2 || errors.isNotEmpty,
+        'both resumed visible listeners to receive an image',
+      );
+      expect(errors, isEmpty);
       expect(source.loads, 2);
       expect(frames, 2);
-      expect(errors, isEmpty);
     },
   );
 
@@ -217,8 +212,10 @@ void main() {
       expect(source.loads, 1);
       expect(read.isCompleted, isFalse);
       read.complete(_png);
-      await pumpEventQueue();
-      await _frame();
+      await _framesUntil(
+        () => received,
+        'the remaining reader to receive the shared image',
+      );
       expect(received, isTrue);
       releaseFirst();
       await pumpEventQueue();
@@ -257,8 +254,10 @@ void main() {
       expect(source.loads, 1);
       var frames = 0;
       listen(stream, onImage: (_) => frames++);
-      await pumpEventQueue();
-      await _frame();
+      await _framesUntil(
+        () => frames >= 1,
+        'the keepAlive relay to receive its resumed image',
+      );
       expect(source.loads, 2);
       expect(frames, 1);
     },
@@ -278,7 +277,7 @@ void main() {
       finishReads.add(() {
         if (!native.isCompleted) native.complete(_Frame(image));
       });
-      final codec = _Codec(native.future);
+      final codec = TrackedImageCodec(native.future);
       final source = provider(
         () async => _png,
         decoder: (buffer, {getTargetSize}) async {
@@ -293,7 +292,10 @@ void main() {
       ).resolve(ImageConfiguration.empty);
       var frames = 0;
       listen(stream, onImage: (_) => frames++);
-      await pumpEventQueue();
+      await _framesUntil(
+        () => codec.reads >= 1,
+        'the native frame request to begin before cancellation',
+      );
       expect(codec.reads, 1);
       var done = false;
       final preparing = owner.prepareForExit().then((release) {
@@ -370,8 +372,10 @@ void main() {
     expect(next.completer, isNot(same(stream.completer)));
     var frames = 0;
     listen(next, onImage: (_) => frames++);
-    await pumpEventQueue();
-    await _frame();
+    await _framesUntil(
+      () => frames >= 1,
+      'the explicit retry to receive its image',
+    );
     expect(source.loads, 2);
     expect(frames, 1);
     final preparing = owner.prepareForExit();
@@ -396,8 +400,10 @@ void main() {
       releaseFirst();
       expect(source.loads, 0);
       releaseSecond();
-      await pumpEventQueue();
-      await _frame();
+      await _framesUntil(
+        () => frames >= 2,
+        'both visible listeners to receive an image after the final hold',
+      );
       expect(source.loads, 1);
       expect(frames, 2);
     },
@@ -510,8 +516,10 @@ void main() {
       expect(cache.statusForKey(source).pending, true);
       expect(nextFrames, 0);
       nextRead.complete(_png);
-      await pumpEventQueue();
-      await _frame();
+      await _framesUntil(
+        () => nextFrames >= 1,
+        'the replacement stream to receive its own image',
+      );
       expect(nextFrames, 1);
       expect(cache.statusForKey(source).keepAlive, true);
       expect(source.loads, 2);
@@ -616,8 +624,10 @@ void main() {
       detach.add(remove);
       read.completeError(error, stack);
       await observed.future;
-      await pumpEventQueue();
-      await _frame();
+      await _framesUntil(
+        () => frames >= 1,
+        'the reentrant retry to receive its image',
+      );
       expect(source.loads, 2);
       expect(frames, 1);
       final preparation = owner.prepareForExit();

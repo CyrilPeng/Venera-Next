@@ -13,6 +13,8 @@ import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/operation_failure.dart';
 
+import '../../support/native_test_environment.dart';
+
 const _key = 'favorite_metadata_native';
 
 void main() {
@@ -27,7 +29,7 @@ void main() {
   late bool muted;
   setUp(() async {
     if (Platform.isWindows) {
-      final path = Directory('build/windows/x64/runner/Release').absolute.path;
+      final path = windowsNativeTestDirectory.absolute.path;
       DynamicLibrary.open('$path/flutter_windows.dll');
       DynamicLibrary.open('$path/flutter_qjs_plugin.dll');
     }

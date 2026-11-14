@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/image_provider/base_image_provider.dart';
 import 'package:venera_next/foundation/image_provider/image_provider_lifecycle.dart';
 import 'package:venera_next/foundation/log.dart';
+import '../support/image_provider_fixture.dart';
 
 class _Provider extends BaseImageProvider<_Provider> {
   _Provider(this.read, {String? cacheKey}) : _cacheKey = cacheKey;
@@ -84,17 +85,6 @@ ImageStreamListener _listener() => ImageStreamListener(
   (image, _) => image.dispose(),
   onError: (Object error, StackTrace? stack) {},
 );
-
-Future<ui.Image> _image() async {
-  final recorder = ui.PictureRecorder();
-  ui.Canvas(recorder).drawColor(const ui.Color(0xff00ff00), ui.BlendMode.src);
-  final picture = recorder.endRecording();
-  try {
-    return await picture.toImage(1, 1);
-  } finally {
-    picture.dispose();
-  }
-}
 
 Iterable<Object> _causes(Object error) sync* {
   if (error is ImageProviderPreparationFailure) {
@@ -256,7 +246,7 @@ void main() {
     'released stream joins native frame and disposes both image and codec',
     () async {
       final native = Completer<ui.FrameInfo>();
-      final image = await _image();
+      final image = await opaqueTestImage();
       final codec = _Codec(() => native.future);
       final provider = _Provider(() async => Uint8List(1));
       final stream = _stream(provider, (buffer, {getTargetSize}) async {
@@ -421,7 +411,7 @@ void main() {
             provider.loads == 1 ? firstRead.future : Future.value(Uint8List(1)),
       );
       final cache = PaintingBinding.instance.imageCache;
-      final nativeImage = await _image();
+      final nativeImage = await opaqueTestImage();
       ImageStream resolve() => ImageStream()
         ..setCompleter(
           cache.putIfAbsent(
@@ -475,7 +465,7 @@ void main() {
         final oldProvider = _Provider(() => oldRead.future, cacheKey: cacheKey);
         final newProvider = _Provider(() => newRead.future, cacheKey: cacheKey);
         final cache = PaintingBinding.instance.imageCache;
-        final nativeImage = cacheCompleted ? await _image() : null;
+        final nativeImage = cacheCompleted ? await opaqueTestImage() : null;
         ImageStream cachedStream(
           _Provider provider,
           ImageDecoderCallback decode,
@@ -546,7 +536,7 @@ void main() {
       'native cleanup failure reaches local owner and $globalTiming global preparation',
       () async {
         final native = Completer<ui.FrameInfo>();
-        final image = await _image();
+        final image = await opaqueTestImage();
         final failure = StateError('native codec cleanup failed');
         final codec = _Codec(() => native.future, disposeFailure: failure);
         final provider = _Provider(() async => Uint8List(1));
@@ -601,8 +591,8 @@ void main() {
       'completed cache joins only its in-flight native frame; global hold=$globalHold',
       () async {
         final native = Completer<ui.FrameInfo>();
-        final first = await _image();
-        final second = await _image();
+        final first = await opaqueTestImage();
+        final second = await opaqueTestImage();
         late final _Codec codec;
         codec = _Codec(
           () => codec.reads == 1 ? Future.value(_Frame(first)) : native.future,
@@ -682,7 +672,7 @@ void main() {
         'cached native failure retains original stack; before post-frame=$failsBeforeFrame global hold=$globalHold',
         () async {
           final native = Completer<ui.FrameInfo>();
-          final first = await _image();
+          final first = await opaqueTestImage();
           late final _Codec codec;
           codec = _Codec(
             () =>
@@ -775,7 +765,7 @@ void main() {
     'a remaining listener owns the native frame even for an opted-in release',
     () async {
       final native = Completer<ui.FrameInfo>();
-      final image = await _image();
+      final image = await opaqueTestImage();
       final codec = _Codec(() => native.future);
       final provider = _Provider(() async => Uint8List(1));
       final stream = _stream(provider, (buffer, {getTargetSize}) async {

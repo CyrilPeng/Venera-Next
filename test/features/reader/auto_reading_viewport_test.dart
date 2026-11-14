@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:photo_view/photo_view.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/features/comic_source/models.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
@@ -26,15 +25,8 @@ import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/log.dart';
 
-bool _sqliteAvailable() {
-  try {
-    final db = sqlite3.openInMemory();
-    db.dispose();
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
+import '../../support/sqlite_test_environment.dart';
+import 'support/favorites_read_fixture.dart';
 
 void main() {
   for (final mode in ReaderMode.values) {
@@ -68,7 +60,7 @@ void main() {
             App.dataPath = directory.path;
             App.cachePath = directory.path;
             Log.isMuted = true;
-            _favoritesOwner = _Favorites();
+            _favoritesOwner = ReaderFavoritesStub();
             final settings = appdata.settings;
             settings['comicSpecificSettings'] = <String, dynamic>{};
             settings['deviceSpecificSettings'] = <String, dynamic>{};
@@ -416,7 +408,7 @@ void main() {
             directory.deleteSync(recursive: true);
           }
         },
-        skip: !_sqliteAvailable(),
+        skip: !sqliteTestAvailable(),
       );
     }
   }
@@ -459,24 +451,6 @@ class _TestReaderState extends ReaderState {
   void disposeReaderWindow() {}
   @override
   void updateHistory() {}
-}
-
-class _Favorites extends ChangeNotifier implements LocalFavoritesManager {
-  @override
-  int get connectionGeneration => 1;
-
-  @override
-  Future<void> onRead(
-    String id,
-    ComicType type, {
-    int? generation,
-    void Function()? checkActive,
-  }) async {
-    checkActive?.call();
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _TestHistory extends HistoryManager {

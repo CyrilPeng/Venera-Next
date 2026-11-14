@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -12,6 +11,8 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
+
+import '../support/quickjs_test_environment.dart';
 
 class _RealHttpOverrides extends HttpOverrides {}
 
@@ -89,25 +90,7 @@ class _DrainAdapter extends RHttpAdapter {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  var nativeAvailable = true;
-  try {
-    if (Platform.isWindows) {
-      final path = Directory(
-        Platform.environment['VENERA_NATIVE_TEST_DIRECTORY'] ??
-            'build/windows/x64/runner/Release',
-      ).absolute.path;
-      DynamicLibrary.open('$path/flutter_windows.dll');
-      DynamicLibrary.open('$path/flutter_qjs_plugin.dll');
-    } else {
-      DynamicLibrary.open(
-        Platform.isLinux
-            ? 'libflutter_qjs_plugin.so'
-            : 'flutter_qjs.framework/flutter_qjs',
-      );
-    }
-  } catch (_) {
-    nativeAvailable = false;
-  }
+  final nativeAvailable = quickJsTestAvailable();
   setUp(() {
     App.version = 'test';
     App.isInitialized = false;

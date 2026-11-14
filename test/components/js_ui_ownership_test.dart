@@ -14,51 +14,13 @@ import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 
-class _Callback extends JSInvokable {
-  _Callback(this.action);
-  final Object? Function(List<dynamic>) action;
-  int calls = 0;
-  int destroys = 0;
-  @override
-  dynamic invoke(List args, [dynamic thisVal]) {
-    calls++;
-    return action(List<dynamic>.from(args));
-  }
-
-  @override
-  void destroy() => destroys++;
-}
+import '../support/js_ui_test_support.dart' show drainUi;
+import '../support/js_ownership_fixture.dart';
 
 class _Reference extends JSRef {
   int destroys = 0;
   @override
   void destroy() => destroys++;
-}
-
-Future<void> drainUi(
-  WidgetTester tester,
-  Future<void> Function() action,
-) async {
-  var done = false;
-  Object? failure;
-  StackTrace? failureStack;
-  final result = action().then<void>(
-    (_) => done = true,
-    onError: (Object error, StackTrace stack) {
-      failure = error;
-      failureStack = stack;
-      done = true;
-    },
-  );
-  for (var i = 0; i < 200 && !done; i++) {
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 10)),
-    );
-    await tester.pump();
-  }
-  expectSync(done, isTrue, reason: 'The original UI work did not settle.');
-  await result;
-  if (failure != null) Error.throwWithStackTrace(failure!, failureStack!);
 }
 
 void main() {
@@ -115,7 +77,7 @@ void main() {
     }
   }
 
-  Future<void> showAction(WidgetTester tester, _Callback callback) async {
+  Future<void> showAction(WidgetTester tester, OwnedJsCallback callback) async {
     final shown =
         invoke({
               'function': 'showDialog',
@@ -136,7 +98,7 @@ void main() {
     ) async {
       await host(tester);
       final completion = Completer<Object?>();
-      final callback = _Callback((_) => completion.future);
+      final callback = OwnedJsCallback((_) => completion.future);
       await showAction(tester, callback);
       await tester.tap(find.text('Run action'));
       await tester.pump();
@@ -163,7 +125,7 @@ void main() {
       (tester) async {
         await host(tester);
         final completion = Completer<Object?>();
-        final callback = _Callback((_) => completion.future);
+        final callback = OwnedJsCallback((_) => completion.future);
         if (loading) {
           invoke({'function': 'showLoading', 'onCancel': callback});
           await frames(tester);
@@ -196,7 +158,7 @@ void main() {
     tester,
   ) async {
     await host(tester);
-    final callback = _Callback((_) => null);
+    final callback = OwnedJsCallback((_) => null);
     await showAction(tester, callback);
     final button = tester.widget<TextButton>(
       find.widgetWithText(TextButton, 'Run action'),
@@ -211,8 +173,8 @@ void main() {
   testWidgets('busy state blocks synchronous callback reentry', (tester) async {
     await host(tester);
     VoidCallback? press;
-    late final _Callback callback;
-    callback = _Callback((_) {
+    late final OwnedJsCallback callback;
+    callback = OwnedJsCallback((_) {
       if (callback.calls == 1) press!();
       return Future<Object?>.value(null);
     });
@@ -230,7 +192,7 @@ void main() {
   ) async {
     await host(tester);
     final reference = _Reference();
-    final callback = _Callback((_) {
+    final callback = OwnedJsCallback((_) {
       throw {
         'message': 'rejected graph',
         'value': reference,
@@ -250,8 +212,8 @@ void main() {
   ) async {
     await host(tester);
     VoidCallback? press;
-    late final _Callback callback;
-    callback = _Callback((_) {
+    late final OwnedJsCallback callback;
+    callback = OwnedJsCallback((_) {
       if (callback.calls == 1) press!();
       return null;
     });
@@ -271,7 +233,7 @@ void main() {
   ) async {
     await host(tester);
     final completion = Completer<Object?>();
-    final callback = _Callback((_) => completion.future);
+    final callback = OwnedJsCallback((_) => completion.future);
     final first = invoke({'function': 'showLoading', 'onCancel': callback});
     await frames(tester);
     await tester.tap(find.text('Cancel'));
@@ -291,7 +253,7 @@ void main() {
     'immediate programmatic loading completion does not invoke cancel',
     (tester) async {
       await host(tester);
-      final callback = _Callback((_) => null);
+      final callback = OwnedJsCallback((_) => null);
       final id = invoke({'function': 'showLoading', 'onCancel': callback});
       invoke({'function': 'cancelLoading', 'id': id});
       await frames(tester);
@@ -307,7 +269,7 @@ void main() {
       await host(tester);
       final semantics = tester.ensureSemantics();
       final completion = Completer<Object?>();
-      await showAction(tester, _Callback((_) => completion.future));
+      await showAction(tester, OwnedJsCallback((_) => completion.future));
       await tester.tap(find.text('Run action'));
       await tester.pump();
       try {
@@ -327,7 +289,7 @@ void main() {
     (tester) async {
       await host(tester);
       var completed = false;
-      final callback = _Callback((_) => Future<Object?>.value(null));
+      final callback = OwnedJsCallback((_) => Future<Object?>.value(null));
       final result =
           invoke({
                 'function': 'showInputDialog',

@@ -17,7 +17,7 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'sidebar_presentation_test.dart' show settleSidebarWork;
+import '../support/sidebar_test_support.dart' show settleSidebarWork;
 
 class _File extends FileSelection {
   _File({this.release}) : super('selected.pdf');

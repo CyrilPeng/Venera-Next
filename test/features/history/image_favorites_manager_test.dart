@@ -5,7 +5,8 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/history/image_favorites_cache.dart';
 import 'package:venera_next/foundation/app.dart';
-import 'image_favorites_repository_test.dart' show comic;
+
+import '../../support/image_favorites_fixture.dart' show comic;
 
 void main() {
   setUpAll(() {

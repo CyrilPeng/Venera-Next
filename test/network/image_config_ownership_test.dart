@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -17,6 +16,8 @@ import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/network/image_loading_config.dart';
 import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/request_scope.dart';
+
+import '../support/quickjs_test_environment.dart';
 
 class _CancelOnInspectMap extends MapBase<String, dynamic> {
   _CancelOnInspectMap(this.valuesByKey, this.cancel);
@@ -46,28 +47,6 @@ class _CancelOnInspectMap extends MapBase<String, dynamic> {
   dynamic remove(Object? key) => valuesByKey.remove(key);
 }
 
-bool _quickJsAvailable() {
-  try {
-    if (Platform.isWindows) {
-      final build = Directory('build/windows/x64/runner/Release').absolute.path;
-      if (File('$build/flutter_windows.dll').existsSync()) {
-        DynamicLibrary.open('$build/flutter_windows.dll');
-        DynamicLibrary.open('$build/flutter_qjs_plugin.dll');
-      }
-    }
-    DynamicLibrary.open(
-      Platform.isWindows
-          ? 'flutter_qjs_plugin.dll'
-          : Platform.isLinux
-          ? 'libflutter_qjs_plugin.so'
-          : 'flutter_qjs.framework/flutter_qjs',
-    );
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
 class _Callback extends JSInvokable {
   _Callback(this.callback, {this.cleanupError});
 
@@ -92,7 +71,7 @@ class _Callback extends JSInvokable {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final nativeAvailable = _quickJsAvailable();
+  final nativeAvailable = quickJsTestAvailable();
   setUpAll(() async {
     if (Platform.isWindows || Platform.isLinux) await rhttp.Rhttp.init();
   });

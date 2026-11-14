@@ -6,6 +6,8 @@ import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/image_processing.dart' as processing;
 
+import '../support/native_test_environment.dart';
+
 class _TrackedEngine extends FlutterQjs {
   var closes = 0;
   var dispatchFinished = false;
@@ -27,15 +29,10 @@ void main() {
   late String initialization;
   setUpAll(() async {
     if (Platform.isWindows) {
-      final native = Directory(
-        Platform.environment['VENERA_NATIVE_TEST_DIRECTORY'] ??
-            'build/windows/x64/runner/Release',
-      ).absolute.path;
+      final native = windowsNativeTestDirectory.absolute.path;
       DynamicLibrary.open('$native/flutter_windows.dll');
       DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
-      final codecs =
-          Platform.environment['VENERA_NATIVE_TEST_LIBRARY'] ??
-          '$native/venera_native.dll';
+      final codecs = windowsNativeCodecTestLibrary;
       DynamicLibrary.open(codecs);
     }
     initialization = await File('assets/init.js').readAsString();

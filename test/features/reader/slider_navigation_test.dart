@@ -21,6 +21,7 @@ import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'support/favorites_read_fixture.dart';
 
 void main() {
   for (final rapid in [false, true]) {
@@ -40,7 +41,7 @@ void main() {
       try {
         App.dataPath = directory.path;
         App.cachePath = directory.path;
-        _favoritesOwner = _Favorites();
+        _favoritesOwner = ReaderFavoritesStub();
         final settings = appdata.settings;
         settings['comicSpecificSettings'] = <String, dynamic>{};
         settings['deviceSpecificSettings'] = <String, dynamic>{};
@@ -197,24 +198,6 @@ class _ReaderState extends ReaderState {
   void disposeReaderWindow() {}
   @override
   void updateHistory() {}
-}
-
-class _Favorites extends ChangeNotifier implements LocalFavoritesManager {
-  @override
-  int get connectionGeneration => 1;
-
-  @override
-  Future<void> onRead(
-    String id,
-    ComicType type, {
-    int? generation,
-    void Function()? checkActive,
-  }) async {
-    checkActive?.call();
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _TestHistory extends HistoryManager {

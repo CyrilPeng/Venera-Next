@@ -23,7 +23,9 @@ import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 
-import 'source_editor_ownership_test.dart' show drain, pumpUntil;
+import '../../support/native_test_environment.dart';
+
+import '../../support/source_editor_test_support.dart' show drain, pumpUntil;
 
 class _UiHandler implements JsUiMessageHandler {
   _UiHandler(this.action);
@@ -90,7 +92,7 @@ void main() {
     );
     await tester.runAsync(() async {
       if (Platform.isWindows) {
-        final native = Directory('build/windows/x64/runner/Release').absolute;
+        final native = windowsNativeTestDirectory.absolute;
         DynamicLibrary.open('${native.path}/flutter_windows.dll');
         DynamicLibrary.open('${native.path}/flutter_qjs_plugin.dll');
       }

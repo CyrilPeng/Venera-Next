@@ -26,6 +26,8 @@ void main(List<String> args) {
       flush: true,
     );
     marker.renameSync('$root/ready.json');
+    // Publish the checkpoint after closing the producer's rename handle.
+    stdout.writeln('content-checkpoint:$at');
     stdin.readLineSync();
     throw StateError('Probe must be killed by its parent');
   }

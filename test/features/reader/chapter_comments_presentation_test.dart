@@ -13,6 +13,8 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/foundation/res.dart';
 
+import '../../support/native_test_environment.dart';
+
 void main() {
   setUpAll(() async {
     final path = Platform.environment['CHAPTER_COMMENTS_QA_FONT'];
@@ -22,7 +24,9 @@ void main() {
     )..addFont(File(path).readAsBytes().then(ByteData.sublistView))).load();
     await (FontLoader('MaterialIcons')..addFont(
           File(
-            'build/windows/x64/runner/Release/data/flutter_assets/fonts/MaterialIcons-Regular.otf',
+            windowsNativeTestFile(
+              'data/flutter_assets/fonts/MaterialIcons-Regular.otf',
+            ).path,
           ).readAsBytes().then(ByteData.sublistView),
         ))
         .load();

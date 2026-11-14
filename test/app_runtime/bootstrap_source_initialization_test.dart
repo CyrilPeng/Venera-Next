@@ -16,14 +16,14 @@ import 'package:venera_next/foundation/js_engine.dart';
 
 import '../support/legacy_favorites_fixture.dart';
 
+import '../support/native_test_environment.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   var nativeAvailable = true;
   try {
     if (Platform.isWindows) {
-      final native = Directory(
-        'build/windows/x64/runner/Release',
-      ).absolute.path;
+      final native = windowsNativeTestDirectory.absolute.path;
       DynamicLibrary.open('$native/flutter_windows.dll');
       DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
     } else {
@@ -34,6 +34,7 @@ void main() {
       );
     }
   } catch (_) {
+    if (requireNativeTestLibraries) rethrow;
     nativeAvailable = false;
   }
 

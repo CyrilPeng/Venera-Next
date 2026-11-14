@@ -10,6 +10,8 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/persistence_failure.dart';
 
+import '../../support/sqlite_test_environment.dart';
+
 History _history(String id) => History.fromMap({
   'type': ComicType.local.value,
   'time': DateTime(2026, 10, 4).millisecondsSinceEpoch,
@@ -58,16 +60,6 @@ Future<void> _persistDuration(
     HistoryRepository(database).addReadDuration(snapshot, durationMs);
   } finally {
     database.dispose();
-  }
-}
-
-bool _sqliteAvailable() {
-  try {
-    final database = sqlite3.openInMemory();
-    database.dispose();
-    return true;
-  } catch (_) {
-    return false;
   }
 }
 
@@ -493,6 +485,8 @@ void main() {
         },
       );
     },
-    skip: _sqliteAvailable() ? false : 'sqlite3 native library is unavailable',
+    skip: sqliteTestAvailable()
+        ? false
+        : 'sqlite3 native library is unavailable',
   );
 }

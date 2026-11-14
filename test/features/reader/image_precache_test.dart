@@ -12,6 +12,7 @@ import 'package:venera_next/foundation/image_provider/base_image_provider.dart';
 import 'package:venera_next/foundation/image_provider/image_provider_lifecycle.dart';
 import 'package:venera_next/foundation/image_provider/reader_image.dart';
 import 'package:venera_next/network/image_stream.dart';
+import '../../support/image_provider_fixture.dart';
 
 final _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==',
@@ -42,36 +43,6 @@ class _Frame implements ui.FrameInfo {
   final ui.Image image;
   @override
   Duration get duration => const Duration(milliseconds: 10);
-}
-
-class _Codec implements ui.Codec {
-  _Codec(this.frame);
-  final Future<ui.FrameInfo> frame;
-  int reads = 0;
-  int disposals = 0;
-  @override
-  int get frameCount => 1;
-  @override
-  int get repetitionCount => 0;
-  @override
-  Future<ui.FrameInfo> getNextFrame() {
-    reads++;
-    return frame;
-  }
-
-  @override
-  void dispose() => disposals++;
-}
-
-Future<ui.Image> _image() async {
-  final recorder = ui.PictureRecorder();
-  ui.Canvas(recorder).drawColor(const ui.Color(0xff00ff00), ui.BlendMode.src);
-  final picture = recorder.endRecording();
-  try {
-    return await picture.toImage(1, 1);
-  } finally {
-    picture.dispose();
-  }
 }
 
 void main() {
@@ -326,8 +297,8 @@ void main() {
     () async {
       final decoded = Completer<ui.Codec>();
       var decoding = false;
-      final nativeImage = await _image();
-      final codec = _Codec(Future.value(_Frame(nativeImage)));
+      final nativeImage = await opaqueTestImage();
+      final codec = TrackedImageCodec(Future.value(_Frame(nativeImage)));
       releasePending.add(() {
         if (!decoded.isCompleted) decoded.complete(codec);
         if (!nativeImage.debugDisposed) nativeImage.dispose();
@@ -438,7 +409,7 @@ void main() {
     'late native frame failure belongs to the last reader and is not replayed globally',
     () async {
       final nativeFrame = Completer<ui.FrameInfo>();
-      final codec = _Codec(nativeFrame.future);
+      final codec = TrackedImageCodec(nativeFrame.future);
       final error = StateError('late native frame failure');
       final stack = StackTrace.fromString('original native frame stack');
       final image = provider(
@@ -478,8 +449,8 @@ void main() {
     'release waits for native frame creation and disposes a late frame',
     () async {
       final nativeFrame = Completer<ui.FrameInfo>();
-      final codec = _Codec(nativeFrame.future);
-      final nativeImage = await _image();
+      final codec = TrackedImageCodec(nativeFrame.future);
+      final nativeImage = await opaqueTestImage();
       releasePending.add(() {
         if (!nativeFrame.isCompleted) nativeFrame.complete(_Frame(nativeImage));
       });

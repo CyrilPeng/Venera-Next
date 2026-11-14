@@ -9,6 +9,8 @@ import 'package:path/path.dart' as path;
 import 'package:venera_native/venera_native.dart';
 import 'package:venera_next/foundation/image_processing.dart' as processing;
 
+import '../support/native_test_environment.dart';
+
 const fixtures = 'packages/venera_native/test/fixtures';
 final nativeHost = Platform.isWindows || Platform.isLinux;
 
@@ -25,11 +27,7 @@ void deleteOwnedTemp(Directory directory) {
 void main() {
   setUpAll(() {
     if (Platform.isWindows) {
-      final library =
-          Platform.environment['VENERA_NATIVE_TEST_LIBRARY'] ??
-          Directory(
-            'build/windows/x64/runner/Debug/venera_native.dll',
-          ).absolute.path;
+      final library = windowsNativeCodecTestLibrary;
       DynamicLibrary.open(library);
     }
   });

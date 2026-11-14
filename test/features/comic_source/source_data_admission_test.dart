@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ffi';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
@@ -14,6 +13,8 @@ import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/init.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/network/cookie_jar.dart';
+
+import '../../support/quickjs_test_environment.dart';
 
 String _script(String key, {String init = ''}) =>
     '''
@@ -37,25 +38,7 @@ if (!globalThis.done_$key) {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  bool nativeAvailable;
-  try {
-    if (Platform.isWindows) {
-      final native = Directory(
-        'build/windows/x64/runner/Release',
-      ).absolute.path;
-      DynamicLibrary.open('$native/flutter_windows.dll');
-      DynamicLibrary.open('$native/flutter_qjs_plugin.dll');
-    } else {
-      DynamicLibrary.open(
-        Platform.isLinux
-            ? 'libflutter_qjs_plugin.so'
-            : 'flutter_qjs.framework/flutter_qjs',
-      );
-    }
-    nativeAvailable = true;
-  } catch (_) {
-    nativeAvailable = false;
-  }
+  final nativeAvailable = quickJsTestAvailable();
   group('source data admission', () {
     late Directory root;
     late JsEngine engine;

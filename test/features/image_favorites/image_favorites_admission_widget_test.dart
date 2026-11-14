@@ -10,7 +10,8 @@ import 'package:venera_next/features/image_favorites/image_favorites_page.dart';
 import 'package:venera_next/features/image_favorites/image_favorites_summary.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
-import '../history/image_favorites_repository_test.dart' show comic;
+
+import '../../support/image_favorites_fixture.dart' show comic;
 
 void main() {
   late ImageFavoriteManager imageManager;

@@ -8,6 +8,7 @@ import 'package:venera_next/features/follow_updates/follow_updates.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/res.dart';
 import 'package:venera_next/network/request_scope.dart';
+import '../../support/comic_source_fixture.dart';
 
 void main() {
   const sourceKey = 'follow_updates_test_source';
@@ -25,7 +26,7 @@ void main() {
     'updateComic does not retry errors already handled by the source',
     () async {
       var attempts = 0;
-      final source = _source(
+      final source = stubComicSource(
         sourceKey,
         loadComicInfo: (id) async {
           attempts++;
@@ -65,7 +66,7 @@ void main() {
       final replies = <Completer<Res<ComicDetails>>>[];
       final tokens = <RequestScope>[];
       ComicSourceManager().add(
-        _source(
+        stubComicSource(
           sourceKey,
           loadComicInfo: (_) {
             tokens.add(RequestScope.current!);
@@ -99,7 +100,7 @@ void main() {
     () async {
       final favorites = _Favorites([_item(sourceKey, '1')]);
       ComicSourceManager().add(
-        _source(
+        stubComicSource(
           sourceKey,
           loadComicInfo: (_) => Completer<Res<ComicDetails>>().future,
         ),
@@ -168,42 +169,4 @@ class _Favorites extends Fake implements LocalFavoritesManager {
     writes += 2;
     return updateTime != null;
   }
-}
-
-ComicSource _source(String key, {LoadComicFunc? loadComicInfo}) {
-  return ComicSource(
-    'Test Source',
-    key,
-    null,
-    null,
-    null,
-    null,
-    const [],
-    null,
-    null,
-    loadComicInfo,
-    null,
-    null,
-    null,
-    null,
-    'test.js',
-    '',
-    '1.0.0',
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    false,
-    false,
-    null,
-    null,
-  );
 }

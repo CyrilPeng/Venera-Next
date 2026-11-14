@@ -11,6 +11,7 @@ import 'package:venera_next/features/sync/data_sync_remote.dart';
 import 'package:venera_next/features/sync/data_sync_remote_port.dart';
 import 'package:venera_next/network/webdav.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
+import 'support/remote_response_fixture.dart';
 
 void main() {
   late Directory directory;
@@ -34,7 +35,7 @@ void main() {
           if (request.uri.host == 'dav.example.test') {
             expect(request.headers[HttpHeaders.authorizationHeader], isNotNull);
             expect(request.uri.path, '/dav/MixedRoot/Snapshot.venera');
-            return _response(
+            return dataSyncResponse(
               status,
               headers: {
                 'location': [
@@ -52,7 +53,7 @@ void main() {
             request.headers.keys.map((key) => key.toLowerCase()),
             everyElement(isIn(['accept', 'accept-encoding', 'user-agent'])),
           );
-          return _response(
+          return dataSyncResponse(
             200,
             bytes: bytes,
             headers: {
@@ -118,7 +119,7 @@ void main() {
           ),
         );
         if (request.uri.path == '/dav/MixedRoot/Snapshot.venera') {
-          return _response(
+          return dataSyncResponse(
             302,
             headers: {
               'location': [
@@ -131,7 +132,7 @@ void main() {
           request.uri.toString(),
           'https://dav.example.test/Download/%E6%96%87%20%25%3F%23.venera?sign=Mixed%20Token',
         );
-        return _response(
+        return dataSyncResponse(
           200,
           bytes: bytes,
           headers: {
@@ -162,7 +163,7 @@ void main() {
       () async {
         final fixture = _Fixture((request) {
           if (request.uri.host == 'dav.example.test') {
-            return _response(
+            return dataSyncResponse(
               302,
               headers: {
                 'location': ['//cdn.example.test/private?sign=token'],
@@ -170,7 +171,7 @@ void main() {
             );
           }
           expect(request.headers[HttpHeaders.authorizationHeader], isNull);
-          return _response(
+          return dataSyncResponse(
             401,
             headers: {
               'www-authenticate': [
@@ -198,7 +199,7 @@ void main() {
       final fixture = _Fixture((request) {
         if (hop++ == 0) {
           expect(request.headers[HttpHeaders.authorizationHeader], isNotNull);
-          return _response(
+          return dataSyncResponse(
             302,
             headers: {
               'location': ['https://cdn.example.test/link'],
@@ -207,14 +208,14 @@ void main() {
         }
         expect(request.headers[HttpHeaders.authorizationHeader], isNull);
         if (request.uri.host == 'cdn.example.test') {
-          return _response(
+          return dataSyncResponse(
             307,
             headers: {
               'location': ['https://dav.example.test/Download/snapshot'],
             },
           );
         }
-        return _response(200, bytes: bytes);
+        return dataSyncResponse(200, bytes: bytes);
       });
       addTearDown(fixture.remote.dispose);
       fixture.client.auth = const webdav.BasicAuth(
@@ -234,7 +235,7 @@ void main() {
     () async {
       final fixture = _Fixture((request) {
         if (request.uri.port == 443) {
-          return _response(
+          return dataSyncResponse(
             302,
             headers: {
               'location': ['https://dav.example.test:8443/download'],
@@ -242,7 +243,7 @@ void main() {
           );
         }
         expect(request.headers[HttpHeaders.authorizationHeader], isNull);
-        return _response(200, bytes: bytes);
+        return dataSyncResponse(200, bytes: bytes);
       });
       addTearDown(fixture.remote.dispose);
       fixture.client.auth = const webdav.BasicAuth(
@@ -272,7 +273,7 @@ void main() {
       'unsafe/ambiguous redirect ${jsonEncode(locations)} is not followed',
       () async {
         final fixture = _Fixture(
-          (_) => _response(302, headers: {'location': locations}),
+          (_) => dataSyncResponse(302, headers: {'location': locations}),
         );
         addTearDown(fixture.remote.dispose);
         final output = File('${directory.path}/untouched.venera')
@@ -293,7 +294,7 @@ void main() {
       for (final loop in [true, false]) {
         var hop = 0;
         final fixture = _Fixture(
-          (_) => _response(
+          (_) => dataSyncResponse(
             302,
             headers: {
               'location': [
@@ -322,13 +323,13 @@ void main() {
       () async {
         final fixture = _Fixture(
           (request) => request.uri.host == 'dav.example.test'
-              ? _response(
+              ? dataSyncResponse(
                   302,
                   headers: {
                     'location': ['https://cdn.example.test/file'],
                   },
                 )
-              : _response(status, bytes: [1, 2, 3]),
+              : dataSyncResponse(status, bytes: [1, 2, 3]),
         );
         addTearDown(fixture.remote.dispose);
         await expectLater(
@@ -346,14 +347,14 @@ void main() {
       for (final truncatedRedirect in [true, false]) {
         final fixture = _Fixture(
           (request) => request.uri.host == 'dav.example.test'
-              ? _response(
+              ? dataSyncResponse(
                   302,
                   headers: {
                     'location': ['https://cdn.example.test/file'],
                     if (truncatedRedirect) 'content-length': ['10'],
                   },
                 )
-              : _response(
+              : dataSyncResponse(
                   200,
                   bytes: [1, 2],
                   headers: {
@@ -475,19 +476,6 @@ Matcher _status(int status) => isA<DioException>().having(
   (error) => error.response?.statusCode,
   'HTTP status',
   status,
-);
-
-ResponseBody _response(
-  int status, {
-  List<int> bytes = const [],
-  Map<String, List<String>> headers = const {},
-}) => ResponseBody(
-  Stream.value(Uint8List.fromList(bytes)),
-  status,
-  headers: {
-    'content-length': ['${bytes.length}'],
-    ...headers,
-  },
 );
 
 class _Fixture {
