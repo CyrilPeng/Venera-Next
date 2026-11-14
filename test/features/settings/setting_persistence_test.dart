@@ -81,11 +81,17 @@ void main() {
       );
       final release = Completer<void>();
       final exclusive = AppDataOperations.instance.run(() => release.future);
+      final switchBounds = tester.getRect(find.byType(Switch));
+      final titleBounds = tester.getRect(find.text('Page number'));
       await tester.tap(find.byType(Switch));
       await tester.pump();
       expect(appdata.settings['showPageNumberInReader'], isTrue);
       expect(callbacks, 0);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(Switch), findsOneWidget);
+      expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+      expect(tester.getRect(find.byType(Switch)), switchBounds);
+      expect(tester.getRect(find.text('Page number')), titleBounds);
       release.complete();
       await _flush(tester, Future.wait([exclusive, appdata.saveData(false)]));
       expect(callbacks, 1);
@@ -233,6 +239,72 @@ void main() {
         expect(appdata.settings['defaultSearchTarget'], isNull);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
+  for (final width in [360.0, 600.0]) {
+    testWidgets(
+      'selector remains stable and accepts the latest edit while saving at $width',
+      (tester) async {
+        final root = _prepare();
+        tester.view.physicalSize = Size(width, 720);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        appdata.settings['initialPage'] = '0';
+        var callbacks = 0;
+        await tester.pumpWidget(
+          _host(
+            MediaQuery(
+              data: MediaQueryData(
+                size: Size(width, 720),
+                textScaler: TextScaler.linear(1.8),
+              ),
+              child: SelectSetting.preference(
+                title: 'Layout',
+                preference: const StringPreference('initialPage', '0'),
+                optionTranslation: const {'0': 'One', '1': 'Two'},
+                onChanged: () => callbacks++,
+              ),
+            ),
+          ),
+        );
+        final tileBounds = tester.getRect(find.byType(ListTile));
+        final titleBounds = tester.getRect(find.text('Layout'));
+        final release = Completer<void>();
+        final exclusive = AppDataOperations.instance.run(() => release.future);
+        Future<void> choose(String value) async {
+          await tester.tap(
+            width < 450
+                ? find.byType(ListTile)
+                : find.byIcon(Icons.arrow_drop_down),
+          );
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 400));
+          await tester.tap(find.text(value).last);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 400));
+        }
+
+        await choose('Two');
+        expect(find.byIcon(Icons.arrow_drop_down), findsOneWidget);
+        expect(tester.getRect(find.byType(ListTile)), tileBounds);
+        expect(tester.getRect(find.text('Layout')), titleBounds);
+        expect(callbacks, 0);
+        await choose('One');
+        release.complete();
+        await _flush(tester, Future.wait([exclusive, appdata.saveData(false)]));
+        expect(callbacks, 1);
+        expect(tester.getRect(find.byType(ListTile)), tileBounds);
+        expect(
+          jsonDecode(
+            File('${root.path}/appdata.json').readAsStringSync(),
+          )['settings']['initialPage'],
+          '0',
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
       },
     );
   }

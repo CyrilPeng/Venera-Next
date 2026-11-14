@@ -80,6 +80,11 @@ void main() {
         state.itemScrollController.jumpTo(index: 3, alignment: 0.4);
         await fixture.waitForImages(tester);
         expect(state.currentChapter, 1);
+        final updates = fixture.updates;
+        for (var i = 0; i < 5; i++) {
+          state.onPositionChanged();
+        }
+        expect(fixture.updates, updates);
         final visible = state.imageStates
             .whereType<ComicImageState>()
             .where((image) => image.visibleInReader)
@@ -392,6 +397,7 @@ class _Fixture {
   ImageWork get imageWork => owners.last;
   late final ReaderController navigation;
   final loads = <int>[];
+  var updates = 0;
   final loading = <int, List<bool>>{};
   Future<List<String>> Function(int, RequestScope)? load;
   ContinuousModeState get state => viewport.current! as ContinuousModeState;
@@ -443,7 +449,7 @@ class _Fixture {
         chapterId: (chapter) => 'id-$chapter',
         chapterTitle: (chapter) => 'Title $chapter',
         onViewportChanged: viewport.update,
-        onUpdate: () {},
+        onUpdate: () => updates++,
         onFloatingButton: (_) {},
         onCollectImage: () {},
         onActiveChapterChanged: () {},

@@ -99,7 +99,7 @@ class _Source extends Fake implements ComicSource {
   };
 }
 
-class _History extends Fake implements HistoryManager {
+class _History extends Fake with ChangeNotifier implements HistoryManager {
   @override
   History? find(String id, ComicType type) => null;
 }

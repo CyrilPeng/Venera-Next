@@ -1,4 +1,5 @@
 import 'package:venera_next/features/history/history_scope.dart';
+import 'package:venera_next/features/history/history_manager.dart';
 import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/application_preferences.dart';
@@ -46,7 +47,6 @@ import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/navigation_admission.dart';
 import 'package:venera_next/foundation/appdata.dart';
-import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/opencc.dart';
@@ -128,6 +128,22 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   late String readFilterSelect;
 
+  HistoryManager? _history;
+  List<FavoriteItem>? _displayedCache;
+  List<FavoriteItem>? _visibleCache;
+
+  bool get _usesReadingFilter =>
+      !searchMode &&
+      (readFilterSelect == 'UnCompleted' || readFilterSelect == 'Completed');
+
+  void _invalidateDisplay() {
+    _displayedCache = null;
+    _visibleCache = null;
+  }
+
+  List<FavoriteItem> get _displayedComics =>
+      _displayedCache ??= searchMode ? searchResults : filterComics(comics);
+
   var searchResults = <FavoriteItem>[];
 
   void updateSearchResult() {
@@ -135,6 +151,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   void _refreshSearchResults() {
+    _invalidateDisplay();
     if (keyword.trim().isEmpty) {
       searchResults = comics;
     } else {
@@ -151,13 +168,15 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   void _replaceComics(List<FavoriteItem> value) {
     comics = value;
+    _invalidateDisplay();
     if (searchMode) _refreshSearchResults();
     _reconcileSelection();
   }
 
   List<FavoriteItem> get _visibleComics {
+    if (_visibleCache case final cached?) return cached;
     final filter = KeywordFilter.fromSettings(appdata.settings);
-    return (searchMode ? searchResults : filterComics(comics))
+    return _visibleCache = _displayedComics
         .where((comic) => isBlocked(comic, filter: filter) == null)
         .toList();
   }
@@ -173,7 +192,21 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   void _onSettingsChanged() {
-    if (_canReadObservedFolder) setState(_reconcileSelection);
+    if (_canReadObservedFolder) {
+      setState(() {
+        _invalidateDisplay();
+        _reconcileSelection();
+      });
+    }
+  }
+
+  void _onHistoryChanged() {
+    if (_canReadObservedFolder && _usesReadingFilter) {
+      setState(() {
+        _invalidateDisplay();
+        _reconcileSelection();
+      });
+    }
   }
 
   void updateComics() {
@@ -236,10 +269,12 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   List<FavoriteItem> filterComics(List<FavoriteItem> curComics) {
+    if (!_usesReadingFilter) return curComics;
+    final historyManager = _history;
     return curComics.where((comic) {
-      var history = HistoryScope.read(
-        context,
-      ).find(comic.id, ComicType(comic.sourceKey.hashCode));
+      final history = historyManager?.isInitialized == true
+          ? historyManager!.find(comic.id, comic.type)
+          : null;
       if (readFilterSelect == "UnCompleted") {
         return history == null || history.page != history.maxPage;
       } else if (readFilterSelect == "Completed") {
@@ -335,6 +370,15 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final history =
+        context.dependOnInheritedWidgetOfExactType<HistoryScope>()?.manager ??
+        HistoryScope.read(context);
+    if (!identical(history, _history)) {
+      _history?.removeListener(_onHistoryChanged);
+      _history = history..addListener(_onHistoryChanged);
+      _invalidateDisplay();
+      _reconcileSelection();
+    }
     if (_queryOwner != null) return;
     _queryOwner = WindowSelectionTask(context);
     updateComics();
@@ -380,6 +424,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     _cancelMetadataUpdates();
     _retireUpdateFlyout();
     _observedManager.removeListener(updateComics);
+    _history?.removeListener(_onHistoryChanged);
     appdata.settings.removeListener(_onSettingsChanged);
     scrollController.dispose();
     super.dispose();
@@ -417,7 +462,8 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
       setState(() {
         searchMode = false;
         keyword = '';
-        updateComics();
+        _invalidateDisplay();
+        _reconcileSelection();
       });
       return true;
     }
@@ -509,7 +555,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
       target.onFolderSelected(false, parent.name);
     }
 
-    final displayedComics = searchMode ? searchResults : filterComics(comics);
+    final displayedComics = _displayedComics;
     final compactActions = context.width < changePoint && !isAllFolder;
     final canSelect =
         _canReadObservedFolder && !isLoading && _visibleComics.isNotEmpty;
@@ -654,8 +700,9 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                             }
                             setState(() {
                               readFilterSelect = readFilter;
+                              _invalidateDisplay();
+                              _reconcileSelection();
                             });
-                            updateComics();
                           },
                         );
                       },
@@ -670,8 +717,9 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                   onPressed: () {
                     setState(() {
                       keyword = "";
+                      searchHasUpper = false;
                       searchMode = true;
-                      updateSearchResult();
+                      _refreshSearchResults();
                     });
                   },
                 ),
@@ -1071,9 +1119,10 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                 icon: const Icon(Icons.close),
                 onPressed: () {
                   setState(() {
-                    setState(() {
-                      searchMode = false;
-                    });
+                    searchMode = false;
+                    keyword = '';
+                    _invalidateDisplay();
+                    _reconcileSelection();
                   });
                 },
               ),

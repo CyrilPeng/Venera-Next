@@ -120,7 +120,7 @@ class CacheManager {
     List<int> data, [
     int duration = 7 * 24 * 60 * 60 * 1000,
   ]) {
-    final bytes = List<int>.of(data);
+    final bytes = Uint8List.fromList(data);
     return _enqueue(() => _writeCache(key, bytes, duration));
   }
 

@@ -125,6 +125,8 @@ class ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
   ImageStream? _imageStream;
   ImageInfo? _imageInfo;
   ImageChunkEvent? _loadingProgress;
+  ImageChunkEvent? _pendingProgress;
+  int? _progressFrame;
   bool _isListeningToStream = false;
   late bool _invertColors;
   int? _frameNumber;
@@ -174,6 +176,7 @@ class ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
   @override
   void dispose() {
     assert(_imageStream != null);
+    _cancelProgressUpdate();
     WidgetsBinding.instance.removeObserver(this);
     _stopListeningToStream();
     _completerHandle?.dispose();
@@ -270,6 +273,7 @@ class ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
         _handleImageFrame,
         onChunk: _handleImageChunk,
         onError: (Object error, StackTrace? stackTrace) {
+          _cancelProgressUpdate();
           setState(() {
             _lastException = error;
           });
@@ -280,6 +284,7 @@ class ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
   }
 
   void _handleImageFrame(ImageInfo imageInfo, bool synchronousCall) {
+    _cancelProgressUpdate();
     setState(() {
       _replaceImage(info: imageInfo);
       _loadingProgress = null;
@@ -336,10 +341,25 @@ class ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
   }
 
   void _handleImageChunk(ImageChunkEvent event) {
-    setState(() {
-      _loadingProgress = event;
-      _lastException = null;
+    _pendingProgress = event;
+    _progressFrame ??= SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _progressFrame = null;
+      final progress = _pendingProgress;
+      _pendingProgress = null;
+      if (!mounted || progress == null) return;
+      setState(() {
+        _loadingProgress = progress;
+        _lastException = null;
+      });
     });
+  }
+
+  void _cancelProgressUpdate() {
+    if (_progressFrame case final frame?) {
+      SchedulerBinding.instance.cancelFrameCallbackWithId(frame);
+    }
+    _progressFrame = null;
+    _pendingProgress = null;
   }
 
   void _replaceImage({required ImageInfo? info}) {
@@ -364,6 +384,7 @@ class ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
     if (_imageStream?.key == newStream.key) {
       return;
     }
+    _cancelProgressUpdate();
 
     if (_isListeningToStream) {
       _imageStream!.removeListener(_getListener());
@@ -408,6 +429,7 @@ class ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
   /// to true, which create [ImageStreamCompleterHandle] to keep the completer
   /// alive and is compatible with the [TickerMode] being off.
   void _stopListeningToStream({bool keepStreamAlive = false}) {
+    _cancelProgressUpdate();
     if (!_isListeningToStream) {
       return;
     }
@@ -461,6 +483,7 @@ class ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
                   child: Listener(
                     onPointerDown: (details) {
                       ReaderTapScope.maybeOf(context)?.ignoreNextTap();
+                      _cancelProgressUpdate();
                       setState(() {
                         _loadingProgress = null;
                         _lastException = null;

@@ -64,15 +64,25 @@ abstract class _SettingState<W extends StatefulWidget, T>
   }
 
   Widget withSaveStatus(Widget child) => protectSettings(
-    Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    Stack(
       children: [
-        child,
-        if (hasSettingsSaveError)
-          Align(
-            alignment: AlignmentDirectional.centerEnd,
-            child: settingsSaveStatus,
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            child,
+            if (hasSettingsSaveError)
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: settingsSaveStatus,
+              ),
+          ],
+        ),
+        if (saving && !hasSettingsSaveError)
+          const PositionedDirectional(
+            top: 2,
+            end: 2,
+            child: IgnorePointer(child: _savingIndicator),
           ),
       ],
     ),
@@ -167,9 +177,7 @@ class _SwitchSettingState extends _SettingState<SwitchSetting, bool> {
       ListTile(
         title: Text(widget.title),
         subtitle: widget.subtitle == null ? null : Text(widget.subtitle!),
-        trailing: saving
-            ? _savingIndicator
-            : Switch(value: value!, onChanged: change),
+        trailing: Switch(value: value!, onChanged: change),
       ),
     );
   }
@@ -386,27 +394,19 @@ class _DoubleLineSelectSettingsState
           ],
         ),
         subtitle:
-            widget.selectorBuilder?.call(
-              context,
-              value,
-              saving
-                  ? null
-                  : (selected) {
-                      if (mounted &&
-                          target.matches(field) &&
-                          (selected == null ||
-                              widget.optionTranslation.containsKey(selected))) {
-                        unawaited(change(selected));
-                      }
-                    },
-            ) ??
+            widget.selectorBuilder?.call(context, value, (selected) {
+              if (mounted &&
+                  target.matches(field) &&
+                  (selected == null ||
+                      widget.optionTranslation.containsKey(selected))) {
+                unawaited(change(selected));
+              }
+            }) ??
             Text(widget.optionTranslation[value] ?? "None"),
-        trailing: saving
-            ? _savingIndicator
-            : widget.selectorBuilder == null
+        trailing: widget.selectorBuilder == null
             ? const Icon(Icons.arrow_drop_down)
             : null,
-        onTap: saving || widget.selectorBuilder != null
+        onTap: widget.selectorBuilder != null
             ? null
             : () {
                 var renderBox = context.findRenderObject() as RenderBox;
@@ -537,32 +537,31 @@ class _EndSelectorSelectSettingState
               ),
           ],
         ),
-        trailing: saving
-            ? _savingIndicator
-            : widget.selectorBuilder?.call(context, value, (selected) {
-                    if (mounted &&
-                        target.matches(field) &&
-                        (selected == null ||
-                            widget.optionTranslation.containsKey(selected))) {
-                      unawaited(change(selected));
-                    }
-                  }) ??
-                  Select(
-                    current: options[value],
-                    values: options.values.toList(),
-                    minWidth: 64,
-                    onTap: (index) {
-                      if (mounted &&
-                          target.matches(field) &&
-                          index >= 0 &&
-                          index < options.length) {
-                        final selected = options.keys.elementAt(index);
-                        if (widget.optionTranslation.containsKey(selected)) {
-                          unawaited(change(selected));
-                        }
-                      }
-                    },
-                  ),
+        trailing:
+            widget.selectorBuilder?.call(context, value, (selected) {
+              if (mounted &&
+                  target.matches(field) &&
+                  (selected == null ||
+                      widget.optionTranslation.containsKey(selected))) {
+                unawaited(change(selected));
+              }
+            }) ??
+            Select(
+              current: options[value],
+              values: options.values.toList(),
+              minWidth: 64,
+              onTap: (index) {
+                if (mounted &&
+                    target.matches(field) &&
+                    index >= 0 &&
+                    index < options.length) {
+                  final selected = options.keys.elementAt(index);
+                  if (widget.optionTranslation.containsKey(selected)) {
+                    unawaited(change(selected));
+                  }
+                }
+              },
+            ),
       ),
     );
   }
