@@ -36,10 +36,11 @@ Finder _tile(String id) => find.byWidgetPredicate(
 
 class _Fixture {
   final manager = LocalFavoritesManager.independent();
-  final history = HistoryManager.create();
+  final history = _ObservedHistory();
   final navigator = appNavigation.rootNavigatorKey;
   double textScale = 1;
   bool dark = false;
+  double keyboardInset = 0;
 
   Widget host({String folder = 'B'}) => FavoritesScope(
     manager: manager,
@@ -57,6 +58,7 @@ class _Fixture {
           child: MediaQuery(
             data: MediaQuery.of(context).copyWith(
               textScaler: TextScaler.linear(textScale),
+              viewInsets: EdgeInsets.only(bottom: keyboardInset),
               disableAnimations: true,
             ),
             child: child!,
@@ -73,6 +75,18 @@ class _Fixture {
       ),
     ),
   );
+}
+
+class _ObservedHistory extends HistoryManager {
+  _ObservedHistory() : super.create();
+
+  int reads = 0;
+
+  @override
+  History? find(String id, ComicType type) {
+    reads++;
+    return super.find(id, type);
+  }
 }
 
 Future<_Fixture> _prepare(WidgetTester tester, int count) async {
@@ -193,6 +207,60 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   App.dataPath = Directory.systemTemp.path;
   App.cachePath = Directory.systemTemp.path;
+
+  for (final filtered in [false, true]) {
+    testWidgets(
+      'large favorites reuse filtering across keyboard layouts and follow history: filtered=$filtered',
+      (tester) async {
+        final fixture = await _prepare(tester, 1200);
+        if (filtered) {
+          appdata.implicitData['local_favorites_read_filter'] = 'Completed';
+        }
+        await tester.pumpWidget(fixture.host());
+        await _settle(tester);
+        final grid = find.byType(SliverGridComics, skipOffstage: false);
+        final input = tester.widget<SliverGridComics>(grid).comics;
+        final reads = fixture.history.reads;
+        expect(reads, filtered ? 1200 : 0);
+        for (final inset in [80.0, 160.0, 240.0, 0.0]) {
+          fixture.keyboardInset = inset;
+          await tester.pumpWidget(fixture.host());
+          await tester.pump();
+          expect(fixture.history.reads, reads);
+          expect(tester.widget<SliverGridComics>(grid).comics, same(input));
+        }
+        await tester.runAsync(
+          () => fixture.history.addHistory(
+            History(
+              type: const HistoryType(17),
+              time: DateTime.now(),
+              title: 'Existing 0',
+              subtitle: '',
+              cover: '',
+              ep: 1,
+              page: 2,
+              id: 'seed-0',
+              readEpisode: {'1'},
+              maxPage: 2,
+              readDurationMs: 0,
+            ),
+          ),
+        );
+        await _settle(tester);
+        if (filtered) {
+          expect(
+            tester.widget<SliverGridComics>(grid).comics.single.id,
+            'seed-0',
+          );
+          expect(fixture.history.reads, greaterThan(reads));
+        } else {
+          expect(fixture.history.reads, 0);
+          expect(tester.widget<SliverGridComics>(grid).comics, same(input));
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets(
     'wide selection toolbar exposes common actions and Escape exits local modes',

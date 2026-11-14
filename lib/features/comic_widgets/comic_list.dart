@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'package:venera_next/foundation/application_preferences.dart';
 import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/keyword_filter.dart';
@@ -61,13 +62,17 @@ class SliverGridComics extends StatefulWidget {
 class _SliverGridComicsState extends State<SliverGridComics> {
   List<Comic> comics = [];
   List<int> heroIDs = [];
+  List<Comic> _inputSnapshot = [];
 
   static int _nextHeroID = 0;
 
   void _refreshComics() {
-    final previousIDs = <(String, String), List<int>>{};
+    _inputSnapshot = List.of(widget.comics);
+    final previousIDs = <(String, String), Queue<int>>{};
     for (var i = 0; i < comics.length; i++) {
-      (previousIDs[(comics[i].sourceKey, comics[i].id)] ??= []).add(heroIDs[i]);
+      (previousIDs[(comics[i].sourceKey, comics[i].id)] ??= Queue<int>()).add(
+        heroIDs[i],
+      );
     }
     final filter = KeywordFilter.fromSettings(appdata.settings);
     comics = widget.comics
@@ -76,7 +81,7 @@ class _SliverGridComicsState extends State<SliverGridComics> {
     heroIDs = [
       for (final comic in comics)
         switch (previousIDs[(comic.sourceKey, comic.id)]) {
-          final ids? when ids.isNotEmpty => ids.removeAt(0),
+          final ids? when ids.isNotEmpty => ids.removeFirst(),
           _ => _nextHeroID++,
         },
     ];
@@ -84,8 +89,15 @@ class _SliverGridComicsState extends State<SliverGridComics> {
 
   @override
   void didUpdateWidget(covariant SliverGridComics oldWidget) {
-    _refreshComics();
     super.didUpdateWidget(oldWidget);
+    // Equality on Comic only compares identity, so replacement metadata must
+    // refresh too. Keep a snapshot to detect callers mutating the input list.
+    if (widget.comics.length != _inputSnapshot.length ||
+        Iterable<int>.generate(widget.comics.length).any(
+          (index) => !identical(widget.comics[index], _inputSnapshot[index]),
+        )) {
+      _refreshComics();
+    }
   }
 
   @override
