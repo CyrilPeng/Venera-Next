@@ -41,7 +41,7 @@ FavoriteItem _comic(String id) => FavoriteItem(
   tags: const [],
 );
 
-class _History extends Fake implements HistoryManager {
+class _History extends Fake with ChangeNotifier implements HistoryManager {
   @override
   History? find(String id, ComicType type) => null;
 }

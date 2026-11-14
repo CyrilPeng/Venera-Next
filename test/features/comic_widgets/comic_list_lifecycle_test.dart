@@ -11,7 +11,73 @@ import 'package:venera_next/foundation/res.dart';
 Comic _comic(String title, {List<String>? tags}) =>
     Comic(title, '', title, null, tags, '', 'webdav_library', null, null);
 
+class _ObservedComic extends Comic {
+  _ObservedComic()
+    : super(
+        'Offscreen',
+        '',
+        'observed',
+        null,
+        const [],
+        '',
+        'webdav_library',
+        null,
+        null,
+      );
+
+  int reads = 0;
+
+  @override
+  String get title {
+    reads++;
+    return super.title;
+  }
+}
+
 void main() {
+  testWidgets(
+    'layout rebuilds reuse filtering while changed input metadata is refreshed',
+    (tester) async {
+      appdata.settings['blockedWords'] = <String>['Hidden'];
+      final observed = _ObservedComic();
+      final comics = <Comic>[
+        for (var i = 0; i < 100; i++) _comic('Visible $i'),
+        observed,
+      ];
+      Widget build() => MaterialApp(
+        home: Scaffold(
+          body: CustomScrollView(slivers: [SliverGridComics(comics: comics)]),
+        ),
+      );
+      await tester.pumpWidget(build());
+      final reads = observed.reads;
+      expect(reads, greaterThan(0));
+      await tester.pumpWidget(build());
+      await tester.pump();
+      expect(observed.reads, reads);
+      comics[comics.length - 1] = Comic(
+        'Hidden',
+        '',
+        observed.id,
+        null,
+        const [],
+        '',
+        observed.sourceKey,
+        null,
+        null,
+      );
+      await tester.pumpWidget(build());
+      await tester.pump();
+      expect(find.text('Hidden by keyword filters: 1 comics'), findsOneWidget);
+      comics.removeLast();
+      await tester.pumpWidget(build());
+      await tester.pump();
+      expect(find.text('Hidden by keyword filters: 1 comics'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   testWidgets(
     'duplicate source entries retain distinct hero identities after refresh',
     (tester) async {
