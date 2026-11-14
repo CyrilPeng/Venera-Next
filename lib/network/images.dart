@@ -271,10 +271,10 @@ abstract class ImageDownloader {
         if (expectedBytes == -1) {
           expectedBytes = null;
         }
-        var buffer = <int>[];
+        final buffer = BytesBuilder();
         await for (var data in stream) {
           scope.check();
-          buffer.addAll(data);
+          buffer.add(data);
           if (expectedBytes != null) {
             yield ImageDownloadProgress(
               currentBytes: buffer.length,
@@ -283,21 +283,25 @@ abstract class ImageDownloader {
           }
         }
 
+        var bytes = buffer.takeBytes();
         if (configs['onResponse'] is JSInvokable) {
-          buffer = await _applyImageResponseCallback(
+          final response = await _applyImageResponseCallback(
             configs['onResponse'] as JSInvokable,
-            buffer,
+            bytes,
             owner,
           );
+          bytes = response is Uint8List
+              ? response
+              : Uint8List.fromList(response);
         }
 
         scope.check();
-        await CacheManager().writeCache(cacheKey, buffer);
+        await CacheManager().writeCache(cacheKey, bytes);
         scope.check();
         yield ImageDownloadProgress(
-          currentBytes: buffer.length,
-          totalBytes: buffer.length,
-          imageBytes: Uint8List.fromList(buffer),
+          currentBytes: bytes.length,
+          totalBytes: bytes.length,
+          imageBytes: bytes,
         );
       })) {
         yield event;
@@ -418,30 +422,26 @@ abstract class ImageDownloader {
             if (expectedBytes == -1) {
               expectedBytes = null;
             }
-            var buffer = <int>[];
+            final buffer = BytesBuilder();
             await for (var data in stream) {
               scope?.check();
-              buffer.addAll(data);
+              buffer.add(data);
               yield ImageDownloadProgress(
                 currentBytes: buffer.length,
                 totalBytes: expectedBytes,
               );
             }
 
+            var data = buffer.takeBytes();
             if (configs['onResponse'] is JSInvokable) {
-              buffer = await _applyImageResponseCallback(
+              final response = await _applyImageResponseCallback(
                 configs['onResponse'] as JSInvokable,
-                buffer,
+                data,
                 owner,
               );
-            }
-
-            Uint8List data;
-            if (buffer is Uint8List) {
-              data = buffer;
-            } else {
-              data = Uint8List.fromList(buffer);
-              buffer.clear();
+              data = response is Uint8List
+                  ? response
+                  : Uint8List.fromList(response);
             }
 
             if (configs['modifyImage'] != null) {

@@ -56,17 +56,20 @@ void main() {
   });
 
   test('image onResponse callback is freed after valid result', () async {
+    final input = Uint8List.fromList([1, 2, 3]);
     final callback = _FakeJSInvokable((args) {
       expect(args.single, isA<Uint8List>());
+      (args.single as Uint8List)[0] = 9;
       return <int>[3, 2, 1];
     });
 
     final result = await ImageDownloader.debugApplyImageResponseCallback(
       callback,
-      <int>[1, 2, 3],
+      input,
     );
 
     expect(result, <int>[3, 2, 1]);
+    expect(input, [1, 2, 3]);
     expect(callback.destroyCount, 1);
   });
 

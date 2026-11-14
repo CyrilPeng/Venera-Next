@@ -46,7 +46,11 @@ class WaterfallController {
   bool _current(RequestScope scope) =>
       !_disposed && identical(scope, _scope) && !scope.isCancelled;
 
-  Future<WaterfallChapterSegment> _load(int chapter, RequestScope scope) async {
+  Future<WaterfallChapterSegment> _load(
+    int chapter,
+    RequestScope scope, {
+    Future<void> Function(RequestScope)? beforeReturn,
+  }) async {
     final request = RequestScope(parent: scope);
     final task = _imageWork.start(onCancel: request.cancel);
     if (task == null) {
@@ -91,6 +95,8 @@ class WaterfallController {
     try {
       final id = chapterId(chapter);
       final images = await request.run(runOriginal);
+      if (beforeReturn != null) await beforeReturn(request);
+      request.check();
       return WaterfallChapterSegment(
         chapter: chapter,
         eid: id,
@@ -152,6 +158,7 @@ class WaterfallController {
   Future<int> ensureBefore({
     required int current,
     required int threshold,
+    Future<void> Function(RequestScope)? beforeInsert,
   }) async {
     if (_disposed ||
         _navigating ||
@@ -162,7 +169,11 @@ class WaterfallController {
     final scope = _scope;
     _loadingBefore = true;
     try {
-      final segment = await _load(_flow.firstChapter! - 1, scope);
+      final segment = await _load(
+        _flow.firstChapter! - 1,
+        scope,
+        beforeReturn: beforeInsert,
+      );
       if (!_current(scope)) return 0;
       return _flow.addBefore(segment);
     } on RequestCancelled {

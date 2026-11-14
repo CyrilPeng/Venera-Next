@@ -247,20 +247,81 @@ class ContinuousModeState extends State<ReaderContinuousView>
     final insertedCount = await waterfall.ensureBefore(
       current: current,
       threshold: math.max(preCacheCount, 1),
+      beforeInsert: _waitForScrollIdle,
     );
     if (!isCurrent() || insertedCount == 0) {
       return;
     }
+    // The fetch may finish after the user has moved to a different page.
+    // Item positions still describe the old list until its next layout.
+    ItemPosition? anchor;
+    for (final item in itemPositionsListener.itemPositions.value) {
+      if (item.index > 0 &&
+          item.itemTrailingEdge > 0 &&
+          item.itemLeadingEdge < 1 &&
+          (anchor == null || item.index < anchor.index)) {
+        anchor = item;
+      }
+    }
+    final anchorIndex = anchor?.index ?? current;
+    final anchorAlignment = anchor?.itemLeadingEdge ?? 0;
+    _scrollController?.resetLayoutAnchor();
     _isRestoringPrependedSegmentPosition = true;
     setState(() {});
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!isCurrent()) return;
-      itemScrollController.jumpTo(index: current + insertedCount);
+      itemScrollController.jumpTo(
+        index: anchorIndex + insertedCount,
+        alignment: anchorAlignment,
+      );
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (isCurrent()) {
           _isRestoringPrependedSegmentPosition = false;
         }
       });
+    });
+  }
+
+  Future<void> _waitForScrollIdle(RequestScope scope) async {
+    while (mounted && _scrollController?.hasClients == true) {
+      scope.check();
+      final scrolling = _scrollController!.position.isScrollingNotifier;
+      if (!scrolling.value) return;
+      final idle = Completer<void>();
+      void changed() {
+        if (!scrolling.value && !idle.isCompleted) idle.complete();
+      }
+
+      scrolling.addListener(changed);
+      try {
+        await scope.run(() => idle.future);
+      } finally {
+        scrolling.removeListener(changed);
+      }
+      // Drag-to-ballistic transitions can publish a transient idle state.
+    }
+    scope.check();
+  }
+
+  bool _isDecodedFlowImage(int index) {
+    if (_isRestoringPrependedSegmentPosition ||
+        _isNavigatingWaterfallLocation) {
+      return false;
+    }
+    final ref = _imageRefAt(index);
+    if (ref == null) return false;
+    final pending = navigation.state.pendingPage;
+    if (pending != null &&
+        (ref.position.chapter != currentChapter ||
+            ref.position.imageNumber != pending)) {
+      return false;
+    }
+    return imageStates.whereType<ComicImageState>().any((state) {
+      final image = (state.widget.image as ReaderDisplayImageProvider).image;
+      return state.readyForAutoReading &&
+          image.eid == ref.position.chapterId &&
+          image.page == ref.position.imageNumber &&
+          image.imageKey == ref.imageKey;
     });
   }
 
@@ -340,6 +401,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
     if (index == null) return;
     var imageRef = _imageRefAt(index);
     if (imageRef == null) return;
+    _scrollController?.resetLayoutAnchor();
     _isNavigatingWaterfallLocation = true;
     setState(() {
       _setReaderLocation(imageRef);
@@ -363,6 +425,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
   void initState() {
     _scrollController = ContinuousScrollController(
       itemPositionsListener.itemPositions,
+      canAnchor: _isDecodedFlowImage,
       onPositionChanged: () {
         _smoothPosition = null;
         _smoothGeneration++;
@@ -402,6 +465,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
       _imageDownloads = ReaderImageDownloads(work: widget.imageWork);
       unawaited(_waterfall.dispose());
       _waterfall = _createWaterfall();
+      _scrollController?.resetLayoutAnchor();
       _isRestoringPrependedSegmentPosition = false;
       _isNavigatingWaterfallLocation = false;
       _releaseWaterfallLoading?.call();
@@ -556,8 +620,11 @@ class ContinuousModeState extends State<ReaderContinuousView>
           _isNavigatingWaterfallLocation) {
         return;
       }
-      _setReaderLocation(imageRef);
-      widget.onUpdate();
+      if (imageRef.position.chapter != currentChapter ||
+          imageRef.position.imageNumber != currentPage) {
+        _setReaderLocation(imageRef);
+        widget.onUpdate();
+      }
     } else if (page != currentPage) {
       navigation.reportPage(page);
       widget.onUpdate();
@@ -664,6 +731,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
               finalImage.position.chapter != currentChapter) {
             // Short error placeholders can expose the final chapter before
             // scrolling moves the active location into that chapter.
+            _scrollController?.resetLayoutAnchor();
             itemScrollController.jumpTo(index: lastIndex);
             _setReaderLocation(finalImage);
             return AutoReadingStep.advanced;
@@ -929,11 +997,14 @@ class ContinuousModeState extends State<ReaderContinuousView>
       addSemanticIndexes: false,
       scrollDirection: data.vertical ? Axis.vertical : Axis.horizontal,
       reverse: data.reverse,
-      physics: isCTRLPressed || _isMouseScrolling || disableScroll
-          ? const NeverScrollableScrollPhysics()
-          : isZoomedIn
-          ? const ClampingScrollPhysics()
-          : const BouncingScrollPhysics(),
+      physics: ContinuousLayoutPhysics(
+        controller: _scrollController!,
+        parent: isCTRLPressed || _isMouseScrolling || disableScroll
+            ? const NeverScrollableScrollPhysics()
+            : isZoomedIn
+            ? const ClampingScrollPhysics()
+            : const BouncingScrollPhysics(),
+      ),
       itemBuilder: (context, index) {
         return ContinuousScrollAnchor(
           controller: _scrollController!,
@@ -1203,6 +1274,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
   @override
   Future<void> animateToPage(int page) async {
     if (_disposed || !mounted) return;
+    _scrollController?.resetLayoutAnchor();
     final controller = navigation;
     var index = _waterfallIndexOfChapterPage(currentChapter, page) ?? page;
     await itemScrollController.scrollTo(
@@ -1279,6 +1351,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
   @override
   void toPage(int page) {
     if (_disposed || !mounted) return;
+    _scrollController?.resetLayoutAnchor();
     var index = _waterfallIndexOfChapterPage(currentChapter, page) ?? page;
     itemScrollController.jumpTo(index: index);
     _futurePosition = null;

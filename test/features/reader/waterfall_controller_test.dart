@@ -45,6 +45,36 @@ void main() {
   });
   tearDown(() => controller.dispose());
 
+  test(
+    'exit preparation cancels an owned prepend wait before changing the flow',
+    () async {
+      final entered = Completer<void>();
+      var listenerActive = false;
+      final prepend = controller.ensureBefore(
+        current: 1,
+        threshold: 1,
+        beforeInsert: (scope) async {
+          listenerActive = true;
+          entered.complete();
+          try {
+            await scope.run(() => Completer<void>().future);
+          } finally {
+            listenerActive = false;
+          }
+        },
+      );
+      await entered.future;
+      final release = await work.prepareForExit();
+      expect(await prepend, 0);
+      expect(listenerActive, isFalse);
+      expect(controller.flow.firstChapter, 3);
+      release();
+      expect(await controller.ensureBefore(current: 1, threshold: 1), 2);
+      expect(controller.flow.firstChapter, 2);
+      expect(errors, isEmpty);
+    },
+  );
+
   for (final direction in ['after', 'before', 'navigation']) {
     test('pending $direction retains its original chapter ID', () async {
       await controller.dispose();

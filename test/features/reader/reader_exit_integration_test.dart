@@ -556,7 +556,15 @@ void main() {
         expect(appNavigation.rootNavigatorKey.currentState!.canPop(), isTrue);
         expect(fixture.history.progress.last.page, 2);
         saving.completeError(StateError('progress disk failure'));
-        await tester.pumpAndSettle();
+        // Recovery can restart native image work. Wait for the exit outcome
+        // while allowing its real I/O and codec futures to complete.
+        await pumpReaderUntil(
+          tester,
+          () => find
+              .text('Unable to close. Please try again.')
+              .evaluate()
+              .isNotEmpty,
+        );
         expect(fixture.readerKey.currentState, same(reader));
         expect(find.text('Saving...'), findsNothing);
         expect(find.text('Unable to close. Please try again.'), findsOneWidget);
@@ -564,6 +572,10 @@ void main() {
         fixture.history.onProgress = null;
         reader.setPage(3);
         await tester.tap(find.byType(BackButton));
+        await pumpReaderUntil(
+          tester,
+          () => fixture.readerKey.currentState == null,
+        );
         await tester.pumpAndSettle();
         expect(fixture.readerKey.currentState, isNull);
         expect(find.text('Library home'), findsOneWidget);

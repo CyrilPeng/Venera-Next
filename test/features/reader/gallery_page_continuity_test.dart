@@ -15,6 +15,48 @@ import 'package:venera_next/features/reader/reader_viewport.dart';
 import 'package:venera_next/foundation/image_work.dart';
 
 void main() {
+  testWidgets(
+    'unchanged gallery preloads are shared and resume after exit holds',
+    (tester) async {
+      final fixture = _Fixture('ltr', preloadCount: 1);
+      var starts = 0;
+      final detach = fixture.work.retainTasks((_) {
+        starts++;
+        return () {};
+      });
+      try {
+        await fixture.mount(tester);
+        for (var i = 0; i < 12; i++) {
+          await tester.runAsync(() => pumpEventQueue());
+          await tester.pump();
+        }
+        final before = starts;
+        for (var i = 0; i < 5; i++) {
+          fixture.gallery.cache(1);
+          await tester.pump();
+        }
+        expect(starts, before);
+        final release = fixture.work.holdForExit();
+        fixture.gallery.cache(1);
+        release();
+        await fixture.decode(tester, () => fixture.gallery.autoReadingReady);
+        for (var i = 0; i < 12; i++) {
+          await tester.runAsync(() => pumpEventQueue());
+          await tester.pump();
+        }
+        expect(starts, greaterThan(before));
+        final resumed = starts;
+        fixture.gallery.cache(1);
+        await tester.pump();
+        expect(starts, resumed);
+        expect(tester.takeException(), isNull);
+      } finally {
+        detach();
+        await fixture.dispose(tester);
+      }
+    },
+  );
+
   for (final direction in ['ltr', 'rtl', 'vertical']) {
     testWidgets(
       'interrupted $direction turn resets the retained page in place',
@@ -87,8 +129,9 @@ void main() {
 }
 
 class _Fixture {
-  _Fixture(this.direction);
+  _Fixture(this.direction, {this.preloadCount = 0});
   final String direction;
+  final int preloadCount;
   final directory = Directory.systemTemp.createTempSync('gallery-continuity-');
   final work = ImageWork();
   final viewport = ReaderViewportBinding();
@@ -156,7 +199,7 @@ class _Fixture {
       commentsAtEnd: false,
       firstChapter: true,
       lastChapter: true,
-      preloadCount: 0,
+      preloadCount: preloadCount,
       doubleTapCollect: false,
       centerLongPressZoom: true,
       pageAnimation: true,

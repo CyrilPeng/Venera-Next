@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/cache_scan.dart';
@@ -21,6 +22,29 @@ import 'package:venera_next/foundation/cache_scan.dart';
 }
 
 void main() {
+  for (final typed in [false, true]) {
+    test(
+      'queued cache writes retain their original byte snapshot: typed=$typed',
+      () async {
+        final gate = Completer<CacheScanResult>();
+        final f = fixture(scanner: (_, _) => gate.future);
+        final scanning = f.manager.start();
+        final List<int> bytes = typed
+            ? Uint8List.fromList([1, 2, 255])
+            : [1, 2, 255];
+        final writing = f.manager.writeCache('snapshot', bytes);
+        bytes[0] = 9;
+        gate.complete(const CacheScanResult(0, []));
+        await Future.wait([scanning, writing]);
+        expect(await (await f.manager.findCache('snapshot'))!.readAsBytes(), [
+          1,
+          2,
+          255,
+        ]);
+      },
+    );
+  }
+
   test('construction does not scan and start shares one scan', () async {
     var scans = 0;
     final gate = Completer<CacheScanResult>();

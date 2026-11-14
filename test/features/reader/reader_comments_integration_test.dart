@@ -41,11 +41,23 @@ void main() {
         await tester.pump();
         expect(fixture.readerKey.currentState, same(reader));
         saving.completeError(StateError('Comments exit save failed'));
-        await tester.pumpAndSettle();
+        // Recovery can restart native image work. Wait for the exit outcome
+        // while allowing its real I/O and codec futures to complete.
+        await pumpReaderUntil(
+          tester,
+          () => find
+              .text('Unable to close. Please try again.')
+              .evaluate()
+              .isNotEmpty,
+        );
         expect(fixture.readerKey.currentState, same(reader));
         expect(find.text('Unable to close. Please try again.'), findsOneWidget);
         fixture.history.onProgress = null;
         await tester.tap(exit);
+        await pumpReaderUntil(
+          tester,
+          () => fixture.readerKey.currentState == null,
+        );
         await tester.pumpAndSettle();
         expect(fixture.readerKey.currentState, isNull);
         expect(tester.takeException(), isNull);

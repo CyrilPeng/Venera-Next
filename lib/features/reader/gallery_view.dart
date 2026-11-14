@@ -59,6 +59,18 @@ class GalleryModeState extends State<ReaderGalleryView>
         AutoReadingImageViewport {
   late var _imageDownloads = ReaderImageDownloads(work: widget.imageWork);
   late var _imagePrecache = ReaderImagePrecache(work: widget.imageWork);
+  VoidCallback? _removePrecacheResumeListener;
+  Object? _precacheInputs;
+  final _precachePages = <int>{};
+
+  void _bindPrecacheResume() {
+    _removePrecacheResumeListener?.call();
+    _removePrecacheResumeListener = widget.imageWork.addResumeListener(() {
+      _precacheInputs = null;
+      _precachePages.clear();
+      if (mounted && !_disposed) cache(page);
+    });
+  }
 
   late PageController controller;
 
@@ -97,6 +109,7 @@ class GalleryModeState extends State<ReaderGalleryView>
   @override
   void initState() {
     controller = PageController(initialPage: page);
+    _bindPrecacheResume();
     widget.onViewportChanged(this, true);
     Future.microtask(() {
       if (mounted) widget.onReady();
@@ -112,6 +125,7 @@ class GalleryModeState extends State<ReaderGalleryView>
       _singleImageStates.clear();
     }
     if (!identical(oldWidget.imageWork, widget.imageWork)) {
+      _bindPrecacheResume();
       unawaited(_imageDownloads.dispose());
       unawaited(_imagePrecache.dispose());
       _imageDownloads = ReaderImageDownloads(work: widget.imageWork);
@@ -126,6 +140,7 @@ class GalleryModeState extends State<ReaderGalleryView>
   @override
   void dispose() {
     _disposed = true;
+    _removePrecacheResumeListener?.call();
     _longPressController = null;
     widget.onViewportChanged(this, false);
     keyRepeatTimer?.cancel();
@@ -206,6 +221,31 @@ class GalleryModeState extends State<ReaderGalleryView>
   }
 
   void cache(int startPage) {
+    if (_disposed || !mounted) return;
+    final configuration = createLocalImageConfiguration(context);
+    final inputs = (
+      data.content,
+      widget.imageWork,
+      navigation,
+      data.sourceKey,
+      data.comicId,
+      data.chapterId,
+      page,
+      preCacheCount,
+      totalPages,
+      data.layout.imagesPerPage,
+      data.layout.singleImageOnFirstPage,
+      data.vertical,
+      data.reverse,
+      data.decodePixelBudget,
+      widget.readerSize(),
+      configuration,
+    );
+    if (_precacheInputs != inputs) {
+      _precacheInputs = inputs;
+      _precachePages.clear();
+    }
+    if (!_precachePages.add(startPage)) return;
     for (int i = startPage - 1; i <= startPage + preCacheCount; i++) {
       if (i == startPage ||
           i <= 0 ||
@@ -213,20 +253,21 @@ class GalleryModeState extends State<ReaderGalleryView>
           isChapterCommentsPage(i)) {
         continue;
       }
-      _cachePage(i, i == startPage + 1 || i == startPage - 1);
+      _cachePage(i, i == startPage + 1 || i == startPage - 1, configuration);
     }
   }
 
-  void _cachePage(int page, bool shouldPreCache) {
+  void _cachePage(
+    int page,
+    bool shouldPreCache,
+    ImageConfiguration configuration,
+  ) {
     if (isChapterCommentsPage(page)) return;
     var (startIndex, endIndex) = getPageImagesRange(page);
     for (int i = startIndex; i < endIndex; i++) {
       final key = data.images[i];
       if (shouldPreCache) {
-        _imagePrecache.preload(
-          _imageProvider(key),
-          createLocalImageConfiguration(context),
-        );
+        _imagePrecache.preload(_imageProvider(key), configuration);
       } else if (!key.startsWith('file://')) {
         _imageDownloads.preload(
           key,
@@ -378,6 +419,8 @@ class GalleryModeState extends State<ReaderGalleryView>
             errorBuilder: (_, error, stack, retry) => NetworkError(
               message: error.toString(),
               retry: () {
+                _precachePages.remove(index);
+                cache(index);
                 retry();
                 reload?.call();
               },
