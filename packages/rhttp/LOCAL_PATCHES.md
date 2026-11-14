@@ -150,6 +150,32 @@ certificate-trust security updates remain unchanged. The locked native
 callback-drain tests and complete RustSec scan pass with this update; HTTP
 settings, streaming cancellation and generated bridge APIs are unchanged.
 
+## QUIC transport security updates (2026-11-13)
+
+The complete-lockfile CI audit reported two denial-of-service advisories in
+`quinn-proto` 0.11.18 and one in `quinn-udp` 0.5.14. The precise registry updates
+select the first patched releases:
+
+| Crate | Previous | Updated | RustSec advisories |
+|---|---|---|---|
+| quinn-proto | 0.11.18 | 0.11.19 | [RUSTSEC-2026-0524](https://rustsec.org/advisories/RUSTSEC-2026-0524) (Retry token panic/allocation), [RUSTSEC-2026-0523](https://rustsec.org/advisories/RUSTSEC-2026-0523) (bidirectional stream limit) |
+| quinn-udp | 0.5.14 | 0.5.16 | [RUSTSEC-2026-0538](https://rustsec.org/advisories/RUSTSEC-2026-0538) (truncated datagram receive loop on the affected Apple/BSD receive paths) |
+
+Both versions come from the existing crates.io source and retain the Quinn
+project's MIT/Apache-2.0 licensing. `quinn-proto` changes its version and checksum.
+The patched `quinn-udp` uses the already selected `windows-sys` 0.52.0 dependency
+graph, so Cargo also removes its unused `windows-sys` 0.60.2, `windows-targets`
+0.53.5 and eight 0.53.1 architecture packages. This dependency edge is part of the
+upstream patch; Windows compilation and ownership regressions validate it.
+
+The build continues to use Rust 1.92.0, Flutter Rust Bridge 2.11.1 and the libc
+0.2.189 iOS compatibility pin. Validation uses the locked callback-drain tests,
+the complete cargo-audit 0.22.2 scan and fresh native libraries in the existing
+Linux, Windows, Android, macOS, iOS and HarmonyOS build checks. The original
+failing audit remains in the test-reorganization evidence. The allowed
+`pin-utils` unmaintained warning is tracked separately from vulnerabilities and
+unsoundness failures; the workflow retains its existing scan policy.
+
 ## Building the patched source
 
 Windows/Linux CMake, Android Gradle and iOS/macOS pod scripts all invoke the
