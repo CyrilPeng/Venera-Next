@@ -55,8 +55,10 @@ extension WebviewExtension on InAppWebViewController {
 
   Future<String?> getUA() async {
     var res = await evaluateJavascript(source: "navigator.userAgent");
-    if (res is String) {
-      if (res[0] == "'" || res[0] == "\"") {
+    if (res is String && res.isNotEmpty) {
+      if (res.length >= 2 &&
+          (res[0] == "'" || res[0] == "\"") &&
+          res[res.length - 1] == res[0]) {
         res = res.substring(1, res.length - 1);
       }
     }

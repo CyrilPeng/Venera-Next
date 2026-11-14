@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io' as io;
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/routing/app_navigation.dart';
@@ -11,10 +14,20 @@ import 'package:venera_next/network/cookie_jar.dart';
 import 'package:venera_next/routing/webview.dart';
 import 'package:venera_next/foundation/extensions.dart';
 
+import 'cloudflare_verification.dart';
+
 void passCloudflare(CloudflareException e, void Function() onFinished) async {
   final rootContext = appNavigation.rootContext;
-  var url = e.url;
-  var uri = Uri.parse(url);
+  final url = e.url;
+  final uri = Uri.parse(url);
+  CloudflareVerification? verification;
+  var finished = false;
+  void finish() {
+    if (finished) return;
+    finished = true;
+    verification?.dispose();
+    onFinished();
+  }
 
   final CookieJarSql cookieJar;
   try {
@@ -22,34 +35,29 @@ void passCloudflare(CloudflareException e, void Function() onFinished) async {
   } catch (error, stack) {
     Log.error('Cloudflare', error, stack);
     if (rootContext.mounted) rootContext.showMessage(message: error.toString());
-    onFinished();
+    finish();
     return;
   }
   if (!rootContext.mounted) {
-    onFinished();
+    finish();
     return;
   }
 
-  Future<bool> persistCookies(List<io.Cookie> cookies) async {
-    try {
-      await cookieJar.saveFromResponseAsync(uri, cookies);
-      return true;
-    } catch (error, stack) {
-      Log.error('Cloudflare', error, stack);
-      if (rootContext.mounted) {
-        rootContext.showMessage(message: error.toString());
-      }
-      return false;
+  void reportError(Object error, StackTrace stack, {bool present = true}) {
+    Log.error('Cloudflare', error, stack);
+    if (present && !finished && rootContext.mounted) {
+      rootContext.showMessage(message: error.toString());
     }
   }
 
-  Future<bool> saveCookies(Map<String, String> cookies) {
+  Future<void> saveCookies(Map<String, String> cookies) {
     var domain = uri.host;
     var splits = domain.split('.');
     if (splits.length > 1) {
       domain = ".${splits[splits.length - 2]}.${splits[splits.length - 1]}";
     }
-    return persistCookies(
+    return cookieJar.saveFromResponseAsync(
+      uri,
       List<io.Cookie>.generate(cookies.length, (index) {
         var cookie = io.Cookie(
           cookies.keys.elementAt(index),
@@ -63,106 +71,156 @@ void passCloudflare(CloudflareException e, void Function() onFinished) async {
 
   // Linux uses the separate desktop WebView host and its cookie adapter.
   if (App.isLinux) {
-    var webview = DesktopWebview(
-      initialUrl: url,
-      onTitleChange: (title, controller) async {
-        var head =
-            await controller.evaluateJavascript("document.head.innerHTML") ??
-            "";
-        var body =
-            await controller.evaluateJavascript("document.body.innerHTML") ??
-            "";
-        Log.info("Cloudflare", "Checking head: $head");
-        var isChallenging =
-            head.contains('#challenge-success-text') ||
-            head.contains("#challenge-error-text") ||
-            head.contains("#challenge-form") ||
-            body.contains("challenge-platform") ||
-            body.contains("window._cf_chl_opt");
-        if (!isChallenging) {
-          Log.info(
-            "Cloudflare",
-            "Cloudflare is passed due to there is no challenge css",
-          );
-          var ua = controller.userAgent;
-          if (ua != null) {
-            appdata.implicitData['ua'] = ua;
-            appdata.writeImplicitData();
+    DesktopWebview? activeController;
+    bool current() => !finished && rootContext.mounted;
+    verification = CloudflareVerification(
+      isCurrent: current,
+      readPage: () async {
+        final controller = activeController!;
+        Future<Object?> read(String source) async {
+          final value = await controller.evaluateJavascript(source);
+          if (value == null) return null;
+          // The desktop host returns JSON; older adapters returned plain text.
+          try {
+            return jsonDecode(value);
+          } on FormatException {
+            return value;
           }
-          var cookiesMap = await controller.getCookies(url);
-          if (cookiesMap['cf_clearance'] == null) {
-            return;
-          }
-          if (!await saveCookies(cookiesMap)) return;
-          controller.close();
-          onFinished();
         }
-      },
-      onClose: onFinished,
-    );
-    webview.open();
-  } else {
-    bool success = false;
-    void check(InAppWebViewController controller) async {
-      var head =
-          await controller.evaluateJavascript(source: "document.head.innerHTML")
-              as String;
-      var body =
-          await controller.evaluateJavascript(source: "document.body.innerHTML")
-              as String;
-      Log.info("Cloudflare", "Checking head: $head");
-      var isChallenging =
-          head.contains('#challenge-success-text') ||
-          head.contains("#challenge-error-text") ||
-          head.contains("#challenge-form") ||
-          body.contains("challenge-platform") ||
-          body.contains("window._cf_chl_opt");
-      if (!isChallenging) {
-        Log.info(
-          "Cloudflare",
-          "Cloudflare is passed due to there is no challenge css",
+
+        final readyState = await read('document.readyState');
+        final head = await read(
+          'document.head ? document.head.innerHTML : null',
         );
-        var ua = await controller.getUA();
-        if (ua != null) {
+        final body = await read(
+          'document.body ? document.body.innerHTML : null',
+        );
+        return cloudflarePageState(
+          readyState: readyState,
+          head: head,
+          body: body,
+        );
+      },
+      accept: () async {
+        final controller = activeController!;
+        final cookies = await controller.getCookies(url);
+        if (!current() || cookies['cf_clearance']?.isNotEmpty != true) {
+          return false;
+        }
+        await saveCookies(cookies);
+        if (!current()) return false;
+        final ua = controller.userAgent;
+        if (ua != null && ua.isNotEmpty) {
           appdata.implicitData['ua'] = ua;
-          appdata.writeImplicitData();
+          await appdata.writeImplicitData();
         }
-        var cookies = await controller.getCookies(url) ?? [];
-        if (cookies.firstWhereOrNull(
-              (element) => element.name == 'cf_clearance',
-            ) ==
-            null) {
-          return;
-        }
-        if (!await persistCookies(cookies)) return;
-        if (!success) {
-          appNavigation.rootPop();
-          success = true;
-        }
+        return current();
+      },
+      onPassed: () {
+        activeController!.close();
+        finish();
+      },
+      onError: (error, stack) => reportError(error, stack, present: current()),
+    );
+    final webview = DesktopWebview(
+      initialUrl: url,
+      onTitleChange: (title, controller) {
+        activeController = controller;
+        unawaited(verification!.check());
+      },
+      onClose: finish,
+    );
+    try {
+      await webview.open();
+    } catch (error, stack) {
+      reportError(error, stack);
+      finish();
+    }
+  } else {
+    BuildContext? pageContext;
+    ModalRoute<dynamic>? pageRoute;
+    NavigatorState? navigator;
+    InAppWebViewController? activeController;
+    bool current() =>
+        !finished &&
+        pageContext?.mounted == true &&
+        pageRoute?.isCurrent == true &&
+        navigator?.mounted == true;
+    void check(InAppWebViewController controller) {
+      if (!current()) return;
+      if (!identical(activeController, controller)) {
+        verification?.dispose();
+        activeController = controller;
+        bool ownsController() =>
+            current() && identical(activeController, controller);
+        verification = CloudflareVerification(
+          isCurrent: ownsController,
+          readPage: () async {
+            final readyState = await controller.evaluateJavascript(
+              source: 'document.readyState',
+            );
+            final head = await controller.evaluateJavascript(
+              source: 'document.head ? document.head.innerHTML : null',
+            );
+            final body = await controller.evaluateJavascript(
+              source: 'document.body ? document.body.innerHTML : null',
+            );
+            return cloudflarePageState(
+              readyState: readyState,
+              head: head,
+              body: body,
+            );
+          },
+          accept: () async {
+            final cookies = await controller.getCookies(url) ?? [];
+            if (!ownsController() ||
+                cookies.firstWhereOrNull(
+                      (cookie) =>
+                          cookie.name == 'cf_clearance' &&
+                          cookie.value.isNotEmpty,
+                    ) ==
+                    null) {
+              return false;
+            }
+            final ua = await controller.getUA();
+            if (!ownsController()) return false;
+            await cookieJar.saveFromResponseAsync(uri, cookies);
+            if (!ownsController()) return false;
+            if (ua != null && ua.isNotEmpty) {
+              appdata.implicitData['ua'] = ua;
+              await appdata.writeImplicitData();
+            }
+            return ownsController();
+          },
+          onPassed: () => navigator!.pop(),
+          onError: (error, stack) =>
+              reportError(error, stack, present: ownsController()),
+        );
       }
+      unawaited(verification!.check());
     }
 
-    await rootContext.to(
-      () => AppWebview(
-        initialUrl: url,
-        singlePage: true,
-        onTitleChange: (title, controller) async {
-          check(controller);
-        },
-        onLoadStop: (controller) async {
-          check(controller);
-        },
-        onStarted: (controller) async {
-          var ua = await controller.getUA();
-          if (ua != null) {
-            appdata.implicitData['ua'] = ua;
-            appdata.writeImplicitData();
-          }
-          var cookies = await controller.getCookies(url) ?? [];
-          await persistCookies(cookies);
-        },
-      ),
-    );
-    onFinished();
+    try {
+      await rootContext.to(
+        () => Builder(
+          builder: (context) {
+            pageContext = context;
+            pageRoute = ModalRoute.of(context);
+            navigator = Navigator.of(context);
+            return AppWebview(
+              initialUrl: url,
+              singlePage: true,
+              onTitleChange: (title, controller) => check(controller),
+              onLoadStop: check,
+              onStarted: check,
+            );
+          },
+        ),
+      );
+    } catch (error, stack) {
+      reportError(error, stack);
+    } finally {
+      finish();
+    }
   }
 }
