@@ -95,6 +95,14 @@ class _ReaderBrightnessSettingState
 
   void _enabled(bool value) {
     if (!acceptsSettingsChanges) return;
+    if (!hasSettingsSaveError &&
+        (_preview.enabled ??
+                _fields.read(
+                  _field(ReaderPreferences.readerBrightnessEnabled),
+                )) ==
+            value) {
+      return;
+    }
     _save(
       ReaderPreferences.readerBrightnessEnabled,
       value,
@@ -104,6 +112,14 @@ class _ReaderBrightnessSettingState
 
   void _brightness(int value) {
     if (!acceptsSettingsChanges) return;
+    if (!hasSettingsSaveError &&
+        (_preview.brightness ??
+                _fields.read<num>(
+                  _field(ReaderPreferences.readerBrightness),
+                )) ==
+            value) {
+      return;
+    }
     _save<num>(
       ReaderPreferences.readerBrightness,
       value,
@@ -119,6 +135,13 @@ class _ReaderBrightnessSettingState
     final brightness =
         _preview.brightness ??
         _fields.read<num>(_field(ReaderPreferences.readerBrightness))!;
+    final status = SizedBox(
+      height: 48,
+      child: Align(
+        alignment: AlignmentDirectional.centerEnd,
+        child: settingsSaveStatus,
+      ),
+    );
     return protectSettings(
       widget.panel
           ? ReaderBrightnessPanel(
@@ -126,7 +149,7 @@ class _ReaderBrightnessSettingState
               brightness: brightness,
               onEnabledChanged: _enabled,
               onBrightnessChanged: _brightness,
-              status: settingsSaveStatus,
+              status: status,
             )
           : Column(
               mainAxisSize: MainAxisSize.min,
@@ -137,7 +160,7 @@ class _ReaderBrightnessSettingState
                   onEnabledChanged: _enabled,
                   onBrightnessChanged: _brightness,
                 ),
-                settingsSaveStatus,
+                status,
               ],
             ),
     );

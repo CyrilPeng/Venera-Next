@@ -164,47 +164,64 @@ void main() {
     },
   );
 
-  testWidgets(
-    'rapid dimming previews immediately and persists every accepted change without drag end',
-    (tester) async {
-      final root = _prepare();
-      final preview = ReaderBrightnessPreview();
-      var callbacks = 0;
-      await tester.pumpWidget(
-        _host(
-          ReaderBrightnessSetting(
-            comicId: 'comic',
-            sourceKey: 'local',
-            preview: preview,
-            onChanged: (_) => callbacks++,
+  for (final panel in [false, true]) {
+    testWidgets(
+      'rapid dimming keeps layout stable and persists without drag end: panel=$panel',
+      (tester) async {
+        final root = _prepare();
+        final preview = ReaderBrightnessPreview();
+        var callbacks = 0;
+        await tester.pumpWidget(
+          _host(
+            ReaderBrightnessSetting(
+              panel: panel,
+              comicId: 'comic',
+              sourceKey: 'local',
+              preview: preview,
+              onChanged: (_) => callbacks++,
+            ),
           ),
-        ),
-      );
-      final release = Completer<void>();
-      final exclusive = AppDataOperations.instance.run(() => release.future);
-      final change = tester
-          .widget<ReaderBrightnessControl>(find.byType(ReaderBrightnessControl))
-          .onBrightnessChanged;
-      change(20);
-      change(35);
-      change(75);
-      await tester.pump();
-      expect(preview.brightness, 75);
-      expect(tester.widget<Slider>(find.byType(Slider)).value, 75);
-      expect(appdata.settings['readerBrightness'], 50);
-      expect(callbacks, 0);
-      release.complete();
-      await _flush(tester, Future.wait([exclusive, appdata.saveData(false)]));
-      expect(preview.brightness, isNull);
-      expect(callbacks, 1);
-      final saved = jsonDecode(
-        File('${root.path}/appdata.json').readAsStringSync(),
-      );
-      expect(saved['settings']['readerBrightness'], 75);
-      await tester.pumpWidget(const SizedBox.shrink());
-      preview.dispose();
-    },
-  );
+        );
+        final sliderBounds = tester.getRect(find.byType(Slider));
+        final formBounds = tester.getRect(find.byType(ReaderBrightnessSetting));
+        final release = Completer<void>();
+        final exclusive = AppDataOperations.instance.run(() => release.future);
+        final change = tester
+            .widget<ReaderBrightnessControl>(
+              find.byType(ReaderBrightnessControl),
+            )
+            .onBrightnessChanged;
+        change(20);
+        change(35);
+        change(75);
+        await tester.pump();
+        expect(preview.brightness, 75);
+        expect(tester.widget<Slider>(find.byType(Slider)).value, 75);
+        expect(appdata.settings['readerBrightness'], 50);
+        expect(callbacks, 0);
+        expect(tester.getRect(find.byType(Slider)), sliderBounds);
+        expect(
+          tester.getRect(find.byType(ReaderBrightnessSetting)),
+          formBounds,
+        );
+        release.complete();
+        await _flush(tester, Future.wait([exclusive, appdata.saveData(false)]));
+        expect(preview.brightness, isNull);
+        expect(callbacks, 1);
+        expect(tester.getRect(find.byType(Slider)), sliderBounds);
+        expect(
+          tester.getRect(find.byType(ReaderBrightnessSetting)),
+          formBounds,
+        );
+        final saved = jsonDecode(
+          File('${root.path}/appdata.json').readAsStringSync(),
+        );
+        expect(saved['settings']['readerBrightness'], 75);
+        await tester.pumpWidget(const SizedBox.shrink());
+        preview.dispose();
+      },
+    );
+  }
 
   testWidgets(
     'detached brightness form retains preview and the reader owns its queued assignment',

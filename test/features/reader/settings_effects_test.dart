@@ -114,27 +114,29 @@ void main() {
     },
   );
 
-  test(
-    'every registered and unknown setting refreshes view inputs exactly once',
-    () {
-      for (final key in [
-        ...ReaderPreferences.all.map((preference) => preference.key),
-        'futureReaderOption',
-        'readerBrightnessFutureOption',
-        'eInkRefreshFutureOption',
-      ]) {
-        final effects = readerSettingEffects(key).toList();
+  test('only brightness presentation avoids refreshing reader view inputs', () {
+    for (final key in [
+      ...ReaderPreferences.all.map((preference) => preference.key),
+      'futureReaderOption',
+      'readerBrightnessFutureOption',
+      'eInkRefreshFutureOption',
+    ]) {
+      final effects = readerSettingEffects(key).toList();
+      if (key == ReaderPreferences.readerBrightness.key ||
+          key == ReaderPreferences.readerBrightnessEnabled.key) {
+        expect(effects, [ReaderSettingEffect.rebuildShell], reason: key);
+      } else {
         expect(effects.last, ReaderSettingEffect.rebuildReader, reason: key);
-        expect(effects.toSet().length, effects.length, reason: key);
-        if (effects.contains(ReaderSettingEffect.updateSystemUi)) {
-          expect(
-            effects.indexOf(ReaderSettingEffect.updateSystemUi),
-            lessThan(effects.indexOf(ReaderSettingEffect.rebuildShell)),
-          );
-        }
       }
-    },
-  );
+      expect(effects.toSet().length, effects.length, reason: key);
+      if (effects.contains(ReaderSettingEffect.updateSystemUi)) {
+        expect(
+          effects.indexOf(ReaderSettingEffect.updateSystemUi),
+          lessThan(effects.indexOf(ReaderSettingEffect.rebuildShell)),
+        );
+      }
+    }
+  });
 
   test('mode change applies before gesture rebinding and layout detection', () {
     final effects = readerSettingEffects(

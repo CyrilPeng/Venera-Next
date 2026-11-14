@@ -67,6 +67,11 @@ class ReaderSettingsRequest {
 }
 
 Iterable<ReaderSettingEffect> readerSettingEffects(String key) sync* {
+  if (key == ReaderPreferences.readerBrightness.key ||
+      key == ReaderPreferences.readerBrightnessEnabled.key) {
+    yield ReaderSettingEffect.rebuildShell;
+    return;
+  }
   if (key == ReaderPreferences.readerMode.key) {
     yield ReaderSettingEffect.applyMode;
     yield ReaderSettingEffect.rebindImageGesture;
