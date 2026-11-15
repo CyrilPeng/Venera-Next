@@ -46,6 +46,7 @@ class FavoriteFolderBrowser extends StatefulWidget {
 
 class _FavoriteFolderBrowserState extends State<FavoriteFolderBrowser> {
   final _search = TextEditingController();
+  final _searchFocus = FocusNode();
   final _expanded = <String>{};
   String _query = '';
 
@@ -78,29 +79,47 @@ class _FavoriteFolderBrowserState extends State<FavoriteFolderBrowser> {
   @override
   void dispose() {
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
   Widget _buildSearch(BuildContext context) {
-    final field = TextField(
-      key: const ValueKey('favorite-folder-search'),
-      controller: _search,
-      enabled: widget.enabled,
-      decoration: InputDecoration(
-        labelText: 'Search local folders'.tl,
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: _query.isEmpty
-            ? null
-            : IconButton(
-                tooltip: 'Clear'.tl,
-                icon: const Icon(Icons.close),
-                onPressed: () => setState(() {
-                  _search.clear();
-                  _query = '';
-                }),
-              ),
+    final field = Focus(
+      onKeyEvent: (node, event) {
+        if (widget.enabled &&
+            event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          setState(() {
+            _search.clear();
+            _query = '';
+          });
+          _searchFocus.unfocus();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: TextField(
+        key: const ValueKey('favorite-folder-search'),
+        controller: _search,
+        focusNode: _searchFocus,
+        enabled: widget.enabled,
+        decoration: InputDecoration(
+          labelText: 'Search local folders'.tl,
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _query.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Clear'.tl,
+                  icon: const Icon(Icons.close),
+                  onPressed: () => setState(() {
+                    _search.clear();
+                    _query = '';
+                  }),
+                ),
+        ),
+        onChanged: (value) =>
+            setState(() => _query = value.trim().toLowerCase()),
       ),
-      onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
     );
     if (!TvNavigation.enabledOf(context)) return field;
     // EditableText ignores ordinary directional focus intents. Keep horizontal

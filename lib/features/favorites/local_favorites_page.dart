@@ -131,6 +131,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   HistoryManager? _history;
   List<FavoriteItem>? _displayedCache;
   List<FavoriteItem>? _visibleCache;
+  late var _keywordFilter = KeywordFilter.fromSettings(appdata.settings);
 
   bool get _usesReadingFilter =>
       !searchMode &&
@@ -155,11 +156,22 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     if (keyword.trim().isEmpty) {
       searchResults = comics;
     } else {
+      final variants =
+          <String>{
+                keyword,
+                if (OpenCC.hasChineseSimplified(keyword))
+                  OpenCC.simplifiedToTraditional(keyword),
+                if (OpenCC.hasChineseTraditional(keyword))
+                  OpenCC.traditionalToSimplified(keyword),
+              }
+              .map(
+                (value) =>
+                    value.split(' ').where((word) => word.isNotEmpty).toList(),
+              )
+              .toList();
       searchResults = [];
       for (var comic in comics) {
-        if (matchKeyword(keyword, comic) ||
-            matchKeywordT(keyword, comic) ||
-            matchKeywordS(keyword, comic)) {
+        if (variants.any((words) => _matchSearchWords(words, comic))) {
           searchResults.add(comic);
         }
       }
@@ -175,9 +187,8 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   List<FavoriteItem> get _visibleComics {
     if (_visibleCache case final cached?) return cached;
-    final filter = KeywordFilter.fromSettings(appdata.settings);
     return _visibleCache = _displayedComics
-        .where((comic) => isBlocked(comic, filter: filter) == null)
+        .where((comic) => isBlocked(comic, filter: _keywordFilter) == null)
         .toList();
   }
 
@@ -192,7 +203,10 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   void _onSettingsChanged() {
-    if (_canReadObservedFolder) {
+    final filter = KeywordFilter.fromSettings(appdata.settings);
+    if (_canReadObservedFolder &&
+        !listEquals(filter.rules, _keywordFilter.rules)) {
+      _keywordFilter = filter;
       setState(() {
         _invalidateDisplay();
         _reconcileSelection();
@@ -269,24 +283,25 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   List<FavoriteItem> filterComics(List<FavoriteItem> curComics) {
-    if (!_usesReadingFilter) return curComics;
+    if (curComics.isEmpty || !_usesReadingFilter) return curComics;
     final historyManager = _history;
+    final completed = historyManager?.isInitialized == true
+        ? historyManager!.completedAmong(
+            curComics.map((comic) => (comic.id, comic.type.value)),
+          )
+        : const <(String, int)>{};
     return curComics.where((comic) {
-      final history = historyManager?.isInitialized == true
-          ? historyManager!.find(comic.id, comic.type)
-          : null;
       if (readFilterSelect == "UnCompleted") {
-        return history == null || history.page != history.maxPage;
+        return !completed.contains((comic.id, comic.type.value));
       } else if (readFilterSelect == "Completed") {
-        return history != null && history.page == history.maxPage;
+        return completed.contains((comic.id, comic.type.value));
       }
       return true;
     }).toList();
   }
 
-  bool matchKeyword(String keyword, FavoriteItem comic) {
-    var list = keyword.split(" ");
-    for (var k in list) {
+  bool _matchSearchWords(Iterable<String> words, FavoriteItem comic) {
+    for (var k in words) {
       if (k.isEmpty) continue;
       if (checkKeyWordMatch(k, comic.title, false)) {
         continue;
@@ -326,24 +341,6 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     return temp.contains(keyword);
   }
 
-  // Convert keyword to traditional Chinese to match comics
-  bool matchKeywordT(String keyword, FavoriteItem comic) {
-    if (!OpenCC.hasChineseSimplified(keyword)) {
-      return false;
-    }
-    keyword = OpenCC.simplifiedToTraditional(keyword);
-    return matchKeyword(keyword, comic);
-  }
-
-  // Convert keyword to simplified Chinese to match comics
-  bool matchKeywordS(String keyword, FavoriteItem comic) {
-    if (!OpenCC.hasChineseTraditional(keyword)) {
-      return false;
-    }
-    keyword = OpenCC.traditionalToSimplified(keyword);
-    return matchKeyword(keyword, comic);
-  }
-
   @override
   void initState() {
     super.initState();
@@ -363,6 +360,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
       networkFolder = null;
     }
     comics = [];
+    _keywordFilter = KeywordFilter.fromSettings(appdata.settings);
     _observedManager.addListener(updateComics);
     appdata.settings.addListener(_onSettingsChanged);
   }
@@ -1371,11 +1369,17 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
       ),
     );
     if (multiSelectMode || searchMode) {
-      body = CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.escape): _dismissLocalMode,
+      body = Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.escape &&
+              _dismissLocalMode()) {
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
         },
-        child: Focus(autofocus: true, child: body),
+        child: body,
       );
     }
     return PopScope(

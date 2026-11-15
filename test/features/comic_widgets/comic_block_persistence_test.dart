@@ -310,7 +310,8 @@ void main() {
       final release = Completer<void>();
       final exclusive = AppDataOperations.instance.run(() => release.future);
       await tester.tap(find.widgetWithText(FilledButton, 'Block'));
-      await tester.pump();
+      // Exercise layout with the delayed slow-save feedback visible.
+      await tester.pump(const Duration(milliseconds: 500));
       final pending = find.byType(CircularProgressIndicator).evaluate().length;
       final layoutError = tester.takeException();
       final button = tester.widget<FilledButton>(

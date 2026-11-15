@@ -87,6 +87,10 @@ void main() {
       await tester.pump();
       expect(appdata.settings['showPageNumberInReader'], isTrue);
       expect(callbacks, 0);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 399));
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 1));
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(find.byType(Switch), findsOneWidget);
       expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
@@ -326,11 +330,7 @@ void main() {
     );
     await tester.tap(find.byType(Switch));
     await tester.pump();
-    for (
-      var i = 0;
-      i < 500 && find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
-      i++
-    ) {
+    for (var i = 0; i < 500 && find.text('Retry').evaluate().isEmpty; i++) {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 10)),
       );

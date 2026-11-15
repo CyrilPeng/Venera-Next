@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -153,6 +154,51 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, 'Folder 599'), findsOneWidget);
     expect(find.text('Folder 0'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Escape clears folder search before leaving its route', (
+    tester,
+  ) async {
+    final navigator = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigator,
+        builder: (_, child) => CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.escape): () =>
+                navigator.currentState!.maybePop(),
+          },
+          child: child!,
+        ),
+        home: const Scaffold(body: Text('Home')),
+      ),
+    );
+    unawaited(
+      navigator.currentState!.push<void>(
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            body: FavoriteFolderBrowser(tree: _tree(), onSelected: (_) {}),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('favorite-folder-search')),
+      'week',
+    );
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(FavoriteFolderBrowser), findsOneWidget);
+    final field = tester.widget<EditableText>(find.byType(EditableText));
+    expect(field.controller.text, isEmpty);
+    expect(field.focusNode.hasFocus, isFalse);
+    expect(find.text('Short stories'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Home'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
