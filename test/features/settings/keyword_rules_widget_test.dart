@@ -34,6 +34,7 @@ Directory _prepare() {
   final oldSettings =
       jsonDecode(jsonEncode(appdata.toJson()['settings'])) as Map;
   App.dataPath = root.path;
+  File('${root.path}/appdata.json').writeAsStringSync('{}');
   appdata.settings['language'] = 'en-US';
   appdata.settings['disableSyncFields'] = '';
   appdata.settings['blockedWords'] = ['alpha'];
@@ -103,7 +104,10 @@ Future<void> _save(WidgetTester tester, {bool adding = false}) async {
 }
 
 Future<void> _confirmDelete(WidgetTester tester) async {
-  await _tap(tester, find.byKey(_deleteConfirmKey));
+  await tester.ensureVisible(find.byKey(_deleteConfirmKey));
+  await tester.tap(find.byKey(_deleteConfirmKey));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
   await _flush(tester, appdata.saveData(false));
 }
 
