@@ -107,7 +107,6 @@ Future<void> _confirmDelete(WidgetTester tester) async {
   await tester.ensureVisible(find.byKey(_deleteConfirmKey));
   await tester.tap(find.byKey(_deleteConfirmKey));
   await tester.pump();
-  await tester.pump(const Duration(milliseconds: 300));
   await _flush(tester, appdata.saveData(false));
 }
 
