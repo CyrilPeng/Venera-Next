@@ -15,6 +15,54 @@ import 'package:venera_next/features/reader/reader_viewport.dart';
 import 'package:venera_next/foundation/image_work.dart';
 
 void main() {
+  for (final forward in [true, false]) {
+    testWidgets(
+      'half-page drag release continues without a position jump: $forward',
+      (tester) async {
+        final fixture = _Fixture('ltr');
+        try {
+          await fixture.mount(tester);
+          if (!forward) await fixture.turnWithoutDiscardingFrame(tester, 2);
+          final initial = fixture.gallery.controller.position.pixels;
+          final gesture = await tester.startGesture(
+            tester.getCenter(find.byType(ReaderGalleryView)),
+          );
+          // The first movement resolves the PageView/PhotoView gesture arena.
+          await gesture.moveBy(Offset(forward ? -24 : 24, 0));
+          await tester.pump(const Duration(milliseconds: 20));
+          await gesture.moveBy(
+            Offset((forward ? -1 : 1) * fixture.size.width * .55, 0),
+          );
+          await tester.pump(const Duration(milliseconds: 120));
+          final dragged = fixture.gallery.controller.position.pixels;
+          expect(
+            (dragged - initial).abs(),
+            greaterThan(fixture.size.width * .4),
+          );
+          await gesture.up();
+          expect(
+            fixture.gallery.controller.position.pixels,
+            closeTo(dragged, .5),
+          );
+          await tester.pump(const Duration(milliseconds: 8));
+          expect(
+            (fixture.gallery.controller.position.pixels - dragged).abs(),
+            lessThan(fixture.size.width / 4),
+          );
+          await fixture.decode(
+            tester,
+            () => fixture.paintedImage(forward ? 2 : 1)?.image != null,
+          );
+          await tester.pumpAndSettle();
+          expect(fixture.navigation.state.page, forward ? 2 : 1);
+          expect(tester.takeException(), isNull);
+        } finally {
+          await fixture.dispose(tester);
+        }
+      },
+    );
+  }
+
   testWidgets(
     'unchanged gallery preloads are shared and resume after exit holds',
     (tester) async {

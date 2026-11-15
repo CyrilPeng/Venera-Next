@@ -545,6 +545,9 @@ class HistoryManager with ChangeNotifier {
   History? find(String id, ComicType type) =>
       _historyCache.find(id, type.value);
 
+  Set<(String, int)> completedAmong(Iterable<(String, int)> identities) =>
+      _repository.completedAmong(identities);
+
   List<History> getAll() => _repository.getAll();
   List<History> getRecent() => _repository.getRecent();
   int count() => _repository.count();

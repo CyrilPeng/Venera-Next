@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/display_image_provider.dart';
+import 'package:venera_next/features/reader/image_precache.dart';
 import 'package:venera_next/features/reader/white_border_crop.dart';
 import 'package:venera_next/foundation/image_provider/reader_image.dart';
 import 'package:venera_next/foundation/image_work.dart';
@@ -207,6 +208,60 @@ void _cleanup(WidgetTester tester, ReaderWhiteBorderCrop crop, ImageWork work) {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('every page crops after precaching and lazy scroll admission', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(164, 400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final sources = [for (var i = 0; i < 8; i++) _Provider(_page())];
+    final work = ImageWork();
+    final crop = ReaderWhiteBorderCrop(work);
+    final precache = ReaderImagePrecache(work: work);
+    _cleanup(tester, crop, work);
+    addTearDown(precache.dispose);
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    for (final source in sources.skip(1)) {
+      precache.preload(source, ImageConfiguration.empty);
+    }
+    await _waitUntil(
+      tester,
+      () => sources
+          .skip(1)
+          .every(
+            (source) => PaintingBinding.instance.imageCache
+                .statusForKey(source)
+                .keepAlive,
+          ),
+    );
+    await tester.pump();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ListView.builder(
+          itemCount: sources.length,
+          cacheExtent: 0,
+          itemBuilder: (_, index) => ComicImage(
+            key: ValueKey('crop-page-$index'),
+            image: ReaderDisplayImageProvider(sources[index], work),
+            whiteBorderCrop: crop,
+            width: double.infinity,
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < sources.length; i++) {
+      final page = find.byKey(ValueKey('crop-page-$i'));
+      await tester.scrollUntilVisible(page, 180);
+      await _waitUntil(
+        tester,
+        () => (tester.getSize(page).height - 320).abs() < 0.01,
+      );
+      expect(sources[i].loads, 1);
+    }
+    expect(tester.takeException(), isNull);
+  });
 
   test(
     'images beyond the readback budget remain full without retaining pixels',

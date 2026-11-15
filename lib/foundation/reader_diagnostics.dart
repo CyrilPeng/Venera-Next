@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer' show Timeline;
 import 'dart:math' as math;
+import 'dart:ui' show FramePhase;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
@@ -225,6 +226,8 @@ class ReaderDiagnostics extends ChangeNotifier {
         frame.buildDuration.inMicroseconds,
         frame.rasterDuration.inMicroseconds,
         frame.totalSpan.inMicroseconds,
+        frame.timestampInMicroseconds(FramePhase.vsyncStart) - _startedAt,
+        frame.timestampInMicroseconds(FramePhase.buildStart) - _startedAt,
       ]);
     }
   }
@@ -252,11 +255,11 @@ class ReaderDiagnostics extends ChangeNotifier {
           );
     final events = _events.toList();
     final data = <String, Object?>{
-      'schema': 1,
+      'schema': 2,
       'privacy':
           'No comic content, titles, paths, URLs, accounts, scripts, or error text.',
       'measurement':
-          'Elapsed waits are not CPU time or UI-thread blocking. Source reads include encoded cache and source callbacks. Processing wait measures only custom image processing. Frame samples are not measured FPS.',
+          'Elapsed waits are not CPU time or UI-thread blocking. Source reads include encoded cache and source callbacks. Processing wait measures only custom image processing. Frame samples are not measured FPS. receivedAtUs is the batched callback receipt time, not the frame time. vsyncStartUs and buildStartUs are engine timestamps relative to capture start; negative values precede capture.',
       'configuration': _configuration,
       'durationUs': _recording ? _elapsed : _duration,
       'stopReason': _stopReason?.name,
@@ -281,7 +284,14 @@ class ReaderDiagnostics extends ChangeNotifier {
         'frameBudgetUs': _frameBudgetUs.round(),
         'overBudget': slow.length,
         'slowest': slow.take(40).toList(),
-        'slowestColumns': ['receivedAtUs', 'uiUs', 'rasterUs', 'totalSpanUs'],
+        'slowestColumns': [
+          'receivedAtUs',
+          'uiUs',
+          'rasterUs',
+          'totalSpanUs',
+          'vsyncStartUs',
+          'buildStartUs',
+        ],
       },
       'retainedStageSamples': {
         for (final stage in ReaderDiagnosticStage.values)

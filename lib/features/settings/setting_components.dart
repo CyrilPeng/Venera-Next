@@ -78,7 +78,7 @@ abstract class _SettingState<W extends StatefulWidget, T>
               ),
           ],
         ),
-        if (saving && !hasSettingsSaveError)
+        if (showSettingsSaveProgress && !hasSettingsSaveError)
           const PositionedDirectional(
             top: 2,
             end: 2,

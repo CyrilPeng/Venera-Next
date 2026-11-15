@@ -35,6 +35,39 @@ void main() {
   tearDown(() => db.dispose());
 
   test(
+    'completion batches preserve shared source IDs, null totals and updates',
+    () {
+      repository.writeProgress(item()..page = 10);
+      repository.writeProgress(item(type: 1)..maxPage = null);
+      final requested = <(String, int)>{
+        ('shared', 0),
+        ('shared', 1),
+        ('absent', 0),
+      };
+      final expected = <(String, int)>{('shared', 0)};
+      for (var i = 0; i < 1001; i++) {
+        final history = item(type: 17)
+          ..id = "batch-'$i"
+          ..page = i.isEven ? 10 : 3;
+        repository.writeProgress(history);
+        requested.add((history.id, 17));
+        requested.add((history.id, 99));
+        if (i.isEven) expected.add((history.id, 17));
+      }
+      expect(repository.completedAmong(const []), isEmpty);
+      expect(
+        repository.completedAmong([...requested, ('shared', 0)]),
+        expected,
+      );
+      repository.writeProgress(item()..page = 2);
+      expect(
+        repository.completedAmong([('shared', 0), ('shared', 1)]),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
     'chapter snapshots survive reload, duration writes and metadata refresh',
     () {
       final value = item()

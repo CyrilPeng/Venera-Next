@@ -38,8 +38,11 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
   Object _owner = Object();
   bool _leaving = false;
   bool _disposed = false;
+  Timer? _progressTimer;
+  bool _showSaveProgress = false;
 
   bool get savingSettings => _pending.isNotEmpty;
+  bool get showSettingsSaveProgress => savingSettings && _showSaveProgress;
   bool get acceptsSettingsChanges =>
       !_disposed &&
       !_leaving &&
@@ -116,6 +119,21 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
     }
   }
 
+  void _updateSaveProgress() {
+    if (!savingSettings) {
+      _progressTimer?.cancel();
+      _progressTimer = null;
+      _showSaveProgress = false;
+    } else if (!_showSaveProgress && _progressTimer == null && !_disposed) {
+      _progressTimer = Timer(const Duration(milliseconds: 400), () {
+        _progressTimer = null;
+        if (!_disposed && savingSettings) {
+          setState(() => _showSaveProgress = true);
+        }
+      });
+    }
+  }
+
   Future<bool> saveSetting(
     // Keys identify the persisted target and field, not just the UI control.
     Object key,
@@ -148,6 +166,7 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
         return false;
       }
       _updateGuards();
+      _updateSaveProgress();
       setState(() {});
       started = true;
       await Future<void>.sync(persist);
@@ -179,6 +198,7 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
       return false;
     } finally {
       _pending.remove(save);
+      _updateSaveProgress();
       task?.finish();
       save.done.complete();
       save.releaseIfSettled();
@@ -283,7 +303,7 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
   Widget get settingsSaveStatus => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      if (savingSettings)
+      if (showSettingsSaveProgress)
         Padding(
           padding: const EdgeInsets.all(12),
           child: SizedBox.square(
@@ -312,6 +332,7 @@ abstract class SettingsSaveState<W extends StatefulWidget> extends State<W> {
   @override
   void dispose() {
     _disposed = true;
+    _progressTimer?.cancel();
     for (final entry in _guards.entries) {
       entry.key.unregisterPopEntry(entry.value);
       entry.value.canPopNotifier.dispose();

@@ -81,11 +81,18 @@ class _ObservedHistory extends HistoryManager {
   _ObservedHistory() : super.create();
 
   int reads = 0;
+  int progressReads = 0;
 
   @override
   History? find(String id, ComicType type) {
     reads++;
     return super.find(id, type);
+  }
+
+  @override
+  Set<(String, int)> completedAmong(Iterable<(String, int)> identities) {
+    progressReads++;
+    return super.completedAmong(identities);
   }
 }
 
@@ -220,13 +227,14 @@ void main() {
         await _settle(tester);
         final grid = find.byType(SliverGridComics, skipOffstage: false);
         final input = tester.widget<SliverGridComics>(grid).comics;
-        final reads = fixture.history.reads;
-        expect(reads, filtered ? 1200 : 0);
+        final reads = fixture.history.progressReads;
+        expect(reads, filtered ? 1 : 0);
+        expect(fixture.history.reads, 0);
         for (final inset in [80.0, 160.0, 240.0, 0.0]) {
           fixture.keyboardInset = inset;
           await tester.pumpWidget(fixture.host());
           await tester.pump();
-          expect(fixture.history.reads, reads);
+          expect(fixture.history.progressReads, reads);
           expect(tester.widget<SliverGridComics>(grid).comics, same(input));
         }
         await tester.runAsync(
@@ -252,9 +260,9 @@ void main() {
             tester.widget<SliverGridComics>(grid).comics.single.id,
             'seed-0',
           );
-          expect(fixture.history.reads, greaterThan(reads));
+          expect(fixture.history.progressReads, greaterThan(reads));
         } else {
-          expect(fixture.history.reads, 0);
+          expect(fixture.history.progressReads, 0);
           expect(tester.widget<SliverGridComics>(grid).comics, same(input));
         }
         expect(tester.takeException(), isNull);
@@ -287,8 +295,8 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const ValueKey('favorites-deselect')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('favorites-select-all')));
-      await tester.pumpAndSettle();
+      // Do not move focus to a toolbar button: the report enters selection
+      // from a focused search field, then presses Escape immediately.
       expect(find.text('Selected 1 comics'), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
@@ -303,6 +311,35 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('unrelated settings retain a covered large filtered list', (
+    tester,
+  ) async {
+    final fixture = await _prepare(tester, 1200);
+    appdata.implicitData['local_favorites_read_filter'] = 'Completed';
+    await tester.pumpWidget(fixture.host());
+    await _settle(tester);
+    final grid = find.byType(SliverGridComics, skipOffstage: false);
+    final input = tester.widget<SliverGridComics>(grid).comics;
+    final reads = fixture.history.progressReads;
+    expect(reads, 1);
+    unawaited(
+      fixture.navigator.currentState!.push<void>(
+        MaterialPageRoute(
+          builder: (_) => const Scaffold(body: Text('Settings')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    appdata.settings['readerBrightness'] = 35;
+    await tester.pumpAndSettle();
+    expect(fixture.history.progressReads, reads);
+    expect(tester.widget<SliverGridComics>(grid).comics, same(input));
+    fixture.navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(fixture.history.progressReads, reads);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('Escape dismisses a deletion dialog before clearing selection', (
     tester,
