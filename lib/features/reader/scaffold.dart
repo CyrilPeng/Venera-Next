@@ -38,6 +38,7 @@ import 'package:venera_next/features/reader/settings_panel.dart';
 import 'package:venera_next/features/reader/image_selection.dart';
 import 'package:venera_next/features/reader/image_picker.dart';
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/reader_settings.dart' as preferences;
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/routing/settings.dart';
 
@@ -64,12 +65,16 @@ class ReaderScaffold extends StatefulWidget {
     required this.createChapterComments,
     required this.chapterNavigation,
     required this.child,
+    this.readBrightnessSettings,
+    this.brightnessChanges,
     this.onDiagnostics,
     this.onRemoteKey,
     this.onCancelRemoteKeys,
   });
 
   final ReaderShellData data;
+  final preferences.ReaderSettings Function()? readBrightnessSettings;
+  final Listenable? brightnessChanges;
   final ReaderProgressRequest progress;
   final Future<void> Function() onExit;
   final VoidCallback? onFullscreen;
@@ -99,6 +104,9 @@ class ReaderScaffold extends StatefulWidget {
 
 class ReaderScaffoldState extends State<ReaderScaffold> {
   var _brightnessPreview = ReaderBrightnessPreview();
+
+  preferences.ReaderSettings get _brightnessSettings =>
+      widget.readBrightnessSettings?.call() ?? widget.data.preferences;
 
   bool _isOpen = false;
 
@@ -286,15 +294,24 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
           if (!isOnChapterCommentsPage)
             Positioned.fill(
               child: ListenableBuilder(
-                listenable: _brightnessPreview,
-                builder: (context, _) => ReaderBrightnessOverlay(
-                  enabled:
-                      _brightnessPreview.enabled ??
-                      widget.data.preferences.readerBrightnessEnabled,
-                  brightness:
-                      _brightnessPreview.brightness ??
-                      widget.data.preferences.readerBrightness,
-                ),
+                listenable: Listenable.merge([
+                  _brightnessPreview,
+                  widget.brightnessChanges,
+                ]),
+                builder: (context, _) {
+                  // Persistence can finish without a page report. Releasing
+                  // the preview must reveal the current value, not the last
+                  // immutable page snapshot.
+                  final settings = _brightnessSettings;
+                  return ReaderBrightnessOverlay(
+                    enabled:
+                        _brightnessPreview.enabled ??
+                        settings.readerBrightnessEnabled,
+                    brightness:
+                        _brightnessPreview.brightness ??
+                        settings.readerBrightness,
+                  );
+                },
               ),
             ),
           if (!isOnChapterCommentsPage) _buildInformation(),
@@ -322,7 +339,10 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
             child: _menuRegion(
               visible: _isOpen,
               child: ListenableBuilder(
-                listenable: _brightnessPreview,
+                listenable: Listenable.merge([
+                  _brightnessPreview,
+                  widget.brightnessChanges,
+                ]),
                 builder: (context, _) => buildBottom(),
               ),
             ),
@@ -520,7 +540,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
       onRotate: widget.onRotate,
       brightnessEnabled:
           _brightnessPreview.enabled ??
-          widget.data.preferences.readerBrightnessEnabled,
+          _brightnessSettings.readerBrightnessEnabled,
       onBrightness: () =>
           setState(() => _brightnessPanelOpen = !_brightnessPanelOpen),
       automaticReading: ReaderAutomaticReadingAction(

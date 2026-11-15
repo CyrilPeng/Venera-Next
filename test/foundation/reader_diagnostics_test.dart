@@ -12,13 +12,13 @@ import 'package:venera_next/foundation/image_provider/reader_image.dart';
 import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/foundation/reader_diagnostics.dart';
 
-FrameTiming _frame(int ui, int raster) => FrameTiming(
-  vsyncStart: 0,
-  buildStart: 0,
-  buildFinish: ui,
-  rasterStart: ui,
-  rasterFinish: ui + raster,
-  rasterFinishWallTime: ui + raster,
+FrameTiming _frame(int ui, int raster, {int start = 0}) => FrameTiming(
+  vsyncStart: start,
+  buildStart: start + 100,
+  buildFinish: start + 100 + ui,
+  rasterStart: start + 100 + ui,
+  rasterFinish: start + 100 + ui + raster,
+  rasterFinishWallTime: start + 100 + ui + raster,
 );
 
 Future<void> _drawFrame() async {
@@ -59,6 +59,33 @@ void main() {
     );
   });
   tearDown(() => diagnostics.dispose());
+
+  test('batched frame receipt retains distinct engine timestamps', () {
+    now = 100000;
+    start();
+    now = 1100000;
+    frames!([
+      _frame(10000, 1000, start: 100500),
+      _frame(10000, 1000, start: 200500),
+    ]);
+    diagnostics.stop(ReaderDiagnosticStop.review);
+    final data = report();
+    final summary = data['retainedFrameSamples'] as Map;
+    expect(data['schema'], 2);
+    expect(summary['ui']['count'], 2);
+    expect(summary['slowest'], [
+      [1000000, 10000, 1000, 11100, 500, 600],
+      [1000000, 10000, 1000, 11100, 100500, 100600],
+    ]);
+    expect(summary['slowestColumns'], [
+      'receivedAtUs',
+      'uiUs',
+      'rasterUs',
+      'totalSpanUs',
+      'vsyncStartUs',
+      'buildStartUs',
+    ]);
+  });
 
   test('disabled capture registers no callbacks and reads no clock', () {
     expect(

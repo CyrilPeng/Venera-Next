@@ -1,7 +1,13 @@
+import 'package:image/image.dart' as img;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/navigation_bar.dart';
 import 'package:venera_next/foundation/app_page_route.dart';
+import 'package:venera_next/components/image.dart';
+import 'package:venera_next/features/local_comics/local_comic_image.dart';
+import 'package:venera_next/features/local_comics/local_comic_model.dart';
+import 'package:venera_next/foundation/comic_type.dart';
+import 'package:venera_next/foundation/file_system.dart';
 
 const _flightKey = ValueKey('cover-flight');
 
@@ -10,6 +16,7 @@ Widget _page(
   bool detail = false,
   bool failed = false,
   bool gesture = false,
+  ImageProvider? cover,
 }) => Material(
   key: ValueKey('page-$page-$detail'),
   child: Align(
@@ -24,13 +31,17 @@ Widget _page(
         height: detail ? 200 : 110,
         child: failed
             ? const Icon(Icons.error)
-            : ColoredBox(color: detail ? Colors.green : Colors.blue),
+            : cover == null
+            ? ColoredBox(color: detail ? Colors.green : Colors.blue)
+            : AnimatedImage(image: cover, fit: BoxFit.cover),
       ),
     ),
   ),
 );
 
 class _Harness {
+  _Harness({this.covers = const []});
+  final List<ImageProvider> covers;
   final pane = GlobalKey<NaviPaneState>();
   final navigation = ValueNotifier(GlobalKey<NavigatorState>());
   final rebuild = ValueNotifier(0);
@@ -68,8 +79,12 @@ class _Harness {
               ),
             ],
             paneActions: const [],
-            pageBuilder: (page) =>
-                _page(page, failed: failed, gesture: gesture),
+            pageBuilder: (page) => _page(
+              page,
+              failed: failed,
+              gesture: gesture,
+              cover: covers.isEmpty ? null : covers[page],
+            ),
             observer: observer,
             navigatorKey: navigation.value,
           ),
@@ -81,13 +96,108 @@ class _Harness {
 
   void push(int page, {bool failed = false}) => navigator.push<void>(
     AppPageRoute<void>(
-      builder: (_) =>
-          _page(page, detail: true, failed: failed, gesture: _gesture),
+      builder: (_) => _page(
+        page,
+        detail: true,
+        failed: failed,
+        gesture: _gesture,
+        cover: covers.isEmpty ? null : covers[page],
+      ),
     ),
   );
 }
 
+class _LocalCover extends LocalComicImageProvider {
+  _LocalCover(this.file, int index)
+    : super(
+        LocalComic(
+          id: 'hero-local-$index',
+          title: 'Local comic $index',
+          subtitle: '',
+          tags: const [],
+          directory: '',
+          chapters: null,
+          cover: '',
+          comicType: ComicType.local,
+          downloadedChapters: const [],
+          createdAt: DateTime(2026),
+        ),
+      );
+  final File file;
+  @override
+  File get coverFile => file;
+}
+
 void main() {
+  testWidgets('local file covers release flights across rapid tab switches', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'local-cover-flight-',
+    );
+    final covers = <ImageProvider>[];
+    for (var i = 0; i < 2; i++) {
+      final page = img.Image(width: 100, height: 160)
+        ..clear(img.ColorRgb8(50 + i * 100, 100, 180));
+      final file = File('${directory.path}/$i.png')
+        ..writeAsBytesSync(img.encodePng(page));
+      covers.add(_LocalCover(file, i));
+    }
+    final harness = _Harness(covers: covers);
+    try {
+      await harness.mount(tester);
+      for (
+        var attempt = 0;
+        attempt < 100 &&
+            find
+                .byWidgetPredicate(
+                  (widget) => widget is RawImage && widget.image != null,
+                )
+                .evaluate()
+                .isEmpty;
+        attempt++
+      ) {
+        await tester.runAsync(() => pumpEventQueue());
+        await tester.pump();
+      }
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is RawImage && widget.image != null,
+        ),
+        findsWidgets,
+      );
+      for (var round = 0; round < 4; round++) {
+        harness.push(harness.pane.currentState!.currentPage);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 30));
+        harness.pane.currentState!.updatePage(
+          1 - harness.pane.currentState!.currentPage,
+        );
+        await tester.pump();
+        harness.push(harness.pane.currentState!.currentPage);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 30));
+        harness.navigator.pop();
+        await tester.pumpAndSettle();
+        expect(find.byKey(_flightKey, skipOffstage: false), findsNothing);
+        expect(harness.observer.routes, hasLength(1));
+        expect(tester.takeException(), isNull);
+      }
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+      await tester.pump();
+      expect(
+        directory.resolveSymbolicLinksSync(),
+        startsWith(
+          '${Directory.systemTemp.resolveSymbolicLinksSync()}${Platform.pathSeparator}',
+        ),
+      );
+      directory.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('the nested navigator retains its hero controller on rebuild', (
     tester,
   ) async {

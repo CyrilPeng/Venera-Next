@@ -22,6 +22,8 @@ class ReaderShellHost extends StatelessWidget {
       onRemoteKey: reader.onTvKeyEvent,
       onCancelRemoteKeys: () =>
           reader.imageViewController?.cancelKeyboardInput(),
+      readBrightnessSettings: () => reader.preferences,
+      brightnessChanges: appdata.settings,
       data: ReaderShellData(
         comicId: reader.cid,
         sourceKey: reader.type.sourceKey,
