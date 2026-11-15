@@ -9,6 +9,7 @@ import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
+import 'package:venera_next/foundation/widget_utils.dart';
 
 final _keywordSettings = KeywordSettingsStore(
   readSettings: () => appdata.settings,
@@ -155,10 +156,17 @@ class _KeywordRuleEditorState extends SettingsSaveState<KeywordRuleEditor> {
   bool _modeChosen = false;
   bool _showPreview = false;
   bool _stale = false;
+  bool _deleteAccepted = false;
   String? _error;
 
   bool get _comments => widget.target == BlockedKeywordList.comments;
-  bool get _editable => !savingSettings && !hasSettingsSaveError && !_stale;
+  bool get _editable =>
+      !savingSettings &&
+      !hasSettingsSaveError &&
+      !_stale &&
+      !_deleteAccepted &&
+      !_leavingSettings;
+  bool get _leavingSettings => !acceptsSettingsChanges;
   bool get _shortAbbreviation =>
       KeywordRule.isShortAbbreviation(_controller.text);
 
@@ -218,6 +226,80 @@ class _KeywordRuleEditorState extends SettingsSaveState<KeywordRuleEditor> {
                 : 'Keyword already exists'.tl;
           });
         }
+      },
+    );
+  }
+
+  Future<void> _confirmDelete() async {
+    final original = widget.initialRule;
+    if (original == null || !_editable || !acceptsSettingsChanges) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      animationStyle: MediaQuery.disableAnimationsOf(context)
+          ? AnimationStyle.noAnimation
+          : null,
+      builder: (context) => ContentDialog(
+        title: 'Delete rule'.tl,
+        content: Text(
+          'Delete the keyword rule "@a"?'.tlParams({'a': original.keyword}),
+        ).paddingHorizontal(16),
+        actions: [
+          Flexible(
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              runSpacing: 8,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text('Cancel'.tl),
+                ),
+                FilledButton(
+                  key: const ValueKey('keyword-rule-delete-confirm'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text('Delete'.tl),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    // The rule and target are captured from the opened editor, never from its
+    // current form fields. Recheck after the confirmation is dismissed.
+    if (!mounted || !_editable || !acceptsSettingsChanges) return;
+    setState(() => _deleteAccepted = true);
+    var removed = false;
+    var publishedByThisEditor = false;
+    await saveSetting(
+      (widget.target, original.keyword, 'delete'),
+      () async {
+        removed = await _keywordSettings.removeRule(
+          widget.target,
+          original,
+          // A concurrently deleted rule is stale, not a successful deletion.
+          requirePresent: !publishedByThisEditor,
+          publishedByEditor: publishedByThisEditor,
+          onRemoved: () => publishedByThisEditor = true,
+        );
+      },
+      onSaved: () {
+        if (!mounted) return;
+        if (!removed) {
+          setState(() {
+            _deleteAccepted = false;
+            _stale = true;
+            _error = 'The rule changed. Close and reopen the editor.'.tl;
+          });
+          return;
+        }
+        // Route ownership is released only after the durable save finishes.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) leaveSettings();
+        });
       },
     );
   }
@@ -360,10 +442,27 @@ class _KeywordRuleEditorState extends SettingsSaveState<KeywordRuleEditor> {
         ),
       ),
       actions: [
-        settingsSaveStatus,
-        FilledButton(
-          onPressed: _editable ? _save : null,
-          child: Text(widget.initialRule == null ? 'Add'.tl : 'Save'.tl),
+        Flexible(
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            runSpacing: 8,
+            children: [
+              settingsSaveStatus,
+              if (widget.initialRule != null)
+                TextButton(
+                  key: const ValueKey('keyword-rule-delete'),
+                  onPressed: _editable ? _confirmDelete : null,
+                  child: Text(
+                    'Delete'.tl,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ),
+              FilledButton(
+                onPressed: _editable ? _save : null,
+                child: Text(widget.initialRule == null ? 'Add'.tl : 'Save'.tl),
+              ),
+            ],
+          ),
         ),
       ],
     ),
