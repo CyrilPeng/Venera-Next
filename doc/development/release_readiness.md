@@ -5,6 +5,59 @@ not mark unresolved reports as fixed. Dated verification records and the
 original device acceptance checklist remain below. The newest dated section
 defines the current release scope; older candidate sections are historical.
 
+## v1.18.4 second prerelease (2026-11-15)
+
+The maintainer authorized publishing a new prerelease and notifying the related
+issue reporters to test it. Prepare `v1.18.4-rc.2`, build **251**, on `main`.
+PR #179 preserves the four grouped Cloudflare, settings, favorites and reader
+fixes and is merged at `4e7a716f23f112b4e0ccfb6412543c384969aed5`.
+Release preparation changes version metadata, changelog and release records;
+the application and dependency inputs remain at that merged source.
+
+- Rebuild Android mobile/TV, Windows, macOS, iOS, Linux x64/ARM64 and the unsigned
+  ARM64/API-26 HarmonyOS HAP from the exact new tag. Require current metadata,
+  full quality, dependency/native checks and all platform build gates before
+  publication. Preserve source, version, increasing build codes, canonical
+  Android signing identity, package contents, draft and public SHA-256 checks.
+  Do not relabel RC1 packages or move historical tags.
+- Keep stable updates at `v1.18.3`; RC2 does not advance AltStore or Winget.
+  Retain `runtime_acceptance: stable_required`, `signed: false` and
+  `runtime_verified: false`. Candidate publication permits device testing;
+  it does not establish native HarmonyOS acceptance or Android frame-rate gains.
+- Deliver #165 null-safe verification and persisted Cookie/UA completion;
+  #168 stable controls while saving; #169 stable brightness panels; #167 cached
+  favorites work; and #170/#178 reduced image-loading work and stable reading
+  positions. Retain existing diagnostics as baselines. Windows site interaction
+  and Android 120 Hz measurements still need original-device confirmation.
+- Also deliver the previously unreleased menu lock, optional vertical white-edge
+  cropping (#139), visible selection actions and Esc behavior (#152), expanded
+  favorite-folder panel (#157), HarmonyOS launcher name (#162), QUIC security
+  updates and the consolidated test/CI maintenance. #166 server rejection/TLS,
+  #159 persistent external libraries and deferred #163/#81/#123 are not
+  declared fixed by RC2.
+- Before upgrading, keep an independent application-data export and the
+  original comics. Use an in-place upgrade with the existing signing identity;
+  do not clear data, uninstall or re-import comics as a testing prerequisite.
+  Use the pre-upgrade export if a rollback is needed.
+
+After publication, independently download and verify the complete public asset
+set, including Android manifests and HAP provenance. Only then post one
+RC2-specific notice in each of the ten related open issues, checking all prior
+comments for duplicate notices. Keep the issues open for actual feedback.
+
+| Issue | Reporter test focus |
+| --- | --- |
+| #165 | Windows: complete the original Cloudflare challenge, load the source again, and close a verification page during loading without a null exception or repeated verification loop. |
+| #167 | Android: enter/return to the existing large collection, open/close search and the keyboard, and verify list/filter refreshes after reading. |
+| #168 | Android: change switches and selectors, including continuous input at narrow width/large text; controls and labels stay in place and the final value persists. |
+| #169 | Android: repeatedly adjust brightness in ordinary and shortcut panels; panel/slider positions stay stable and the final brightness persists. |
+| #170 | Android waterfall: scroll while images load, keep the current position during image-size changes and previous-chapter insertion, and compare with the existing 120 Hz baseline when practical. |
+| #178 | Android paged mode at 120 Hz: turn pages as images finish loading and report remaining stalls; host byte-work measurements are not device FPS claims. |
+| #139 | Enable white-edge cropping in vertical continuous/waterfall modes; check light artwork and edge text, disable it to restore the full image, and verify saved originals are unchanged. |
+| #152 | Windows: visible select-all/invert/cancel actions when space permits; Esc closes dialogs, then exits selection, then exits search without losing the query prematurely. |
+| #157 | Android/Windows: open the details favorite panel with many folders, use its full available height and access New Folder at the top right after scrolling. |
+| #162 | Native HarmonyOS: upgrade with the same signing key, check the launcher name and cold launch; do not substitute the Android APK or request signing materials. |
+
 ## RC1 publishing recovery (2026-11-11)
 
 The exact tag `v1.18.4-rc.1` points to
