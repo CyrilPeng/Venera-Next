@@ -5,6 +5,58 @@ not mark unresolved reports as fixed. Dated verification records and the
 original device acceptance checklist remain below. The newest dated section
 defines the current release scope; older candidate sections are historical.
 
+## v1.18.4 third prerelease (2026-11-16)
+
+The maintainer authorized the next prerelease and focused reporter testing.
+Prepare `v1.18.4-rc.3`, build **252**, on `main`. PR #181 retains the two grouped
+reader/diagnostics and favorites/settings commits and is merged at
+`d110a4419e916e7a1f11203c208a97cc90876867`. Its final quality, dependency,
+Windows/Android/TV and HarmonyOS candidate checks passed. Release preparation
+changes version metadata, changelog and release records; runtime and dependency
+inputs remain at the merged source.
+
+- Rebuild every standard platform and the unsigned ARM64/API-26 HarmonyOS HAP
+  from the exact new tag. Require the tag's metadata, complete quality/native
+  checks and all platform build gates. Preserve package identities, increasing
+  build codes, canonical Android signatures and source/version provenance.
+- Require all **24** assets: 19 standard-platform packages, two Android
+  manifests and three HarmonyOS assets. Verify draft and public names, sizes,
+  upload states and SHA-256 digests, including the documented GitHub package
+  filename conversion. Link both nonempty HarmonyOS guides at the exact tag.
+- Keep stable updates at `v1.18.3`; RC3 does not advance AltStore or Winget.
+  Preserve `runtime_acceptance: stable_required`, `signed: false` and
+  `runtime_verified: false`. Candidate publication enables device testing;
+  it does not establish HarmonyOS runtime acceptance or Android frame-rate gains.
+- Deliver #180's current-page brightness after persistence; #167's filtering,
+  status refresh and batched history lookup changes; and #152's Esc handling
+  while comic/folder search retains focus. Fast settings saves show progress
+  only after 400 ms without changing persistence or exit ownership.
+- Deliver schema-2 reader reports for #178 with actual engine VSync/build
+  timestamps. Callback receipt time is batched and cannot itself identify a
+  one-second timer as the cause. Paged animation and status polling production
+  code are unchanged; reverse paging and release-speed symptoms remain open.
+- #168/#169/#170 were closed on reporter acceptance of RC2. #139 now has two
+  concrete JPEG samples and Android device information; reuse that evidence
+  for image-specific investigation. #129's local-import cover residual still
+  needs a confirmed build and navigation sequence. Do not repeat earlier
+  material requests or declare these symptoms fixed by the host probes.
+- #166 server rejection/TLS and #159 persistent external libraries remain
+  separate work. Deferred #163/#81/#123 stay outside this release's scope.
+- Keep an independent application-data export and the original comics before
+  upgrading. Use the existing signing identity for an in-place upgrade.
+
+After publication, independently download and verify the complete public asset
+set, Android manifests/signatures and HAP provenance. Then post one RC3-specific
+notice in each of the four newly delivered issues below, checking existing
+comments for duplicate notices. Keep the issues open until actual acceptance.
+
+| Issue | Reporter test focus |
+| --- | --- |
+| #180 | Android: adjust brightness without turning the current page, wait for persistence and preview completion, and verify ordinary/shortcut panels keep the final brightness. |
+| #167 | Android: retain the existing 1,000+ collection; enter/return, change layout and reading filters, search/select, then modify settings in another page and return. Check responsiveness and correct post-reading results. |
+| #152 | Windows: search then select while input retains focus; Esc closes a dialog first, exits selection while retaining the query, then exits comic search. Folder search clears/unfocuses before the next Esc returns. |
+| #178 | Android 120 Hz: compare cached forward/reverse paging under similar duration and gesture frequency, including half-page release. First report remaining visible stalls; when practical, collect the new schema-2 report instead of repeating old attachments. |
+
 ## v1.18.4 second prerelease (2026-11-15)
 
 The maintainer authorized publishing a new prerelease and notifying the related

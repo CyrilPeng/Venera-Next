@@ -1,5 +1,7 @@
 # RC2 新反馈处理与验证记录
 
+本记录保留 RC2 反馈处理时的版本与验证状态；本批修复的 RC3 交付准备和原设备验收安排见[发布记录](release_readiness.md#v1184-third-prerelease-2026-11-16)。
+
 核对日期：2026-11-15。基于主线 `c0c45979d453c2a8740c45f08e95997c90717629` 处理本轮反馈，修复分支为 `codex/rc2-feedback-fixes`。公开候选版仍为 [v1.18.4-rc.2（1.18.4-rc.2+251）](https://github.com/CyrilPeng/Venera-Next/releases/tag/v1.18.4-rc.2)，稳定更新渠道仍为 `v1.18.3`。下述新代码登记在更新日志的「未发布」中，尚未交付新的安装包。
 
 ## 已确认完成并关闭
