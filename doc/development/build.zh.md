@@ -179,3 +179,9 @@ flutter pub get --enforce-lockfile
 ### Gradle 下载过慢
 
 可以在本地临时切换 Gradle wrapper 镜像或配置网络代理，但环境相关地址不应提交到仓库。提交前应确认 `gradle-wrapper.properties` 没有混入本地镜像改动。
+
+## 历史记录与恢复
+
+已完成的历史整理、依赖迁移、测试优化及 Issue 快照从 [v1.18.4-rc.3 文档树](https://github.com/CyrilPeng/Venera-Next/tree/v1.18.4-rc.3/doc)检索。恢复历史实现使用对应标签或保存的 Git bundle，在独立工作区核对来源、锁与版本；历史 SHA 和已发布资产继续对应当时的输入。鸿蒙冻结／最后分支来源见[恢复标签](harmonyos_releases.zh.md#历史来源与恢复)。
+
+临时命令与分析日志放入 `logs/`，生成工程、SDK、安装包下载和编译缓存放入忽略的 `build/`。验收完成后保留来源、最终结果、关键失败、安全与设备报告，清理可重建副本；长期规则合并进现有指南，避免每个版本新增计划和跟进文档。
