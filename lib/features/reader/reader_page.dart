@@ -144,6 +144,8 @@ class ReaderState extends State<Reader>
   late final imageFavorites = HistoryScope.readImages(context);
   final _targetValidity = ValueNotifier(0);
   final _shellChanges = ValueNotifier(0);
+  ReaderImageViewController? _publishedViewport;
+  bool _viewportPublicationPending = false;
   int _diagnosticsRequest = 0;
   Listenable get shellChanges => _shellChanges;
 
@@ -200,9 +202,19 @@ class ReaderState extends State<Reader>
 
   void onViewportChanged(ReaderImageViewController viewport, bool attached) {
     viewportBinding.update(viewport, attached);
+    if (_viewportPublicationPending || _stateDisposed) return;
+    _viewportPublicationPending = true;
     // Attachment happens while building content. Refresh input after the tree
-    // has installed the viewport, without rebuilding that content subtree.
-    WidgetsBinding.instance.addPostFrameCallback((_) => updateShell());
+    // has installed the final owner. Replacing callbacks may detach and attach
+    // the same viewport in one frame without changing the shell's input.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _viewportPublicationPending = false;
+      if (_stateDisposed || !mounted) return;
+      final current = imageViewController;
+      if (identical(_publishedViewport, current)) return;
+      _publishedViewport = current;
+      updateShell();
+    });
   }
 
   ReaderImagePickContext? readImagePickContext() {
@@ -1868,6 +1880,7 @@ class ReaderState extends State<Reader>
   @override
   void dispose() {
     _stateDisposed = true;
+    _publishedViewport = null;
     readerDiagnostics.dispose();
     _targetValidity.value++;
     viewportBinding.dispose();
@@ -1942,13 +1955,18 @@ class ReaderState extends State<Reader>
             autofocus: true,
             onKeyEvent: onKeyEvent,
             child: Overlay.wrap(
-              child: ReaderShellHost(
-                reader: this,
-                child: ReaderGestureHost(
+              child: Material(
+                color: Theme.of(context).colorScheme.surface,
+                child: ReaderShellHost(
                   reader: this,
-                  child: ReaderImagesHost(
+                  child: ReaderGestureHost(
                     reader: this,
-                    key: Key(mode.isWaterfall ? mode.key : chapter.toString()),
+                    child: ReaderImagesHost(
+                      reader: this,
+                      key: Key(
+                        mode.isWaterfall ? mode.key : chapter.toString(),
+                      ),
+                    ),
                   ),
                 ),
               ),

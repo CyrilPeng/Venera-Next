@@ -96,6 +96,50 @@ void main() {
     return reader;
   }
 
+  readerTest('viewport handoffs publish changed owners once and retain input', (
+    tester,
+  ) async {
+    final reader = await mount(tester);
+    var changes = 0;
+    reader.shellChanges.addListener(() => changes++);
+    final old = _Controller(), replacement = _Controller();
+    reader.onViewportChanged(old, true);
+    expect(reader.imageViewController, same(old));
+    expect(changes, 0);
+    tester.binding.scheduleFrame();
+    await tester.pump();
+    expect(changes, 1);
+    for (var i = 0; i < 4; i++) {
+      reader.onViewportChanged(old, false);
+      reader.onViewportChanged(old, true);
+    }
+    tester.binding.scheduleFrame();
+    await tester.pump();
+    expect(changes, 1, reason: 'The final viewport owner did not change.');
+    reader.toNextPage();
+    expect(old.visited, [reader.page]);
+    reader.onViewportChanged(old, false);
+    reader.onViewportChanged(replacement, true);
+    reader.onViewportChanged(old, false);
+    expect(reader.imageViewController, same(replacement));
+    tester.binding.scheduleFrame();
+    await tester.pump();
+    expect(changes, 2);
+    reader.onViewportChanged(old, false);
+    tester.binding.scheduleFrame();
+    await tester.pump();
+    expect(
+      changes,
+      2,
+      reason: 'A stale detach cannot invalidate current input.',
+    );
+    reader.onViewportChanged(replacement, false);
+    expect(reader.imageViewController, isNull);
+    tester.binding.scheduleFrame();
+    await tester.pump();
+    expect(changes, 3);
+  });
+
   for (final cancelled in [false, true]) {
     readerTest(
       'real layout save waits for admission and checks cancellation=$cancelled',
@@ -145,11 +189,14 @@ void main() {
     tester,
   ) async {
     var closed = 0;
-    await mount(tester, onClosed: () => closed++);
+    final reader = await mount(tester, onClosed: () => closed++);
+    reader.onViewportChanged(_Controller(), true);
     expect(closed, 0);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 3));
     expect(closed, 1);
+    expect(reader.imageViewController, isNull);
+    expect(tester.takeException(), isNull);
   });
 
   readerTest(

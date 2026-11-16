@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -6,6 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/features/reader/brightness.dart';
+import 'package:venera_next/features/history/history_api.dart'
+    show ImageFavoriteResult;
+import 'package:venera_next/features/reader/image_favorite_controller.dart';
+import 'package:venera_next/features/reader/image_picker.dart';
 import 'package:venera_next/features/reader/platform_effects_controller.dart';
 import 'package:venera_next/features/reader/progress_bar.dart';
 import 'package:venera_next/features/reader/progress_navigation.dart';
@@ -57,10 +62,15 @@ void main() {
       final calls = <String>[];
       final semantics = tester.ensureSemantics();
       var active = false;
-      var reducedMotion = true;
+      var reducedMotion = false;
       var chapter = 2;
       var comments = false;
       var identity = Object();
+      var favoritePage = 3, favoriteReads = 0, favoriteToggles = 0;
+      int? selectedFavoriteIndex;
+      var favoriteResult = Completer<bool>();
+      final viewport = _SingleImageViewport();
+      final favoriteImages = ['fixture'];
       ReaderShellData data() => ReaderShellData(
         comicId: 'synthetic',
         sourceKey: 'local',
@@ -108,7 +118,7 @@ void main() {
                       data: data(),
                       progress: ReaderProgressRequest(
                         identity: identity,
-                        page: comments ? 13 : 3,
+                        page: comments ? 13 : favoritePage,
                         maxPage: 12,
                         chapter: chapter,
                         maxChapter: 5,
@@ -134,11 +144,37 @@ void main() {
                         return active = !active;
                       },
                       acquireSidebarPause: () => () {},
-                      readImagePickContext: () => null,
+                      readImagePickContext: () => ReaderImagePickContext(
+                        viewport: viewport,
+                        images: favoriteImages,
+                        chapter: chapter,
+                      ),
                       onSystemUiChanged: (open) => calls.add('menu $open'),
                       createChapterMenu: () => null,
-                      createFavoriteQuery: () => null,
-                      createImageFavorite: () => null,
+                      createFavoriteQuery: () {
+                        if (comments) return null;
+                        final target = (chapter, favoritePage);
+                        final result = favoriteResult;
+                        return ReaderImageFavoriteQuery(
+                          key: target,
+                          isCurrent: () => target == (chapter, favoritePage),
+                          read: () {
+                            favoriteReads++;
+                            return result.future;
+                          },
+                        );
+                      },
+                      createImageFavorite: () => ReaderImageFavoriteRequest(
+                        supported: true,
+                        isCurrent: () => true,
+                        toggle: (index, check) async {
+                          favoriteToggles++;
+                          selectedFavoriteIndex = index;
+                          check();
+                          favoriteResult = Completer<bool>()..complete(true);
+                          return ImageFavoriteResult.collected;
+                        },
+                      ),
                       createImageExport: () => null,
                       createSettings: () => null,
                       createChapterComments: () => null,
@@ -156,11 +192,43 @@ void main() {
         ),
       );
       await mount();
+      final toolbar = find.byType(ReaderBottomBar, skipOffstage: false);
+      final hidden = tester.widget<ReaderBottomBar>(toolbar);
+      expect(favoriteReads, 1);
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(
+        tester.binding.transientCallbackCount,
+        0,
+        reason: 'A hidden loading indicator must not produce frames.',
+      );
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      favoriteResult.complete(false);
+      await tester.pump();
+      expect(tester.widget<ReaderBottomBar>(toolbar), same(hidden));
+      shell.currentState!.addImageFavorite();
+      for (var i = 0; i < 10 && favoriteReads < 2; i++) {
+        await tester.pump();
+      }
+      expect(favoriteToggles, 1);
+      expect(selectedFavoriteIndex, 0);
+      expect(favoriteReads, 2);
+      expect(await favoriteResult.future, isTrue);
+      expect(tester.widget<ReaderBottomBar>(toolbar), same(hidden));
+      favoriteResult = Completer<bool>();
+      favorites.notifyListeners();
+      await tester.pump();
+      expect(favoriteReads, 3, reason: 'Invalidation rebinds while closed.');
+      final invalidated = tester.widget<ReaderBottomBar>(toolbar);
+      favoriteResult.complete(false);
+      await tester.pump();
+      expect(tester.widget<ReaderBottomBar>(toolbar), same(invalidated));
       final rotationFocus = Focus.of(
         tester.element(find.byIcon(Icons.screen_rotation)),
       );
       expect(rotationFocus.canRequestFocus, isFalse);
       expect(find.bySemanticsLabel('Page'), findsNothing);
+      reducedMotion = true;
+      await mount();
       shell.currentState!.openOrClose();
       await tester.pump();
       expect(
@@ -169,6 +237,16 @@ void main() {
         reason: 'Reduced motion positions both bars immediately.',
       );
       await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+      favoritePage = 4;
+      favoriteResult = Completer<bool>();
+      await mount();
+      final visible = tester.widget<ReaderBottomBar>(toolbar);
+      expect(favoriteReads, 4);
+      favoriteResult.complete(true);
+      await tester.pump();
+      expect(tester.widget<ReaderBottomBar>(toolbar), isNot(same(visible)));
+      expect(find.byIcon(Icons.favorite), findsOneWidget);
       expect(tester.takeException(), isNull);
       expect(
         find.descendant(
@@ -308,4 +386,11 @@ void main() {
       semantics.dispose();
     });
   }
+}
+
+class _SingleImageViewport implements ReaderImagePickingViewport {
+  @override
+  (int, int)? get currentImageRange => (0, 1);
+  @override
+  int? getImageIndexByOffset(Offset offset) => 0;
 }
