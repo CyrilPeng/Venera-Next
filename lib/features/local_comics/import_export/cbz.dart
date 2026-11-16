@@ -3,6 +3,7 @@ import 'package:archive/archive_io.dart' as archive_io;
 import 'package:enough_convert/enough_convert.dart';
 import 'package:venera_native/venera_native.dart';
 import 'package:venera_next/features/comic_storage/comic_storage.dart';
+import 'package:venera_next/features/comic_storage/comic_info_xml.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/comic_type.dart';
@@ -169,6 +170,23 @@ abstract class CBZ {
       } catch (e) {
         Log.warning("CBZ", "Failed to parse metadata: $e");
       }
+    }
+    var comicInfoFile = File(FilePath.join(cache.path, 'ComicInfo.xml'));
+    if (metaData != null &&
+        metaData.chapters == null &&
+        comicInfoFile.existsSync()) {
+      final chapters = _readComicInfoChapters(comicInfoFile);
+      if (chapters != null) {
+        metaData = ComicMetaData(
+          title: metaData.title,
+          author: metaData.author,
+          tags: metaData.tags,
+          chapters: chapters,
+        );
+      }
+    }
+    if (metaData == null && comicInfoFile.existsSync()) {
+      metaData = _readComicInfoMetadata(comicInfoFile);
     }
     metaData ??= ComicMetaData(
       title: file.name.substring(0, file.name.lastIndexOf('.')),
@@ -448,6 +466,30 @@ abstract class CBZ {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&apos;');
+  }
+
+  /// Reads chapter ranges embedded in a Venera-exported [ComicInfo.xml].
+  ///
+  /// The exporter writes them into `<Notes>Chapters: title: start-end; ...`.
+  /// Returns null when no usable chapters are present, so callers can fall
+  /// back to the flat single-volume behavior without erroring.
+  static List<ComicChapter>? _readComicInfoChapters(File comicInfoFile) {
+    try {
+      final notes = ComicInfoXml.readNotes(comicInfoFile.readAsStringSync());
+      return parseChaptersFromNotes(notes ?? '');
+    } catch (e) {
+      Log.warning("CBZ", "Failed to parse ComicInfo chapters: $e");
+      return null;
+    }
+  }
+
+  static ComicMetaData? _readComicInfoMetadata(File comicInfoFile) {
+    try {
+      return ComicInfoXml.readMetadata(comicInfoFile.readAsStringSync());
+    } catch (e) {
+      Log.warning("CBZ", "Failed to parse ComicInfo metadata: $e");
+      return null;
+    }
   }
 
   static _ComicInfoTags _buildComicInfoTags(ComicMetaData data) {

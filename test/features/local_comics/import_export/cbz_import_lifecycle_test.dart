@@ -55,6 +55,54 @@ void main() {
       ..writeAsBytesSync(archive.ZipEncoder().encodeBytes(contents));
   }
 
+  File bookWithComicInfo(String name) {
+    final contents = archive.Archive();
+    const notes =
+        'Chapters: 第01卷: 1-2; 第02卷: 3-3';
+    final entries = {
+      '1.jpg': name,
+      '2.jpg': name,
+      '3.jpg': name,
+      'ComicInfo.xml':
+          '<ComicInfo><Title>$name</Title><Writer>Author</Writer>'
+          '<Notes>$notes</Notes></ComicInfo>',
+    };
+    for (final entry in entries.entries) {
+      final bytes = utf8.encode(entry.value);
+      contents.addFile(archive.ArchiveFile(entry.key, bytes.length, bytes));
+    }
+    return File('${root.path}/$name.cbz')
+      ..writeAsBytesSync(archive.ZipEncoder().encodeBytes(contents));
+  }
+
+  test(
+    'flat CBZ carrying only ComicInfo.xml restores chapters on import',
+    () async {
+      final service = ComicImportService(
+        localManager: () => manager,
+        favoritesManager: LocalFavoritesManager.new,
+      );
+      await CBZ.import(
+        bookWithComicInfo('ComicInfoBook'),
+        registerComic: service.registerComic,
+      );
+      final saved = manager.findByName('ComicInfoBook')!;
+      expect(saved.hasChapters, isTrue);
+      expect(saved.chapters!.titles.toList(), ['第01卷', '第02卷']);
+      expect(saved.chapters!.ids.toList(), ['0', '1']);
+      expect(saved.downloadedChapters, ['0', '1']);
+      // Cover inferred from the first root page when no explicit cover exists.
+      final coverPath =
+          '${manager.path}/${saved.directory}/${saved.cover}';
+      expect(File(coverPath).existsSync(), isTrue);
+      // Chapter pages are copied into per-chapter directories.
+      final chapter1 = await manager.getImages(saved.id, ComicType.local, '0');
+      expect(chapter1, hasLength(2));
+      final chapter2 = await manager.getImages(saved.id, ComicType.local, '1');
+      expect(chapter2, hasLength(1));
+    },
+  );
+
   for (final name in [
     '[Sample Artist \u2013 V.24 black and white part01 (53p).zip].zip',
     'Sample24.zip',
