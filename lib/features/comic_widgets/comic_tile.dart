@@ -160,6 +160,28 @@ void _openComicPage({
   );
 }
 
+/// Opens the configured comic details page on the navigator that owns [context].
+///
+/// Callers inside a dialog should pass their own context so the details route
+/// is pushed above that dialog instead of behind it.
+void openComicPage({
+  required BuildContext context,
+  required String id,
+  required String sourceKey,
+  String? cover,
+  String? title,
+  int? heroID,
+}) {
+  _openComicPage(
+    context: context,
+    id: id,
+    sourceKey: sourceKey,
+    cover: cover,
+    title: title,
+    heroID: heroID,
+  );
+}
+
 Future<void> _addComicToFavorites(BuildContext context, List<Comic> comics) {
   final handler =
       _addComicFavoriteHandler ??
@@ -170,6 +192,9 @@ Future<void> _addComicToFavorites(BuildContext context, List<Comic> comics) {
 ImageProvider? _findImageProvider(Comic comic) {
   return _comicTileImageProviderResolver?.call(comic);
 }
+
+/// Resolves the image provider used by [ComicTile.buildImage].
+ImageProvider? comicTileImageProvider(Comic comic) => _findImageProvider(comic);
 
 ComicTileState _tileState(Comic comic) {
   return _comicTileStateResolver?.call(comic) ?? const ComicTileState();
@@ -432,16 +457,21 @@ class ComicTile extends StatelessWidget {
     );
   }
 
-  Widget buildImage(BuildContext context) {
-    var image = _findImageProvider(comic);
-    if (image == null) {
+  Widget buildImage(
+    BuildContext context, {
+    ImageProvider? image,
+    void Function(Object, StackTrace?)? onError,
+  }) {
+    final provider = image ?? _findImageProvider(comic);
+    if (provider == null) {
       return const SizedBox();
     }
     return AnimatedImage(
-      image: image,
+      image: provider,
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
+      onError: onError,
     );
   }
 
