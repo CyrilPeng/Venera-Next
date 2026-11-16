@@ -221,6 +221,75 @@ void main() {
   );
 
   test(
+    'editor deletion distinguishes a stale rule from its published retry',
+    () async {
+      final draft = _Settings()
+        ..['blockedWords'] = ['bl', 'keep']
+        ..['blockedCommentWords'] = ['comment', 'keep']
+        ..['blockedWordRules'] = {
+          'bl': 'wholeWord:insensitive',
+          'keep': 'contains:sensitive',
+        }
+        ..['blockedCommentWordRules'] = {
+          'comment': 'wholeWord:insensitive',
+          'keep': 'contains:insensitive',
+        };
+      final store = KeywordSettingsStore(
+        readSettings: () => draft,
+        updateSettings: (change) async => change(draft),
+      );
+      const captured = KeywordRule('bl', mode: KeywordMatchMode.wholeWord);
+      var published = false;
+      expect(
+        await store.removeRule(
+          BlockedKeywordList.comments,
+          captured,
+          requirePresent: true,
+          onRemoved: () => published = true,
+        ),
+        isFalse,
+      );
+      expect(published, isFalse);
+      expect(draft['blockedWords'], ['bl', 'keep']);
+      expect(
+        await store.removeRule(
+          BlockedKeywordList.comics,
+          captured,
+          requirePresent: true,
+          onRemoved: () => published = true,
+        ),
+        isTrue,
+      );
+      expect(published, isTrue);
+      expect(draft['blockedWords'], ['keep']);
+      expect(draft['blockedWordRules'], {'keep': 'contains:sensitive'});
+      expect(draft['blockedCommentWords'], ['comment', 'keep']);
+      expect(
+        await store.removeRule(
+          BlockedKeywordList.comics,
+          captured,
+          publishedByEditor: true,
+        ),
+        isTrue,
+      );
+      draft['blockedWords'] = ['bl', 'keep'];
+      draft['blockedWordRules'] = {
+        'bl': 'contains:insensitive',
+        'keep': 'contains:sensitive',
+      };
+      expect(
+        await store.removeRule(
+          BlockedKeywordList.comics,
+          captured,
+          publishedByEditor: true,
+        ),
+        isFalse,
+      );
+      expect(draft['blockedWords'], ['bl', 'keep']);
+    },
+  );
+
+  test(
     'captured deletion protects a changed rule and retries without side effects',
     () async {
       final draft = _Settings()

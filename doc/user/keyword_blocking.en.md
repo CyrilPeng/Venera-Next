@@ -40,11 +40,15 @@ Click **Test match** in the editor and enter a sample title, tag, or comment. Th
 
 The trial checks only the current rule and your sample. Sample text is not saved as a keyword. Click **Add** or **Save** to apply the rule. If saving fails, your edit remains available for retry. If another window has changed or deleted the rule, the editor asks you to reopen it so an older edit cannot overwrite the newer setting.
 
+When editing an existing rule, the editor also offers **Delete**. A confirmation is required before the rule and its matching options are removed; canceling changes nothing. The delete button is absent for new rules. Deletion keeps the same retry and concurrent-change checks; after a successful deletion the editor closes, and the reasons, hidden count, and comic list refresh from the updated settings.
+
 ## 4. Find out why a comic is hidden
 
 Click **Hidden by keyword filters: … comics** in a comic list to view reasons. Each entry shows text from a comic in the current list, the first rule that actually matched, its field, matching method, and case setting. The matching text is highlighted; hidden covers remain hidden.
 
 Click **Edit rule** to change that rule directly. Saving recalculates the reasons and updates the comic list. If the comic remains hidden, another rule may still match; check the reasons again. The count covers only comics already loaded in the current list, rather than the entire library.
+
+From the reasons dialog, you can also use **Delete** in the rule editor and confirm without returning to keyword management. After deletion, the reasons list, hidden count, and comic cards all refresh together.
 
 The comic card's **Block** shortcut uses **Exact tag** for newly selected tags, **Whole word** for 1–3 English letters, and **Contains text** for other text, ignoring case by default. Existing keywords keep their current rules. You can adjust them further in keyword settings.
 
