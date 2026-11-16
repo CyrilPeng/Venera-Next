@@ -42,7 +42,9 @@ The trial checks only the current rule and your sample. Sample text is not saved
 
 ## 4. Find out why a comic is hidden
 
-Click **Hidden by keyword filters: … comics** in a comic list to view reasons. Each entry shows text from a comic in the current list, the first rule that actually matched, its field, matching method, and case setting. The matching text is highlighted; hidden covers remain hidden.
+Click **Hidden by keyword filters: … comics** in a comic list to view reasons. Each entry shows text from a comic in the current list, the first rule that actually matched, its field, matching method, and case setting, with the matching text highlighted. The reasons dialog hides covers by default; comic lists and other pages keep their existing hidden-cover behavior.
+
+When you need to identify a comic, click **Show covers** in the dialog. A cover appears to the left of each reason; click **Hide covers** to restore the default. A missing or failed cover shows a placeholder. Click a cover to open that comic's details; returning preserves the reasons dialog, list contents, and scroll position. Clicking the reason text or keyword, or **Edit rule**, opens the corresponding keyword rule editor instead of comic details. Covers appear only on demand inside this dialog and do not change list hiding rules.
 
 Click **Edit rule** to change that rule directly. Saving recalculates the reasons and updates the comic list. If the comic remains hidden, another rule may still match; check the reasons again. The count covers only comics already loaded in the current list, rather than the entire library.
 
