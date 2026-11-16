@@ -793,6 +793,7 @@
     "features/comic_source/types.dart",
     "features/comic_storage/archive_metadata.dart",
     "features/comic_storage/comic_file_rules.dart",
+    "features/comic_storage/comic_info_xml.dart",
     "features/comic_storage/comic_storage.dart",
     "features/comic_storage/file_system_layout.dart",
     "features/favorites/favorite_cover_cache.dart",

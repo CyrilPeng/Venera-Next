@@ -133,13 +133,7 @@ ImageProvider? _resolveComicTileImageProvider(Comic comic) {
   final cover = comic.cover;
   if (_comicTypeOf(comic) == ComicType.local && !_looksLikeUrl(cover)) {
     final localComic = LocalManager().find(comic.id, ComicType.local);
-    if (localComic != null) {
-      try {
-        return FileImage(localComic.coverFile);
-      } catch (_) {
-        // Fall through to the shared provider if the file cannot be opened yet.
-      }
-    }
+    if (localComic != null) return LocalComicImageProvider(localComic);
   }
   if (comic.sourceKey == 'local') {
     final localComic = LocalManager().find(comic.id, ComicType.local);

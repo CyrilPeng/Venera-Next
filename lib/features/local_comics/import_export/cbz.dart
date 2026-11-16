@@ -3,7 +3,6 @@ import 'package:archive/archive_io.dart' as archive_io;
 import 'package:enough_convert/enough_convert.dart';
 import 'package:venera_native/venera_native.dart';
 import 'package:venera_next/features/comic_storage/comic_storage.dart';
-import 'package:venera_next/features/comic_storage/comic_info_xml.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/foundation/comic_type.dart';

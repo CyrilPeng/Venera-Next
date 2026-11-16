@@ -57,8 +57,7 @@ void main() {
 
   File bookWithComicInfo(String name) {
     final contents = archive.Archive();
-    const notes =
-        'Chapters: 第01卷: 1-2; 第02卷: 3-3';
+    const notes = 'Chapters: 第01卷: 1-2; 第02卷: 3-3';
     final entries = {
       '1.jpg': name,
       '2.jpg': name,
@@ -92,8 +91,7 @@ void main() {
       expect(saved.chapters!.ids.toList(), ['0', '1']);
       expect(saved.downloadedChapters, ['0', '1']);
       // Cover inferred from the first root page when no explicit cover exists.
-      final coverPath =
-          '${manager.path}/${saved.directory}/${saved.cover}';
+      final coverPath = '${manager.path}/${saved.directory}/${saved.cover}';
       expect(File(coverPath).existsSync(), isTrue);
       // Chapter pages are copied into per-chapter directories.
       final chapter1 = await manager.getImages(saved.id, ComicType.local, '0');
