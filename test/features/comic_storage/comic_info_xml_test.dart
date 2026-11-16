@@ -77,9 +77,7 @@ void main() {
     });
 
     test('preserves titles containing colons', () {
-      final chapters = parseChaptersFromNotes(
-        'Chapters: 番外篇: 特别: 3-4',
-      )!;
+      final chapters = parseChaptersFromNotes('Chapters: 番外篇: 特别: 3-4')!;
       expect(chapters, hasLength(1));
       expect(chapters[0].title, '番外篇: 特别');
       expect(chapters[0].start, 3);
@@ -92,14 +90,8 @@ void main() {
     });
 
     test('returns null on overlapping or disordered ranges', () {
-      expect(
-        parseChaptersFromNotes('Chapters: B: 1-2; A: 1-3'),
-        isNull,
-      );
-      expect(
-        parseChaptersFromNotes('Chapters: A: 1-3; B: 3-5'),
-        isNull,
-      );
+      expect(parseChaptersFromNotes('Chapters: B: 1-2; A: 1-3'), isNull);
+      expect(parseChaptersFromNotes('Chapters: A: 1-3; B: 3-5'), isNull);
     });
   });
 }
