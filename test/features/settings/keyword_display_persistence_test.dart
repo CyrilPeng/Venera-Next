@@ -22,7 +22,6 @@ Directory _prepare() {
   final previousPath = App.dataPath;
   final previous = jsonDecode(jsonEncode(appdata.toJson()['settings'])) as Map;
   App.dataPath = root.path;
-  File('${root.path}/appdata.json').writeAsStringSync('{}');
   appdata.settings['disableSyncFields'] = '';
   appdata.settings['blockedWords'] = <String>['alpha', 'beta'];
   appdata.settings['blockedCommentWords'] = <String>['comment'];

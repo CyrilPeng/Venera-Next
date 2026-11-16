@@ -34,7 +34,6 @@ Directory _prepare() {
   final oldSettings =
       jsonDecode(jsonEncode(appdata.toJson()['settings'])) as Map;
   App.dataPath = root.path;
-  File('${root.path}/appdata.json').writeAsStringSync('{}');
   appdata.settings['language'] = 'en-US';
   appdata.settings['disableSyncFields'] = '';
   appdata.settings['blockedWords'] = ['alpha'];
