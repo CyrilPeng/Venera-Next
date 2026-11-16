@@ -116,9 +116,7 @@ Future<void> _openDeleteConfirmation(
   await _tap(tester, find.byKey(_deleteKey));
   expect(find.text('Delete rule'.tl), findsOneWidget);
   expect(
-    find.text(
-      'Delete the keyword rule "@a"?'.tlParams({'a': keyword}),
-    ),
+    find.text('Delete the keyword rule "@a"?'.tlParams({'a': keyword})),
     findsOneWidget,
   );
 }
@@ -537,7 +535,6 @@ void main() {
     },
   );
 
-
   testWidgets(
     'new rules have no delete entry and cancellation keeps editor and settings',
     (tester) async {
@@ -548,7 +545,8 @@ void main() {
       expect(find.text('Delete'.tl), findsNothing);
       await tester.enterText(find.byKey(_wordKey), 'fresh');
       await tester.pumpAndSettle();
-      final before = jsonDecode(jsonEncode(appdata.toJson()['settings'])) as Map;
+      final before =
+          jsonDecode(jsonEncode(appdata.toJson()['settings'])) as Map;
       await _tap(tester, find.byTooltip('Close'.tl));
       expect(find.byType(KeywordRuleEditor), findsNothing);
       expect(jsonDecode(jsonEncode(appdata.toJson()['settings'])), before);
@@ -668,8 +666,10 @@ void main() {
           find.text('The rule changed. Close and reopen the editor.'),
           findsOneWidget,
         );
-        expect(tester.widget<TextButton>(find.byKey(_deleteKey)).onPressed,
-            isNull);
+        expect(
+          tester.widget<TextButton>(find.byKey(_deleteKey)).onPressed,
+          isNull,
+        );
         expect(
           tester
               .widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))

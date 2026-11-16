@@ -454,7 +454,9 @@ class _KeywordRuleEditorState extends SettingsSaveState<KeywordRuleEditor> {
                   onPressed: _editable ? _confirmDelete : null,
                   child: Text(
                     'Delete'.tl,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                 ),
               FilledButton(

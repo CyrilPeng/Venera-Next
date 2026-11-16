@@ -220,7 +220,6 @@ void main() {
     },
   );
 
-
   test(
     'editor deletion distinguishes a stale rule from its published retry',
     () async {
