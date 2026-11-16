@@ -35,6 +35,25 @@ class _ObservedComic extends Comic {
 }
 
 void main() {
+  testWidgets('unfiltered large grids leave offscreen metadata unread', (
+    tester,
+  ) async {
+    final observed = _ObservedComic();
+    final comics = <Comic>[
+      for (var i = 0; i < 1200; i++) _comic('Visible $i'),
+      observed,
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CustomScrollView(slivers: [SliverGridComics(comics: comics)]),
+        ),
+      ),
+    );
+    expect(observed.reads, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'layout rebuilds reuse filtering while changed input metadata is refreshed',
     (tester) async {

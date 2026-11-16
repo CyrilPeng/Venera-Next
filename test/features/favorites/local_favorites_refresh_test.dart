@@ -237,6 +237,21 @@ void main() {
           expect(fixture.history.progressReads, reads);
           expect(tester.widget<SliverGridComics>(grid).comics, same(input));
         }
+        await tester.tap(find.byTooltip('Search'));
+        await tester.pumpAndSettle();
+        expect(fixture.history.progressReads, reads);
+        await tester.tap(find.byTooltip('Cancel'));
+        await tester.pumpAndSettle();
+        expect(fixture.history.progressReads, reads);
+        expect(tester.widget<SliverGridComics>(grid).comics, same(input));
+        unawaited(
+          fixture.navigator.currentState!.push<void>(
+            MaterialPageRoute(
+              builder: (_) => const Scaffold(body: Text('Details')),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
         await tester.runAsync(
           () => fixture.history.addHistory(
             History(
@@ -254,6 +269,14 @@ void main() {
             ),
           ),
         );
+        await _settle(tester);
+        expect(
+          fixture.history.progressReads,
+          reads,
+          reason:
+              'Covered favorites must not query every reader progress update.',
+        );
+        fixture.navigator.currentState!.pop();
         await _settle(tester);
         if (filtered) {
           expect(
@@ -641,6 +664,38 @@ void main() {
       );
       await _chooseAction(tester, 'Invert Selection');
       expect(find.text('Selected 0 comics'), findsOneWidget);
+      final grid = find.byType(SliverGridComics);
+      final searchInput = tester.widget<SliverGridComics>(grid).comics;
+      final reads = fixture.history.progressReads;
+      await tester.runAsync(
+        () => fixture.history.addHistory(
+          History.fromMap({
+            'id': 'seed-1',
+            'type': 17,
+            'time': 1000,
+            'title': 'Existing 1',
+            'subtitle': '',
+            'cover': '',
+            'ep': 1,
+            'page': 2,
+            'max_page': 2,
+          }),
+        ),
+      );
+      await _settle(tester);
+      expect(tester.widget<SliverGridComics>(grid).comics, same(searchInput));
+      expect(fixture.history.progressReads, reads);
+      await tester.tap(find.byTooltip('Cancel'));
+      await _settle(tester);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(fixture.history.progressReads, reads);
+      await tester.tap(find.byTooltip('Cancel'));
+      await _settle(tester);
+      expect(
+        tester.widget<SliverGridComics>(grid).comics.map((comic) => comic.id),
+        ['seed-1'],
+      );
+      expect(fixture.history.progressReads, reads + 1);
       expect(tester.takeException(), isNull);
     },
   );

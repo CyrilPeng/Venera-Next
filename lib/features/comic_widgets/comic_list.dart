@@ -288,13 +288,14 @@ class _SliverGridComics extends StatelessWidget {
 
 /// return the first blocked keyword, or null if not blocked
 String? isBlocked(Comic item, {KeywordFilter? filter}) {
-  return (filter ?? KeywordFilter.fromSettings(appdata.settings))
-      .firstComicMatch(
-        title: item.title,
-        subtitle: item.subtitle,
-        description: item.description,
-        tags: item.tags ?? const [],
-      );
+  final current = filter ?? KeywordFilter.fromSettings(appdata.settings);
+  if (current.rules.isEmpty) return null;
+  return current.firstComicMatch(
+    title: item.title,
+    subtitle: item.subtitle,
+    description: item.description,
+    tags: item.tags ?? const [],
+  );
 }
 
 class ComicList extends StatefulWidget {

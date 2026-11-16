@@ -131,19 +131,22 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   HistoryManager? _history;
   List<FavoriteItem>? _displayedCache;
   List<FavoriteItem>? _visibleCache;
+  List<FavoriteItem>? _visibleInput;
   late var _keywordFilter = KeywordFilter.fromSettings(appdata.settings);
 
-  bool get _usesReadingFilter =>
-      !searchMode &&
-      (readFilterSelect == 'UnCompleted' || readFilterSelect == 'Completed');
+  bool get _hasReadingFilter =>
+      readFilterSelect == 'UnCompleted' || readFilterSelect == 'Completed';
+
+  bool get _usesReadingFilter => !searchMode && _hasReadingFilter;
 
   void _invalidateDisplay() {
     _displayedCache = null;
     _visibleCache = null;
+    _visibleInput = null;
   }
 
   List<FavoriteItem> get _displayedComics =>
-      _displayedCache ??= searchMode ? searchResults : filterComics(comics);
+      searchMode ? searchResults : (_displayedCache ??= filterComics(comics));
 
   var searchResults = <FavoriteItem>[];
 
@@ -152,7 +155,6 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   void _refreshSearchResults() {
-    _invalidateDisplay();
     if (keyword.trim().isEmpty) {
       searchResults = comics;
     } else {
@@ -186,8 +188,13 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   List<FavoriteItem> get _visibleComics {
-    if (_visibleCache case final cached?) return cached;
-    return _visibleCache = _displayedComics
+    final displayed = _displayedComics;
+    if (identical(_visibleInput, displayed) && _visibleCache != null) {
+      return _visibleCache!;
+    }
+    _visibleInput = displayed;
+    if (_keywordFilter.rules.isEmpty) return _visibleCache = displayed;
+    return _visibleCache = displayed
         .where((comic) => isBlocked(comic, filter: _keywordFilter) == null)
         .toList();
   }
@@ -208,19 +215,23 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
         !listEquals(filter.rules, _keywordFilter.rules)) {
       _keywordFilter = filter;
       setState(() {
-        _invalidateDisplay();
+        _visibleCache = null;
+        _visibleInput = null;
         _reconcileSelection();
       });
     }
   }
 
   void _onHistoryChanged() {
-    if (_canReadObservedFolder && _usesReadingFilter) {
-      setState(() {
-        _invalidateDisplay();
-        _reconcileSelection();
-      });
-    }
+    if (!_canReadObservedFolder || !_hasReadingFilter) return;
+    _displayedCache = null;
+    // Search ignores the reading filter, but its cached normal view must still
+    // follow history. A covered route rebuilds when it becomes current again.
+    if (searchMode) return;
+    _visibleCache = null;
+    _visibleInput = null;
+    if (_queryOwner?.canPresent != true) return;
+    setState(_reconcileSelection);
   }
 
   void updateComics() {
@@ -377,7 +388,10 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
       _invalidateDisplay();
       _reconcileSelection();
     }
-    if (_queryOwner != null) return;
+    if (_queryOwner != null) {
+      if (_queryOwner!.canPresent) _reconcileSelection();
+      return;
+    }
     _queryOwner = WindowSelectionTask(context);
     updateComics();
   }
@@ -460,7 +474,6 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
       setState(() {
         searchMode = false;
         keyword = '';
-        _invalidateDisplay();
         _reconcileSelection();
       });
       return true;
@@ -513,7 +526,10 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   Widget _build(BuildContext context, double availableWidth) {
     final target = widget;
     final selection = selectedComics.keys.cast<FavoriteItem>().toList();
-    final selectedItems = selection.map((comic) => comic.detached()).toList();
+    // Snapshot metadata only when an action opens, before any queued writes.
+    late final selectedItems = selection
+        .map((comic) => comic.detached())
+        .toList();
     bool isCurrentSelection() =>
         _canReadObservedFolder &&
         widget.folder == target.folder &&
@@ -975,7 +991,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                   Object.hashAll(selection),
                 ),
                 entries: [
-                  if (!isAllFolder && selectedItems.isNotEmpty)
+                  if (!isAllFolder && selection.isNotEmpty)
                     MenuEntry(
                       icon: Icons.drive_file_move,
                       text: "Move to folder".tl,
@@ -995,7 +1011,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                         );
                       },
                     ),
-                  if (!isAllFolder && selectedItems.isNotEmpty)
+                  if (!isAllFolder && selection.isNotEmpty)
                     MenuEntry(
                       icon: Icons.copy,
                       text: "Copy to folder".tl,
@@ -1032,7 +1048,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                       onClick: invertSelection,
                     ),
                   ],
-                  if (!isAllFolder && selectedItems.isNotEmpty)
+                  if (!isAllFolder && selection.isNotEmpty)
                     MenuEntry(
                       icon: Icons.delete_outline,
                       text: "Delete Comic".tl,
@@ -1060,7 +1076,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                         );
                       },
                     ),
-                  if (selectedItems.isNotEmpty)
+                  if (selection.isNotEmpty)
                     MenuEntry(
                       icon: Icons.download,
                       text: "Download".tl,
@@ -1119,7 +1135,6 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                   setState(() {
                     searchMode = false;
                     keyword = '';
-                    _invalidateDisplay();
                     _reconcileSelection();
                   });
                 },
