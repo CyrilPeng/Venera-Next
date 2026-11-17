@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -281,6 +283,8 @@ class ComicImportOperation {
     String? folder,
     void Function(int scanned)? onScanProgress,
     void Function()? onScanComplete,
+    void Function(ComicDirectoryCopyProgress)? onCopyProgress,
+    void Function()? onRegistering,
   }) async {
     _checkActive();
     final imported = <String?, List<LocalComic>>{folder: []};
@@ -342,7 +346,13 @@ class ComicImportOperation {
     } finally {
       onScanComplete?.call();
     }
-    final result = await _registerComics(imported, copy, issues);
+    final result = await _registerComics(
+      imported,
+      copy,
+      issues,
+      onCopyProgress: onCopyProgress,
+      onRegistering: onRegistering,
+    );
     if (result.importedCount > 0) return result;
     return ComicImportResult(
       succeeded: false,
@@ -768,13 +778,21 @@ class ComicImportOperation {
     List<ComicImportIssue> issues, {
     Map<LocalComic, ComicCopyRecord>? records,
     Iterable<PendingComicCopy> pendingCopies = const [],
+    void Function(ComicDirectoryCopyProgress)? onCopyProgress,
+    void Function()? onRegistering,
   }) async {
     var count = 0;
     final ownedRecords = records ?? <LocalComic, ComicCopyRecord>{};
     try {
       if (copy) {
-        comics = await _copyComicsToLocalDir(comics, issues, ownedRecords);
+        comics = await _copyComicsToLocalDir(
+          comics,
+          issues,
+          ownedRecords,
+          onProgress: onCopyProgress,
+        );
       }
+      onRegistering?.call();
       for (final entry in comics.entries) {
         for (final comic in entry.value) {
           ownedRecords[comic]?.checkUnchanged();
@@ -827,8 +845,9 @@ class ComicImportOperation {
   Future<Map<String?, List<LocalComic>>> _copyComicsToLocalDir(
     Map<String?, List<LocalComic>> comics,
     List<ComicImportIssue> issues,
-    Map<LocalComic, ComicCopyRecord> records,
-  ) async {
+    Map<LocalComic, ComicCopyRecord> records, {
+    void Function(ComicDirectoryCopyProgress)? onProgress,
+  }) async {
     final destination = _manager.path;
     final result = <String?, List<LocalComic>>{};
     for (final entry in comics.entries) {
@@ -854,14 +873,31 @@ class ComicImportOperation {
           }
           metadata[comic.directory] = encoded;
         }
-        final copied = await compute(
-          copyComicDirectories,
-          ComicDirectoryCopyRequest(
-            directories: toCopy.map((comic) => comic.directory).toList(),
-            destination: destination,
-            metadata: metadata,
-          ),
-        );
+        final progress = onProgress == null ? null : ReceivePort();
+        final progressFinished = Completer<void>();
+        final subscription = progress?.listen((message) {
+          if (message == null) {
+            progressFinished.complete();
+          } else {
+            onProgress!(message as ComicDirectoryCopyProgress);
+          }
+        });
+        late final ComicDirectoryCopyResult copied;
+        try {
+          copied = await compute(
+            copyComicDirectories,
+            ComicDirectoryCopyRequest(
+              directories: toCopy.map((comic) => comic.directory).toList(),
+              destination: destination,
+              metadata: metadata,
+              progressPort: progress?.sendPort,
+            ),
+          );
+          if (progress != null) await progressFinished.future;
+        } finally {
+          await subscription?.cancel();
+          progress?.close();
+        }
         final addedSources = <String>{};
         for (final comic in toCopy) {
           if (!addedSources.add(comic.directory)) continue;

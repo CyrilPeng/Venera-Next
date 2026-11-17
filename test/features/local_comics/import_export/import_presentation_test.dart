@@ -272,10 +272,19 @@ void main() {
     final original = ImportComicPresentation.forTask(await host(tester));
     var cancelled = 0;
     final controller = original.showLoading(onCancel: () => cancelled++);
+    controller!.setMessage('Copying 3 of 10 files');
+    controller.setProgress(0.3);
     await tester.pump();
+    expect(find.text('Copying 3 of 10 files'), findsOneWidget);
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+          .value,
+      0.3,
+    );
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpWidget(const SizedBox());
-    expect(controller!.closed, isTrue);
+    expect(controller.closed, isTrue);
     expect(cancelled, 1);
     controller.setMessage('Late progress');
     controller.setProgress(1);

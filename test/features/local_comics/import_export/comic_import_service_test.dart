@@ -92,6 +92,60 @@ void main() {
     return ComicCopyRecord.read(Directory(result.copies[source.directory]!));
   }
 
+  for (final failRead in [false, true]) {
+    test(
+      'directory worker drains progress before registration; failRead=$failRead',
+      () async {
+        final source = Directory('${root.path}/progress-source')..createSync();
+        for (var index = 0; index < 8; index++) {
+          File(
+            '${source.path}/$index.jpg',
+          ).writeAsStringSync(failRead && index == 0 ? '' : 'page $index');
+        }
+        final progress = <ComicDirectoryCopyProgress>[];
+        var registering = false;
+        final result = await service.runImport(
+          (operation) => operation.directory(
+            source,
+            single: true,
+            copy: true,
+            onCopyProgress: (update) {
+              expect(registering, isFalse);
+              expect(manager.count, 0);
+              expect(update.sourcePath, source.path);
+              progress.add(update);
+            },
+            onRegistering: () {
+              registering = true;
+              expect(manager.count, 0);
+              if (!failRead) {
+                expect(progress.last.stage, ComicCopyStage.verifying);
+                expect(progress.last.processed, 8);
+                expect(progress.last.total, 8);
+              }
+            },
+          ),
+        );
+        expect(registering, isTrue);
+        expect(result.importedCount, failRead ? 0 : 1);
+        expect(source.listSync(), hasLength(8));
+        if (failRead) {
+          expect(result.issues.single.kind, ComicImportIssueKind.copyFailed);
+          expect(manager.directory.listSync(), isEmpty);
+        } else {
+          expect(result.issues, isEmpty);
+          expect(
+            progress.map((update) => update.stage).toSet(),
+            ComicCopyStage.values.toSet(),
+          );
+          final saved = manager.findByName(source.name)!;
+          expect(ComicCopyRecord.exists(Directory(saved.directory)), isFalse);
+          expect(Directory(saved.directory).listSync(), hasLength(8));
+        }
+      },
+    );
+  }
+
   test(
     'recovery restores completed copy metadata and retires its markers',
     () async {
