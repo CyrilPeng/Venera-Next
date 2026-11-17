@@ -41,6 +41,7 @@ class _Fixture {
   double textScale = 1;
   bool dark = false;
   double keyboardInset = 0;
+  final tileResolutions = <String, int>{};
 
   Widget host({String folder = 'B'}) => FavoritesScope(
     manager: manager,
@@ -96,7 +97,11 @@ class _ObservedHistory extends HistoryManager {
   }
 }
 
-Future<_Fixture> _prepare(WidgetTester tester, int count) async {
+Future<_Fixture> _prepare(
+  WidgetTester tester,
+  int count, {
+  bool observeTiles = false,
+}) async {
   final root = Directory('build').absolute.createTempSync('favorite-refresh-');
   final buildRoot = Directory('build').resolveSymbolicLinksSync();
   final previousPath = App.dataPath;
@@ -121,6 +126,23 @@ Future<_Fixture> _prepare(WidgetTester tester, int count) async {
     (_) async => false,
   );
   configureComicWidgets(
+    tileStateResolver: !observeTiles
+        ? null
+        : (comic) {
+            fixture.tileResolutions.update(
+              comic.id,
+              (count) => count + 1,
+              ifAbsent: () => 1,
+            );
+            final saved = fixture.history.find(
+              comic.id,
+              (comic as FavoriteItem).type,
+            );
+            return ComicTileState(
+              historyPage: saved?.page,
+              historyDescription: saved == null ? null : 'Page ${saved.page}',
+            );
+          },
     addStateListener: (listener) {
       fixture.manager.addListener(listener);
       fixture.history.addListener(listener);
@@ -214,6 +236,113 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   App.dataPath = Directory.systemTemp.path;
   App.cachePath = Directory.systemTemp.path;
+
+  testWidgets(
+    'covered favorites defer badge reads and show current progress on return',
+    (tester) async {
+      final fixture = await _prepare(tester, 1200, observeTiles: true);
+      await tester.pumpWidget(fixture.host());
+      await _settle(tester);
+      final visibleComic =
+          tester.widget<ComicTile>(find.byType(ComicTile).first).comic
+              as FavoriteItem;
+      fixture.navigator.currentState!.push<void>(
+        MaterialPageRoute(
+          builder: (_) => const Scaffold(body: Text('Details')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      fixture.tileResolutions.clear();
+      await tester.runAsync(
+        () => fixture.history.addHistory(
+          History(
+            type: HistoryType(visibleComic.type.value),
+            time: DateTime.now(),
+            title: visibleComic.title,
+            subtitle: '',
+            cover: '',
+            ep: 1,
+            page: 2,
+            id: visibleComic.id,
+            readEpisode: {'1'},
+            maxPage: 3,
+            readDurationMs: 0,
+          ),
+        ),
+      );
+      await _settle(tester);
+      expect(fixture.tileResolutions, isEmpty);
+      fixture.navigator.currentState!.pop();
+      await _settle(tester);
+      expect(
+        find.descendant(
+          of: _tile(visibleComic.id),
+          matching: find.text('Page 2'),
+        ),
+        findsOneWidget,
+      );
+      expect(fixture.tileResolutions[visibleComic.id], greaterThan(0));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'search, selection and keyboard layouts preserve displayed cards',
+    (tester) async {
+      final fixture = await _prepare(tester, 1200, observeTiles: true);
+      await tester.pumpWidget(fixture.host());
+      await _settle(tester);
+      final original = tester.element(find.byType(ComicTile).first);
+      final visibleComic = (original.widget as ComicTile).comic;
+      fixture.tileResolutions.clear();
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      expect(fixture.tileResolutions, isEmpty);
+      for (final inset in [80.0, 160.0, 240.0, 0.0]) {
+        fixture.keyboardInset = inset;
+        await tester.pumpWidget(fixture.host());
+        await tester.pumpAndSettle();
+        expect(tester.element(_tile(visibleComic.id)), same(original));
+        expect(fixture.tileResolutions[visibleComic.id] ?? 0, 0);
+      }
+      await tester.tap(find.byTooltip('Cancel'));
+      await tester.pumpAndSettle();
+      expect(tester.element(find.byType(ComicTile).first), same(original));
+      expect(fixture.tileResolutions[visibleComic.id] ?? 0, 0);
+      for (var i = 0; i < 2; i++) {
+        await tester.tap(find.byTooltip('Select comics'));
+        await tester.pumpAndSettle();
+        expect(find.text('Selected 0 comics'), findsOneWidget);
+        expect(tester.element(_tile(visibleComic.id)), same(original));
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(find.text('Selected 0 comics'), findsNothing);
+        expect(tester.element(_tile(visibleComic.id)), same(original));
+      }
+      expect(fixture.tileResolutions[visibleComic.id] ?? 0, 0);
+      fixture.tileResolutions.clear();
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      expect(fixture.tileResolutions, isEmpty);
+      await tester.enterText(find.byType(TextField), 'Existing 777');
+      await tester.pumpAndSettle();
+      expect(_tile(visibleComic.id), findsNothing);
+      expect(_tile('seed-777'), findsOneWidget);
+      expect(fixture.tileResolutions['seed-777'], greaterThan(0));
+      final hero = tester.widget<ComicTile>(_tile('seed-777')).heroID;
+      for (final action in ['read', 'viewDetail']) {
+        appdata.settings[FavoritePreferences.onClickFavorite.key] = action;
+        await tester.pumpAndSettle();
+        final tile = tester.widget<ComicTile>(_tile('seed-777'));
+        expect(tile.heroID, hero);
+        expect(
+          tile.menuOptions!.any((entry) => entry.text == 'Read'),
+          action == 'viewDetail',
+        );
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final filtered in [false, true]) {
     testWidgets(

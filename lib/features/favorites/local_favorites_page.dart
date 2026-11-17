@@ -14,7 +14,7 @@ import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show listEquals, mapEquals;
 import 'package:flutter/services.dart';
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/button.dart';
@@ -132,6 +132,10 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   List<FavoriteItem>? _displayedCache;
   List<FavoriteItem>? _visibleCache;
   List<FavoriteItem>? _visibleInput;
+  List<FavoriteItem>? _gridInput;
+  Map<Comic, bool>? _gridSelection;
+  String? _gridFolder;
+  Widget? _comicGrid;
   late var _keywordFilter = KeywordFilter.fromSettings(appdata.settings);
 
   bool get _hasReadingFilter =>
@@ -197,6 +201,17 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     return _visibleCache = displayed
         .where((comic) => isBlocked(comic, filter: _keywordFilter) == null)
         .toList();
+  }
+
+  void _prepareComicGrid(List<FavoriteItem> input) {
+    if (!identical(input, _gridInput) ||
+        _gridFolder != widget.folder ||
+        !mapEquals(selectedComics, _gridSelection)) {
+      _gridInput = input;
+      _gridFolder = widget.folder;
+      _gridSelection = Map<Comic, bool>.unmodifiable(selectedComics);
+      _comicGrid = null;
+    }
   }
 
   void _reconcileSelection() {
@@ -570,6 +585,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     }
 
     final displayedComics = _displayedComics;
+    _prepareComicGrid(displayedComics);
     final compactActions = context.width < changePoint && !isAllFolder;
     final canSelect =
         _canReadObservedFolder && !isLoading && _visibleComics.isNotEmpty;
@@ -1212,10 +1228,10 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                 ),
               ),
             ),
-          SliverGridComics(
+          _comicGrid ??= SliverGridComics(
             comics: displayedComics,
             showHiddenCount: true,
-            selections: selectedComics,
+            selections: _gridSelection,
             useFavoriteDisplaySettings: true,
             menuBuilder: (c) {
               return [
@@ -1383,20 +1399,20 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
         child: body,
       ),
     );
-    if (multiSelectMode || searchMode) {
-      body = Focus(
-        autofocus: true,
-        onKeyEvent: (node, event) {
-          if (event is KeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.escape &&
-              _dismissLocalMode()) {
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        },
-        child: body,
-      );
-    }
+    // Changing modes must not insert/remove an ancestor of the whole grid.
+    body = Focus(
+      autofocus: multiSelectMode || searchMode,
+      skipTraversal: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape &&
+            _dismissLocalMode()) {
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: body,
+    );
     return PopScope(
       canPop: !multiSelectMode && !searchMode && parentFolder == null,
       onPopInvokedWithResult: (didPop, result) {

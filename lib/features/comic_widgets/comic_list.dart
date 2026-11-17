@@ -67,6 +67,7 @@ class _SliverGridComicsState extends State<SliverGridComics> {
   List<Comic> _inputSnapshot = [];
   late var _filter = KeywordFilter.fromSettings(appdata.settings);
   late var _presentation = _readPresentation();
+  bool _tickerEnabled = true;
 
   Object _readPresentation() {
     final preferences = GlobalPreferenceStore(appdata.settings);
@@ -78,6 +79,7 @@ class _SliverGridComicsState extends State<SliverGridComics> {
       preferences.read(DiscoveryPreferences.showHistoryStatusOnTile),
       preferences.read(DiscoveryPreferences.showDetailedReadingProgress),
       preferences.read(DiscoveryPreferences.showUpdateStatusOnTile),
+      preferences.read(FavoritePreferences.onClickFavorite),
       appdata.settings['language'],
       favorite.isGallery,
       favorite.galleryColumns,
@@ -127,6 +129,13 @@ class _SliverGridComicsState extends State<SliverGridComics> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Becoming visible rebuilds the cards with the latest badge state.
+    _tickerEnabled = TickerMode.valuesOf(context).enabled;
+  }
+
+  @override
   void dispose() {
     removeComicWidgetStateListener(_onComicStatusChanged);
     appdata.settings.removeListener(_onSettingsChanged);
@@ -151,7 +160,7 @@ class _SliverGridComicsState extends State<SliverGridComics> {
   void _onComicStatusChanged() {
     // Favorite/history badges change independently of list membership. The
     // caller supplies replacement metadata through didUpdateWidget.
-    if (mounted) setState(() {});
+    if (mounted && _tickerEnabled) setState(() {});
   }
 
   void update() {
