@@ -30,6 +30,7 @@ class SliverGridComics extends StatefulWidget {
   const SliverGridComics({
     super.key,
     required this.comics,
+    this.visibleComics,
     this.onLastItemBuild,
     this.badgeBuilder,
     this.menuBuilder,
@@ -41,6 +42,10 @@ class SliverGridComics extends StatefulWidget {
   });
 
   final List<Comic> comics;
+
+  /// A caller-owned filtering result. Its owner refreshes it when metadata or
+  /// rules change. Keep [comics] for the hidden count and reason dialog.
+  final List<Comic>? visibleComics;
 
   final Map<Comic, bool>? selections;
 
@@ -68,6 +73,7 @@ class _SliverGridComicsState extends State<SliverGridComics> {
   late var _filter = KeywordFilter.fromSettings(appdata.settings);
   late var _presentation = _readPresentation();
   bool _tickerEnabled = true;
+  final _parentRoutes = <ModalRoute<dynamic>>[];
 
   Object _readPresentation() {
     final preferences = GlobalPreferenceStore(appdata.settings);
@@ -87,16 +93,18 @@ class _SliverGridComicsState extends State<SliverGridComics> {
   }
 
   void _refreshComics() {
-    _inputSnapshot = List.of(widget.comics);
+    _inputSnapshot = List.of(widget.visibleComics ?? widget.comics);
     final previousIDs = <(String, String), Queue<int>>{};
     for (var i = 0; i < comics.length; i++) {
       (previousIDs[(comics[i].sourceKey, comics[i].id)] ??= Queue<int>()).add(
         heroIDs[i],
       );
     }
-    comics = widget.comics
-        .where((comic) => isBlocked(comic, filter: _filter) == null)
-        .toList();
+    comics = widget.visibleComics != null
+        ? _inputSnapshot
+        : widget.comics
+              .where((comic) => isBlocked(comic, filter: _filter) == null)
+              .toList();
     heroIDs = [
       for (final comic in comics)
         switch (previousIDs[(comic.sourceKey, comic.id)]) {
@@ -111,10 +119,15 @@ class _SliverGridComicsState extends State<SliverGridComics> {
     super.didUpdateWidget(oldWidget);
     // Equality on Comic only compares identity, so replacement metadata must
     // refresh too. Keep a snapshot to detect callers mutating the input list.
-    if (widget.comics.length != _inputSnapshot.length ||
-        Iterable<int>.generate(widget.comics.length).any(
-          (index) => !identical(widget.comics[index], _inputSnapshot[index]),
-        )) {
+    final input = widget.visibleComics ?? widget.comics;
+    if ((oldWidget.visibleComics == null) != (widget.visibleComics == null) ||
+        input.length != _inputSnapshot.length ||
+        Iterable<int>.generate(
+          input.length,
+        ).any((index) => !identical(input[index], _inputSnapshot[index]))) {
+      if (widget.visibleComics == null) {
+        _filter = KeywordFilter.fromSettings(appdata.settings);
+      }
       _refreshComics();
     }
   }
@@ -133,6 +146,13 @@ class _SliverGridComicsState extends State<SliverGridComics> {
     super.didChangeDependencies();
     // Becoming visible rebuilds the cards with the latest badge state.
     _tickerEnabled = TickerMode.valuesOf(context).enabled;
+    _parentRoutes.clear();
+    var route = ModalRoute.of(context);
+    while (route != null && !_parentRoutes.contains(route)) {
+      _parentRoutes.add(route);
+      final navigatorContext = route.navigator?.context;
+      route = navigatorContext == null ? null : ModalRoute.of(navigatorContext);
+    }
   }
 
   @override
@@ -144,7 +164,9 @@ class _SliverGridComicsState extends State<SliverGridComics> {
 
   void _onSettingsChanged() {
     if (!mounted) return;
-    final filter = KeywordFilter.fromSettings(appdata.settings);
+    final filter = widget.visibleComics == null
+        ? KeywordFilter.fromSettings(appdata.settings)
+        : _filter;
     final presentation = _readPresentation();
     final rulesChanged = !listEquals(filter.rules, _filter.rules);
     if (!rulesChanged && presentation == _presentation) return;
@@ -160,7 +182,11 @@ class _SliverGridComicsState extends State<SliverGridComics> {
   void _onComicStatusChanged() {
     // Favorite/history badges change independently of list membership. The
     // caller supplies replacement metadata through didUpdateWidget.
-    if (mounted && _tickerEnabled) setState(() {});
+    if (mounted &&
+        _tickerEnabled &&
+        _parentRoutes.every((route) => route.isCurrent)) {
+      setState(() {});
+    }
   }
 
   void update() {

@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/components/button.dart';
+import 'package:venera_next/components/select.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/favorites/favorite_models.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/favorites/favorites_scope.dart';
 import 'package:venera_next/features/favorites/favorite_folder_browser.dart';
+import 'package:venera_next/features/favorites/favorite_folder.dart';
 import 'package:venera_next/features/favorites/local_favorites_page.dart';
 import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/history/history_scope.dart';
@@ -36,15 +38,18 @@ Finder _tile(String id) => find.byWidgetPredicate(
 
 class _Fixture {
   final manager = LocalFavoritesManager.independent();
+  _ObservedStore? queries;
   final history = _ObservedHistory();
   final navigator = appNavigation.rootNavigatorKey;
+  final nestedNavigator = GlobalKey<NavigatorState>();
+  bool nested = false;
   double textScale = 1;
   bool dark = false;
   double keyboardInset = 0;
   final tileResolutions = <String, int>{};
 
   Widget host({String folder = 'B'}) => FavoritesScope(
-    manager: manager,
+    manager: queries ?? manager,
     child: HistoryScope(
       manager: history,
       child: MaterialApp(
@@ -65,17 +70,110 @@ class _Fixture {
             child: child!,
           ),
         ),
-        home: Scaffold(
-          body: LocalFavoritesPage(
-            folder: folder,
-            showFolders: () {},
-            onFolderSelected: (_, _) {},
-            updateFolderList: () {},
-          ),
-        ),
+        home: nested
+            ? Navigator(
+                key: nestedNavigator,
+                onGenerateRoute: (_) =>
+                    MaterialPageRoute<void>(builder: (_) => _page(folder)),
+              )
+            : _page(folder),
       ),
     ),
   );
+
+  Widget _page(String folder) => Scaffold(
+    body: LocalFavoritesPage(
+      folder: folder,
+      showFolders: () {},
+      onFolderSelected: (_, _) {},
+      updateFolderList: () {},
+    ),
+  );
+}
+
+class _ObservedStore extends Fake implements LocalFavoritesManager {
+  _ObservedStore(this.store);
+  final LocalFavoritesManager store;
+  int reads = 0;
+  final metadataReads = <String, int>{};
+  final pending = <Completer<List<FavoriteItem>>>[];
+  bool holdReads = false;
+
+  List<FavoriteItem> _observe(List<FavoriteItem> comics) => [
+    for (final comic in comics)
+      _ObservedItem(
+        comic,
+        () => metadataReads.update(
+          comic.id,
+          (count) => count + 1,
+          ifAbsent: () => 1,
+        ),
+      ),
+  ];
+
+  @override
+  int get connectionGeneration => store.connectionGeneration;
+  @override
+  int get totalComics => store.totalComics;
+  @override
+  int folderComics(String folder) => store.folderComics(folder);
+  @override
+  FavoriteFolderTree get folderTree => store.folderTree;
+  @override
+  bool existsFolder(String folder) => store.existsFolder(folder);
+  @override
+  (String?, String?) findLinked(String folder) => store.findLinked(folder);
+  @override
+  void addListener(VoidCallback listener) => store.addListener(listener);
+  @override
+  void removeListener(VoidCallback listener) => store.removeListener(listener);
+  @override
+  List<FavoriteItem> getFolderComics(String folder) {
+    reads++;
+    return _observe(store.getFolderComics(folder));
+  }
+
+  @override
+  List<FavoriteItem> getAllComics() {
+    reads++;
+    return _observe(store.getAllComics());
+  }
+
+  @override
+  Future<List<FavoriteItem>> getFolderComicsAsync(String folder) {
+    reads++;
+    if (holdReads) {
+      final result = Completer<List<FavoriteItem>>();
+      pending.add(result);
+      return result.future.then(_observe);
+    }
+    return store.getFolderComicsAsync(folder).then(_observe);
+  }
+
+  @override
+  Future<List<FavoriteItem>> getAllComicsAsync() {
+    reads++;
+    return store.getAllComicsAsync().then(_observe);
+  }
+}
+
+class _ObservedItem extends FavoriteItem {
+  _ObservedItem(FavoriteItem item, this.onRead)
+    : super.withTime(
+        id: item.id,
+        name: item.name,
+        author: item.author,
+        type: item.type,
+        tags: item.tags,
+        coverPath: item.coverPath,
+        time: item.time,
+      );
+  final VoidCallback onRead;
+  @override
+  String get description {
+    onRead();
+    return super.description;
+  }
 }
 
 class _ObservedHistory extends HistoryManager {
@@ -83,6 +181,9 @@ class _ObservedHistory extends HistoryManager {
 
   int reads = 0;
   int progressReads = 0;
+  int syncProgressReads = 0;
+  bool holdReads = false;
+  final pending = <Completer<Set<(String, int)>>>[];
 
   @override
   History? find(String id, ComicType type) {
@@ -92,8 +193,21 @@ class _ObservedHistory extends HistoryManager {
 
   @override
   Set<(String, int)> completedAmong(Iterable<(String, int)> identities) {
-    progressReads++;
+    syncProgressReads++;
     return super.completedAmong(identities);
+  }
+
+  @override
+  Future<Set<(String, int)>> completedAmongAsync(
+    Iterable<(String, int)> identities,
+  ) {
+    progressReads++;
+    if (holdReads) {
+      final result = Completer<Set<(String, int)>>();
+      pending.add(result);
+      return result.future;
+    }
+    return super.completedAmongAsync(identities);
   }
 }
 
@@ -101,6 +215,7 @@ Future<_Fixture> _prepare(
   WidgetTester tester,
   int count, {
   bool observeTiles = false,
+  bool observeQueries = false,
 }) async {
   final root = Directory('build').absolute.createTempSync('favorite-refresh-');
   final buildRoot = Directory('build').resolveSymbolicLinksSync();
@@ -111,6 +226,7 @@ Future<_Fixture> _prepare(
   );
   final implicit = appdata.implicitData;
   final fixture = _Fixture();
+  if (observeQueries) fixture.queries = _ObservedStore(fixture.manager);
   App.dataPath = root.path;
   App.cachePath = root.path;
   appdata.settings['language'] = 'en-US';
@@ -156,6 +272,9 @@ Future<_Fixture> _prepare(
     await tester.pumpWidget(const SizedBox());
     await tester.runAsync(() async {
       await fixture.manager.closeAndWait();
+      if (fixture.history.hasPendingWrites) {
+        await fixture.history.waitForAsyncWrites();
+      }
       fixture.history.close();
     });
     configureComicWidgets();
@@ -195,7 +314,12 @@ Future<void> _settle(WidgetTester tester) async {
     var i = 0;
     i < 1000 &&
         find
-            .byType(CircularProgressIndicator, skipOffstage: false)
+            .byWidgetPredicate(
+              (widget) =>
+                  widget is CircularProgressIndicator ||
+                  widget is LinearProgressIndicator,
+              skipOffstage: false,
+            )
             .evaluate()
             .isNotEmpty;
     i++
@@ -206,7 +330,12 @@ Future<void> _settle(WidgetTester tester) async {
     await tester.pump();
   }
   expect(
-    find.byType(CircularProgressIndicator, skipOffstage: false),
+    find.byWidgetPredicate(
+      (widget) =>
+          widget is CircularProgressIndicator ||
+          widget is LinearProgressIndicator,
+      skipOffstage: false,
+    ),
     findsNothing,
   );
   await tester.pumpAndSettle();
@@ -240,9 +369,21 @@ void main() {
   testWidgets(
     'covered favorites defer badge reads and show current progress on return',
     (tester) async {
-      final fixture = await _prepare(tester, 1200, observeTiles: true);
+      final fixture = await _prepare(
+        tester,
+        1200,
+        observeTiles: true,
+        observeQueries: true,
+      );
+      appdata.settings['blockedWords'] = List.generate(
+        100,
+        (i) => 'missing-rule-$i',
+      );
       await tester.pumpWidget(fixture.host());
       await _settle(tester);
+      final queries = fixture.queries!;
+      expect(queries.reads, 1);
+      expect(queries.metadataReads['seed-999'], 1);
       final visibleComic =
           tester.widget<ComicTile>(find.byType(ComicTile).first).comic
               as FavoriteItem;
@@ -272,8 +413,17 @@ void main() {
       );
       await _settle(tester);
       expect(fixture.tileResolutions, isEmpty);
+      for (var i = 0; i < 3; i++) {
+        await tester.runAsync(
+          () => fixture.manager.addComic('B', _comic('added-$i', 'Added $i')),
+        );
+      }
+      await _settle(tester);
+      expect(queries.reads, 1);
+      expect(queries.metadataReads['seed-999'], 1);
       fixture.navigator.currentState!.pop();
       await _settle(tester);
+      expect(queries.reads, 2);
       expect(
         find.descendant(
           of: _tile(visibleComic.id),
@@ -289,9 +439,19 @@ void main() {
   testWidgets(
     'search, selection and keyboard layouts preserve displayed cards',
     (tester) async {
-      final fixture = await _prepare(tester, 1200, observeTiles: true);
+      final fixture = await _prepare(
+        tester,
+        1200,
+        observeTiles: true,
+        observeQueries: true,
+      );
+      appdata.settings['blockedWords'] = List.generate(
+        100,
+        (i) => 'missing-rule-$i',
+      );
       await tester.pumpWidget(fixture.host());
       await _settle(tester);
+      expect(fixture.queries!.metadataReads['seed-999'], 1);
       final original = tester.element(find.byType(ComicTile).first);
       final visibleComic = (original.widget as ComicTile).comic;
       fixture.tileResolutions.clear();
@@ -341,6 +501,7 @@ void main() {
         );
       }
       expect(tester.takeException(), isNull);
+      expect(fixture.queries!.metadataReads['seed-999'], 1);
     },
   );
 
@@ -349,6 +510,10 @@ void main() {
       'large favorites reuse filtering across keyboard layouts and follow history: filtered=$filtered',
       (tester) async {
         final fixture = await _prepare(tester, 1200);
+        appdata.settings['blockedWords'] = List.generate(
+          100,
+          (i) => 'missing-rule-$i',
+        );
         if (filtered) {
           appdata.implicitData['local_favorites_read_filter'] = 'Completed';
         }
@@ -359,6 +524,7 @@ void main() {
         final reads = fixture.history.progressReads;
         expect(reads, filtered ? 1 : 0);
         expect(fixture.history.reads, 0);
+        expect(fixture.history.syncProgressReads, 0);
         for (final inset in [80.0, 160.0, 240.0, 0.0]) {
           fixture.keyboardInset = inset;
           await tester.pumpWidget(fixture.host());
@@ -863,7 +1029,7 @@ void main() {
             await _settle(tester);
             if (covered) {
               fixture.navigator.currentState!.pop();
-              await tester.pumpAndSettle();
+              await _settle(tester);
             }
             expect(_tile('new'), findsOneWidget);
             expect(
@@ -910,4 +1076,125 @@ void main() {
     expect(_tile('from-b'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('late progress results follow the current folder and filter', (
+    tester,
+  ) async {
+    final fixture = await _prepare(tester, 3);
+    await tester.runAsync(
+      () => fixture.manager.addComic('A', _comic('from-a', 'Other folder')),
+    );
+    fixture.history.holdReads = true;
+    appdata.implicitData['local_favorites_read_filter'] = 'Completed';
+    await tester.pumpWidget(fixture.host());
+    expect(fixture.history.pending, hasLength(1));
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(fixture.history.syncProgressReads, 0);
+    await tester.pumpWidget(fixture.host(folder: 'A'));
+    expect(fixture.history.pending, hasLength(2));
+    fixture.history.pending[0].complete({('seed-0', 17)});
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(_tile('seed-0'), findsNothing);
+    await tester.tap(find.byTooltip('Filter'));
+    await tester.pump();
+    await tester.tap(find.byType(Select));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('UnCompleted').last);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Confirm').last);
+    for (
+      var i = 0;
+      i < 100 && find.text('Confirm').evaluate().isNotEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(find.text('Confirm'), findsNothing);
+    expect(fixture.history.pending, hasLength(2));
+    fixture.history.pending[1].complete({('from-a', 17)});
+    await _settle(tester);
+    expect(_tile('from-a'), findsNothing);
+    expect(
+      find.text('Hidden by reading-status filter: 1 comics'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+    expect(_tile('from-a'), findsOneWidget);
+    fixture.history.notifyListeners();
+    await tester.pump();
+    expect(fixture.history.pending, hasLength(2));
+    await tester.tap(find.byTooltip('Cancel'));
+    await tester.pump();
+    expect(fixture.history.pending, hasLength(3));
+    fixture.history.pending[2].completeError(
+      StateError('completion probe failure'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('completion probe failure'), findsOneWidget);
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+    expect(fixture.history.pending, hasLength(4));
+    fixture.history.pending[3].complete({});
+    await _settle(tester);
+    expect(_tile('from-a'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final popup in [false, true]) {
+    testWidgets(
+      'root cover defers nested favorites and late loaded metadata: popup=$popup',
+      (tester) async {
+        final fixture = await _prepare(tester, 1200, observeQueries: true);
+        fixture.nested = true;
+        final queries = fixture.queries!..holdReads = true;
+        appdata.settings['blockedWords'] = List.generate(
+          100,
+          (i) => 'missing-$i',
+        );
+        await tester.pumpWidget(fixture.host());
+        expect(queries.pending, hasLength(1));
+        unawaited(
+          popup
+              ? showDialog<void>(
+                  context: fixture.navigator.currentContext!,
+                  builder: (_) => const AlertDialog(content: Text('Popup')),
+                )
+              : fixture.navigator.currentState!.push<void>(
+                  MaterialPageRoute(
+                    builder: (_) => const Scaffold(body: Text('Reader')),
+                  ),
+                ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        queries.pending.single.complete(fixture.manager.getFolderComics('B'));
+        await tester.pump();
+        expect(queries.metadataReads, isEmpty);
+        for (var i = 0; i < 3; i++) {
+          await tester.runAsync(
+            () => fixture.manager.addComic('B', _comic('new-$i', 'New $i')),
+          );
+        }
+        await tester.pump();
+        expect(queries.reads, 1);
+        fixture.navigator.currentState!.pop();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump();
+        expect(queries.pending, hasLength(2));
+        queries.pending.last.complete(fixture.manager.getFolderComics('B'));
+        await _settle(tester);
+        expect(queries.reads, 2);
+        expect(queries.metadataReads['seed-999'], 1);
+        expect(_tile('new-2'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

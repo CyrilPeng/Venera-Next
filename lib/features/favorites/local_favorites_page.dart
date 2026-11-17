@@ -125,23 +125,48 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   int _filterRequest = 0;
   ModalRoute<dynamic>? _updateFlyoutRoute;
   Object? _loadError;
+  bool _comicsDirty = true;
+  List<FavoriteItem>? _pendingComics;
+  bool _tickerEnabled = true;
+  final _parentRoutes = <ModalRoute<dynamic>>[];
+  bool _parentWasCovered = false;
+  FocusScopeNode? _routeFocus;
+  bool _routeHadFocus = false;
 
   late String readFilterSelect;
 
   HistoryManager? _history;
+  Set<(String, int)>? _completed;
+  List<FavoriteItem>? _completionInput;
+  int _readingGeneration = 0;
+  bool _readingLoading = false;
+  Object? _readingError;
   List<FavoriteItem>? _displayedCache;
   List<FavoriteItem>? _visibleCache;
   List<FavoriteItem>? _visibleInput;
   List<FavoriteItem>? _gridInput;
+  List<FavoriteItem>? _gridVisibleInput;
   Map<Comic, bool>? _gridSelection;
   String? _gridFolder;
   Widget? _comicGrid;
   late var _keywordFilter = KeywordFilter.fromSettings(appdata.settings);
+  late var _blockDisplayMode = appdata.settings['comicDisplayMode'];
+  final _blockedCache = Map<FavoriteItem, bool>.identity();
+
+  bool get _canRefresh =>
+      _tickerEnabled &&
+      _queryOwner?.canPresent == true &&
+      _parentRoutes.every((route) => route.isCurrent);
 
   bool get _hasReadingFilter =>
       readFilterSelect == 'UnCompleted' || readFilterSelect == 'Completed';
 
   bool get _usesReadingFilter => !searchMode && _hasReadingFilter;
+
+  bool get _isFiltering => _usesReadingFilter && _readingLoading;
+
+  bool get _hasListError =>
+      _loadError != null || (_usesReadingFilter && _readingError != null);
 
   void _invalidateDisplay() {
     _displayedCache = null;
@@ -149,8 +174,11 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     _visibleInput = null;
   }
 
-  List<FavoriteItem> get _displayedComics =>
-      searchMode ? searchResults : (_displayedCache ??= filterComics(comics));
+  List<FavoriteItem> get _displayedComics => searchMode
+      ? searchResults
+      : _hasReadingFilter
+      ? _displayedCache ?? const []
+      : comics;
 
   var searchResults = <FavoriteItem>[];
 
@@ -186,8 +214,11 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   void _replaceComics(List<FavoriteItem> value) {
     comics = value;
+    _blockedCache.clear();
+    _invalidateCompletion();
     _invalidateDisplay();
     if (searchMode) _refreshSearchResults();
+    _refreshReadingFilter();
     _reconcileSelection();
   }
 
@@ -198,16 +229,26 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     }
     _visibleInput = displayed;
     if (_keywordFilter.rules.isEmpty) return _visibleCache = displayed;
-    return _visibleCache = displayed
-        .where((comic) => isBlocked(comic, filter: _keywordFilter) == null)
+    final visible = displayed
+        .where(
+          (comic) => !_blockedCache.putIfAbsent(
+            comic,
+            () => isBlocked(comic, filter: _keywordFilter) != null,
+          ),
+        )
         .toList();
+    return _visibleCache = visible.length == displayed.length
+        ? displayed
+        : visible;
   }
 
-  void _prepareComicGrid(List<FavoriteItem> input) {
+  void _prepareComicGrid(List<FavoriteItem> input, List<FavoriteItem> visible) {
     if (!identical(input, _gridInput) ||
+        !identical(visible, _gridVisibleInput) ||
         _gridFolder != widget.folder ||
         !mapEquals(selectedComics, _gridSelection)) {
       _gridInput = input;
+      _gridVisibleInput = visible;
       _gridFolder = widget.folder;
       _gridSelection = Map<Comic, bool>.unmodifiable(selectedComics);
       _comicGrid = null;
@@ -215,6 +256,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   void _reconcileSelection() {
+    if (!_canRefresh || _isFiltering) return;
     lastSelectedIndex = null;
     if (selectedComics.isEmpty) return;
     selectedComics = {
@@ -226,31 +268,38 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   void _onSettingsChanged() {
     final filter = KeywordFilter.fromSettings(appdata.settings);
+    final displayMode = appdata.settings['comicDisplayMode'];
     if (_canReadObservedFolder &&
-        !listEquals(filter.rules, _keywordFilter.rules)) {
+        (!listEquals(filter.rules, _keywordFilter.rules) ||
+            displayMode != _blockDisplayMode)) {
       _keywordFilter = filter;
-      setState(() {
-        _visibleCache = null;
-        _visibleInput = null;
-        _reconcileSelection();
-      });
+      _blockDisplayMode = displayMode;
+      _blockedCache.clear();
+      _visibleCache = null;
+      _visibleInput = null;
+      if (_canRefresh) setState(_reconcileSelection);
     }
   }
 
   void _onHistoryChanged() {
-    if (!_canReadObservedFolder || !_hasReadingFilter) return;
-    _displayedCache = null;
-    // Search ignores the reading filter, but its cached normal view must still
-    // follow history. A covered route rebuilds when it becomes current again.
-    if (searchMode) return;
-    _visibleCache = null;
-    _visibleInput = null;
-    if (_queryOwner?.canPresent != true) return;
-    setState(_reconcileSelection);
+    if (!_canReadObservedFolder) return;
+    _invalidateCompletion();
+    if (_usesReadingFilter && _canRefresh) {
+      setState(_refreshReadingFilter);
+    }
   }
 
-  void updateComics() {
+  void updateComics({bool force = false}) {
     if (!_canReadObservedFolder) return;
+    _comicsDirty = true;
+    _pendingComics = null;
+    ++_queryGeneration;
+    if (!_canRefresh && !force) return;
+    _loadComics();
+  }
+
+  void _loadComics() {
+    _comicsDirty = false;
     final manager = _observedManager;
     final generation = ++_queryGeneration;
     final folder = widget.folder;
@@ -281,10 +330,12 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                   widget.folder != folder) {
                 return;
               }
-              setState(() {
-                isLoading = false;
-                _replaceComics(value);
-              });
+              isLoading = false;
+              if (_canRefresh) {
+                setState(() => _replaceComics(value));
+              } else {
+                _pendingComics = value;
+              }
             },
             onError: (Object error, StackTrace stack) {
               Log.error('Favorites query', error, stack);
@@ -293,10 +344,9 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                   widget.folder != folder) {
                 return;
               }
-              setState(() {
-                isLoading = false;
-                _loadError = error;
-              });
+              isLoading = false;
+              _loadError = error;
+              if (_canRefresh) setState(() {});
             },
           ),
         );
@@ -308,22 +358,102 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     setState(() {});
   }
 
-  List<FavoriteItem> filterComics(List<FavoriteItem> curComics) {
-    if (curComics.isEmpty || !_usesReadingFilter) return curComics;
-    final historyManager = _history;
-    final completed = historyManager?.isInitialized == true
-        ? historyManager!.completedAmong(
-            curComics.map((comic) => (comic.id, comic.type.value)),
+  void _invalidateCompletion() {
+    ++_readingGeneration;
+    _completed = null;
+    _completionInput = null;
+    _readingLoading = false;
+    _readingError = null;
+  }
+
+  void _applyReadingFilter() {
+    final completed = _completed!;
+    final showCompleted = readFilterSelect == 'Completed';
+    _displayedCache = comics
+        .where(
+          (comic) =>
+              completed.contains((comic.id, comic.type.value)) == showCompleted,
+        )
+        .toList();
+    _visibleCache = null;
+    _visibleInput = null;
+  }
+
+  void _refreshReadingFilter() {
+    if (!_canReadObservedFolder ||
+        !_canRefresh ||
+        !_usesReadingFilter ||
+        _comicsDirty ||
+        isLoading) {
+      return;
+    }
+    if (identical(_completionInput, comics) && _completed != null) {
+      if (_displayedCache == null) _applyReadingFilter();
+      return;
+    }
+    if (_readingLoading || _readingError != null) return;
+    final input = comics;
+    final history = _history;
+    if (input.isEmpty || history?.isInitialized != true) {
+      _completionInput = input;
+      _completed = const {};
+      _applyReadingFilter();
+      return;
+    }
+    final request = ++_readingGeneration;
+    final historyGeneration = history!.connectionGeneration;
+    _readingLoading = true;
+    bool isCurrent() =>
+        _canReadObservedFolder &&
+        request == _readingGeneration &&
+        identical(input, comics) &&
+        identical(history, _history) &&
+        history.connectionGeneration == historyGeneration;
+    unawaited(
+      history
+          .completedAmongAsync(
+            input.map((comic) => (comic.id, comic.type.value)),
           )
-        : const <(String, int)>{};
-    return curComics.where((comic) {
-      if (readFilterSelect == "UnCompleted") {
-        return !completed.contains((comic.id, comic.type.value));
-      } else if (readFilterSelect == "Completed") {
-        return completed.contains((comic.id, comic.type.value));
-      }
-      return true;
-    }).toList();
+          .then<void>(
+            (completed) {
+              if (!isCurrent()) return;
+              _readingLoading = false;
+              _completionInput = input;
+              _completed = completed;
+              if (_canRefresh && _usesReadingFilter) {
+                setState(() {
+                  _applyReadingFilter();
+                  _reconcileSelection();
+                });
+              } else {
+                _displayedCache = null;
+              }
+            },
+            onError: (Object error, StackTrace stack) {
+              if (!isCurrent()) return;
+              Log.error('Favorite reading filter', error, stack);
+              _readingLoading = false;
+              _readingError = error;
+              if (_canRefresh && _usesReadingFilter) setState(() {});
+            },
+          ),
+    );
+  }
+
+  void _resumeVisibleWork() {
+    if (!_canReadObservedFolder || !_canRefresh) return;
+    _parentWasCovered = false;
+    if (_comicsDirty) {
+      _loadComics();
+      return;
+    }
+    final pending = _pendingComics;
+    if (pending != null) {
+      _pendingComics = null;
+      _replaceComics(pending);
+    }
+    _refreshReadingFilter();
+    _reconcileSelection();
   }
 
   bool _matchSearchWords(Iterable<String> words, FavoriteItem comic) {
@@ -394,21 +524,83 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _tickerEnabled = TickerMode.valuesOf(context).enabled;
+    final routeFocus = FocusScope.of(context, createDependency: false);
+    if (!identical(routeFocus, _routeFocus)) {
+      _routeFocus?.removeListener(_onRouteFocusChanged);
+      _routeFocus = routeFocus;
+      _routeHadFocus = routeFocus.hasFocus;
+      routeFocus.addListener(_onRouteFocusChanged);
+    }
+    final parents = <ModalRoute<dynamic>>[];
+    var route = ModalRoute.of(context);
+    while (route != null && !parents.contains(route)) {
+      parents.add(route);
+      final navigatorContext = route.navigator?.context;
+      route = navigatorContext == null ? null : ModalRoute.of(navigatorContext);
+    }
+    if (!listEquals(parents, _parentRoutes)) {
+      for (final parent in _parentRoutes.skip(1)) {
+        parent.secondaryAnimation?.removeStatusListener(_onParentTransition);
+      }
+      _parentRoutes
+        ..clear()
+        ..addAll(parents);
+      _parentWasCovered = _parentRoutes
+          .skip(1)
+          .any((parent) => !parent.isCurrent);
+      for (final parent in _parentRoutes.skip(1)) {
+        parent.secondaryAnimation?.addStatusListener(_onParentTransition);
+      }
+    }
     final history =
         context.dependOnInheritedWidgetOfExactType<HistoryScope>()?.manager ??
         HistoryScope.read(context);
     if (!identical(history, _history)) {
       _history?.removeListener(_onHistoryChanged);
       _history = history..addListener(_onHistoryChanged);
+      _invalidateCompletion();
       _invalidateDisplay();
-      _reconcileSelection();
     }
     if (_queryOwner != null) {
-      if (_queryOwner!.canPresent) _reconcileSelection();
+      _resumeVisibleWork();
       return;
     }
     _queryOwner = WindowSelectionTask(context);
     updateComics();
+  }
+
+  void _onParentTransition(AnimationStatus status) {
+    _resumeAfterCover();
+  }
+
+  void _onRouteFocusChanged() {
+    final hasFocus = _routeFocus?.hasFocus == true;
+    if (hasFocus == _routeHadFocus) return;
+    _routeHadFocus = hasFocus;
+    // Root popups need not drive the parent route's secondary animation.
+    _resumeAfterCover();
+  }
+
+  void _resumeAfterCover() {
+    if (_parentRoutes.any((parent) => !parent.isCurrent)) {
+      _parentWasCovered = true;
+      return;
+    }
+    if (!_parentWasCovered) return;
+    _parentWasCovered = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_canReadObservedFolder) return;
+      if (!_canRefresh) {
+        _parentWasCovered = true;
+        return;
+      }
+      setState(() {
+        _comicGrid = null;
+        _resumeVisibleWork();
+      });
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   void _retireUpdateFlyout() {
@@ -438,7 +630,9 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
           : _observedManager.findLinked(widget.folder);
       networkSource = linked.$1;
       networkFolder = linked.$2;
-      updateComics();
+      // A replacement folder is an explicit widget input, not a background
+      // notification. Never retain the previous folder under its new label.
+      updateComics(force: true);
     }
     if (oldWidget.folder != widget.folder ||
         oldWidget.importFolder != widget.importFolder) {
@@ -453,12 +647,18 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     _observedManager.removeListener(updateComics);
     _history?.removeListener(_onHistoryChanged);
     appdata.settings.removeListener(_onSettingsChanged);
+    _routeFocus?.removeListener(_onRouteFocusChanged);
+    for (final parent in _parentRoutes.skip(1)) {
+      parent.secondaryAnimation?.removeStatusListener(_onParentTransition);
+    }
     scrollController.dispose();
     super.dispose();
   }
 
   void selectAll() {
-    if (!_canReadObservedFolder) return;
+    if (!_canReadObservedFolder || isLoading || _isFiltering || _hasListError) {
+      return;
+    }
     setState(() {
       selectedComics = {for (final comic in _visibleComics) comic: true};
       lastSelectedIndex = null;
@@ -466,7 +666,9 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   }
 
   void invertSelection() {
-    if (!_canReadObservedFolder) return;
+    if (!_canReadObservedFolder || isLoading || _isFiltering || _hasListError) {
+      return;
+    }
     setState(() {
       selectedComics = {
         for (final comic in _visibleComics)
@@ -489,6 +691,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
       setState(() {
         searchMode = false;
         keyword = '';
+        _refreshReadingFilter();
         _reconcileSelection();
       });
       return true;
@@ -547,6 +750,9 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
         .toList();
     bool isCurrentSelection() =>
         _canReadObservedFolder &&
+        !isLoading &&
+        !_isFiltering &&
+        !_hasListError &&
         widget.folder == target.folder &&
         multiSelectMode &&
         selection.isNotEmpty &&
@@ -585,10 +791,15 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     }
 
     final displayedComics = _displayedComics;
-    _prepareComicGrid(displayedComics);
+    final visibleComics = _visibleComics;
+    _prepareComicGrid(displayedComics, visibleComics);
     final compactActions = context.width < changePoint && !isAllFolder;
     final canSelect =
-        _canReadObservedFolder && !isLoading && _visibleComics.isNotEmpty;
+        _canReadObservedFolder &&
+        !isLoading &&
+        !_isFiltering &&
+        !_hasListError &&
+        visibleComics.isNotEmpty;
     final inlineSelectionActions =
         availableWidth >= 440 + MediaQuery.textScalerOf(context).scale(20) * 4;
     void enterSelection() {
@@ -596,6 +807,8 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
           _queryOwner?.canPresent != true ||
           widget.folder != target.folder ||
           isLoading ||
+          _isFiltering ||
+          _hasListError ||
           _visibleComics.isEmpty) {
         return;
       }
@@ -731,6 +944,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                             setState(() {
                               readFilterSelect = readFilter;
                               _invalidateDisplay();
+                              _refreshReadingFilter();
                               _reconcileSelection();
                             });
                           },
@@ -1151,6 +1365,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                   setState(() {
                     searchMode = false;
                     keyword = '';
+                    _refreshReadingFilter();
                     _reconcileSelection();
                   });
                 },
@@ -1197,16 +1412,28 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
             },
           ),
         ],
-        if (_loadError != null)
+        if (_hasListError)
           SliverToBoxAdapter(
             child: Column(
               children: [
-                Text(_loadError.toString()),
-                TextButton(onPressed: updateComics, child: Text('Retry'.tl)),
+                Text((_loadError ?? _readingError).toString()),
+                TextButton(
+                  onPressed: () {
+                    if (_loadError != null) {
+                      updateComics();
+                    } else {
+                      setState(() {
+                        _invalidateCompletion();
+                        _refreshReadingFilter();
+                      });
+                    }
+                  },
+                  child: Text('Retry'.tl),
+                ),
               ],
             ),
           )
-        else if (isLoading)
+        else if (isLoading || (_isFiltering && _displayedCache == null))
           SliverToBoxAdapter(
             child: SizedBox(
               height: 200,
@@ -1214,6 +1441,8 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
             ),
           )
         else ...[
+          if (_isFiltering)
+            const SliverToBoxAdapter(child: LinearProgressIndicator()),
           if (!searchMode && displayedComics.length < comics.length)
             SliverToBoxAdapter(
               child: Padding(
@@ -1230,6 +1459,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
             ),
           _comicGrid ??= SliverGridComics(
             comics: displayedComics,
+            visibleComics: visibleComics,
             showHiddenCount: true,
             selections: _gridSelection,
             useFavoriteDisplaySettings: true,
