@@ -620,12 +620,59 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Selected 1 comics'), findsNothing);
       expect(find.byType(TextField), findsOneWidget);
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+        'Existing 1',
+      );
       expect(_tile('seed-0'), findsNothing);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(find.byType(TextField), findsNothing);
       expect(_tile('seed-0'), findsOneWidget);
       expect(_tile('seed-1'), findsOneWidget);
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+        isEmpty,
+      );
+      await tester.enterText(find.byType(TextField), 'Existing 1');
+      await tester.pumpAndSettle();
+      await tester.longPress(_tile('seed-1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text('Selected 1 comics'), findsNothing);
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+        'Existing 1',
+      );
+      await tester.enterText(find.byType(TextField), 'Existing 2');
+      await tester.pumpAndSettle();
+      expect(_tile('seed-1'), findsNothing);
+      expect(_tile('seed-2'), findsOneWidget);
+      await tester.longPress(_tile('seed-2'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('favorites-deselect')));
+      await tester.pumpAndSettle();
+      expect(find.text('Selected 1 comics'), findsNothing);
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+        'Existing 2',
+      );
+      expect(_tile('seed-0'), findsNothing);
+      expect(_tile('seed-2'), findsOneWidget);
+      await tester.tap(find.byTooltip('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      expect(_tile('seed-0'), findsOneWidget);
+      expect(_tile('seed-1'), findsOneWidget);
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+        isEmpty,
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -1074,6 +1121,13 @@ void main() {
     await _settle(tester);
     expect(_tile('from-a'), findsOneWidget);
     expect(_tile('from-b'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+      isEmpty,
+    );
     expect(tester.takeException(), isNull);
   });
 

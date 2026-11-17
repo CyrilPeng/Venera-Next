@@ -94,6 +94,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
 
   String keyword = "";
   bool searchHasUpper = false;
+  final _searchController = TextEditingController();
 
   bool searchMode = false;
 
@@ -625,6 +626,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
       multiSelectMode = false;
       searchMode = false;
       keyword = '';
+      _searchController.clear();
       final linked = isAllFolder || !_canReadObservedFolder
           ? (null, null)
           : _observedManager.findLinked(widget.folder);
@@ -651,6 +653,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     for (final parent in _parentRoutes.skip(1)) {
       parent.secondaryAnimation?.removeStatusListener(_onParentTransition);
     }
+    _searchController.dispose();
     scrollController.dispose();
     super.dispose();
   }
@@ -684,19 +687,24 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
     }
     if (multiSelectMode) {
       _cancel();
-      lastSelectedIndex = null;
       return true;
     }
     if (searchMode) {
-      setState(() {
-        searchMode = false;
-        keyword = '';
-        _refreshReadingFilter();
-        _reconcileSelection();
-      });
+      _exitSearch();
       return true;
     }
     return false;
+  }
+
+  void _exitSearch() {
+    setState(() {
+      searchMode = false;
+      keyword = '';
+      searchHasUpper = false;
+      _searchController.clear();
+      _refreshReadingFilter();
+      _reconcileSelection();
+    });
   }
 
   bool downloadComic(FavoriteItem c) {
@@ -962,6 +970,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
                     setState(() {
                       keyword = "";
                       searchHasUpper = false;
+                      _searchController.clear();
                       searchMode = true;
                       _refreshSearchResults();
                     });
@@ -1181,12 +1190,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
               message: "Cancel".tl,
               child: IconButton(
                 icon: const Icon(Icons.close),
-                onPressed: () {
-                  setState(() {
-                    multiSelectMode = false;
-                    selectedComics.clear();
-                  });
-                },
+                onPressed: _cancel,
               ),
             ),
             title: Text(
@@ -1361,17 +1365,11 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
               message: "Cancel".tl,
               child: IconButton(
                 icon: const Icon(Icons.close),
-                onPressed: () {
-                  setState(() {
-                    searchMode = false;
-                    keyword = '';
-                    _refreshReadingFilter();
-                    _reconcileSelection();
-                  });
-                },
+                onPressed: _exitSearch,
               ),
             ),
             title: TextField(
+              controller: _searchController,
               autofocus: true,
               decoration: InputDecoration(
                 hintText: "Search".tl,
@@ -1696,6 +1694,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   void _cancel() {
     setState(() {
       selectedComics.clear();
+      lastSelectedIndex = null;
       multiSelectMode = false;
     });
   }
