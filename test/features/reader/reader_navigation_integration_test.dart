@@ -6,7 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:venera_next/components/message.dart';
+import 'package:venera_next/components/navigation_bar.dart';
 import 'package:venera_next/features/comic_source/models.dart';
+import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
+import 'package:venera_next/features/history/history_summary.dart';
+import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/continuous_view.dart';
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/display_image_provider.dart';
@@ -22,6 +27,7 @@ import 'package:venera_next/features/reader/progress_bar.dart';
 import 'package:venera_next/features/reader/images_host.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/network/request_scope.dart';
 
 import 'support/reader_integration_fixture.dart';
@@ -51,6 +57,128 @@ Future<void> _expectOpaqueSurface(WidgetTester tester, GlobalKey key) =>
 
 void main() {
   setUpReaderIntegration();
+
+  for (final previouslyRead in [false, true]) {
+    testWidgets(
+      'home local cover opens only the root reader and returns without a flight: read=$previouslyRead',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(375, 812));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final fixture = await ReaderIntegrationFixture.create(tester);
+        final history = HistoryManager.create();
+        await tester.runAsync(history.init);
+        readerFixtureHistoryOwner = history;
+        final local = LocalManager().find('book', ComicType.local)!;
+        final nestedKey = GlobalKey<NavigatorState>();
+        final paneKey = GlobalKey<NaviPaneState>();
+        final observer = NaviObserver();
+        final previousMain = appNavigation.mainNavigatorKey;
+        appNavigation.mainNavigatorKey = nestedKey;
+        configureComicWidgets(
+          tileImageProviderResolver: (_) => LocalComicImageProvider(local),
+        );
+        try {
+          if (previouslyRead) {
+            await tester.runAsync(
+              () => history.addHistory(readerResumeHistory(page: 2)),
+            );
+          }
+          await tester.pumpWidget(
+            readerFixtureLibraryView(
+              ReaderSessionScope(
+                onClosed: () => fixture.notifications++,
+                child: MaterialApp(
+                  navigatorKey: appNavigation.rootNavigatorKey,
+                  builder: (_, child) => OverlayWidget(child!),
+                  home: NaviPane(
+                    key: paneKey,
+                    paneItems: [
+                      PaneItemEntry(
+                        label: 'Home',
+                        icon: Icons.home,
+                        activeIcon: Icons.home,
+                      ),
+                      PaneItemEntry(
+                        label: 'Other',
+                        icon: Icons.book,
+                        activeIcon: Icons.book,
+                      ),
+                    ],
+                    paneActions: const [],
+                    pageBuilder: (page) => page == 0
+                        ? CustomScrollView(
+                            slivers: [
+                              HistorySummary(
+                                manager: history,
+                                favoriteChanges: null,
+                              ),
+                              const LocalComicsSummary(),
+                            ],
+                          )
+                        : const Material(child: Text('Other page')),
+                    navigatorKey: nestedKey,
+                    observer: observer,
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final covers = find.byType(SimpleComicTile);
+          final tags = tester
+              .widgetList<Hero>(find.byType(Hero))
+              .map((hero) => hero.tag)
+              .toList();
+          expect(tags.toSet(), hasLength(tags.length));
+          final localCover = find.descendant(
+            of: find.byType(LocalComicsSummary),
+            matching: covers,
+          );
+          await tester.tap(localCover);
+          expect(
+            observer.routes,
+            hasLength(1),
+            reason:
+                'Imported local covers must not push a transient detail route.',
+          );
+          await pumpReaderUntil(tester, () {
+            if (find.byType(Reader).evaluate().isEmpty) return false;
+            final reader = tester.state<ReaderState>(find.byType(Reader));
+            return !reader.isLoading &&
+                (reader.imageViewController as AutoReadingViewport?)
+                        ?.autoReadingReady ==
+                    true;
+          });
+          final reader = tester.state<ReaderState>(find.byType(Reader));
+          expect(reader.page, previouslyRead ? 2 : 1);
+          final exit = reader.requestExit();
+          await pumpReaderUntil(
+            tester,
+            () => !appNavigation.rootNavigatorKey.currentState!.canPop(),
+          );
+          await exit;
+          await tester.pumpAndSettle();
+          expect(observer.routes, hasLength(1));
+          expect(find.byType(Reader), findsNothing);
+          expect(
+            history.find('book', ComicType.local)?.page,
+            previouslyRead ? 2 : 1,
+          );
+          paneKey.currentState!.updatePage(1);
+          await tester.pumpAndSettle();
+          expect(find.byType(SimpleComicTile), findsNothing);
+          expect(find.byType(Hero, skipOffstage: false), findsNothing);
+          expect(tester.takeException(), isNull);
+        } finally {
+          appNavigation.mainNavigatorKey = previousMain;
+          configureComicWidgets();
+          history.close();
+          history.dispose();
+          await fixture.dispose(tester);
+        }
+      },
+    );
+  }
 
   for (final brightness in Brightness.values) {
     testWidgets('direct reader covers its first loading frame: $brightness', (

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/comic_source/models.dart';
 import 'package:venera_next/features/comic_widgets/comic_list.dart';
 import 'package:venera_next/features/comic_widgets/comic_tile.dart';
+import 'package:venera_next/features/comic_widgets/cover_hero_ids.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/res.dart';
 
@@ -35,6 +36,36 @@ class _ObservedComic extends Comic {
 }
 
 void main() {
+  test('cover identities belong to their section and source', () {
+    final history = ComicCoverHeroIds();
+    final local = ComicCoverHeroIds();
+    final original = _comic('Shared ID');
+    final replacement = _comic('Shared ID');
+    final otherSource = Comic(
+      original.title,
+      '',
+      original.id,
+      null,
+      const [],
+      '',
+      'another_source',
+      null,
+      null,
+    );
+    final id = history.forComic(original);
+    expect(history.forComic(replacement), id);
+    final ids = {
+      id,
+      local.forComic(original),
+      history.forComic(otherSource),
+      ComicCoverHeroIds.allocate(),
+    };
+    expect(ids, hasLength(4));
+    history.retain([replacement]);
+    expect(history.forComic(replacement), id);
+    expect(ids.contains(history.forComic(otherSource)), isFalse);
+  });
+
   testWidgets('unfiltered large grids leave offscreen metadata unread', (
     tester,
   ) async {
