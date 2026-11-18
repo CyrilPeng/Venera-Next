@@ -21,6 +21,155 @@ KeywordMatch? _title(String title, KeywordRule rule) =>
     KeywordFilter.rules([rule]).comicMatch(title: title, description: '');
 
 void main() {
+  final misses = List.generate(
+    120,
+    (i) => KeywordRule(
+      'missing-rule-$i',
+      mode: KeywordMatchMode.values[i % 3],
+      caseSensitive: i.isEven,
+    ),
+  );
+  test('large snapshots keep rule priority over field and tag order', () {
+    final first = KeywordRule('bl', mode: KeywordMatchMode.exactTag);
+    final duplicate = KeywordRule('BL', mode: KeywordMatchMode.exactTag);
+    final filter = KeywordFilter.rules([
+      ...misses,
+      first,
+      const KeywordRule('TITLE'),
+      duplicate,
+    ]);
+    final match = filter.comicMatch(
+      title: 'TITLE',
+      subtitle: 'TITLE',
+      description: 'TITLE',
+      tags: ['unrelated', 'genre:BL:other', 'BL'],
+    )!;
+    expect(match.rule, same(first));
+    expect(match.field, KeywordMatchField.tag);
+    expect(match.text, 'genre:BL:other');
+    expect((match.start, match.end), (6, 8));
+    expect(
+      filter.comicMatch(title: '', description: '', tags: ['genre:other:BL']),
+      isNull,
+    );
+  });
+
+  test(
+    'large snapshots preserve literal, Unicode and empty keyword offsets',
+    () {
+      var sample = 0;
+      for (final (rule, title, tags, field, start, end) in [
+        (
+          const KeywordRule('a+b'),
+          'x a+b y',
+          <String>[],
+          KeywordMatchField.title,
+          2,
+          5,
+        ),
+        (
+          const KeywordRule('k'),
+          '😀K',
+          <String>[],
+          KeywordMatchField.title,
+          2,
+          3,
+        ),
+        (
+          const KeywordRule.legacy('\uD83D'),
+          '😀',
+          <String>[],
+          KeywordMatchField.title,
+          0,
+          1,
+        ),
+        (
+          const KeywordRule('bl', mode: KeywordMatchMode.wholeWord),
+          'black and BL',
+          ['BL'],
+          KeywordMatchField.title,
+          10,
+          12,
+        ),
+        (
+          const KeywordRule(
+            'BL',
+            mode: KeywordMatchMode.exactTag,
+            caseSensitive: true,
+          ),
+          'BL',
+          ['x:BL:other', 'BL'],
+          KeywordMatchField.tag,
+          2,
+          4,
+        ),
+        (
+          const KeywordRule('İ', mode: KeywordMatchMode.exactTag),
+          'İ',
+          ['i'],
+          KeywordMatchField.tag,
+          0,
+          1,
+        ),
+        (
+          const KeywordRule('', mode: KeywordMatchMode.wholeWord),
+          'whole word',
+          ['x:'],
+          KeywordMatchField.tag,
+          2,
+          2,
+        ),
+        (
+          const KeywordRule.legacy(''),
+          'any',
+          <String>[],
+          KeywordMatchField.title,
+          0,
+          0,
+        ),
+        (
+          const KeywordRule(
+            'ns:BL:other',
+            mode: KeywordMatchMode.exactTag,
+            caseSensitive: true,
+          ),
+          'ns:BL:other',
+          ['ns:BL:other'],
+          KeywordMatchField.tag,
+          0,
+          11,
+        ),
+      ]) {
+        final match = KeywordFilter.rules([
+          ...misses,
+          rule,
+        ]).comicMatch(title: title, description: '', tags: tags);
+        expect(match, isNotNull, reason: 'Unicode sample $sample');
+        final actual = match!;
+        expect(actual.rule, same(rule));
+        expect((actual.field, actual.start, actual.end), (field, start, end));
+        sample++;
+      }
+      final whole = KeywordFilter.rules([
+        ...misses,
+        const KeywordRule('bl', mode: KeywordMatchMode.wholeWord),
+      ]);
+      expect(
+        whole.comicMatch(title: 'black blé BL漫画', description: ''),
+        isNull,
+      );
+      final dotted = KeywordFilter.rules([
+        ...misses,
+        const KeywordRule('İ', mode: KeywordMatchMode.exactTag),
+      ]);
+      // Dart's original tag policy folds İ to i, not to i plus a combining dot.
+      expect(
+        dotted.comicMatch(title: '', description: '', tags: ['i\u0307']),
+        isNull,
+      );
+    },
+  );
+
   test('sync exclusions keep keyword lists and their options together', () {
     for (final (words, options) in [
       ('blockedWords', 'blockedWordRules'),
