@@ -58,22 +58,29 @@ class GalleryModeState extends State<ReaderGalleryView>
         AutoReadingViewport,
         AutoReadingImageViewport {
   late var _imageDownloads = ReaderImageDownloads(work: widget.imageWork);
-  late var _imagePrecache = ReaderImagePrecache(work: widget.imageWork);
+  late var _imagePrecache = ReaderImagePrecache(
+    work: widget.imageWork,
+    maximumConcurrent: 2,
+  );
   VoidCallback? _removePrecacheResumeListener;
-  Object? _precacheInputs;
-  final _precachePages = <int>{};
+  Object? _lastPrecache;
+  ImageConfiguration? _precacheConfiguration;
+  bool _precacheScheduled = false;
+  int? _scheduledPrecachePage;
+  int? _requestedPrecachePage;
+  int _precacheDirection = 1;
+  double? _lastScrollPage;
 
   void _bindPrecacheResume() {
     _removePrecacheResumeListener?.call();
     _removePrecacheResumeListener = widget.imageWork.addResumeListener(() {
-      _precacheInputs = null;
-      _precachePages.clear();
-      if (mounted && !_disposed) cache(page);
+      _lastPrecache = null;
+      if (mounted && !_disposed) _schedulePrecache(page);
     });
   }
 
   late PageController controller;
-  late int _selectedPage;
+  late final ValueNotifier<int> _activePage;
 
   ReaderGalleryData get data => widget.data;
   ReaderController get navigation => widget.navigation;
@@ -109,14 +116,23 @@ class GalleryModeState extends State<ReaderGalleryView>
 
   @override
   void initState() {
-    _selectedPage = page;
+    _activePage = ValueNotifier(page);
     controller = PageController(initialPage: page);
+    _lastScrollPage = page.toDouble();
+    controller.addListener(_onScroll);
     _bindPrecacheResume();
     widget.onViewportChanged(this, true);
     Future.microtask(() {
       if (mounted) widget.onReady();
     });
     super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _precacheConfiguration = createLocalImageConfiguration(context);
+    _schedulePrecache(page);
   }
 
   @override
@@ -131,12 +147,17 @@ class GalleryModeState extends State<ReaderGalleryView>
       unawaited(_imageDownloads.dispose());
       unawaited(_imagePrecache.dispose());
       _imageDownloads = ReaderImageDownloads(work: widget.imageWork);
-      _imagePrecache = ReaderImagePrecache(work: widget.imageWork);
+      _imagePrecache = ReaderImagePrecache(
+        work: widget.imageWork,
+        maximumConcurrent: 2,
+      );
+      _lastPrecache = null;
     }
     if (oldWidget.onViewportChanged != widget.onViewportChanged) {
       oldWidget.onViewportChanged(this, false);
       widget.onViewportChanged(this, true);
     }
+    _schedulePrecache(page);
   }
 
   @override
@@ -146,7 +167,9 @@ class GalleryModeState extends State<ReaderGalleryView>
     _longPressController = null;
     widget.onViewportChanged(this, false);
     keyRepeatTimer?.cancel();
+    controller.removeListener(_onScroll);
     controller.dispose();
+    _activePage.dispose();
     unawaited(_imagePrecache.dispose());
     unawaited(_imageDownloads.dispose());
     super.dispose();
@@ -222,9 +245,50 @@ class GalleryModeState extends State<ReaderGalleryView>
     return (startIndex, endIndex);
   }
 
-  void cache(int startPage) {
+  void _schedulePrecache(int target) {
     if (_disposed || !mounted) return;
-    final configuration = createLocalImageConfiguration(context);
+    _scheduledPrecachePage = target;
+    if (_precacheScheduled) return;
+    _precacheScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _precacheScheduled = false;
+      final requested = _scheduledPrecachePage;
+      _scheduledPrecachePage = null;
+      if (_disposed || !mounted || requested == null) return;
+      // Intermediate viewport positions must not supersede an accepted command.
+      cache(navigation.state.pendingPage ?? requested);
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  void _onScroll() {
+    if (_disposed || !mounted || !controller.hasClients) return;
+    if (!controller.position.hasContentDimensions) return;
+    final value = controller.page;
+    if (value == null) return;
+    final delta = value - (_lastScrollPage ?? page.toDouble());
+    _lastScrollPage = value;
+    if (delta.abs() < .0001) return;
+    _notePageRequest(
+      navigation.state.pendingPage ??
+          (delta > 0 ? value.ceil() : value.floor()),
+      delta.sign.toInt(),
+    );
+  }
+
+  void _notePageRequest(int target, int direction) {
+    if (target < 1 || target > totalPages) return;
+    if (target == _requestedPrecachePage && direction == _precacheDirection) {
+      return;
+    }
+    _requestedPrecachePage = target;
+    _precacheDirection = direction;
+    _schedulePrecache(target);
+  }
+
+  void cache(int startPage) {
+    final configuration = _precacheConfiguration;
+    if (_disposed || !mounted || configuration == null) return;
     final inputs = (
       data.content,
       widget.imageWork,
@@ -242,35 +306,45 @@ class GalleryModeState extends State<ReaderGalleryView>
       data.decodePixelBudget,
       widget.readerSize(),
       configuration,
+      startPage,
+      _precacheDirection,
     );
-    if (_precacheInputs != inputs) {
-      _precacheInputs = inputs;
-      _precachePages.clear();
-    }
-    if (!_precachePages.add(startPage)) return;
-    for (int i = startPage - 1; i <= startPage + preCacheCount; i++) {
-      if (i == startPage ||
-          i <= 0 ||
-          i > totalPages ||
-          isChapterCommentsPage(i)) {
-        continue;
+    if (_lastPrecache == inputs) return;
+    _lastPrecache = inputs;
+    final decoded = <ReaderImageProvider>[];
+    final retained = <ReaderImageProvider>[];
+    void addPage(int target, List<ReaderImageProvider> providers) {
+      if (target < 1 || target > totalPages || isChapterCommentsPage(target)) {
+        return;
       }
-      _cachePage(i, i == startPage + 1 || i == startPage - 1, configuration);
+      final (start, end) = getPageImagesRange(target);
+      for (var i = start; i < end; i++) {
+        providers.add(_imageProvider(data.images[i]));
+      }
+    }
+
+    addPage(page, retained);
+    addPage(startPage, retained);
+    if (preCacheCount > 0 && startPage != page) addPage(startPage, decoded);
+    for (final adjacent in [
+      startPage + _precacheDirection,
+      startPage - _precacheDirection,
+    ]) {
+      if (preCacheCount <= 0 && adjacent > startPage) continue;
+      addPage(adjacent, decoded);
+    }
+    _imagePrecache.replace(decoded, configuration, retain: retained);
+    for (var distance = 2; distance <= preCacheCount; distance++) {
+      _downloadPage(startPage + _precacheDirection * distance);
     }
   }
 
-  void _cachePage(
-    int page,
-    bool shouldPreCache,
-    ImageConfiguration configuration,
-  ) {
-    if (isChapterCommentsPage(page)) return;
+  void _downloadPage(int page) {
+    if (page < 1 || page > totalPages || isChapterCommentsPage(page)) return;
     var (startIndex, endIndex) = getPageImagesRange(page);
     for (int i = startIndex; i < endIndex; i++) {
       final key = data.images[i];
-      if (shouldPreCache) {
-        _imagePrecache.preload(_imageProvider(key), configuration);
-      } else if (!key.startsWith('file://')) {
+      if (!key.startsWith('file://')) {
         _imageDownloads.preload(
           key,
           data.sourceKey,
@@ -342,14 +416,16 @@ class GalleryModeState extends State<ReaderGalleryView>
                 shouldRefreshEInk = true;
               }
             } else {
-              final previousPage = _selectedPage;
-              navigation.reportPage(i);
+              final previousPage = _activePage.value;
+              if (page != i) navigation.reportPage(i);
               // A jump commits the logical page before the viewport reports
               // it. EInk refresh follows the actual selection, while ignored
               // intermediate pages of an animation must not change it.
-              if (page == i) _selectedPage = i;
+              if (_disposed || !mounted || page != i) return;
+              _activePage.value = i;
+              _schedulePrecache(i);
               shouldRefreshEInk =
-                  _selectedPage != previousPage && !isChapterCommentsPage(i);
+                  i != previousPage && !isChapterCommentsPage(i);
               widget.onPageReported(
                 isChapterCommentsPage(i),
                 shouldRefreshEInk,
@@ -361,7 +437,6 @@ class GalleryModeState extends State<ReaderGalleryView>
             // Neighbours reset their zoom in place without discarding images.
             _longPressController = null;
             isLongPressing = false;
-            if (mounted && !_disposed) setState(() {});
           },
         ),
       ),
@@ -390,7 +465,6 @@ class GalleryModeState extends State<ReaderGalleryView>
     final originalWork = widget.imageWork;
     final (start, end) = getPageImagesRange(index);
     final images = List.generate(end - start, (i) => start + i);
-    cache(index);
     return _GalleryPhotoPage(
       key: ValueKey((
         data.content,
@@ -404,7 +478,8 @@ class GalleryModeState extends State<ReaderGalleryView>
         data.reverse,
         index,
       )),
-      active: page == index,
+      activePage: _activePage,
+      index: index,
       onController: (controller, attached) {
         if (attached) {
           photoViewControllers[index] = controller;
@@ -425,8 +500,9 @@ class GalleryModeState extends State<ReaderGalleryView>
             errorBuilder: (_, error, stack, retry) => NetworkError(
               message: error.toString(),
               retry: () {
-                _precachePages.remove(index);
-                cache(index);
+                _lastPrecache = null;
+                _imagePrecache.replace(const [], ImageConfiguration.empty);
+                _schedulePrecache(index);
                 retry();
                 reload?.call();
               },
@@ -546,6 +622,7 @@ class GalleryModeState extends State<ReaderGalleryView>
   @override
   Future<void> animateToPage(int page) {
     if (_disposed || !mounted || !controller.hasClients) return Future.value();
+    _notePageRequest(page, page >= controller.page! ? 1 : -1);
     if ((page - controller.page!.round()).abs() > 1) {
       controller.jumpToPage(page > controller.page! ? page - 1 : page + 1);
     }
@@ -559,6 +636,7 @@ class GalleryModeState extends State<ReaderGalleryView>
   @override
   void toPage(int page) {
     if (_disposed || !mounted || !controller.hasClients) return;
+    _notePageRequest(page, page >= controller.page! ? 1 : -1);
     controller.jumpToPage(page);
   }
 
@@ -731,11 +809,13 @@ class GalleryModeState extends State<ReaderGalleryView>
 class _GalleryPhotoPage extends StatefulWidget {
   const _GalleryPhotoPage({
     super.key,
-    required this.active,
+    required this.activePage,
+    required this.index,
     required this.onController,
     required this.builder,
   });
-  final bool active;
+  final ValueNotifier<int> activePage;
+  final int index;
   final void Function(PhotoViewController, bool) onController;
   final Widget Function(BuildContext, PhotoViewController) builder;
   @override
@@ -748,12 +828,20 @@ class _GalleryPhotoPageState extends State<_GalleryPhotoPage> {
   void initState() {
     super.initState();
     widget.onController(controller, true);
+    widget.activePage.addListener(_onActivePageChanged);
+  }
+
+  void _onActivePageChanged() {
+    if (widget.activePage.value == widget.index) controller.reset();
   }
 
   @override
   void didUpdateWidget(covariant _GalleryPhotoPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!oldWidget.active && widget.active) controller.reset();
+    if (oldWidget.activePage != widget.activePage) {
+      oldWidget.activePage.removeListener(_onActivePageChanged);
+      widget.activePage.addListener(_onActivePageChanged);
+    }
   }
 
   @override
@@ -761,6 +849,7 @@ class _GalleryPhotoPageState extends State<_GalleryPhotoPage> {
       ClipRect(child: widget.builder(context, controller));
   @override
   void dispose() {
+    widget.activePage.removeListener(_onActivePageChanged);
     widget.onController(controller, false);
     controller.dispose();
     super.dispose();

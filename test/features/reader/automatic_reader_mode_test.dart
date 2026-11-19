@@ -118,26 +118,32 @@ void main() {
     expect(changes, 1, reason: 'The final viewport owner did not change.');
     reader.toNextPage();
     expect(old.visited, [reader.page]);
+    expect(
+      changes,
+      2,
+      reason: 'Same-chapter gallery navigation refreshes the shell once.',
+    );
+    final beforeHandoff = changes;
     reader.onViewportChanged(old, false);
     reader.onViewportChanged(replacement, true);
     reader.onViewportChanged(old, false);
     expect(reader.imageViewController, same(replacement));
     tester.binding.scheduleFrame();
     await tester.pump();
-    expect(changes, 2);
+    expect(changes, beforeHandoff + 1);
     reader.onViewportChanged(old, false);
     tester.binding.scheduleFrame();
     await tester.pump();
     expect(
       changes,
-      2,
+      beforeHandoff + 1,
       reason: 'A stale detach cannot invalidate current input.',
     );
     reader.onViewportChanged(replacement, false);
     expect(reader.imageViewController, isNull);
     tester.binding.scheduleFrame();
     await tester.pump();
-    expect(changes, 3);
+    expect(changes, beforeHandoff + 2);
   });
 
   for (final cancelled in [false, true]) {

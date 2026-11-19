@@ -826,6 +826,7 @@ class ReaderState extends State<Reader>
     animationEnabled: () => preferences.enablePageAnimation,
     viewport: () => imageViewController,
     onChanged: update,
+    onPageNavigationChanged: _onPageNavigationChanged,
     onPageChanged: onPageChanged,
     onError: (error, stack) =>
         Log.error('Reader', 'Page navigation failed: $error', stack),
@@ -881,6 +882,18 @@ class ReaderState extends State<Reader>
           data.matches(chapters),
       select: toChapter,
     );
+  }
+
+  void _onPageNavigationChanged() {
+    if (!mode.isGallery) {
+      update();
+      return;
+    }
+    if (!_stateDisposed) _targetValidity.value++;
+    if (_sessionClosing != null || _sessionFrozen) return;
+    _updateScreenAwake();
+    _cancelOutdatedLayout();
+    updateShell();
   }
 
   void update() {

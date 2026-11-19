@@ -49,6 +49,43 @@ void main() {
   });
   tearDown(() => controller.dispose());
 
+  test(
+    'page presentation retains content notifications for chapter changes',
+    () async {
+      var pagePresentation = 0;
+      controller.dispose();
+      controller = ReaderController(
+        pageCount: () => 300,
+        chapterCount: () => 3,
+        animationEnabled: () => true,
+        viewport: () => view,
+        onChanged: () => updates++,
+        onPageNavigationChanged: () => pagePresentation++,
+        onPageChanged: () => pageChanges++,
+        onError: (error, stack) => errors++,
+      );
+      expect(controller.toPage(2), isTrue);
+      expect(pagePresentation, 1);
+      expect(updates, 0);
+      controller.reportPage(2);
+      view.animations.single.complete();
+      await pumpEventQueue();
+      expect(pagePresentation, 2);
+      expect(updates, 0);
+      expect(pageChanges, 1);
+      expect(controller.toPage(3, animated: false), isTrue);
+      expect(pagePresentation, 3);
+      expect(view.page, 3);
+      expect(pageChanges, 2);
+      expect(controller.toChapter(2), isTrue);
+      expect(updates, 1);
+      expect(pagePresentation, 3);
+      expect(controller.state.chapter, 2);
+      expect(controller.state.page, 1);
+      expect(errors, 0);
+    },
+  );
+
   for (final phase in ['before', 'images', 'mode']) {
     test(
       'current $phase error stays in the UI without poisoning image work',
