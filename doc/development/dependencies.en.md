@@ -4,7 +4,7 @@ Default Chinese version: [dependencies.zh.md](dependencies.zh.md)
 
 This document records governance rules for VeneraNext's Git dependencies and repository-local source packages. `pubspec.lock` is part of reproducible builds, but it does not replace documenting dependency provenance and maintenance responsibility.
 
-See the [2026-11-07 audit and proposal](official_dependency_plan_20261107.zh.md) for the pre-migration snapshot, and the [implementation record](official_dependency_implementation_20261107.zh.md) for current sources, rejected candidates and validation evidence.
+See the [current dependency decisions](dependency_audit.en.md) for exceptions, rejected candidates and validation requirements. The inventory and package provenance/patch manifests retain exact inputs.
 
 ## Rules
 

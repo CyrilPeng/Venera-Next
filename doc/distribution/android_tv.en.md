@@ -84,4 +84,4 @@ Outputs are in `build/app/outputs/apk/mobile/release/` and `build/app/outputs/ap
 
 Check mobile coexistence; 720p/1080p/4K, large text, both themes and reduced motion; focus return in search, lists, chapters, settings and dialogs; no background page turns from menus; no held input after resume; failed-save exit protection; device-local low-memory preferences across import/sync; and actual memory behavior with strips, animation, large pages and extended reading. Reports need version/revision, device and Android version, system ABI, remote type, and reproduction steps, not private comics, credentials, or full backups.
 
-The [historical experiment record](../experiments/android_tv.zh.md) retains the old branch-isolation rules and acceptance checklist. It is no longer the current build guide.
+The [historical experiment record in the RC3 tag](https://github.com/CyrilPeng/Venera-Next/blob/v1.18.4-rc.3/doc/experiments/android_tv.zh.md) retains the old branch-isolation rules and acceptance checklist.

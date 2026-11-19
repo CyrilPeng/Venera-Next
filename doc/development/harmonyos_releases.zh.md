@@ -18,11 +18,11 @@ PR 校验使用 Actions 的准确合并候选 SHA，push 和手动构建使用�
 
 开关授权的是经过源码、构建及资产审核的未签名测试版分发。它不表示设备签装、覆盖升级或功能验收已完成；manifest 中的 `signed: false`、`runtime_verified: false` 与安装指南继续准确记录验证范围。schema 2／3 的预览或未绑定实际 tag 的产物均拒绝 Release 验证，归档标签也不会触发 `v*` 发布。
 
-源码及八个项目包摘要使用已提交的 canonical Git blob；七个受管原生库、PNG／7z 导出、第三方 NOTICE 和全部应用资产继续参与审计。适用的 QuickJS 核心修复固定到 `f5a1f20`，历史来源见[依赖实施记录](official_dependency_implementation_20261107.zh.md)。
+源码及八个项目包摘要使用已提交的 canonical Git blob；七个受管原生库、PNG／7z 导出、第三方 NOTICE 和全部应用资产继续参与审计。适用的 QuickJS 核心修复固定到 `f5a1f20`，当前来源与替换条件见[依赖决策摘要](dependency_audit.zh.md)。
 
 ## 版本与产物
 
-本轮 `v1.18.4-rc.3` 使用构建号 **252**，包含当前页调光、收藏刷新与搜索 Esc 修复，以及 schema 2 阅读慢帧诊断。HAP 与其他平台从准确的新标签重新构建，沿用现有包名和桌面名称。三项鸿蒙附件、标签下的中英文安装指南及 `runtime_acceptance: stable_required` 继续参与发布核验；`signed: false`、`runtime_verified: false` 继续记录构建与真机验收的边界。原设备分页、裁剪和封面反馈仍按各自 issue 跟进，完整安排见[第三个候选版发布准备](release_readiness.md#v1184-third-prerelease-2026-11-16)。
+本轮 `v1.18.4-rc.3` 使用构建号 **252**，包含当前页调光、收藏刷新与搜索 Esc 修复，以及 schema 2 阅读慢帧诊断。HAP 与其他平台从准确的新标签重新构建，沿用现有包名和桌面名称。三项鸿蒙附件、标签下的中英文安装指南及 `runtime_acceptance: stable_required` 继续参与发布核验；`signed: false`、`runtime_verified: false` 继续记录构建与真机验收的边界。原设备分页、裁剪和封面反馈仍按各自 issue 跟进，完整安排见[当前公开版本与验收](release_readiness.md#当前公开版本)。
 
 发布工作流校验调用方的 Git 提交、版本、构建号、运行号及 changelog 摘要。只有独占生成工程被写入调用方版本，源 checkout 不被改写。原生版本名为三段数字，Dart 版本保留 RC 后缀；构建号沿用主线并递增。第一个公开的主线随版 HAP 为 `v1.18.3-rc.3`，构建号 **248**；RC1／RC2 保留已构建的标签与 Actions 记录，均未公开 Release。主线 schema 3 的首个允许构建号为 245，旧 244 来源只保留历史验证；不回填 `v1.18.2` 等旧 Release。
 
@@ -90,4 +90,24 @@ gh run rerun RUN_ID --job RELEASE_JOB_ID --repo CyrilPeng/Venera-Next
 
 草稿补齐报告后只重跑原 run 的 `Release` 任务，使用原构建 artifacts。草稿复用时核对**所有平台**包的名称、大小和 SHA-256，拒绝新编译或替换的包；验收报告是唯一允许额外上传的文件。报告须由具有 write／maintain／admin 权限的人类维护者上传，脚本复核上传者、文件大小与摘要、准确源码和 HAP、每项结果及测试时间。错误／失败报告直接停止发布，不能以“待验收”绕过。已公开候选版补充报告后对原包运行 `verify-published`，不把公开候选版重新当作草稿发布。
 
-在 `stable_required` 策略下，候选版无报告时输出 `ready=true` 并明确设备验收仍待完成；正式版无报告时输出 `ready=false`，全部平台草稿保留，公开与 CDN 步骤跳过。旧 `required` 策略下两类版本无报告均保留草稿。合格报告通过后输出 `ready=true`，公开后再次验证已有报告内容；任务构建成功本身不代表已经公开或完成设备验收。草稿须在 Actions artifacts 保留期内（目前 14 天）完成验收并重跑；过期也保留原包，不替换已测试的包。本轮未连接鸿蒙真机，设备验收仍未完成；问题与长期外部目录评估见[跟进记录](harmonyos_issue_followup_20261110.zh.md)。
+在 `stable_required` 策略下，候选版无报告时输出 `ready=true` 并明确设备验收仍待完成；正式版无报告时输出 `ready=false`，全部平台草稿保留，公开与 CDN 步骤跳过。旧 `required` 策略下两类版本无报告均保留草稿。合格报告通过后输出 `ready=true`，公开后再次验证已有报告内容；任务构建成功本身不代表已经公开或完成设备验收。草稿须在 Actions artifacts 保留期内（目前 14 天）完成验收并重跑；过期也保留原包，不替换已测试的包。本轮未连接鸿蒙真机，设备验收仍未完成；问题与长期外部目录评估见[跟进记录](harmonyos_releases.zh.md#长期外部漫画目录)。
+
+## 长期外部漫画目录
+
+当前目录选择用于复制导入；[长期外部库 #159](https://github.com/CyrilPeng/Venera-Next/issues/159)需要完整存储桥和设备验收。系统提供持久授权 API 不等于应用已取得授权；能力查询、未签名 HAP 编译和宿主回归分别记录。
+
+1. **能力与真实授权**：API 26 手机／平板分别查询 FolderSelection／FolderAuthorization，由真实 Picker 获得 URI 和读写模式，声明 `ohos.permission.FILE_ACCESS_PERSIST`。仅持久化真实授权对象；拒绝、失败、不支持或授权撤销保留记录并进入恢复。
+2. **持久化与激活**：使用 `fileShare.persistPermission`，每次冷启动 `activatePermission`。禁止扩大权限，远程 URI 不支持；卸载会清除授权。URI／模式独立保存，不写入公开诊断。
+3. **存储桥**：URI 不能冒充 Dart 普通路径。现有库、下载、备份／导出接入枚举、创建、读写／seek、重命名、删除、跨 isolate 访问；真实句柄保留到 I/O 收尾，核对源／目标别名、同对象和目录重叠。
+4. **迁移与恢复**：接入 LocalStorageMigration／LocalStorageRelocation 的暂存、复制、事务与恢复。验证只读、空间不足、撤权、取消、中断、中文名和大文件；重新选择可恢复原授权。旧库保留至新库在退出、冷启动、同密钥升级后仍可读。
+5. **能力开放**：上述授权、桥接、失败恢复及真实设备条件全部通过后再开放 `DirectoryPicker.supportsPersistentDirectories`。`DirectorySelection.ownedCopy` 和临时沙箱副本仅表示复制导入，不能作为长期库验收。
+
+系统参考：[持久授权开发指南](https://developer.huawei.com/consumer/en/doc/doccenter-capabilities/file-persistpermission)、[fileShare API](https://developer.huawei.com/consumer/en/doc/doccenter-references/api/js-apis-fileshare)。
+
+## 历史来源与恢复
+
+独立鸿蒙分支已经合入主线，后续全部平台使用同一发布提交。冻结 `1.18.3+244` 来源为 `3e1be1391ba784bb228803525696d38c208f471f`，由 `harmonyos-frozen-244` 标签恢复；最后双分支候选 `ca5f7ef98ec03872d087f0b691e40f0de0080939` 由 `harmonyos-branch-final-245` 标签保存。按旧 schema、原锁和原资产验证历史包。
+
+2026-10 的平板三份报告只验证与 `ef2904f` 配对的核心探针、进程重启和合成升级数据，结果为 `reported_checks_pass`；不代表完整阅读器、真实存储恢复或续签验收。旧工具的 upgrade 阶段仍读取[中文探针指南](../distribution/harmonyos.zh.md)及[英文指南](../distribution/harmonyos.en.md)，保留这些工具输入；普通用户使用[阅读器安装指南](../distribution/harmonyos-reader.zh.md)。
+
+过程、设备报告摘要及历史整理的树一致性／bundle 恢复依据可在 [RC3 文档树](https://github.com/CyrilPeng/Venera-Next/tree/v1.18.4-rc.3/doc)检索；主线指南只维护当前规则。

@@ -1,6 +1,6 @@
 # HarmonyOS 构建与发布工具
 
-鸿蒙平台适配与完整阅读器统一维护在 `main`，使用独立 Flutter OH SDK 从同一主线提交生成 HAP。普通平台保留官方 Flutter、根 pubspec／lock；鸿蒙依赖覆盖、受控锁、ArkTS 模板与原生工具集中在本目录。用户入口见[测试版安装指南](../../doc/distribution/harmonyos-reader.zh.md)；早期探针记录见[实验记录](../../doc/experiments/harmonyos.zh.md)。
+鸿蒙平台适配与完整阅读器统一维护在 `main`，使用独立 Flutter OH SDK 从同一主线提交生成 HAP。普通平台保留官方 Flutter、根 pubspec／lock；鸿蒙依赖覆盖、受控锁、ArkTS 模板与原生工具集中在本目录。用户入口见[测试版安装指南](../../doc/distribution/harmonyos-reader.zh.md)；早期探针范围与恢复标签见[历史来源](../../doc/development/harmonyos_releases.zh.md#历史来源与恢复)。
 
 已发布的主线正式版为 **`1.18.3+249`**，鸿蒙以未签名 Beta HAP 随版分发。
 后续构建使用 schema 3 配置，从调用方 checkout 选择准确主线 SHA，所有平台使用同一来源。
@@ -62,7 +62,7 @@ python3 tool/harmonyos/ci_full_app.py --flutter-sdk "$FLUTTER_OH_SDK"
 
 早期实验采用“unsigned HAP + 用户本地小白调试助手”路线验证核心探针。以下保留开发与历史核对方法，不是当前阅读器安装入口，也不要求用户重复已完成的探针测试。旧配对指南见[中文](../../doc/distribution/harmonyos.zh.md) / [English](../../doc/distribution/harmonyos.en.md)。CI 不保存签名材料，不声称免开发者账号或永久免续签。
 
-2026-10-29 已将 #77 自愿测试者的三份平板报告与 `ef2904f` 构建配对及原生记录核对，结果为 `reported_checks_pass`；空白包成功按本人反馈单独记录。结论仅覆盖该设备／版本的核心探针、进程重启和合成升级数据，不认证硬件／签名身份，不验证续签、文件导入或完整阅读器。脱敏结论及摘要见[设备复核记录](../../doc/experiments/data/harmonyos-tablet-device-review-20261029.json)，原始 JSON 不进版本控制。后续文档更新触发的新构建不替代这次设备报告所对应的旧配对，也无需测试者重复相同四步。
+2026-10-29 已将 #77 自愿测试者的三份平板报告与 `ef2904f` 构建配对及原生记录核对，结果为 `reported_checks_pass`；空白包成功按本人反馈单独记录。结论仅覆盖该设备／版本的核心探针、进程重启和合成升级数据，不认证硬件／签名身份，不验证续签、文件导入或完整阅读器。脱敏结论及摘要见[设备复核记录](https://github.com/CyrilPeng/Venera-Next/blob/v1.18.4-rc.3/doc/experiments/data/harmonyos-tablet-device-review-20261029.json)，原始 JSON 不进版本控制。后续文档更新触发的新构建不替代这次设备报告所对应的旧配对，也无需测试者重复相同四步。
 
 云端在 baseline `0.3.0+4` 之后构建 upgrade `0.3.1+5`，保持探针包名不变。空白包与两份探针均只声明 `phone`／`tablet`，审计实际入包设备类型，拒绝遗漏平板或扩大到 PC／TV；不混用旧 `0.2.x` 配对。两包携带相同源/原生库配对标识，导出前核对真实 `module.json`、嵌入标识、API 26 与原生库哈希，生成 `sideload-manifest.json`、`SHA256SUMS` 及离线安装指南。只有整条流程成功才提供测试包，仍不创建 Release。宿主测试生成的合成数据不属于真机验收。
 

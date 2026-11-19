@@ -126,10 +126,8 @@ ImageProvider? _resolveComicTileImageProvider(Comic comic) {
   if (comic.cover.trim().isEmpty) return null;
   if (comic is LocalComic) return LocalComicImageProvider(comic);
   if (comic is History) return HistoryImageProvider(comic);
-  // Local comics surfaced through favorites/read-later reuse the relative
-  // cover filename (e.g. `cover.jpg`). Those must be resolved back to the
-  // local file instead of being passed to the HTTP downloader as a relative
-  // URL, which fails with "relative URL without a base".
+  // Relative covers in favorites/read-later use the local comic provider,
+  // including its inferred-cover fallback and owned loading lifecycle.
   final cover = comic.cover;
   if (_comicTypeOf(comic) == ComicType.local && !_looksLikeUrl(cover)) {
     final localComic = LocalManager().find(comic.id, ComicType.local);

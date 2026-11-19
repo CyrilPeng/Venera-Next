@@ -170,27 +170,30 @@ abstract class CBZ {
         Log.warning("CBZ", "Failed to parse metadata: $e");
       }
     }
-    var comicInfoFile = File(FilePath.join(cache.path, 'ComicInfo.xml'));
-    if (metaData != null &&
-        metaData.chapters == null &&
-        comicInfoFile.existsSync()) {
-      final chapters = _readComicInfoChapters(comicInfoFile);
-      if (chapters != null) {
-        metaData = ComicMetaData(
-          title: metaData.title,
-          author: metaData.author,
-          tags: metaData.tags,
-          chapters: chapters,
-        );
-      }
-    }
-    if (metaData == null && comicInfoFile.existsSync()) {
-      metaData = _readComicInfoMetadata(comicInfoFile);
-    }
+    final comicInfoFile = File(FilePath.join(cache.path, 'ComicInfo.xml'));
+    final jsonChapters = metaData?.chapters;
+    final hasComicInfo = comicInfoFile.existsSync();
+    metaData ??= hasComicInfo ? _readComicInfoMetadata(comicInfoFile) : null;
     metaData ??= ComicMetaData(
       title: file.name.substring(0, file.name.lastIndexOf('.')),
       author: "",
       tags: [],
+    );
+    // XML ranges describe flat exports. Real chapter folders keep their layout;
+    // JSON chapter ranges retain precedence and their existing failure behavior.
+    final chapters = jsonChapters?.isNotEmpty == true
+        ? jsonChapters
+        : (hasComicInfo && !layout.useChapterDirectories
+              ? _readComicInfoChapters(
+                  comicInfoFile,
+                  pageCount: layout.rootPages.length,
+                )
+              : null);
+    metaData = ComicMetaData(
+      title: metaData.title,
+      author: metaData.author,
+      tags: metaData.tags,
+      chapters: chapters,
     );
     var old = LocalManager().findByName(metaData.title);
     if (old != null) {
@@ -220,7 +223,7 @@ abstract class CBZ {
     final output = ComicImportOutput(dest);
     try {
       File coverFile;
-      if (metaData.chapters == null && layout.useChapterDirectories) {
+      if (layout.useChapterDirectories) {
         coverFile = layout.inferredCover!;
         await coverFile.copyMem(
           FilePath.join(dest.path, 'cover.${coverFile.extension}'),
@@ -260,22 +263,15 @@ abstract class CBZ {
             await src.copyMem(dst.path);
           }
         } else {
-          dest.createSync();
-          var chapters = <String, List<File>>{};
-          for (var chapter in metaData.chapters!) {
-            chapters[chapter.title] = files.sublist(
-              chapter.start - 1,
-              chapter.end,
-            );
-          }
-          int i = 0;
           cpMap = <String, String>{};
-          for (var chapter in chapters.entries) {
-            cpMap[i.toString()] = chapter.key;
+          for (var i = 0; i < metaData.chapters!.length; i++) {
+            final chapter = metaData.chapters![i];
+            final pages = files.sublist(chapter.start - 1, chapter.end);
+            cpMap[i.toString()] = chapter.title;
             var chapterDir = Directory(FilePath.join(dest.path, i.toString()));
             chapterDir.createSync();
-            for (var j = 0; j < chapter.value.length; j++) {
-              var src = chapter.value[j];
+            for (var j = 0; j < pages.length; j++) {
+              var src = pages[j];
               var dst = File(
                 FilePath.join(
                   chapterDir.path,
@@ -284,7 +280,6 @@ abstract class CBZ {
               );
               await src.copyMem(dst.path);
             }
-            i++;
           }
         }
       }
@@ -470,12 +465,29 @@ abstract class CBZ {
   /// Reads chapter ranges embedded in a Venera-exported [ComicInfo.xml].
   ///
   /// The exporter writes them into `<Notes>Chapters: title: start-end; ...`.
-  /// Returns null when no usable chapters are present, so callers can fall
-  /// back to the flat single-volume behavior without erroring.
-  static List<ComicChapter>? _readComicInfoChapters(File comicInfoFile) {
+  /// Only a complete, contiguous partition of the actual pages is usable.
+  /// Otherwise the importer keeps every page in a single flat volume.
+  static List<ComicChapter>? _readComicInfoChapters(
+    File comicInfoFile, {
+    required int pageCount,
+  }) {
     try {
       final notes = ComicInfoXml.readNotes(comicInfoFile.readAsStringSync());
-      return parseChaptersFromNotes(notes ?? '');
+      final chapters = parseChaptersFromNotes(notes ?? '');
+      if (chapters == null) return null;
+      var nextPage = 1;
+      for (final chapter in chapters) {
+        if (chapter.start != nextPage || chapter.end > pageCount) {
+          Log.warning('CBZ', 'Ignoring incomplete ComicInfo chapter ranges');
+          return null;
+        }
+        nextPage = chapter.end + 1;
+      }
+      if (nextPage != pageCount + 1) {
+        Log.warning('CBZ', 'Ignoring incomplete ComicInfo chapter ranges');
+        return null;
+      }
+      return chapters;
     } catch (e) {
       Log.warning("CBZ", "Failed to parse ComicInfo chapters: $e");
       return null;

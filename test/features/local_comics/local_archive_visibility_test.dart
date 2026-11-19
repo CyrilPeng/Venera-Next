@@ -6,10 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
+import 'package:venera_next/app_runtime/core_bootstrap.dart';
+import 'package:venera_next/app_runtime/init.dart' as runtime;
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/features/comic_source/comic_source_api.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
+import 'package:venera_next/features/favorites/favorite_models.dart';
 import 'package:venera_next/features/local_comics/import_export/cbz.dart';
 import 'package:venera_next/features/local_comics/import_export/comic_import_service.dart';
 import 'package:venera_next/features/local_comics/local.dart';
@@ -18,6 +21,7 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/file_selection.dart';
+import 'package:venera_next/foundation/image_provider/base_image_provider.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 
@@ -264,6 +268,94 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   App.dataPath = Directory.systemTemp.path;
   App.cachePath = Directory.systemTemp.path;
+
+  testWidgets('local favorite and read-later tiles infer a missing cover', (
+    tester,
+  ) async {
+    final library = await _prepare(tester);
+    late LocalComic comic;
+    await tester.runAsync(() async {
+      await library.import('local', [_names.first]);
+      comic = library.manager.getComics(LocalSortType.name).single;
+      await comic.coverFile.delete();
+    });
+    for (final setting in [
+      'showFavoriteStatusOnTile',
+      'showHistoryStatusOnTile',
+      'showUpdateStatusOnTile',
+    ]) {
+      appdata.settings[setting] = false;
+    }
+    Future<void> ready() async {}
+    final core = CoreBootstrap(
+      environment: ready,
+      settings: ready,
+      infrastructure: ready,
+      sources: ready,
+      stores: ready,
+      finish: ready,
+    );
+    final errorHandler = FlutterError.onError;
+    try {
+      await tester.runAsync(() => runtime.init(core));
+    } finally {
+      FlutterError.onError = errorHandler;
+    }
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      tester.binding.imageCache.clear();
+      tester.binding.imageCache.clearLiveImages();
+      await tester.pump();
+      await tester.runAsync(() async {
+        (await BaseImageProvider.prepareForExit())();
+        await core.close();
+      });
+    });
+    final favorite = FavoriteItem(
+      id: comic.id,
+      name: comic.title,
+      coverPath: comic.cover,
+      author: comic.subtitle,
+      type: ComicType.local,
+      tags: comic.tags,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              SizedBox(
+                width: 375,
+                height: 180,
+                child: ComicTile(comic: favorite),
+              ),
+              SimpleComicTile(comic: favorite),
+            ],
+          ),
+        ),
+      ),
+    );
+    List<RawImage> painted() =>
+        tester.widgetList<RawImage>(find.byType(RawImage)).toList();
+    bool readyImages() =>
+        painted().length == 2 && painted().every((view) => view.image != null);
+    final waiting = Stopwatch()..start();
+    while (!readyImages() && waiting.elapsed < const Duration(seconds: 5)) {
+      await tester.runAsync(() => pumpEventQueue());
+      await tester.pump();
+    }
+    expect(readyImages(), isTrue);
+    for (final view in painted()) {
+      expect(view.image!.width, 8);
+      expect(view.image!.height, 12);
+    }
+    expect(tester.takeException(), isNull);
+    expect(
+      File('${library.inputs.path}/${_names.first}').readAsBytesSync(),
+      library.sourceBytes,
+    );
+  });
+
   for (final mode in ['local', 'android-borrowed', 'android-copy', 'batch']) {
     for (final reverse in [false, true]) {
       testWidgets(

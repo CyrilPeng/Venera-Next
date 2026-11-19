@@ -5,10 +5,9 @@ import 'archive_metadata.dart';
 /// Reader for the standard [ComicInfo.xml](https://github.com/anansi-project/comicinfo)
 /// companion file found inside CBZ/CB7 archives.
 ///
-/// The exporter in `cbz.dart` writes full metadata back into this file as well
-/// as into `metadata.json`. Standard catalogues (Tachiyomi/Mihon and the older
-/// Venera exports) only ship `ComicInfo.xml`, so the importer must be able to
-/// reconstruct chapters from it when `metadata.json` is absent.
+/// The exporter in `cbz.dart` writes metadata here and embeds chapter ranges
+/// in `<Notes>` using the Venera convention. Archives without JSON metadata
+/// can restore that convention when the ranges cover their actual flat pages.
 class ComicInfoXml {
   ComicInfoXml._();
 

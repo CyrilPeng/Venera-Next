@@ -55,16 +55,23 @@ void main() {
       ..writeAsBytesSync(archive.ZipEncoder().encodeBytes(contents));
   }
 
-  File bookWithComicInfo(String name) {
+  File bookWithComicInfo(
+    String name, {
+    List<String> pages = const ['1.jpg', '2.jpg', '3.jpg'],
+    String notes = 'Chapters: 第01卷: 1-2; 第02卷: 3-3',
+    Map<String, Object?>? metadata,
+    bool includeTitle = true,
+    bool nested = false,
+  }) {
     final contents = archive.Archive();
-    const notes = 'Chapters: 第01卷: 1-2; 第02卷: 3-3';
+    final prefix = nested ? 'wrapped/' : '';
     final entries = {
-      '1.jpg': name,
-      '2.jpg': name,
-      '3.jpg': name,
-      'ComicInfo.xml':
-          '<ComicInfo><Title>$name</Title><Writer>Author</Writer>'
-          '<Notes>$notes</Notes></ComicInfo>',
+      for (final page in pages) '$prefix$page': page,
+      if (metadata != null) '${prefix}metadata.json': jsonEncode(metadata),
+      '${prefix}ComicInfo.xml':
+          '<ComicInfo>${includeTitle ? '<Title>$name</Title>' : ''}'
+          '<Writer>Author</Writer><Genre>Action, Adventure</Genre>'
+          '<Tags>fantasy</Tags><Notes>$notes</Notes></ComicInfo>',
     };
     for (final entry in entries.entries) {
       final bytes = utf8.encode(entry.value);
@@ -72,6 +79,30 @@ void main() {
     }
     return File('${root.path}/$name.cbz')
       ..writeAsBytesSync(archive.ZipEncoder().encodeBytes(contents));
+  }
+
+  Future<LocalComic> importBook(File input) =>
+      CBZ.import(input, registerComic: (comic) => manager.add(comic, comic.id));
+
+  Future<void> expectAllPages(LocalComic comic, List<String> pages) async {
+    final imageUris = <String>[];
+    if (comic.chapters == null) {
+      imageUris.addAll(await manager.getImages(comic.id, ComicType.local, 1));
+    } else {
+      for (final chapter in comic.downloadedChapters) {
+        imageUris.addAll(
+          await manager.getImages(comic.id, ComicType.local, chapter),
+        );
+      }
+    }
+    expect(
+      [
+        for (final uri in imageUris)
+          File(CBZ.localFilePathFromImageUri(uri)).readAsStringSync(),
+      ],
+      pages,
+      reason: 'Every source page must remain readable in its original order',
+    );
   }
 
   test(
@@ -98,6 +129,134 @@ void main() {
       expect(chapter1, hasLength(2));
       final chapter2 = await manager.getImages(saved.id, ComicType.local, '1');
       expect(chapter2, hasLength(1));
+      expect(saved.subtitle, 'Author');
+      expect(saved.tags, ['Action', 'Adventure', 'fantasy']);
+      await expectAllPages(saved, ['1.jpg', '2.jpg', '3.jpg']);
+    },
+  );
+
+  for (final withMetadata in [false, true]) {
+    test(
+      'real chapter folders take precedence over XML ranges; JSON=$withMetadata',
+      () async {
+        const pages = ['Ch1/1.jpg', 'Ch2/1.jpg'];
+        final input = bookWithComicInfo(
+          'Directories',
+          pages: pages,
+          notes: 'Chapters: XML one: 1-1; XML two: 2-2',
+          nested: true,
+          metadata: withMetadata
+              ? {
+                  'title': 'Directories',
+                  'author': 'JSON Author',
+                  'tags': ['JSON tag'],
+                }
+              : null,
+        );
+        final comic = await importBook(input);
+        expect(comic.chapters!.titles.toList(), ['Ch1', 'Ch2']);
+        expect(comic.chapters!.ids.toList(), ['0', '1']);
+        expect(comic.downloadedChapters, ['0', '1']);
+        expect(comic.coverFile.readAsStringSync(), pages.first);
+        expect(comic.subtitle, withMetadata ? 'JSON Author' : 'Author');
+        await expectAllPages(comic, pages);
+        expect(input.existsSync(), isTrue);
+        expect(Directory(App.cachePath).listSync(), isEmpty);
+      },
+    );
+  }
+
+  for (final invalid in [
+    ('missing first pages', 'Chapters: Extra: 3-4'),
+    ('missing middle page', 'Chapters: First: 1-1; Last: 3-4'),
+    ('missing last pages', 'Chapters: First: 1-2'),
+    ('beyond page count', 'Chapters: Whole: 1-5'),
+  ]) {
+    test('XML ranges ${invalid.$1} fall back without losing pages', () async {
+      const pages = ['1.jpg', '2.jpg', '3.jpg', '4.jpg'];
+      final input = bookWithComicInfo(
+        'Fallback',
+        pages: pages,
+        notes: invalid.$2,
+      );
+      final comic = await importBook(input);
+      expect(comic.hasChapters, isFalse);
+      expect(comic.title, 'Fallback');
+      expect(comic.subtitle, 'Author');
+      expect(comic.tags, ['Action', 'Adventure', 'fantasy']);
+      await expectAllPages(comic, pages);
+      expect(input.existsSync(), isTrue);
+      expect(Directory(App.cachePath).listSync(), isEmpty);
+    });
+  }
+
+  test(
+    'duplicate XML chapter titles keep distinct IDs and all pages',
+    () async {
+      const pages = ['1.jpg', '2.jpg', '3.jpg', '4.jpg'];
+      final input = bookWithComicInfo(
+        'Duplicate',
+        pages: pages,
+        notes: 'Chapters: Part: 1-2; Part: 3-4',
+      );
+      final comic = await importBook(input);
+      expect(comic.chapters!.titles.toList(), ['Part', 'Part']);
+      expect(comic.chapters!.ids.toList(), ['0', '1']);
+      expect(comic.downloadedChapters, ['0', '1']);
+      await expectAllPages(comic, pages);
+      expect(input.existsSync(), isTrue);
+    },
+  );
+
+  for (final withJsonChapters in [false, true]) {
+    test(
+      'JSON metadata keeps precedence; own chapters=$withJsonChapters',
+      () async {
+        const pages = ['1.jpg', '2.jpg', '3.jpg', '4.jpg'];
+        final input = bookWithComicInfo(
+          'XML title',
+          pages: pages,
+          notes: 'Chapters: XML chapter: 1-4',
+          metadata: {
+            'title': 'JSON title',
+            'author': 'JSON Author',
+            'tags': ['JSON tag'],
+            if (withJsonChapters)
+              'chapters': [
+                {'title': 'Part', 'start': 1, 'end': 2},
+                {'title': 'Part', 'start': 3, 'end': 4},
+              ]
+            else
+              'chapters': <Object>[],
+          },
+        );
+        final comic = await importBook(input);
+        expect(comic.title, 'JSON title');
+        expect(comic.subtitle, 'JSON Author');
+        expect(comic.tags, ['JSON tag']);
+        expect(
+          comic.chapters!.titles.toList(),
+          withJsonChapters ? ['Part', 'Part'] : ['XML chapter'],
+        );
+        expect(
+          comic.chapters!.ids.toList(),
+          withJsonChapters ? ['0', '1'] : ['0'],
+        );
+        await expectAllPages(comic, pages);
+        expect(input.existsSync(), isTrue);
+      },
+    );
+  }
+
+  test(
+    'XML notes restore chapters when the archive supplies the title',
+    () async {
+      final input = bookWithComicInfo('Filename title', includeTitle: false);
+      final comic = await importBook(input);
+      expect(comic.title, 'Filename title');
+      expect(comic.chapters!.titles.toList(), ['第01卷', '第02卷']);
+      await expectAllPages(comic, ['1.jpg', '2.jpg', '3.jpg']);
+      expect(input.existsSync(), isTrue);
     },
   );
 

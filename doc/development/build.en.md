@@ -179,3 +179,9 @@ The Flutter/Dart version or package-source environment usually does not match. C
 ### Slow Gradle Downloads
 
 You may temporarily use a local Gradle wrapper mirror or configure a network proxy. Environment-specific URLs must not be committed. Before submitting changes, verify that `gradle-wrapper.properties` does not contain local mirror edits.
+
+## Historical Records and Recovery
+
+Completed history, dependency migration, test optimization and issue snapshots remain in the [v1.18.4-rc.3 documentation tree](https://github.com/CyrilPeng/Venera-Next/tree/v1.18.4-rc.3/doc). Restore the corresponding tag or saved Git bundle in an independent workspace, checking source, locks and version. Historical SHAs and published assets still identify their original inputs. See [HarmonyOS recovery tags](harmonyos_releases.en.md#historical-sources-and-recovery).
+
+Put temporary command/analysis logs in `logs/` and generated projects, SDKs, downloaded installers and compiler caches in ignored `build/`. After acceptance, retain source, final outcomes, important failures, security and device evidence, then remove reproducible copies. Merge durable rules into maintained guides rather than adding a plan/follow-up document each release.

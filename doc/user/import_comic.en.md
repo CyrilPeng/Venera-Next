@@ -113,6 +113,18 @@ Cat's Eye.cbz
 If there is no `cover.[ext]` in the root folder, the first image from the first
 chapter is used as the cover.
 
+The development branch reads the title, writer, genres and tags from
+`ComicInfo.xml` in local archives. Valid `metadata.json` takes precedence;
+when it has no chapter information, the importer can use the Venera export
+convention in XML `Notes`: `Chapters: title: start-end; ...`.
+
+Actual chapter folders take precedence over XML page ranges. Flat images are
+split into chapters only when the XML ranges start at page 1, are contiguous
+and cover every story image. Incomplete, out-of-bounds or unparseable ranges
+fall back to a single volume while preserving every story image. Duplicate
+chapter titles keep separate chapters. If the XML has no title, the archive
+filename supplies it. These rules apply to local comic archive imports.
+
 ### HarmonyOS Comic Collection ZIP
 
 The development branch accepts both layouts below through **Comic collection ZIP**.
@@ -158,7 +170,7 @@ import; the original document is not streamed by the reader.
 
 - Open `Local` -> `Import` -> `PDF comic files` to select one or more PDFs. Each file becomes a separate comic, and the destination favorites folder is selected once for the batch.
 - Files are converted sequentially. Progress includes the current file, its position in the batch, and its page count, so there is no need to select each volume separately.
-- **New on main (unreleased):** select “Run in background”, close the progress dialog, or go back to keep reading other comics without cancelling import. Open “PDF import tasks” using the PDF icon on the home screen's Local card or the local library page to check progress, cancel, or review individual results. Reopening does not restart import. Additional PDF batches join the same serial queue; queued tasks can be cancelled immediately. Clearing completed task records does not delete imported comics.
+- **Background import since v1.17.0:** select “Run in background”, close the progress dialog, or go back to keep reading other comics without cancelling import. Open “PDF import tasks” using the PDF icon on the home screen's Local card or the local library page to check progress, cancel, or review individual results. Reopening does not restart import. Additional PDF batches join the same serial queue; queued tasks can be cancelled immediately. Clearing completed task records does not delete imported comics.
 - Each successful comic is saved immediately. Duplicate selections and titles already in the local library are skipped. A damaged, password-protected, or unreadable file does not stop the remaining files; individual results are shown at the end.
 - Cancelling stops subsequent imports and cleans up the unfinished comic after the current file preparation or page operation finishes safely. Successfully imported comics are kept, and unprocessed files are not counted as failures.
 - On main, changing local storage or scanning to restore the library is blocked while a PDF is being converted or registered; wait for import to finish or cancel it first. If migration or recovery has already started, new PDFs wait until it finishes before conversion. You can keep reading other comics.

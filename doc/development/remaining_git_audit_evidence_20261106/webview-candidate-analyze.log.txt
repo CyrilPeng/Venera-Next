@@ -1,3 +1,0 @@
-Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
-Analyzing app-webview-upstream...
-No issues found! (ran in 25.4s)

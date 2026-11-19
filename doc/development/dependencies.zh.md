@@ -4,7 +4,7 @@ English version: [dependencies.en.md](dependencies.en.md)
 
 本文记录 VeneraNext 的依赖治理规则，覆盖不来自 pub.dev 的 Git 依赖和仓库内本地源码包。`pubspec.lock` 是构建复现依据，但不能替代依赖来源和维护责任说明。
 
-全部直接依赖的迁移前核查见[2026-11-07 官方来源方案](official_dependency_plan_20261107.zh.md)；当前已实施来源、未采用候选和验证证据见[本轮实施记录](official_dependency_implementation_20261107.zh.md)。
+当前来源例外、未采用候选及验证要求见[依赖决策摘要](dependency_audit.zh.md)，准确内容由机器清单及包内来源／补丁记录维护。
 
 ## 基本规则
 
