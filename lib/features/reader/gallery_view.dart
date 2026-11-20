@@ -7,6 +7,7 @@ import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/features/reader/image_downloads.dart';
 import 'package:venera_next/features/reader/image_precache.dart';
 import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/foundation/reader_diagnostics.dart';
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/auto_reading.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -70,6 +71,7 @@ class GalleryModeState extends State<ReaderGalleryView>
   int? _requestedPrecachePage;
   int _precacheDirection = 1;
   double? _lastScrollPage;
+  int? _diagnosticGeneration, _diagnosticPositionBucket;
 
   void _bindPrecacheResume() {
     _removePrecacheResumeListener?.call();
@@ -117,7 +119,13 @@ class GalleryModeState extends State<ReaderGalleryView>
   @override
   void initState() {
     _activePage = ValueNotifier(page);
-    controller = PageController(initialPage: page);
+    controller = PageController(
+      initialPage: page,
+      onAttach: (position) =>
+          position.isScrollingNotifier.addListener(_onDiagnosticScrollState),
+      onDetach: (position) =>
+          position.isScrollingNotifier.removeListener(_onDiagnosticScrollState),
+    );
     _lastScrollPage = page.toDouble();
     controller.addListener(_onScroll);
     _bindPrecacheResume();
@@ -143,6 +151,7 @@ class GalleryModeState extends State<ReaderGalleryView>
       _singleImageStates.clear();
     }
     if (!identical(oldWidget.imageWork, widget.imageWork)) {
+      _diagnosticGeneration = _diagnosticPositionBucket = null;
       _bindPrecacheResume();
       unawaited(_imageDownloads.dispose());
       unawaited(_imagePrecache.dispose());
@@ -266,6 +275,7 @@ class GalleryModeState extends State<ReaderGalleryView>
     if (!controller.position.hasContentDimensions) return;
     final value = controller.page;
     if (value == null) return;
+    _recordDiagnosticViewport(value);
     final delta = value - (_lastScrollPage ?? page.toDouble());
     _lastScrollPage = value;
     if (delta.abs() < .0001) return;
@@ -273,6 +283,40 @@ class GalleryModeState extends State<ReaderGalleryView>
       navigation.state.pendingPage ??
           (delta > 0 ? value.ceil() : value.floor()),
       delta.sign.toInt(),
+    );
+  }
+
+  double? get _diagnosticViewportPage =>
+      !_disposed &&
+          controller.hasClients &&
+          controller.position.hasContentDimensions
+      ? controller.page
+      : null;
+
+  void _onDiagnosticScrollState() {
+    if (widget.imageWork.diagnostics?.isRecording != true) return;
+    final value = _diagnosticViewportPage;
+    if (value != null) _recordDiagnosticViewport(value, force: true);
+  }
+
+  void _recordDiagnosticViewport(double value, {bool force = false}) {
+    final diagnostics = widget.imageWork.diagnostics;
+    final generation = diagnostics?.captureGeneration;
+    if (generation == null) return;
+    if (_diagnosticGeneration != generation) {
+      _diagnosticGeneration = generation;
+      _diagnosticPositionBucket = null;
+    }
+    // Record quarter-page crossings and scroll boundaries, not every tick.
+    final bucket = (value * 4).round();
+    if (!force && _diagnosticPositionBucket == bucket) return;
+    _diagnosticPositionBucket = bucket;
+    diagnostics!.recordNavigation(
+      ReaderDiagnosticNavigation.viewport,
+      page: page,
+      chapter: navigation.state.chapter,
+      viewportPage: value,
+      scrolling: controller.position.isScrollingNotifier.value,
     );
   }
 
@@ -397,6 +441,13 @@ class GalleryModeState extends State<ReaderGalleryView>
                 !identical(navigation, originalNavigation)) {
               return;
             }
+            widget.imageWork.diagnostics?.recordNavigation(
+              ReaderDiagnosticNavigation.pageSelected,
+              page: page,
+              targetPage: i,
+              chapter: navigation.state.chapter,
+              viewportPage: _diagnosticViewportPage,
+            );
             var shouldRefreshEInk = false;
             if (i == 0) {
               if (data.firstChapter ||
@@ -622,20 +673,43 @@ class GalleryModeState extends State<ReaderGalleryView>
   @override
   Future<void> animateToPage(int page) {
     if (_disposed || !mounted || !controller.hasClients) return Future.value();
+    final turn = widget.imageWork.diagnostics?.beginPageTurn(
+      page: this.page,
+      targetPage: page,
+      chapter: navigation.state.chapter,
+      viewportPage: _diagnosticViewportPage,
+    );
     _notePageRequest(page, page >= controller.page! ? 1 : -1);
     if ((page - controller.page!.round()).abs() > 1) {
       controller.jumpToPage(page > controller.page! ? page - 1 : page + 1);
     }
-    return controller.animateToPage(
+    final animation = controller.animateToPage(
       page,
       duration: const Duration(milliseconds: 200),
       curve: Curves.ease,
+    );
+    if (turn == null) return animation;
+    return animation.whenComplete(
+      () => turn.finish(
+        page: this.page,
+        viewportPage: _diagnosticViewportPage,
+        scrolling: !_disposed && controller.hasClients
+            ? controller.position.isScrollingNotifier.value
+            : null,
+      ),
     );
   }
 
   @override
   void toPage(int page) {
     if (_disposed || !mounted || !controller.hasClients) return;
+    widget.imageWork.diagnostics?.recordNavigation(
+      ReaderDiagnosticNavigation.jumpToPage,
+      page: this.page,
+      targetPage: page,
+      chapter: navigation.state.chapter,
+      viewportPage: _diagnosticViewportPage,
+    );
     _notePageRequest(page, page >= controller.page! ? 1 : -1);
     controller.jumpToPage(page);
   }

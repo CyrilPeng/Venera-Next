@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:venera_next/foundation/reader_diagnostics.dart';
 import 'package:venera_next/foundation/translations.dart';
+import 'package:venera_next/components/file_save_task.dart';
 
 /// Reports stay in this reader's memory until cleared or the reader closes.
 class ReaderDiagnosticsDialog extends StatefulWidget {
@@ -15,6 +18,8 @@ class ReaderDiagnosticsDialog extends StatefulWidget {
 
 class _ReaderDiagnosticsDialogState extends State<ReaderDiagnosticsDialog> {
   bool _copying = false;
+  bool _saving = false;
+  bool get _busy => _copying || _saving;
   String? _feedback;
 
   Future<void> _copy(String report) async {
@@ -26,6 +31,23 @@ class _ReaderDiagnosticsDialogState extends State<ReaderDiagnosticsDialog> {
       if (mounted) setState(() => _feedback = 'Unable to copy report.'.tl);
     } finally {
       if (mounted) setState(() => _copying = false);
+    }
+  }
+
+  Future<void> _save() async {
+    // Capture bytes before opening the picker. The existing save boundary
+    // retains pending platform work in the original window if this dialog exits.
+    final bytes = utf8.encode(widget.diagnostics.exportJson(complete: true));
+    setState(() => _saving = true);
+    try {
+      final saved = await saveFileForWindow(
+        context,
+        data: bytes,
+        filename: 'reader-diagnostics.json',
+      );
+      if (mounted && saved) setState(() => _feedback = 'Saved'.tl);
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -58,6 +80,11 @@ class _ReaderDiagnosticsDialogState extends State<ReaderDiagnosticsDialog> {
               const SizedBox(height: 12),
               Text(
                 'Elapsed image waits do not prove UI blocking. Frame samples are not measured FPS. Captures are cleared when the reader closes.'
+                    .tl,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Copy uses the bounded preview. Save the full report to include all retained frame and navigation samples.'
                     .tl,
               ),
               if (diagnostics.hasCapture) ...[
@@ -103,7 +130,7 @@ class _ReaderDiagnosticsDialogState extends State<ReaderDiagnosticsDialog> {
           ),
           if (report != null && !diagnostics.isRecording) ...[
             TextButton(
-              onPressed: _copying
+              onPressed: _busy
                   ? null
                   : () {
                       diagnostics.clear();
@@ -112,8 +139,12 @@ class _ReaderDiagnosticsDialogState extends State<ReaderDiagnosticsDialog> {
               child: Text('Clear report'.tl),
             ),
             TextButton(
-              onPressed: _copying ? null : () => _copy(report),
+              onPressed: _busy ? null : () => _copy(report),
               child: Text('Copy report'.tl),
+            ),
+            TextButton(
+              onPressed: _busy ? null : _save,
+              child: Text('Save full report'.tl),
             ),
           ],
           if (diagnostics.isRecording)
@@ -123,9 +154,7 @@ class _ReaderDiagnosticsDialogState extends State<ReaderDiagnosticsDialog> {
             )
           else
             FilledButton(
-              onPressed: _copying
-                  ? null
-                  : () => Navigator.of(context).pop(true),
+              onPressed: _busy ? null : () => Navigator.of(context).pop(true),
               child: Text('Start new 45-second capture'.tl),
             ),
         ],
