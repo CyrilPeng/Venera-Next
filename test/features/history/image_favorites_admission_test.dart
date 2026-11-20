@@ -40,6 +40,99 @@ void main() {
   Future<void> seed(Iterable<ImageFavoritesComic> comics) => history
       .accessImageFavorites((repository, _) => repository.saveAll(comics));
 
+  test(
+    'repeated chapter status reads share one actual SQL row lookup',
+    () async {
+      await seed([comic('comic')]);
+      var lookups = 0;
+      final database = history.imageFavoritesDatabase;
+      database.createFunction(
+        functionName: 'observe_status',
+        argumentCount: const AllowedArgumentCount(1),
+        directOnly: false,
+        function: (arguments) {
+          lookups++;
+          return arguments.single;
+        },
+      );
+      database.execute('ALTER TABLE image_favorites RENAME TO favorite_rows');
+      database.execute('''
+      CREATE VIEW image_favorites AS
+      SELECT id, title, sub_title, author, tags, translated_tags, time,
+             max_page, source_key,
+             observe_status(image_favorites_ep) AS image_favorites_ep, other
+      FROM favorite_rows
+    ''');
+      expect(
+        await manager.isCollected('comic', 'source', 'chapter', 1),
+        isTrue,
+      );
+      final initialLookups = lookups;
+      expect(initialLookups, 1);
+      final reads = await Future.wait([
+        for (var page = 1; page <= 50; page++)
+          manager.isCollected('comic', 'source', 'chapter', page),
+      ]);
+      expect(reads.first, isTrue);
+      expect(reads.skip(1), everyElement(isFalse));
+      expect(lookups, initialLookups);
+      expect(
+        await manager.isCollected('comic', 'source', 'other-chapter', 1),
+        isFalse,
+      );
+      expect(lookups, initialLookups + 1);
+      expect(
+        await manager.isCollected('comic', 'source', 'chapter', 1),
+        isTrue,
+      );
+      expect(
+        lookups,
+        initialLookups + 2,
+        reason: 'Only one chapter is retained.',
+      );
+    },
+  );
+
+  test(
+    'status observes peer writes, failed reads and whole-store invalidation',
+    () async {
+      await seed([comic('comic')]);
+      expect(
+        await manager.isCollected('comic', 'source', 'chapter', 1),
+        isTrue,
+      );
+      final peer = ImageFavoriteManager.create(history: history);
+      addTearDown(peer.dispose);
+      expect(await peer.toggle(selection()), ImageFavoriteResult.collected);
+      expect(
+        await manager.isCollected('comic', 'source', 'chapter', 2),
+        isTrue,
+      );
+      history.imageFavoritesDatabase.execute(
+        "UPDATE image_favorites SET image_favorites_ep = 'invalid-json'",
+      );
+      await expectLater(
+        manager.isCollected('comic', 'source', 'chapter', 2),
+        throwsFormatException,
+      );
+      await seed([comic('comic')]);
+      expect(
+        await manager.isCollected('comic', 'source', 'chapter', 1),
+        isTrue,
+      );
+      expect(
+        await manager.isCollected('comic', 'source', 'chapter', 2),
+        isFalse,
+      );
+      history.imageFavoritesDatabase.execute('DELETE FROM image_favorites');
+      manager.notifyChanges();
+      expect(
+        await manager.isCollected('comic', 'source', 'chapter', 1),
+        isFalse,
+      );
+    },
+  );
+
   test('queued toggle uses imported content and detached intent', () async {
     final closed = Completer<void>();
     final release = Completer<void>();
@@ -77,6 +170,8 @@ void main() {
     'captured access rejects replacement database before queued mutation',
     () async {
       final access = manager.capture();
+      await seed([comic('comic')]);
+      expect(await access.isCollected('comic', 'source', 'chapter', 1), isTrue);
       final closed = Completer<void>();
       final release = Completer<void>();
       final replacing = operations.run(() async {
@@ -89,6 +184,10 @@ void main() {
         await history.init();
       });
       await closed.future;
+      final rejectedRead = expectLater(
+        access.isCollected('comic', 'source', 'chapter', 1),
+        throwsStateError,
+      );
       final rejected = expectLater(
         access.toggle(selection(), checkActive: () {}),
         throwsStateError,
@@ -96,6 +195,7 @@ void main() {
       release.complete();
       await replacing;
       await rejected;
+      await rejectedRead;
       expect(access.isCurrent, isFalse);
       expect(await manager.getAll(), isEmpty);
       final fresh = manager.capture();

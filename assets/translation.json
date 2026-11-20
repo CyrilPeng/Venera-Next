@@ -1061,6 +1061,8 @@
     "Report preview": "报告预览",
     "Clear report": "清除报告",
     "Copy report": "复制报告",
+    "Save full report": "保存完整报告",
+    "Copy uses the bounded preview. Save the full report to include all retained frame and navigation samples.": "复制使用有大小限制的预览；保存完整报告可保留采集缓冲中的全部帧与翻页样本。",
     "Stop and review": "结束并查看",
     "Start new 45-second capture": "开始新的 45 秒采集",
     "Unable to copy report.": "无法复制报告，请重试。"
@@ -2126,6 +2128,8 @@
     "Report preview": "報告預覽",
     "Clear report": "清除報告",
     "Copy report": "複製報告",
+    "Save full report": "儲存完整報告",
+    "Copy uses the bounded preview. Save the full report to include all retained frame and navigation samples.": "複製使用有大小限制的預覽；儲存完整報告可保留採集緩衝中的全部畫面與翻頁樣本。",
     "Stop and review": "結束並查看",
     "Start new 45-second capture": "開始新的 45 秒採集",
     "Unable to copy report.": "無法複製報告，請重試。"
