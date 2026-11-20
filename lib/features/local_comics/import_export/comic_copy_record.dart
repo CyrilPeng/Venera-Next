@@ -9,6 +9,11 @@ import 'package:venera_next/foundation/file_system.dart';
 
 enum ComicCopyRecoveryKind { complete, resumable, unverified }
 
+enum ComicCopyStage { preparing, checking, copying, verifying }
+
+typedef ComicCopyProgress =
+    void Function(ComicCopyStage stage, int processed, int total);
+
 /// A copy's intent precedes its first payload write. Completion is a second,
 /// immutable record bound to that exact intent and the copied directory tree.
 /// Neither a directory name nor the presence of images proves completion.
@@ -61,9 +66,15 @@ class ComicCopyRecord {
     Directory directory, {
     required Directory source,
     String? metadata,
+    ComicCopyProgress? onProgress,
   }) async {
     final sourcePath = _resolved(source);
-    final tree = await _readTree(source, skipRecords: false);
+    final tree = await _readTree(
+      source,
+      skipRecords: false,
+      onProgress: (processed, total) =>
+          onProgress?.call(ComicCopyStage.preparing, processed, total),
+    );
     if (_resolved(source) != sourcePath || directory.listSync().isNotEmpty) {
       throw StateError('Copy source or reserved output changed');
     }
@@ -132,7 +143,12 @@ class ComicCopyRecord {
       )
       .toString();
 
-  Future<void> verifyResumable() async {
+  Future<void> verifyResumable() => _verifyResumable();
+
+  Future<void> _verifyResumable({
+    bool deferMissingFiles = false,
+    ComicCopyProgress? onProgress,
+  }) async {
     _checkIntent();
     final expected = _sourceTree;
     if (expected == null || hasCompletion) {
@@ -148,14 +164,33 @@ class ComicCopyRecord {
         path.isWithin(outputPath, sourcePath)) {
       throw StateError('Copy source location changed or overlaps output');
     }
-    if (!_sameTree(await _readTree(source, skipRecords: false), expected)) {
-      throw StateError('Copy source changed; reimport from the current source');
-    }
-    final actual = await _tree();
+    final actual = await _tree(
+      onProgress: (processed, total) =>
+          onProgress?.call(ComicCopyStage.checking, processed, total),
+    );
     if (actual.entries.any((entry) => expected[entry.key] != entry.value)) {
       throw StateError(
         'Copied files changed; keep them and reimport the source',
       );
+    }
+    // Missing payload is checked against its captured digest when copied below.
+    // Existing payload will be skipped, so its source bytes must be checked now.
+    // In both cases enumerate the entire source to reject added/removed entries.
+    final sourceTree = await _readTree(
+      source,
+      skipRecords: false,
+      fileKeysToHash: deferMissingFiles ? actual.keys.toSet() : null,
+      onProgress: (processed, total) =>
+          onProgress?.call(ComicCopyStage.checking, processed, total),
+    );
+    if (sourceTree.length != expected.length ||
+        sourceTree.entries.any(
+          (entry) => entry.value == 'file'
+              ? expected[entry.key] == null ||
+                    expected[entry.key] == 'directory'
+              : expected[entry.key] != entry.value,
+        )) {
+      throw StateError('Copy source changed; reimport from the current source');
     }
     _checkIntent();
   }
@@ -163,9 +198,9 @@ class ComicCopyRecord {
   /// Existing payload is never overwritten. Native atomic renames leave
   /// only an intent-owned staging file on interruption. Providers without atomic
   /// rename may also leave conflicting payload, which remains untouched.
-  Future<void> resume() async {
+  Future<void> resume({ComicCopyProgress? onProgress}) async {
     final outputRoot = _resolved(directory);
-    await verifyResumable();
+    await _verifyResumable(deferMissingFiles: true, onProgress: onProgress);
     final sourcePath =
         (jsonDecode(_intent) as Map<String, dynamic>)['source'] as String;
     final entries = _sourceTree!.entries.toList()
@@ -175,6 +210,9 @@ class ComicCopyRecord {
         );
         return depth == 0 ? a.key.compareTo(b.key) : depth;
       });
+    final total = entries.where((entry) => entry.value != 'directory').length;
+    var processed = 0;
+    onProgress?.call(ComicCopyStage.copying, processed, total);
     for (final entry in entries) {
       _checkIntent();
       final parts = (jsonDecode(entry.key) as List).cast<String>();
@@ -190,7 +228,12 @@ class ComicCopyRecord {
       }
 
       checkOutputParent();
-      if (File(target).existsSync() || Directory(target).existsSync()) continue;
+      if (File(target).existsSync() || Directory(target).existsSync()) {
+        if (entry.value != 'directory') {
+          onProgress?.call(ComicCopyStage.copying, ++processed, total);
+        }
+        continue;
+      }
       if (entry.value == 'directory') {
         Directory(target).createSync();
       } else {
@@ -203,15 +246,7 @@ class ComicCopyRecord {
           throw StateError('Copy source changed while resuming');
         }
         final staging = File(FilePath.join(directory.path, stagingName));
-        // Recheck links/types before opening the only replaceable control file.
-        final stagingEntries = directory
-            .listSync(followLinks: false)
-            .where((entry) => entry.name.toLowerCase() == stagingName);
-        if (stagingEntries.any(
-          (entry) => entry is! File || entry.name != stagingName,
-        )) {
-          throw StateError('Unexpected copy staging entry');
-        }
+        _checkStaging(staging);
         staging.writeAsBytesSync(bytes, flush: true);
         if (sha256
                 .convert(
@@ -227,11 +262,31 @@ class ComicCopyRecord {
           throw StateError('Copy target appeared while resuming');
         }
         staging.renameSync(target);
+        onProgress?.call(ComicCopyStage.copying, ++processed, total);
       }
     }
     final staging = File(FilePath.join(directory.path, stagingName));
+    _checkStaging(staging);
     if (staging.existsSync()) staging.deleteSync();
-    await complete();
+    await complete(onProgress: onProgress);
+  }
+
+  void _checkStaging(File staging) {
+    // Normally rename has removed staging, so only query that path. A leftover
+    // needs a listing to check its actual spelling on case-insensitive volumes.
+    final type = FileSystemEntity.typeSync(staging.path, followLinks: false);
+    if (type == FileSystemEntityType.notFound) return;
+    if (type != FileSystemEntityType.file) {
+      throw StateError('Unexpected copy staging entry');
+    }
+    final stagingEntries = directory
+        .listSync(followLinks: false)
+        .where((entry) => entry.name.toLowerCase() == stagingName);
+    if (stagingEntries.any(
+      (entry) => entry is! File || entry.name != stagingName,
+    )) {
+      throw StateError('Unexpected copy staging entry');
+    }
   }
 
   static bool _sameTree(Map<String, String> a, Map<String, String> b) =>
@@ -310,7 +365,7 @@ class ComicCopyRecord {
     }
   }
 
-  Future<void> complete() async {
+  Future<void> complete({ComicCopyProgress? onProgress}) async {
     _checkIntent();
     if (_completionFile.existsSync() ||
         Directory(_completionFile.path).existsSync()) {
@@ -319,7 +374,10 @@ class ComicCopyRecord {
         directory.path,
       );
     }
-    final tree = await _tree();
+    final tree = await _tree(
+      onProgress: (processed, total) =>
+          onProgress?.call(ComicCopyStage.verifying, processed, total),
+    );
     if (_sourceTree != null && !_sameTree(tree, _sourceTree)) {
       throw StateError('Copy does not match the original source manifest');
     }
@@ -402,20 +460,29 @@ class ComicCopyRecord {
     if (hasRegistration(registration)) _registrationFile.deleteSync();
   }
 
-  Future<Map<String, String>> _tree() =>
-      _readTree(directory, skipRecords: true);
+  Future<Map<String, String>> _tree({
+    void Function(int processed, int total)? onProgress,
+  }) => _readTree(directory, skipRecords: true, onProgress: onProgress);
 
   static Future<Map<String, String>> _readTree(
     Directory directory, {
     required bool skipRecords,
+    Set<String>? fileKeysToHash,
+    void Function(int processed, int total)? onProgress,
   }) async {
     final entries = <String, String>{};
-    Future<void> visit(Directory current, List<String> parent) async {
+    final files = <({String key, File file})>[];
+    void visit(Directory current, List<String> parent) {
       final children = current.listSync(followLinks: false)
         ..sort((a, b) => a.name.compareTo(b.name));
       for (final entry in children) {
         if (_names.contains(entry.name.toLowerCase())) {
-          if (skipRecords && parent.isEmpty && entry is File) continue;
+          if (skipRecords &&
+              parent.isEmpty &&
+              entry is File &&
+              _names.contains(entry.name)) {
+            continue;
+          }
           throw FileSystemException(
             'Unexpected copy control entry',
             entry.path,
@@ -425,14 +492,12 @@ class ComicCopyRecord {
         final key = jsonEncode(segments);
         if (entry is Directory) {
           entries[key] = 'directory';
-          await visit(entry, segments);
+          visit(entry, segments);
         } else if (entry is File) {
-          final bytes = await readFileBytesChecked(
-            entry,
-            requireNonEmpty: isComicImageFileName(entry.name),
-            synchronousIO: true,
-          );
-          entries[key] = sha256.convert(bytes).toString();
+          entries[key] = 'file';
+          if (fileKeysToHash == null || fileKeysToHash.contains(key)) {
+            files.add((key: key, file: entry));
+          }
         } else {
           throw FileSystemException(
             'Unexpected link in copied output',
@@ -442,7 +507,18 @@ class ComicCopyRecord {
       }
     }
 
-    await visit(Directory(directory.path), const []);
+    visit(Directory(directory.path), const []);
+    var processed = 0;
+    onProgress?.call(processed, files.length);
+    for (final entry in files) {
+      final bytes = await readFileBytesChecked(
+        entry.file,
+        requireNonEmpty: isComicImageFileName(entry.file.name),
+        synchronousIO: true,
+      );
+      entries[entry.key] = sha256.convert(bytes).toString();
+      onProgress?.call(++processed, files.length);
+    }
     return entries;
   }
 }

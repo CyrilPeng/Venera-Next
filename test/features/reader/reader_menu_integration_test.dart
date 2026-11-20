@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
@@ -72,6 +73,13 @@ void main() {
       final restore = readerFixtureCommentRegistry(() => source);
       final saving = Completer<void>();
       try {
+        if (change == 'chapter') {
+          final root = fixture.directory.path;
+          Directory('$root/comics/book/two').createSync();
+          File(
+            '$root/comics/book/one/1.png',
+          ).copySync('$root/comics/book/two/1.png');
+        }
         await fixture.mount(
           tester,
           pushed: false,

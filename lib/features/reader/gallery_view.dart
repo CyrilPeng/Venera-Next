@@ -73,6 +73,7 @@ class GalleryModeState extends State<ReaderGalleryView>
   }
 
   late PageController controller;
+  late int _selectedPage;
 
   ReaderGalleryData get data => widget.data;
   ReaderController get navigation => widget.navigation;
@@ -108,6 +109,7 @@ class GalleryModeState extends State<ReaderGalleryView>
 
   @override
   void initState() {
+    _selectedPage = page;
     controller = PageController(initialPage: page);
     _bindPrecacheResume();
     widget.onViewportChanged(this, true);
@@ -340,10 +342,14 @@ class GalleryModeState extends State<ReaderGalleryView>
                 shouldRefreshEInk = true;
               }
             } else {
-              final previousPage = page;
+              final previousPage = _selectedPage;
               navigation.reportPage(i);
+              // A jump commits the logical page before the viewport reports
+              // it. EInk refresh follows the actual selection, while ignored
+              // intermediate pages of an animation must not change it.
+              if (page == i) _selectedPage = i;
               shouldRefreshEInk =
-                  page != previousPage && !isChapterCommentsPage(i);
+                  _selectedPage != previousPage && !isChapterCommentsPage(i);
               widget.onPageReported(
                 isChapterCommentsPage(i),
                 shouldRefreshEInk,

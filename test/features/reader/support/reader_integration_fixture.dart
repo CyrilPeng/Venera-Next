@@ -297,6 +297,7 @@ class ReaderIntegrationFixture {
   late final images = ImageFavoriteManager.create(history: history);
   final previousImages = readerFixtureImageOwner;
   final readerKey = GlobalKey<FixtureReaderState>();
+  final surfaceKey = GlobalKey();
   late final Directory directory;
   late WindowFrameController frame;
   int exits = 0;
@@ -383,6 +384,9 @@ class ReaderIntegrationFixture {
     bool waitForImage = true,
     bool expectContent = true,
     bool withWindow = true,
+    bool withScaffold = true,
+    bool firstFrameOnly = false,
+    Widget Function()? entryBuilder,
     SelectionTaskRegistry? registry,
     ValueNotifier<SelectionTaskRegistry>? registries,
     WindowFinalizer? finalize,
@@ -401,21 +405,27 @@ class ReaderIntegrationFixture {
     int? initialChapterGroup,
   }) async {
     var registered = false;
-    Widget reader() => Scaffold(
-      body: FixtureReader(
-        key: readerKey,
-        onClosed: () => notifications++,
-        volumeConnect: volumeConnect,
-        windowCoordinator: windowCoordinator,
-        chapters: chapters,
-        comicId: comicId,
-        comicType: comicType,
-        savedHistory: savedHistory,
-        initialChapter: initialChapter,
-        initialPage: initialPage,
-        initialChapterGroup: initialChapterGroup,
-      ),
-    );
+    Widget reader() {
+      final content =
+          entryBuilder?.call() ??
+          FixtureReader(
+            key: readerKey,
+            onClosed: () => notifications++,
+            volumeConnect: volumeConnect,
+            windowCoordinator: windowCoordinator,
+            chapters: chapters,
+            comicId: comicId,
+            comicType: comicType,
+            savedHistory: savedHistory,
+            initialChapter: initialChapter,
+            initialPage: initialPage,
+            initialChapterGroup: initialChapterGroup,
+          );
+      return withScaffold
+          ? Scaffold(body: content)
+          : RepaintBoundary(key: surfaceKey, child: content);
+    }
+
     if (volumeConnect != null) {
       appdata.settings['enableTurnPageByVolumeKey'] = true;
       appdata.settings['enablePageAnimation'] = false;
@@ -482,6 +492,7 @@ class ReaderIntegrationFixture {
         ),
       );
     }
+    if (firstFrameOnly) return;
     if (!expectContent) {
       await tester.pump(const Duration(seconds: 1));
       return;
@@ -519,8 +530,27 @@ class ReaderIntegrationFixture {
   Future<void> dispose(WidgetTester tester) async {
     history.onProgress = null;
     history.onDuration = null;
-    readerKey.currentState?.autoReading.stop();
+    final reader =
+        readerKey.currentState ??
+        (find.byType(Reader).evaluate().isEmpty
+            ? null
+            : tester.state<ReaderState>(find.byType(Reader)));
+    reader?.autoReading.stop();
     await tester.pumpWidget(const SizedBox());
+    // Cancellation still owns any native/file Future already in progress.
+    // Join its acknowledgement before closing stores or deleting local files.
+    if (reader != null) {
+      var drained = false;
+      final closing = reader.imageWork.dispose();
+      unawaited(
+        closing.then<void>(
+          (_) => drained = true,
+          onError: (Object _, StackTrace _) => drained = true,
+        ),
+      );
+      await pumpReaderUntil(tester, () => drained);
+      await closing;
+    }
     await tester.pump(const Duration(seconds: 3));
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),

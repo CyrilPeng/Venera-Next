@@ -159,7 +159,28 @@ class ApplicationUpdatePrompt {
     } catch (error, stack) {
       Log.error('Check application updates', error, stack);
       if (!silent && context.mounted && _active) {
-        context.showMessage(message: 'Failed to check for updates'.tl);
+        final hint = error is ApplicationUpdateFailure
+            ? switch (error.reason) {
+                ApplicationUpdateFailureReason.timeout =>
+                  'Update request timed out. Please try again.'.tl,
+                ApplicationUpdateFailureReason.connection =>
+                  'Update connection failed. Check the application proxy and network settings.'
+                      .tl,
+                ApplicationUpdateFailureReason.rateLimit =>
+                  'GitHub request limit reached. Please try again later.'.tl,
+                ApplicationUpdateFailureReason.http =>
+                  'GitHub returned HTTP @status. Please try again later.'
+                      .tlParams({'status': '${error.statusCode}'}),
+                ApplicationUpdateFailureReason.metadata =>
+                  'The update response could not be read. Please try again later.'
+                      .tl,
+                ApplicationUpdateFailureReason.unknown => null,
+              }
+            : null;
+        final message = 'Failed to check for updates'.tl;
+        context.showMessage(
+          message: hint == null ? message : '$message\n$hint',
+        );
       }
     } finally {
       try {

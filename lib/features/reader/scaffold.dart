@@ -404,7 +404,10 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
         excluding: !visible,
         child: ExcludeSemantics(
           excluding: !visible,
-          child: IgnorePointer(ignoring: !visible, child: child),
+          child: IgnorePointer(
+            ignoring: !visible,
+            child: TickerMode(enabled: visible, child: child),
+          ),
         ),
       );
 
@@ -465,7 +468,13 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
   _createFavorites() => ReaderImageFavoriteController(
     work: widget.imageWork,
     onChanged: () {
-      if (mounted) update();
+      // Keep background status reads available to quick collection. Only
+      // visible controls need repainting; invalidation still rebinds a query.
+      if (mounted &&
+          (isOpen ||
+              _favorites.status == ReaderImageFavoriteStatus.unavailable)) {
+        update();
+      }
     },
     cancelSelection: _selectionOverlay.cancel,
     onUnsupported: () => showToast(

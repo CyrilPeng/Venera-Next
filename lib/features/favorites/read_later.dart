@@ -55,8 +55,15 @@ class ReadLaterButton extends StatelessWidget {
   }
 }
 
-class ReadLaterSummary extends StatelessWidget {
+class ReadLaterSummary extends StatefulWidget {
   const ReadLaterSummary({super.key});
+
+  @override
+  State<ReadLaterSummary> createState() => _ReadLaterSummaryState();
+}
+
+class _ReadLaterSummaryState extends State<ReadLaterSummary> {
+  final _heroIds = ComicCoverHeroIds();
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +72,7 @@ class ReadLaterSummary extends StatelessWidget {
       listenable: Listenable.merge([manager, appdata.settings]),
       builder: (context, _) {
         final comics = manager.getReadLaterComics(limit: 10);
+        _heroIds.retain(comics);
         final folder = manager.readLaterFolder;
         final count = folder == null ? 0 : manager.count(folder);
         return SliverToBoxAdapter(
@@ -112,12 +120,7 @@ class ReadLaterSummary extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: SimpleComicTile(
                           comic: comics[index],
-                          // Keep hero tags separate from the adjacent history card.
-                          heroID: Object.hash(
-                            'readLater',
-                            comics[index].id,
-                            comics[index].type,
-                          ),
+                          heroID: _heroIds.forComic(comics[index]),
                           gaplessPlayback: true,
                         ),
                       ),

@@ -14,12 +14,17 @@ class ApplicationUpdateAdapter extends RHttpAdapter {
   int closes = 0;
   Object? closeError;
 
-  void complete(Object data, {int status = 200}) => response.complete(
+  void complete(
+    Object data, {
+    int status = 200,
+    Map<String, List<String>> headers = const {},
+  }) => response.complete(
     ResponseBody.fromString(
       jsonEncode(data),
       status,
       headers: {
         Headers.contentTypeHeader: ['application/json'],
+        ...headers,
       },
     ),
   );

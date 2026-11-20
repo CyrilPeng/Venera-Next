@@ -260,8 +260,11 @@ class ReaderController {
     if (page == _page && page != 1 && page != count && _pendingPage == null) {
       return false;
     }
+    // Finish an active turn with a jump so repeated keys do not restart the
+    // transition before the requested page has been selected.
+    final hasAnimation = animated && _pendingPage == null && animationEnabled();
     resetAnimation();
-    if (animated && animationEnabled()) {
+    if (hasAnimation) {
       _pendingPage = page;
       _snapshot = null;
       final generation = _generation;

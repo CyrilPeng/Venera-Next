@@ -1,11 +1,13 @@
 import 'package:venera_next/features/history/history.dart';
+import 'package:venera_next/features/history/history_scope.dart';
 import 'package:venera_next/features/local_comics/local_comics.dart';
 import 'package:venera_next/features/reader/reader.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/context.dart';
 
 void openLocalComic(LocalComic comic) {
-  final history = HistoryManager().find(comic.id, comic.comicType);
+  final context = appNavigation.rootContext;
+  final history = HistoryScope.read(context).find(comic.id, comic.comicType);
   final start = resolveLocalReadingStart(
     chapters: comic.chapters,
     downloadedChapters: comic.downloadedChapters,
@@ -13,9 +15,9 @@ void openLocalComic(LocalComic comic) {
     historyPage: history?.page,
     historyGroup: history?.group,
   );
-  appNavigation.rootContext.to(
+  context.to(
     () => Reader(
-      onClosed: ReaderSessionScope.onClosedOf(appNavigation.rootContext),
+      onClosed: ReaderSessionScope.onClosedOf(context),
       type: comic.comicType,
       cid: comic.id,
       name: comic.title,

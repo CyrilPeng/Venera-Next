@@ -62,6 +62,80 @@ void main() {
   });
 
   test(
+    'background completion reads preserve snapshots and mutation order',
+    () async {
+      final original = _history('completion');
+      await manager.addHistory(original);
+      final started = Completer<void>();
+      final release = Completer<void>();
+      beforeDuration = () async {
+        started.complete();
+        await release.future;
+      };
+      final duration = manager.addReadDuration(
+        original,
+        const Duration(milliseconds: 30),
+      );
+      await started.future;
+      final completedWrite = manager.addHistory(original.copy()..page = 10);
+      final requested = [(original.id, original.type.value), (original.id, 99)];
+      final reading = manager.completedAmongAsync(requested);
+      requested.clear();
+      final laterWrite = manager.addHistory(original.copy()..page = 4);
+      var replacementStarted = false;
+      final replacing = operations.run(() {
+        replacementStarted = true;
+        expect(manager.find(original.id, original.type)!.page, 4);
+      });
+      expect(replacementStarted, isFalse);
+      release.complete();
+      expect(await reading, {(original.id, original.type.value)});
+      await Future.wait([duration, completedWrite, laterWrite, replacing]);
+      expect(replacementStarted, isTrue);
+      expect(manager.hasPendingWrites, isFalse);
+      expect(
+        await manager.completedAmongAsync([(original.id, original.type.value)]),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'completion reads queued before close cannot follow a reopened database',
+    () async {
+      final started = Completer<void>();
+      final release = Completer<void>();
+      beforeDuration = () async {
+        started.complete();
+        await release.future;
+      };
+      final original = _history('old completion');
+      final writing = manager.addReadDuration(
+        original,
+        const Duration(milliseconds: 30),
+      );
+      await started.future;
+      final reading = manager.completedAmongAsync([
+        (original.id, original.type.value),
+      ]);
+      final rejected = expectLater(reading, throwsStateError);
+      manager.close();
+      final target = Directory('${directory.path}/new-completion')
+        ..createSync();
+      App.dataPath = target.path;
+      release.complete();
+      await Future.wait([writing, rejected]);
+      await manager.init();
+      await manager.addHistory(original.copy()..page = 10);
+      expect(
+        await manager.completedAmongAsync([(original.id, original.type.value)]),
+        {(original.id, original.type.value)},
+      );
+      expect(manager.find(original.id, original.type)!.readDurationMs, 0);
+    },
+  );
+
+  test(
     'reopening shares initialization with callers queued behind replacement',
     () async {
       final closed = Completer<void>();
