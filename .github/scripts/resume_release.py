@@ -10,6 +10,9 @@ import shutil
 
 import android_tv_build as android
 import harmonyos_release as release
+import release_delivery as delivery
+from release_assets import committed_policy
+from release_security import check_report
 
 
 REQUIRED_JOBS = {
@@ -26,6 +29,14 @@ TOOLING_FILES = {
     ".github/workflows/resume-release.yml", "CHANGELOG.md",
     "doc/development/release_readiness.md", "doc/development/harmonyos_releases.zh.md",
     "doc/development/harmonyos_releases.en.md",
+    ".github/scripts/release_assets.py", ".github/scripts/release_security.py", ".github/scripts/release_delivery.py",
+    ".github/scripts/android_tv_build.py", ".github/scripts/tests/test_release_assets.py",
+    ".github/scripts/tests/test_release_delivery.py", ".github/scripts/tests/test_release_security.py",
+    ".github/workflows/main.yml", ".github/workflows/build.yml", ".github/workflows/dependency_review.yml", ".github/workflows/analyze.yml",
+    ".github/actions/download-release/action.yml", ".github/release-policy.json", "test/tool/ci_workflow_contract_test.dart",
+    # Channel indexing is outside the original compiler inputs.
+    "alt_store.json",
+    "doc/development/build.zh.md", "doc/development/build.en.md",
 }
 RELEASE_ARTIFACTS = {
     "harmonyos-release", "macos_build", "ios_build", "windows_build", "deb_build",
@@ -55,11 +66,17 @@ def source_bundles_harmonyos(root, commit):
     return release.bundles_harmonyos(pin)
 
 
-def validate_build_run(run, jobs, run_id, *, bundled_harmonyos=True):
+def source_policy(root, commit):
+    return committed_policy(root, commit)
+
+
+def validate_build_run(run, jobs, run_id, *, bundled_harmonyos=True, policy=None):
     validate_run_identity(run, run_id)
     if not isinstance(jobs, list) or any(not isinstance(job, dict) for job in jobs):
         raise ValueError("Invalid original build job inventory")
     required = REQUIRED_JOBS if bundled_harmonyos else REQUIRED_JOBS - {"HarmonyOS / unsigned-hap"}
+    if policy:
+        required = required | set(policy["required_jobs"])
     for name in required:
         matches = [job for job in jobs if job.get("name") == name]
         if (len(matches) != 1 or matches[0].get("status") != "completed"
@@ -81,7 +98,8 @@ def original_build(tooling_root, run_id):
     if not isinstance(pages, list) or any(not isinstance(page, dict) or not isinstance(page.get("jobs"), list) for page in pages):
         raise ValueError("Invalid paginated original job response")
     validate_build_run(run, [job for page in pages for job in page["jobs"]], run_id,
-                       bundled_harmonyos=source_bundles_harmonyos(tooling_root, run["head_sha"]))
+                       bundled_harmonyos=source_bundles_harmonyos(tooling_root, run["head_sha"]),
+                       policy=source_policy(tooling_root, run["head_sha"]))
     head = release.git(tooling_root, "rev-parse", "HEAD").decode().strip()
     changed = release.git(tooling_root, "diff", "--name-only", "-z", run["head_sha"], head, "--")
     paths = {path.decode() for path in changed.split(b"\0") if path}
@@ -101,7 +119,7 @@ def original_environment(run):
             "GITHUB_REF_TYPE": "tag", "GITHUB_REF_NAME": run["head_branch"]}
 
 
-def collect_artifacts(downloaded, output, *, bundled_harmonyos=True):
+def collect_artifacts(downloaded, output, *, bundled_harmonyos=True, verification=False):
     """Collect only named compiler artifacts; diagnostics cannot become packages."""
     required = RELEASE_ARTIFACTS if bundled_harmonyos else RELEASE_ARTIFACTS - {"harmonyos-release"}
     for name in sorted(required):
@@ -123,6 +141,11 @@ def collect_artifacts(downloaded, output, *, bundled_harmonyos=True):
             count += 1
         if not count:
             raise ValueError("Empty original build artifact: " + name)
+    if verification:
+        proof = downloaded / "release-verification" / delivery.PROOF
+        if not proof.is_file() or proof.is_symlink():
+            raise ValueError("Missing original full-build verification manifest")
+        shutil.copyfile(proof, output / delivery.PROOF)
 
 
 def check_identity_and_notes(remote, expected, notes):
@@ -143,6 +166,7 @@ def main():
     parser.add_argument("--release-files", type=Path, nargs="+")
     parser.add_argument("--github-output", type=Path)
     parser.add_argument("--receipt", type=Path)
+    parser.add_argument("--security-report", type=Path)
     args = parser.parse_args()
     run, tooling_head = original_build(args.tooling_root, args.run)
     if args.action == "source":
@@ -150,6 +174,7 @@ def main():
             with args.github_output.open("a", encoding="utf-8") as output:
                 output.write(f"source_commit={run['head_sha']}\ntag={run['head_branch']}\n")
                 output.write(f"bundled_harmonyos={str(source_bundles_harmonyos(args.tooling_root, run['head_sha'])).lower()}\n")
+                output.write(f"verification={str(source_policy(args.tooling_root, run['head_sha']) is not None).lower()}\n")
         print(json.dumps({"run_id": run["id"], "source_commit": run["head_sha"],
                           "tag": run["head_branch"], "tooling_commit": tooling_head}))
         return
@@ -164,23 +189,51 @@ def main():
     assets = release.publication_assets(args.artifacts, expected, args.source_root)
     files = release.release_file_records(args.release_files)
     remote_files = release.github_release_file_records(files)
-    remote = release.read_remote_release(expected["tag"], published=False)
+    policy = source_policy(args.source_root, run["head_sha"])
+    if args.security_report is not None:
+        security = json.loads(args.security_report.read_text())
+        check_report(security, args.source_root, {"source_commit": run["head_sha"]})
+    else:
+        security = None
+    if policy:
+        if security is None:
+            raise ValueError("Recovery requires a fresh scan of the original lockfile")
+        environment = original_environment(run)
+        proof = args.artifacts.parent / delivery.PROOF
+        delivery.prepare_production(args.source_root, args.source_root, args.artifacts.parent, proof,
+                                    args.notes_file, args.receipt, environment, security=security)
+        delivery.production(args.source_root, args.source_root, args.artifacts.parent, proof, args.notes_file,
+                            args.receipt, environment, publish=True, security=security)
+        receipt = json.loads(args.receipt.read_text())
+        receipt.update(original_run=run["id"], tooling_commit=tooling_head,
+                       recovery_run=os.environ.get("GITHUB_RUN_ID"))
+        delivery.assets.write_receipt(args.receipt, receipt)
+        return
+    try:
+        remote = release.read_remote_release(expected["tag"], published=False)
+    except ValueError as error:
+        if "Expected a draft" not in str(error):
+            raise
+        remote = release.read_remote_release(expected["tag"], published=True)
+    already_published = remote.get("draft") is False
     check_identity_and_notes(remote, expected, notes)
     release.check_draft_files(remote, expected, files)
-    release.check_remote_release(remote, expected, assets, published=False)
+    release.check_remote_release(remote, expected, assets, published=already_published)
     # Verify both Android catalogs against the compiler's exact source/run.
     android.verify_release(args.artifacts.parent,
                            release.blob(args.source_root, expected["source_commit"], "pubspec.yaml").decode("utf-8-sig"),
                            {"GITHUB_SHA": run["head_sha"], "GITHUB_REF": "refs/tags/" + expected["tag"],
                             "GITHUB_EVENT_NAME": "push"})
-    ready = release.check_runtime(expected, assets, allow_pending=True)
+    ready = release.check_runtime(expected, assets, allow_pending=not already_published, published=already_published)
+    delivery.download_files(remote, files)
     receipt = {"schema": 1, "original_run": run["id"], "source_commit": run["head_sha"],
                "tag": expected["tag"], "tooling_commit": tooling_head,
                "recovery_run": os.environ.get("GITHUB_RUN_ID"), "ready": ready,
-               "files": files, "github_files": remote_files, "published": False}
+               "files": files, "github_files": remote_files, "published": already_published}
     if ready:
-        options = ["--latest=false"] if "-" in expected["version"] else []
-        release.gh("release", "edit", expected["tag"], "--repo", release.REPOSITORY, "--draft=false", *options)
+        if not already_published:
+            options = ["--latest=false"] if "-" in expected["version"] else []
+            release.gh("release", "edit", expected["tag"], "--repo", release.REPOSITORY, "--draft=false", *options)
         published = release.read_remote_release(expected["tag"], published=True)
         if published.get("id") != remote.get("id"):
             raise ValueError("Release identity changed during publication")
@@ -188,6 +241,7 @@ def main():
         release.check_draft_files(published, expected, files)
         release.check_remote_release(published, expected, assets, published=True)
         release.check_runtime(expected, assets, published=True)
+        delivery.download_files(published, files)
         receipt["published"] = True
         receipt["release_url"] = published["html_url"]
     args.receipt.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

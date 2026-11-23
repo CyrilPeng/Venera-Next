@@ -2,7 +2,17 @@ name: 完整构建
 run-name: 完整构建 ${{ github.ref_name }}
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '构建并核验，或演练真实草稿上传；手动运行均不公开版本'
+        type: choice
+        options: [build, rehearsal]
+        default: build
+      rehearsal_interrupt:
+        description: '上传一个原包后中断，随后恢复同一草稿并校验资产未被替换'
+        type: boolean
+        default: false
   push:
     tags:
       - 'v*'
@@ -36,8 +46,12 @@ jobs:
     needs: Release_Metadata
     uses: ./.github/workflows/analyze.yml
 
+  Security:
+    needs: Release_Metadata
+    uses: ./.github/workflows/dependency_review.yml
+
   Build:
-    needs: [Release_Metadata, Quality]
+    needs: [Release_Metadata, Quality, Security]
     uses: ./.github/workflows/build.yml
     with:
       quality_checked: true
@@ -50,19 +64,46 @@ jobs:
     secrets: inherit
 
   HarmonyOS:
-    needs: [Release_Metadata, Quality]
+    needs: [Release_Metadata, Quality, Security]
     if: needs.Release_Metadata.outputs.bundled_harmonyos == 'true'
     uses: ./.github/workflows/harmonyos-release.yml
 
+  Verify_Packages:
+    needs: [Release_Metadata, Quality, Security, Build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: verification-source
+          persist-credentials: false
+      - uses: ./verification-source/.github/actions/download-release
+        with:
+          directory: verified-packages
+          receipts: 'true'
+          verification: 'false'
+      - name: 汇总完整平台清单、实际包摘要与当前安全门禁
+        run: >-
+          python3 verification-source/.github/scripts/release_assets.py aggregate --root verification-source
+          --directory verified-packages --receipts verified-packages/receipts
+          --security-report verified-packages/security/security-report.json
+          --receipt release-verification.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-verification
+          path: release-verification.json
+          if-no-files-found: error
+          retention-days: 30
+
   Release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    needs: [Release_Metadata, Quality, Build, HarmonyOS]
+    timeout-minutes: 45
+    needs: [Release_Metadata, Quality, Security, Build, HarmonyOS, Verify_Packages]
     if: >-
       ${{
         always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') &&
         needs.Release_Metadata.result == 'success' && needs.Quality.result == 'success' &&
-        needs.Build.result == 'success' &&
+        needs.Security.result == 'success' && needs.Build.result == 'success' && needs.Verify_Packages.result == 'success' &&
         (
           (needs.Release_Metadata.outputs.bundled_harmonyos == 'true' && needs.HarmonyOS.result == 'success') ||
           (needs.Release_Metadata.outputs.bundled_harmonyos == 'false' && needs.HarmonyOS.result == 'skipped')
@@ -90,62 +131,17 @@ jobs:
           path: harmonyos-source
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/download-artifact@v8
-        if: needs.Release_Metadata.outputs.bundled_harmonyos == 'true'
+      - uses: ./release-source/.github/actions/download-release
         with:
-          name: harmonyos-release
-          path: outputs/harmonyos
+          directory: outputs
+          bundled-harmonyos: ${{ needs.Release_Metadata.outputs.bundled_harmonyos }}
       - name: 核验鸿蒙版本、源码、原生库及资产
         if: needs.Release_Metadata.outputs.bundled_harmonyos == 'true'
         run: |
           python3 .github/scripts/harmonyos_release.py verify \
             --source-root ../harmonyos-source --artifacts ../outputs/harmonyos
-      - uses: actions/download-artifact@v8
-        with:
-          name: macos_build
-          path: outputs
-      - uses: actions/download-artifact@v8
-        with:
-          name: ios_build
-          path: outputs
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: apk-*
-          path: outputs
-          merge-multiple: true
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: tv-apk-*
-          path: outputs
-          merge-multiple: true
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: android-*-manifest
-          path: outputs
-          merge-multiple: true
       - name: 核验手机版与 TV 版完整性、签名及构建来源
         run: python3 .github/scripts/android_tv_build.py verify-release --directory ../outputs
-      - uses: actions/download-artifact@v8
-        with:
-          name: windows_build
-          path: outputs
-      - uses: actions/download-artifact@v8
-        with:
-          name: deb_build
-          path: outputs
-      - uses: actions/download-artifact@v8
-        with:
-          name: arch_build
-          path: outputs
-      - uses: actions/download-artifact@v8
-        with:
-          name: deb_arm64_build
-          path: outputs
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: linux_extra_*
-          path: outputs
-          merge-multiple: true
       - name: 生成 Winget Manifest
         if: ${{ !contains(github.ref_name, '-') }}
         run: |
@@ -162,61 +158,127 @@ jobs:
           name: winget_manifest
           path: outputs/winget/manifests
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
       - name: 创建或复用草稿 Release，核对并保留原构建资产
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          shopt -s nullglob
-          files=(
-            ../outputs/harmonyos/*
-            ../outputs/*.ipa
-            ../outputs/*.dmg
-            ../outputs/*.apk
-            ../outputs/android-*-manifest.json
-            ../outputs/*.zip
-            ../outputs/*.exe
-            ../outputs/*.deb
-            ../outputs/*.rpm
-            ../outputs/*.zst
-            ../outputs/*.AppImage
-          )
-          if (( ${#files[@]} == 0 )); then
-            echo "没有找到可发布的构建产物。" >&2
-            exit 1
-          fi
-
-          python3 .github/scripts/harmonyos_release.py prepare-draft \
-            --source-root ../harmonyos-source --artifacts ../outputs/harmonyos \
-            --notes-file ../release_notes.md --release-files "${files[@]}"
-      - name: 核验草稿安装包的实际大小与摘要
+          python3 .github/scripts/release_delivery.py prepare-draft \
+            --source-root ../harmonyos-source --directory ../outputs \
+            --manifest ../outputs/release-verification.json --notes-file ../release_notes.md \
+            --receipt ../release-delivery.json
+      - name: 下载回读草稿原包并核验公开条件
+        id: delivery_gate
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 .github/scripts/harmonyos_release.py verify-draft \
-            --source-root ../harmonyos-source --artifacts ../outputs/harmonyos
-      - name: 按同提交分发配置核验发布条件
-        id: harmonyos_runtime
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 .github/scripts/harmonyos_release.py verify-runtime \
-            --source-root ../harmonyos-source --artifacts ../outputs/harmonyos \
-            --allow-pending --github-output "$GITHUB_OUTPUT"
+          python3 .github/scripts/release_delivery.py verify-draft \
+            --source-root ../harmonyos-source --directory ../outputs \
+            --manifest ../outputs/release-verification.json --notes-file ../release_notes.md \
+            --receipt ../release-delivery.json
       - name: 发布草稿 Release
-        if: steps.harmonyos_runtime.outputs.ready == 'true'
+        if: steps.delivery_gate.outputs.ready == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: gh release edit "${GITHUB_REF_NAME}" --draft=false
+        run: |
+          python3 .github/scripts/release_delivery.py publish \
+            --source-root ../harmonyos-source --directory ../outputs \
+            --manifest ../outputs/release-verification.json --notes-file ../release_notes.md \
+            --receipt ../release-delivery.json
       - name: 复核已发布安装包
-        if: steps.harmonyos_runtime.outputs.ready == 'true'
+        if: steps.delivery_gate.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 .github/scripts/harmonyos_release.py verify-published \
             --source-root ../harmonyos-source --artifacts ../outputs/harmonyos
       - name: 清理 jsDelivr CDN 缓存
-        if: steps.harmonyos_runtime.outputs.ready == 'true'
+        if: steps.delivery_gate.outputs.ready == 'true'
         run: |
           curl -s "https://purge.jsdelivr.net/gh/CyrilPeng/venera-next@main/pubspec.yaml" | jq '.status'
           curl -s "https://purge.jsdelivr.net/gh/CyrilPeng/venera-next@main/CHANGELOG.md" | jq '.status'
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release-delivery-receipt
+          path: release-delivery.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  Rehearsal:
+    needs: [Release_Metadata, Quality, Security, Build, Verify_Packages]
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'rehearsal'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: rehearsal-source
+          persist-credentials: false
+      - uses: ./rehearsal-source/.github/actions/download-release
+        with:
+          directory: rehearsal-packages
+      - name: 演练真实草稿上传，按需中断
+        id: upload
+        env:
+          INTERRUPT_AFTER_UPLOAD: ${{ inputs.rehearsal_interrupt }}
+        shell: bash
+        run: |
+          flags=()
+          expected=0
+          if [[ "$INTERRUPT_AFTER_UPLOAD" == true ]]; then
+            flags+=(--interrupt-after-upload)
+            expected=75
+          fi
+          set +e
+          python3 rehearsal-source/.github/scripts/release_delivery.py rehearse --root rehearsal-source \
+            --directory rehearsal-packages --manifest rehearsal-packages/release-verification.json \
+            --receipt rehearsal-delivery.json "${flags[@]}"
+          status=$?
+          set -e
+          if [[ "$status" -ne "$expected" ]]; then
+            echo "::error::演练返回 $status，预期 $expected"
+            exit 1
+          fi
+      - name: 从独立进程恢复原草稿与原包并下载回读
+        if: inputs.rehearsal_interrupt && steps.upload.outcome == 'success'
+        run: >-
+          python3 rehearsal-source/.github/scripts/release_delivery.py resume-rehearsal --root rehearsal-source
+          --directory rehearsal-packages --manifest rehearsal-packages/release-verification.json
+          --receipt rehearsal-delivery.json
+      - name: 清理本次未公开演练草稿
+        if: always()
+        run: >-
+          python3 rehearsal-source/.github/scripts/release_delivery.py cleanup-rehearsal
+          --receipt rehearsal-delivery.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release-rehearsal-receipt
+          path: rehearsal-delivery.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  Summary:
+    needs: [Release_Metadata, Quality, Security, Build, Verify_Packages, HarmonyOS, Release, Rehearsal]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: 分别报告源码、质量、安全、构建、包核验与交付结果
+        env:
+          GATES: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          gates = json.loads(os.environ['GATES'])
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as output:
+              output.write('## 发布门禁结果\n\n| 检查 | 结果 |\n| --- | --- |\n')
+              for name, value in gates.items():
+                  output.write(f"| {name} | {value['result']} |\n")
+              output.write('\n手动构建与演练不公开版本；渠道同步以各渠道实际结果为准。\n')
+          PY

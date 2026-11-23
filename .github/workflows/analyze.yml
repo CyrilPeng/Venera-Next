@@ -100,6 +100,10 @@ jobs:
       - run: python3 .github/scripts/check_architecture_dependencies.py
       - name: 核对测试文件与执行清单
         run: python3 .github/scripts/test_suites.py --strict-imports --output build/test-audit/inventory.json
+      - name: 准备实际归档格式的脚本回归工具
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libarchive-tools
       - run: python3 -m unittest discover -s .github/scripts/tests -p "test_*.py"
       - name: 保存测试清单
         if: ${{ always() }}

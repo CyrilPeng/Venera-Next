@@ -191,6 +191,19 @@ and exact libc 0.2.189 iOS compatibility pin remain unchanged. The full
 RustSec audit and fresh cloud native/platform checks validate this update;
 no vulnerability exclusion is added.
 
+## Cookie private-nonce security update (2026-11-23)
+
+The fresh release audit reported
+[RUSTSEC-2026-0594](https://rustsec.org/advisories/RUSTSEC-2026-0594.html)
+in `cookie` 0.18.1. The advisory concerns repeated AES-GCM nonces when Unix
+processes fork and generate private encrypted cookies on the forking thread.
+This application's resolved cookie dependency does not enable the `private`
+feature. The complete-lockfile gate still requires a patched version, so the
+precise Cargo update selects `cookie` 0.18.3. Only its version and checksum
+change; the existing dependency graph, Rust/bridge pins and HTTP settings stay
+the same. Fresh native builds and platform checks validate the updated lock.
+No vulnerability exclusion is added.
+
 ## Building the patched source
 
 Windows/Linux CMake, Android Gradle and iOS/macOS pod scripts all invoke the

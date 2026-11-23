@@ -9,9 +9,9 @@ import 'package:venera_next/network/request_scope.dart';
 import '../support/application_update_adapter.dart';
 
 void main() {
-  test(
+  testWidgets(
     'update deadline cancels HTTP but still waits for native cleanup',
-    () async {
+    (tester) async {
       final adapter = ApplicationUpdateAdapter();
       final service = ApplicationUpdateService(
         createClient: () => Dio()..httpClientAdapter = adapter,
@@ -36,10 +36,13 @@ void main() {
               ),
         ),
       );
-      await adapter.entered.future;
-      await adapter.draining.future;
+      await tester.pump(Duration.zero);
+      expect(adapter.entered.isCompleted, isTrue);
+      await tester.pump(const Duration(milliseconds: 30));
+      expect(adapter.draining.isCompleted, isTrue);
       expect(finished, isFalse);
       adapter.released.complete();
+      await tester.pump();
       await checked;
       await service.closeAndWait();
       expect(adapter.closes, 1);

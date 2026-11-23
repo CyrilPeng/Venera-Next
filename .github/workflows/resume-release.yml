@@ -18,10 +18,46 @@ permissions:
   actions: read
 
 jobs:
-  resume:
+  source:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      source_commit: ${{ steps.source.outputs.source_commit }}
+      tag: ${{ steps.source.outputs.tag }}
+      bundled_harmonyos: ${{ steps.source.outputs.bundled_harmonyos }}
+      verification: ${{ steps.source.outputs.verification }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: ${{ inputs.source_run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: 按原提交政策核实原运行与必需门禁
+        id: source
+        run: python3 .github/scripts/resume_release.py source --run "$SOURCE_RUN" --github-output "$GITHUB_OUTPUT"
+
+  Security:
+    needs: source
+    uses: ./.github/workflows/dependency_review.yml
+    with:
+      source_ref: ${{ needs.source.outputs.source_commit }}
+    permissions:
+      contents: read
+
+  resume:
+    needs: [source, Security]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    concurrency:
+      group: release-${{ github.repository }}-refs/tags/${{ needs.source.outputs.tag }}
+      cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
       SOURCE_RUN: ${{ inputs.source_run }}
@@ -36,29 +72,27 @@ jobs:
         run: |
           python3 -m unittest discover -s .github/scripts/tests -p test_resume_release.py -v
           python3 -m unittest discover -s .github/scripts/tests -p test_harmonyos_release.py -v
-      - name: 校验原标签来源及全部构建门禁
-        id: source
-        run: python3 tooling/.github/scripts/resume_release.py source --run "$SOURCE_RUN" --github-output "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
         with:
-          ref: ${{ steps.source.outputs.source_commit }}
+          ref: ${{ needs.source.outputs.source_commit }}
           path: original-source
           fetch-depth: 0
           persist-credentials: false
       - name: 从准确原标签生成发布说明
         working-directory: original-source
         env:
-          SOURCE_TAG: ${{ steps.source.outputs.tag }}
+          SOURCE_TAG: ${{ needs.source.outputs.tag }}
         run: python3 .github/scripts/validate_release.py --tag "$SOURCE_TAG" --write-notes ../release_notes.md
       - uses: actions/download-artifact@v8
         with:
-          pattern: '*'
+          pattern: '{macos_build,ios_build,windows_build,deb_build,arch_build,deb_arm64_build,apk-*,tv-apk-*,android-*-manifest,linux_extra_*,harmonyos-release,release-verification}'
           path: original-artifacts
           run-id: ${{ inputs.source_run }}
           github-token: ${{ github.token }}
       - name: 收集原构建安装包与 Android 清单
         env:
-          BUNDLED_HARMONYOS: ${{ steps.source.outputs.bundled_harmonyos }}
+          BUNDLED_HARMONYOS: ${{ needs.source.outputs.bundled_harmonyos }}
+          VERIFICATION: ${{ needs.source.outputs.verification }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -66,15 +100,24 @@ jobs:
           sys.path.insert(0, 'tooling/.github/scripts')
           from resume_release import collect_artifacts
           collect_artifacts(Path('original-artifacts'), Path('outputs'),
-                            bundled_harmonyos=os.environ['BUNDLED_HARMONYOS'] == 'true')
+                            bundled_harmonyos=os.environ['BUNDLED_HARMONYOS'] == 'true',
+                            verification=os.environ['VERIFICATION'] == 'true')
           PY
+      - uses: actions/download-artifact@v8
+        with:
+          name: rust-dependency-audit
+          path: fresh-security
       - name: 核验并复用全部原包，公开后复核
         run: |
           shopt -s nullglob
-          files=(outputs/harmonyos/* outputs/*.ipa outputs/*.dmg outputs/*.apk outputs/android-*-manifest.json outputs/*.zip outputs/*.exe outputs/*.deb outputs/*.rpm outputs/*.zst outputs/*.AppImage)
+          files=(outputs/harmonyos/* outputs/*.ipa outputs/*.dmg outputs/*.apk outputs/android-*-manifest.json outputs/*.zip outputs/*.exe outputs/*.deb outputs/*.rpm outputs/*.zst outputs/*.AppImage outputs/release-verification.json)
+          if [[ ! -f outputs/release-verification.json ]]; then
+            files=(outputs/harmonyos/* outputs/*.ipa outputs/*.dmg outputs/*.apk outputs/android-*-manifest.json outputs/*.zip outputs/*.exe outputs/*.deb outputs/*.rpm outputs/*.zst outputs/*.AppImage)
+          fi
           python3 tooling/.github/scripts/resume_release.py publish --run "$SOURCE_RUN" \
             --source-root original-source --artifacts outputs/harmonyos \
-            --notes-file release_notes.md --release-files "${files[@]}" --receipt release-recovery.json
+            --notes-file release_notes.md --release-files "${files[@]}" --receipt release-recovery.json \
+            --security-report fresh-security/security-report.json
       - uses: actions/upload-artifact@v7
         with:
           name: release-recovery-receipt

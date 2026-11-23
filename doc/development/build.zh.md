@@ -145,6 +145,8 @@ python .github/scripts/release_version.py --check --tag v1.2.3
 
 `代码分析` 工作流会运行版本与结构检查、Python 脚本测试、修改文件的 Dart 格式检查、`flutter analyze`、完整 Dart 测试及覆盖率汇总。`依赖安全审查` 会检查 PR 新增或升级的依赖，`PR 平台冒烟构建` 会按改动范围验证 Android 和 Windows 编译。`完整构建` 在开始多平台构建前会复用同一质量工作流；手动平台构建和 tag 发布则共同复用 `.github/workflows/build.yml`，避免两套构建定义产生差异。
 
+`完整构建` 同时等待准确提交的最新 RustSec 扫描和各平台真实安装包回执。手动运行默认 `mode=build`，全部包核验成功后留在 Actions；`mode=rehearsal` 额外演练内部草稿的真实上传及下载，`rehearsal_interrupt=true` 验证中断后复用原包恢复。手动模式不公开 Release、不推进 AltStore 或 Winget；正式标签通过完整门禁后发布。安全报告超过 24 小时先重新扫描原锁文件，普通安装包与回执保留 30 天。具体条件见[发布流程](release_readiness.md)。本项目的实际安装包构建均使用 GitHub Actions。
+
 Android release 工作流需要以下仓库 Secrets：
 
 - `ANDROID_KEYSTORE`：keystore 文件的 Base64 内容

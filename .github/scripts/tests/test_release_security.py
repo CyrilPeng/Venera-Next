@@ -42,7 +42,7 @@ class ReleaseSecurityTests(unittest.TestCase):
                 security.check_report(self.report | change, Path("unused"), self.context, now=self.now)
 
     def test_unavailable_database_or_failed_audit_keeps_a_failure_receipt(self):
-        for failure in ("network", "audit"):
+        for failure in ("network", "registry", "audit", "query"):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 lock = root / security.LOCKFILE
@@ -55,6 +55,11 @@ class ReleaseSecurityTests(unittest.TestCase):
                         if failure == "network":
                             raise subprocess.CalledProcessError(128, command)
                         return subprocess.CompletedProcess(command, 0)
+                    if command[:2] == ["cargo", "fetch"]:
+                        return subprocess.CompletedProcess(command, 1 if failure == "registry" else 0, b"", b"Registry metadata")
+                    if failure == "query":
+                        return subprocess.CompletedProcess(command, 0, json.dumps({"vulnerabilities": {"count": 0}}).encode(),
+                                                           b"error: couldn't check if the package is yanked: not found\n")
                     return subprocess.CompletedProcess(command, 1, json.dumps({"vulnerabilities": {"count": 1}}).encode(), b"Denied advisory")
                 with patch.object(security, "source_context", return_value=self.context), \
                         patch.object(security.subprocess, "check_output", side_effect=[
@@ -64,9 +69,33 @@ class ReleaseSecurityTests(unittest.TestCase):
                 receipt = json.loads((root / "evidence/security-report.json").read_text())
                 self.assertFalse(receipt["passed"])
                 audits = [command for command in calls if command[:2] == ["cargo", "audit"]]
-                self.assertEqual(len(audits), 0 if failure == "network" else 1)
+                self.assertEqual(len(audits), 0 if failure in ("network", "registry") else 1)
                 if audits:
                     self.assertIn("--no-fetch", audits[0])
+
+    def test_successful_scan_queries_the_installed_binary_version(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            lock = root / security.LOCKFILE
+            lock.parent.mkdir(parents=True)
+            lock.write_bytes(self.lock)
+
+            def output(command, **kwargs):
+                if command == ["cargo-audit", "--version"]:
+                    return ("cargo-audit " + security.AUDIT_VERSION + "\n").encode()
+                if command[:3] == ["cargo", "audit", "--version"]:
+                    return ("cargo-audit-audit " + security.AUDIT_VERSION + "\n").encode()
+                return b"b" * 40
+
+            result = json.dumps({"vulnerabilities": {"count": 0}}).encode()
+            with patch.object(security, "source_context", return_value=self.context), \
+                    patch.object(security.subprocess, "check_output", side_effect=output), \
+                    patch.object(security.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, result, b"")):
+                security.scan(root, root / "evidence", {})
+            receipt = json.loads((root / "evidence/security-report.json").read_text())
+            self.assertTrue(receipt["passed"])
+            self.assertEqual(receipt["vulnerability_count"], 0)
+            self.assertEqual(receipt["cargo_audit_version"], security.AUDIT_VERSION)
 
 
 if __name__ == "__main__":

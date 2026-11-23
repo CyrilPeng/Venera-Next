@@ -38,6 +38,19 @@ def git(root, *args):
 
 
 class RecoverySourceTests(unittest.TestCase):
+    def test_new_gates_are_required_only_for_sources_that_committed_the_policy(self):
+        policy = {'required_jobs': ['Security / Rust 锁定依赖漏洞扫描', 'Verify_Packages']}
+        jobs = passed_jobs()
+        resume.validate_build_run(build_run(), jobs, 123)
+        with self.assertRaisesRegex(ValueError, 'gate did not pass'):
+            resume.validate_build_run(build_run(), jobs, 123, policy=policy)
+        extra = [{'name': name, 'status': 'completed', 'conclusion': 'success'} for name in policy['required_jobs']]
+        resume.validate_build_run(build_run(), jobs + extra, 123, policy=policy)
+        for name in policy['required_jobs']:
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'gate did not pass'):
+                resume.validate_build_run(build_run(), jobs + [job | {'conclusion': 'skipped'}
+                                          if job['name'] == name else job for job in extra], 123, policy=policy)
+
     def test_only_completed_same_repository_tag_builds_are_eligible(self):
         run = build_run()
         self.assertEqual(resume.validate_build_run(run, passed_jobs(), 123), run)
@@ -217,8 +230,10 @@ class RecoveryPublicationTests(unittest.TestCase):
             stack.enter_context(patch.object(sys, 'argv', argv))
             stack.enter_context(patch.dict(os.environ, {'GITHUB_RUN_ID': '999', 'GITHUB_SHA': 'b' * 40}))
             stack.enter_context(patch.object(resume, 'original_build', return_value=(build_run(), 'c' * 40)))
+            stack.enter_context(patch.object(resume, 'source_policy', return_value=None))
             context = stack.enter_context(patch.object(resume.release, 'context', return_value=expected))
             stack.enter_context(patch.object(resume.release, 'verify_bundle', return_value={}))
+            stack.enter_context(patch.object(resume.delivery, 'download_files', return_value=1))
             stack.enter_context(patch.object(resume.release, 'read_remote_release', side_effect=[remote, published]))
             stack.enter_context(patch.object(resume.release, 'blob', return_value=b'version: 1.18.4-rc.1+250'))
             android = stack.enter_context(patch.object(resume.android, 'verify_release'))

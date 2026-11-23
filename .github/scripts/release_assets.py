@@ -95,8 +95,10 @@ def file_records(files):
         require(path.is_file() and not path.is_symlink() and path.name not in records and path.stat().st_size > 0,
                 "Missing, duplicate, linked or empty release file: " + path.name)
         with path.open("rb") as stream:
-            digest = hashlib.file_digest(stream, "sha256").hexdigest()
-        records[path.name] = {"bytes": path.stat().st_size, "sha256": digest}
+            digest = hashlib.sha256()
+            while block := stream.read(1024 * 1024):
+                digest.update(block)
+        records[path.name] = {"bytes": path.stat().st_size, "sha256": digest.hexdigest()}
     require(records, "No release files supplied")
     return records
 
@@ -210,6 +212,18 @@ def apple_bundle(read, names, prefix, assets, root, context, *, ios):
     check_payload(read, names, assets, root, context)
 
 
+@contextmanager
+def deb_tar_reader(data, member):
+    if member.endswith(".zst"):
+        # Ubuntu's dpkg-deb defaults to zstd; its system Python cannot decode that tar format.
+        names = safe_names(subprocess.check_output(["bsdtar", "-tf", "-"], input=data, timeout=60).decode().splitlines())
+        yield lambda name: subprocess.check_output(["bsdtar", "-xOf", "-", names[name]], input=data, timeout=60), set(names)
+    else:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as archive:
+            names = safe_names(archive.getnames())
+            yield lambda name: archive.extractfile(names[name]).read(), set(names)
+
+
 def check_deb(path, arch, root, context):
     members = {}
     with path.open("rb") as stream:
@@ -226,9 +240,7 @@ def check_deb(path, arch, root, context):
     for category in ("control", "data"):
         matches = [name for name in members if name.startswith(category + ".tar")]
         require(len(matches) == 1, "Missing Debian tar member")
-        with tarfile.open(fileobj=io.BytesIO(members[matches[0]]), mode="r:*") as archive:
-            names = safe_names(archive.getnames())
-            read = lambda name: archive.extractfile(names[name]).read()
+        with deb_tar_reader(members[matches[0]], matches[0]) as (read, names):
             if category == "control":
                 fields = dict(re.findall(r"^(Package|Version|Architecture): (.+)$", read("control").decode(), re.M))
                 require(fields == {"Package": "venera-next", "Version": versions(context["version"])[0], "Architecture": arch},

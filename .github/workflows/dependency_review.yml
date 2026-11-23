@@ -1,6 +1,13 @@
 name: 依赖安全审查
 
 on:
+  workflow_call:
+    inputs:
+      source_ref:
+        description: '恢复发布时扫描已核实原运行的完整源码 SHA'
+        required: false
+        type: string
+        default: ''
   pull_request:
   push:
     branches:
@@ -10,8 +17,8 @@ on:
     - cron: '15 4 * * 1'
 
 concurrency:
-  group: dependency-review-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: dependency-review-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -24,6 +31,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: 检查新增依赖漏洞
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
@@ -40,19 +49,28 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        if: inputs.source_ref != ''
+        with:
+          ref: ${{ inputs.source_ref }}
+          path: audit-source
+          persist-credentials: false
       - name: 安装固定版本的审计工具
         run: cargo install cargo-audit --version 0.22.2 --locked --no-default-features
-      - name: 扫描完整 Rust 锁文件
+      - name: 用最新漏洞库扫描准确提交的完整 Rust 锁文件
         shell: bash
+        env:
+          AUDIT_SOURCE: ${{ inputs.source_ref != '' && 'audit-source' || '.' }}
+          GITHUB_SHA: ${{ inputs.source_ref || github.sha }}
         run: |
-          set -o pipefail
-          mkdir -p build/security
-          cargo audit --file packages/rhttp/rust/Cargo.lock --deny unsound 2>&1 | tee build/security/rust-audit.log
+          python3 .github/scripts/release_security.py --root "$AUDIT_SOURCE" --output build/security
       - name: 保留依赖审计结果
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
           name: rust-dependency-audit
-          path: build/security/rust-audit.log
+          path: build/security/
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 30

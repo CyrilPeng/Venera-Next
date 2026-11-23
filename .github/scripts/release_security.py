@@ -48,21 +48,29 @@ def scan(root, output, environ):
               "lockfile_sha256": hashlib.sha256(lock).hexdigest(), "passed": False,
               "scanned_at": datetime.now(timezone.utc).isoformat()}
     try:
-        version = subprocess.check_output(["cargo", "audit", "--version"], timeout=30).decode().strip()
-        require(version == "cargo-audit " + AUDIT_VERSION, "Unexpected cargo-audit version")
+        # The Cargo subcommand reports `cargo-audit-audit`; query the installed binary itself.
+        version = subprocess.check_output(["cargo-audit", "--version"], timeout=30).decode().strip()
+        require(version == "cargo-audit " + AUDIT_VERSION, "Unexpected cargo-audit version: " + version)
         with tempfile.TemporaryDirectory(prefix="release-rustsec-") as directory:
             database = Path(directory) / "advisory-db"
             # A fresh clone fails closed on network errors, with no cached-database fallback.
             subprocess.run(["git", "clone", "--quiet", "--depth=1", "https://github.com/RustSec/advisory-db.git", str(database)],
                            check=True, timeout=180)
             report["database_commit"] = subprocess.check_output(["git", "-C", str(database), "rev-parse", "HEAD"], timeout=30).decode().strip()
+            # --no-fetch also disables index updates for yanked checks; prepare the full locked index first.
+            fetched = subprocess.run(["cargo", "fetch", "--locked", "--manifest-path", str(root / "packages/rhttp/rust/Cargo.toml")],
+                                     capture_output=True, timeout=300)
+            (output / "cargo-fetch.log").write_bytes(fetched.stdout + fetched.stderr)
+            report["registry_metadata_checked"] = fetched.returncode == 0
+            require(report["registry_metadata_checked"], "Locked registry metadata refresh failed; see cargo-fetch.log")
             result = subprocess.run(["cargo", "audit", "--file", str(root / LOCKFILE), "--db", str(database),
-                                     "--no-fetch", "--json", "--deny", "unsound"], capture_output=True, timeout=300)
+                                     "--no-fetch", "--json", "--color", "never", "--deny", "unsound"], capture_output=True, timeout=300)
             (output / "rust-audit.json").write_bytes(result.stdout)
             (output / "rust-audit.log").write_bytes(result.stderr)
             raw = json.loads(result.stdout)
             report["vulnerability_count"] = raw.get("vulnerabilities", {}).get("count")
-            report["passed"] = result.returncode == 0 and report["vulnerability_count"] == 0
+            report["passed"] = (result.returncode == 0 and report["vulnerability_count"] == 0
+                                and not re.search(rb"(?m)^error:", result.stderr))
             require(report["passed"], "Rust dependency audit failed; see rust-audit.json and rust-audit.log")
             check_report(report, root, context)
     finally:

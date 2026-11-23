@@ -2,6 +2,7 @@ import copy
 import io
 import json
 from pathlib import Path
+import shutil
 import struct
 import subprocess
 import sys
@@ -14,20 +15,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import release_assets as assets
 
 
-def tar_bytes(files):
+def tar_bytes(files, *, zstd=False):
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode="w:gz") as archive:
         for name, data in files.items():
             member = tarfile.TarInfo(name)
             member.size = len(data)
             archive.addfile(member, io.BytesIO(data))
-    return output.getvalue()
+    data = output.getvalue()
+    if not zstd:
+        return data
+    # A file output avoids the compressed stream's stdout block padding.
+    with tempfile.TemporaryDirectory(prefix="deb-zstd-fixture-") as temporary:
+        source, target = Path(temporary) / "source.tar.gz", Path(temporary) / "target.tar.zst"
+        source.write_bytes(data)
+        subprocess.run(["bsdtar", "--zstd", "-cf", str(target), "@" + str(source)], check=True, timeout=30)
+        return target.read_bytes()
 
 
-def deb_bytes(files, control):
+def deb_bytes(files, control, *, zstd=False):
     output = bytearray(b"!<arch>\n")
-    for name, data in {"debian-binary": b"2.0\n", "control.tar.gz": tar_bytes({"control": control}),
-                       "data.tar.gz": tar_bytes(files)}.items():
+    compression = "zst" if zstd else "gz"
+    for name, data in {"debian-binary": b"2.0\n", f"control.tar.{compression}": tar_bytes({"control": control}, zstd=zstd),
+                       f"data.tar.{compression}": tar_bytes(files, zstd=zstd)}.items():
         output.extend(f"{name + '/':<16}{0:<12}{0:<6}{0:<6}{'100644':<8}{len(data):<10}`\n".encode())
         output.extend(data)
         if len(data) % 2:
@@ -151,6 +161,23 @@ class ReleaseAssetTests(unittest.TestCase):
         assets.write_receipt(receipts / "windows.json", foreign)
         with self.assertRaisesRegex(ValueError, "Wrong compiler source"):
             assets.aggregate(output, receipts, self.context)
+
+    @unittest.skipUnless(shutil.which("bsdtar"), "zstd Debian regression requires libarchive-tools")
+    def test_zstd_deb_members_match_the_actual_ubuntu_package_format(self):
+        prefix = "usr/local/lib/venera-next/"
+        header = bytearray(64)
+        header[:6] = b"\x7fELF\x02\x01"
+        struct.pack_into("<H", header, 18, 183)
+        files = {prefix + "venera-next": bytes(header),
+                 **{prefix + "data/flutter_assets/" + name: value for name, value in self.payload(font=True).items()}}
+        package = self.root / "zstd.deb"
+        control = b"Package: venera-next\nVersion: 1.2.3\nArchitecture: arm64\n"
+        package.write_bytes(deb_bytes(files, control, zstd=True))
+        assets.check_deb(package, "arm64", self.root, self.context)
+        files[prefix + "data/flutter_assets/CHANGELOG.md"] = b"Unverified content"
+        package.write_bytes(deb_bytes(files, control, zstd=True))
+        with self.assertRaisesRegex(ValueError, "Embedded source"):
+            assets.check_deb(package, "arm64", self.root, self.context)
 
     def test_partial_upload_never_accepts_replaced_or_ambiguous_packages(self):
         files = {"linux~rc.deb": {"bytes": 7, "sha256": "a" * 64}, "app.ipa": {"bytes": 8, "sha256": "b" * 64}}

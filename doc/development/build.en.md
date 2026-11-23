@@ -145,6 +145,8 @@ python .github/scripts/release_version.py --check --tag v1.2.3
 
 The `代码分析` workflow runs version and structure checks, Python script tests, formatting checks for changed Dart files, `flutter analyze`, the full Dart test suite, and coverage reporting. `依赖安全审查` checks dependencies added or upgraded by a pull request, while `PR 平台冒烟构建` verifies Android and Windows compilation when the changed files can affect platform builds. Before starting multi-platform builds, `完整构建` reuses the same quality workflow. Manual platform builds and tag releases both reuse `.github/workflows/build.yml` so their build definitions cannot drift apart.
 
+`完整构建` also requires a fresh RustSec scan of the exact commit and receipts from checks of the actual platform packages. Manual `mode=build` keeps verified packages in Actions. `mode=rehearsal` additionally exercises uploads and downloads using an internal draft; `rehearsal_interrupt=true` checks recovery with the original packages after an interrupted upload. Manual runs never publish a Release or advance AltStore/Winget. Tag releases publish only after all required gates pass. Security reports expire after 24 hours; recovery rescans the original lockfile. Standard packages and verification receipts are retained for 30 days. See the [release rules](release_readiness.md). Actual application packages for this project are built using GitHub Actions.
+
 Android release workflows require these repository Secrets:
 
 - `ANDROID_KEYSTORE`: Base64 content of the keystore file
