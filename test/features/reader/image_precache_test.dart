@@ -64,8 +64,11 @@ void main() {
     return result;
   }
 
-  ReaderImagePrecache owner(ImageWork session) {
-    final result = ReaderImagePrecache(work: session);
+  ReaderImagePrecache owner(ImageWork session, {int maximumConcurrent = 1}) {
+    final result = ReaderImagePrecache(
+      work: session,
+      maximumConcurrent: maximumConcurrent,
+    );
     owners.add(result);
     return result;
   }
@@ -74,6 +77,23 @@ void main() {
     Future<Uint8List> Function(void Function()) read, {
     ImageDecoderCallback? decoder,
   }) => _Provider('prefetch-${nextProvider++}', read, decoder: decoder);
+
+  Future<void> waitFor(bool Function() ready) async {
+    final waiting = Stopwatch()..start();
+    while (!ready() && waiting.elapsed < const Duration(seconds: 5)) {
+      await frame();
+    }
+    expect(ready(), isTrue);
+  }
+
+  List<(_Provider, Completer<Uint8List>)> pendingImages(int count) =>
+      List.generate(count, (_) {
+        final bytes = Completer<Uint8List>();
+        releasePending.add(() {
+          if (!bytes.isCompleted) bytes.complete(_png);
+        });
+        return (provider((_) => bytes.future), bytes);
+      });
 
   tearDown(() async {
     for (final release in releasePending) {
@@ -93,6 +113,106 @@ void main() {
     await frame();
     expect(BaseImageProvider.debugActiveLoadCount, 0);
   });
+
+  test('a new window retains the current and incoming decode', () async {
+    final precache = owner(work(), maximumConcurrent: 2);
+    final images = pendingImages(3);
+    final cache = PaintingBinding.instance.imageCache;
+    precache.replace([images[0].$1, images[1].$1], ImageConfiguration.empty);
+    expect(images.map((image) => image.$1.loads), [1, 1, 0]);
+    precache.replace(
+      [images[2].$1],
+      ImageConfiguration.empty,
+      retain: [images[0].$1, images[1].$1],
+    );
+    expect(cache.statusForKey(images[0].$1).pending, isTrue);
+    expect(cache.statusForKey(images[1].$1).pending, isTrue);
+    images[0].$2.complete(_png);
+    images[1].$2.complete(_png);
+    await waitFor(() => images[2].$1.loads == 1);
+    expect(cache.statusForKey(images[0].$1).keepAlive, isTrue);
+    expect(cache.statusForKey(images[1].$1).keepAlive, isTrue);
+    expect(images.map((image) => image.$1.loads), [1, 1, 1]);
+  });
+
+  test(
+    'cancelled native reads retain bounded admission and decode slots',
+    () async {
+      final session = work();
+      final precache = owner(session, maximumConcurrent: 2);
+      var admitted = 0;
+      var peakAdmission = 0;
+      final detach = session.retainTasks((_) {
+        admitted++;
+        if (admitted > peakAdmission) peakAdmission = admitted;
+        return () => admitted--;
+      });
+      final images = pendingImages(6);
+      try {
+        precache.replace(
+          images.map((image) => image.$1),
+          ImageConfiguration.empty,
+        );
+        expect(images.map((image) => image.$1.loads), [1, 1, 0, 0, 0, 0]);
+        expect(admitted, 4);
+        precache.replace([
+          images[4].$1,
+          images[5].$1,
+        ], ImageConfiguration.empty);
+        await frame();
+        expect(images[4].$1.loads, 0);
+        expect(images[5].$1.loads, 0);
+        images[0].$2.complete(_png);
+        await waitFor(() => images[4].$1.loads == 1);
+        expect(images[5].$1.loads, 0);
+        images[1].$2.complete(_png);
+        await waitFor(() => images[5].$1.loads == 1);
+        expect(images[2].$1.loads, 0);
+        expect(images[3].$1.loads, 0);
+        expect(peakAdmission, lessThanOrEqualTo(4));
+      } finally {
+        detach();
+      }
+    },
+  );
+
+  test('the latest window prioritizes already admitted neighbours', () async {
+    final precache = owner(work());
+    final images = pendingImages(3);
+    precache.replace(images.map((image) => image.$1), ImageConfiguration.empty);
+    expect(images.map((image) => image.$1.loads), [1, 0, 0]);
+    precache.replace([
+      images[2].$1,
+      images[1].$1,
+      images[0].$1,
+    ], ImageConfiguration.empty);
+    images[0].$2.complete(_png);
+    await waitFor(() => images[2].$1.loads == 1);
+    expect(images[1].$1.loads, 0);
+    images[2].$2.complete(_png);
+    await waitFor(() => images[1].$1.loads == 1);
+  });
+
+  test(
+    'a failed speculative image is not retried in the same window',
+    () async {
+      final precache = owner(work());
+      final failed = provider(
+        (_) async => throw Exception('Invalid Status Code: 404'),
+      );
+      final ready = provider((_) async => _png);
+      final cache = PaintingBinding.instance.imageCache;
+      precache.replace([failed, ready], ImageConfiguration.empty);
+      await waitFor(() => cache.statusForKey(ready).keepAlive);
+      for (var i = 0; i < 4; i++) {
+        precache.replace([failed, ready], ImageConfiguration.empty);
+        await frame();
+      }
+      expect(failed.loads, 1);
+      precache.replace([ready, failed], ImageConfiguration.empty);
+      await waitFor(() => failed.loads == 2);
+    },
+  );
 
   test('held sessions reject precache without resolving an image', () async {
     final session = work();

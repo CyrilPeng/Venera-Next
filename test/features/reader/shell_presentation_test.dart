@@ -60,6 +60,7 @@ void main() {
       final shell = GlobalKey<ReaderScaffoldState>();
       final repaint = GlobalKey();
       final calls = <String>[];
+      VoidCallback rotate = () => calls.add('rotate');
       final semantics = tester.ensureSemantics();
       var active = false;
       var reducedMotion = false;
@@ -136,7 +137,7 @@ void main() {
                       imageWork: work,
                       favoriteChanges: favorites,
                       orientation: ReaderOrientation.system,
-                      onRotate: () => calls.add('rotate'),
+                      onRotate: rotate,
                       onExit: () async => calls.add('exit'),
                       onFullscreen: null,
                       onToggleAutomaticReading: () {
@@ -247,6 +248,25 @@ void main() {
       await tester.pump();
       expect(tester.widget<ReaderBottomBar>(toolbar), isNot(same(visible)));
       expect(find.byIcon(Icons.favorite), findsOneWidget);
+      expect(tester.widget<ReaderBottomBar>(toolbar).page, 4);
+      final topWidget = tester.widget<ReaderTopBar>(find.byType(ReaderTopBar));
+      final actions = tester.widget<ReaderBottomBar>(toolbar).actions;
+      final panel = tester.widget<ReaderBrightnessPanel>(
+        find.byType(ReaderBrightnessPanel),
+      );
+      shell.currentState!.update();
+      await tester.pump();
+      expect(
+        tester.widget<ReaderTopBar>(find.byType(ReaderTopBar)),
+        same(topWidget),
+      );
+      expect(tester.widget<ReaderBottomBar>(toolbar).actions, same(actions));
+      expect(
+        tester.widget<ReaderBrightnessPanel>(
+          find.byType(ReaderBrightnessPanel),
+        ),
+        same(panel),
+      );
       expect(tester.takeException(), isNull);
       expect(
         find.descendant(
@@ -335,6 +355,14 @@ void main() {
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       expect(calls, contains('rotate'));
+      rotate = () => calls.add('rotate refreshed');
+      await mount();
+      await tester.pump();
+      await tester.tap(find.byTooltip('Screen Rotation'));
+      expect(calls.last, 'rotate refreshed');
+      rotate = () => calls.add('rotate');
+      await mount();
+      await tester.pump();
       await tester.tap(find.byIcon(Icons.play_circle_outline));
       expect(active, isTrue);
       expect(shell.currentState!.isOpen, isFalse);

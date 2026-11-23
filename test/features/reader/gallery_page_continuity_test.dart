@@ -14,8 +14,45 @@ import 'package:venera_next/features/reader/page_layout.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
 import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/foundation/image_provider/reader_image.dart';
 
 void main() {
+  for (final direction in ['ltr', 'rtl', 'vertical']) {
+    testWidgets('accepted $direction target decodes before it is mounted', (
+      tester,
+    ) async {
+      final fixture = _Fixture(direction, preloadCount: 1, pageCount: 4);
+      try {
+        await fixture.mount(tester);
+        final target = ReaderImageProvider(
+          fixture.data.images[2],
+          null,
+          'continuity',
+          'one',
+          1,
+        );
+        final cache = PaintingBinding.instance.imageCache;
+        expect(cache.statusForKey(target).keepAlive, isFalse);
+        expect(fixture.navigation.toPage(3), isTrue);
+        await tester.pump();
+        expect(fixture.navigation.state.page, 1);
+        expect(fixture.gallery.controller.page, closeTo(2, .001));
+        expect(fixture.wrapper(3), findsNothing);
+        await fixture.decode(
+          tester,
+          () => cache.statusForKey(target).keepAlive,
+        );
+        expect(fixture.wrapper(3), findsNothing);
+        await tester.pumpAndSettle();
+        expect(fixture.navigation.state.page, 3);
+        expect(fixture.paintedImage(3)?.image, isNotNull);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await fixture.dispose(tester);
+      }
+    });
+  }
+
   for (final forward in [true, false]) {
     testWidgets(
       'half-page drag release continues without a position jump: $forward',
@@ -85,10 +122,28 @@ void main() {
           await tester.pump();
         }
         expect(starts, before);
+        final neighbour = ReaderImageProvider(
+          fixture.data.images[1],
+          null,
+          'continuity',
+          'one',
+          1,
+        );
+        final cache = PaintingBinding.instance.imageCache;
+        await fixture.decode(
+          tester,
+          () => cache.statusForKey(neighbour).keepAlive,
+        );
+        expect(cache.evict(neighbour, includeLive: false), isTrue);
         final release = fixture.work.holdForExit();
         fixture.gallery.cache(1);
         release();
-        await fixture.decode(tester, () => fixture.gallery.autoReadingReady);
+        await fixture.decode(
+          tester,
+          () =>
+              fixture.gallery.autoReadingReady &&
+              cache.statusForKey(neighbour).keepAlive,
+        );
         for (var i = 0; i < 12; i++) {
           await tester.runAsync(() => pumpEventQueue());
           await tester.pump();
@@ -116,6 +171,7 @@ void main() {
             await fixture.mount(tester);
             for (final target in [2, 1, 2, 1]) {
               fixture.reports.clear();
+              fixture.progressUpdates = 0;
               expect(fixture.navigation.toPage(target), isTrue);
               await tester.pump();
               await tester.pump(const Duration(milliseconds: 16));
@@ -141,6 +197,7 @@ void main() {
               expect(fixture.navigation.state.page, target);
               expect(fixture.gallery.controller.page, closeTo(target, .001));
               expect(fixture.reports, contains((false, true)));
+              expect(fixture.progressUpdates, 1);
             }
             expect(tester.takeException(), isNull);
           } finally {
@@ -220,10 +277,17 @@ void main() {
 }
 
 class _Fixture {
-  _Fixture(this.direction, {this.preloadCount = 0, this.imagesPerPage = 1});
+  _Fixture(
+    this.direction, {
+    this.preloadCount = 0,
+    this.imagesPerPage = 1,
+    this.pageCount = 2,
+  });
   final String direction;
   final int preloadCount;
   final int imagesPerPage;
+  final int pageCount;
+  int progressUpdates = 0;
   final reports = <(bool, bool)>[];
   final directory = Directory.systemTemp.createTempSync('gallery-continuity-');
   final work = ImageWork();
@@ -238,7 +302,7 @@ class _Fixture {
     animationEnabled: () => true,
     viewport: () => viewport.current,
     onChanged: () {},
-    onPageChanged: () {},
+    onPageChanged: () => progressUpdates++,
     onError: (error, stack) => fail('$error\n$stack'),
   );
   GalleryModeState get gallery => key.currentState!;
@@ -275,7 +339,7 @@ class _Fixture {
 
   Future<void> mount(WidgetTester tester) async {
     final images = <String>[];
-    for (var page = 1; page <= 2 * imagesPerPage; page++) {
+    for (var page = 1; page <= pageCount * imagesPerPage; page++) {
       final pixels = img.Image(width: 60, height: 90)
         ..clear(
           page == 1 ? img.ColorRgb8(30, 100, 180) : img.ColorRgb8(180, 60, 30),

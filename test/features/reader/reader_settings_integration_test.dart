@@ -29,6 +29,94 @@ void main() {
   setUpReaderIntegration();
 
   testWidgets(
+    'page layout keeps live scope fallback and rejects old requests',
+    (tester) async {
+      tester.view.physicalSize = const Size(400, 600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final settings = appdata.settings;
+      final previous = {
+        for (final key in [
+          'deviceId',
+          'deviceSpecificSettings',
+          'comicSpecificSettings',
+        ])
+          key: settings[key],
+      };
+      final fixture = await ReaderIntegrationFixture.create(
+        tester,
+        imageCount: 12,
+      );
+      try {
+        settings['readerMode'] = ReaderMode.galleryLeftToRight.key;
+        settings['readerScreenPicNumberForPortrait'] = 1;
+        settings['readerScreenPicNumberForLandscape'] = 2;
+        settings['showSingleImageOnFirstPage'] = false;
+        settings['deviceId'] = 'layout-178';
+        settings['deviceSpecificSettings'] = {
+          'layout-178': {
+            'enabled': true,
+            'readerScreenPicNumberForPortrait': 2,
+            'readerScreenPicNumberForLandscape': 3,
+          },
+        };
+        settings['comicSpecificSettings'] = {};
+        await fixture.mount(tester, pushed: false);
+        final reader = fixture.readerKey.currentState!;
+        final oldProgress = reader.createProgressRequest();
+        final oldFavorite = reader.createImageFavoriteQuery()!;
+        expect(reader.pageLayout.imagesPerPage, 2);
+        settings['comicSpecificSettings'] = {
+          '${reader.cid}@${reader.type.sourceKey}': {
+            'enabled': true,
+            'readerScreenPicNumberForPortrait': 4,
+            'readerScreenPicNumberForLandscape': 5,
+            'showSingleImageOnFirstPage': true,
+          },
+        };
+        expect(reader.pageLayout.imagesPerPage, 4);
+        expect(reader.pageLayout.singleImageOnFirstPage, isTrue);
+        final currentPage = reader.page;
+        expect(oldProgress.selectPage(2), isFalse);
+        expect(reader.page, currentPage);
+        expect(oldFavorite.isCurrent(), isFalse);
+        settings.setReaderSetting(
+          reader.cid,
+          reader.type.sourceKey,
+          'enabled',
+          false,
+        );
+        expect(reader.pageLayout.imagesPerPage, 2);
+        expect(reader.pageLayout.singleImageOnFirstPage, isFalse);
+        settings.setDeviceReaderSetting('enabled', false);
+        expect(reader.pageLayout.imagesPerPage, 1);
+        settings.setDeviceReaderSetting('enabled', true);
+        settings.setDeviceReaderSetting(
+          'readerScreenPicNumberForPortrait',
+          'broken',
+        );
+        expect(reader.pageLayout.imagesPerPage, 1);
+        tester.view.physicalSize = const Size(600, 400);
+        await tester.pump();
+        expect(reader.pageLayout.imagesPerPage, 3);
+        settings.setReaderSetting(
+          reader.cid,
+          reader.type.sourceKey,
+          'enabled',
+          true,
+        );
+        expect(reader.pageLayout.imagesPerPage, 5);
+        expect(reader.pageLayout.singleImageOnFirstPage, isTrue);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await fixture.dispose(tester);
+        previous.forEach((key, value) => settings[key] = value);
+      }
+    },
+  );
+
+  testWidgets(
     'enabling crop in an imported ZIP waterfall applies to every page',
     (tester) async {
       tester.view.physicalSize = const Size(400, 600);
