@@ -4,10 +4,10 @@
 
 ## 当前公开版本
 
-- 稳定渠道为 [v1.18.3](https://github.com/CyrilPeng/Venera-Next/releases/tag/v1.18.3)。最新候选为 [v1.18.4-rc.3（1.18.4-rc.3+252）](https://github.com/CyrilPeng/Venera-Next/releases/tag/v1.18.4-rc.3)，源码为 `266177d6ad5790bcb9854f4e8fdbbab093fdee7f`。
-- [该标签的完整 CI](https://github.com/CyrilPeng/Venera-Next/actions/runs/43778233475)通过。24 项公开资产已下载并核验摘要，八个 APK 的签名／版本／ABI，以及 Windows、iOS 和鸿蒙包内版本与来源均已核验。
-- 鸿蒙仍为 ARM64／API 26 未签名 Beta，`signed: false`、`runtime_verified: false`。构建、来源核验和公开安装包不替代设备签装、真实授权、冷启动或同密钥升级。
-- RC3 已通知 #180、#167、#152、#178 对应测试。#139 的特定 JPEG、#129 的本地封面残留继续按[诊断指南](reader_diagnostics.md#设备复现与验收)定位；#159 长期目录见[实施条件](harmonyos_releases.zh.md#长期外部漫画目录)。#163、#81、#123 的新增功能继续暂缓。
+- 本轮正式版本为 [v1.18.4（1.18.4+253）](https://github.com/CyrilPeng/Venera-Next/releases/tag/v1.18.4)，汇总 RC1–RC3 与后续反馈修复；以该标签的[完整构建](https://github.com/CyrilPeng/Venera-Next/actions/workflows/main.yml)和公开资产核验结果确认交付，不能把分支测试包改名为正式包。
+- #178 的 Android 120 Hz 阅读及 #188 的目录切换已由原提出者确认；#129、#152 已有可安装修复且超过 72 小时未收到新失败反馈，按维护者约定接受。超时接受与真机明确确认分别记录。
+- #166 强 Cloudflare／TLS 兼容问题与 #186 原设备更新检查网络故障因证据不足暂缓，不声明已修复；白边裁剪的扫描痕迹／压缩灰点边界见[诊断指南](reader_diagnostics.md#设备复现与验收)。#159 长期目录见[实施条件](harmonyos_releases.zh.md#长期外部漫画目录)，#163、#81、#123 的新增功能继续暂缓。
+- 鸿蒙改为[独立 Actions Beta](https://github.com/CyrilPeng/Venera-Next/actions/workflows/harmonyos-release.yml)，普通正式 Release 不附 HAP。仍为 ARM64／API 26 未签名包，`signed: false`、`runtime_verified: false`；构建、来源核验和下载不替代设备签装、真实授权、冷启动或同密钥升级。历史 RC3 的[完整 CI 与 24 项资产](https://github.com/CyrilPeng/Venera-Next/actions/runs/43778233475)保留。
 
 ## 准备同一来源
 
@@ -26,19 +26,19 @@ python .github/scripts/test_suites.py --strict-imports
 
 ## 完整 CI 与资产核验
 
-`.github/workflows/main.yml` 先验证元数据，再执行 Quality；普通平台 Build 和 HarmonyOS 均依赖 Quality，Release 等待全部必需结果。保留完整 Flutter 分片、覆盖率汇总、Windows／TV、JVM／Swift、原生 ABI／sanitizers、真实 Provider 及脚本门禁。
+`.github/workflows/main.yml` 先验证元数据，再执行 Quality；普通平台 Build 依赖 Quality，Release 等待全部必需结果。`distribution: independent_beta` 明确要求随版 HarmonyOS 任务跳过；历史或显式 `bundled` 配置仍要求该任务成功。普通平台失败、元数据缺失或分发状态不符均不能公开。保留完整 Flutter 分片、覆盖率汇总、Windows／TV、JVM／Swift、原生 ABI／sanitizers、真实 Provider 及脚本门禁。
 
-核对 Android 手机／TV 各 ABI、Windows、macOS、iOS、Linux x64／ARM64、鸿蒙 HAP 与其 manifest／来源／安装说明／校验附件。资产名称、数量、大小、上传状态和 SHA-256 均与本次构建清单一致，另核验包内版本、包身份、APK 签名／ABI、ELF 导出、NOTICE 与鸿蒙来源摘要。
+核对 Android 手机／TV 各 ABI、Windows、macOS、iOS、Linux x64／ARM64。资产名称、数量、大小、上传状态和 SHA-256 均与本次构建清单一致，另核验包内版本、包身份和 APK 签名／ABI。独立 Beta 的 HAP、manifest、校验附件及设备模板留在其 Actions 运行中，继续验证 ELF 导出、NOTICE 与准确来源摘要；禁止将 HAP 或鸿蒙设备报告混入普通正式版。
 
 发布源码 checkout 与输出目录分开，生成安装说明、解包或下载不污染受审查来源。GitHub 草稿通过鉴权列表与 Release ID 查找；草稿期不依赖仅返回公开版本的 tag 查询。公开前重新读取并核验准确草稿与全部附件，公开后重新下载核验实际资产。
 
 ## 设备报告与稳定渠道
 
-鸿蒙 schema 3 的 `stable_required` 允许无设备报告的候选版公开，正式版必须有准确 HAP 的合格验收；已有失败或无效报告均阻止通过。历史 schema／`required` 按原政策恢复，不追改旧标签。
+普通正式版按已提交的 `independent_beta` 配置分发，鸿蒙另行验收。历史随版鸿蒙 schema 3 的 `stable_required` 允许无设备报告的候选版公开，包含 HAP 的正式版必须有准确 HAP 的合格验收；已有失败或无效报告均阻止通过。恢复流程读取原构建提交中的策略，不用当前配置豁免旧版本，历史 schema／`required` 按原政策恢复。
 
 独立设备模板最初全部为 `not_run`，绑定源码、版本、构建号和未签名原 HAP SHA-256。启动、来源／阅读、归档与目录导入、下载、备份导出／导入、同密钥覆盖升级、冷重启及 UI／能力按真实结果填写。报告不含账号、设备标识或签名材料，由有权限的维护者核验并上传；后续重跑保留原构建资产，未签装或未执行的项目不能填为通过。
 
-稳定版在设备与发布门禁完成后推进更新渠道、AltStore 和 Winget；RC 仅在 Release 手动下载。Winget 收录以 Microsoft 审核为准。通知只对应本次实际交付和新增验收条件，已有充分反馈不重复索取；Issue 是否完成依据实际反馈及适用范围判断。
+稳定版在对应发布门禁和资产核验完成后推进更新渠道、AltStore 和 Winget；RC 仅在 Release 手动下载，鸿蒙独立 Beta 从 Actions 下载。Winget 收录以 Microsoft 审核为准。修复提供可安装包后，72 小时无新失败反馈按约定接受；证据不足、没有可验收修复或有明确失败的问题不能套用超时通过。通知只对应本次实际交付，已有充分反馈不重复索取。
 
 ## 证据保留与恢复
 

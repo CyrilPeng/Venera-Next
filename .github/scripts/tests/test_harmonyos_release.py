@@ -107,7 +107,8 @@ class Fixture:
         self.release_commit = commit(self.root)
         self.preview_next = True
 
-    def unified_mainline(self, *, release_enabled=False, guide_delivery=None, runtime_acceptance=None):
+    def unified_mainline(self, *, release_enabled=False, guide_delivery=None, runtime_acceptance=None,
+                         distribution=None):
         self.next_candidate()
         for name in release.tracked(self.source, self.source_commit):
             write(self.root, name, release.blob(self.source, self.source_commit, name))
@@ -117,6 +118,8 @@ class Fixture:
             self.next_pin['guide_delivery'] = guide_delivery
         if runtime_acceptance is not None:
             self.next_pin['runtime_acceptance'] = runtime_acceptance
+        if distribution is not None:
+            self.next_pin['distribution'] = distribution
         write(self.root, release.NEXT_PIN, json.dumps(self.next_pin))
         self.release_commit = commit(self.root)
         self.sync_mainline_source()
@@ -326,6 +329,93 @@ class HarmonyReleaseTests(unittest.TestCase):
         expected = fixture.bundle()
         with self.assertRaisesRegex(ValueError, 'guide is empty'):
             self.verify(expected)
+
+    def test_independent_beta_keeps_real_hap_audits_and_source_bound_config(self):
+        fixture = self.fixture
+        fixture.unified_mainline(release_enabled=True, guide_delivery='repository',
+                                 runtime_acceptance='stable_required', distribution='independent_beta')
+        fixture.preview_next = False
+        git(fixture.root, 'tag', '-a', 'v1.18.3', '-m', 'reviewed release')
+        expected = fixture.bundle(tagged=True)
+        self.assertEqual(expected['distribution'], 'independent_beta')
+        self.assertEqual(expected['source_commit'], fixture.release_commit)
+        self.assertEqual(len(self.verify(expected)), 3)
+        output = fixture.directory / 'github-output.txt'
+        arguments = ['harmonyos_release.py', 'config', '--root', str(fixture.root),
+                     '--github-output', str(output)]
+        with patch.dict(os.environ, fixture.environment(tagged=True)), patch.object(sys, 'argv', arguments), \
+                contextlib.redirect_stdout(io.StringIO()):
+            release.main()
+        self.assertIn('bundled_release=false', output.read_text())
+        arguments = ['harmonyos_release.py', 'verify', '--root', str(fixture.root),
+                     '--source-root', str(fixture.source), '--artifacts', str(fixture.output)]
+        with patch.dict(os.environ, fixture.environment(tagged=True)), patch.object(sys, 'argv', arguments), \
+                contextlib.redirect_stdout(io.StringIO()):
+            release.main()
+            fixture.bundle(tagged=True, metadata_change=lambda metadata: metadata['native_libraries'].pop('librhttp.so'))
+            with self.assertRaises(ValueError):
+                release.main()
+        for invalid in ('disabled', '', False, None):
+            with self.subTest(distribution=invalid):
+                write(fixture.root, release.NEXT_PIN, json.dumps(fixture.next_pin | {'distribution': invalid}))
+                with self.assertRaisesRegex(ValueError, 'Invalid immutable'):
+                    release.load_pin(fixture.root, next_candidate=True)
+
+    def test_independent_standard_release_rechecks_all_packages_without_a_device_claim(self):
+        fixture = self.fixture
+        fixture.unified_mainline(release_enabled=True, guide_delivery='repository',
+                                 runtime_acceptance='stable_required', distribution='independent_beta')
+        fixture.preview_next = False
+        git(fixture.root, 'tag', '-a', 'v1.18.3', '-m', 'reviewed release')
+        expected = fixture.context(tagged=True)
+        output = fixture.directory / 'outputs'
+        output.mkdir()
+        directory = output / 'harmonyos'
+        files = [output / name for name in ('android.apk', 'android-mobile-manifest.json', 'linux.deb')]
+        for path in files:
+            path.write_bytes(path.name.encode())
+        records = release.release_file_records(files)
+        remote = {'tag_name': expected['tag'], 'target_commitish': fixture.release_commit,
+                  'draft': True, 'prerelease': False, 'assets': [
+                      {'name': name, 'size': record['bytes'], 'state': 'uploaded',
+                       'digest': 'sha256:' + record['sha256']} for name, record in records.items()]}
+        self.assertEqual(release.publication_assets(directory, expected, fixture.source), {})
+        for published in (False, True):
+            current = remote | {'draft': not published}
+            with self.subTest(published=published), patch.object(release, 'read_remote_release', return_value=current), \
+                    contextlib.redirect_stdout(io.StringIO()) as stdout:
+                release.check_remote_release(current, expected, {}, published=published)
+                release.verify_standard_release_files(directory, expected, current)
+                self.assertTrue(release.check_runtime(expected, {}, published=published))
+                self.assertIn('without device acceptance claims', stdout.getvalue())
+        for changed in (
+            remote | {'target_commitish': '0' * 40},
+            remote | {'assets': remote['assets'] + [{'name': 'unexpected.HAP'}]},
+            remote | {'assets': remote['assets'] + [{'name': release.RUNTIME_REPORT}]},
+        ):
+            with self.subTest(remote=changed), self.assertRaises(ValueError):
+                release.check_remote_release(changed, expected, {}, published=False)
+        for changed in (
+            remote | {'assets': remote['assets'][1:]},
+            remote | {'assets': remote['assets'] + [remote['assets'][0]]},
+            remote | {'assets': [remote['assets'][0] | {'digest': 'sha256:' + '0' * 64}, *remote['assets'][1:]]},
+            remote | {'assets': [remote['assets'][0] | {'state': 'new'}, *remote['assets'][1:]]},
+        ):
+            with self.subTest(remote=changed), self.assertRaises(ValueError):
+                release.verify_standard_release_files(directory, expected, changed)
+        files[0].write_bytes(b'tampered package')
+        with self.assertRaisesRegex(ValueError, 'package differs'):
+            release.verify_standard_release_files(directory, expected, remote)
+        write(directory, 'harmonyos-manifest.json', '{}')
+        with self.assertRaisesRegex(ValueError, 'outside the standard release'):
+            release.publication_assets(directory, expected, fixture.source)
+        notes = fixture.directory / 'notes.md'
+        notes.write_text('Stable release notes', encoding='utf-8')
+        hap = output / 'unexpected.hap'
+        hap.write_bytes(b'beta')
+        with patch.object(release, 'gh') as github, self.assertRaisesRegex(ValueError, 'cannot enter'):
+            release.prepare_draft(expected, [hap], notes)
+        github.assert_not_called()
 
     def test_unknown_guide_modes_cannot_relax_release_validation(self):
         fixture = self.fixture

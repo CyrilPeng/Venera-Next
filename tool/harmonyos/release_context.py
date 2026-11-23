@@ -21,6 +21,8 @@ def validate_context(value, source_commit, environ):
         fields.add("guide_delivery")
     if unified and "runtime_acceptance" in value:
         fields.add("runtime_acceptance")
+    if unified and "distribution" in value:
+        fields.add("distribution")
     hashes = ("source_commit", "release_commit") if unified else ("source_commit", "main_baseline", "release_commit")
     if (set(value) != fields or type(value["schema"]) is not int or value["schema"] not in (2, 3) or value["channel"] != "harmonyos-beta"
             or type(value["tagged"]) is not bool or type(value["preview"]) is not bool
@@ -29,6 +31,7 @@ def validate_context(value, source_commit, environ):
             or (unified and (value["source_mode"] != "release_commit" or value["source_commit"] != value["release_commit"]))
             or ("guide_delivery" in value and value["guide_delivery"] != "repository")
             or ("runtime_acceptance" in value and value["runtime_acceptance"] not in ("required", "stable_required"))
+            or ("distribution" in value and value["distribution"] not in ("bundled", "independent_beta"))
             or value["source_commit"] != source_commit
             or value["release_commit"] != environ.get("GITHUB_SHA", value["release_commit"])
             or not isinstance(value["changelog"], str)

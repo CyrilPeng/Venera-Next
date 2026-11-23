@@ -95,6 +95,45 @@ class RecoverySourceTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'untracked'):
                     resume.original_build(root, 123)
 
+    def test_independent_beta_skips_only_the_harmonyos_gate(self):
+        jobs = [job | {'conclusion': 'skipped'} if job['name'] == 'HarmonyOS / unsigned-hap'
+                else job for job in passed_jobs()]
+        self.assertEqual(resume.validate_build_run(build_run(), jobs, 123, bundled_harmonyos=False), build_run())
+        with self.assertRaisesRegex(ValueError, 'gate did not pass'):
+            resume.validate_build_run(build_run(), jobs, 123)
+        for name in resume.REQUIRED_JOBS - {'HarmonyOS / unsigned-hap'}:
+            changed = [job | {'conclusion': 'skipped'} if job['name'] == name else job for job in jobs]
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'gate did not pass'):
+                resume.validate_build_run(build_run(), changed, 123, bundled_harmonyos=False)
+        failed = [job | {'conclusion': 'failure'} if job['name'] == 'HarmonyOS / unsigned-hap'
+                  else job for job in jobs]
+        with self.assertRaisesRegex(ValueError, 'Only a failed publishing job'):
+            resume.validate_build_run(build_run(), failed, 123, bundled_harmonyos=False)
+
+    def test_distribution_is_read_from_the_original_commit_and_legacy_stays_bundled(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            git(root, 'init', '-q')
+            (root / 'CHANGELOG.md').write_text('Original release\n')
+            git(root, 'add', '.')
+            git(root, 'commit', '-qm', 'legacy source')
+            legacy = git(root, 'rev-parse', 'HEAD')
+            pin = root / resume.release.NEXT_PIN
+            pin.parent.mkdir()
+            pin.write_text(json.dumps({'schema': 3, 'source_mode': 'release_commit',
+                                       'distribution': 'independent_beta'}))
+            git(root, 'add', '.')
+            git(root, 'commit', '-qm', 'independent source')
+            independent = git(root, 'rev-parse', 'HEAD')
+            pin.write_text(json.dumps({'distribution': 'bundled'}))
+            self.assertTrue(resume.source_bundles_harmonyos(root, legacy))
+            self.assertFalse(resume.source_bundles_harmonyos(root, independent))
+        for pin in ({'schema': 2, 'distribution': 'independent_beta'},
+                    {'schema': 3, 'source_mode': 'main', 'distribution': 'independent_beta'},
+                    {'distribution': 'disabled'}):
+            with self.subTest(pin=pin), self.assertRaisesRegex(ValueError, 'distribution mode'):
+                resume.release.bundles_harmonyos(pin)
+
 
 class RecoveryArtifactTests(unittest.TestCase):
     def populate(self, root):
@@ -129,6 +168,19 @@ class RecoveryArtifactTests(unittest.TestCase):
                     (directory / 'ios_build.bin').write_bytes(b'Conflicting name')
                 with self.assertRaisesRegex(ValueError, 'Missing|Empty|Duplicate'):
                     resume.collect_artifacts(root / 'downloaded', root / 'outputs')
+
+    def test_independent_collection_still_requires_every_standard_platform_artifact(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.populate(root / 'downloaded')
+            (root / 'downloaded/harmonyos-release/harmonyos-release.bin').unlink()
+            (root / 'downloaded/harmonyos-release').rmdir()
+            resume.collect_artifacts(root / 'downloaded', root / 'outputs', bundled_harmonyos=False)
+            self.assertFalse((root / 'outputs/harmonyos').exists())
+            self.assertEqual(len(list((root / 'outputs').rglob('*.bin'))), len(resume.RELEASE_ARTIFACTS) - 1)
+            (root / 'downloaded/windows_build/windows_build.bin').unlink()
+            with self.assertRaisesRegex(ValueError, 'Empty original build artifact'):
+                resume.collect_artifacts(root / 'downloaded', root / 'missing-output', bundled_harmonyos=False)
 
 
 class RecoveryPublicationTests(unittest.TestCase):

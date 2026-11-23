@@ -44,6 +44,10 @@ def include_installation_guide_links(notes: str, tag: str) -> str:
         return notes
     if policy.get("guide_delivery") != "repository":
         return notes
+    if policy.get("distribution") == "independent_beta":
+        return notes + ("\n\n鸿蒙继续通过独立 Actions 工作流提供未签名 Beta 测试包："
+                        "[HarmonyOS Beta](https://github.com/CyrilPeng/Venera-Next/actions/workflows/harmonyos-release.yml)。"
+                        "本次正式版不包含 HAP，鸿蒙设备验收仍待完成。")
     links = []
     for language, label in (("zh", "简体中文"), ("en", "English")):
         path = f"doc/distribution/harmonyos-reader.{language}.md"

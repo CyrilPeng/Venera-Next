@@ -53,7 +53,7 @@
 <a id="introduction"></a>
 ## 1. Introduction
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, Windows, Linux, iOS, and macOS**, with a **HarmonyOS beta** distributed alongside each release.
+[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, Windows, Linux, iOS, and macOS**, with an independently distributed **HarmonyOS beta**.
 
 This fork focuses on fewer interruptions and more reading: Waterfall mode scrolls across chapters without leaving the reader, long-pressing Favorite skips the folder picker, and nighttime and E-Ink devices get their own reading adjustments. Local import, offline downloads, reading statistics, and multi-device sync make finding comics, reading them, and following ongoing series easier.
 
@@ -176,13 +176,13 @@ See [Windows Distribution](doc/distribution/windows.en.md) for installer, portab
 <a id="harmonyos-beta"></a>
 ### 3.4 HarmonyOS (Beta)
 
-Download a HarmonyOS package from the [release page](https://github.com/CyrilPeng/Venera-Next/releases). Starting with `v1.18.3-rc.3`, every prerelease and stable release includes the matching HarmonyOS beta:
+Download the `harmonyos-release` artifact from a successful run of the [HarmonyOS Beta workflow](https://github.com/CyrilPeng/Venera-Next/actions/workflows/harmonyos-release.yml). Starting with `v1.18.4`, the unsigned HarmonyOS Beta is distributed independently; standard stable releases do not include a HAP. Historical release attachments remain available:
 
 | File | Description | Recommended for |
 |---|---|---|
 | `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | Unsigned ARM64 beta | HarmonyOS phones and tablets meeting API 26 requirements |
 
-Sign and sideload it yourself. Keep the original signing key for upgrades; do not uninstall or clear data. See the [HarmonyOS beta installation guide](doc/distribution/harmonyos-reader.en.md) for instructions and limitations.
+Verify the manifest, source commit and SHA-256 from the same run, then sign and sideload it yourself. Keep the original signing key for upgrades; do not uninstall or clear data. HarmonyOS device acceptance remains pending. See the [HarmonyOS beta installation guide](doc/distribution/harmonyos-reader.en.md) for instructions and limitations.
 
 <a id="linux"></a>
 ### 3.5 Linux
@@ -234,7 +234,7 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 - **Preloading:** adjust the image preload count in Settings → Reading to prepare upcoming images and reduce waits. Loading more images also uses more data and memory.
 - **Resume:** progress stores the chapter and page, and Waterfall records the chapter you are actually reading. Ascending/descending on the details page only changes the list display.
 - **Separate reader settings:** enable device-specific or per-comic settings so you do not have to readjust them each time.
-- **Unreleased on main:** lock the reader menu from its toolbar and unlock with the small edge lock; page turns, scrolling, and zoom remain available. Vertical Continuous and Waterfall add Crop white side borders, off by default. Turning it off restores the complete display; original files, downloads, and exports remain intact. See [side margins and cropping](doc/user/reader_width.en.md).
+- **v1.18.4:** lock the reader menu from its toolbar and unlock with the small edge lock; page turns, scrolling, and zoom remain available. Vertical Continuous and Waterfall provide Crop white side borders, off by default. Turning it off restores the complete display; original files, downloads, and exports remain intact. See [side margins and cropping](doc/user/reader_width.en.md).
 
 | Single-page view | Split double-page view |
 |---|---|
@@ -257,7 +257,7 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 <a id="favorites-read-later-and-update-tracking"></a>
 ### 5.4 Favorites, Read Later, and update tracking
 
-`v1.18.4-rc.1` provides Select comics in the wide-screen toolbar or narrow-screen More menu and adds Sort subfolders. Unreleased improvements on main put Select All, Invert Selection, and Deselect in the toolbar when space permits and let desktop Escape exit selection or search. The comic-detail favorite panel uses the full available height and keeps New Folder on the right of its fixed toolbar. See [favorite folders and bulk actions](doc/user/favorite_folders.en.md).
+`v1.18.4` provides Select comics in the wide-screen toolbar or narrow-screen More menu and adds Sort subfolders. Select All, Invert Selection, and Deselect appear in the toolbar when space permits, and desktop Escape exits selection or search. The comic-detail favorite panel uses the full available height and keeps New Folder on the right of its fixed toolbar. See [favorite folders and bulk actions](doc/user/favorite_folders.en.md).
 
 - **Favorites:** tap Favorite on the details page to open the panel and pick a local folder or the source account (extension-dependent). The favorites page supports list and cover-gallery layouts (auto or 2–6 columns).
 - **Quick Favorite:** long-press Favorite on the details page to add the comic directly to the selected local folder, which defaults to the Follow Updates folder. Change the target in Settings → Local Favorites → Quick Favorite.
@@ -304,9 +304,9 @@ Remote CBZ/ZIP/7Z/CB7 archives must be extracted on the server or restored local
 <a id="keyword-blocking"></a>
 ### 5.8 Keyword blocking
 
-Manage comic and comment keywords separately in **Settings → Explore**. The unreleased version on `main` adds **Contains text**, **Whole word**, **Exact tag**, and per-rule case settings. Try sample text before saving, or click a comic list's hidden count to view reasons and edit a rule. **Whole word** is recommended for short abbreviations such as `BL` to avoid matching `black`; existing rules retain their original behavior.
+Manage comic and comment keywords separately in **Settings → Explore**. `v1.18.4` provides **Contains text**, **Whole word**, **Exact tag**, and per-rule case settings. Try sample text before saving, or click a comic list's hidden count to view reasons and edit a rule. **Whole word** is recommended for short abbreviations such as `BL` to avoid matching `black`; existing rules retain their original behavior.
 
-See [keyword blocking and match reasons](doc/user/keyword_blocking.en.md) for examples and backup compatibility. The current stable release, `v1.18.3`, does not yet include these new controls.
+See [keyword blocking and match reasons](doc/user/keyword_blocking.en.md) for examples and backup compatibility.
 
 <a id="developing-comic-sources"></a>
 ## 6. Developing comic sources
@@ -358,7 +358,7 @@ Run `winget upgrade --id CyrilPeng.VeneraNext --exact`. Public-source availabili
 ## 8. Developer resources
 
 - [Build and Development](doc/development/build.en.md): Flutter/Rust, locked dependencies, tests, and releases.
-- [HarmonyOS Release Builds](doc/development/harmonyos_releases.en.md): pinned branch source, independent SDK, unsigned HAP and publication gates.
+- [HarmonyOS Independent Beta Builds](doc/development/harmonyos_releases.en.md): exact mainline source, independent SDK, unsigned HAP and device acceptance.
 - [Contributing](CONTRIBUTING.en.md) · [Dependency Governance](doc/development/dependencies.en.md).
 - [Windows Distribution](doc/distribution/windows.en.md) · [Headless Mode](doc/user/headless.en.md).
 - [Security Policy](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Documentation Index](doc/README.en.md).

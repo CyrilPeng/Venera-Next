@@ -172,6 +172,17 @@ class ValidateReleaseTests(unittest.TestCase):
                 finally:
                     target.write_bytes(original)
 
+    def test_independent_beta_notes_link_to_the_separate_build_workflow(self):
+        policy = self.root / '.github/harmonyos-next.json'
+        policy.parent.mkdir()
+        policy.write_text('{"guide_delivery": "repository", "distribution": "independent_beta"}', encoding='utf-8')
+        target = self.root / 'notes.md'
+        self.invoke('--write-notes', str(target), ref='refs/tags/v1.2.3', ref_type='tag')
+        notes = target.read_text(encoding='utf-8')
+        self.assertIn('/actions/workflows/harmonyos-release.yml', notes)
+        self.assertIn('不包含 HAP', notes)
+        self.assertIn('设备验收仍待完成', notes)
+
     def test_complete_build_keeps_branch_and_release_paths_separate(self):
         workflow = (ROOT / ".github/workflows/main.yml").read_text(encoding="utf-8")
         metadata = re.search(
@@ -191,9 +202,13 @@ class ValidateReleaseTests(unittest.TestCase):
         )
         release = workflow.split("\n  Release:\n", 1)[1]
         self.assertIn(
-            "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
+            "always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
             release,
         )
+        for job in ('Release_Metadata', 'Quality', 'Build'):
+            self.assertIn(f"needs.{job}.result == 'success'", release)
+        self.assertIn("bundled_harmonyos == 'true' && needs.HarmonyOS.result == 'success'", release)
+        self.assertIn("bundled_harmonyos == 'false' && needs.HarmonyOS.result == 'skipped'", release)
         self.assertIn(
             "run: python3 .github/scripts/validate_release.py --write-notes", release
         )

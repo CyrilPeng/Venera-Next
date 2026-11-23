@@ -44,24 +44,45 @@ void main() {
       .cast<YamlMap>()
       .toList();
 
-  test('release waits for quality, every platform and the mandatory HAP', () {
-    expect(needs(release), {
-      'Release_Metadata',
-      'Quality',
-      'Build',
-      'HarmonyOS',
-    });
-    final hap = mainJobs['HarmonyOS'] as YamlMap;
-    expect(needs(hap), {'Release_Metadata', 'Quality'});
-    expect(hap['uses'], './.github/workflows/harmonyos-release.yml');
-    expect(hap.containsKey('if'), isFalse);
-    expect(hap.containsKey('continue-on-error'), isFalse);
-    expect((mainJobs['Build'] as YamlMap)['with']['quality_checked'], isTrue);
-    expect(
-      (main['on'] as YamlMap).keys,
-      containsAll(['push', 'workflow_dispatch']),
-    );
-  });
+  test(
+    'release waits for every required gate under its committed distribution',
+    () {
+      expect(needs(release), {
+        'Release_Metadata',
+        'Quality',
+        'Build',
+        'HarmonyOS',
+      });
+      final hap = mainJobs['HarmonyOS'] as YamlMap;
+      expect(needs(hap), {'Release_Metadata', 'Quality'});
+      expect(hap['uses'], './.github/workflows/harmonyos-release.yml');
+      expect(
+        hap['if'],
+        "needs.Release_Metadata.outputs.bundled_harmonyos == 'true'",
+      );
+      expect(hap.containsKey('continue-on-error'), isFalse);
+      final condition = (release['if'] as String).replaceAll(
+        RegExp(r'\s+'),
+        ' ',
+      );
+      expect(condition, contains("always() && github.event_name == 'push'"));
+      expect(condition, contains("startsWith(github.ref, 'refs/tags/v')"));
+      for (final job in ['Release_Metadata', 'Quality', 'Build']) {
+        expect(condition, contains("needs.$job.result == 'success'"));
+      }
+      expect(
+        condition,
+        contains(
+          "(needs.Release_Metadata.outputs.bundled_harmonyos == 'true' && needs.HarmonyOS.result == 'success') || (needs.Release_Metadata.outputs.bundled_harmonyos == 'false' && needs.HarmonyOS.result == 'skipped')",
+        ),
+      );
+      expect((mainJobs['Build'] as YamlMap)['with']['quality_checked'], isTrue);
+      expect(
+        (main['on'] as YamlMap).keys,
+        containsAll(['push', 'workflow_dispatch']),
+      );
+    },
+  );
 
   test(
     'release source, HAP source, notes and collected assets remain bound',
