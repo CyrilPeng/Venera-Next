@@ -342,6 +342,7 @@ class LoadingDialogController {
     if (closed) {
       return;
     }
+    _progress = value;
     _serProgress?.call(value);
   }
 
@@ -349,6 +350,7 @@ class LoadingDialogController {
     if (closed) {
       return;
     }
+    _message = message;
     _setMessage?.call(message);
   }
 }

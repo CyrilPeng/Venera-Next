@@ -52,6 +52,12 @@ class _ReaderWithLoadingState
   }
 
   @override
+  Widget buildFrame(BuildContext context, Widget child) => Material(
+    color: Theme.of(context).colorScheme.surface,
+    child: SizedBox.expand(child: child),
+  );
+
+  @override
   Widget buildContent(BuildContext context, ReaderProps data) {
     return Reader(
       onClosed: ReaderSessionScope.onClosedOf(context),

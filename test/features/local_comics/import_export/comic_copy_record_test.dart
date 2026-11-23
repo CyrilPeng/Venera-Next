@@ -1,7 +1,9 @@
 import 'legacy_copy_fixture.dart';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as path;
 import 'package:venera_next/features/local_comics/import_export/comic_copy_record.dart';
 import 'package:venera_next/features/local_comics/import_export/comic_directory_copy.dart';
 import 'package:venera_next/foundation/file_system.dart';
@@ -38,6 +40,125 @@ void main() {
     Directory('${source.path}/empty').createSync();
     final destination = Directory('${root.path}/resumable')..createSync();
     return ComicCopyRecord.prepare(destination, source: source);
+  }
+
+  test(
+    'a thousand-page copy uses bounded listings and checks missing bytes only when copied',
+    () async {
+      const pageCount = 1000;
+      final source = Directory('${root.path}/large-source')..createSync();
+      final destination = Directory('${root.path}/large-output')..createSync();
+      for (var index = 0; index < pageCount; index++) {
+        File(
+          '${source.path}/${index.toString().padLeft(4, '0')}.jpg',
+        ).writeAsStringSync('page $index');
+      }
+      var listings = 0;
+      var listedEntries = 0;
+      var sourceReads = 0;
+      final parent = Zone.current;
+      File countedFile(File file) => path.isWithin(source.path, file.path)
+          ? _CountedSourceFile(file, () => sourceReads++)
+          : file;
+      final progress = <({ComicCopyStage stage, int current, int total})>[];
+      await IOOverrides.runZoned(
+        () async {
+          final pending = await ComicCopyRecord.prepare(
+            Directory(destination.path),
+            source: Directory(source.path),
+          );
+          await pending.resume(
+            onProgress: (stage, current, total) =>
+                progress.add((stage: stage, current: current, total: total)),
+          );
+        },
+        createDirectory: (value) =>
+            _CountedDirectory(parent.run(() => Directory(value)), (entries) {
+              listings++;
+              listedEntries += entries.length;
+              return entries
+                  .map((entry) => entry is File ? countedFile(entry) : entry)
+                  .toList();
+            }),
+        createFile: (value) => countedFile(parent.run(() => File(value))),
+      );
+      expect(listings, lessThanOrEqualTo(8));
+      expect(listedEntries, lessThanOrEqualTo(pageCount * 8));
+      expect(sourceReads, pageCount * 2);
+      await ComicCopyRecord.read(destination).verifyComplete();
+      expect(source.listSync(), hasLength(pageCount));
+      for (final stage in [ComicCopyStage.copying, ComicCopyStage.verifying]) {
+        final updates = progress.where((update) => update.stage == stage);
+        expect(updates.first.current, 0);
+        expect(updates.last.current, pageCount);
+        expect(updates.every((update) => update.total == pageCount), isTrue);
+      }
+    },
+  );
+
+  for (final conflict in ['directory', 'case alias']) {
+    test(
+      'resume preserves a staging $conflict introduced after checking',
+      () async {
+        final pending = await resumable();
+        final name = conflict == 'case alias'
+            ? ComicCopyRecord.stagingName.toUpperCase()
+            : ComicCopyRecord.stagingName;
+        final stagingPath = '${pending.directory.path}/$name';
+        await expectLater(
+          pending.resume(
+            onProgress: (stage, current, total) {
+              if (stage != ComicCopyStage.copying || current != 0) return;
+              if (conflict == 'directory') {
+                Directory(stagingPath).createSync();
+              } else {
+                File(stagingPath).writeAsStringSync('keep unrelated file');
+              }
+            },
+          ),
+          throwsA(anyOf(isA<StateError>(), isA<FileSystemException>())),
+        );
+        expect(pending.hasCompletion, isFalse);
+        if (conflict == 'directory') {
+          expect(Directory(stagingPath).existsSync(), isTrue);
+        } else {
+          expect(File(stagingPath).readAsStringSync(), 'keep unrelated file');
+        }
+      },
+    );
+  }
+
+  test('resume checks source bytes for pages already copied', () async {
+    final pending = await resumable();
+    File('${pending.directory.path}/1.jpg').writeAsStringSync('first page');
+    File('${root.path}/source/1.jpg').writeAsStringSync('other page');
+    await expectLater(pending.resume(), throwsStateError);
+    expect(pending.hasCompletion, isFalse);
+    expect(
+      File('${pending.directory.path}/1.jpg').readAsStringSync(),
+      'first page',
+    );
+    expect(
+      File('${pending.directory.path}/chapter/2.jpg').existsSync(),
+      isFalse,
+    );
+  });
+
+  for (final missing in [false, true]) {
+    test(
+      'resume rejects source tree changes before copying; missing=$missing',
+      () async {
+        final pending = await resumable();
+        if (missing) {
+          File('${root.path}/source/1.jpg').deleteSync();
+        } else {
+          File('${root.path}/source/extra.jpg').writeAsStringSync('extra page');
+        }
+        await expectLater(pending.resume(), throwsStateError);
+        expect(pending.hasCompletion, isFalse);
+        expect(File('${pending.directory.path}/1.jpg').existsSync(), isFalse);
+      },
+    );
   }
 
   test(
@@ -307,4 +428,39 @@ void main() {
     );
     await expectLater(target.listSync(), isEmpty);
   });
+}
+
+class _CountedDirectory extends Fake implements Directory {
+  _CountedDirectory(this.actual, this.onList);
+  final Directory actual;
+  final List<FileSystemEntity> Function(List<FileSystemEntity>) onList;
+  @override
+  String get path => actual.path;
+  @override
+  String resolveSymbolicLinksSync() => actual.resolveSymbolicLinksSync();
+  @override
+  List<FileSystemEntity> listSync({
+    bool recursive = false,
+    bool followLinks = true,
+  }) => onList(actual.listSync(recursive: recursive, followLinks: followLinks));
+  @override
+  void createSync({bool recursive = false}) =>
+      actual.createSync(recursive: recursive);
+  @override
+  bool existsSync() => actual.existsSync();
+}
+
+class _CountedSourceFile extends Fake implements File {
+  _CountedSourceFile(this.actual, this.onRead);
+  final File actual;
+  final void Function() onRead;
+  @override
+  String get path => actual.path;
+  @override
+  int lengthSync() => actual.lengthSync();
+  @override
+  Uint8List readAsBytesSync() {
+    onRead();
+    return actual.readAsBytesSync();
+  }
 }

@@ -526,9 +526,19 @@ void main() {
         appdata.settings['showSingleImageOnFirstPage'] = false;
         await fixture.mount(tester, pushed: false);
         final reader = fixture.readerKey.currentState!;
+        final shell = tester.state<ReaderScaffoldState>(
+          find.byType(ReaderScaffold),
+        );
         expect(reader.pageLayout.imageRange(1, 3), (0, 2));
         expect(await reader.createImageFavoriteQuery()!.read(), isNull);
-        expect(find.byTooltip('Select an image to collect'), findsOneWidget);
+        shell.openOrClose();
+        await tester.pumpAndSettle();
+        expect(
+          find.byTooltip('Select an image to collect').hitTestable(),
+          findsOneWidget,
+        );
+        shell.openOrClose();
+        await tester.pumpAndSettle();
         await readerFixtureImageOwner!.toggle(
           ImageFavoriteInput(
             id: 'book',
@@ -551,7 +561,13 @@ void main() {
         await tester.pumpAndSettle();
         expect(reader.pageLayout.imageRange(reader.page, 3), (2, 3));
         expect(await reader.createImageFavoriteQuery()!.read(), isTrue);
-        expect(find.byTooltip('Uncollect the image'), findsOneWidget);
+        expect(shell.isOpen, isFalse);
+        shell.openOrClose();
+        await tester.pumpAndSettle();
+        expect(
+          find.byTooltip('Uncollect the image').hitTestable(),
+          findsOneWidget,
+        );
         expect(tester.takeException(), isNull);
       } finally {
         await fixture.dispose(tester);

@@ -559,6 +559,7 @@
     "features/comic_widgets/comic_list.dart",
     "features/comic_widgets/comic_tile.dart",
     "features/comic_widgets/comic_widgets.dart",
+    "features/comic_widgets/cover_hero_ids.dart",
     "features/comic_widgets/keyword_hidden_notice.dart",
     "features/comic_widgets/rating.dart",
     "features/discovery/categories_page.dart",

@@ -35,6 +35,7 @@ class FollowUpdatesWidget extends StatefulWidget {
 }
 
 class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
+  final _heroIds = ComicCoverHeroIds();
   String? _repairing;
   FollowUpdatesRuntime? _runtime;
   HistoryManager? _history;
@@ -104,6 +105,7 @@ class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
         manager: FavoritesScope.read(context),
       );
     }
+    _heroIds.retain(previewComics);
   }
 
   void updateCount() {
@@ -176,7 +178,7 @@ class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
                     itemCount: previewComics.length,
                     itemBuilder: (context, index) {
                       final comic = previewComics[index];
-                      final heroID = comic.id.hashCode;
+                      final heroID = _heroIds.forComic(comic);
                       return SimpleComicTile(
                         comic: comic,
                         heroID: heroID,

@@ -65,18 +65,23 @@ void main() {
     start();
     now = 1100000;
     frames!([
-      _frame(10000, 1000, start: 100500),
+      _frame(1000, 1000, start: 100500),
       _frame(10000, 1000, start: 200500),
     ]);
     diagnostics.stop(ReaderDiagnosticStop.review);
     final data = report();
     final summary = data['retainedFrameSamples'] as Map;
-    expect(data['schema'], 2);
+    expect(data['schema'], 3);
     expect(summary['ui']['count'], 2);
     expect(summary['slowest'], [
-      [1000000, 10000, 1000, 11100, 500, 600],
       [1000000, 10000, 1000, 11100, 100500, 100600],
     ]);
+    expect(data['frameSamples'], [
+      [1000000, 1000, 1000, 2100, 500, 600],
+      [1000000, 10000, 1000, 11100, 100500, 100600],
+    ]);
+    expect(data['retainedFrameCount'], 2);
+    expect(data['omittedFrameSamplesForCopy'], 0);
     expect(summary['slowestColumns'], [
       'receivedAtUs',
       'uiUs',
@@ -85,6 +90,7 @@ void main() {
       'vsyncStartUs',
       'buildStartUs',
     ]);
+    expect(data['frameSampleColumns'], summary['slowestColumns']);
   });
 
   test('disabled capture registers no callbacks and reads no clock', () {
@@ -93,6 +99,14 @@ void main() {
       isNull,
     );
     diagnostics.recordCache(42, pending: false, keepAlive: false, live: false);
+    diagnostics.recordNavigation(
+      ReaderDiagnosticNavigation.volumeNext,
+      page: 1,
+    );
+    expect(
+      diagnostics.beginPageTurn(page: 1, targetPage: 2, chapter: 1),
+      isNull,
+    );
     expect(diagnostics.hasCapture, isFalse);
     expect(attaches, 0);
     expect(detaches, 0);
@@ -160,13 +174,20 @@ void main() {
         1,
         ReaderDiagnosticStage.codecInitWait,
       )!;
+      final oldTurn = diagnostics.beginPageTurn(
+        page: 1,
+        targetPage: 2,
+        chapter: 1,
+      )!;
       diagnostics.stop(ReaderDiagnosticStop.background);
       expect(report()['inFlightStagesAtStop'], 1);
       old.finish();
       expect(report()['imageEvents'], isEmpty);
       start();
       old.finish();
+      oldTurn.finish(page: 2, viewportPage: 2);
       expect(report()['imageEvents'], isEmpty);
+      expect(report()['navigationEvents'], isEmpty);
       final pending = diagnostics.beginImageSpan(
         2,
         ReaderDiagnosticStage.firstDecodeWait,
@@ -202,6 +223,7 @@ void main() {
         maxEvents: 3,
         maxFrames: 2,
         maxImages: 2,
+        maxNavigationEvents: 2,
         nowMicros: () => now,
         attachTimings: (callback) => frames = callback,
         detachTimings: (_) {},
@@ -217,11 +239,21 @@ void main() {
       }
       diagnostics.recordCache(3, pending: false, keepAlive: false, live: false);
       frames!([_frame(1, 1), _frame(2, 2), _frame(3, 3)]);
+      for (var page = 1; page <= 3; page++) {
+        diagnostics.recordNavigation(
+          ReaderDiagnosticNavigation.volumeNext,
+          page: page,
+          targetPage: page + 1,
+        );
+      }
       diagnostics.stop(ReaderDiagnosticStop.review);
       final data = report();
       expect(data['imageEvents'], hasLength(3));
       expect(data['droppedEvents'], 2);
       expect(data['droppedFrames'], 1);
+      expect(data['frameSamples'], hasLength(2));
+      expect(data['navigationEvents'].map((event) => event['page']), [2, 3]);
+      expect(data['droppedNavigationEvents'], 1);
       expect(data['ignoredImageLookups'], 1);
       expect(data['retainedFrameSamples']['ui']['count'], 2);
       expect(data['configuration']['appVersion'], 'unknown');
@@ -279,9 +311,18 @@ void main() {
               height: 0x7fffffffffffffff,
             );
         now += 100;
+        diagnostics.recordNavigation(
+          ReaderDiagnosticNavigation.viewport,
+          page: i + 1,
+          viewportPage: i + 1.25,
+          scrolling: true,
+        );
       }
       frames!(
-        List.generate(diagnostics.maxFrames, (_) => _frame(50000, 50000)),
+        List.generate(
+          diagnostics.maxFrames,
+          (i) => _frame(50000, 50000, start: i * 8333),
+        ),
       );
       diagnostics.stop(ReaderDiagnosticStop.review);
       final encoded = diagnostics.exportJson();
@@ -307,6 +348,33 @@ void main() {
         diagnostics.maxFrames,
       );
       expect(data['retainedFrameSamples']['slowest'], hasLength(40));
+      expect(data['omittedFrameSamplesForCopy'], greaterThan(0));
+      expect(
+        (data['frameSamples'] as List).length +
+            (data['omittedFrameSamplesForCopy'] as int),
+        diagnostics.maxFrames,
+      );
+      expect(
+        (data['navigationEvents'] as List).length +
+            (data['omittedNavigationEventsForCopy'] as int),
+        diagnostics.maxNavigationEvents,
+      );
+      final complete =
+          jsonDecode(diagnostics.exportJson(complete: true)) as Map;
+      expect(complete['frameSamples'], hasLength(diagnostics.maxFrames));
+      expect(complete['imageEvents'], hasLength(diagnostics.maxEvents));
+      expect(
+        complete['navigationEvents'],
+        hasLength(diagnostics.maxNavigationEvents),
+      );
+      expect(complete['omittedEventsForCopy'], 0);
+      expect(complete['omittedFrameSamplesForCopy'], 0);
+      expect(complete['omittedNavigationEventsForCopy'], 0);
+      expect(complete['frameSamples'].first[4], 0);
+      expect(
+        complete['frameSamples'].last[4],
+        (diagnostics.maxFrames - 1) * 8333,
+      );
       expect(
         diagnostics.exportJson(),
         encoded,
