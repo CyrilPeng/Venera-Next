@@ -57,13 +57,16 @@ jobs:
           run-id: ${{ inputs.source_run }}
           github-token: ${{ github.token }}
       - name: 收集原构建安装包与 Android 清单
+        env:
+          BUNDLED_HARMONYOS: ${{ steps.source.outputs.bundled_harmonyos }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import sys
+          import os, sys
           sys.path.insert(0, 'tooling/.github/scripts')
           from resume_release import collect_artifacts
-          collect_artifacts(Path('original-artifacts'), Path('outputs'))
+          collect_artifacts(Path('original-artifacts'), Path('outputs'),
+                            bundled_harmonyos=os.environ['BUNDLED_HARMONYOS'] == 'true')
           PY
       - name: 核验并复用全部原包，公开后复核
         run: |

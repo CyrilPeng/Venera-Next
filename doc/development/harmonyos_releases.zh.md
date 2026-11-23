@@ -10,39 +10,39 @@ PR 校验使用 Actions 的准确合并候选 SHA，push 和手动构建使用�
 
 `.github/workflows/harmonyos-experiment.yml` 监听主线相关源码、依赖、工具和发布配置变化，复用 `harmonyos-release.yml` 的完整阅读器构建。保持独立 SDK 目录、受控 OH lock、原生交叉编译、严格分析、宿主回归、真实 API 26 HAP、完整资产及原生导出审计。生成器仅修改生成工程与下载后的覆盖层，不修改官方 Flutter、共享 Pub cache 或主线根锁。
 
-## 冻结的 244 与随版分发
+## 独立 Beta 与历史随版策略
 
 244 的 schema 1 `.github/harmonyos-release.json`、固定 Git 输入和历史资产保留。`harmonyos-frozen-244` 归档标签保留原来源的可达性；`harmonyos-branch-final-245` 保存最后一次双分支候选。后续开发只使用 `main`。旧 schema 2 解析保留用于历史验证，当前主线使用 schema 3。
 
-维护者于 2026-11-07 明确要求此后每次发包都包含鸿蒙版，主线配置已启用 `release_enabled: true`。候选版和正式版均必须重新构建同提交的未签名 ARM64 测试版 HAP，并携带该提交配置要求的全部鸿蒙分发资产；不能只发布其他平台。发布开关在标签元数据阶段检查，禁用时立即阻止整次发布。
+从 `v1.18.4+253` 起，维护者采用独立 Beta 分发，schema 3 配置明确设置 `distribution: independent_beta`，保留 `release_enabled: true`。普通正式 Release 只包含其他平台，鸿蒙由 `harmonyos-release.yml` 从准确主线提交生成未签名 ARM64 HAP 和验证附件。独立分发不构成鸿蒙稳定版或真机验收通过。
 
-开关授权的是经过源码、构建及资产审核的未签名测试版分发。它不表示设备签装、覆盖升级或功能验收已完成；manifest 中的 `signed: false`、`runtime_verified: false` 与安装指南继续准确记录验证范围。schema 2／3 的预览或未绑定实际 tag 的产物均拒绝 Release 验证，归档标签也不会触发 `v*` 发布。
+未声明 `distribution` 的历史配置默认 `bundled`，保留该提交的 HAP、伴随文件和设备验收门禁；显式 `bundled` 同样处理。恢复旧标签读取原提交策略，不用新策略豁免旧 HAP。未知值、旧 schema 冒用独立分发或来源不一致均拒绝。manifest 中的 `signed: false`、`runtime_verified: false` 继续准确记录验证范围；预览只作为 Actions Beta 产物，归档标签不会触发 `v*` 发布。
 
 源码及八个项目包摘要使用已提交的 canonical Git blob；七个受管原生库、PNG／7z 导出、第三方 NOTICE 和全部应用资产继续参与审计。适用的 QuickJS 核心修复固定到 `f5a1f20`，当前来源与替换条件见[依赖决策摘要](dependency_audit.zh.md)。
 
 ## 版本与产物
 
-本轮 `v1.18.4-rc.3` 使用构建号 **252**，包含当前页调光、收藏刷新与搜索 Esc 修复，以及 schema 2 阅读慢帧诊断。HAP 与其他平台从准确的新标签重新构建，沿用现有包名和桌面名称。三项鸿蒙附件、标签下的中英文安装指南及 `runtime_acceptance: stable_required` 继续参与发布核验；`signed: false`、`runtime_verified: false` 继续记录构建与真机验收的边界。原设备分页、裁剪和封面反馈仍按各自 issue 跟进，完整安排见[当前公开版本与验收](release_readiness.md#当前公开版本)。
+本轮 `v1.18.4` 使用构建号 **253**，汇总三个 RC 和后续反馈修复，阅读诊断为 schema 3。普通正式版从准确标签重新构建；鸿蒙同源 Beta 由独立工作流生成，沿用现有包名、桌面名称和未验证标记。#178、#188 已获原提出者确认，#129、#152 按 72 小时规则接受；已知限制与完整安排见[当前公开版本与验收](release_readiness.md#当前公开版本)。
 
 发布工作流校验调用方的 Git 提交、版本、构建号、运行号及 changelog 摘要。只有独占生成工程被写入调用方版本，源 checkout 不被改写。原生版本名为三段数字，Dart 版本保留 RC 后缀；构建号沿用主线并递增。第一个公开的主线随版 HAP 为 `v1.18.3-rc.3`，构建号 **248**；RC1／RC2 保留已构建的标签与 Actions 记录，均未公开 Release。主线 schema 3 的首个允许构建号为 245，旧 244 来源只保留历史验证；不回填 `v1.18.2` 等旧 Release。
 
 正式版 `v1.18.3` 使用构建号 **249**，与其他平台从同一正式版提交重新构建；候选验收产物不重命名为正式包。正式版仍随包提供未签名 Beta HAP 和四项伴随文件，继续保留尚未完成的鸿蒙真机签装、阅读、真实数据升级与续签验收边界。
 
-从下一次发布起，主线 schema 3 配置使用 `guide_delivery: repository`，Release 必须包含三项鸿蒙附件：
+主线 schema 3 配置使用 `guide_delivery: repository`，独立 Beta 的 `harmonyos-release` artifact 必须包含三项文件；历史随版策略则将其放在 Release：
 
 - `VeneraNext-版本-harmonyos-arm64-unsigned.hap`
 - `harmonyos-manifest.json`
 - `harmonyos-SHA256SUMS`
 
-中英文安装指南维护在 `doc/distribution/harmonyos-reader.*.md`，README 使用相对链接，Release 正文自动链接到该次发布 tag 下的指南。指南必须存在于准确源码提交且内容非空；校验值随 HAP 生成，`harmonyos-SHA256SUMS` 继续放在 Release。
+中英文安装指南维护在 `doc/distribution/harmonyos-reader.*.md`，README 使用相对链接，独立分发的正式版说明链接到 Beta 工作流。构建指南必须存在于准确源码提交且内容非空；校验值随 HAP 生成，`harmonyos-SHA256SUMS` 与其放在同一 artifact。
 
 未声明 `guide_delivery` 的历史配置继续要求上述三项及 `harmonyos-install.zh.md`、`harmonyos-install.en.md`，并逐字核对指南附件与原提交。`v1.18.3` 等已发布版本保留原五附件及标签；新策略不追改历史资产。未知配置值直接拒绝。
 
-HAP 采用 `com.github.cyrilpeng.veneranext.harmony` 包名和 `VeneraNext (HarmonyOS Beta)` 显示名，最低／目标 SDK 为 API 26。复核真实 `module.json`、AArch64 ELF、原生库精确摘要、完整 Dart／资源源码清单和包内版本，安装指南来自准确构建提交。下载页须继续明确未签名及测试版身份，不能把编译通过说成真机升级或续签验收。
+HAP 采用 `com.github.cyrilpeng.veneranext.harmony` 包名和所有语言统一的 `VeneraNext` 桌面名称，最低／目标 SDK 为 API 26。复核真实 `module.json`、AArch64 ELF、原生库精确摘要、完整 Dart／资源源码清单和包内版本，安装指南来自准确构建提交。下载页继续明确未签名及测试版身份，不能把编译通过说成真机升级或续签验收。
 
 ## 发布门禁与无发布验证
 
-完整构建的 `Release` 同时依赖 Quality、原平台 Build 与 HarmonyOS。HAP 缺失、内容损坏、源码过期或摘要错误都不得 `continue-on-error`。先创建或复用草稿，再从 GitHub API 按发布提交的配置核对全部鸿蒙资产的名称、大小、上传状态和 SHA-256，并满足下述对应版本的真机验收策略；通过后才公开，公开后复核资产及已有的验收报告。任一阶段失败须查看日志，不允许静默去掉鸿蒙包后继续。
+完整构建的 `Release` 必须取得元数据、Quality 与所有普通平台 Build 成功。独立 Beta 配置只允许随版 HarmonyOS 任务明确跳过；随版配置仍要求该任务成功。草稿公开前后逐一核对普通安装包的名称、大小、上传状态和 SHA-256，独立模式拒绝 HAP、鸿蒙 companion 或设备报告进入正式版。独立 Beta 自身仍严格审核实际 HAP，缺库、内容损坏、源码过期或摘要错误均不能通过。
 
 GitHub 按标签查询的 Release 接口只返回已公开版本。草稿阶段使用鉴权发布列表的完整分页定位唯一同标签草稿，再按其数字 ID 重新读取附件；缺失、重名、状态或 ID／标签变化都停止发布。公开后改用标签接口复核，创建 Release 时显式绑定调用方源码 SHA。RC2 的 26 项附件已上传为草稿，但旧查询接口返回 404；本修复由 RC3 重新验证完整发布链路。
 
@@ -61,7 +61,7 @@ gh workflow run harmonyos-release.yml --ref main
 
 ## 准确 HAP 的真机验收
 
-从 `v1.18.4-rc.1+250` 起，schema 3 配置使用 `runtime_acceptance: stable_required`。候选版在完整源码、构建及资产审核通过后可公开供实际设备测试，尚无报告时不声称已完成真机验收；正式版必须有合格报告后才能公开。候选版若已有报告，同样严格验证，错误或失败不能忽略。历史 `required` 策略继续要求候选版和正式版均有报告，没有此字段的旧标签仍按原流程验证，不追改已发布包；未知值拒绝。
+独立 Beta 的设备验收单独进行，普通正式版不附 HAP 或设备报告，也不声称鸿蒙已完成验收。下面的报告规则继续用于准确 Beta 的设备测试和历史随版版本。历史 `v1.18.4-rc.1+250` 起的 `stable_required` 允许候选版无报告供测试，包含 HAP 的正式版仍必须有合格报告；任何已附报告严格验证。历史 `required` 要求两类版本均有报告，没有此字段的旧标签按原流程处理，不追改已发布包。
 
 构建清单继续保留 `runtime_verified: false`；独立的 `harmonyos-runtime-acceptance.json` 记录实际设备验收，不能把构建通过或候选版公开改写成真机通过。
 
@@ -81,7 +81,7 @@ HAP 工作流在完整包审核后生成单独的 `harmonyos-runtime-acceptance-
 
 除上述目录能力缺失外，每项均须为 `pass`，并填写实际操作、结果或限制的 `detail`。填写实际 `device_model`、`os_version` 与带时区的 `tested_at`；不要填占位值，不包含账号、设备标识、私人书名或签名材料。报告只证明所列设备与系统，手机、平板和不同系统仍需逐步扩大验证范围。
 
-维护者完成测试并审核报告后，上传到该版本的准确草稿或已公开候选版（示例中的版本和路径需替换；正式版报告必须绑定正式版重新构建的 HAP，不能沿用 RC 报告）：
+独立 Beta 下载该运行的 `harmonyos-runtime-acceptance-template`，完成测试后将审核报告与原始 HAP／manifest 一同保留，不上传到普通正式 Release。恢复历史随版版本时，维护者完成审核后上传到该版本的准确草稿或已公开候选版（示例中的版本和路径需替换；包含 HAP 的正式版报告必须绑定重新构建的 HAP，不能沿用 RC 报告）：
 
 ```bash
 gh release upload vX.Y.Z /path/to/harmonyos-runtime-acceptance.json --repo CyrilPeng/Venera-Next
@@ -90,7 +90,7 @@ gh run rerun RUN_ID --job RELEASE_JOB_ID --repo CyrilPeng/Venera-Next
 
 草稿补齐报告后只重跑原 run 的 `Release` 任务，使用原构建 artifacts。草稿复用时核对**所有平台**包的名称、大小和 SHA-256，拒绝新编译或替换的包；验收报告是唯一允许额外上传的文件。报告须由具有 write／maintain／admin 权限的人类维护者上传，脚本复核上传者、文件大小与摘要、准确源码和 HAP、每项结果及测试时间。错误／失败报告直接停止发布，不能以“待验收”绕过。已公开候选版补充报告后对原包运行 `verify-published`，不把公开候选版重新当作草稿发布。
 
-在 `stable_required` 策略下，候选版无报告时输出 `ready=true` 并明确设备验收仍待完成；正式版无报告时输出 `ready=false`，全部平台草稿保留，公开与 CDN 步骤跳过。旧 `required` 策略下两类版本无报告均保留草稿。合格报告通过后输出 `ready=true`，公开后再次验证已有报告内容；任务构建成功本身不代表已经公开或完成设备验收。草稿须在 Actions artifacts 保留期内（目前 14 天）完成验收并重跑；过期也保留原包，不替换已测试的包。本轮未连接鸿蒙真机，设备验收仍未完成；问题与长期外部目录评估见[跟进记录](harmonyos_releases.zh.md#长期外部漫画目录)。
+历史随版 `stable_required` 的候选版无报告时可公开并说明待验收，包含 HAP 的正式版无报告时保留草稿；旧 `required` 两类版本均保留草稿。合格报告通过后公开并再次验证，原包不能替换。独立模式的普通正式版在来源和全部普通资产验证后可公开，输出明确说明鸿蒙独立 Beta 无设备验收声明。Actions artifacts 保留 14 天，审核前另存准确原包与报告。本轮未连接鸿蒙真机，设备验收仍未完成；长期外部目录见[实施条件](#长期外部漫画目录)。
 
 ## 长期外部漫画目录
 

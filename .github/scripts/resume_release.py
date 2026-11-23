@@ -36,7 +36,7 @@ RELEASE_ARTIFACTS = {
 }
 
 
-def validate_build_run(run, jobs, run_id):
+def validate_run_identity(run, run_id):
     if (not isinstance(run, dict) or type(run.get("id")) is not int or run.get("id") != run_id
             or run.get("event") != "push" or run.get("path") != ".github/workflows/main.yml"
             or run.get("status") != "completed" or run.get("conclusion") not in ("failure", "success")
@@ -46,9 +46,21 @@ def validate_build_run(run, jobs, run_id):
             or not isinstance(run.get("repository"), dict)
             or run["repository"].get("full_name", "").lower() != release.REPOSITORY.lower()):
         raise ValueError("Recovery requires an exact completed tagged full-build run from this repository")
+
+
+def source_bundles_harmonyos(root, commit):
+    if release.NEXT_PIN not in release.tracked(root, commit):
+        return True
+    pin = json.loads(release.blob(root, commit, release.NEXT_PIN))
+    return release.bundles_harmonyos(pin)
+
+
+def validate_build_run(run, jobs, run_id, *, bundled_harmonyos=True):
+    validate_run_identity(run, run_id)
     if not isinstance(jobs, list) or any(not isinstance(job, dict) for job in jobs):
         raise ValueError("Invalid original build job inventory")
-    for name in REQUIRED_JOBS:
+    required = REQUIRED_JOBS if bundled_harmonyos else REQUIRED_JOBS - {"HarmonyOS / unsigned-hap"}
+    for name in required:
         matches = [job for job in jobs if job.get("name") == name]
         if (len(matches) != 1 or matches[0].get("status") != "completed"
                 or matches[0].get("conclusion") != "success"):
@@ -63,11 +75,13 @@ def original_build(tooling_root, run_id):
     if type(run_id) is not int or run_id <= 0:
         raise ValueError("Invalid original run ID")
     run = json.loads(release.gh("api", f"repos/{release.REPOSITORY}/actions/runs/{run_id}"))
+    validate_run_identity(run, run_id)
     pages = json.loads(release.gh("api", "--paginate", "--slurp",
                                   f"repos/{release.REPOSITORY}/actions/runs/{run_id}/jobs?filter=latest&per_page=100"))
     if not isinstance(pages, list) or any(not isinstance(page, dict) or not isinstance(page.get("jobs"), list) for page in pages):
         raise ValueError("Invalid paginated original job response")
-    validate_build_run(run, [job for page in pages for job in page["jobs"]], run_id)
+    validate_build_run(run, [job for page in pages for job in page["jobs"]], run_id,
+                       bundled_harmonyos=source_bundles_harmonyos(tooling_root, run["head_sha"]))
     head = release.git(tooling_root, "rev-parse", "HEAD").decode().strip()
     changed = release.git(tooling_root, "diff", "--name-only", "-z", run["head_sha"], head, "--")
     paths = {path.decode() for path in changed.split(b"\0") if path}
@@ -87,9 +101,10 @@ def original_environment(run):
             "GITHUB_REF_TYPE": "tag", "GITHUB_REF_NAME": run["head_branch"]}
 
 
-def collect_artifacts(downloaded, output):
+def collect_artifacts(downloaded, output, *, bundled_harmonyos=True):
     """Collect only named compiler artifacts; diagnostics cannot become packages."""
-    for name in sorted(RELEASE_ARTIFACTS):
+    required = RELEASE_ARTIFACTS if bundled_harmonyos else RELEASE_ARTIFACTS - {"harmonyos-release"}
+    for name in sorted(required):
         directory = downloaded / name
         if not directory.is_dir() or directory.is_symlink():
             raise ValueError("Missing original build artifact: " + name)
@@ -134,6 +149,7 @@ def main():
         if args.github_output:
             with args.github_output.open("a", encoding="utf-8") as output:
                 output.write(f"source_commit={run['head_sha']}\ntag={run['head_branch']}\n")
+                output.write(f"bundled_harmonyos={str(source_bundles_harmonyos(args.tooling_root, run['head_sha'])).lower()}\n")
         print(json.dumps({"run_id": run["id"], "source_commit": run["head_sha"],
                           "tag": run["head_branch"], "tooling_commit": tooling_head}))
         return
@@ -145,7 +161,7 @@ def main():
     if not notes.strip():
         raise ValueError("Empty original release notes")
     expected = release.context(args.source_root, args.source_root, original_environment(run))
-    assets = release.verify_bundle(args.artifacts, expected, args.source_root)
+    assets = release.publication_assets(args.artifacts, expected, args.source_root)
     files = release.release_file_records(args.release_files)
     remote_files = release.github_release_file_records(files)
     remote = release.read_remote_release(expected["tag"], published=False)

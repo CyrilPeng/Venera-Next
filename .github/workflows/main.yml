@@ -18,6 +18,8 @@ jobs:
   Release_Metadata:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      bundled_harmonyos: ${{ steps.harmonyos_policy.outputs.bundled_release }}
     steps:
       - uses: actions/checkout@v7
       - name: 校验发布标签元数据
@@ -27,7 +29,8 @@ jobs:
         if: github.ref_type != 'tag'
         run: python3 .github/scripts/validate_release.py --build-only
       - name: 校验同提交鸿蒙来源与随版发布开关
-        run: python3 .github/scripts/harmonyos_release.py config
+        id: harmonyos_policy
+        run: python3 .github/scripts/harmonyos_release.py config --github-output "$GITHUB_OUTPUT"
 
   Quality:
     needs: Release_Metadata
@@ -48,13 +51,23 @@ jobs:
 
   HarmonyOS:
     needs: [Release_Metadata, Quality]
+    if: needs.Release_Metadata.outputs.bundled_harmonyos == 'true'
     uses: ./.github/workflows/harmonyos-release.yml
 
   Release:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: [Release_Metadata, Quality, Build, HarmonyOS]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      ${{
+        always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') &&
+        needs.Release_Metadata.result == 'success' && needs.Quality.result == 'success' &&
+        needs.Build.result == 'success' &&
+        (
+          (needs.Release_Metadata.outputs.bundled_harmonyos == 'true' && needs.HarmonyOS.result == 'success') ||
+          (needs.Release_Metadata.outputs.bundled_harmonyos == 'false' && needs.HarmonyOS.result == 'skipped')
+        )
+      }}
     defaults:
       run:
         working-directory: release-source
@@ -78,10 +91,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/download-artifact@v8
+        if: needs.Release_Metadata.outputs.bundled_harmonyos == 'true'
         with:
           name: harmonyos-release
           path: outputs/harmonyos
       - name: 核验鸿蒙版本、源码、原生库及资产
+        if: needs.Release_Metadata.outputs.bundled_harmonyos == 'true'
         run: |
           python3 .github/scripts/harmonyos_release.py verify \
             --source-root ../harmonyos-source --artifacts ../outputs/harmonyos
@@ -174,13 +189,13 @@ jobs:
           python3 .github/scripts/harmonyos_release.py prepare-draft \
             --source-root ../harmonyos-source --artifacts ../outputs/harmonyos \
             --notes-file ../release_notes.md --release-files "${files[@]}"
-      - name: 核验草稿中鸿蒙资产的实际大小与摘要
+      - name: 核验草稿安装包的实际大小与摘要
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 .github/scripts/harmonyos_release.py verify-draft \
             --source-root ../harmonyos-source --artifacts ../outputs/harmonyos
-      - name: 核验鸿蒙验收策略，正式版缺报告时保留草稿
+      - name: 按同提交分发配置核验发布条件
         id: harmonyos_runtime
         env:
           GH_TOKEN: ${{ github.token }}
@@ -193,7 +208,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: gh release edit "${GITHUB_REF_NAME}" --draft=false
-      - name: 复核已发布鸿蒙资产
+      - name: 复核已发布安装包
         if: steps.harmonyos_runtime.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
