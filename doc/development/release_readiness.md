@@ -30,6 +30,8 @@ python .github/scripts/test_suites.py --strict-imports
 
 核对 Android 手机／TV 各 ABI、Windows、macOS、iOS、Linux x64／ARM64。资产名称、数量、大小、上传状态和 SHA-256 均与本次构建清单一致，另核验包内版本、包身份和 APK 签名／ABI。独立 Beta 的 HAP、manifest、校验附件及设备模板留在其 Actions 运行中，继续验证 ELF 导出、NOTICE 与准确来源摘要；禁止将 HAP 或鸿蒙设备报告混入普通正式版。
 
+普通安装包统一使用 `.github/scripts/release_assets.py`：各平台在可读取实际包的原生运行器上检查内容，再生成 `release-receipt-*`。Android 手机／TV 使用原签名清单；Windows 核对便携包并保留真实安装启动检查；macOS 挂载只读 DMG，iOS 读取 IPA；Linux 读取 DEB、RPM、Arch 与 AppImage 的真实内容。版本与源码资源从准确 Git blob 读取，DEB 保持既有安装目录，ARM64 字体变换和编码路径逐项核验。回执绑定源码提交、版本、构建号、运行号及实际文件摘要；汇总必须包含配置推导的完整附件和全部平台回执，不能用当前目录里的文件反推“应有附件”。
+
 发布源码 checkout 与输出目录分开，生成安装说明、解包或下载不污染受审查来源。GitHub 草稿通过鉴权列表与 Release ID 查找；草稿期不依赖仅返回公开版本的 tag 查询。公开前重新读取并核验准确草稿与全部附件，公开后重新下载核验实际资产。
 
 ## 设备报告与稳定渠道
@@ -42,6 +44,6 @@ python .github/scripts/test_suites.py --strict-imports
 
 ## 证据保留与恢复
 
-长期保留来源／版本、CI run、资产摘要、签名／来源核验、设备报告和通知回执。本地安装包副本、下载 SDK、编译缓存和临时工程可在验收完成后清理，报告先另存；CI artifacts 目前保留 14 天。
+长期保留来源／版本、CI run、资产摘要、签名／来源核验、设备报告和通知回执。本地安装包副本、下载 SDK、编译缓存和临时工程可在验收完成后清理，报告先另存；普通安装包及平台核验回执的 CI artifacts 保留 30 天，测试日志按各工作流的保留策略清理。
 
 旧测试整理、依赖审计、Issue 快照、平台实验和历史操作的原始资料保存在 [v1.18.4-rc.3 文档树](https://github.com/CyrilPeng/Venera-Next/tree/v1.18.4-rc.3/doc)。冻结鸿蒙来源与恢复标签见[历史来源](harmonyos_releases.zh.md#历史来源与恢复)。代码回滚按普通 revert 恢复同组源码、配置与锁，独立安全修复保留；回退安装前另存备份并核对数据兼容与原签名身份。

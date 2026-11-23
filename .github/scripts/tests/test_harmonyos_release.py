@@ -17,6 +17,7 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / '.github/scripts'))
 sys.path.insert(0, str(ROOT / 'tool/harmonyos'))
 from test_app_labels import label_index, label_module
 SPEC = importlib.util.spec_from_file_location('harmonyos_release', ROOT / '.github/scripts/harmonyos_release.py')

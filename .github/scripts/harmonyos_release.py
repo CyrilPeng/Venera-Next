@@ -13,6 +13,9 @@ import struct
 import subprocess
 import zipfile
 
+from release_assets import file_records as release_file_records
+from release_assets import github_file_records as github_release_file_records
+
 
 REPOSITORY = "CyrilPeng/Venera-Next"
 PIN = ".github/harmonyos-release.json"
@@ -472,32 +475,6 @@ def read_remote_release(tag, *, published, allow_missing=False):
     return remote
 
 
-def release_file_records(files):
-    records = {}
-    for path in files:
-        if not path.is_file() or path.is_symlink() or path.name in records or path.stat().st_size <= 0:
-            raise ValueError("Missing, duplicate, linked or empty release file: " + path.name)
-        digest = hashlib.sha256()
-        with path.open("rb") as stream:
-            for block in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(block)
-        records[path.name] = {"bytes": path.stat().st_size, "sha256": digest.hexdigest()}
-    if not records:
-        raise ValueError("No release files supplied")
-    return records
-
-
-def github_release_file_records(files):
-    """Map GitHub's tilde normalization without accepting ambiguous assets."""
-    records = {}
-    for name, record in files.items():
-        remote_name = name.replace("~", ".")
-        if remote_name in records:
-            raise ValueError("Release filenames collide after GitHub normalization: " + remote_name)
-        records[remote_name] = record
-    return records
-
-
 def check_draft_files(remote, expected, files):
     bundled = bundles_harmonyos(expected)
     policy = runtime_acceptance_policy(expected) if bundled else None
@@ -564,7 +541,8 @@ def verify_standard_release_files(directory, expected, remote):
     suffixes = {".ipa", ".dmg", ".apk", ".zip", ".exe", ".deb", ".rpm", ".zst", ".AppImage"}
     files = [path for path in sorted(parent.iterdir())
              if path.suffix in suffixes or (
-                 path.name.startswith("android-") and path.name.endswith("-manifest.json"))]
+                 path.name.startswith("android-") and path.name.endswith("-manifest.json"))
+             or path.name == "release-verification.json"]
     check_draft_files(remote, expected, release_file_records(files))
 
 
