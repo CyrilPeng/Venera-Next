@@ -1,7 +1,9 @@
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -156,6 +158,43 @@ class GenerateSponsorsTest(unittest.TestCase):
         self.assertEqual(first.count("Featured Studio"), 1)
         self.assertIn("<sub>置顶赞助</sub>", featured)
         self.assertIn("<sub>Featured sponsors</sub>", featured_en)
+
+    def test_generated_outputs_update_and_remove_sponsors_in_every_language(self) -> None:
+        source = sponsors.parse_source({
+            "schemaVersion": 1,
+            "sponsors": [_monthly("Featured Studio", 200, "2026-01-01")],
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            paths = {
+                Path(directory) / path.name: label
+                for path, label in sponsors.README_LABELS.items()
+            }
+            for path in paths:
+                path.write_text(
+                    "language navigation\n" + sponsors.README_START + "\n"
+                    + sponsors.README_END + "\nproject description\n",
+                    encoding="utf-8",
+                )
+            with patch.object(sponsors, "README_LABELS", paths), \
+                    patch.object(sponsors, "load_source", return_value=source) as load:
+                outputs = sponsors.generated_outputs()
+                self.assertEqual(
+                    {path.name for path in paths},
+                    {"README.md", "README.en.md", "README.de.md", "README.ja.md"},
+                )
+                for path, label in paths.items():
+                    content = outputs[path]
+                    self.assertIn(f"<sub>{label}</sub>", content)
+                    self.assertIn("Featured Studio", content)
+                    self.assertTrue(content.startswith("language navigation\n"))
+                    self.assertTrue(content.endswith("project description\n"))
+                    path.write_text(content, encoding="utf-8")
+                self.assertEqual(sponsors.generated_outputs(), outputs)
+                load.return_value = []
+                for path, content in sponsors.generated_outputs().items():
+                    if path in paths:
+                        self.assertNotIn("Featured Studio", content)
+                        self.assertIn(sponsors.README_START + "\n" + sponsors.README_END, content)
 
 
 if __name__ == "__main__":
