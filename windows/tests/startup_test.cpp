@@ -139,6 +139,65 @@ void TestStartupLog(const std::filesystem::path& directory) {
   CloseHandle(locked);
 }
 
+DWORD PropagateDiagnosticFault() {
+  __try {
+    __try {
+      RaiseException(EXCEPTION_ILLEGAL_INSTRUCTION, 0, 0, nullptr);
+    } __except (LogWindowsStartupException(GetExceptionInformation())) {
+      return ERROR_SUCCESS;
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    return GetExceptionCode();
+  }
+  return ERROR_SUCCESS;
+}
+
+void TestStartupException(const std::filesystem::path& directory) {
+  const auto crash = directory / "windows-startup-crash.log";
+  SetLastError(ERROR_INVALID_HANDLE);
+  InitializeWindowsStartupLog(directory.wstring());
+  LogWindowsStartupPlatform();
+  LogWindowsStartupStage("Diagnostic exception probe");
+  Check(GetLastError() == ERROR_INVALID_HANDLE,
+        "platform and stage logging must preserve the caller's Windows error");
+  Check(PropagateDiagnosticFault() == EXCEPTION_ILLEGAL_INSTRUCTION,
+        "diagnostics must let the original native exception propagate");
+  const auto text = ReadText(crash);
+  Check(text.find("stage=\"Diagnostic exception probe\"") != std::string::npos &&
+            text.find("exception=0xC000001D") != std::string::npos,
+        "an escaping exception must record its stage and original code");
+  Check(text.find("module=unknown") == std::string::npos &&
+            text.find("offset=0x") != std::string::npos,
+        "an image-backed exception must identify its module and relative offset");
+  Check(text.find('\\') == std::string::npos &&
+            text.find('/') == std::string::npos,
+        "fault diagnostics must not include absolute module paths");
+  ShutdownWindowsStartupLog();
+  {
+    std::ofstream file(crash, std::ios::binary | std::ios::trunc);
+    file << std::string(kStartupLogMaxBytes, 'x');
+  }
+  InitializeWindowsStartupLog(directory.wstring());
+  LogWindowsStartupStage("Exception after rotation");
+  Check(PropagateDiagnosticFault() == EXCEPTION_ILLEGAL_INSTRUCTION,
+        "rotation must not change exception propagation");
+  ShutdownWindowsStartupLog();
+  Check(std::filesystem::file_size(crash) < kStartupLogMaxBytes &&
+            std::filesystem::file_size(
+                directory / "windows-startup-crash.previous.log") ==
+                kStartupLogMaxBytes,
+        "exception logs must rotate within their size limit");
+  HANDLE locked = CreateFileW(crash.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+                              nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
+                              nullptr);
+  Check(locked != INVALID_HANDLE_VALUE, "test must lock the exception log");
+  InitializeWindowsStartupLog(directory.wstring());
+  Check(PropagateDiagnosticFault() == EXCEPTION_ILLEGAL_INSTRUCTION,
+        "an unavailable exception log must not handle the native fault");
+  ShutdownWindowsStartupLog();
+  CloseHandle(locked);
+}
+
 }  // namespace
 
 int main() {
@@ -149,8 +208,11 @@ int main() {
   // No Dart entry point or application data is loaded by these native tests.
   TestStartupResults(unique_name);
   TestStartupLog(directory);
+  TestStartupException(directory);
   std::filesystem::remove(directory / "windows-startup.log");
   std::filesystem::remove(directory / "windows-startup.previous.log");
+  std::filesystem::remove(directory / "windows-startup-crash.log");
+  std::filesystem::remove(directory / "windows-startup-crash.previous.log");
   std::filesystem::remove(directory);
   std::cout << "Windows startup and log regression tests passed.\n";
   return EXIT_SUCCESS;

@@ -63,9 +63,9 @@ void main() {
   }
 
   testWidgets(
-    'waterfall hit preserves the displayed chapter and duplicate source index',
+    'waterfall image and margin hits preserve the displayed chapter and duplicate source index',
     (tester) async {
-      final fixture = _Fixture(shortPages: true);
+      final fixture = _Fixture(shortPages: true, sideMargin: 20);
       try {
         await fixture.mount(tester);
         for (var i = 0; i < 20 && !fixture.loads.contains(2); i++) {
@@ -106,10 +106,32 @@ void main() {
         expect(state.getImageIndexByOffset(point), 2);
         await tester.runAsync(() => state.getImageByOffset(point));
         expect(fixture.reads.last.chapterId, 'id-1');
+        final reader = tester.getRect(find.byType(ReaderContinuousView));
+        for (final (image, chapter, index) in [
+          (current, 'id-1', 2),
+          (next, 'id-2', null),
+        ]) {
+          final imageBounds = tester.getRect(find.byWidget(image.widget));
+          for (final x in [reader.left + 4, reader.right - 4]) {
+            final marginPoint = Offset(x, imageBounds.center.dy);
+            expect(reader.contains(marginPoint), isTrue);
+            expect(imageBounds.contains(marginPoint), isFalse);
+            expect(state.getImageIndexByOffset(marginPoint), index);
+            await tester.runAsync(() => state.getImageByOffset(marginPoint));
+            expect(fixture.reads.last.chapterId, chapter);
+            expect(fixture.reads.last.imageKey, fixture.imageKey);
+          }
+        }
+        final divider = tester.getCenter(find.text('Continue to Title 2'));
+        expect(await state.getImageByOffset(divider), isNull);
+        expect(state.getImageIndexByOffset(divider), isNull);
+        final outside = Offset(reader.left - 4, point.dy);
+        expect(await state.getImageByOffset(outside), isNull);
+        expect(state.getImageIndexByOffset(outside), isNull);
         await tester.pumpWidget(const SizedBox());
         expect(await state.getImageByOffset(point), isNull);
         expect(state.getImageIndexByOffset(point), isNull);
-        expect(fixture.reads, hasLength(2));
+        expect(fixture.reads, hasLength(6));
       } finally {
         await fixture.dispose(tester);
       }
@@ -364,6 +386,7 @@ class _Fixture {
   _Fixture({
     int chapter = 1,
     this.shortPages = false,
+    this.sideMargin = 0,
     this.size = const Size(800, 600),
     this.textScale = 1.0,
   }) {
@@ -383,6 +406,7 @@ class _Fixture {
 
   final directory = Directory.systemTemp.createTempSync('continuous-owner-');
   final bool shortPages;
+  final double sideMargin;
   final Size size;
   final double textScale;
   var comicId = 'book';
@@ -435,7 +459,7 @@ class _Fixture {
           invertSplit: false,
           scrollSpeed: 1,
           limitImageWidth: false,
-          sideMargin: 0,
+          sideMargin: sideMargin,
           doubleTapCollect: false,
           centerLongPressZoom: true,
           sourceKey: null,
