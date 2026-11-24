@@ -214,6 +214,19 @@ try {
         return $primary.MainWindowHandle -ne [IntPtr]::Zero -and
             (Has-StartupEvent $primary.Id 'First Flutter frame rendered')
     } 'First launch did not produce a window and a Flutter frame.' 60
+    foreach ($stage in @(
+        'Runtime platform process=', 'COM initialized',
+        'Preparing Flutter project', 'Reading entrypoint arguments',
+        'Constructing Flutter window', 'Looking for existing window',
+        'Registering window class', 'Locating display monitor',
+        'Querying display DPI', 'Display DPI=', 'Creating native window',
+        'Native window created', 'Initializing native window theme',
+        'Creating Flutter engine and view', 'Native plugins registered'
+    )) {
+        if (-not (Has-StartupEvent $primary.Id $stage)) {
+            throw "First launch did not record its startup stage: $stage"
+        }
+    }
     $watch = [Diagnostics.Stopwatch]::StartNew()
     while ($watch.Elapsed.TotalSeconds -lt 12) {
         if ($primary.HasExited) { throw 'The primary instance exited during the startup observation period.' }
@@ -267,8 +280,14 @@ try {
         }
         $process.Dispose()
     }
-    if (Test-Path -LiteralPath $startupLog) {
-        Copy-Item -LiteralPath $startupLog -Destination (Join-Path $testRoot 'windows-startup.log')
+    foreach ($name in @(
+        'windows-startup.log', 'windows-startup.previous.log',
+        'windows-startup-crash.log', 'windows-startup-crash.previous.log'
+    )) {
+        $diagnostic = Join-Path (Split-Path -Parent $startupLog) $name
+        if (Test-Path -LiteralPath $diagnostic -PathType Leaf) {
+            Copy-Item -LiteralPath $diagnostic -Destination (Join-Path $testRoot $name)
+        }
     }
     if ($uninstaller -and (Test-Path -LiteralPath $uninstaller)) {
         $cleanup = Start-Process -FilePath $uninstaller -WindowStyle Hidden -PassThru `

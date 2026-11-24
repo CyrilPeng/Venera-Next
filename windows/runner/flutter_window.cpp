@@ -62,7 +62,7 @@ bool FlutterWindow::OnCreate() {
 
   // The size here must match the window dimensions to avoid unnecessary surface
   // creation / destruction in the startup path.
-  LogWindowsStartup("Creating Flutter engine and view");
+  LogWindowsStartupStage("Creating Flutter engine and view");
   flutter_controller_ = std::make_unique<flutter::FlutterViewController>(
       frame.right - frame.left, frame.bottom - frame.top, project_);
   // Ensure that basic setup of the controller was successful.
@@ -74,9 +74,9 @@ bool FlutterWindow::OnCreate() {
     LogWindowsStartup("Flutter view initialization failed");
     return false;
   }
-  LogWindowsStartup("Registering native plugins");
+  LogWindowsStartupStage("Registering native plugins");
   RegisterPlugins(flutter_controller_->engine());
-  LogWindowsStartup("Native plugins registered");
+  LogWindowsStartupStage("Native plugins registered");
   window_hotkey_.SetWindow(GetHandle());
   RegisterWindowHotkeyChannel(flutter_controller_->engine()->messenger(),
                               window_hotkey_);
@@ -196,7 +196,7 @@ bool FlutterWindow::OnCreate() {
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    LogWindowsStartup("First Flutter frame rendered");
+    LogWindowsStartupStage("First Flutter frame rendered");
     // this->Show();
   });
 

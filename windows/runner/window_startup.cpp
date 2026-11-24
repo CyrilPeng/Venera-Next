@@ -18,6 +18,7 @@ int RunWindowsApplication(Win32Window& window, const std::wstring& title) {
   }
   window.SetQuitOnClose(true);
 
+  LogWindowsStartupStage("Entering Windows message loop");
   MSG msg{};
   BOOL received;
   while ((received = GetMessage(&msg, nullptr, 0, 0)) > 0) {
