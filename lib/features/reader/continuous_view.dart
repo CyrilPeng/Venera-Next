@@ -519,7 +519,15 @@ class ContinuousModeState extends State<ReaderContinuousView>
     SchedulerBinding.instance.ensureVisualUpdate();
   }
 
-  Iterable<({int index, Rect bounds, bool loading, bool fullyVisible})>
+  Iterable<
+    ({
+      int index,
+      ReaderImageProvider image,
+      Rect bounds,
+      bool loading,
+      bool fullyVisible,
+    })
+  >
   _visibleImageBounds(RenderBox viewport) sync* {
     // A distant scroll can mount a second, hidden list for its crossfade.
     // Match the active scroll owner, not cached indices that can predate a resize.
@@ -569,6 +577,7 @@ class ContinuousModeState extends State<ReaderContinuousView>
       final visible = bounds.intersect(Offset.zero & viewport.size);
       yield (
         index: index,
+        image: image,
         bounds: bounds,
         loading:
             state is ComicImageState &&
@@ -1473,15 +1482,29 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   ReaderImageProvider? _imageAt(Offset offset) {
     if (_disposed || !mounted) return null;
-    for (var imageState in imageStates) {
-      if ((imageState as ComicImageState).containsPoint(offset)) {
-        final image =
-            (imageState.widget.image as ReaderDisplayImageProvider).image;
-        if (image.cid == data.comicId && image.sourceKey == data.sourceKey) {
-          return image;
-        }
+    final viewport = context.findRenderObject();
+    if (viewport is! RenderBox || !viewport.attached || !viewport.hasSize) {
+      return null;
+    }
+    final point = viewport.globalToLocal(offset);
+    final viewportBounds = Offset.zero & viewport.size;
+    if (!viewportBounds.contains(point)) return null;
+
+    ReaderImageProvider? marginImage;
+    for (final candidate in _visibleImageBounds(viewport)) {
+      final bounds = candidate.bounds.intersect(viewportBounds);
+      if (!bounds.isFinite || bounds.isEmpty) continue;
+      if (bounds.contains(point)) return candidate.image;
+      // A narrowed flow still owns the blank sides of its visible image row.
+      // Do not select across chapter dividers or outside the active viewport.
+      final alongImage = data.vertical
+          ? point.dy >= bounds.top && point.dy < bounds.bottom
+          : point.dx >= bounds.left && point.dx < bounds.right;
+      if (alongImage) {
+        if (marginImage != null) return null;
+        marginImage = candidate.image;
       }
     }
-    return null;
+    return marginImage;
   }
 }

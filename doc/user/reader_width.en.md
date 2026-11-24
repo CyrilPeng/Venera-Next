@@ -19,6 +19,8 @@ Both margins and the width limit follow comic-specific, device-specific, then gl
 
 The current chapter and page are retained. Pinch zoom remains available for temporarily viewing details; use side margins for a persistent smaller strip layout.
 
+In Continuous or Waterfall reading, right-clicking the blank side margins of a visible image row can also save or copy that original image. When several images are visible, selection follows the row under the pointer and retains the image's actual chapter. Chapter dividers and areas outside the reader do not select an image.
+
 ## Crop white side borders
 
 In vertical Continuous or Waterfall mode, enable Crop white side borders in reader settings. It is off by default. Detection removes continuous near-white empty columns on the left and right so content can use more width; the top and bottom remain intact. Side margins and the width limit can still be used together with cropping.
