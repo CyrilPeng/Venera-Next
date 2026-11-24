@@ -83,6 +83,31 @@ Follow terminology already used in the same feature, such as 画廊／畫廊, �
 
 From `tool/code_audit`, run `dart pub get --enforce-lockfile`, `dart run bin/self_check.dart` and `dart run bin/check_translations.dart ../..`. CI checks complete static keys in multiline, adjacent, escaped, conditional and list expressions, plus dictionary structure, duplicate JSON keys and parameters. Variables and other dynamic targets still require runtime coverage. Resource loading, language switching and English fallback are covered by `test/foundation/translations_test.dart` and the tag/locale regressions.
 
+### Glossary
+
+These terms come from the existing dictionaries and explain feature boundaries. New languages should use natural, consistent terms. Translate complete sentences in the context of the actual screen and action.
+
+| English source | Simplified Chinese | Traditional Chinese | Meaning |
+| --- | --- | --- | --- |
+| Comics | 漫画 | 漫畫 | Works managed or read by the app |
+| Comic Source | 漫画源 | 漫畫源 | An extension providing information about works |
+| Favorites | 收藏 | 收藏 | Works and folders saved by the user |
+| History | 历史 | 歷史 | Existing reading records |
+| Gallery | 画廊 | 畫廊 | An image collection, following the source's presentation |
+| Restore | 恢复 | 恢復 | Restore backed-up data, preserving any overwrite consequences |
+| Import | 导入 | 匯入 | Bring external files or data into the app |
+| Export | 导出 | 匯出 | Write app data to external files |
+| Save | 保存 | 儲存 | Save changes or an image; distinct from downloading a whole work |
+
+### New Language Acceptance
+
+See [Translation Contributions](../../CONTRIBUTING.en.md#translation-contributions) for proposals and review participation. When adding a language, maintainers update the language registry, system-language matching, Flutter component support and audit coverage, and assess tag/comic-source fallback. Existing Chinese dictionaries and English fallback remain checked. Per-language dictionary files can be evaluated with the first additions; the current format remains in use.
+
+- Cover all app text from the same source commit, preserve placeholder names/counts, and verify loading, explicit switching, system-language changes and English fallback. Include settings, the reader, favorites, import/export, backup/restore and error messages.
+- Record reviewers and reviewed scope. Check deletion, overwrite, restore and error actions explicitly. Dynamic text and real Flutter components still need verification after static audits pass.
+- Use GitHub build artifacts from the corresponding commit to check phone, desktop, narrow-screen and large-text settings, menus, confirmations and errors. Record the language, platform, text scale and build run link.
+- Enable language selection after dictionary, component and layout acceptance; language maintainers update text as features change.
+
 ## Android Build
 
 Place local release signing files at:
