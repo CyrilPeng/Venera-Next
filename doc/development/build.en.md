@@ -73,6 +73,16 @@ For early feedback, run `python .github/scripts/run_flutter_tests.py --partition
 
 PRs retain `依赖安全审查` and `PR 平台冒烟构建`. Relevant Flutter, root test, native, dependency, script, and workflow changes trigger Android mobile/TV Debug builds and Windows native/window regressions; native platform paths also trigger Linux, macOS, and iOS builds. HarmonyOS retains its independently pinned SDK, host, and HAP gates. Documentation changes follow the existing platform path rules; the workflows define exact triggers. Dart formatting checks only modified files. Main continues to require the existing quality, dependency, and platform gates, with direct force-pushes and branch deletion disabled.
 
+## Translation Maintenance
+
+The app supports Simplified Chinese, Traditional Chinese and English. The [language registry](../../lib/foundation/app_language.dart) defines settings choices, Flutter locales and translation identifiers. Persisted choices remain `zh-CN`, `zh-TW` and `en-US`; dictionaries and JS `APP.locale` use `zh_CN`, `zh_TW` and `en_US`. Comic-source script dictionaries retain their existing region/language fallback rules.
+
+English source text serves as both the translation key and the default fallback. The two Chinese dictionaries in [translation.json](../../assets/translation.json) must have the same keys. Update the call and both dictionaries together when adding or editing text. Use `tlParams` with `@name` placeholders (an ASCII letter followed by letters, digits or underscores), rather than interpolating a translation key. Preserve names and occurrence counts; translators may reorder them. Replacement matches complete names, and unknown keys or parameters retain their original text.
+
+Follow terminology already used in the same feature, such as 画廊／畫廊, 备份／備份 and 覆盖／覆寫. Deletion, overwrite and restore confirmations must retain the affected data, consequences and confirmation meaning. New languages require demand, reviewers, complete dictionaries and component/layout verification before enabling selection.
+
+From `tool/code_audit`, run `dart pub get --enforce-lockfile`, `dart run bin/self_check.dart` and `dart run bin/check_translations.dart ../..`. CI checks complete static keys in multiline, adjacent, escaped, conditional and list expressions, plus dictionary structure, duplicate JSON keys and parameters. Variables and other dynamic targets still require runtime coverage. Resource loading, language switching and English fallback are covered by `test/foundation/translations_test.dart` and the tag/locale regressions.
+
 ## Android Build
 
 Place local release signing files at:

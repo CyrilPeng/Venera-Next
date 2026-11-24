@@ -1,56 +1,47 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
+import 'package:venera_next/foundation/app_language.dart';
+import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/translations.dart';
 
 void main() {
-  final translations = Map<String, dynamic>.from(
-    jsonDecode(File('assets/translation.json').readAsStringSync()),
-  );
+  TestWidgetsFlutterBinding.ensureInitialized();
+  final previousLanguage = appdata.settings['language'];
 
-  test('all literal translation keys used by Dart code are defined', () {
-    final literalPattern = RegExp(r'''(["'])([^"']+)\1\.(?:tl|tlParams)\b''');
-    final keys = <String>{};
-    final sourceFiles = Directory('lib')
-        .listSync(recursive: true)
-        .whereType<File>()
-        .where((file) => file.path.endsWith('.dart'));
+  setUpAll(AppTranslation.init);
+  setUp(() => appdata.settings['language'] = 'en-US');
+  tearDown(() => appdata.settings['language'] = previousLanguage);
 
-    for (final file in sourceFiles) {
-      for (final match in literalPattern.allMatches(file.readAsStringSync())) {
-        keys.add(match.group(2)!);
-      }
-    }
+  test('bundled dictionaries cover the registered non-English languages', () {
+    expect(AppTranslation.translations.keys.toSet(), {
+      for (final language in AppLanguage.values)
+        if (language != AppLanguage.english) language.translationKey,
+    });
+  });
 
-    final localeMaps = {
-      for (final entry in translations.entries)
-        entry.key: Map<String, dynamic>.from(entry.value as Map),
-    };
-    for (final entry in localeMaps.entries) {
-      final missing = <String>[];
-      for (final key in keys) {
-        if (!entry.value.containsKey(key)) {
-          missing.add(key);
-        }
-      }
-      missing.sort();
-      expect(
-        missing,
-        isEmpty,
-        reason: '${entry.key} is missing translations:\n${missing.join('\n')}',
-      );
+  test('switching languages translates overwrite confirmation and fallback', () {
+    const confirmation =
+        'Local changes will be overwritten by the downloaded backup. Continue?';
+    for (final (language, expected) in [
+      ('zh-CN', '下载备份会覆盖本地修改，是否继续？'),
+      ('zh-TW', '下載的備份將覆寫本機修改，是否繼續？'),
+      ('en-US', confirmation),
+      ('zh-CN', '下载备份会覆盖本地修改，是否继续？'),
+    ]) {
+      appdata.settings['language'] = language;
+      expect(confirmation.tl, expected);
+      expect('An unknown translation key'.tl, 'An unknown translation key');
     }
   });
 
-  test('translation keys are language-neutral', () {
-    final cjk = RegExp(r'[\u4e00-\u9fff]');
-    final keys = Map<String, dynamic>.from(translations.values.first as Map);
-    for (final key in keys.keys) {
-      expect(
-        cjk.hasMatch(key),
-        isFalse,
-        reason: 'invalid translation key: $key',
-      );
+  test('parameters replace complete tokens once and cover repeated uses', () {
+    expect(
+      '@a and @amount: @a / @unknown'.tlParams({'a': '@amount', 'amount': 10}),
+      '@amount and 10: @amount / @unknown',
+    );
+    for (final language in AppLanguage.values) {
+      appdata.settings['language'] = language.preference;
+      expect('Page @page'.tlParams({'page': 12}), isNot(contains('@page')));
+      expect('Page @page'.tlParams({'page': 12}), contains('12'));
     }
   });
 }

@@ -43,6 +43,7 @@ import 'components/message.dart';
 import 'components/window_frame.dart';
 import 'components/window_selection_task.dart';
 import 'foundation/app.dart';
+import 'foundation/app_language.dart';
 import 'foundation/app_profile.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'foundation/app_locale.dart';
@@ -460,13 +461,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           localizationsDelegates: [
             GlobalMaterialLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
           ],
           locale: appLocale,
-          supportedLocales: const [
-            Locale('zh', 'CN'),
-            Locale('zh', 'TW'),
-            Locale('en'),
-          ],
+          supportedLocales: AppLanguage.supportedLocales,
           builder: (context, widget) {
             ErrorWidget.builder = (details) {
               Log.error(

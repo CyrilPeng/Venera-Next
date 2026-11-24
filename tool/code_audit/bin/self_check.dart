@@ -1,6 +1,7 @@
 import 'package:analyzer/dart/analysis/utilities.dart';
 
 import 'public_symbols.dart';
+import 'translations_self_check.dart';
 
 void main() {
   final parsed = parseString(
@@ -58,4 +59,5 @@ final topField = 'dynamicEntry';
     throw StateError('Duplicate declarations in visitor');
   }
   print('AST inventory checks passed');
+  checkTranslations();
 }

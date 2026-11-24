@@ -3,7 +3,9 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/app_locale.dart';
+import 'package:venera_next/foundation/app_language.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +19,21 @@ void main() {
 
   tearDown(() {
     appdata.settings['language'] = defaultLanguage;
+  });
+
+  test('settings and Flutter locales use the same language registry', () {
+    expect(AppPreferences.language.choices, AppLanguage.options.keys);
+    expect(AppLanguage.supportedLocales, [
+      const Locale('zh', 'CN'),
+      const Locale('zh', 'TW'),
+      const Locale('en'),
+    ]);
+    for (final language in AppLanguage.values) {
+      appdata.settings['language'] = language.preference;
+      expect(appLanguage, language);
+      expect(appLocale, language.locale);
+    }
+    expect(AppLanguage.english.translationKey, 'en_US');
   });
 
   group('appLocale explicit language setting', () {

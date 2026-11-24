@@ -736,7 +736,7 @@ class JsEngine with _JSEngineApi, Init {
               engine: this,
             );
           case "getLocale":
-            return "${appLocale.languageCode}_${appLocale.countryCode}";
+            return appLanguage.translationKey;
           case "getPlatform":
             return Platform.operatingSystem;
           case "setClipboard":

@@ -8,6 +8,7 @@ import 'package:venera_next/network/request_scope.dart';
 import 'package:rhttp/rhttp.dart' as rhttp;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_language.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/js_engine.dart';
 import 'package:venera_next/foundation/log.dart';
@@ -113,6 +114,27 @@ void main() {
   group(
     'native JS resource ownership',
     () {
+      test(
+        'locale bridge reports canonical identifiers after each switch',
+        () async {
+          final previousLanguage = appdata.settings['language'];
+          addTearDown(() => appdata.settings['language'] = previousLanguage);
+          final engine = JsEngine.create(
+            createHttpClient: () => Dio()..httpClientAdapter = _Adapter(),
+            loadInitScript: () async => Uint8List(0),
+          );
+          addTearDown(engine.closeAndWait);
+          await engine.init();
+          for (final language in AppLanguage.values) {
+            appdata.settings['language'] = language.preference;
+            expect(
+              engine.runCode('sendMessage({method:"getLocale"})'),
+              language.translationKey,
+            );
+          }
+        },
+      );
+
       test(
         'independent engines keep their original UI handler and identity',
         () async {

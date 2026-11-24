@@ -119,6 +119,7 @@ jobs:
         run: |
           dart pub get --enforce-lockfile
           dart run bin/self_check.dart
+          dart run bin/check_translations.dart ../..
           dart analyze --fatal-infos
       - name: 验证 Git 与本地依赖来源、许可证及补丁记录
         run: dart tool/check_git_dependencies.dart
