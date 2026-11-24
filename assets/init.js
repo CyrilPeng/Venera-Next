@@ -1520,7 +1520,7 @@ let APP = {
 
     /**
      * Get current app locale
-     * @returns {string} - The app locale, in the format of [languageCode]_[countryCode]
+     * @returns {string} - The app locale: "zh_CN", "zh_TW", or "en_US".
      */
     get locale() {
         return sendMessage({

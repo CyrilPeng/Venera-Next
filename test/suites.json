@@ -391,7 +391,8 @@
     {
       "id": "code-audit",
       "include": [
-        "tool/code_audit/bin/self_check.dart"
+        "tool/code_audit/bin/self_check.dart",
+        "tool/code_audit/bin/translations_self_check.dart"
       ],
       "kind": "tool-self-check",
       "entry": "dart run bin/self_check.dart in tool/code_audit",

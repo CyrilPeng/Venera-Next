@@ -1,23 +1,25 @@
 import 'dart:ui';
 
+import 'app_language.dart';
 import 'appdata.dart';
 import 'application_preferences.dart';
 import 'global_preference_store.dart';
 
 /// Resolve the current preference on every read, including after a settings change.
-Locale get appLocale => resolveAppLocale(
+AppLanguage get appLanguage => resolveAppLanguage(
   GlobalPreferenceStore(appdata.settings).read(AppPreferences.language),
   PlatformDispatcher.instance.locales,
 );
 
-Locale resolveAppLocale(String preference, List<Locale> systemLocales) {
-  final selected = switch (preference) {
-    'zh-CN' => const Locale('zh', 'CN'),
-    'zh-TW' => const Locale('zh', 'TW'),
-    'en-US' => const Locale('en'),
-    _ => null,
-  };
-  if (selected != null) return selected;
+Locale get appLocale => appLanguage.locale;
+
+Locale resolveAppLocale(String preference, List<Locale> systemLocales) =>
+    resolveAppLanguage(preference, systemLocales).locale;
+
+AppLanguage resolveAppLanguage(String preference, List<Locale> systemLocales) {
+  for (final language in AppLanguage.values) {
+    if (language.preference == preference) return language;
+  }
 
   for (final locale in systemLocales) {
     if (locale.languageCode == 'zh') {
@@ -28,9 +30,11 @@ Locale resolveAppLocale(String preference, List<Locale> systemLocales) {
         'Hans' => false,
         _ => const ['TW', 'HK', 'MO'].contains(locale.countryCode),
       };
-      return Locale('zh', traditional ? 'TW' : 'CN');
+      return traditional
+          ? AppLanguage.traditionalChinese
+          : AppLanguage.simplifiedChinese;
     }
-    if (locale.languageCode == 'en') return const Locale('en');
+    if (locale.languageCode == 'en') return AppLanguage.english;
   }
-  return const Locale('en');
+  return AppLanguage.english;
 }

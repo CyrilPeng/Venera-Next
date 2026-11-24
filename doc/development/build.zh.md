@@ -73,6 +73,16 @@ git diff --check
 
 PR 保留 `依赖安全审查` 和 `PR 平台冒烟构建`。相关 Flutter、根测试、原生、依赖、脚本及工作流变更触发 Android 手机版／TV Debug 和 Windows 原生／窗口回归；原生平台路径另触发 Linux、macOS 与 iOS 构建。鸿蒙继续使用独立固定 SDK 的 host 与 HAP 门禁。文档等不影响平台构建的改动按原路径规则跳过；具体触发以工作流为准。Dart 格式检查只检查本次修改的文件，`main` 继续要求既有质量、依赖与平台门禁，禁止直接强推或删除分支。
 
+## 翻译维护
+
+当前支持简体中文、繁体中文和英文。[语言注册表](../../lib/foundation/app_language.dart)统一维护设置选项、Flutter 支持列表及翻译标识；已保存的 `zh-CN`、`zh-TW`、`en-US` 不变，词典与 JS `APP.locale` 使用 `zh_CN`、`zh_TW`、`en_US`。漫画源脚本的独立词典仍按现有地区／语言回退规则读取。
+
+应用英文原文同时作为翻译键和默认回退文案，[translation.json](../../assets/translation.json)维护相同键集合的两份中文词典。新增或润色文案时同步调用与两份词典，不使用插值生成翻译键。参数使用 `@name`（英文字母开头，后续可含数字或下划线），通过 `tlParams` 传入同名参数；名称和出现次数应与原文一致，可调整顺序。运行时按完整参数名替换，保留未知参数和未知文案。
+
+沿用同模块的术语，例如画廊／畫廊、备份／備份、覆盖／覆寫。删除、覆盖及恢复提示必须保留操作对象、后果和确认含义。新增语种另行安排需求与校对者，完成词典、组件和布局验证后再开放语言选择。
+
+在 `tool/code_audit` 执行 `dart pub get --enforce-lockfile`、`dart run bin/self_check.dart` 和 `dart run bin/check_translations.dart ../..`。CI 使用语法树检查跨行、拼接、转义、条件和列表中的静态键，并核对词典结构、重复键和参数；变量及其他动态文案仍需相应运行时回归，不能将静态扫描通过视为全部动态文案已翻译。实际资源加载、语言切换及英文回退由 `test/foundation/translations_test.dart` 和标签／语言回归验证。
+
 ## Android 构建
 
 本地 release 签名文件放置在：
