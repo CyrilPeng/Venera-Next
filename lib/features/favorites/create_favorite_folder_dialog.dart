@@ -181,22 +181,20 @@ class _CreateFavoriteFolderDialogState
         ],
       ).paddingHorizontal(16),
       actions: [
-        Flexible(
-          child: Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 4,
-            runSpacing: 4,
-            children: [
-              TextButton(
-                onPressed: importing || _completed || !_canAct ? null : import,
-                child: Text("Import from file".tl),
-              ),
-              FilledButton(
-                onPressed: importing || !_canAct ? null : create,
-                child: Text((_completed ? "OK" : "Create").tl),
-              ),
-            ],
-          ),
+        Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 4,
+          runSpacing: 4,
+          children: [
+            TextButton(
+              onPressed: importing || _completed || !_canAct ? null : import,
+              child: Text("Import from file".tl),
+            ),
+            FilledButton(
+              onPressed: importing || !_canAct ? null : create,
+              child: Text((_completed ? "OK" : "Create").tl),
+            ),
+          ],
         ),
       ],
     ),

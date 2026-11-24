@@ -160,7 +160,7 @@ class _AppSettingsState extends State<AppSettings> {
         SelectSetting.preference(
           title: "Language".tl,
           preference: AppPreferences.language,
-          optionTranslation: AppLanguage.options,
+          optionTranslation: {...AppLanguage.options, 'system': 'System'.tl},
           onChanged: () {
             appNavigation.forceRebuild();
           },
