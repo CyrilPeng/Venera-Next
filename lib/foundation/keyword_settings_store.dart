@@ -116,11 +116,18 @@ class KeywordSettingsStore {
     return result;
   }
 
+  /// An open editor passes [requirePresent] so a rule deleted before admission
+  /// is reported as changed. [onRemoved] runs inside the admitted draft, before
+  /// durability; a retry passes [publishedByEditor] to recognize its own
+  /// deletion without removing a rule that another editor has since restored.
   Future<bool> removeRule(
     BlockedKeywordList target,
-    KeywordRule expected,
-  ) async {
-    var removed = true;
+    KeywordRule expected, {
+    bool requirePresent = false,
+    bool publishedByEditor = false,
+    void Function()? onRemoved,
+  }) async {
+    var removed = !requirePresent;
     await updateSettings((draft) {
       final preferences = GlobalPreferenceStore(draft);
       final current = _rules(
@@ -128,7 +135,7 @@ class KeywordSettingsStore {
         target,
       ).where((rule) => rule.keyword == expected.keyword).firstOrNull;
       if (current == null) return;
-      if (current != expected) {
+      if (publishedByEditor || current != expected) {
         removed = false;
         return;
       }
@@ -142,6 +149,8 @@ class KeywordSettingsStore {
       final options = Map.of(preferences.read(target.ruleOptions))
         ..remove(expected.keyword);
       preferences.write(target.ruleOptions, options);
+      removed = true;
+      onRemoved?.call();
     });
     return removed;
   }

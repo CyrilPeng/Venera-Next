@@ -14,6 +14,7 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
+import 'package:venera_next/foundation/translations.dart';
 import 'package:window_manager/window_manager.dart';
 
 Directory _prepare() {
@@ -246,6 +247,200 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
+
+  for (final comments in [false, true]) {
+    testWidgets(
+      'editor delete persists the ${comments ? 'comment' : 'comic'} rule and its options',
+      (tester) async {
+        final root = _prepare();
+        final wordsKey = comments ? 'blockedCommentWords' : 'blockedWords';
+        final optionsKey = comments
+            ? 'blockedCommentWordRules'
+            : 'blockedWordRules';
+        appdata.settings[wordsKey] = ['alpha', 'keep'];
+        appdata.settings[optionsKey] = <String, String>{
+          'alpha': 'wholeWord:insensitive',
+          'keep': 'contains:insensitive',
+        };
+        await tester.pumpWidget(
+          _host(KeywordBlockingSettings(comments: comments)),
+        );
+        await tester.tap(find.widgetWithText(ListTile, 'alpha'));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('keyword-rule-delete')),
+          findsOneWidget,
+        );
+        await tester.tap(find.byKey(const ValueKey('keyword-rule-delete')));
+        await tester.pumpAndSettle();
+        expect(find.text('Delete rule'.tl), findsOneWidget);
+        await tester.tap(find.widgetWithText(TextButton, 'Cancel'.tl));
+        await tester.pumpAndSettle();
+        expect(find.byType(KeywordRuleEditor), findsOneWidget);
+        expect(appdata.settings[wordsKey], ['alpha', 'keep']);
+        await tester.tap(find.byKey(const ValueKey('keyword-rule-delete')));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('keyword-rule-delete-confirm')),
+        );
+        await _flush(tester, appdata.saveData(false));
+        await tester.pumpAndSettle();
+        expect(find.byType(KeywordRuleEditor), findsNothing);
+        expect(_saved(root)[wordsKey], ['keep']);
+        expect(_saved(root)[optionsKey], {'keep': 'contains:insensitive'});
+        expect(
+          _saved(root)[comments ? 'blockedWords' : 'blockedCommentWords'],
+          comments ? ['alpha', 'beta'] : ['comment'],
+        );
+        expect(find.text('alpha'), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
+  for (final deleted in [false, true]) {
+    testWidgets('editor delete keeps a stale dialog open: deleted=$deleted', (
+      tester,
+    ) async {
+      final root = _prepare();
+      appdata.settings['blockedWords'] = ['alpha', 'keep'];
+      appdata.settings['blockedWordRules'] = <String, String>{
+        'alpha': 'contains:insensitive',
+        'keep': 'contains:insensitive',
+      };
+      await tester.pumpWidget(_host(const KeywordBlockingSettings()));
+      await tester.tap(find.widgetWithText(ListTile, 'alpha'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('keyword-rule-delete')));
+      await tester.pumpAndSettle();
+      if (deleted) {
+        appdata.settings['blockedWords'] = ['keep'];
+        appdata.settings['blockedWordRules'] = <String, String>{
+          'keep': 'contains:insensitive',
+        };
+      } else {
+        appdata.settings['blockedWordRules'] = <String, String>{
+          'alpha': 'wholeWord:sensitive',
+          'keep': 'contains:insensitive',
+        };
+      }
+      await tester.tap(
+        find.byKey(const ValueKey('keyword-rule-delete-confirm')),
+      );
+      await _flush(tester, appdata.saveData(false));
+      expect(find.byType(KeywordRuleEditor), findsOneWidget);
+      expect(
+        find.text('The rule changed. Close and reopen the editor.'.tl),
+        findsOneWidget,
+      );
+      expect(
+        _saved(root)['blockedWords'],
+        deleted ? ['keep'] : ['alpha', 'keep'],
+      );
+      expect(
+        _saved(root)['blockedWordRules'],
+        deleted
+            ? <String, String>{'keep': 'contains:insensitive'}
+            : <String, String>{
+                'alpha': 'wholeWord:sensitive',
+                'keep': 'contains:insensitive',
+              },
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  testWidgets(
+    'editor delete and confirmation stay usable on a narrow large-text screen',
+    (tester) async {
+      _prepare();
+      tester.view.physicalSize = const Size(375, 740);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(1.8),
+              disableAnimations: true,
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(body: KeywordBlockingSettings(comments: true)),
+        ),
+      );
+      await tester.tap(find.widgetWithText(ListTile, 'comment'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('keyword-rule-delete')).hitTestable(),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('keyword-rule-delete')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('keyword-rule-delete-confirm')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(
+        find.widgetWithText(TextButton, 'Cancel'.tl).hitTestable(),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'window owns a pending editor delete after its dialog route is removed',
+    (tester) async {
+      final root = _prepare();
+      _mockWindow();
+      var exits = 0;
+      final navigator = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigator,
+          builder: (_, child) => WindowFrame(child!, onExit: () => exits++),
+          home: const Scaffold(body: KeywordBlockingSettings()),
+        ),
+      );
+      await tester.tap(find.widgetWithText(ListTile, 'alpha'));
+      await tester.pumpAndSettle();
+      final route = ModalRoute.of(
+        tester.element(find.byKey(const ValueKey('keyword-rule-delete'))),
+      )!;
+      await tester.tap(find.byKey(const ValueKey('keyword-rule-delete')));
+      await tester.pumpAndSettle();
+      final release = Completer<void>();
+      addTearDown(() {
+        if (!release.isCompleted) release.complete();
+      });
+      final exclusive = AppDataOperations.instance.run(() => release.future);
+      await tester.tap(
+        find.byKey(const ValueKey('keyword-rule-delete-confirm')),
+      );
+      await tester.pump();
+      navigator.currentState!.removeRoute(route);
+      await tester.pumpAndSettle();
+      (tester.state(find.byType(WindowFrame)) as WindowListener)
+          .onWindowClose();
+      await tester.pump();
+      expect(exits, 0);
+      release.complete();
+      await _flush(tester, Future.wait([exclusive, appdata.saveData(false)]));
+      for (var i = 0; i < 20 && exits == 0; i++) {
+        await tester.pump(const Duration(milliseconds: 10));
+      }
+      expect(exits, 1);
+      expect(_saved(root)['blockedWords'], ['beta']);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   testWidgets('failed keyword save retries without appending the word twice', (
     tester,

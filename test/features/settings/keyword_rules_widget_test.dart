@@ -20,6 +20,7 @@ import 'package:venera_next/features/settings/keyword_blocking.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/foundation/keyword_filter.dart';
 import 'package:venera_next/foundation/keyword_settings_store.dart';
@@ -27,6 +28,8 @@ import 'package:venera_next/foundation/translations.dart';
 
 const _wordKey = ValueKey('keyword-rule-word');
 const _sampleKey = ValueKey('keyword-rule-sample');
+const _deleteKey = ValueKey('keyword-rule-delete');
+const _deleteConfirmKey = ValueKey('keyword-rule-delete-confirm');
 const _coverToggleKey = ValueKey('keyword-reasons-toggle-covers');
 const _reasonsListKey = ValueKey('keyword-reasons-list');
 const _noCoverKey = ValueKey('keyword-reasons-no-cover');
@@ -74,6 +77,7 @@ Directory _prepare() {
   appdata.settings['blockedCommentWords'] = ['comment'];
   appdata.settings['blockedWordRules'] = <String, String>{};
   appdata.settings['blockedCommentWordRules'] = <String, String>{};
+  registerShowMessageHandler((_, _) {});
   addTearDown(() {
     App.dataPath = oldPath;
     oldSettings.forEach((key, value) => appdata.settings[key] = value);
@@ -112,6 +116,7 @@ Future<void> _flush(WidgetTester tester, Future<void> operation) async {
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
   await tester.tap(finder);
   await tester.pumpAndSettle();
 }
@@ -133,6 +138,26 @@ Future<void> _save(WidgetTester tester, {bool adding = false}) async {
   await tester.tap(button);
   await tester.pump();
   await _flush(tester, appdata.saveData(false));
+}
+
+Future<void> _confirmDelete(WidgetTester tester) async {
+  await tester.ensureVisible(find.byKey(_deleteConfirmKey));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(_deleteConfirmKey));
+  await tester.pump();
+  await _flush(tester, appdata.saveData(false));
+}
+
+Future<void> _openDeleteConfirmation(
+  WidgetTester tester, {
+  String keyword = 'alpha',
+}) async {
+  await _tap(tester, find.byKey(_deleteKey));
+  expect(find.text('Delete rule'.tl), findsOneWidget);
+  expect(
+    find.text('Delete the keyword rule "@a"?'.tlParams({'a': keyword})),
+    findsOneWidget,
+  );
 }
 
 Future<void> _capture(WidgetTester tester, String name) async {
@@ -805,6 +830,241 @@ void main() {
       );
       expect(_saved(root)['blockedWordRules'], isEmpty);
       expect(isBlocked(_comic('black')), 'bl');
+    },
+  );
+
+  testWidgets(
+    'new rules have no delete entry and cancellation keeps editor and settings',
+    (tester) async {
+      final root = _prepare();
+      await tester.pumpWidget(_host(const KeywordBlockingSettings()));
+      await _add(tester);
+      expect(find.byKey(_deleteKey), findsNothing);
+      expect(find.text('Delete'.tl), findsNothing);
+      await tester.enterText(find.byKey(_wordKey), 'fresh');
+      await tester.pumpAndSettle();
+      final before =
+          jsonDecode(jsonEncode(appdata.toJson()['settings'])) as Map;
+      await _tap(tester, find.byTooltip('Close'.tl));
+      expect(find.byType(KeywordRuleEditor), findsNothing);
+      expect(jsonDecode(jsonEncode(appdata.toJson()['settings'])), before);
+      await _tap(tester, find.widgetWithText(ListTile, 'alpha'));
+      expect(find.byKey(_deleteKey), findsOneWidget);
+      await _openDeleteConfirmation(tester);
+      await _tap(tester, find.widgetWithText(TextButton, 'Cancel'.tl));
+      expect(find.byType(KeywordRuleEditor), findsOneWidget);
+      expect(find.text('Edit keyword'.tl), findsOneWidget);
+      expect(appdata.settings['blockedWords'], ['alpha']);
+      expect(appdata.settings['blockedWordRules'], isEmpty);
+      await _flush(tester, appdata.saveData(false));
+      expect(_saved(root)['blockedWords'], ['alpha']);
+      expect(_saved(root)['blockedWordRules'], isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  for (final language in ['en-US', 'zh-CN', 'de-DE', 'ja-JP']) {
+    for (final showCovers in [false, true]) {
+      testWidgets(
+        'reason editor deletes one matching rule on a narrow large-text screen: $language, covers=$showCovers',
+        (tester) async {
+          final root = _prepare();
+          appdata.settings['language'] = language;
+          configureComicWidgets(
+            tileImageProviderResolver: (_) => _memoryImage(),
+            keywordRuleEditor: (context, rule) => showKeywordRuleEditor(
+              context,
+              target: BlockedKeywordList.comics,
+              rule: rule,
+            ),
+          );
+          addTearDown(() {
+            tester.binding.imageCache.clear();
+            tester.binding.imageCache.clearLiveImages();
+            configureComicWidgets();
+          });
+          appdata.settings['blockedWords'] = ['alpha', 'shared'];
+          appdata.settings['blockedWordRules'] = <String, String>{
+            'alpha': 'contains:insensitive',
+            'shared': 'contains:insensitive',
+          };
+          final comics = [
+            _comic('alpha only'),
+            _comic('shared story'),
+            _comic('Other title'),
+          ];
+          tester.view.physicalSize = const Size(375, 740);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          await tester.pumpWidget(_reasonsHost(comics, textScale: 1.8));
+          final hero = tester.widget<ComicTile>(find.byType(ComicTile)).heroID;
+          await _tap(
+            tester,
+            find.text(
+              'Hidden by keyword filters: @a comics'.tlParams({'a': 2}),
+            ),
+          );
+          expect(
+            find.text('Keyword: @a'.tlParams({'a': 'alpha'})),
+            findsOneWidget,
+          );
+          if (showCovers) await _tap(tester, find.byKey(_coverToggleKey));
+          await _tap(tester, find.text('Edit rule'.tl).first);
+          await _openDeleteConfirmation(tester);
+          await tester.ensureVisible(find.byKey(_deleteConfirmKey));
+          await tester.pumpAndSettle();
+          expect(find.byKey(_deleteConfirmKey).hitTestable(), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          await _confirmDelete(tester);
+          expect(find.byType(KeywordRuleEditor), findsNothing);
+          expect(_saved(root)['blockedWords'], ['shared']);
+          expect(_saved(root)['blockedWordRules'], {
+            'shared': 'contains:insensitive',
+          });
+          expect(
+            find.text('Keyword: @a'.tlParams({'a': 'alpha'})),
+            findsNothing,
+          );
+          expect(
+            find.text('Keyword: @a'.tlParams({'a': 'shared'})),
+            findsOneWidget,
+          );
+          expect(
+            find.text(showCovers ? 'Hide covers'.tl : 'Show covers'.tl),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(
+              of: find.byKey(_reasonsListKey),
+              matching: find.byType(AnimatedImage),
+            ),
+            showCovers ? findsOneWidget : findsNothing,
+          );
+          if (showCovers) {
+            expect(
+              find.byKey(
+                const ValueKey(
+                  'keyword-reasons-cover:webdav_library:shared story',
+                ),
+              ),
+              findsOneWidget,
+            );
+            expect(
+              find.byKey(
+                const ValueKey(
+                  'keyword-reasons-cover:webdav_library:alpha only',
+                ),
+              ),
+              findsNothing,
+            );
+          }
+          expect(isBlocked(comics[0]), isNull);
+          expect(isBlocked(comics[1]), 'shared');
+          await _tap(tester, find.widgetWithText(TextButton, 'Close'.tl));
+          expect(find.byType(ComicTile), findsNWidgets(2));
+          expect(
+            find.text(
+              'Hidden by keyword filters: @a comics'.tlParams({'a': 1}),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            tester
+                .widgetList<ComicTile>(find.byType(ComicTile))
+                .singleWhere((tile) => tile.comic.title == 'Other title')
+                .heroID,
+            hero,
+          );
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox.shrink());
+        },
+      );
+    }
+  }
+
+  for (final deleted in [false, true]) {
+    testWidgets(
+      'delete rejects a concurrently changed or deleted rule: deleted=$deleted',
+      (tester) async {
+        final root = _prepare();
+        appdata.settings['blockedWordRules'] = <String, String>{
+          'alpha': 'contains:insensitive',
+        };
+        await tester.pumpWidget(_host(const KeywordBlockingSettings()));
+        await _tap(tester, find.widgetWithText(ListTile, 'alpha'));
+        await _openDeleteConfirmation(tester);
+        if (deleted) {
+          appdata.settings['blockedWords'] = ['keep'];
+          appdata.settings['blockedWordRules'] = <String, String>{
+            'keep': 'contains:insensitive',
+          };
+        } else {
+          appdata.settings['blockedWordRules'] = <String, String>{
+            'alpha': 'wholeWord:sensitive',
+          };
+        }
+        await _confirmDelete(tester);
+        expect(find.byType(KeywordRuleEditor), findsOneWidget);
+        expect(
+          find.text('The rule changed. Close and reopen the editor.'),
+          findsOneWidget,
+        );
+        expect(
+          tester.widget<TextButton>(find.byKey(_deleteKey)).onPressed,
+          isNull,
+        );
+        expect(
+          tester
+              .widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
+              .onPressed,
+          isNull,
+        );
+        expect(_saved(root)['blockedWords'], deleted ? ['keep'] : ['alpha']);
+        expect(
+          _saved(root)['blockedWordRules'],
+          deleted
+              ? <String, String>{'keep': 'contains:insensitive'}
+              : <String, String>{'alpha': 'wholeWord:sensitive'},
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
+  testWidgets(
+    'failed deletion keeps retry, repairs the durable settings and closes',
+    (tester) async {
+      final root = _prepare();
+      appdata.settings['blockedWordRules'] = <String, String>{
+        'alpha': 'contains:insensitive',
+      };
+      await tester.pumpWidget(_host(const KeywordBlockingSettings()));
+      await _tap(tester, find.widgetWithText(ListTile, 'alpha'));
+      final blocked = Directory('${root.path}/appdata.json')..createSync();
+      await _openDeleteConfirmation(tester);
+      await tester.tap(find.byKey(_deleteConfirmKey));
+      for (var i = 0; i < 500 && find.text('Retry').evaluate().isEmpty; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+      }
+      expect(find.text('Retry'), findsOneWidget);
+      expect(find.byType(KeywordRuleEditor), findsOneWidget);
+      expect(appdata.settings['blockedWords'], isEmpty);
+      expect(appdata.settings['blockedWordRules'], isEmpty);
+      blocked.deleteSync();
+      await tester.ensureVisible(find.text('Retry'));
+      await tester.tap(find.text('Retry'));
+      await _flush(tester, appdata.saveData(false));
+      expect(find.byType(KeywordRuleEditor), findsNothing);
+      expect(_saved(root)['blockedWords'], isEmpty);
+      expect(_saved(root)['blockedWordRules'], isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
     },
   );
 

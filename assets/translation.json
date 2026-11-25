@@ -1070,7 +1070,9 @@
     "Copy uses the bounded preview. Save the full report to include all retained frame and navigation samples.": "复制使用有大小限制的预览；保存完整报告可保留采集缓冲中的全部帧与翻页样本。",
     "Stop and review": "结束并查看",
     "Start new 45-second capture": "开始新的 45 秒采集",
-    "Unable to copy report.": "无法复制报告，请重试。"
+    "Unable to copy report.": "无法复制报告，请重试。",
+    "Delete rule": "删除规则",
+    "Delete the keyword rule \"@a\"?": "确定删除关键词规则「@a」吗？"
   },
   "zh_TW": {
     "Crop white side borders": "自動裁切左右白邊",
@@ -2143,7 +2145,9 @@
     "Copy uses the bounded preview. Save the full report to include all retained frame and navigation samples.": "複製使用有大小限制的預覽；儲存完整報告可保留採集緩衝中的全部畫面與翻頁樣本。",
     "Stop and review": "結束並查看",
     "Start new 45-second capture": "開始新的 45 秒採集",
-    "Unable to copy report.": "無法複製報告，請重試。"
+    "Unable to copy report.": "無法複製報告，請重試。",
+    "Delete rule": "刪除規則",
+    "Delete the keyword rule \"@a\"?": "確定刪除關鍵字規則「@a」嗎？"
   },
   "de_DE": {
     "Crop white side borders": "Weiße Seitenränder beschneiden",
@@ -3216,7 +3220,9 @@
     "Show covers": "Cover anzeigen",
     "Hide covers": "Cover ausblenden",
     "No cover": "Kein Cover",
-    "Covers are shown. Tap a cover to open its details.": "Cover werden angezeigt. Tippe auf ein Cover, um die Details zu öffnen."
+    "Covers are shown. Tap a cover to open its details.": "Cover werden angezeigt. Tippe auf ein Cover, um die Details zu öffnen.",
+    "Delete rule": "Regel löschen",
+    "Delete the keyword rule \"@a\"?": "Die Schlüsselwortregel „@a“ löschen?"
   },
   "ja_JP": {
     "Crop white side borders": "左右の白い余白を切り取る",
@@ -4289,6 +4295,8 @@
     "Show covers": "表紙を表示",
     "Hide covers": "表紙を非表示",
     "No cover": "表紙なし",
-    "Covers are shown. Tap a cover to open its details.": "表紙を表示しています。表紙をタップすると詳細を開きます。"
+    "Covers are shown. Tap a cover to open its details.": "表紙を表示しています。表紙をタップすると詳細を開きます。",
+    "Delete rule": "ルールを削除",
+    "Delete the keyword rule \"@a\"?": "キーワードルール「@a」を削除しますか？"
   }
 }
