@@ -6,13 +6,14 @@ import 'package:venera_next/components/file_save_task.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/context.dart';
-import 'package:venera_next/foundation/file_type.dart';
 import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'clipboard_image.dart';
 import 'gesture_port.dart';
 import 'gesture_request.dart';
 import 'image_action.dart';
+import 'image_export.dart';
+import 'image_read.dart';
 import 'reader_tap_scope.dart';
 
 class ReaderGestureDetector extends StatefulWidget {
@@ -437,6 +438,12 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
 
   void _showMenu(ReaderGestureRequest request, Offset location) {
     if (!_accepts(request) || widget.isMenuLocked()) return;
+    final image = request.canUseImage
+        ? request.viewport?.getImageReadByOffset(location)
+        : null;
+    final selection = image == null
+        ? null
+        : request.imageSelection?.call(image);
     final settings = widget.openSettings, chapters = widget.openChapters;
     void invoke(VoidCallback action) {
       if (_accepts(request) && !widget.isMenuLocked()) action();
@@ -474,20 +481,25 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
           MenuEntry(
             icon: Icons.copy,
             text: 'Copy Image'.tl,
-            onClick: () =>
-                unawaited(_useImage(request, location, writeImageToClipboard)),
+            onClick: () => unawaited(
+              _useImage(
+                request,
+                image,
+                selection,
+                (image) => writeImageToClipboard(image.bytes),
+              ),
+            ),
           ),
         if (request.canUseImage)
           MenuEntry(
             icon: Icons.download_outlined,
             text: 'Save Image'.tl,
             onClick: () => unawaited(
-              _useImage(request, location, (image) async {
-                final filetype = detectFileType(image);
+              _useImage(request, image, selection, (image) async {
                 await saveFileForWindow(
                   context,
-                  filename: 'image${filetype.ext}',
-                  data: image,
+                  filename: image.filename,
+                  data: image.bytes,
                 );
               }),
             ),
@@ -505,8 +517,9 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
 
   Future<void> _useImage(
     ReaderGestureRequest request,
-    Offset location,
-    Future<void> Function(Uint8List) consume,
+    ReaderImageRead? image,
+    ReaderImageSelection? selection,
+    Future<void> Function(ReaderImageExport) consume,
   ) async {
     if (!_accepts(request) ||
         widget.isMenuLocked() ||
@@ -516,9 +529,9 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
     }
     await useReaderImage(
       work: widget.imageWork,
-      read: () => request.viewport!.getImageByOffset(location),
+      read: () => selection == null ? Future.value(null) : image!.read(),
       isCurrent: () => _accepts(request),
-      consume: consume,
+      consume: (bytes) => consume(ReaderImageExport(selection!, bytes)),
       onMissing: () {
         if (mounted) context.showMessage(message: 'No Image'.tl);
       },

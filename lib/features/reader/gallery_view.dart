@@ -17,6 +17,7 @@ import 'gallery_data.dart';
 import 'display_image_provider.dart';
 import 'image_dimensions.dart';
 import 'image_position.dart';
+import 'image_read.dart';
 import 'reader_controller.dart';
 import 'reader_viewport.dart';
 
@@ -840,15 +841,22 @@ class GalleryModeState extends State<ReaderGalleryView>
 
   @override
   Future<Uint8List?> getImageByOffset(Offset offset) async {
+    return getImageReadByOffset(offset)?.read();
+  }
+
+  @override
+  ReaderImageRead? getImageReadByOffset(Offset offset) {
     final index = getImageIndexByOffset(offset);
     if (index == null) return null;
-    return widget.readImage(
-      ReaderImageAddress(
+    return ReaderImageRead(
+      address: ReaderImageAddress(
         imageKey: data.images[index],
         sourceKey: data.sourceKey,
         comicId: data.comicId,
         chapterId: data.chapterId,
       ),
+      imageNumber: index + 1,
+      readBytes: widget.readImage,
     );
   }
 

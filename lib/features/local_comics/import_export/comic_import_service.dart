@@ -11,11 +11,13 @@ import 'package:venera_next/features/comic_storage/comic_storage.dart';
 import 'package:venera_next/features/favorites/favorites_api.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
+import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/foundation/persistence_failure.dart';
 import 'package:venera_next/foundation/sqlite_transaction.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 
 import '../local.dart';
 import '../local_storage_guard.dart';
@@ -23,6 +25,7 @@ import 'comic_directory_copy.dart';
 import 'comic_copy_metadata.dart';
 import 'comic_copy_record.dart';
 import 'cbz.dart';
+import 'comic_collection_archive.dart';
 
 void _checkCopyLocation(String directoryPath, String libraryPath) {
   final directory = Directory(directoryPath);
@@ -176,13 +179,18 @@ class ComicImportService {
   Future<ComicImportResult> archives(
     Directory directory, {
     String? folder,
+    void Function()? checkStop,
   }) async {
     final files = (await directory.list().toList()).whereType<File>().where(
       (file) => isComicArchiveFileName(file.name),
     );
     final selections = files.map((file) => FileSelection(file.path)).toList();
     try {
-      return await selectedArchives(selections, folder: folder);
+      return await selectedArchives(
+        selections,
+        folder: folder,
+        checkStop: checkStop,
+      );
     } finally {
       await Future.wait(selections.map((selection) => selection.dispose()));
     }
@@ -192,19 +200,20 @@ class ComicImportService {
     Iterable<FileSelection> files, {
     String? folder,
     void Function()? checkStop,
-  }) async {
+  }) => runImport((operation) async {
     final issues = <ComicImportIssue>[];
     var count = 0;
     for (final file in files) {
       checkStop?.call();
       try {
-        await file.withFile(
-          (source) => CBZ.import(
-            source,
-            registerComic: (comic) => registerComic(comic, folder: folder),
-          ),
+        final result = await file.withFile(
+          (source) =>
+              operation.archive(source, folder: folder, checkStop: checkStop),
         );
-        count++;
+        count += result.importedCount;
+        issues.addAll(result.issues);
+      } on SelectionCancelled {
+        rethrow;
       } catch (error, stack) {
         issues.add(ComicImportIssue.archive(file.name, error, stack));
       }
@@ -217,7 +226,21 @@ class ComicImportService {
       importedCount: count,
       issues: issues,
     );
-  }
+  });
+
+  Future<ComicImportResult> archive(
+    File file, {
+    String? folder,
+    void Function()? checkStop,
+    ComicArchiveLimits limits = const ComicArchiveLimits(),
+  }) => runImport(
+    (operation) => operation.archive(
+      file,
+      folder: folder,
+      checkStop: checkStop,
+      limits: limits,
+    ),
+  );
 
   Future<T> _withOperation<T>(
     LocalManager manager,
@@ -274,6 +297,93 @@ class ComicImportOperation {
 
   void _checkActive() {
     if (!_active) throw StateError('Comic import operation has ended');
+  }
+
+  Future<ComicImportResult> archive(
+    File source, {
+    String? folder,
+    void Function()? checkStop,
+    ComicArchiveLimits limits = const ComicArchiveLimits(),
+  }) async {
+    _checkActive();
+    checkStop?.call();
+    final issues = <ComicImportIssue>[];
+    var count = 0;
+    Directory? workspace;
+    try {
+      final isZip = (await CBZ.checkType(source)).mime == 'application/zip';
+      final index = isZip
+          ? await inspectComicArchive(source, limits: limits)
+          : null;
+      checkStop?.call();
+      final children = index?.cbzFiles;
+      if (children == null) {
+        await CBZ.import(
+          source,
+          registerComic: (comic) => _registerComic(comic, folder: folder),
+        );
+        count = 1;
+      } else {
+        if (children.length > limits.maxComics) {
+          throw const FormatException('The archive exceeds import limits');
+        }
+        workspace = Directory(App.cachePath).createTempSync('cbz_collection_');
+        await extractComicCollection(source, workspace, limits: limits);
+        var entriesLeft = limits.maxEntries - index!.entryCount;
+        var bytesLeft = limits.maxExpandedBytes - index.expandedBytes;
+        for (final name in children) {
+          checkStop?.call();
+          final child = File(path.join(workspace.path, name));
+          try {
+            final remaining = ComicArchiveLimits(
+              maxEntries: entriesLeft,
+              maxExpandedBytes: bytesLeft,
+            );
+            final childIndex = await inspectComicArchive(
+              child,
+              limits: remaining,
+            );
+            // Charge declared expansion before extraction, even if this child
+            // fails CRC validation or registration. Never recurse into it.
+            entriesLeft -= childIndex.entryCount;
+            bytesLeft -= childIndex.expandedBytes;
+            checkStop?.call();
+            await CBZ.import(
+              child,
+              extract: (file, output) => extractComicCollection(
+                file,
+                output,
+                allowRootImages: true,
+                limits: remaining,
+              ),
+              registerComic: (comic) => _registerComic(comic, folder: folder),
+            );
+            count++;
+          } on SelectionCancelled {
+            rethrow;
+          } catch (error, stack) {
+            issues.add(
+              ComicImportIssue.archive(
+                '${source.name} / ${path.basename(name)}',
+                error,
+                stack,
+              ),
+            );
+          }
+        }
+      }
+    } on SelectionCancelled {
+      rethrow;
+    } catch (error, stack) {
+      issues.add(ComicImportIssue.archive(source.name, error, stack));
+    } finally {
+      await workspace?.deleteIgnoreError(recursive: true);
+    }
+    return ComicImportResult(
+      succeeded: count > 0,
+      importedCount: count,
+      issues: issues,
+    );
   }
 
   Future<ComicImportResult> directory(

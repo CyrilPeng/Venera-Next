@@ -429,6 +429,7 @@ class _ArchiveResultService extends ComicImportService {
   Future<ComicImportResult> archives(
     Directory directory, {
     String? folder,
+    void Function()? checkStop,
   }) async => result;
 }
 

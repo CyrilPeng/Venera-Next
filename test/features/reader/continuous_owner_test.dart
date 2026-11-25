@@ -97,6 +97,9 @@ void main() {
             });
         final next = at('id-2', 1);
         final nextPoint = tester.getCenter(find.byWidget(next.widget));
+        final nextRead = state.getImageReadByOffset(nextPoint)!;
+        expect(nextRead.address.chapterId, 'id-2');
+        expect(nextRead.imageNumber, 1);
         await tester.runAsync(() => state.getImageByOffset(nextPoint));
         expect(fixture.reads.single.chapterId, 'id-2');
         expect(fixture.reads.single.imageKey, fixture.imageKey);
@@ -104,6 +107,9 @@ void main() {
         final current = at('id-1', 3);
         final point = tester.getCenter(find.byWidget(current.widget));
         expect(state.getImageIndexByOffset(point), 2);
+        final currentRead = state.getImageReadByOffset(point)!;
+        expect(currentRead.address.chapterId, 'id-1');
+        expect(currentRead.imageNumber, 3);
         await tester.runAsync(() => state.getImageByOffset(point));
         expect(fixture.reads.last.chapterId, 'id-1');
         final reader = tester.getRect(find.byType(ReaderContinuousView));
@@ -117,6 +123,9 @@ void main() {
             expect(reader.contains(marginPoint), isTrue);
             expect(imageBounds.contains(marginPoint), isFalse);
             expect(state.getImageIndexByOffset(marginPoint), index);
+            final selected = state.getImageReadByOffset(marginPoint)!;
+            expect(selected.address.chapterId, chapter);
+            expect(selected.imageNumber, index == null ? 1 : index + 1);
             await tester.runAsync(() => state.getImageByOffset(marginPoint));
             expect(fixture.reads.last.chapterId, chapter);
             expect(fixture.reads.last.imageKey, fixture.imageKey);
@@ -124,12 +133,15 @@ void main() {
         }
         final divider = tester.getCenter(find.text('Continue to Title 2'));
         expect(await state.getImageByOffset(divider), isNull);
+        expect(state.getImageReadByOffset(divider), isNull);
         expect(state.getImageIndexByOffset(divider), isNull);
         final outside = Offset(reader.left - 4, point.dy);
         expect(await state.getImageByOffset(outside), isNull);
+        expect(state.getImageReadByOffset(outside), isNull);
         expect(state.getImageIndexByOffset(outside), isNull);
         await tester.pumpWidget(const SizedBox());
         expect(await state.getImageByOffset(point), isNull);
+        expect(state.getImageReadByOffset(point), isNull);
         expect(state.getImageIndexByOffset(point), isNull);
         expect(fixture.reads, hasLength(6));
       } finally {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
@@ -11,6 +12,7 @@ import 'package:venera_next/features/history/history.dart';
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/image_export.dart';
 import 'package:venera_next/features/reader/image_position.dart';
+import 'package:venera_next/features/reader/image_read.dart';
 import 'package:venera_next/features/reader/gallery_view.dart';
 import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
@@ -23,6 +25,131 @@ import 'support/reader_integration_fixture.dart';
 
 void main() {
   setUpReaderIntegration();
+
+  testWidgets(
+    'gesture metadata uses the clicked neighboring chapter and source page',
+    (tester) async {
+      final fixture = await ReaderIntegrationFixture.create(tester);
+      try {
+        await fixture.mount(
+          tester,
+          pushed: false,
+          chapters: const ComicChapters({'one': 'One', 'two': 'Two'}),
+        );
+        final reader = fixture.readerKey.currentState!;
+        final request = reader.createGestureRequest()!;
+        final selected = request.imageSelection!(
+          ReaderImageRead(
+            address: const ReaderImageAddress(
+              imageKey: 'same-key',
+              sourceKey: null,
+              comicId: 'book',
+              chapterId: 'two',
+            ),
+            imageNumber: 7,
+            readBytes: (_) async => null,
+          ),
+        )!;
+        expect(reader.chapter, 1);
+        expect(selected.chapter, 2);
+        expect(selected.cacheKey, 'same-key@null@book@two');
+        expect(
+          ReaderImageExport(
+            selected,
+            Uint8List.fromList([
+              0x89,
+              0x50,
+              0x4e,
+              0x47,
+              0x0d,
+              0x0a,
+              0x1a,
+              0x0a,
+            ]),
+          ).filename,
+          'Book_EP2_P7.png',
+        );
+        reader.controller.restoreChapter(2);
+        expect(request.isTargetCurrent(), isFalse);
+        expect(selected.chapter, 2);
+        expect(selected.imageNumber, 7);
+      } finally {
+        await fixture.dispose(tester);
+      }
+    },
+  );
+
+  testWidgets(
+    'right-click save keeps the clicked duplicate filename during picker navigation',
+    (tester) async {
+      final fixture = await ReaderIntegrationFixture.create(tester);
+      const selector = MethodChannel('plugins.flutter.io/file_selector');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final picked = Completer<String?>();
+      final dialog = Completer<void>();
+      final destination = File('${fixture.directory.path}/right-click.png');
+      Object? arguments;
+      messenger.setMockMethodCallHandler(selector, (call) {
+        arguments = call.arguments;
+        dialog.complete();
+        return picked.future;
+      });
+      try {
+        appdata.settings['readerScreenPicNumberForLandscape'] = 2;
+        appdata.settings['readerScreenPicNumberForPortrait'] = 2;
+        appdata.settings['showSingleImageOnFirstPage'] = false;
+        await fixture.mount(tester, pushed: false);
+        final reader = fixture.readerKey.currentState!;
+        final key = reader.images!.first;
+        final source = File(key.substring(7)).readAsBytesSync();
+        reader.controller.replaceChapterImages([key, key, key]);
+        reader.update();
+        await tester.pumpAndSettle();
+        final gallery = reader.imageViewController! as GalleryModeState;
+        final visible =
+            gallery.imageStates.keys
+                .whereType<ComicImageState>()
+                .where((image) => image.visibleInReader)
+                .toList()
+              ..sort(
+                (a, b) => tester
+                    .getCenter(find.byWidget(a.widget))
+                    .dx
+                    .compareTo(tester.getCenter(find.byWidget(b.widget)).dx),
+              );
+        expect(visible, hasLength(2));
+        final point = tester.getCenter(find.byWidget(visible.last.widget));
+        Future<void>? exporting;
+        var done = false;
+        final detach = reader.imageWork.retainTasks((task) {
+          exporting ??= task.done.then((_) => done = true);
+          return () {};
+        });
+        try {
+          await tester.tapAt(point, buttons: kSecondaryMouseButton);
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Save Image'));
+          await pumpReaderUntil(tester, () => dialog.isCompleted || done);
+          expect(dialog.isCompleted, isTrue);
+          expect(arguments.toString(), contains('Book_EP1_P2.png'));
+          reader.toPage(2, animated: false);
+          await tester.pumpAndSettle();
+          picked.complete(destination.path);
+          await pumpReaderUntil(tester, () => done);
+          await exporting;
+          expect(destination.readAsBytesSync(), source);
+          expect(tester.takeException(), isNull);
+        } finally {
+          detach();
+        }
+      } finally {
+        if (!picked.isCompleted) picked.complete(null);
+        messenger.setMockMethodCallHandler(selector, null);
+        await fixture.dispose(tester);
+      }
+    },
+  );
 
   testWidgets(
     'captured reader image read retains the original chapter cache key',
