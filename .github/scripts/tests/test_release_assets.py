@@ -9,6 +9,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest import mock
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -206,6 +207,72 @@ class ReleaseAssetTests(unittest.TestCase):
             assets.github_file_records(files | {"linux.rc.deb": files["linux~rc.deb"]})
         with self.assertRaisesRegex(ValueError, "Unsafe"):
             assets.safe_names(["../outside.txt"])
+
+
+class DmgDetachTests(unittest.TestCase):
+    def setUp(self):
+        self.mount = Path("temporary mount")
+        self.command = ["hdiutil", "detach", str(self.mount)]
+
+    def test_resource_busy_can_recover_on_the_same_mount(self):
+        busy = subprocess.CalledProcessError(16, self.command)
+        with mock.patch.object(assets.subprocess, "run", side_effect=[busy, None]) as run, \
+                mock.patch.object(assets.time, "sleep") as sleep:
+            assets.detach_dmg(self.mount)
+        self.assertEqual(run.call_args_list, [mock.call(self.command, check=True, timeout=60)] * 2)
+        sleep.assert_called_once_with(1)
+
+    def test_persistent_contention_still_blocks_verification(self):
+        busy = subprocess.CalledProcessError(16, self.command)
+        with mock.patch.object(assets.subprocess, "run", side_effect=busy) as run, \
+                mock.patch.object(assets.time, "sleep") as sleep:
+            with self.assertRaises(subprocess.CalledProcessError) as caught:
+                assets.detach_dmg(self.mount)
+        self.assertIs(caught.exception, busy)
+        self.assertEqual(run.call_count, 4)
+        self.assertEqual(sleep.call_args_list, [mock.call(1), mock.call(2), mock.call(4)])
+
+    def test_other_errors_fail_without_retry(self):
+        failure = subprocess.CalledProcessError(1, self.command)
+        with mock.patch.object(assets.subprocess, "run", side_effect=failure) as run, \
+                mock.patch.object(assets.time, "sleep") as sleep:
+            with self.assertRaises(subprocess.CalledProcessError) as caught:
+                assets.detach_dmg(self.mount)
+        self.assertIs(caught.exception, failure)
+        run.assert_called_once_with(self.command, check=True, timeout=60)
+        sleep.assert_not_called()
+
+    def test_timeout_fails_without_retry(self):
+        failure = subprocess.TimeoutExpired(self.command, 60)
+        with mock.patch.object(assets.subprocess, "run", side_effect=failure) as run, \
+                mock.patch.object(assets.time, "sleep") as sleep:
+            with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                assets.detach_dmg(self.mount)
+        self.assertIs(caught.exception, failure)
+        run.assert_called_once_with(self.command, check=True, timeout=60)
+        sleep.assert_not_called()
+
+    def test_failed_payload_remains_failed_after_cleanup_recovers(self):
+        verification_error = ValueError("Embedded source differs")
+        detach_calls = []
+
+        def hdiutil(command, **kwargs):
+            if command[1] == "attach":
+                (Path(command[5]) / "VeneraNext.app").mkdir(parents=True)
+            else:
+                detach_calls.append(command)
+                if len(detach_calls) == 1:
+                    raise subprocess.CalledProcessError(16, command)
+
+        with mock.patch.object(assets.subprocess, "run", side_effect=hdiutil), \
+                mock.patch.object(assets.time, "sleep") as sleep, \
+                mock.patch.object(assets, "apple_bundle", side_effect=verification_error):
+            with self.assertRaises(ValueError) as caught:
+                assets.check_platform("macos", {"app.dmg": Path("app.dmg")}, Path("source"), {}, {})
+        self.assertIs(caught.exception, verification_error)
+        self.assertEqual(len(detach_calls), 2)
+        self.assertEqual(detach_calls[0], detach_calls[1])
+        sleep.assert_called_once_with(1)
 
 
 if __name__ == "__main__":

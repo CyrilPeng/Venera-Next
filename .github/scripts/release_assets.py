@@ -14,6 +14,7 @@ import struct
 import subprocess
 import tarfile
 import tempfile
+import time
 import zipfile
 
 import android_tv_build as android
@@ -274,6 +275,20 @@ def directory_reader(directory):
     return lambda name: (directory / name).read_bytes(), names
 
 
+def detach_dmg(mount):
+    """Detach our temporary read-only image, retrying only resource contention."""
+    for attempt in range(4):
+        try:
+            subprocess.run(["hdiutil", "detach", str(mount)], check=True, timeout=60)
+            return
+        except subprocess.CalledProcessError as error:
+            if error.returncode != 16 or attempt == 3:
+                raise
+            delay = 2 ** attempt
+            print(f"Temporary DMG is busy; retrying detach in {delay} seconds.", flush=True)
+            time.sleep(delay)
+
+
 def check_platform(platform, paths, root, context, environ):
     if platform.startswith("android_"):
         flavor = platform.removeprefix("android_")
@@ -308,7 +323,7 @@ def check_platform(platform, paths, root, context, environ):
                 read, names = directory_reader(apps[0])
                 apple_bundle(read, names, "", "Contents/Frameworks/App.framework/Resources/flutter_assets/", root, context, ios=False)
             finally:
-                subprocess.run(["hdiutil", "detach", str(mount)], check=True, timeout=60)
+                detach_dmg(mount)
     else:
         machine = "x86_64" if platform == "linux_x64" else "aarch64"
         for path in paths.values():
