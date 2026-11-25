@@ -624,6 +624,10 @@
     "View reasons": "查看原因",
     "Keyword filter reasons": "关键词屏蔽原因",
     "Only comics in this list are checked. Images stay hidden.": "仅检查当前列表中的漫画，不显示被屏蔽的图片。",
+    "Show covers": "显示封面",
+    "Hide covers": "隐藏封面",
+    "No cover": "暂无封面",
+    "Covers are shown. Tap a cover to open its details.": "当前弹窗显示封面，点击封面可打开详情。",
     "No comics in this list are hidden by keywords.": "当前列表没有被关键词隐藏的漫画。",
     "Matched in @a": "命中位置：@a",
     "Keyword: @a": "关键词：@a",
@@ -1693,6 +1697,10 @@
     "View reasons": "查看原因",
     "Keyword filter reasons": "關鍵字封鎖原因",
     "Only comics in this list are checked. Images stay hidden.": "僅檢查目前列表中的漫畫，不顯示被封鎖的圖片。",
+    "Show covers": "顯示封面",
+    "Hide covers": "隱藏封面",
+    "No cover": "暫無封面",
+    "Covers are shown. Tap a cover to open its details.": "目前對話框顯示封面，點擊封面可開啟詳情。",
     "No comics in this list are hidden by keywords.": "目前列表沒有被關鍵字隱藏的漫畫。",
     "Matched in @a": "符合位置：@a",
     "Keyword: @a": "關鍵字：@a",
@@ -3204,7 +3212,11 @@
     "Copy uses the bounded preview. Save the full report to include all retained frame and navigation samples.": "Kopiert wird die größenbegrenzte Vorschau. Den vollständigen Bericht speichern, um alle gespeicherten Frame- und Navigationsstichproben einzuschließen.",
     "Stop and review": "Beenden und prüfen",
     "Start new 45-second capture": "Neue 45-Sekunden-Erfassung starten",
-    "Unable to copy report.": "Bericht konnte nicht kopiert werden."
+    "Unable to copy report.": "Bericht konnte nicht kopiert werden.",
+    "Show covers": "Cover anzeigen",
+    "Hide covers": "Cover ausblenden",
+    "No cover": "Kein Cover",
+    "Covers are shown. Tap a cover to open its details.": "Cover werden angezeigt. Tippe auf ein Cover, um die Details zu öffnen."
   },
   "ja_JP": {
     "Crop white side borders": "左右の白い余白を切り取る",
@@ -4273,6 +4285,10 @@
     "Copy uses the bounded preview. Save the full report to include all retained frame and navigation samples.": "コピーするのはサイズに制限のあるプレビューです。保存されたフレームとページ移動のサンプルをすべて含めるには、完全なレポートを保存してください。",
     "Stop and review": "停止して確認",
     "Start new 45-second capture": "新しく 45 秒間収集",
-    "Unable to copy report.": "レポートをコピーできませんでした。"
+    "Unable to copy report.": "レポートをコピーできませんでした。",
+    "Show covers": "表紙を表示",
+    "Hide covers": "表紙を非表示",
+    "No cover": "表紙なし",
+    "Covers are shown. Tap a cover to open its details.": "表紙を表示しています。表紙をタップすると詳細を開きます。"
   }
 }
