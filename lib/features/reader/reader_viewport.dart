@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 
 import 'reader_controller.dart';
 import 'image_picker.dart';
+import 'image_read.dart';
 
 /// Owns the current viewport without retaining a reader State.
 class ReaderViewportBinding {
@@ -44,4 +45,6 @@ abstract interface class ReaderImageViewController
   bool handleOnTap(Offset location);
 
   Future<Uint8List?> getImageByOffset(Offset offset);
+
+  ReaderImageRead? getImageReadByOffset(Offset offset);
 }

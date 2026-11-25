@@ -340,6 +340,7 @@ class ReaderState extends State<Reader>
     final titles = chapters?.titles.toList(growable: false);
     final settings = preferences;
     final layout = pageLayout;
+    final bookTitle = widget.name;
     bool targetCurrent() =>
         mounted &&
         !_stateDisposed &&
@@ -398,6 +399,28 @@ class ReaderState extends State<Reader>
       isTargetCurrent: targetCurrent,
       targetChanges: Listenable.merge([sources, _targetValidity]),
       viewport: viewport,
+      imageSelection: (image) {
+        final address = image.address;
+        final imageChapter = ids == null
+            ? (address.chapterId == '0' ? 1 : 0)
+            : ids.indexOf(address.chapterId) + 1;
+        if (!targetCurrent() ||
+            imageChapter < 1 ||
+            image.imageNumber < 1 ||
+            address.comicId != comic ||
+            address.sourceKey != source?.key) {
+          return null;
+        }
+        return ReaderImageSelection(
+          imageKey: address.imageKey,
+          sourceKey: address.sourceKey,
+          comicId: comic,
+          chapterId: address.chapterId,
+          title: bookTitle,
+          chapter: imageChapter,
+          imageNumber: image.imageNumber,
+        );
+      },
       preferences: settings,
       vertical: currentMode.isTopToBottom,
       reversed:

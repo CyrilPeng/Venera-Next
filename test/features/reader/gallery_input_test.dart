@@ -262,6 +262,10 @@ void main() {
               );
               expect((await picker.pick())?.index, start + i);
               picker.dispose();
+              final selected = state.getImageReadByOffset(point)!;
+              expect(selected.imageNumber, start + i + 1);
+              expect(selected.address.imageKey, data.images[start + i]);
+              expect(selected.address.chapterId, 'chapter');
               await tester.runAsync(() => state.getImageByOffset(point));
               expect(reads.last.imageKey, data.images[start + i]);
               expect(reads.last.sourceKey, isNull);

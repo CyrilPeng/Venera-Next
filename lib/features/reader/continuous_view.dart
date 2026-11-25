@@ -24,6 +24,7 @@ import 'package:venera_next/features/reader/waterfall_controller.dart';
 import 'continuous_data.dart';
 import 'continuous_scroll.dart';
 import 'current_image.dart';
+import 'image_read.dart';
 import 'display_image_provider.dart';
 import 'white_border_crop.dart';
 import 'reader_controller.dart';
@@ -1454,15 +1455,22 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
   @override
   Future<Uint8List?> getImageByOffset(Offset offset) async {
+    return getImageReadByOffset(offset)?.read();
+  }
+
+  @override
+  ReaderImageRead? getImageReadByOffset(Offset offset) {
     final image = _imageAt(offset);
     if (image == null) return null;
-    return widget.readImage(
-      ReaderImageAddress(
+    return ReaderImageRead(
+      address: ReaderImageAddress(
         imageKey: image.imageKey,
         sourceKey: image.sourceKey,
         comicId: image.cid,
         chapterId: image.eid,
       ),
+      imageNumber: image.page,
+      readBytes: widget.readImage,
     );
   }
 
