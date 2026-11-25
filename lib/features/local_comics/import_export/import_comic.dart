@@ -46,18 +46,16 @@ class ImportComic {
     if (file == null) return false;
     final controller = presentation.showLoading(allowCancel: false);
     try {
-      await operation.useFile(
-        file,
-        (source) => CBZ.import(
-          source,
-          registerComic: (comic) =>
-              service.registerComic(comic, folder: selectedFolder),
+      return await _showImportResult(
+        () => operation.useFile(
+          file,
+          (source) => service.archive(
+            source,
+            folder: selectedFolder,
+            checkStop: operation.checkActive,
+          ),
         ),
       );
-      presentation.showMessage(
-        message: 'Imported @a comics'.tlParams({'a': 1}),
-      );
-      return true;
     } finally {
       controller?.close();
     }
@@ -92,14 +90,21 @@ class ImportComic {
       ),
     );
     if (selection == null) return false;
-    return operation.useDirectory(selection, _multipleCbz);
+    return operation.useDirectory(
+      selection,
+      (directory) => _multipleCbz(directory, operation),
+    );
   }
 
-  Future<bool> _multipleCbz(Directory dir) async {
+  Future<bool> _multipleCbz(Directory dir, SelectionOperation operation) async {
     final controller = presentation.showLoading(allowCancel: false);
     try {
       return await _showImportResult(
-        () => service.archives(dir, folder: selectedFolder),
+        () => service.archives(
+          dir,
+          folder: selectedFolder,
+          checkStop: operation.checkActive,
+        ),
       );
     } finally {
       controller?.close();

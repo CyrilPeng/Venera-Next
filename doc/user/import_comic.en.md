@@ -113,6 +113,24 @@ Cat's Eye.cbz
 If there is no `cover.[ext]` in the root folder, the first image from the first
 chapter is used as the cover.
 
+### Reimport a Multiple-CBZ Export ZIP
+
+The development branch accepts the application's `comics_export.zip` through
+both single and batch archive import. This improvement has not yet shipped in a
+stable installation package. CBZs at the ZIP root or in one common outer folder
+are imported individually, retaining their titles, authors, tags, chapters and
+original pages.
+
+The result reports the actual imported count and names each failed child.
+Existing comics with the same title are kept. A damaged or duplicate CBZ does not
+stop other children. The original ZIP is retained. Cancellation or exit waits for
+the current child to finish, then stops pending children and keeps committed books.
+
+Only the outer ZIP and its CBZs are expanded; nested containers are not imported
+recursively. A collection is limited to 1000 comics and a combined 100000 entries
+and 8 GiB of expanded content across both layers. Allow additional space for the
+imported comic copies. Exceeding a limit reports a failure.
+
 ### HarmonyOS Comic Collection ZIP
 
 The development branch accepts both layouts below through **Comic collection ZIP**.
@@ -132,8 +150,8 @@ asks which layout to use, with no preselected answer. Cancelling imports nothing
 you do not need to repackage the ZIP. A comic root containing a cover or pages is
 not automatically removed.
 
-Comic and chapter names are preserved. **An archive file** still imports one book
-and never automatically splits its chapters into books. Hidden system sidecars
+Comic and chapter names are preserved. An image/chapter archive imports one book;
+a ZIP of independent CBZs uses the collection behavior above. Hidden system sidecars
 are ignored for layout detection, but all archive paths must still pass validation.
 
 ### Migrated Settings and Favorites

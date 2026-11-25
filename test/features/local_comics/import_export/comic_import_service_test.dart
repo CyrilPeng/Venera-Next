@@ -8,6 +8,13 @@ import 'package:venera_next/features/local_comics/import_export/comic_copy_metad
 import 'package:venera_next/features/local_comics/import_export/comic_copy_record.dart';
 import 'package:venera_next/features/local_comics/import_export/comic_directory_copy.dart';
 import 'package:venera_next/features/local_comics/import_export/comic_import_service.dart';
+import 'package:venera_next/features/comic_source/models.dart';
+import 'package:venera_next/features/local_comics/import_export/comic_collection_archive.dart';
+import 'package:venera_next/features/local_comics/import_export/comic_export_service.dart';
+import 'package:venera_next/features/local_comics/import_export/cbz.dart';
+import 'package:venera_next/features/local_comics/import_export/comic_archive_compressor.dart';
+import 'package:image/image.dart' as image;
+import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
@@ -90,6 +97,341 @@ void main() {
     );
     expect(result.failures, isEmpty);
     return ComicCopyRecord.read(Directory(result.copies[source.directory]!));
+  }
+
+  List<int> zip(Map<String, List<int>> files) {
+    final contents = archive.Archive();
+    for (final entry in files.entries) {
+      contents.addFile(archive.ArchiveFile.bytes(entry.key, entry.value));
+    }
+    return archive.ZipEncoder().encodeBytes(contents);
+  }
+
+  List<int> bookBytes(String title) => zip({
+    '1.jpg': utf8.encode('page of $title'),
+    'metadata.json': utf8.encode(
+      jsonEncode({
+        'title': title,
+        'author': 'Author',
+        'tags': ['tag'],
+      }),
+    ),
+  });
+
+  File collection(Map<String, List<int>> books) =>
+      File(path.join(root.path, 'comics_export.zip'))
+        ..writeAsBytesSync(zip(books));
+
+  testWidgets('real multiple-CBZ export imports metadata, chapters and pages', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final first = comicIn('${root.path}/source/first', '漫画 One');
+      final chaptered = comicIn('${root.path}/source/second', 'Book Two');
+      final pageBytes = [
+        for (var index = 0; index < 3; index++)
+          image.encodeJpg(
+            image.Image(width: 32, height: 32)
+              ..setPixelRgb(0, 0, index * 80, 100, 20),
+          ),
+      ];
+      File('${first.directory}/1.jpg').writeAsBytesSync(pageBytes[0]);
+      File('${chaptered.directory}/1.jpg').writeAsBytesSync(pageBytes[1]);
+      var chapterIndex = 1;
+      for (final chapter in ['first', 'second']) {
+        final directory = Directory('${chaptered.directory}/$chapter')
+          ..createSync();
+        File(
+          '${directory.path}/1.jpg',
+        ).writeAsBytesSync(pageBytes[chapterIndex++]);
+      }
+      final second = LocalComic(
+        id: '0',
+        title: chaptered.title,
+        subtitle: chaptered.subtitle,
+        tags: chaptered.tags,
+        directory: chaptered.directory,
+        chapters: const ComicChapters({'first': '第一章', 'second': '第二章'}),
+        cover: '1.jpg',
+        comicType: ComicType.local,
+        downloadedChapters: ['first', 'second'],
+        createdAt: chaptered.createdAt,
+      );
+      await service.registerComic(first);
+      await service.registerComic(second);
+      final original = manager.getComics(LocalSortType.name).toList();
+      final exported = File('${root.path}/roundtrip.zip');
+      await SelectionOperation().run(
+        (operation) => exportLocalComics(
+          original,
+          operation: operation,
+          cachePath: root.path,
+          extension: '.cbz',
+          export: CBZ.export,
+          compress: compressComicArchive,
+          save: (file, name) async {
+            expect(name, 'comics_export.zip');
+            await file.copy(exported.path);
+          },
+          isCancelled: () => false,
+        ),
+      );
+      await manager.pendingDownloadTaskWrites;
+      manager.dispose();
+      App.dataPath = (Directory('${root.path}/restored')..createSync()).path;
+      manager = LocalManager(initializeSources: () async {});
+      await manager.init();
+      final result = await service.archive(exported);
+      expect(
+        result.issues,
+        isEmpty,
+        reason: result.issues
+            .map((issue) => '${issue.sourceName}: ${issue.error}')
+            .join('\n'),
+      );
+      expect(result.importedCount, 2);
+      for (final source in original) {
+        final saved = manager.findByName(source.title)!;
+        expect(saved.subtitle, source.subtitle);
+        expect(saved.tags, source.tags);
+        expect(saved.chapters?.titles, source.chapters?.titles);
+        final chapters = saved.downloadedChapters.isEmpty
+            ? <dynamic>[1]
+            : saved.downloadedChapters;
+        final pages = <List<int>>[];
+        for (final chapter in chapters) {
+          for (final uri in await manager.getImages(
+            saved.id,
+            ComicType.local,
+            chapter,
+          )) {
+            pages.add(
+              File(CBZ.localFilePathFromImageUri(uri)).readAsBytesSync(),
+            );
+          }
+        }
+        expect(
+          pages,
+          source.chapters == null
+              ? [pageBytes[0]]
+              : [pageBytes[1], pageBytes[2]],
+        );
+      }
+      expect(exported.existsSync(), isTrue);
+      expect(File('${first.directory}/1.jpg').readAsBytesSync(), pageBytes[0]);
+      expect(
+        root.listSync().where((entry) => entry.name.startsWith('cbz_')),
+        isEmpty,
+      );
+    });
+  });
+
+  for (final wrapper in ['', 'Collection/']) {
+    test('single archive imports each wrapped CBZ: $wrapper', () async {
+      final source = collection({
+        '${wrapper}Book 10.cbz': bookBytes('Ten'),
+        '${wrapper}Book 2.cbz': bookBytes('Two'),
+        '__MACOSX/._Book.cbz': [1],
+      });
+      final result = await service.archive(source);
+      expect(result.importedCount, 2);
+      expect(result.issues, isEmpty);
+      expect(manager.findByName('Ten')!.tags, ['tag']);
+      expect(manager.findByName('Two')!.subtitle, 'Author');
+      expect(source.existsSync(), isTrue);
+    });
+  }
+
+  test(
+    'collection keeps successes and reports damaged and duplicate children',
+    () async {
+      await service.registerComic(
+        comicIn('${root.path}/existing', 'Duplicate'),
+      );
+      final source = collection({
+        '1 Good.cbz': bookBytes('Good'),
+        '2 Broken.cbz': utf8.encode('broken'),
+        '3 Duplicate.cbz': bookBytes('Duplicate'),
+        '4 Last.cbz': bookBytes('Last'),
+      });
+      final result = await service.archive(source);
+      expect(result.succeeded, isTrue);
+      expect(result.importedCount, 2);
+      expect(result.issues.map((issue) => issue.sourceName), [
+        'comics_export.zip / 2 Broken.cbz',
+        'comics_export.zip / 3 Duplicate.cbz',
+      ]);
+      expect(manager.count, 3);
+      expect(source.existsSync(), isTrue);
+      expect(
+        root.listSync().where((entry) => entry.name.startsWith('cbz_')),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'archive directory counts collection children and ordinary CBZs',
+    () async {
+      final directory = Directory('${root.path}/batch')..createSync();
+      final source = collection({
+        'A.cbz': bookBytes('A'),
+        'B.cbz': bookBytes('B'),
+      });
+      await source.copy('${directory.path}/collection.zip');
+      File('${directory.path}/C.cbz').writeAsBytesSync(bookBytes('C'));
+      final result = await service.archives(directory);
+      expect(result.importedCount, 3);
+      expect(result.issues, isEmpty);
+      expect(manager.count, 3);
+    },
+  );
+
+  for (final byteBudget in [false, true]) {
+    test(
+      'collection expansion limits accumulate across both layers: bytes=$byteBudget',
+      () async {
+        final first = bookBytes('First');
+        final second = bookBytes('Second');
+        final source = collection({'1.cbz': first, '2.cbz': second});
+        final firstFile = File('${root.path}/first.cbz')
+          ..writeAsBytesSync(first);
+        final index = await inspectComicArchive(firstFile);
+        final result = await service.archive(
+          source,
+          limits: byteBudget
+              ? ComicArchiveLimits(
+                  maxExpandedBytes:
+                      first.length + second.length + index.expandedBytes,
+                )
+              : const ComicArchiveLimits(maxEntries: 5),
+        );
+        expect(result.importedCount, 1);
+        expect(result.issues.single.sourceName, 'comics_export.zip / 2.cbz');
+        expect(
+          result.issues.single.error.toString(),
+          contains('import limits'),
+        );
+        expect(manager.findByName('First'), isNotNull);
+        expect(manager.findByName('Second'), isNull);
+      },
+    );
+  }
+
+  test('collection comic count is limited before extraction', () async {
+    final source = collection({
+      'A.cbz': bookBytes('A'),
+      'B.cbz': bookBytes('B'),
+    });
+    final result = await service.archive(
+      source,
+      limits: const ComicArchiveLimits(maxComics: 1),
+    );
+    expect(result.importedCount, 0);
+    expect(result.issues.single.error.toString(), contains('import limits'));
+    expect(manager.directory.listSync(), isEmpty);
+  });
+
+  for (final batch in [false, true]) {
+    test(
+      'cancelling between children preserves committed books and cleans staging: batch=$batch',
+      () async {
+        final source = collection({
+          '1.cbz': bookBytes('First'),
+          '2.cbz': bookBytes('Second'),
+        });
+        void checkStop() {
+          if (manager.count == 1) throw const SelectionCancelled();
+        }
+
+        await expectLater(
+          batch
+              ? service.archives(root, checkStop: checkStop)
+              : service.archive(source, checkStop: checkStop),
+          throwsA(isA<SelectionCancelled>()),
+        );
+        expect(manager.findByName('First'), isNotNull);
+        expect(manager.findByName('Second'), isNull);
+        expect(source.existsSync(), isTrue);
+        expect(
+          root.listSync().where((entry) => entry.name.startsWith('cbz_')),
+          isEmpty,
+        );
+      },
+    );
+  }
+
+  for (final wrapper in ['', 'Book/']) {
+    test('ordinary chapter ZIP stays one comic: wrapper=$wrapper', () async {
+      final source = File('${root.path}/Chaptered.zip')
+        ..writeAsBytesSync(
+          zip({
+            '${wrapper}Chapter 1/1.jpg': utf8.encode('first chapter page'),
+            '${wrapper}Chapter 2/1.jpg': utf8.encode('second chapter page'),
+          }),
+        );
+      final result = await service.archive(source);
+      expect(result.importedCount, 1);
+      expect(result.issues, isEmpty);
+      expect(manager.findByName('Chaptered')!.chapters!.titles, [
+        'Chapter 1',
+        'Chapter 2',
+      ]);
+      expect(manager.count, 1);
+    });
+  }
+
+  test('nested containers are not recursively imported', () async {
+    final source = collection({
+      'Nested.cbz': zip({'Book.cbz': bookBytes('Book')}),
+    });
+    final result = await service.archive(source);
+    expect(result.importedCount, 0);
+    expect(result.issues.single.error.toString(), contains('No images'));
+    expect(manager.count, 0);
+  });
+
+  for (final damaged in [false, true]) {
+    test(
+      'unsafe or CRC-damaged inner CBZ cannot escape collection staging: damaged=$damaged',
+      () async {
+        List<int> inner;
+        if (damaged) {
+          final archiveFile = archive.Archive()
+            ..addFile(
+              archive.ArchiveFile.noCompress('1.jpg', 4, [71, 72, 73, 74]),
+            );
+          inner = archive.ZipEncoder().encodeBytes(archiveFile);
+          final nameLength = inner[26] | inner[27] << 8;
+          final extraLength = inner[28] | inner[29] << 8;
+          inner[30 + nameLength + extraLength] = 70;
+        } else {
+          inner = zip({
+            '../escape.jpg': [1, 2],
+          });
+        }
+        final source = collection({
+          '1 Good.cbz': bookBytes('Good'),
+          '2 Broken.cbz': inner,
+        });
+        final result = await service.archive(source);
+        expect(result.importedCount, 1);
+        expect(
+          result.issues.single.sourceName,
+          'comics_export.zip / 2 Broken.cbz',
+        );
+        expect(
+          result.issues.single.error.toString(),
+          contains(damaged ? 'damaged file data' : 'unsafe path'),
+        );
+        expect(manager.findByName('Good'), isNotNull);
+        expect(File('${root.path}/escape.jpg').existsSync(), isFalse);
+        expect(
+          root.listSync().where((entry) => entry.name.startsWith('cbz_')),
+          isEmpty,
+        );
+      },
+    );
   }
 
   for (final failRead in [false, true]) {
