@@ -274,4 +274,53 @@ void main() {
     expect(keep.readAsStringSync(), 'untouched');
     expect(workspace.listSync(), hasLength(1));
   });
+
+  test('ordinary page and chapter archives are not CBZ collections', () async {
+    for (final name in ['1.jpg', 'Chapter/1.jpg', 'Book/Chapter/1.jpg']) {
+      writeZip([
+        archive.ArchiveFile.bytes(name, [1]),
+      ]);
+      expect((await inspectComicArchive(source)).cbzFiles, isNull);
+    }
+    writeZip([
+      archive.ArchiveFile.bytes('1.jpg', [1]),
+      archive.ArchiveFile.bytes('Book.cbz', [2]),
+    ]);
+    expect((await inspectComicArchive(source)).cbzFiles, isNull);
+  });
+
+  test('bounded individual extraction permits root pages', () async {
+    writeZip([
+      archive.ArchiveFile.bytes('1.jpg', [1, 2]),
+    ]);
+    final index = await inspectComicArchive(source);
+    expect(index.entryCount, 1);
+    expect(index.expandedBytes, 2);
+    await extractComicCollection(source, workspace, allowRootImages: true);
+    expect(File(p.join(workspace.path, '1.jpg')).readAsBytesSync(), [1, 2]);
+  });
+
+  for (final limits in [
+    const ComicArchiveLimits(maxEntries: 1),
+    const ComicArchiveLimits(maxExpandedBytes: 2),
+  ]) {
+    test(
+      'preflight limits reject before materializing content: $limits',
+      () async {
+        writeZip([
+          archive.ArchiveFile.bytes('A.cbz', [1, 2]),
+          archive.ArchiveFile.bytes('B.cbz', [3, 4]),
+        ]);
+        await expectLater(
+          inspectComicArchive(source, limits: limits),
+          throwsFormatException,
+        );
+        await expectLater(
+          extractComicCollection(source, workspace, limits: limits),
+          throwsFormatException,
+        );
+        expect(workspace.listSync(), isEmpty);
+      },
+    );
+  }
 }

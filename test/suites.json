@@ -30,7 +30,8 @@
         "test/foundation/js_result_descendants_test.dart",
         "test/routing/webview_menu_test.dart",
         "test/features/comic_source/source_web_login_test.dart",
-        "test/network/rhttp_active_cancellation_test.dart"
+        "test/network/rhttp_active_cancellation_test.dart",
+        "test/features/local_comics/import_export/comic_import_service_test.dart"
       ],
       "source_matches": [
         "Platform\\.isWindows",

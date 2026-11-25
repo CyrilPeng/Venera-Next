@@ -16,7 +16,7 @@ class ReaderImageSelection {
     required this.imageNumber,
   });
   final String imageKey;
-  final String sourceKey;
+  final String? sourceKey;
   final String comicId;
   final String chapterId;
   final String title;

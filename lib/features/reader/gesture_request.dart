@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart' show Listenable;
 import 'package:venera_next/foundation/reader_settings.dart';
 import 'reader_viewport.dart';
+import 'image_read.dart';
+import 'image_export.dart';
 
 /// Captured capabilities for one pointer sequence or context-menu request.
 /// Widgets do not look up the reader again when a delayed action completes.
@@ -11,6 +13,7 @@ class ReaderGestureRequest {
     bool Function()? isTargetCurrent,
     this.targetChanges,
     required this.viewport,
+    this.imageSelection,
     required this.preferences,
     required this.vertical,
     required this.reversed,
@@ -33,6 +36,7 @@ class ReaderGestureRequest {
   /// Publications from the original target owner, in addition to UI changes.
   final Listenable? targetChanges;
   final ReaderImageViewController? viewport;
+  final ReaderImageSelection? Function(ReaderImageRead)? imageSelection;
   final ReaderSettings preferences;
   final bool vertical, reversed, onCommentsPage, canUseImage;
   final void Function(bool forward) turnPage, turnWheel;
