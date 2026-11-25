@@ -116,6 +116,7 @@ Future<void> _flush(WidgetTester tester, Future<void> operation) async {
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
   await tester.tap(finder);
   await tester.pumpAndSettle();
 }
@@ -141,6 +142,7 @@ Future<void> _save(WidgetTester tester, {bool adding = false}) async {
 
 Future<void> _confirmDelete(WidgetTester tester) async {
   await tester.ensureVisible(find.byKey(_deleteConfirmKey));
+  await tester.pumpAndSettle();
   await tester.tap(find.byKey(_deleteConfirmKey));
   await tester.pump();
   await _flush(tester, appdata.saveData(false));
@@ -912,6 +914,7 @@ void main() {
           await _tap(tester, find.text('Edit rule'.tl).first);
           await _openDeleteConfirmation(tester);
           await tester.ensureVisible(find.byKey(_deleteConfirmKey));
+          await tester.pumpAndSettle();
           expect(find.byKey(_deleteConfirmKey).hitTestable(), findsOneWidget);
           expect(tester.takeException(), isNull);
           await _confirmDelete(tester);
