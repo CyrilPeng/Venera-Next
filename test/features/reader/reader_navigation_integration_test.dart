@@ -817,13 +817,17 @@ void main() {
         await tester.pumpAndSettle();
         final old = reader.chapterNavigation.action!;
         fixture.history.onProgress = (_) => saving.future;
-        final exiting = reader.requestExit();
+        var exitFinished = false;
+        final exiting = reader.requestExit().whenComplete(() {
+          exitFinished = true;
+        });
         await tester.pump();
         old.select();
         report(1);
         expect(reader.chapter, 1);
         expect(reader.chapterNavigation.action, isNull);
         saving.completeError(StateError('Save rejected'));
+        await pumpReaderUntil(tester, () => exitFinished);
         await exiting;
         await tester.pumpAndSettle();
         report(1);
