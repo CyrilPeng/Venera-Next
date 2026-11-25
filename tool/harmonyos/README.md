@@ -1,8 +1,8 @@
 # HarmonyOS 构建与发布工具
 
-鸿蒙平台适配与完整阅读器统一维护在 `main`，使用独立 Flutter OH SDK 从同一主线提交生成 HAP。普通平台保留官方 Flutter、根 pubspec／lock；鸿蒙依赖覆盖、受控锁、ArkTS 模板与原生工具集中在本目录。用户入口见[测试版安装指南](../../doc/distribution/harmonyos-reader.zh.md)；早期探针范围与恢复标签见[历史来源](../../doc/development/harmonyos_releases.zh.md#历史来源与恢复)。
+鸿蒙平台适配与完整阅读器统一维护在 `main`，使用独立 Flutter OH SDK 从同一主线提交生成 HAP。普通平台保留官方 Flutter、根 pubspec／lock；鸿蒙依赖覆盖、受控锁、ArkTS 模板与原生工具集中在本目录。用户入口见[安装指南](../../doc/distribution/harmonyos-reader.zh.md)；早期探针范围与恢复标签见[历史来源](../../doc/development/harmonyos_releases.zh.md#历史来源与恢复)。
 
-本轮主线正式版为 **`1.18.4+253`**，鸿蒙改为 Actions 独立未签名 Beta，普通正式 Release 不附 HAP。
+本轮主线正式版为 **`1.18.5+254`**，鸿蒙与其他平台随同一正式 Release 提供未签名 HAP。
 后续构建使用 schema 3 配置，从调用方 checkout 选择准确主线 SHA，所有平台使用同一来源。
 既有 `1.18.3+244` 继续使用提交 `3e1be1391ba784bb228803525696d38c208f471f`
 和原锁文件、原生库及 Release 资产；不以新 HAP 覆盖这些历史产物。
@@ -11,7 +11,7 @@
 分支候选构建只用于无发布预览。2026-11-06 审计发现的适用 QuickJS-NG 核心缺陷已在
 `f5a1f20` 中回移修复；Linux 64／32 位 ASan／UBSan 与 Windows 64／32 位 ASan
 均已通过，来源和边界见依赖的 CORE_PATCHES.md／JSON。旧 d07 的泛型 push 没有
-后来引入的优化缺陷。主线配置使用 `distribution: independent_beta`、`runtime_acceptance: optional` 并保留 `release_enabled: true`；完整平台构建
+后来引入的优化缺陷。主线配置使用 `distribution: bundled`、`channel: harmonyos`、`runtime_acceptance: optional` 并保留 `release_enabled: true`；完整平台构建
 与签装、真机运行分别验证，宿主安全回归不作为鸿蒙运行验收。
 
 完整阅读器记录仓库内八个包的输入摘要；滚动列表已回归官方 pub.dev 0.3.8。
@@ -22,15 +22,15 @@ PNG／7z 由 `packages/venera_native` 的自编桥接和独立固定的官方核
 `venera_saf` 随源码同步，鸿蒙继续使用自己的目录能力边界；Android SAF 插件不被
 声明为鸿蒙持久授权实现。独立 OH 锁文件仅同步所需来源和覆盖路径。
 
-## 独立 Beta 完整阅读器
+## 随版发布的完整阅读器
 
 主线 `.github/workflows/harmonyos-release.yml` 保留 `.github/harmonyos-release.json` 的 schema 1 冻结来源，下一候选采用 schema 3 的 `source_mode: release_commit`。构建 checkout 必须精确等于调用方 HEAD，拒绝未提交、暂存和未跟踪输入；普通业务修复无需同步另一条开发分支或更新共同基线。上下文保留准确版本、提交和运行号，预览继续拒绝 Release 发布。
 
 `release_context.py` 验证准确来源提交、版本、构建号、运行号和 changelog 摘要。`prepare_full_app.py` 只在 `build/harmonyos/full-app` 注入版本与 changelog，运行源码与主线 canonical Git blob 一致；本地构建读取同一源码的 `release.json`。`app/pubspec.lock.template` 是独立 OH SDK 的受控锁，CI 使用 `--enforce-lockfile`。
 
-`ci_full_app.py` 在独立工程中执行严格分析、宿主回归、真实 ARM64 HAP 构建及 ELF／资产审计。当前 `guide_delivery: repository` 配置输出 `VeneraNext-版本-harmonyos-arm64-unsigned.hap`、`harmonyos-manifest.json` 和 `harmonyos-SHA256SUMS` 三项文件，放在同一运行的 `harmonyos-release` artifact；中英文指南保存在准确源码提交。独立 Beta 继续核对 Git 源码清单、包内版本、仓库指南及全部文件，任何 HAP 审核失败均阻止该候选通过。普通正式版按明确独立配置另行构建和核验全部普通资产。
+`ci_full_app.py` 在独立工程中执行严格分析、宿主回归、真实 ARM64 HAP 构建及 ELF／资产审计。当前 `guide_delivery: repository` 配置输出 `VeneraNext-版本-harmonyos-arm64-unsigned.hap`、`harmonyos-manifest.json` 和 `harmonyos-SHA256SUMS` 三项文件，放在同一运行的 `harmonyos-release` artifact，正式发布时随全部平台安装包上传到同一 Release；中英文指南保存在准确源码提交。核对 Git 源码清单、包内版本、仓库指南及全部文件，任何 HAP 审核失败均阻止发布。
 
-当前 `optional` 允许随版正式版和候选版在没有真机报告时发布或恢复草稿，仍保留未签名 Beta 标记及 `runtime_verified: false`；主动附上的报告继续严格检查准确 HAP、来源、上传者和测试结果。未声明 `distribution` 的历史配置默认随版，按原提交保留 HAP、伴随文件及原报告策略，历史 `required`／`stable_required` 不受当前可选策略影响；未声明 `guide_delivery` 的配置仍输出并严格校验两份 `harmonyos-install.*.md`，保留原五附件格式。无发布上下文的手动构建仍附带 `install.*.md`。已发布的 `v1.18.3` 等附件保持原样。
+当前 `optional` 允许随版正式版和候选版在没有真机报告时发布或恢复草稿，仍保留 `signed: false` 及 `runtime_verified: false`；主动附上的报告继续严格检查准确 HAP、来源、上传者和测试结果。当前 `harmonyos` 渠道使用 `full_reader` 元数据，未声明渠道的历史配置保留原 Beta 上下文和实验元数据。未声明 `distribution` 的旧配置默认随版，按原提交保留 HAP、伴随文件及原报告策略，历史 `required`／`stable_required` 不受当前可选策略影响；未声明 `guide_delivery` 的配置仍输出并严格校验两份 `harmonyos-install.*.md`。已发布附件保持原样。
 
 CPF WebView 保留其 OHOS 实现，并从主线固定的官方 `0aaf7a0` 导出浏览器退出事件 Dart 接口与类型，补齐 Windows 专用代码的静态依赖。生成时先替换主线同名 Git／Windows 本地 overrides，再插入协调的 CPF path 组，拒绝重复 YAML key。覆盖层不改写应用代理逻辑、不生成退出事件；生成工程用于 HAP，Windows 发行使用主线自己的来源。复制的上游类型与生成文件保持原字节，原始和适配后的依赖树均记录摘要。
 
@@ -54,7 +54,7 @@ python3 tool/harmonyos/ci_full_app.py --flutter-sdk "$FLUTTER_OH_SDK"
 
 首次 API 26 运行已确认真实 Native 组件版本为 `26.0.0.105`，空白包、核心库编译、探针分析与 6 项宿主回归均通过；探针 HAP 编译完成后，由于自动 strip 改写库字节而被严格哈希检查拒绝。现固定组件版本和重建 ZIP 的完整 SHA-256，并关闭探针模块的自动 strip 后重新验证；不能把被审计拒绝的那次运行称为全流程成功。
 
-主线候选流程先验证空白工程，再重编译全部核心／完整阅读器原生库并构建完整阅读器；早期核心与升级探针保留为手动实验工具。模块关闭自动 strip，核对 AArch64 ELF、实际入包库及精确哈希，拒绝缺库、内容变化和空包。证据保留 14 天，当前产物使用 `harmonyos-release` 名称但只供未签名候选验证。
+主线候选流程先验证空白工程，再重编译全部核心／完整阅读器原生库并构建完整阅读器；早期核心与升级探针保留为手动实验工具。模块关闭自动 strip，核对 AArch64 ELF、实际入包库及精确哈希，拒绝缺库、内容变化和空包。构建日志与设备模板保留 14 天，`harmonyos-release` HAP 产物保留 30 天；分支运行只用于预览，正式标签构建随 Release 公开。
 
 只有完整阅读器阶段的 `packaging_pass` 表示 `lib/main.dart` 和原应用代码实际编译入包；空白或探针成功不能替代它。未签名包仍需用户本地签装，CI 不证明原生库真机运行或数据恢复。DevEco 仅保留为开发者调试备选，不要求普通用户安装完整 SDK。
 

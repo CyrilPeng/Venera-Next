@@ -32,7 +32,7 @@
   - [3.1 Android 手机与平板](#android-手机与平板)
   - [3.2 Android TV](#android-tv)
   - [3.3 Windows](#windows)
-  - [3.4 HarmonyOS（测试版）](#harmonyos测试版)
+  - [3.4 HarmonyOS](#harmonyos)
   - [3.5 Linux](#linux)
   - [3.6 iOS](#ios)
   - [3.7 macOS](#macos)
@@ -53,13 +53,13 @@
 <a id="项目介绍"></a>
 ## 1. 项目介绍
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) 是基于 [Venera](https://github.com/venera-app/venera) 持续开发的 Flutter 漫画阅读器，支持 **Android、Android TV、Windows、Linux、iOS 和 macOS**，另提供 **HarmonyOS 测试版**。
+[VeneraNext](https://github.com/CyrilPeng/venera-next) 是基于 [Venera](https://github.com/venera-app/venera) 持续开发的 Flutter 漫画阅读器，支持 **Android、Android TV、Windows、Linux、iOS、macOS 和 HarmonyOS**。
 
 本分支围绕“少一点打断，多一点阅读”打磨日常体验：瀑布流跨章连读不用退出，长按收藏省去选择收藏夹的步骤，夜间和墨水屏设备各有阅读设置。本地导入、离线下载、阅读统计与多设备同步，让找书、看漫画和追连载更方便。
 
 原项目的 JavaScript 漫画源扩展、本地阅读、搜索与分类、收藏下载，以及按源提供的登录、评论和评分能力继续保留。
 
-界面支持简体中文、繁体中文、英文、德语和日语，可在 **设置 → 应用 → 语言** 中切换。项目 README 默认仍为中文。德语和日语为开发版新增，将随下一个稳定版本提供。
+界面支持简体中文、繁体中文、英文、德语和日语，可在 **设置 → 应用 → 语言** 中切换。项目 README 默认仍为中文。德语和日语从 `v1.18.5` 起随正式版提供。
 
 **快速入口：** [下载安装](#下载安装) · [使用说明](#使用说明) · [编写漫画源](doc/api/comic_source.zh.md) · [JavaScript API](doc/api/js.zh.md) · [更新日志](CHANGELOG.md)
 
@@ -174,15 +174,16 @@ winget upgrade --id CyrilPeng.VeneraNext --exact
 Windows 安装器、便携包和 winget manifest 维护说明见 [doc/distribution/windows.zh.md](doc/distribution/windows.zh.md)。
 
 <a id="harmonyos测试版"></a>
-### 3.4 HarmonyOS（测试版）
+<a id="harmonyos"></a>
+### 3.4 HarmonyOS
 
-从 [HarmonyOS Beta 工作流](https://github.com/CyrilPeng/Venera-Next/actions/workflows/harmonyos-release.yml) 的成功运行下载 `harmonyos-release` 产物。自 `v1.18.4` 起，鸿蒙独立分发未签名 Beta，普通正式 Release 不再附带 HAP；历史发布页中的鸿蒙附件保留：
+从[最新正式 Release](https://github.com/CyrilPeng/Venera-Next/releases/latest) 的 Assets 下载鸿蒙安装包。自 `v1.18.5` 起，鸿蒙与其他平台使用同一版本、随 Releases 发布，公开附件可直接下载，无需登录 GitHub：
 
 | 文件名 | 说明 | 适用场景 |
 |---|---|---|
-| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | 未签名 ARM64 测试版 | 满足 API 26 要求的鸿蒙手机与平板 |
+| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | 未签名 ARM64 安装包 | 满足 API 26 要求的鸿蒙手机与平板 |
 
-核对同一运行的 manifest、源码提交与 SHA-256 后自行签名侧载；升级时沿用原签名密钥，不卸载或清空数据。鸿蒙设备验收仍待完成，安装步骤与功能限制见 [鸿蒙测试版安装指南](doc/distribution/harmonyos-reader.zh.md)。
+同一发布页提供 `harmonyos-manifest.json` 和 `harmonyos-SHA256SUMS`，核对后自行签名侧载；应用内更新检查会跳转到包含匹配 HAP 的发布页。升级时沿用原签名密钥。安装步骤和已知平台限制见[鸿蒙安装指南](doc/distribution/harmonyos-reader.zh.md)。
 
 <a id="linux"></a>
 ### 3.5 Linux
@@ -358,7 +359,7 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 ## 8. 开发者入口
 
 - [构建与开发](doc/development/build.zh.md)：Flutter/Rust 环境、依赖锁定、测试和发布。
-- [鸿蒙独立 Beta 构建](doc/development/harmonyos_releases.zh.md)：准确主线提交、独立 SDK、未签名 HAP 与设备验收。
+- [鸿蒙构建与发布](doc/development/harmonyos_releases.zh.md)：同提交随版发布、独立 SDK、未签名 HAP 与可选设备报告。
 - [贡献指南](CONTRIBUTING.md) · [依赖治理](doc/development/dependencies.zh.md)。
 - [Windows 分发维护](doc/distribution/windows.zh.md) · [无头命令模式](doc/user/headless.zh.md)。
 - [安全政策](SECURITY.md) · [行为准则](CODE_OF_CONDUCT.md) · [完整文档索引](doc/README.md)。

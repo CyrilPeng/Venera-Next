@@ -183,6 +183,23 @@ class ValidateReleaseTests(unittest.TestCase):
         self.assertIn('不包含 HAP', notes)
         self.assertIn('设备验收仍待完成', notes)
 
+    def test_official_harmonyos_notes_link_to_the_exact_release_installation_guides(self):
+        policy = self.root / '.github/harmonyos-next.json'
+        policy.parent.mkdir()
+        policy.write_text('{"guide_delivery": "repository", "distribution": "bundled", '
+                          '"channel": "harmonyos", "runtime_acceptance": "optional"}', encoding='utf-8')
+        for language in ('zh', 'en'):
+            guide = self.root / f'doc/distribution/harmonyos-reader.{language}.md'
+            guide.parent.mkdir(parents=True, exist_ok=True)
+            guide.write_text('# Installation\n', encoding='utf-8')
+        target = self.root / 'notes.md'
+        self.invoke('--write-notes', str(target), ref='refs/tags/v1.2.3', ref_type='tag')
+        notes = target.read_text(encoding='utf-8')
+        self.assertNotIn('Beta', notes)
+        self.assertNotIn('/actions/workflows/', notes)
+        for language in ('zh', 'en'):
+            self.assertIn(f'/blob/v1.2.3/doc/distribution/harmonyos-reader.{language}.md', notes)
+
     def test_complete_build_keeps_branch_and_release_paths_separate(self):
         workflow = (ROOT / ".github/workflows/main.yml").read_text(encoding="utf-8")
         metadata = re.search(

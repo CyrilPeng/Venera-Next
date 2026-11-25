@@ -13,7 +13,7 @@ from pathlib import Path
 from native_build import CONFIG, ROOT, digest, require_within
 from prepare_probe import (BASE, command, configure_device_types, configure_profile,
                            export_qjs, verify_native_report)
-from release_context import build_inputs
+from release_context import build_inputs, reader_purpose
 from app_labels import APP_LABEL, configure_app_labels
 
 
@@ -447,7 +447,7 @@ def prepare_project(args):
     for name in ("librhttp.so", "libqjs.so", "libsqlite3.so", "libc++_shared.so"):
         shutil.copy2(args.native_dir / "arm64-v8a" / name, destination / name)
     metadata = {
-        "schema": 1, "purpose": "full_reader_experiment", "branch": "main",
+        "schema": 1, "purpose": reader_purpose(identity["release"]), "branch": "main",
         "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "bundle_name": FULL_CONFIG["bundle_name"], "app_label": APP_LABEL, "version_name": identity["version_name"],
         "hap_version_name": identity["hap_version_name"],

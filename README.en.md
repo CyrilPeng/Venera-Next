@@ -32,7 +32,7 @@
   - [3.1 Android phones and tablets](#android-phones-and-tablets)
   - [3.2 Android TV](#android-tv)
   - [3.3 Windows](#windows)
-  - [3.4 HarmonyOS (Beta)](#harmonyos-beta)
+  - [3.4 HarmonyOS](#harmonyos)
   - [3.5 Linux](#linux)
   - [3.6 iOS](#ios)
   - [3.7 macOS](#macos)
@@ -53,13 +53,13 @@
 <a id="introduction"></a>
 ## 1. Introduction
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, Windows, Linux, iOS, and macOS**, with an independently distributed **HarmonyOS beta**.
+[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, Windows, Linux, iOS, macOS, and HarmonyOS**.
 
 This fork focuses on fewer interruptions and more reading: Waterfall mode scrolls across chapters without leaving the reader, long-pressing Favorite skips the folder picker, and nighttime and E-Ink devices get their own reading adjustments. Local import, offline downloads, reading statistics, and multi-device sync make finding comics, reading them, and following ongoing series easier.
 
 Venera's JavaScript extensions, local reading, search and categories, favorites, downloads, and source-dependent login, comments, and ratings remain available.
 
-The interface supports Simplified Chinese, Traditional Chinese, English, German and Japanese. Choose a language in **Settings → App → Language**. The default project README remains Chinese. German and Japanese are new in the development version and will be included in the next stable release.
+The interface supports Simplified Chinese, Traditional Chinese, English, German and Japanese. Choose a language in **Settings → App → Language**. The default project README remains Chinese. German and Japanese are included in stable releases starting with `v1.18.5`.
 
 **Quick links:** [Install](#download-and-installation) · [Usage](#usage-guide) · [Write a source](doc/api/comic_source.en.md) · [JavaScript API](doc/api/js.en.md) · [Changelog](CHANGELOG.md)
 
@@ -176,15 +176,16 @@ You can also download `VeneraNext-xxx-windows-installer.exe` or the portable ZIP
 See [Windows Distribution](doc/distribution/windows.en.md) for installer, portable build, and winget maintenance details.
 
 <a id="harmonyos-beta"></a>
-### 3.4 HarmonyOS (Beta)
+<a id="harmonyos"></a>
+### 3.4 HarmonyOS
 
-Download the `harmonyos-release` artifact from a successful run of the [HarmonyOS Beta workflow](https://github.com/CyrilPeng/Venera-Next/actions/workflows/harmonyos-release.yml). Starting with `v1.18.4`, the unsigned HarmonyOS Beta is distributed independently; standard stable releases do not include a HAP. Historical release attachments remain available:
+Download the HarmonyOS package from Assets on the [latest stable Release](https://github.com/CyrilPeng/Venera-Next/releases/latest). Starting with `v1.18.5`, HarmonyOS shares the version and release schedule of the other platforms. Public attachments can be downloaded directly without signing in to GitHub:
 
 | File | Description | Recommended for |
 |---|---|---|
-| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | Unsigned ARM64 beta | HarmonyOS phones and tablets meeting API 26 requirements |
+| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | Unsigned ARM64 package | HarmonyOS phones and tablets meeting API 26 requirements |
 
-Verify the manifest, source commit and SHA-256 from the same run, then sign and sideload it yourself. Keep the original signing key for upgrades; do not uninstall or clear data. HarmonyOS device acceptance remains pending. See the [HarmonyOS beta installation guide](doc/distribution/harmonyos-reader.en.md) for instructions and limitations.
+The same release includes `harmonyos-manifest.json` and `harmonyos-SHA256SUMS`. Verify them, then sign and sideload the HAP yourself. In-app update checks open a release containing the matching HAP. Keep your original signing key for upgrades. See the [HarmonyOS installation guide](doc/distribution/harmonyos-reader.en.md) for instructions and known platform limitations.
 
 <a id="linux"></a>
 ### 3.5 Linux
@@ -360,7 +361,7 @@ Run `winget upgrade --id CyrilPeng.VeneraNext --exact`. Public-source availabili
 ## 8. Developer resources
 
 - [Build and Development](doc/development/build.en.md): Flutter/Rust, locked dependencies, tests, and releases.
-- [HarmonyOS Independent Beta Builds](doc/development/harmonyos_releases.en.md): exact mainline source, independent SDK, unsigned HAP and device acceptance.
+- [HarmonyOS Builds and Releases](doc/development/harmonyos_releases.en.md): same-source bundled releases, independent SDK, unsigned HAP and optional device reports.
 - [Contributing](CONTRIBUTING.en.md) · [Dependency Governance](doc/development/dependencies.en.md).
 - [Windows Distribution](doc/distribution/windows.en.md) · [Headless Mode](doc/user/headless.en.md).
 - [Security Policy](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Documentation Index](doc/README.en.md).

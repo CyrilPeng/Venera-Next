@@ -24,7 +24,9 @@ def validate_context(value, source_commit, environ):
     if unified and "distribution" in value:
         fields.add("distribution")
     hashes = ("source_commit", "release_commit") if unified else ("source_commit", "main_baseline", "release_commit")
-    if (set(value) != fields or type(value["schema"]) is not int or value["schema"] not in (2, 3) or value["channel"] != "harmonyos-beta"
+    if (set(value) != fields or type(value["schema"]) is not int or value["schema"] not in (2, 3)
+            or not (value["channel"] == "harmonyos-beta" or (
+                unified and value["channel"] == "harmonyos" and value.get("distribution") == "bundled"))
             or type(value["tagged"]) is not bool or type(value["preview"]) is not bool
             or any(not isinstance(value[key], str) or not re.fullmatch(r"[0-9a-f]{40}", value[key])
                    for key in hashes)
@@ -57,6 +59,10 @@ def validate_context(value, source_commit, environ):
     return value
 
 
+def reader_purpose(release):
+    return "full_reader" if release and release.get("channel") == "harmonyos" else "full_reader_experiment"
+
+
 def validate_version(version, build):
     if not isinstance(version, str) or not VERSION.fullmatch(version) or type(build) is not int or not 245 <= build <= 2147483647:
         raise ValueError("The next HarmonyOS reader requires a valid version and build number >=245")
@@ -73,6 +79,10 @@ def build_inputs():
             if ((version, build) != (config["version"], config["build"])
                     or changelog != (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")):
                 raise ValueError("Mainline and preview builds must use their source version and changelog")
+        if context["schema"] == 3:
+            policy = json.loads((ROOT / ".github/harmonyos-next.json").read_text(encoding="utf-8"))
+            if context["channel"] != policy.get("channel", "harmonyos-beta"):
+                raise ValueError("The HarmonyOS release channel must match its source policy")
         release = {key: item for key, item in context.items() if key != "changelog"}
     else:
         if os.environ.get("GITHUB_REF_TYPE") == "tag":

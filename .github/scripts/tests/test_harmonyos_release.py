@@ -109,7 +109,7 @@ class Fixture:
         self.preview_next = True
 
     def unified_mainline(self, *, release_enabled=False, guide_delivery=None, runtime_acceptance=None,
-                         distribution=None):
+                         distribution=None, channel=None):
         self.next_candidate()
         for name in release.tracked(self.source, self.source_commit):
             write(self.root, name, release.blob(self.source, self.source_commit, name))
@@ -121,6 +121,8 @@ class Fixture:
             self.next_pin['runtime_acceptance'] = runtime_acceptance
         if distribution is not None:
             self.next_pin['distribution'] = distribution
+        if channel is not None:
+            self.next_pin['channel'] = channel
         write(self.root, release.NEXT_PIN, json.dumps(self.next_pin))
         self.release_commit = commit(self.root)
         self.sync_mainline_source()
@@ -162,7 +164,8 @@ class Fixture:
         native[:6] = b'\x7fELF\x02\x01'
         struct.pack_into('<HH', native, 16, 3, 183)
         metadata = {
-            'purpose': 'full_reader_experiment', 'entrypoint': 'lib/main.dart',
+            'purpose': 'full_reader' if expected['channel'] == 'harmonyos' else 'full_reader_experiment',
+            'entrypoint': 'lib/main.dart',
             'signed': False, 'runtime_verified': False, 'reader_integrated': True,
             'source_commit': self.source_commit, 'release': release.public_context(expected),
             'source_files': source_files, 'bundle_name': release.BUNDLE,
@@ -466,6 +469,55 @@ class HarmonyReleaseTests(unittest.TestCase):
         self.assertFalse(manifest['signed'])
         template = release.runtime_template(manifest)
         self.assertTrue(all(item['status'] == 'not_run' for item in template['checks'].values()))
+
+    def test_official_bundled_hap_uses_its_committed_channel_without_device_claims(self):
+        fixture = self.fixture
+        fixture.unified_mainline(release_enabled=True, guide_delivery='repository',
+                                 runtime_acceptance='optional', distribution='bundled', channel='harmonyos')
+        fixture.preview_next = False
+        git(fixture.root, 'tag', '-a', 'v1.18.3', '-m', 'official release')
+        expected = fixture.bundle(tagged=True)
+        self.verify(expected)
+        self.assertTrue(release.bundles_harmonyos(expected))
+        self.assertEqual(expected['channel'], 'harmonyos')
+        self.assertFalse(release.runtime_report_required(expected))
+        manifest = json.loads((fixture.output / 'harmonyos-manifest.json').read_text())
+        self.assertEqual(manifest['build']['purpose'], 'full_reader')
+        self.assertEqual(manifest['build']['release']['channel'], 'harmonyos')
+        self.assertEqual({path.name for path in fixture.output.iterdir()}, {
+            'VeneraNext-1.18.3-harmonyos-arm64-unsigned.hap',
+            'harmonyos-manifest.json', 'harmonyos-SHA256SUMS'})
+        self.assertFalse(manifest['signed'])
+        self.assertFalse(manifest['runtime_verified'])
+        with zipfile.ZipFile(fixture.output / manifest['hap'], 'a') as archive:
+            archive.writestr('libs/arm64-v8a/libunexpected.so', b'unreviewed library')
+        fixture.refresh_package_digest(expected)
+        with self.assertRaisesRegex(ValueError, 'native libraries'):
+            self.verify(expected)
+
+    def test_official_channel_rejects_unknown_or_independent_policy_and_source_drift(self):
+        fixture = self.fixture
+        fixture.unified_mainline(distribution='bundled', channel='harmonyos')
+        for change in ({'channel': 'harmonyos-beta'}, {'channel': 'stable'}, {'channel': False},
+                       {'channel': None}, {'distribution': 'independent_beta'}, {'schema': 2}):
+            with self.subTest(change=change):
+                write(fixture.root, release.NEXT_PIN, json.dumps(fixture.next_pin | change))
+                with self.assertRaisesRegex(ValueError, 'Invalid immutable'):
+                    release.load_pin(fixture.root, next_candidate=True)
+        write(fixture.root, release.NEXT_PIN, json.dumps({
+            key: value for key, value in fixture.next_pin.items() if key != 'channel'}))
+        with self.assertRaisesRegex(ValueError, 'uncommitted'):
+            fixture.context()
+
+    def test_historical_bundled_config_keeps_its_original_beta_channel_and_metadata(self):
+        fixture = self.fixture
+        fixture.unified_mainline(distribution='bundled', runtime_acceptance='stable_required')
+        expected = fixture.bundle()
+        self.verify(expected)
+        self.assertEqual(expected['channel'], 'harmonyos-beta')
+        manifest = json.loads((fixture.output / 'harmonyos-manifest.json').read_text())
+        self.assertEqual(manifest['build']['purpose'], 'full_reader_experiment')
+        self.assertEqual(expected['runtime_acceptance'], 'stable_required')
 
     def test_release_only_changes_preserve_a_common_immutable_baseline(self):
         fixture = self.fixture
