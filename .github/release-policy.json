@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "required_jobs": [
+    "Security / Rust 锁定依赖漏洞扫描",
+    "Verify_Packages"
+  ],
+  "verification_artifact": "release-verification",
+  "security_max_age_hours": 24,
+  "artifact_retention_days": 30
+}

@@ -2,7 +2,7 @@
 
 Default Chinese version: [testing.zh.md](testing.zh.md)
 
-This guide covers test ownership, local execution, CI evidence, and regression maintenance. See [Build and Development](build.en.md) for toolchains and [Dependency Governance](dependencies.en.md) for sources and patches. The reorganization baseline, decisions, and acceptance record are in [experiments](../experiments/test_reorganization_plan_20261113.zh.md).
+This guide covers test ownership, local execution, CI evidence, and regression maintenance. See [Build and Development](build.en.md) for toolchains and [Dependency Governance](dependencies.en.md) for sources and patches. Completed reorganization conclusions appear below; this guide is the maintained execution and maintenance reference.
 
 ## Environment and Entry Points
 
@@ -119,3 +119,11 @@ LCOV merges hits by normalized source path and line number, checking each record
 - Merges/removals record original cases/parameters, protected behavior, current-code evidence, replacements, platforms, and validation. Keep unresolved candidates. Names containing legacy, native, or integration do not determine removal.
 - Preserve independent failure coverage for old databases/backups, transaction failure, real crash recovery, download resume/cancellation, path boundaries, FFI ownership, stale callbacks, menu locking, TV, and release provenance. Fixtures retain source, license, and hashes.
 - Update `CHANGELOG.md` for each batch, use Chinese Conventional Commits, and finish local and complete CI validation before advancing. Roll back through normal batch reverts while retaining independent security fixes.
+
+## Completed Test Reorganization
+
+S0–S7 completed and entered main in November 2026. Primary `*_test.dart` lines fell from 178,391 to 177,380; all test Dart including support grew from 179,922 to 180,498 (+576). Splitting responsibilities and restoring execution coverage improved maintenance without a large overall line reduction.
+
+Three comparable normal CI samples completed after native-frame waits were repaired. Ordinary LCOV retained all 525 files and 55,832 line records; hits rose from 45,641 to 45,659 with no lost baseline record or hit. Quality feedback arrived earlier, but complete PR duration missed its original speed target. Builds, host tests and device acceptance retain separate scope.
+
+The [RC3 final report](https://github.com/CyrilPeng/Venera-Next/blob/v1.18.4-rc.3/doc/experiments/test_reorganization_result_20261113.zh.md) preserves baselines, case changes, failures and comparable samples. Maintain current rules here rather than appending release-specific process records. Import journals now own actual directory replacement; retire the unused `DirectoryReplacement` and its five dedicated tests, retaining current transaction and real interruption-recovery tests. Historical comic metadata codecs and compatibility tests remain.

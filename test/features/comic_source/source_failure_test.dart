@@ -2,11 +2,43 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/comic_source/source_failure.dart';
 import 'package:venera_next/features/comic_source/source_failure_presentation.dart';
 import 'package:venera_next/features/comic_source/source_repositories.dart';
+import 'package:venera_next/foundation/app_language.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'bundled translations cover every source failure presentation',
+    () async {
+      final previousLanguage = appdata.settings['language'];
+      final previousTranslations = AppTranslation.translations;
+      addTearDown(() {
+        appdata.settings['language'] = previousLanguage;
+        AppTranslation.translations = previousTranslations;
+      });
+      await AppTranslation.init();
+      for (final language in AppLanguage.values) {
+        appdata.settings['language'] = language.preference;
+        for (final code in SourceFailureCode.values) {
+          final dictionary =
+              AppTranslation.translations[language.translationKey];
+          if (language != AppLanguage.english) {
+            expect(
+              dictionary,
+              contains(code.message),
+              reason: '${language.name}/${code.name}',
+            );
+          }
+          expect(
+            sourceFailureMessage(SourceFailure(code)),
+            dictionary?[code.message] ?? code.message,
+          );
+        }
+      }
+    },
+  );
 
   test('repository failure keeps its reason across presentation languages', () {
     final language = appdata.settings['language'];

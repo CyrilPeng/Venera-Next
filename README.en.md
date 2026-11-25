@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="README.md">简体中文</a> | <strong>English</strong>
+  <a href="README.md">简体中文</a> | <strong>English</strong> | <a href="README.de.md">Deutsch</a> | <a href="README.ja.md">日本語</a>
 
   <br>
   <img src="assets/readme_logo.png" alt="VeneraNext" width="200" />
@@ -32,7 +32,7 @@
   - [3.1 Android phones and tablets](#android-phones-and-tablets)
   - [3.2 Android TV](#android-tv)
   - [3.3 Windows](#windows)
-  - [3.4 HarmonyOS (Beta)](#harmonyos-beta)
+  - [3.4 HarmonyOS](#harmonyos)
   - [3.5 Linux](#linux)
   - [3.6 iOS](#ios)
   - [3.7 macOS](#macos)
@@ -53,11 +53,13 @@
 <a id="introduction"></a>
 ## 1. Introduction
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, Windows, Linux, iOS, and macOS**, with a **HarmonyOS beta** distributed alongside each release.
+[VeneraNext](https://github.com/CyrilPeng/venera-next) continues development of [Venera](https://github.com/venera-app/venera), a Flutter comic reader for **Android, Android TV, Windows, Linux, iOS, macOS, and HarmonyOS**.
 
 This fork focuses on fewer interruptions and more reading: Waterfall mode scrolls across chapters without leaving the reader, long-pressing Favorite skips the folder picker, and nighttime and E-Ink devices get their own reading adjustments. Local import, offline downloads, reading statistics, and multi-device sync make finding comics, reading them, and following ongoing series easier.
 
 Venera's JavaScript extensions, local reading, search and categories, favorites, downloads, and source-dependent login, comments, and ratings remain available.
+
+The interface supports Simplified Chinese, Traditional Chinese, English, German and Japanese. Choose a language in **Settings → App → Language**. The default project README remains Chinese. German and Japanese are included in stable releases starting with `v1.18.5`.
 
 **Quick links:** [Install](#download-and-installation) · [Usage](#usage-guide) · [Write a source](doc/api/comic_source.en.md) · [JavaScript API](doc/api/js.en.md) · [Changelog](CHANGELOG.md)
 
@@ -174,15 +176,16 @@ You can also download `VeneraNext-xxx-windows-installer.exe` or the portable ZIP
 See [Windows Distribution](doc/distribution/windows.en.md) for installer, portable build, and winget maintenance details.
 
 <a id="harmonyos-beta"></a>
-### 3.4 HarmonyOS (Beta)
+<a id="harmonyos"></a>
+### 3.4 HarmonyOS
 
-Download a HarmonyOS package from the [release page](https://github.com/CyrilPeng/Venera-Next/releases). Starting with `v1.18.3-rc.3`, every prerelease and stable release includes the matching HarmonyOS beta:
+Download the HarmonyOS package from Assets on the [latest stable Release](https://github.com/CyrilPeng/Venera-Next/releases/latest). Starting with `v1.18.5`, HarmonyOS shares the version and release schedule of the other platforms. Public attachments can be downloaded directly without signing in to GitHub:
 
 | File | Description | Recommended for |
 |---|---|---|
-| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | Unsigned ARM64 beta | HarmonyOS phones and tablets meeting API 26 requirements |
+| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | Unsigned ARM64 package | HarmonyOS phones and tablets meeting API 26 requirements |
 
-Sign and sideload it yourself. Keep the original signing key for upgrades; do not uninstall or clear data. See the [HarmonyOS beta installation guide](doc/distribution/harmonyos-reader.en.md) for instructions and limitations.
+The same release includes `harmonyos-manifest.json` and `harmonyos-SHA256SUMS`. Verify them, then sign and sideload the HAP yourself. In-app update checks open a release containing the matching HAP. Keep your original signing key for upgrades. See the [HarmonyOS installation guide](doc/distribution/harmonyos-reader.en.md) for instructions and known platform limitations.
 
 <a id="linux"></a>
 ### 3.5 Linux
@@ -234,7 +237,7 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 - **Preloading:** adjust the image preload count in Settings → Reading to prepare upcoming images and reduce waits. Loading more images also uses more data and memory.
 - **Resume:** progress stores the chapter and page, and Waterfall records the chapter you are actually reading. Ascending/descending on the details page only changes the list display.
 - **Separate reader settings:** enable device-specific or per-comic settings so you do not have to readjust them each time.
-- **Unreleased on main:** lock the reader menu from its toolbar and unlock with the small edge lock; page turns, scrolling, and zoom remain available. Vertical Continuous and Waterfall add Crop white side borders, off by default. Turning it off restores the complete display; original files, downloads, and exports remain intact. See [side margins and cropping](doc/user/reader_width.en.md).
+- **v1.18.4:** lock the reader menu from its toolbar and unlock with the small edge lock; page turns, scrolling, and zoom remain available. Vertical Continuous and Waterfall provide Crop white side borders, off by default. Turning it off restores the complete display; original files, downloads, and exports remain intact. See [side margins and cropping](doc/user/reader_width.en.md).
 
 | Single-page view | Split double-page view |
 |---|---|
@@ -257,7 +260,7 @@ Download `VeneraNext-xxx.dmg` from the [latest stable release](https://github.co
 <a id="favorites-read-later-and-update-tracking"></a>
 ### 5.4 Favorites, Read Later, and update tracking
 
-`v1.18.4-rc.1` provides Select comics in the wide-screen toolbar or narrow-screen More menu and adds Sort subfolders. Unreleased improvements on main put Select All, Invert Selection, and Deselect in the toolbar when space permits and let desktop Escape exit selection or search. The comic-detail favorite panel uses the full available height and keeps New Folder on the right of its fixed toolbar. See [favorite folders and bulk actions](doc/user/favorite_folders.en.md).
+`v1.18.4` provides Select comics in the wide-screen toolbar or narrow-screen More menu and adds Sort subfolders. Select All, Invert Selection, and Deselect appear in the toolbar when space permits, and desktop Escape exits selection or search. The comic-detail favorite panel uses the full available height and keeps New Folder on the right of its fixed toolbar. See [favorite folders and bulk actions](doc/user/favorite_folders.en.md).
 
 - **Favorites:** tap Favorite on the details page to open the panel and pick a local folder or the source account (extension-dependent). The favorites page supports list and cover-gallery layouts (auto or 2–6 columns).
 - **Quick Favorite:** long-press Favorite on the details page to add the comic directly to the selected local folder, which defaults to the Follow Updates folder. Change the target in Settings → Local Favorites → Quick Favorite.
@@ -304,9 +307,9 @@ Remote CBZ/ZIP/7Z/CB7 archives must be extracted on the server or restored local
 <a id="keyword-blocking"></a>
 ### 5.8 Keyword blocking
 
-Manage comic and comment keywords separately in **Settings → Explore**. The unreleased version on `main` adds **Contains text**, **Whole word**, **Exact tag**, and per-rule case settings. Try sample text before saving, or click a comic list's hidden count to view reasons and edit a rule. **Whole word** is recommended for short abbreviations such as `BL` to avoid matching `black`; existing rules retain their original behavior.
+Manage comic and comment keywords separately in **Settings → Explore**. `v1.18.4` provides **Contains text**, **Whole word**, **Exact tag**, and per-rule case settings. Try sample text before saving, or click a comic list's hidden count to view reasons and edit a rule. **Whole word** is recommended for short abbreviations such as `BL` to avoid matching `black`; existing rules retain their original behavior.
 
-See [keyword blocking and match reasons](doc/user/keyword_blocking.en.md) for examples and backup compatibility. The current stable release, `v1.18.3`, does not yet include these new controls.
+See [keyword blocking and match reasons](doc/user/keyword_blocking.en.md) for examples and backup compatibility.
 
 <a id="developing-comic-sources"></a>
 ## 6. Developing comic sources
@@ -358,7 +361,7 @@ Run `winget upgrade --id CyrilPeng.VeneraNext --exact`. Public-source availabili
 ## 8. Developer resources
 
 - [Build and Development](doc/development/build.en.md): Flutter/Rust, locked dependencies, tests, and releases.
-- [HarmonyOS Release Builds](doc/development/harmonyos_releases.en.md): pinned branch source, independent SDK, unsigned HAP and publication gates.
+- [HarmonyOS Builds and Releases](doc/development/harmonyos_releases.en.md): same-source bundled releases, independent SDK, unsigned HAP and optional device reports.
 - [Contributing](CONTRIBUTING.en.md) · [Dependency Governance](doc/development/dependencies.en.md).
 - [Windows Distribution](doc/distribution/windows.en.md) · [Headless Mode](doc/user/headless.en.md).
 - [Security Policy](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Documentation Index](doc/README.en.md).

@@ -165,6 +165,11 @@ Comic _comic(String title, {String? sourceKey, String? cover}) => Comic(
 
 Widget _reasonsHost(List<Comic> comics, {double textScale = 1}) {
   return MaterialApp(
+    theme: ThemeData(
+      fontFamily: Platform.environment['KEYWORD_RULES_FONT'] == null
+          ? null
+          : 'KeywordRulesPreview',
+    ),
     builder: (context, child) => MediaQuery(
       data: MediaQuery.of(context).copyWith(
         textScaler: TextScaler.linear(textScale),
@@ -604,73 +609,79 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets(
-    'missing and failed covers show placeholders on narrow large-text screens',
-    (tester) async {
-      _prepare();
-      configureComicWidgets(
-        tileImageProviderResolver: (comic) =>
-            comic.title == 'alpha comic' ? _FailedImage() : null,
-      );
-      addTearDown(configureComicWidgets);
-      appdata.settings['blockedWords'] = ['comic'];
-      tester.view.physicalSize = const Size(375, 740);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(
-        _reasonsHost([
-          _comic('alpha comic'),
-          _comic('beta comic', sourceKey: 'local'),
-          _comic('gamma comic', sourceKey: 'network'),
-        ], textScale: 1.8),
-      );
-      await _tap(tester, find.text('Hidden by keyword filters: 3 comics'));
-      expect(find.byKey(_coverToggleKey).hitTestable(), findsOneWidget);
-      await _tap(tester, find.byKey(_coverToggleKey));
-      final scrollable = find.descendant(
-        of: find.byKey(_reasonsListKey),
-        matching: find.byType(Scrollable),
-      );
-      for (final (title, sourceKey) in [
-        ('alpha comic', 'webdav_library'),
-        ('beta comic', 'local'),
-        ('gamma comic', 'network'),
-      ]) {
-        final cover = find.byKey(
-          ValueKey('keyword-reasons-cover:$sourceKey:$title'),
+  for (final language in ['en-US', 'zh-CN', 'de-DE', 'ja-JP']) {
+    testWidgets(
+      'missing and failed covers show placeholders on narrow large-text screens: $language',
+      (tester) async {
+        _prepare();
+        appdata.settings['language'] = language;
+        configureComicWidgets(
+          tileImageProviderResolver: (comic) =>
+              comic.title == 'alpha comic' ? _FailedImage() : null,
         );
-        await tester.scrollUntilVisible(cover, 120, scrollable: scrollable);
-        await tester.pumpAndSettle();
+        addTearDown(configureComicWidgets);
+        appdata.settings['blockedWords'] = ['comic'];
+        tester.view.physicalSize = const Size(375, 740);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          _reasonsHost([
+            _comic('alpha comic'),
+            _comic('beta comic', sourceKey: 'local'),
+            _comic('gamma comic', sourceKey: 'network'),
+          ], textScale: 1.8),
+        );
+        await _tap(
+          tester,
+          find.text('Hidden by keyword filters: @a comics'.tlParams({'a': 3})),
+        );
         expect(find.byKey(_coverToggleKey).hitTestable(), findsOneWidget);
-        expect(cover.hitTestable(), findsOneWidget);
-        expect(tester.getSize(cover), const Size(56, 78));
-        if (title == 'alpha comic') {
-          final error = find.descendant(
-            of: cover,
-            matching: find.byIcon(Icons.error),
+        await _tap(tester, find.byKey(_coverToggleKey));
+        final scrollable = find.descendant(
+          of: find.byKey(_reasonsListKey),
+          matching: find.byType(Scrollable),
+        );
+        for (final (title, sourceKey) in [
+          ('alpha comic', 'webdav_library'),
+          ('beta comic', 'local'),
+          ('gamma comic', 'network'),
+        ]) {
+          final cover = find.byKey(
+            ValueKey('keyword-reasons-cover:$sourceKey:$title'),
           );
-          expect(error, findsOneWidget);
-        } else {
-          final placeholder = find.descendant(
-            of: cover,
-            matching: find.byKey(_noCoverKey),
-          );
-          expect(placeholder, findsOneWidget);
-          final placeholderIcon = find.descendant(
-            of: cover,
-            matching: find.byIcon(Icons.image_outlined),
-          );
-          expect(placeholderIcon, findsOneWidget);
+          await tester.scrollUntilVisible(cover, 120, scrollable: scrollable);
+          await tester.pumpAndSettle();
+          expect(find.byKey(_coverToggleKey).hitTestable(), findsOneWidget);
+          expect(cover.hitTestable(), findsOneWidget);
+          expect(tester.getSize(cover), const Size(56, 78));
+          if (title == 'alpha comic') {
+            final error = find.descendant(
+              of: cover,
+              matching: find.byIcon(Icons.error),
+            );
+            expect(error, findsOneWidget);
+          } else {
+            final placeholder = find.descendant(
+              of: cover,
+              matching: find.byKey(_noCoverKey),
+            );
+            expect(placeholder, findsOneWidget);
+            final placeholderIcon = find.descendant(
+              of: cover,
+              matching: find.byIcon(Icons.image_outlined),
+            );
+            expect(placeholderIcon, findsOneWidget);
+          }
         }
-      }
-      final dialog = tester.getRect(find.byType(ContentDialog));
-      expect(dialog.left, greaterThanOrEqualTo(0));
-      expect(dialog.right, lessThanOrEqualTo(375));
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
+        final dialog = tester.getRect(find.byType(ContentDialog));
+        expect(dialog.left, greaterThanOrEqualTo(0));
+        expect(dialog.right, lessThanOrEqualTo(375));
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
 
   testWidgets(
     'failed additions retry both words and options without duplicates',

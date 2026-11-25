@@ -10,39 +10,41 @@ PR 校验使用 Actions 的准确合并候选 SHA，push 和手动构建使用�
 
 `.github/workflows/harmonyos-experiment.yml` 监听主线相关源码、依赖、工具和发布配置变化，复用 `harmonyos-release.yml` 的完整阅读器构建。保持独立 SDK 目录、受控 OH lock、原生交叉编译、严格分析、宿主回归、真实 API 26 HAP、完整资产及原生导出审计。生成器仅修改生成工程与下载后的覆盖层，不修改官方 Flutter、共享 Pub cache 或主线根锁。
 
-## 冻结的 244 与随版分发
+## 正式随版发布与历史策略
 
 244 的 schema 1 `.github/harmonyos-release.json`、固定 Git 输入和历史资产保留。`harmonyos-frozen-244` 归档标签保留原来源的可达性；`harmonyos-branch-final-245` 保存最后一次双分支候选。后续开发只使用 `main`。旧 schema 2 解析保留用于历史验证，当前主线使用 schema 3。
 
-维护者于 2026-11-07 明确要求此后每次发包都包含鸿蒙版，主线配置已启用 `release_enabled: true`。候选版和正式版均必须重新构建同提交的未签名 ARM64 测试版 HAP，并携带该提交配置要求的全部鸿蒙分发资产；不能只发布其他平台。发布开关在标签元数据阶段检查，禁用时立即阻止整次发布。
+从 `v1.18.5+254` 起，鸿蒙与其他平台统一随正式 Releases 发包。schema 3 配置设置 `distribution: bundled`、`channel: harmonyos` 和 `release_enabled: true`，`main.yml` 从同一标签调用 `harmonyos-release.yml`，生成未签名 ARM64 HAP 与验证附件。正式发布页长期提供下载，应用内更新检查识别同版本 HAP 与 manifest。PR 和手动分支运行只生成预览产物。
 
-开关授权的是经过源码、构建及资产审核的未签名测试版分发。它不表示设备签装、覆盖升级或功能验收已完成；manifest 中的 `signed: false`、`runtime_verified: false` 与安装指南继续准确记录验证范围。schema 2／3 的预览或未绑定实际 tag 的产物均拒绝 Release 验证，归档标签也不会触发 `v*` 发布。
+当前主线显式设置 `runtime_acceptance: optional`，正式版和候选版都可在没有真机报告时发布，不因缺报告将整个 Release 留在草稿。取消 Beta 分类后仍保留 `signed: false`、`runtime_verified: false`，源码、版本、原生库和包体摘要核验继续强制执行；主动提供的无效或失败报告仍会阻止发布。
 
-源码及八个项目包摘要使用已提交的 canonical Git blob；七个受管原生库、PNG／7z 导出、第三方 NOTICE 和全部应用资产继续参与审计。适用的 QuickJS 核心修复固定到 `f5a1f20`，历史来源见[依赖实施记录](official_dependency_implementation_20261107.zh.md)。
+历史 `v1.18.4` 继续按 `independent_beta` 分发；未声明 `distribution` 的旧配置默认随版。恢复旧标签读取原提交策略，历史 `required`／`stable_required` 不受主线 `optional` 影响。未声明 `channel` 的配置保留原 `harmonyos-beta` 上下文及 `full_reader_experiment` 元数据；新 `harmonyos` 渠道只允许 schema 3 的显式随版配置，使用 `full_reader` 元数据。未知值、旧 schema 冒用新渠道或来源不一致均拒绝，归档标签不会触发 `v*` 发布。
+
+源码及八个项目包摘要使用已提交的 canonical Git blob；七个受管原生库、PNG／7z 导出、第三方 NOTICE 和全部应用资产继续参与审计。适用的 QuickJS 核心修复固定到 `f5a1f20`，当前来源与替换条件见[依赖决策摘要](dependency_audit.zh.md)。
 
 ## 版本与产物
 
-本轮 `v1.18.4-rc.3` 使用构建号 **252**，包含当前页调光、收藏刷新与搜索 Esc 修复，以及 schema 2 阅读慢帧诊断。HAP 与其他平台从准确的新标签重新构建，沿用现有包名和桌面名称。三项鸿蒙附件、标签下的中英文安装指南及 `runtime_acceptance: stable_required` 继续参与发布核验；`signed: false`、`runtime_verified: false` 继续记录构建与真机验收的边界。原设备分页、裁剪和封面反馈仍按各自 issue 跟进，完整安排见[第三个候选版发布准备](release_readiness.md#v1184-third-prerelease-2026-11-16)。
+本轮 `v1.18.5` 使用构建号 **254**，交付德语／日语、翻译修复、Windows 启动诊断及阅读图片保存定位，并恢复鸿蒙随版发布。所有平台从准确正式标签重新构建；鸿蒙沿用现有包名、桌面名称和签装方式。设备反馈与已知限制见[当前公开版本与验收](release_readiness.md#当前公开版本)。
 
 发布工作流校验调用方的 Git 提交、版本、构建号、运行号及 changelog 摘要。只有独占生成工程被写入调用方版本，源 checkout 不被改写。原生版本名为三段数字，Dart 版本保留 RC 后缀；构建号沿用主线并递增。第一个公开的主线随版 HAP 为 `v1.18.3-rc.3`，构建号 **248**；RC1／RC2 保留已构建的标签与 Actions 记录，均未公开 Release。主线 schema 3 的首个允许构建号为 245，旧 244 来源只保留历史验证；不回填 `v1.18.2` 等旧 Release。
 
 正式版 `v1.18.3` 使用构建号 **249**，与其他平台从同一正式版提交重新构建；候选验收产物不重命名为正式包。正式版仍随包提供未签名 Beta HAP 和四项伴随文件，继续保留尚未完成的鸿蒙真机签装、阅读、真实数据升级与续签验收边界。
 
-从下一次发布起，主线 schema 3 配置使用 `guide_delivery: repository`，Release 必须包含三项鸿蒙附件：
+主线 schema 3 配置使用 `guide_delivery: repository`，`harmonyos-release` artifact 必须包含三项文件，正式发布时全部上传到同一 Release：
 
 - `VeneraNext-版本-harmonyos-arm64-unsigned.hap`
 - `harmonyos-manifest.json`
 - `harmonyos-SHA256SUMS`
 
-中英文安装指南维护在 `doc/distribution/harmonyos-reader.*.md`，README 使用相对链接，Release 正文自动链接到该次发布 tag 下的指南。指南必须存在于准确源码提交且内容非空；校验值随 HAP 生成，`harmonyos-SHA256SUMS` 继续放在 Release。
+中英文安装指南维护在 `doc/distribution/harmonyos-reader.*.md`，四种语言 README 提供公开 Release 入口，Release 安装说明固定链接到该版本标签。指南必须存在于准确源码提交且内容非空；校验值随 HAP 生成，`harmonyos-SHA256SUMS` 与其放在同一 artifact 和发布页。
 
 未声明 `guide_delivery` 的历史配置继续要求上述三项及 `harmonyos-install.zh.md`、`harmonyos-install.en.md`，并逐字核对指南附件与原提交。`v1.18.3` 等已发布版本保留原五附件及标签；新策略不追改历史资产。未知配置值直接拒绝。
 
-HAP 采用 `com.github.cyrilpeng.veneranext.harmony` 包名和 `VeneraNext (HarmonyOS Beta)` 显示名，最低／目标 SDK 为 API 26。复核真实 `module.json`、AArch64 ELF、原生库精确摘要、完整 Dart／资源源码清单和包内版本，安装指南来自准确构建提交。下载页须继续明确未签名及测试版身份，不能把编译通过说成真机升级或续签验收。
+HAP 采用 `com.github.cyrilpeng.veneranext.harmony` 包名和所有语言统一的 `VeneraNext` 桌面名称，最低／目标 SDK 为 API 26。复核真实 `module.json`、AArch64 ELF、原生库精确摘要、完整 Dart／资源源码清单和包内版本，安装指南来自准确构建提交。下载页说明未签名及已知平台限制，真机升级或续签只按实际反馈记录。
 
 ## 发布门禁与无发布验证
 
-完整构建的 `Release` 同时依赖 Quality、原平台 Build 与 HarmonyOS。HAP 缺失、内容损坏、源码过期或摘要错误都不得 `continue-on-error`。先创建或复用草稿，再从 GitHub API 按发布提交的配置核对全部鸿蒙资产的名称、大小、上传状态和 SHA-256，并满足下述对应版本的真机验收策略；通过后才公开，公开后复核资产及已有的验收报告。任一阶段失败须查看日志，不允许静默去掉鸿蒙包后继续。
+当前完整构建的 `Release` 必须取得元数据、Quality、Security、所有普通平台 Build、平台回执汇总及 HarmonyOS 成功。草稿公开前后逐一核对全部安装包的名称、大小、上传状态和 SHA-256。鸿蒙缺库、内容损坏、源码过期或摘要错误均不能通过；只有历史独立分发配置允许 HarmonyOS 明确跳过，并禁止鸿蒙附件进入该普通 Release。
 
 GitHub 按标签查询的 Release 接口只返回已公开版本。草稿阶段使用鉴权发布列表的完整分页定位唯一同标签草稿，再按其数字 ID 重新读取附件；缺失、重名、状态或 ID／标签变化都停止发布。公开后改用标签接口复核，创建 Release 时显式绑定调用方源码 SHA。RC2 的 26 项附件已上传为草稿，但旧查询接口返回 404；本修复由 RC3 重新验证完整发布链路。
 
@@ -61,7 +63,9 @@ gh workflow run harmonyos-release.yml --ref main
 
 ## 准确 HAP 的真机验收
 
-从 `v1.18.4-rc.1+250` 起，schema 3 配置使用 `runtime_acceptance: stable_required`。候选版在完整源码、构建及资产审核通过后可公开供实际设备测试，尚无报告时不声称已完成真机验收；正式版必须有合格报告后才能公开。候选版若已有报告，同样严格验证，错误或失败不能忽略。历史 `required` 策略继续要求候选版和正式版均有报告，没有此字段的旧标签仍按原流程验证，不追改已发布包；未知值拒绝。
+当前 `optional` 将真机报告作为可选验收记录。随版正式版和候选版在缺报告时都可发布，发布与草稿恢复共用该规则，并明确记录真机验收仍待完成；主动附上的报告仍严格检查上传者、准确 HAP、版本、源码、摘要和全部测试结果，错误或失败报告会停止发布。可选的是报告的发布前置要求，报告内容不能冒充验收通过。
+
+下面的可选报告用于记录准确 HAP 的实际设备反馈。历史 `v1.18.4-rc.1+250` 起的 `stable_required` 允许候选版无报告供测试，包含 HAP 的正式版仍必须有合格报告；历史 `required` 要求两类版本均有报告，独立分发的 `v1.18.4` 不向普通 Release 上传鸿蒙报告。没有报告字段的旧标签按原流程处理，不追改已发布包。
 
 构建清单继续保留 `runtime_verified: false`；独立的 `harmonyos-runtime-acceptance.json` 记录实际设备验收，不能把构建通过或候选版公开改写成真机通过。
 
@@ -81,13 +85,33 @@ HAP 工作流在完整包审核后生成单独的 `harmonyos-runtime-acceptance-
 
 除上述目录能力缺失外，每项均须为 `pass`，并填写实际操作、结果或限制的 `detail`。填写实际 `device_model`、`os_version` 与带时区的 `tested_at`；不要填占位值，不包含账号、设备标识、私人书名或签名材料。报告只证明所列设备与系统，手机、平板和不同系统仍需逐步扩大验证范围。
 
-维护者完成测试并审核报告后，上传到该版本的准确草稿或已公开候选版（示例中的版本和路径需替换；正式版报告必须绑定正式版重新构建的 HAP，不能沿用 RC 报告）：
+维护者可下载该运行的 `harmonyos-runtime-acceptance-template`，完成实际测试后将审核报告上传到准确草稿或已公开版本；当前报告可选，历史强制策略须按原提交补齐（示例中的版本和路径需替换；正式版报告必须绑定该版本原始构建的 HAP，不能沿用 RC 报告）：
 
 ```bash
 gh release upload vX.Y.Z /path/to/harmonyos-runtime-acceptance.json --repo CyrilPeng/Venera-Next
 gh run rerun RUN_ID --job RELEASE_JOB_ID --repo CyrilPeng/Venera-Next
 ```
 
-草稿补齐报告后只重跑原 run 的 `Release` 任务，使用原构建 artifacts。草稿复用时核对**所有平台**包的名称、大小和 SHA-256，拒绝新编译或替换的包；验收报告是唯一允许额外上传的文件。报告须由具有 write／maintain／admin 权限的人类维护者上传，脚本复核上传者、文件大小与摘要、准确源码和 HAP、每项结果及测试时间。错误／失败报告直接停止发布，不能以“待验收”绕过。已公开候选版补充报告后对原包运行 `verify-published`，不把公开候选版重新当作草稿发布。
+历史强制策略的草稿补齐报告后只重跑原 run 的 `Release` 任务，使用原构建 artifacts。`optional` 草稿恢复无需等待报告。草稿复用时核对**所有平台**包的名称、大小和 SHA-256，拒绝新编译或替换的包；验收报告是唯一允许额外上传的文件。已上传报告须由具有 write／maintain／admin 权限的人类维护者提供，脚本复核上传者、文件大小与摘要、准确源码和 HAP、每项结果及测试时间。错误／失败报告直接停止发布，不能以可选或“待验收”绕过。已公开版本补充报告后对原包运行 `verify-published`，不重新当作草稿发布。
 
-在 `stable_required` 策略下，候选版无报告时输出 `ready=true` 并明确设备验收仍待完成；正式版无报告时输出 `ready=false`，全部平台草稿保留，公开与 CDN 步骤跳过。旧 `required` 策略下两类版本无报告均保留草稿。合格报告通过后输出 `ready=true`，公开后再次验证已有报告内容；任务构建成功本身不代表已经公开或完成设备验收。草稿须在 Actions artifacts 保留期内（目前 14 天）完成验收并重跑；过期也保留原包，不替换已测试的包。本轮未连接鸿蒙真机，设备验收仍未完成；问题与长期外部目录评估见[跟进记录](harmonyos_issue_followup_20261110.zh.md)。
+历史随版 `stable_required` 的候选版无报告时可公开，包含 HAP 的正式版无报告时保留草稿；旧 `required` 两类版本均保留草稿。合格报告通过后公开并再次验证，原包不能替换。当前 HAP 构建产物保留 30 天，设备模板和构建日志保留 14 天，公开 Release 的 HAP 与核验附件长期保留。本轮未连接鸿蒙真机，设备结果仅以已有及后续实际反馈为准；长期外部目录见[实施条件](#长期外部漫画目录)。
+
+## 长期外部漫画目录
+
+当前目录选择用于复制导入；[长期外部库 #159](https://github.com/CyrilPeng/Venera-Next/issues/159)需要完整存储桥和设备验收。系统提供持久授权 API 不等于应用已取得授权；能力查询、未签名 HAP 编译和宿主回归分别记录。
+
+1. **能力与真实授权**：API 26 手机／平板分别查询 FolderSelection／FolderAuthorization，由真实 Picker 获得 URI 和读写模式，声明 `ohos.permission.FILE_ACCESS_PERSIST`。仅持久化真实授权对象；拒绝、失败、不支持或授权撤销保留记录并进入恢复。
+2. **持久化与激活**：使用 `fileShare.persistPermission`，每次冷启动 `activatePermission`。禁止扩大权限，远程 URI 不支持；卸载会清除授权。URI／模式独立保存，不写入公开诊断。
+3. **存储桥**：URI 不能冒充 Dart 普通路径。现有库、下载、备份／导出接入枚举、创建、读写／seek、重命名、删除、跨 isolate 访问；真实句柄保留到 I/O 收尾，核对源／目标别名、同对象和目录重叠。
+4. **迁移与恢复**：接入 LocalStorageMigration／LocalStorageRelocation 的暂存、复制、事务与恢复。验证只读、空间不足、撤权、取消、中断、中文名和大文件；重新选择可恢复原授权。旧库保留至新库在退出、冷启动、同密钥升级后仍可读。
+5. **能力开放**：上述授权、桥接、失败恢复及真实设备条件全部通过后再开放 `DirectoryPicker.supportsPersistentDirectories`。`DirectorySelection.ownedCopy` 和临时沙箱副本仅表示复制导入，不能作为长期库验收。
+
+系统参考：[持久授权开发指南](https://developer.huawei.com/consumer/en/doc/doccenter-capabilities/file-persistpermission)、[fileShare API](https://developer.huawei.com/consumer/en/doc/doccenter-references/api/js-apis-fileshare)。
+
+## 历史来源与恢复
+
+独立鸿蒙分支已经合入主线，后续全部平台使用同一发布提交。冻结 `1.18.3+244` 来源为 `3e1be1391ba784bb228803525696d38c208f471f`，由 `harmonyos-frozen-244` 标签恢复；最后双分支候选 `ca5f7ef98ec03872d087f0b691e40f0de0080939` 由 `harmonyos-branch-final-245` 标签保存。按旧 schema、原锁和原资产验证历史包。
+
+2026-10 的平板三份报告只验证与 `ef2904f` 配对的核心探针、进程重启和合成升级数据，结果为 `reported_checks_pass`；不代表完整阅读器、真实存储恢复或续签验收。旧工具的 upgrade 阶段仍读取[中文探针指南](../distribution/harmonyos.zh.md)及[英文指南](../distribution/harmonyos.en.md)，保留这些工具输入；普通用户使用[阅读器安装指南](../distribution/harmonyos-reader.zh.md)。
+
+过程、设备报告摘要及历史整理的树一致性／bundle 恢复依据可在 [RC3 文档树](https://github.com/CyrilPeng/Venera-Next/tree/v1.18.4-rc.3/doc)检索；主线指南只维护当前规则。

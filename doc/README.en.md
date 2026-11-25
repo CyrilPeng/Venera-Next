@@ -29,6 +29,10 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 - [漫画源本地调试](development/source_debugging.zh.md) / [Local Source Debugging](development/source_debugging.en.md)
 - [磁盘日志](development/logging.zh.md) / [Disk logs](development/logging.en.md)
 - [依赖治理](development/dependencies.zh.md) / [Dependency Governance](development/dependencies.en.md)
+- [Current dependency decisions](development/dependency_audit.en.md)
+- [Reader diagnostics and performance investigation (Chinese)](development/reader_diagnostics.md)
+- [Windows WebView proxy troubleshooting (Chinese)](development/windows_webview_proxy.md)
+- [Release workflow and current acceptance (Chinese)](development/release_readiness.md)
 
 ## Distribution
 
@@ -36,9 +40,7 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 - [Windows 分发](distribution/windows.zh.md) / [Windows Distribution](distribution/windows.en.md)
 - [鸿蒙测试版安装与升级](distribution/harmonyos-reader.zh.md) / [HarmonyOS Beta Installation](distribution/harmonyos-reader.en.md)
 - [鸿蒙随版构建](development/harmonyos_releases.zh.md) / [HarmonyOS Release Builds](development/harmonyos_releases.en.md)
-- [HarmonyOS mainline implementation (Chinese)](development/harmonyos_mainline_20261107.zh.md): one source commit, platform build gates and branch archives.
 - [Linux 安装与分发](distribution/linux.zh.md) / [Linux Installation and Distribution](distribution/linux.en.md)
-- [HarmonyOS 实验签装与升级验证](distribution/harmonyos.zh.md) / [HarmonyOS Experimental Sideload Checks](distribution/harmonyos.en.md): diagnostic probes only, not a reader release.
 
 ## User And CLI
 
@@ -54,17 +56,10 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 
 ## Experiments
 
-- [Test suite reorganization plan, 2026-11-13 (Chinese)](experiments/test_reorganization_plan_20261113.zh.md): scope, implementation batches, platform execution, deletion criteria, acceptance and rollback.
-- [Test reorganization baseline and implementation record (Chinese)](experiments/test_reorganization_baseline_20261113.zh.md): original coverage, actual CI duration, execution gaps and batch decisions.
-- [Test reorganization results and acceptance (Chinese)](experiments/test_reorganization_result_20261113.zh.md): physical counts, complete cases and coverage, normal CI costs and phase exit review.
-- [Test platform and follow-up acceptance (Chinese)](experiments/test_reorganization_platform_acceptance_20261113.zh.md): actual platform/native execution, build and device limits, open-issue recommendations and environment failure records.
-- [Historical Android TV Alpha experiment, now integrated into main (Chinese)](experiments/android_tv.zh.md)
-- [Source installation task design (Chinese)](experiments/source_installation_tasks.zh.md)
-- [Source repository management design (Chinese)](experiments/source_repositories.zh.md)
 - [图片增强实验](experiments/image_enhancement.zh.md)
 - [去混淆像素复制优化](experiments/image_descrambling.zh.md)
-- [WebDAV 阅读卡顿分阶段排查](experiments/webdav_reader_performance.zh.md)
 - [AVIF 格式识别与解码评估](experiments/avif_decoder.zh.md)
+- [Image HTTP/3 fallback and native probes (Chinese)](experiments/http3_image_fallback.zh.md)
 
 ## Maintenance Rules
 
@@ -73,3 +68,5 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 - Chinese documents are the default entry. If the two versions cannot be perfectly synchronized, keep the Chinese version complete and accurate first.
 - `experiments/` documents record decisions, risks, and tasks before a feature is stable.
 - Comic source documents describe only the extension interface and runtime contract. They must not provide, recommend, maintain, or verify third-party comic sources.
+
+Completed process records and raw comparisons remain in the [v1.18.4-rc.3 documentation tree](https://github.com/CyrilPeng/Venera-Next/tree/v1.18.4-rc.3/doc). Maintain enduring rules in current guides; new investigations retain a purpose, reproducible method and exit conditions.

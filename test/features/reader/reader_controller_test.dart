@@ -49,6 +49,43 @@ void main() {
   });
   tearDown(() => controller.dispose());
 
+  test(
+    'page presentation retains content notifications for chapter changes',
+    () async {
+      var pagePresentation = 0;
+      controller.dispose();
+      controller = ReaderController(
+        pageCount: () => 300,
+        chapterCount: () => 3,
+        animationEnabled: () => true,
+        viewport: () => view,
+        onChanged: () => updates++,
+        onPageNavigationChanged: () => pagePresentation++,
+        onPageChanged: () => pageChanges++,
+        onError: (error, stack) => errors++,
+      );
+      expect(controller.toPage(2), isTrue);
+      expect(pagePresentation, 1);
+      expect(updates, 0);
+      controller.reportPage(2);
+      view.animations.single.complete();
+      await pumpEventQueue();
+      expect(pagePresentation, 2);
+      expect(updates, 0);
+      expect(pageChanges, 1);
+      expect(controller.toPage(3, animated: false), isTrue);
+      expect(pagePresentation, 3);
+      expect(view.page, 3);
+      expect(pageChanges, 2);
+      expect(controller.toChapter(2), isTrue);
+      expect(updates, 1);
+      expect(pagePresentation, 3);
+      expect(controller.state.chapter, 2);
+      expect(controller.state.page, 1);
+      expect(errors, 0);
+    },
+  );
+
   for (final phase in ['before', 'images', 'mode']) {
     test(
       'current $phase error stays in the UI without poisoning image work',
@@ -316,22 +353,52 @@ void main() {
   });
 
   test(
-    'replacement animation filters old viewport positions and completion',
+    'rapid navigation jumps and stale completion cannot end a newer animation',
     () async {
       controller.toPage(150);
-      controller.toPage(200);
-      controller.reportPage(150);
+      controller.reportPage(149);
       expect(controller.state.page, 1);
-      controller.reportPage(200);
+      controller.toPage(200);
+      expect(view.animations, hasLength(1));
+      expect(view.page, 200);
+      expect(controller.state.page, 200);
+      expect(controller.state.isAnimating, false);
+      controller.toPage(250);
+      controller.reportPage(150);
       expect(controller.state.page, 200);
       view.animations.first.complete();
       await pumpEventQueue();
-      expect(controller.state.pendingPage, 200);
+      expect(controller.state.pendingPage, 250);
+      controller.reportPage(250);
       view.animations.last.complete();
       await pumpEventQueue();
       expect(controller.state.isAnimating, false);
+      expect(controller.state.page, 250);
     },
   );
+
+  for (final step in [-1, 1]) {
+    test(
+      '100 rapid page commands retain each handoff in direction $step',
+      () async {
+        controller.restorePage(150);
+        for (var i = 0; i < 100; i++) {
+          expect(controller.toPage(controller.state.page + step), isTrue);
+        }
+        expect(controller.state.page, 150 + 50 * step);
+        expect(controller.state.pendingPage, isNull);
+        expect(view.animations, hasLength(50));
+        expect(updates, 100);
+        for (final animation in view.animations) {
+          animation.complete();
+        }
+        await pumpEventQueue();
+        expect(controller.state.page, 150 + 50 * step);
+        expect(updates, 100);
+        expect(errors, 0);
+      },
+    );
+  }
 
   test(
     'chapter adapter handles loaded segments or falls back to chapter load',

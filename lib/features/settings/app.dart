@@ -19,6 +19,7 @@ import 'package:venera_next/features/settings/webdav_settings.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/features/webdav_library/webdav_library.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/app_language.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
@@ -159,12 +160,7 @@ class _AppSettingsState extends State<AppSettings> {
         SelectSetting.preference(
           title: "Language".tl,
           preference: AppPreferences.language,
-          optionTranslation: const {
-            "system": "System",
-            "zh-CN": "简体中文",
-            "zh-TW": "繁體中文",
-            "en-US": "English",
-          },
+          optionTranslation: {...AppLanguage.options, 'system': 'System'.tl},
           onChanged: () {
             appNavigation.forceRebuild();
           },

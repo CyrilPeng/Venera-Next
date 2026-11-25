@@ -38,6 +38,19 @@ def git(root, *args):
 
 
 class RecoverySourceTests(unittest.TestCase):
+    def test_new_gates_are_required_only_for_sources_that_committed_the_policy(self):
+        policy = {'required_jobs': ['Security / Rust 锁定依赖漏洞扫描', 'Verify_Packages']}
+        jobs = passed_jobs()
+        resume.validate_build_run(build_run(), jobs, 123)
+        with self.assertRaisesRegex(ValueError, 'gate did not pass'):
+            resume.validate_build_run(build_run(), jobs, 123, policy=policy)
+        extra = [{'name': name, 'status': 'completed', 'conclusion': 'success'} for name in policy['required_jobs']]
+        resume.validate_build_run(build_run(), jobs + extra, 123, policy=policy)
+        for name in policy['required_jobs']:
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'gate did not pass'):
+                resume.validate_build_run(build_run(), jobs + [job | {'conclusion': 'skipped'}
+                                          if job['name'] == name else job for job in extra], 123, policy=policy)
+
     def test_only_completed_same_repository_tag_builds_are_eligible(self):
         run = build_run()
         self.assertEqual(resume.validate_build_run(run, passed_jobs(), 123), run)
@@ -95,6 +108,45 @@ class RecoverySourceTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'untracked'):
                     resume.original_build(root, 123)
 
+    def test_independent_beta_skips_only_the_harmonyos_gate(self):
+        jobs = [job | {'conclusion': 'skipped'} if job['name'] == 'HarmonyOS / unsigned-hap'
+                else job for job in passed_jobs()]
+        self.assertEqual(resume.validate_build_run(build_run(), jobs, 123, bundled_harmonyos=False), build_run())
+        with self.assertRaisesRegex(ValueError, 'gate did not pass'):
+            resume.validate_build_run(build_run(), jobs, 123)
+        for name in resume.REQUIRED_JOBS - {'HarmonyOS / unsigned-hap'}:
+            changed = [job | {'conclusion': 'skipped'} if job['name'] == name else job for job in jobs]
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'gate did not pass'):
+                resume.validate_build_run(build_run(), changed, 123, bundled_harmonyos=False)
+        failed = [job | {'conclusion': 'failure'} if job['name'] == 'HarmonyOS / unsigned-hap'
+                  else job for job in jobs]
+        with self.assertRaisesRegex(ValueError, 'Only a failed publishing job'):
+            resume.validate_build_run(build_run(), failed, 123, bundled_harmonyos=False)
+
+    def test_distribution_is_read_from_the_original_commit_and_legacy_stays_bundled(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            git(root, 'init', '-q')
+            (root / 'CHANGELOG.md').write_text('Original release\n')
+            git(root, 'add', '.')
+            git(root, 'commit', '-qm', 'legacy source')
+            legacy = git(root, 'rev-parse', 'HEAD')
+            pin = root / resume.release.NEXT_PIN
+            pin.parent.mkdir()
+            pin.write_text(json.dumps({'schema': 3, 'source_mode': 'release_commit',
+                                       'distribution': 'independent_beta'}))
+            git(root, 'add', '.')
+            git(root, 'commit', '-qm', 'independent source')
+            independent = git(root, 'rev-parse', 'HEAD')
+            pin.write_text(json.dumps({'distribution': 'bundled'}))
+            self.assertTrue(resume.source_bundles_harmonyos(root, legacy))
+            self.assertFalse(resume.source_bundles_harmonyos(root, independent))
+        for pin in ({'schema': 2, 'distribution': 'independent_beta'},
+                    {'schema': 3, 'source_mode': 'main', 'distribution': 'independent_beta'},
+                    {'distribution': 'disabled'}):
+            with self.subTest(pin=pin), self.assertRaisesRegex(ValueError, 'distribution mode'):
+                resume.release.bundles_harmonyos(pin)
+
 
 class RecoveryArtifactTests(unittest.TestCase):
     def populate(self, root):
@@ -130,9 +182,23 @@ class RecoveryArtifactTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'Missing|Empty|Duplicate'):
                     resume.collect_artifacts(root / 'downloaded', root / 'outputs')
 
+    def test_independent_collection_still_requires_every_standard_platform_artifact(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.populate(root / 'downloaded')
+            (root / 'downloaded/harmonyos-release/harmonyos-release.bin').unlink()
+            (root / 'downloaded/harmonyos-release').rmdir()
+            resume.collect_artifacts(root / 'downloaded', root / 'outputs', bundled_harmonyos=False)
+            self.assertFalse((root / 'outputs/harmonyos').exists())
+            self.assertEqual(len(list((root / 'outputs').rglob('*.bin'))), len(resume.RELEASE_ARTIFACTS) - 1)
+            (root / 'downloaded/windows_build/windows_build.bin').unlink()
+            with self.assertRaisesRegex(ValueError, 'Empty original build artifact'):
+                resume.collect_artifacts(root / 'downloaded', root / 'missing-output', bundled_harmonyos=False)
+
 
 class RecoveryPublicationTests(unittest.TestCase):
-    def exercise(self, *, ready=True, failure=None):
+    def exercise(self, *, ready=True, failure=None, version='1.18.4-rc.1',
+                 policy='stable_required', verify_runtime=False):
         with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
             root = Path(temporary)
             packages = root / 'outputs'
@@ -143,13 +209,21 @@ class RecoveryPublicationTests(unittest.TestCase):
             notes, receipt = root / 'notes.md', root / 'receipt.json'
             notes.write_text('Original tag notes\n')
             expected = {'schema': 3, 'tagged': True, 'preview': False, 'release_commit': 'a' * 40,
-                        'source_commit': 'a' * 40, 'tag': 'v1.18.4-rc.1', 'version': '1.18.4-rc.1',
-                        'runtime_acceptance': 'stable_required'}
-            records = resume.release.release_file_records([package])
+                        'source_commit': 'a' * 40, 'tag': 'v' + version, 'version': version, 'build': 250,
+                        'guide_delivery': 'repository', 'runtime_acceptance': policy}
+            release_files, hap_assets = [package], {}
+            if verify_runtime:
+                for name in resume.release.asset_names(version, guide_delivery='repository').values():
+                    path = hap / name
+                    path.write_bytes(('Original compiler bytes ' + name).encode())
+                    release_files.append(path)
+                hap_assets = resume.release.release_file_records(release_files[1:])
+            records = resume.release.release_file_records(release_files)
             remote = {'id': 456, 'tag_name': expected['tag'], 'target_commitish': 'a' * 40,
-                      'draft': True, 'prerelease': True, 'body': 'Original tag notes\r\n',
-                      'assets': [{'name': 'linux.rc.deb', 'size': package.stat().st_size, 'state': 'uploaded',
-                                  'digest': 'sha256:' + records[package.name]['sha256']}]}
+                      'draft': True, 'prerelease': '-' in version, 'body': 'Original tag notes\r\n',
+                      'assets': [{'name': name, 'size': record['bytes'], 'state': 'uploaded',
+                                  'digest': 'sha256:' + record['sha256']}
+                                 for name, record in resume.release.github_release_file_records(records).items()]}
             published = copy.deepcopy(remote) | {'draft': False, 'html_url': 'https://example.invalid/release'}
             if failure == 'notes':
                 remote['body'] = 'Unexpected notes'
@@ -161,16 +235,24 @@ class RecoveryPublicationTests(unittest.TestCase):
                 published['assets'][0]['digest'] = 'sha256:' + '0' * 64
             argv = ['resume_release.py', 'publish', '--run', '123', '--source-root', str(root),
                     '--artifacts', str(hap), '--notes-file', str(notes),
-                    '--release-files', str(package), '--receipt', str(receipt)]
+                    '--release-files', *map(str, release_files), '--receipt', str(receipt)]
+            run = build_run() | {'head_branch': expected['tag']}
             stack.enter_context(patch.object(sys, 'argv', argv))
             stack.enter_context(patch.dict(os.environ, {'GITHUB_RUN_ID': '999', 'GITHUB_SHA': 'b' * 40}))
-            stack.enter_context(patch.object(resume, 'original_build', return_value=(build_run(), 'c' * 40)))
+            stack.enter_context(patch.object(resume, 'original_build', return_value=(run, 'c' * 40)))
+            stack.enter_context(patch.object(resume, 'source_policy', return_value=None))
             context = stack.enter_context(patch.object(resume.release, 'context', return_value=expected))
-            stack.enter_context(patch.object(resume.release, 'verify_bundle', return_value={}))
-            stack.enter_context(patch.object(resume.release, 'read_remote_release', side_effect=[remote, published]))
-            stack.enter_context(patch.object(resume.release, 'blob', return_value=b'version: 1.18.4-rc.1+250'))
+            stack.enter_context(patch.object(resume.release, 'verify_bundle', return_value=hap_assets))
+            stack.enter_context(patch.object(resume.delivery, 'download_files', return_value=1))
+            lookup = [remote, published]
+            if verify_runtime:
+                lookup = lambda *args, **kwargs: copy.deepcopy(published if kwargs['published'] else remote)
+            stack.enter_context(patch.object(resume.release, 'read_remote_release', side_effect=lookup))
+            stack.enter_context(patch.object(resume.release, 'blob', return_value=f'version: {version}+250'.encode()))
             android = stack.enter_context(patch.object(resume.android, 'verify_release'))
-            runtime = stack.enter_context(patch.object(resume.release, 'check_runtime', return_value=ready))
+            runtime_patch = (patch.object(resume.release, 'check_runtime', wraps=resume.release.check_runtime)
+                             if verify_runtime else patch.object(resume.release, 'check_runtime', return_value=ready))
+            runtime = stack.enter_context(runtime_patch)
             github = stack.enter_context(patch.object(resume.release, 'gh'))
             if failure == 'android':
                 android.side_effect = ValueError('Invalid original Android catalog')
@@ -192,11 +274,12 @@ class RecoveryPublicationTests(unittest.TestCase):
             self.assertEqual(value['published'], ready)
             self.assertEqual(value['files'], records)
             self.assertEqual(value['github_files']['linux.rc.deb'], records['linux~rc.deb'])
-            self.assertEqual(context.call_args.args[2], resume.original_environment(build_run()))
+            self.assertEqual(context.call_args.args[2], resume.original_environment(run))
             self.assertEqual(android.call_args.args[2]['GITHUB_SHA'], 'a' * 40)
             if ready:
-                github.assert_called_once_with('release', 'edit', 'v1.18.4-rc.1', '--repo',
-                                               resume.release.REPOSITORY, '--draft=false', '--latest=false')
+                options = ['--latest=false'] if '-' in version else []
+                github.assert_called_once_with('release', 'edit', expected['tag'], '--repo',
+                                               resume.release.REPOSITORY, '--draft=false', *options)
                 self.assertEqual(runtime.call_count, 2)
             else:
                 github.assert_not_called()
@@ -206,6 +289,11 @@ class RecoveryPublicationTests(unittest.TestCase):
 
     def test_missing_required_acceptance_retains_the_draft(self):
         self.exercise(ready=False)
+
+    def test_optional_stable_and_prerelease_recovery_publishes_original_packages_without_a_report(self):
+        for version in ('1.18.4', '1.18.4-rc.1'):
+            with self.subTest(version=version):
+                self.exercise(version=version, policy='optional', verify_runtime=True)
 
     def test_source_notes_assets_android_and_runtime_failures_stop_publication(self):
         for failure in ('notes', 'source', 'digest', 'android', 'runtime', 'published_digest'):

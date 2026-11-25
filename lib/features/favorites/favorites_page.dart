@@ -94,7 +94,9 @@ class _FavoritesPageState extends SettingsSaveState<FavoritesPage> {
     return protectSettings(
       Column(
         children: [
-          if (savingSettings || hasSettingsSaveError) settingsSaveStatus,
+          // Folder selection is an implicit preference. A transient save row
+          // shifts both panes; only failures need an inline retry affordance.
+          if (hasSettingsSaveError) settingsSaveStatus,
           Expanded(
             child: IconTheme(
               data: IconThemeData(

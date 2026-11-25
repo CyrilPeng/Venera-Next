@@ -4,7 +4,7 @@
 
 See the [Comic Source Guide](../api/comic_source.en.md) and [JavaScript API](../api/js.en.md) for extension contracts. This guide covers importing, editing, reloading, and diagnosing scripts.
 
-Unified import, task reload, explicit editor save/reload, and asynchronous evaluator improvements are currently unreleased main-branch features. Version 1.16.0 retains the earlier URL/file import entry points. Start from the [minimal template](../examples/minimal_source.js), replacing its fictional service and mappings according to the [example API contract](../api/comic_source.en.md#1-script-and-minimal-example).
+Unified import, task reload, explicit editor save/reload and asynchronous evaluation shipped in v1.17.0. Use versioned documentation for earlier interfaces. Start from the [minimal template](../examples/minimal_source.js) and [API contract](../api/comic_source.en.md#1-script-and-minimal-example).
 
 ## Import and retry
 
@@ -65,3 +65,11 @@ Follow checks allow 5 concurrent calls globally and 2 per source, with at least 
 Cancel, dismissing the progress dialog, or starting another check stops the old queue and bridge retries, ignores late results, and prevents subsequent favorite updates. Completed results remain. HTTP requests associated with a request scope are also cancelled.
 
 QuickJS asynchronous dispatch does not always retain Dart request scopes. Cancellation therefore cannot guarantee termination of every subrequest an extension starts after subsequent JavaScript `await` statements, or interrupt a synchronous infinite loop. Evaluation and initialization timeouts do not kill the script either. Remote side effects cannot be rolled back. Bound internal request waits and retries, and avoid detached data writes from `init()`.
+
+## Installation Tasks and Source Ownership
+
+The application-session queue downloads at most three tasks concurrently. Script writes/parsing/registration share a serial entry with updates/reloads. Tasks survive leaving a page but stop on app exit. Queued/downloading/waiting commits can be cancelled; started commits finish cleanup. Failure cleans only newly owned objects without reloading every source.
+
+Known source keys deduplicate first; manual links with unknown keys deduplicate by URL. Repositories share active tasks for the same source. Terminal records belong to their original repository/address; deleted or changed repositories require reconfirmation. Successful installation persists script/origin and discovery/search registration without rebuilding the navigation tree.
+
+Appdata `comicSourceRepositories`/`comicSourceOrigins` use existing backup/sync. A legacy single URL migrates once; removing all repositories does not recreate it, and old scripts are not assigned inferred origins. Origin changes affect later updates; repository removal retains scripts, settings and reading data. Report failed catalogs and unchecked sources explicitly. See [source repositories](../user/source_repositories.en.md).

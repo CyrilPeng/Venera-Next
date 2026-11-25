@@ -84,4 +84,4 @@ flutter build apk --release --flavor tv `
 
 升级和后续修改重点复查：与手机版共存；720p／1080p／4K、大字号、明暗主题及减少动画；搜索、列表、章节、设置和弹窗的焦点返回；菜单内不翻页；后台恢复不连发；退出保存失败保护；导入／同步不传递低内存开关；长条图、动画、大图和连续阅读的实际内存。反馈附版本／提交、设备与 Android 版本、系统 ABI、遥控器类型及复现步骤即可，不要求私人漫画、凭据或完整备份。
 
-早期分支隔离规则与实验验收表保留在[历史实验记录](../experiments/android_tv.zh.md)，不再作为当前构建指引。
+早期分支隔离规则与实验验收表保留在[RC3 标签中的历史实验记录](https://github.com/CyrilPeng/Venera-Next/blob/v1.18.4-rc.3/doc/experiments/android_tv.zh.md)。

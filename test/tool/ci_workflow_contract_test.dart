@@ -44,24 +44,63 @@ void main() {
       .cast<YamlMap>()
       .toList();
 
-  test('release waits for quality, every platform and the mandatory HAP', () {
-    expect(needs(release), {
-      'Release_Metadata',
-      'Quality',
-      'Build',
-      'HarmonyOS',
-    });
-    final hap = mainJobs['HarmonyOS'] as YamlMap;
-    expect(needs(hap), {'Release_Metadata', 'Quality'});
-    expect(hap['uses'], './.github/workflows/harmonyos-release.yml');
-    expect(hap.containsKey('if'), isFalse);
-    expect(hap.containsKey('continue-on-error'), isFalse);
-    expect((mainJobs['Build'] as YamlMap)['with']['quality_checked'], isTrue);
-    expect(
-      (main['on'] as YamlMap).keys,
-      containsAll(['push', 'workflow_dispatch']),
-    );
-  });
+  test(
+    'release waits for every required gate under its committed distribution',
+    () {
+      expect(needs(release), {
+        'Release_Metadata',
+        'Quality',
+        'Security',
+        'Build',
+        'HarmonyOS',
+        'Verify_Packages',
+      });
+      final hap = mainJobs['HarmonyOS'] as YamlMap;
+      expect(needs(hap), {'Release_Metadata', 'Quality', 'Security'});
+      expect(hap['uses'], './.github/workflows/harmonyos-release.yml');
+      expect(
+        hap['if'],
+        "needs.Release_Metadata.outputs.bundled_harmonyos == 'true'",
+      );
+      expect(hap.containsKey('continue-on-error'), isFalse);
+      final condition = (release['if'] as String).replaceAll(
+        RegExp(r'\s+'),
+        ' ',
+      );
+      expect(condition, contains("always() && github.event_name == 'push'"));
+      expect(condition, contains("startsWith(github.ref, 'refs/tags/v')"));
+      for (final job in [
+        'Release_Metadata',
+        'Quality',
+        'Security',
+        'Build',
+        'Verify_Packages',
+      ]) {
+        expect(condition, contains("needs.$job.result == 'success'"));
+      }
+      expect(
+        condition,
+        contains(
+          "(needs.Release_Metadata.outputs.bundled_harmonyos == 'true' && needs.HarmonyOS.result == 'success') || (needs.Release_Metadata.outputs.bundled_harmonyos == 'false' && needs.HarmonyOS.result == 'skipped')",
+        ),
+      );
+      expect((mainJobs['Build'] as YamlMap)['with']['quality_checked'], isTrue);
+      expect(
+        (mainJobs['Security'] as YamlMap)['uses'],
+        './.github/workflows/dependency_review.yml',
+      );
+      expect(needs(mainJobs['Verify_Packages'] as YamlMap), {
+        'Release_Metadata',
+        'Quality',
+        'Security',
+        'Build',
+      });
+      expect(
+        (main['on'] as YamlMap).keys,
+        containsAll(['push', 'workflow_dispatch']),
+      );
+    },
+  );
 
   test(
     'release source, HAP source, notes and collected assets remain bound',
@@ -85,13 +124,13 @@ void main() {
       final draft = commandStep(release, 'prepare-draft')['run'] as String;
       expect(
         draft,
-        contains(
-          '--source-root ../harmonyos-source --artifacts ../outputs/harmonyos',
-        ),
+        contains('--source-root ../harmonyos-source --directory ../outputs'),
       );
       expect(draft, contains('--notes-file ../release_notes.md'));
-      expect(draft, contains(r'--release-files "${files[@]}"'));
-      expect(draft, contains('../outputs/harmonyos/*'));
+      expect(
+        draft,
+        contains('--manifest ../outputs/release-verification.json'),
+      );
       expect(
         commandStep(release, 'android_tv_build.py verify-release')['run'],
         contains('--directory ../outputs'),
@@ -106,36 +145,31 @@ void main() {
   test(
     'draft and runtime verification precede publication and postchecks follow',
     () {
-      final publication = commandIndex(release, '--draft=false');
+      final publication = commandIndex(release, 'release_delivery.py publish');
       expect(commandIndex(release, 'verify-draft'), lessThan(publication));
-      expect(commandIndex(release, 'verify-runtime'), lessThan(publication));
       expect(
         commandIndex(release, 'verify-published'),
         greaterThan(publication),
       );
-      final runtime = commandStep(release, 'verify-runtime');
-      expect(runtime['id'], 'harmonyos_runtime');
-      expect(
-        runtime['run'],
-        contains(r'--allow-pending --github-output "$GITHUB_OUTPUT"'),
-      );
+      final runtime = commandStep(release, 'verify-draft');
+      expect(runtime['id'], 'delivery_gate');
       final gated = steps(release)
           .where(
             (step) =>
                 step['if'] is String &&
                 (step['if'] as String).contains(
-                  "steps.harmonyos_runtime.outputs.ready == 'true'",
+                  "steps.delivery_gate.outputs.ready == 'true'",
                 ),
           )
           .toList();
       expect(gated, hasLength(3));
       expect(
-        commandStep(release, '--draft=false')['if'],
-        contains("steps.harmonyos_runtime.outputs.ready == 'true'"),
+        commandStep(release, 'release_delivery.py publish')['if'],
+        contains("steps.delivery_gate.outputs.ready == 'true'"),
       );
       expect(
         commandStep(release, 'verify-published')['if'],
-        contains("steps.harmonyos_runtime.outputs.ready == 'true'"),
+        contains("steps.delivery_gate.outputs.ready == 'true'"),
       );
     },
   );
@@ -242,12 +276,25 @@ void main() {
         android['if'],
         contains("needs.Manual_Quality.result == 'success'"),
       );
-      final patterns = steps(
-        release,
-      ).map((step) => step['with']?['pattern']).whereType<String>().toSet();
+      final downloadAction =
+          loadYaml(
+                File(
+                  '.github/actions/download-release/action.yml',
+                ).readAsStringSync(),
+              )
+              as YamlMap;
+      final patterns = (downloadAction['runs']['steps'] as YamlList)
+          .cast<YamlMap>()
+          .map((step) => step['with']?['pattern'])
+          .whereType<String>()
+          .join(',');
       expect(
         patterns,
-        containsAll(['apk-*', 'tv-apk-*', 'android-*-manifest']),
+        allOf(
+          contains('apk-*'),
+          contains('tv-apk-*'),
+          contains('android-*-manifest'),
+        ),
       );
       expect(
         File('pubspec.yaml').readAsStringSync(),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -13,8 +14,6 @@ Future<void> killAt(
   String phase, {
   bool checkOwner = false,
 }) async {
-  final ready = File('${root.path}/ready.json');
-  if (ready.existsSync()) ready.deleteSync();
   final child = await Process.start(dartExecutable(), [
     '--packages=${p.absolute('.dart_tool/package_config.json')}',
     'test/fixtures/source_transaction_crash_probe.dart',
@@ -23,28 +22,25 @@ Future<void> killAt(
     phase,
   ]);
   final errors = child.stderr.transform(utf8.decoder).join();
-  final output = child.stdout.transform(utf8.decoder).join();
+  final output = StreamIterator(
+    child.stdout.transform(utf8.decoder).transform(const LineSplitter()),
+  );
   var exited = false;
   final exit = child.exitCode.then((value) {
     exited = true;
     return value;
   });
   try {
-    final deadline = DateTime.now().add(const Duration(seconds: 30));
-    while (!ready.existsSync() &&
-        !exited &&
-        DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-    }
-    if (!ready.existsSync()) {
+    final signaled = await output.moveNext().timeout(
+      const Duration(seconds: 30),
+      onTimeout: () => false,
+    );
+    if (!signaled) {
       if (!exited) child.kill(ProcessSignal.sigkill);
       await exit.timeout(const Duration(seconds: 10));
       fail('Source transaction probe failed at $phase: ${await errors}');
     }
-    expect(jsonDecode(ready.readAsStringSync()), {
-      'pid': child.pid,
-      'phase': phase,
-    });
+    expect(jsonDecode(output.current), {'pid': child.pid, 'phase': phase});
     if (checkOwner) {
       await expectLater(
         SourceTransactionJournal.recover(root.path),
@@ -54,13 +50,13 @@ Future<void> killAt(
     expect(child.kill(ProcessSignal.sigkill), isTrue);
     expect(await exit.timeout(const Duration(seconds: 10)), isNot(0));
     expect(await errors, isEmpty);
-    expect(await output, isEmpty);
+    expect(await output.moveNext(), isFalse);
   } finally {
     if (!exited) child.kill(ProcessSignal.sigkill);
     await exit.timeout(const Duration(seconds: 10));
     await child.stdin.close();
+    await output.cancel();
     await errors;
-    await output;
   }
 }
 

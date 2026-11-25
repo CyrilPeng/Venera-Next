@@ -8,8 +8,10 @@ import 'package:image/image.dart' as img;
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/continuous_data.dart';
 import 'package:venera_next/features/reader/continuous_view.dart';
+import 'package:venera_next/features/reader/display_image_provider.dart';
 import 'package:venera_next/features/reader/image_export.dart';
 import 'package:venera_next/features/reader/image_picker.dart';
+import 'package:venera_next/features/reader/image_position.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
 import 'package:venera_next/foundation/image_work.dart';
@@ -107,6 +109,48 @@ void main() {
       expect(fixture.state.scrollController.offset, 0);
       expect(fixture.navigation.state.page, 2);
       expect(fixture.state.currentImageRange, (1, 2));
+    } finally {
+      await fixture.dispose(tester);
+    }
+  });
+
+  testWidgets('narrowed image margins keep their page after zoom and pan', (
+    tester,
+  ) async {
+    final fixture = _Fixture(
+      size: const Size(800, 600),
+      imageSize: const Size(800, 1200),
+      sideMargin: 20,
+    );
+    try {
+      await fixture.mount(tester);
+      final state = fixture.state;
+      for (final zoom in [false, true]) {
+        if (zoom) {
+          state.photoViewController.scale = 1.5;
+          state.photoViewController.position = const Offset(40, 0);
+          await fixture.settle(tester);
+        }
+        final image = state.imageStates
+            .whereType<ComicImageState>()
+            .singleWhere((state) {
+              final source =
+                  (state.widget.image as ReaderDisplayImageProvider).image;
+              return source.page == 1 && state.visibleInReader;
+            });
+        final bounds = tester.getRect(find.byWidget(image.widget));
+        final point = Offset(
+          4,
+          bounds.center.dy.clamp(4, fixture.size.height - 4),
+        );
+        expect(bounds.contains(point), isFalse);
+        expect(state.getImageIndexByOffset(point), 0);
+        await tester.runAsync(() => state.getImageByOffset(point));
+        expect(fixture.reads.single.chapterId, 'chapter-1');
+        expect(fixture.reads.single.imageKey, fixture.imageKeys.first);
+        fixture.reads.clear();
+      }
+      expect(tester.takeException(), isNull);
     } finally {
       await fixture.dispose(tester);
     }
@@ -215,6 +259,7 @@ class _Fixture {
     this.mode = 'vertical',
     this.size = const Size(400, 600),
     this.crossChapter = false,
+    this.sideMargin = 0,
     Size? imageSize,
     int? shortPage,
     int imageCount = 3,
@@ -252,12 +297,14 @@ class _Fixture {
   final String mode;
   final Size size;
   final bool crossChapter;
+  final double sideMargin;
   final directory = Directory.systemTemp.createTempSync(
     'current-reader-image-',
   );
   final work = ImageWork();
   final viewport = ReaderViewportBinding();
   final loadedChapters = <int>[];
+  final reads = <ReaderImageAddress>[];
   late final List<String> imageKeys;
   late final ReaderController navigation;
   ContinuousModeState get state => viewport.current! as ContinuousModeState;
@@ -283,7 +330,7 @@ class _Fixture {
             invertSplit: false,
             scrollSpeed: 1,
             limitImageWidth: false,
-            sideMargin: 0,
+            sideMargin: sideMargin,
             doubleTapCollect: false,
             centerLongPressZoom: true,
             sourceKey: null,
@@ -306,7 +353,10 @@ class _Fixture {
           onPreviousError: (error, _) => fail('$error'),
           onNavigationError: (_, error, _) => fail('$error'),
           readerSize: () => size,
-          readImage: (_) async => Uint8List(0),
+          readImage: (image) async {
+            reads.add(image);
+            return Uint8List(0);
+          },
         ),
       ),
     );

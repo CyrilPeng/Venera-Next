@@ -6,23 +6,20 @@ import 'app_locale.dart';
 
 extension AppTranslation on String {
   String _translate() {
-    var locale = appLocale;
-    var key = "${locale.languageCode}_${locale.countryCode}";
-    if (locale.languageCode == "en") {
-      key = "en_US";
-    }
-    return (translations[key]?[this]) ?? this;
+    return translations[appLanguage.translationKey]?[this] ?? this;
   }
 
   String get tl => _translate();
 
   String tlParams(Map<String, Object> values) {
-    var res = _translate();
-    for (var entry in values.entries) {
-      res = res.replaceFirst("@${entry.key}", entry.value.toString());
-    }
-    return res;
+    return _translate().replaceAllMapped(
+      _placeholder,
+      (match) =>
+          values[match.group(0)!.substring(1)]?.toString() ?? match.group(0)!,
+    );
   }
+
+  static final _placeholder = RegExp(r'@[A-Za-z][A-Za-z0-9_]*');
 
   static Map<String, Map<String, String>> translations = const {};
 

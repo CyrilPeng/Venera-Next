@@ -73,6 +73,48 @@ git diff --check
 
 PR 保留 `依赖安全审查` 和 `PR 平台冒烟构建`。相关 Flutter、根测试、原生、依赖、脚本及工作流变更触发 Android 手机版／TV Debug 和 Windows 原生／窗口回归；原生平台路径另触发 Linux、macOS 与 iOS 构建。鸿蒙继续使用独立固定 SDK 的 host 与 HAP 门禁。文档等不影响平台构建的改动按原路径规则跳过；具体触发以工作流为准。Dart 格式检查只检查本次修改的文件，`main` 继续要求既有质量、依赖与平台门禁，禁止直接强推或删除分支。
 
+## 翻译维护
+
+当前支持简体中文、繁体中文、英文、德语和日语。[语言注册表](../../lib/foundation/app_language.dart)统一维护设置选项、Flutter 支持列表及翻译标识；已保存的 `zh-CN`、`zh-TW`、`en-US` 不变，新增 `de-DE`、`ja-JP`；词典与 JS `APP.locale` 使用 `zh_CN`、`zh_TW`、`en_US`、`de_DE`、`ja_JP`。系统语言按偏好顺序匹配，德语地区变体和未带地区的日语均能识别，应用默认仍跟随系统。漫画源脚本的独立词典仍按现有地区／语言回退规则读取，德日不套用中文标签词库。
+
+应用英文原文同时作为翻译键和默认回退文案，[translation.json](../../assets/translation.json)维护相同键集合的简中、繁中、德语和日语词典。新增或润色文案时同步调用与所有词典，不使用插值生成翻译键。参数使用 `@name`（英文字母开头，后续可含数字或下划线），通过 `tlParams` 传入同名参数；名称和出现次数应与原文一致，可调整顺序。运行时按完整参数名替换，保留未知参数和未知文案。品牌、格式、技术缩写和自然通用的词可与英文相同，不能用成段英文代替未完成的翻译。
+
+沿用同模块的术语，例如画廊／畫廊、备份／備份、覆盖／覆寫。删除、覆盖及恢复提示必须保留操作对象、后果和确认含义。新增语种另行安排需求与校对者，完成词典、组件和布局验证后再开放语言选择。
+
+在 `tool/code_audit` 执行 `dart pub get --enforce-lockfile`、`dart run bin/self_check.dart` 和 `dart run bin/check_translations.dart ../..`。CI 使用语法树检查跨行、拼接、转义、条件和列表中的静态键，并核对词典结构、重复键和参数；变量及其他动态文案仍需相应运行时回归，不能将静态扫描通过视为全部动态文案已翻译。实际资源加载、语言切换及英文回退由 `test/foundation/translations_test.dart` 和标签／语言回归验证。
+
+### 术语参考
+
+下表取自现有词典，用于理解功能边界；新增语种应按该语言习惯建立对应术语并保持一致。完整句子仍以实际页面与操作含义为准。
+
+| 英文原文 | 简体中文 | 繁体中文 | 德语 | 日语 | 含义 |
+| --- | --- | --- | --- | --- | --- |
+| Comics | 漫画 | 漫畫 | Comics | 漫画 | 应用管理或阅读的作品 |
+| Comic Source | 漫画源 | 漫畫源 | Comic-Quelle | 漫画ソース | 提供作品信息的扩展 |
+| Favorites | 收藏 | 收藏 | Favoriten | お気に入り | 用户保存的作品与目录 |
+| History | 历史 | 歷史 | Verlauf | 履歴 | 已有阅读记录 |
+| Gallery | 画廊 | 畫廊 | Galerie | ギャラリー | 图片集合，沿用对应源的展示语义 |
+| Continuous | 连续 | 連續 | Fortlaufend | 連続 | 同一章节内连续滚动 |
+| Waterfall | 瀑布流 | 瀑布流 | Wasserfall | ウォーターフォール | 跨章节连续阅读 |
+| Read later | 稍后阅读 | 稍後閱讀 | Später lesen | あとで読む | 保存计划阅读的作品 |
+| Restore | 恢复 | 恢復 | Wiederherstellen | 復元 | 从备份恢复数据，保留覆盖后果的说明 |
+| Backup | 备份 | 備份 | Backup | バックアップ | 用于恢复的备份副本 |
+| Overwrite | 覆盖 | 覆寫 | Überschreiben | 上書き | 替换已有数据，提示中保留对象和后果 |
+| Import | 导入 | 匯入 | Importieren | インポート | 将外部文件或数据加入应用 |
+| Export | 导出 | 匯出 | Exportieren | エクスポート | 将应用内的数据写到外部文件 |
+| Save | 保存 | 儲存 | Speichern | 保存 | 保存当前修改或图片，与下载整部作品区分 |
+
+### 新语种验收
+
+需求和校对参与方式见[翻译贡献](../../CONTRIBUTING.md#翻译贡献)。新增语种时，维护者同步语言注册表、系统语言匹配、Flutter 组件支持和翻译审查范围，并评估标签与漫画源语言回退；现有中文词典和英文回退继续校验。按语言拆分词典可与首批语种一起评估，当前文件格式保持现状。
+
+- 核对同一源码提交的全部应用文案、参数名称与次数，并检查实际加载、显式切换、系统语言变化及英文回退；设置、阅读器、收藏、导入导出、备份恢复和错误提示都应覆盖。
+- 记录校对者与已审校范围，逐项确认删除、覆盖、恢复提示和错误操作含义。静态审查通过后仍需验证动态文案与实际 Flutter 组件。
+- 使用对应 commit 的 GitHub 构建产物，验证手机、桌面、窄屏及大字号下的设置、菜单、确认框与错误提示；记录语言、平台、文字缩放及构建运行链接。
+- 完成词典、组件和布局验收后开放语言选择，并由语言维护者随功能变更更新文案。
+
+德日的真实字体布局回归复用 `test/foundation/translations_test.dart`，覆盖手机、横屏、桌面及两倍字号的实际设置、菜单和覆盖确认。质量工作流上传 `i18n-layout` 截图与原始测试记录；组件核验不替代社区母语校对或设备验收。根 `README.md` 保持中文，四种 README 的语言入口和赞助展示需同步维护。
+
 ## Android 构建
 
 本地 release 签名文件放置在：
@@ -145,6 +187,8 @@ python .github/scripts/release_version.py --check --tag v1.2.3
 
 `代码分析` 工作流会运行版本与结构检查、Python 脚本测试、修改文件的 Dart 格式检查、`flutter analyze`、完整 Dart 测试及覆盖率汇总。`依赖安全审查` 会检查 PR 新增或升级的依赖，`PR 平台冒烟构建` 会按改动范围验证 Android 和 Windows 编译。`完整构建` 在开始多平台构建前会复用同一质量工作流；手动平台构建和 tag 发布则共同复用 `.github/workflows/build.yml`，避免两套构建定义产生差异。
 
+`完整构建` 同时等待准确提交的最新 RustSec 扫描和各平台真实安装包回执。手动运行默认 `mode=build`，全部包核验成功后留在 Actions；`mode=rehearsal` 额外演练内部草稿的真实上传及下载，`rehearsal_interrupt=true` 验证中断后复用原包恢复。手动模式不公开 Release、不推进 AltStore 或 Winget；正式标签通过完整门禁后发布。安全报告超过 24 小时先重新扫描原锁文件，普通安装包与回执保留 30 天。具体条件见[发布流程](release_readiness.md)。本项目的实际安装包构建均使用 GitHub Actions。
+
 Android release 工作流需要以下仓库 Secrets：
 
 - `ANDROID_KEYSTORE`：keystore 文件的 Base64 内容
@@ -179,3 +223,9 @@ flutter pub get --enforce-lockfile
 ### Gradle 下载过慢
 
 可以在本地临时切换 Gradle wrapper 镜像或配置网络代理，但环境相关地址不应提交到仓库。提交前应确认 `gradle-wrapper.properties` 没有混入本地镜像改动。
+
+## 历史记录与恢复
+
+已完成的历史整理、依赖迁移、测试优化及 Issue 快照从 [v1.18.4-rc.3 文档树](https://github.com/CyrilPeng/Venera-Next/tree/v1.18.4-rc.3/doc)检索。恢复历史实现使用对应标签或保存的 Git bundle，在独立工作区核对来源、锁与版本；历史 SHA 和已发布资产继续对应当时的输入。鸿蒙冻结／最后分支来源见[恢复标签](harmonyos_releases.zh.md#历史来源与恢复)。
+
+临时命令与分析日志放入 `logs/`，生成工程、SDK、安装包下载和编译缓存放入忽略的 `build/`。验收完成后保留来源、最终结果、关键失败、安全与设备报告，清理可重建副本；长期规则合并进现有指南，避免每个版本新增计划和跟进文档。

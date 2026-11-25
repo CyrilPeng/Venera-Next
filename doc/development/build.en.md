@@ -73,6 +73,48 @@ For early feedback, run `python .github/scripts/run_flutter_tests.py --partition
 
 PRs retain `依赖安全审查` and `PR 平台冒烟构建`. Relevant Flutter, root test, native, dependency, script, and workflow changes trigger Android mobile/TV Debug builds and Windows native/window regressions; native platform paths also trigger Linux, macOS, and iOS builds. HarmonyOS retains its independently pinned SDK, host, and HAP gates. Documentation changes follow the existing platform path rules; the workflows define exact triggers. Dart formatting checks only modified files. Main continues to require the existing quality, dependency, and platform gates, with direct force-pushes and branch deletion disabled.
 
+## Translation Maintenance
+
+The app supports Simplified Chinese, Traditional Chinese, English, German and Japanese. The [language registry](../../lib/foundation/app_language.dart) defines settings choices, Flutter locales and translation identifiers. Existing persisted choices remain `zh-CN`, `zh-TW` and `en-US`, with `de-DE` and `ja-JP` added. Dictionaries and JS `APP.locale` use `zh_CN`, `zh_TW`, `en_US`, `de_DE` and `ja_JP`. System locales are matched in preference order, including German regional variants and Japanese without a region; the app still follows the system by default. Comic-source script dictionaries retain their region/language fallback rules. German and Japanese do not use the Chinese tag dictionaries.
+
+English source text serves as both the translation key and the default fallback. The Simplified Chinese, Traditional Chinese, German and Japanese dictionaries in [translation.json](../../assets/translation.json) must have the same keys. Update the call and all dictionaries together when adding or editing text. Use `tlParams` with `@name` placeholders (an ASCII letter followed by letters, digits or underscores), rather than interpolating a translation key. Preserve names and occurrence counts; translators may reorder them. Replacement matches complete names, and unknown keys or parameters retain their original text. Brands, formats, technical abbreviations and natural shared terms may match English; untranslated paragraphs must not stand in for completed translations.
+
+Follow terminology already used in the same feature, such as 画廊／畫廊, 备份／備份 and 覆盖／覆寫. Deletion, overwrite and restore confirmations must retain the affected data, consequences and confirmation meaning. New languages require demand, reviewers, complete dictionaries and component/layout verification before enabling selection.
+
+From `tool/code_audit`, run `dart pub get --enforce-lockfile`, `dart run bin/self_check.dart` and `dart run bin/check_translations.dart ../..`. CI checks complete static keys in multiline, adjacent, escaped, conditional and list expressions, plus dictionary structure, duplicate JSON keys and parameters. Variables and other dynamic targets still require runtime coverage. Resource loading, language switching and English fallback are covered by `test/foundation/translations_test.dart` and the tag/locale regressions.
+
+### Glossary
+
+These terms come from the existing dictionaries and explain feature boundaries. New languages should use natural, consistent terms. Translate complete sentences in the context of the actual screen and action.
+
+| English source | Simplified Chinese | Traditional Chinese | German | Japanese | Meaning |
+| --- | --- | --- | --- | --- | --- |
+| Comics | 漫画 | 漫畫 | Comics | 漫画 | Works managed or read by the app |
+| Comic Source | 漫画源 | 漫畫源 | Comic-Quelle | 漫画ソース | An extension providing information about works |
+| Favorites | 收藏 | 收藏 | Favoriten | お気に入り | Works and folders saved by the user |
+| History | 历史 | 歷史 | Verlauf | 履歴 | Existing reading records |
+| Gallery | 画廊 | 畫廊 | Galerie | ギャラリー | An image collection, following the source's presentation |
+| Continuous | 连续 | 連續 | Fortlaufend | 連続 | Scrolling within one chapter |
+| Waterfall | 瀑布流 | 瀑布流 | Wasserfall | ウォーターフォール | Continuous reading across chapters |
+| Read later | 稍后阅读 | 稍後閱讀 | Später lesen | あとで読む | Works saved for future reading |
+| Restore | 恢复 | 恢復 | Wiederherstellen | 復元 | Restore backed-up data, preserving any overwrite consequences |
+| Backup | 备份 | 備份 | Backup | バックアップ | A saved copy used for restoration |
+| Overwrite | 覆盖 | 覆寫 | Überschreiben | 上書き | Replace existing data; preserve the affected data and consequences |
+| Import | 导入 | 匯入 | Importieren | インポート | Bring external files or data into the app |
+| Export | 导出 | 匯出 | Exportieren | エクスポート | Write app data to external files |
+| Save | 保存 | 儲存 | Speichern | 保存 | Save changes or an image; distinct from downloading a whole work |
+
+### New Language Acceptance
+
+See [Translation Contributions](../../CONTRIBUTING.en.md#translation-contributions) for proposals and review participation. When adding a language, maintainers update the language registry, system-language matching, Flutter component support and audit coverage, and assess tag/comic-source fallback. Existing Chinese dictionaries and English fallback remain checked. Per-language dictionary files can be evaluated with the first additions; the current format remains in use.
+
+- Cover all app text from the same source commit, preserve placeholder names/counts, and verify loading, explicit switching, system-language changes and English fallback. Include settings, the reader, favorites, import/export, backup/restore and error messages.
+- Record reviewers and reviewed scope. Check deletion, overwrite, restore and error actions explicitly. Dynamic text and real Flutter components still need verification after static audits pass.
+- Use GitHub build artifacts from the corresponding commit to check phone, desktop, narrow-screen and large-text settings, menus, confirmations and errors. Record the language, platform, text scale and build run link.
+- Enable language selection after dictionary, component and layout acceptance; language maintainers update text as features change.
+
+German/Japanese layout regressions reuse `test/foundation/translations_test.dart`, covering real settings, menus and overwrite confirmations on phone, landscape and desktop sizes with text scaled to 200%. The quality workflow uploads screenshots and raw test records as `i18n-layout`; component checks do not replace community native-language review or device acceptance. Keep the default `README.md` Chinese and maintain language links and sponsor displays in all four READMEs.
+
 ## Android Build
 
 Place local release signing files at:
@@ -145,6 +187,8 @@ python .github/scripts/release_version.py --check --tag v1.2.3
 
 The `代码分析` workflow runs version and structure checks, Python script tests, formatting checks for changed Dart files, `flutter analyze`, the full Dart test suite, and coverage reporting. `依赖安全审查` checks dependencies added or upgraded by a pull request, while `PR 平台冒烟构建` verifies Android and Windows compilation when the changed files can affect platform builds. Before starting multi-platform builds, `完整构建` reuses the same quality workflow. Manual platform builds and tag releases both reuse `.github/workflows/build.yml` so their build definitions cannot drift apart.
 
+`完整构建` also requires a fresh RustSec scan of the exact commit and receipts from checks of the actual platform packages. Manual `mode=build` keeps verified packages in Actions. `mode=rehearsal` additionally exercises uploads and downloads using an internal draft; `rehearsal_interrupt=true` checks recovery with the original packages after an interrupted upload. Manual runs never publish a Release or advance AltStore/Winget. Tag releases publish only after all required gates pass. Security reports expire after 24 hours; recovery rescans the original lockfile. Standard packages and verification receipts are retained for 30 days. See the [release rules](release_readiness.md). Actual application packages for this project are built using GitHub Actions.
+
 Android release workflows require these repository Secrets:
 
 - `ANDROID_KEYSTORE`: Base64 content of the keystore file
@@ -179,3 +223,9 @@ The Flutter/Dart version or package-source environment usually does not match. C
 ### Slow Gradle Downloads
 
 You may temporarily use a local Gradle wrapper mirror or configure a network proxy. Environment-specific URLs must not be committed. Before submitting changes, verify that `gradle-wrapper.properties` does not contain local mirror edits.
+
+## Historical Records and Recovery
+
+Completed history, dependency migration, test optimization and issue snapshots remain in the [v1.18.4-rc.3 documentation tree](https://github.com/CyrilPeng/Venera-Next/tree/v1.18.4-rc.3/doc). Restore the corresponding tag or saved Git bundle in an independent workspace, checking source, locks and version. Historical SHAs and published assets still identify their original inputs. See [HarmonyOS recovery tags](harmonyos_releases.en.md#historical-sources-and-recovery).
+
+Put temporary command/analysis logs in `logs/` and generated projects, SDKs, downloaded installers and compiler caches in ignored `build/`. After acceptance, retain source, final outcomes, important failures, security and device evidence, then remove reproducible copies. Merge durable rules into maintained guides rather than adding a plan/follow-up document each release.

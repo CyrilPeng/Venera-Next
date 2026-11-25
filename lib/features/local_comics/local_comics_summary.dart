@@ -16,7 +16,9 @@ import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/routing/app_navigation.dart';
+import 'package:venera_next/routing/local_reading.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -35,12 +37,14 @@ class LocalComicsSummary extends StatefulWidget {
 }
 
 class _LocalComicsSummaryState extends State<LocalComicsSummary> {
+  final _heroIds = ComicCoverHeroIds();
   late List<LocalComic> local;
   late int count;
 
   void onLocalComicsChange() {
     setState(() {
       local = LocalManager().getRecent();
+      _heroIds.retain(local);
       count = LocalManager().count;
     });
   }
@@ -109,18 +113,24 @@ class _LocalComicsSummaryState extends State<LocalComicsSummary> {
                     scrollDirection: Axis.horizontal,
                     itemCount: local.length,
                     itemBuilder: (context, index) {
-                      final heroID = local[index].id.hashCode;
+                      final comic = local[index];
+                      final imported = comic.comicType == ComicType.local;
+                      final heroID = imported ? null : _heroIds.forComic(comic);
                       return SimpleComicTile(
-                        comic: local[index],
+                        comic: comic,
                         heroID: heroID,
                         gaplessPlayback: true,
                         onTap: () {
+                          if (imported) {
+                            openLocalComic(comic);
+                            return;
+                          }
                           context.to(
                             () => ComicPage(
-                              id: local[index].id,
-                              sourceKey: local[index].sourceKey,
-                              cover: local[index].cover,
-                              title: local[index].title,
+                              id: comic.id,
+                              sourceKey: comic.sourceKey,
+                              cover: comic.cover,
+                              title: comic.title,
                               heroID: heroID,
                             ),
                           );

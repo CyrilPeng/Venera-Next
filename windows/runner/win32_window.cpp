@@ -3,6 +3,8 @@
 #include <dwmapi.h>
 #include <flutter_windows.h>
 
+#include <cstdio>
+
 #include "resource.h"
 #include "startup_log.h"
 
@@ -127,6 +129,7 @@ Win32Window::~Win32Window() {
 Win32Window::CreateResult Win32Window::Create(const std::wstring& title,
                                              const Point& origin,
                                              const Size& size) {
+  LogWindowsStartupStage("Looking for existing window");
   HWND hwnd = ::FindWindow(kWindowClassName, title.c_str());
   if (hwnd) {
     LogWindowsStartup("Existing instance found");
@@ -141,8 +144,10 @@ Win32Window::CreateResult Win32Window::Create(const std::wstring& title,
     }
     return CreateResult::kExistingInstance;
   }
+  LogWindowsStartupStage("Preparing native window state");
   Destroy();
 
+  LogWindowsStartupStage("Registering window class");
   const wchar_t* window_class =
       WindowClassRegistrar::GetInstance()->GetWindowClass();
   if (!window_class) {
@@ -151,10 +156,16 @@ Win32Window::CreateResult Win32Window::Create(const std::wstring& title,
 
   const POINT target_point = {static_cast<LONG>(origin.x),
                               static_cast<LONG>(origin.y)};
+  LogWindowsStartupStage("Locating display monitor");
   HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
+  LogWindowsStartupStage("Querying display DPI");
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
+  char dpi_event[64]{};
+  _snprintf_s(dpi_event, sizeof(dpi_event), _TRUNCATE, "Display DPI=%u", dpi);
+  LogWindowsStartup(dpi_event);
   double scale_factor = dpi / 96.0;
 
+  LogWindowsStartupStage("Creating native window");
   HWND window = CreateWindow(
       window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
       Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
@@ -166,7 +177,8 @@ Win32Window::CreateResult Win32Window::Create(const std::wstring& title,
     return CreateResult::kFailed;
   }
 
-  LogWindowsStartup("Native window created");
+  LogWindowsStartupStage("Native window created");
+  LogWindowsStartupStage("Initializing native window theme");
   UpdateTheme(window);
 
   if (!OnCreate()) {

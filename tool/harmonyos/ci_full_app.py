@@ -1,4 +1,4 @@
-"""Build, audit and export the complete Flutter reader source as a lab HAP."""
+"""Build, audit and export the complete Flutter reader source as an unsigned HAP."""
 
 import argparse
 import hashlib
@@ -15,7 +15,7 @@ from native_build import ROOT, digest, require_within, validate_elf
 from prepare_full_app import BASE, DEPS, EXTRA_LIBRARIES, PROJECT, NATIVE_NOTICE_ASSET, NATIVE_NOTICE_SOURCE, LABEL_SOURCE
 from prepare_probe import LIBRARIES
 from sideload import audit_device_types
-from release_context import build_inputs
+from release_context import build_inputs, reader_purpose
 from app_labels import APP_LABEL, audit_hap_labels
 
 sys.path.insert(0, str(ROOT / ".github/scripts"))
@@ -34,11 +34,11 @@ def host_tests():
 
 def audit_full_hap(hap, metadata, expected_assets):
     if not hap.name.endswith("-unsigned.hap"):
-        raise ValueError("Only an unsigned reader experiment may be exported")
-    if (metadata.get("purpose") != "full_reader_experiment" or metadata.get("reader_integrated") is not True
+        raise ValueError("Only an unsigned reader HAP may be exported")
+    if (metadata.get("purpose") != reader_purpose(metadata.get("release")) or metadata.get("reader_integrated") is not True
             or metadata.get("runtime_verified") is not False or metadata.get("signed") is not False
             or metadata.get("entrypoint") != "lib/main.dart" or metadata.get("app_label") != APP_LABEL):
-        raise ValueError("This is not an unverified full reader experiment")
+        raise ValueError("This is not an audited unsigned full reader HAP")
     expected = metadata["native_libraries"]
     if set(expected) != set(LIBRARIES) | set(EXTRA_LIBRARIES):
         raise ValueError("Incomplete full reader native manifest")
@@ -104,7 +104,7 @@ def check_real_source(metadata):
 def build(flutter_sdk):
     CI.mkdir(parents=True, exist_ok=True)
     source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    report = {"status": "building", "purpose": "full_reader_experiment", "commit": source_commit,
+    report = {"status": "building", "purpose": reader_purpose(build_inputs()["release"]), "commit": source_commit,
               "signed": False, "reader_integrated": True, "runtime_verified": False}
     try:
         run_logged([sys.executable, ROOT / "tool/harmonyos/prepare_full_app.py", "project", "--flutter-sdk", flutter_sdk], "full-app-prepare")

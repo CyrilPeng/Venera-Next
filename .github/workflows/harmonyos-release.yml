@@ -162,7 +162,7 @@ jobs:
           name: harmonyos-release
           path: harmonyos/build/harmonyos/ci/release-artifacts/*
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
 
       - name: Generate an exact-HAP device acceptance template with no passing claims
         working-directory: release
@@ -186,7 +186,7 @@ jobs:
           import json, os
           from pathlib import Path
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
-              summary.write('## HarmonyOS beta build\n\n')
+              summary.write('## HarmonyOS HAP build\n\n')
               for label, name in (('SDK', 'ci/sdk'), ('blank', 'ci/blank-build'),
                                   ('core native', 'native/native-build'),
                                   ('reader native', 'full-native/extra-native-build'),
@@ -194,7 +194,7 @@ jobs:
                   path = Path(f'build/harmonyos/{name}.json')
                   status = json.loads(path.read_text())['status'] if path.exists() else 'not completed'
                   summary.write(f'- {label}: `{status}`\n')
-              summary.write('\nUnsigned ARM64 phone/tablet beta only. No signing, device installation, '
+              summary.write('\nUnsigned ARM64 phone/tablet HAP. No signing, device installation, '
                             'certificate renewal or feature acceptance is claimed. This job does not publish a release.\n')
           PY
 

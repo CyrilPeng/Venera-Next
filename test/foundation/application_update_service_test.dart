@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/application_update_service.dart';
 import 'package:venera_next/foundation/operation_failure.dart';
@@ -7,6 +9,98 @@ import 'package:venera_next/network/request_scope.dart';
 import '../support/application_update_adapter.dart';
 
 void main() {
+  testWidgets(
+    'update deadline cancels HTTP but still waits for native cleanup',
+    (tester) async {
+      final adapter = ApplicationUpdateAdapter();
+      final service = ApplicationUpdateService(
+        createClient: () => Dio()..httpClientAdapter = adapter,
+        currentVersion: () => '1.18.3',
+        requestTimeout: const Duration(milliseconds: 30),
+      );
+      var finished = false;
+      final checked = expectLater(
+        service.check().whenComplete(() => finished = true),
+        throwsA(
+          isA<ApplicationUpdateFailure>()
+              .having(
+                (e) => e.reason,
+                'reason',
+                ApplicationUpdateFailureReason.timeout,
+              )
+              .having((e) => e.cause, 'cause', isA<TimeoutException>())
+              .having(
+                (e) => e.toString(),
+                'diagnostics',
+                contains('releases/latest'),
+              ),
+        ),
+      );
+      await tester.pump(Duration.zero);
+      expect(adapter.entered.isCompleted, isTrue);
+      await tester.pump(const Duration(milliseconds: 30));
+      expect(adapter.draining.isCompleted, isTrue);
+      expect(finished, isFalse);
+      adapter.released.complete();
+      await tester.pump();
+      await checked;
+      await service.closeAndWait();
+      expect(adapter.closes, 1);
+    },
+  );
+
+  for (final (status, headers, reason) in [
+    (429, <String, List<String>>{}, ApplicationUpdateFailureReason.rateLimit),
+    (
+      403,
+      {
+        'x-ratelimit-remaining': ['0'],
+        'x-ratelimit-reset': ['1800000000'],
+      },
+      ApplicationUpdateFailureReason.rateLimit,
+    ),
+    (403, <String, List<String>>{}, ApplicationUpdateFailureReason.http),
+  ]) {
+    test('update HTTP $status retains upstream diagnostics: $reason', () async {
+      final adapter = ApplicationUpdateAdapter()..released.complete();
+      final service = ApplicationUpdateService(
+        createClient: () => Dio()..httpClientAdapter = adapter,
+        currentVersion: () => '1.18.3',
+      );
+      final checked = expectLater(
+        service.check(),
+        throwsA(
+          isA<ApplicationUpdateFailure>()
+              .having((e) => e.reason, 'reason', reason)
+              .having((e) => e.statusCode, 'status', status)
+              .having(
+                (e) => e.cause,
+                'original HTTP error',
+                isA<DioException>(),
+              )
+              .having(
+                (e) => e.toString(),
+                'upstream message',
+                contains('upstream response'),
+              )
+              .having(
+                (e) => e.toString(),
+                'diagnostic status',
+                contains('HTTP $status'),
+              ),
+        ),
+      );
+      await adapter.entered.future;
+      adapter.complete(
+        {'message': 'upstream response'},
+        status: status,
+        headers: headers,
+      );
+      await checked;
+      await service.closeAndWait();
+    });
+  }
+
   for (final kind in [
     'hap',
     'missing',

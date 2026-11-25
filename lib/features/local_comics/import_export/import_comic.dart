@@ -10,6 +10,8 @@ import 'package:venera_next/components/message.dart'
 import '../local_storage_guard.dart';
 import 'cbz.dart';
 import 'comic_import_service.dart';
+import 'comic_copy_record.dart';
+import 'comic_directory_copy.dart';
 import 'comic_collection_archive.dart';
 import 'epub_import.dart';
 import 'pdf_import.dart';
@@ -227,8 +229,10 @@ class ImportComic {
     if (selection == null) return false;
     controller = presentation.showLoading(
       allowCancel: false,
+      withProgress: true,
       message: 'Preparing selected folder'.tl,
     );
+    controller?.setProgress(null);
     try {
       return await _showImportResult(
         () => service.runImport((importing) async {
@@ -248,7 +252,13 @@ class ImportComic {
                 'Scanned @a folders; preparing import'.tlParams({'a': count}),
               ),
               onScanComplete: () =>
-                  controller?.setMessage('Saving imported comics'.tl),
+                  controller?.setMessage('Preparing comic files'.tl),
+              onCopyProgress: (progress) =>
+                  _showCopyProgress(controller, progress),
+              onRegistering: () {
+                controller?.setProgress(null);
+                controller?.setMessage('Saving imported comics'.tl);
+              },
             );
           });
         }),
@@ -267,8 +277,10 @@ class ImportComic {
     if (file == null) return false;
     var controller = presentation.showLoading(
       allowCancel: false,
+      withProgress: true,
       message: 'Extracting comic collection'.tl,
     );
+    controller?.setProgress(null);
     try {
       return await _showImportResult(
         () => service.runImport(
@@ -298,7 +310,11 @@ class ImportComic {
                   operation.checkActive();
                   if (separate == null) throw const SelectionCancelled();
                   if (!separate) collectionRoot = workspace;
-                  controller = presentation.showLoading(allowCancel: false);
+                  controller = presentation.showLoading(
+                    allowCancel: false,
+                    withProgress: true,
+                  );
+                  controller?.setProgress(null);
                 }
                 controller?.setMessage('Scanning and importing comics'.tl);
                 return importing.directory(
@@ -312,7 +328,13 @@ class ImportComic {
                     }),
                   ),
                   onScanComplete: () =>
-                      controller?.setMessage('Saving imported comics'.tl),
+                      controller?.setMessage('Preparing comic files'.tl),
+                  onCopyProgress: (progress) =>
+                      _showCopyProgress(controller, progress),
+                  onRegistering: () {
+                    controller?.setProgress(null);
+                    controller?.setMessage('Saving imported comics'.tl);
+                  },
                 );
               },
             );
@@ -324,6 +346,26 @@ class ImportComic {
     } finally {
       controller?.close();
     }
+  }
+
+  void _showCopyProgress(
+    LoadingDialogController? controller,
+    ComicDirectoryCopyProgress progress,
+  ) {
+    final message = switch (progress.stage) {
+      ComicCopyStage.preparing => 'Reading comic files (@a/@b)',
+      ComicCopyStage.checking => 'Checking comic files (@a/@b)',
+      ComicCopyStage.copying => 'Copying comic files (@a/@b)',
+      ComicCopyStage.verifying => 'Verifying copied files (@a/@b)',
+    };
+    controller?.setProgress(
+      progress.total > 0 ? progress.processed / progress.total : null,
+    );
+    controller?.setMessage(
+      progress.total > 0
+          ? message.tlParams({'a': progress.processed, 'b': progress.total})
+          : 'Preparing comic files'.tl,
+    );
   }
 
   Future<bool> localDownloads() => _showImportResult(() async {

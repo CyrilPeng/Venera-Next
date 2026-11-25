@@ -23,7 +23,7 @@ A root folder page provides links to its children, but its comic list and count 
 
 Comic-detail favorites, bulk add/transfer, Quick Favorite settings, and update-tracking selection share a searchable folder picker. It displays paths while retaining the original folder reference. Parents and children can be selected separately. Quick Favorite also supports None.
 
-In the unreleased version, the comic-detail favorite panel lets local folders use the full available height and scrolls local and network favorites together. New Folder stays in the fixed toolbar on the right while folders scroll. The Local favorites first setting still determines section order (#157).
+In the v1.18.4 prereleases, the comic-detail favorite panel lets local folders use the full available height and scrolls local and network favorites together. New Folder stays in the fixed toolbar on the right while folders scroll. The Local favorites first setting still determines section order (#157).
 
 On TV, use direction keys to move focus and Select to activate a folder or its separate expansion arrow. Back closes the picker and returns focus to its opening control. In folder search, Up/Down leave text input while Left/Right still edit the caret. Sorting offers Move up/Move down buttons without dragging. These controls do not change TV's separate data or low-memory policy; an actual device's input method may still require a companion input device.
 
@@ -33,7 +33,7 @@ Use Select comics in the favorites toolbar on wide screens or in the More menu o
 
 Select All, inversion, and long-press range selection include only comics visible under the current search, reading-status filter, and blocked-keyword rules. They exclude subfolders and their contents. Empty selections offer selection controls only. Bulk deletion first confirms the number of comics; cancelling keeps favorites, and confirmation removes only those favorite records from the current folder. Back or Cancel exits selection, and switching folders clears it.
 
-The unreleased version puts Select All, Invert Selection, and Deselect directly in the toolbar when there is enough space, retaining the More menu on narrow screens. On desktop, Escape closes a dialog first, then exits selection. If search is also active, the query remains after selection ends; a second Escape exits search and restores the full list (#152).
+The v1.18.4 prereleases put Select All, Invert Selection, and Deselect directly in the toolbar when there is enough space, retaining the More menu on narrow screens. On desktop, Escape closes a dialog first, then exits selection. If search is also active, the query remains after selection ends; a second Escape exits search and restores the full list (#152).
 
 ## Creating, Moving And Sorting
 

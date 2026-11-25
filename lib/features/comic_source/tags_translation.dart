@@ -7,30 +7,34 @@ https://github.com/EhTagTranslation/Database/tree/master/database
 
 import 'dart:convert';
 import 'package:flutter/services.dart';
+import 'package:venera_next/foundation/app_language.dart';
 import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/foundation/extensions.dart';
 
 extension TagsTranslation on String {
-  static final Map<String, Map<String, String>> _data = {};
+  static Map<AppLanguage, Map<String, Map<String, String>>> _tables = const {};
+
+  static Map<String, Map<String, String>> get _data =>
+      _tables[appLanguage == AppLanguage.traditionalChinese
+          ? AppLanguage.traditionalChinese
+          : AppLanguage.simplifiedChinese] ??
+      const {};
 
   static Future<void> readData() async {
-    var fileName = appLocale.countryCode == 'TW'
-        ? "assets/tags_tw.json"
-        : "assets/tags.json";
-    var data = await rootBundle.load(fileName);
-    List<int> bytes = data.buffer.asUint8List(
-      data.offsetInBytes,
-      data.lengthInBytes,
-    );
-    const JsonDecoder().convert(const Utf8Decoder().convert(bytes)).forEach((
-      key,
-      value,
-    ) {
-      _data[key] = {};
-      value.forEach((key1, value1) {
-        _data[key]?[key1] = value1;
-      });
-    });
+    // Load both bundled dictionaries once, then select on every read. Explicit
+    // choices, system locale changes and rapid switches share the same path.
+    final tables = await Future.wait([
+      rootBundle.loadString('assets/tags.json', cache: false),
+      rootBundle.loadString('assets/tags_tw.json', cache: false),
+    ]);
+    Map<String, Map<String, String>> decode(String content) => {
+      for (final entry in (jsonDecode(content) as Map<String, dynamic>).entries)
+        entry.key: Map<String, String>.from(entry.value as Map),
+    };
+    _tables = {
+      AppLanguage.simplifiedChinese: decode(tables[0]),
+      AppLanguage.traditionalChinese: decode(tables[1]),
+    };
   }
 
   static bool _haveNamespace(String key) {
@@ -126,15 +130,21 @@ extension TagsTranslation on String {
   /// English to chinese translations
   ///
   /// Not include artists and group
-  static MultipleMap<String, String> get enTagsTranslations => MultipleMap([
-    maleTags,
-    femaleTags,
-    languageTranslations,
-    parodyTags,
-    characterTranslations,
-    otherTags,
-    mixedTags,
-  ]);
+  static MultipleMap<String, String> get enTagsTranslations {
+    final data = _data;
+    return MultipleMap([
+      for (final namespace in [
+        'male',
+        'female',
+        'language',
+        'parody',
+        'character',
+        'other',
+        'mixed',
+      ])
+        data[namespace] ?? const {},
+    ]);
+  }
 }
 
 enum TranslationType {

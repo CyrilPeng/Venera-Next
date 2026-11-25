@@ -9,12 +9,8 @@ void main(List<String> args) async {
   final kind = args[1];
   final phase = args[2];
   void rendezvous() {
-    final marker = File('$root/ready.tmp');
-    marker.writeAsStringSync(
-      jsonEncode({'pid': pid, 'phase': phase}),
-      flush: true,
-    );
-    marker.renameSync('$root/ready.json');
+    // Blocking stdout publishes the checkpoint before waiting for the parent.
+    stdout.writeln(jsonEncode({'pid': pid, 'phase': phase}));
     stdin.readLineSync();
     throw StateError('Probe resumed instead of being terminated');
   }

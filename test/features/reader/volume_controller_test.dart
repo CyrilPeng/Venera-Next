@@ -9,6 +9,7 @@ ReaderVolumeController controller({
   bool Function()? nextPage,
   bool Function()? previousPage,
   void Function(Object, StackTrace)? onError,
+  void Function(bool)? onInput,
 }) => ReaderVolumeController(
   connect: connect,
   nextPage:
@@ -26,6 +27,7 @@ ReaderVolumeController controller({
   nextChapter: () => actions?.add('next chapter'),
   previousChapter: () => actions?.add('previous chapter end'),
   onError: onError ?? (_, _) {},
+  onInput: onInput,
 );
 
 class _Lease implements ReaderVolumeConnection {
@@ -47,10 +49,12 @@ void main() {
   test('acknowledged events navigate pages and chapter boundaries', () async {
     late _Lease lease;
     final actions = <String>[];
+    final inputs = <bool>[];
     var pageAvailable = true;
     final reader = controller(
       connect: (send) => lease = _Lease(send),
       actions: actions,
+      onInput: inputs.add,
       nextPage: () {
         actions.add('next page');
         return pageAvailable;
@@ -75,9 +79,11 @@ void main() {
       'next page',
       'next chapter',
     ]);
+    expect(inputs, [false, true, false, true]);
     await reader.dispose();
     lease.send(2);
     expect(actions, hasLength(6));
+    expect(inputs, hasLength(4));
   });
 
   test(

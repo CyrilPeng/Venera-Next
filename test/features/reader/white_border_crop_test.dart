@@ -86,8 +86,8 @@ class _GatedImage extends Fake implements ui.Image {
 }
 
 class _Provider extends ReaderImageProvider {
-  _Provider(img.Image page)
-    : bytes = img.encodePng(page),
+  _Provider(img.Image page, {bool jpeg = false})
+    : bytes = jpeg ? img.encodeJpg(page, quality: 100) : img.encodePng(page),
       super('crop-${_next++}', null, 'comic', 'chapter', 1);
   static int _next = 0;
   Uint8List bytes;
@@ -191,12 +191,20 @@ Widget _view(
   ),
 );
 
-void _cleanup(WidgetTester tester, ReaderWhiteBorderCrop crop, ImageWork work) {
+void _cleanup(
+  WidgetTester tester,
+  ReaderWhiteBorderCrop crop,
+  ImageWork work, {
+  ReaderImagePrecache? precache,
+}) {
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox());
     crop.dispose();
     var closed = false;
-    final closing = work.dispose().then((_) => closed = true);
+    final closing = Future.wait([
+      if (precache != null) precache.dispose(),
+      work.dispose(),
+    ]).then((_) => closed = true);
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
     await tester.pump();
@@ -209,23 +217,23 @@ void _cleanup(WidgetTester tester, ReaderWhiteBorderCrop crop, ImageWork work) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('every page crops after precaching and lazy scroll admission', (
+  testWidgets('PNG/JPEG pages crop after precaching and lazy scrolling', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(164, 400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final sources = [for (var i = 0; i < 8; i++) _Provider(_page())];
+    final sources = [
+      for (var i = 0; i < 8; i++)
+        _Provider(_page(width: 128, left: 16, right: 16), jpeg: i.isOdd),
+    ];
     final work = ImageWork();
     final crop = ReaderWhiteBorderCrop(work);
     final precache = ReaderImagePrecache(work: work);
-    _cleanup(tester, crop, work);
-    addTearDown(precache.dispose);
+    _cleanup(tester, crop, work, precache: precache);
     await tester.pumpWidget(const MaterialApp(home: SizedBox()));
-    for (final source in sources.skip(1)) {
-      precache.preload(source, ImageConfiguration.empty);
-    }
+    precache.replace(sources.skip(1), ImageConfiguration.empty);
     await _waitUntil(
       tester,
       () => sources
@@ -256,7 +264,7 @@ void main() {
       await tester.scrollUntilVisible(page, 180);
       await _waitUntil(
         tester,
-        () => (tester.getSize(page).height - 320).abs() < 0.01,
+        () => (tester.getSize(page).height - 262.4).abs() < 0.01,
       );
       expect(sources[i].loads, 1);
     }
@@ -389,11 +397,13 @@ void main() {
     'a single edge text pixel or pale panel stops that edge at every row',
     () {
       for (final row in [0, 79, 159]) {
-        final page = _page();
-        page.setPixelRgba(2, row, 0, 0, 0, 255);
-        expect(_insets(page), (0, 10));
-        page.setPixelRgba(2, row, 252, 252, 252, 255);
-        expect(_insets(page), (0, 10));
+        for (final column in [0, 2]) {
+          for (final shade in [0, 94, 202, 248, 252]) {
+            final page = _page();
+            page.setPixelRgba(column, row, shade, shade, shade, 255);
+            expect(_insets(page), (0, 10));
+          }
+        }
       }
     },
   );

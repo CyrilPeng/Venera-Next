@@ -29,6 +29,10 @@ English index: [README.en.md](README.en.md)
 - [漫画源本地调试](development/source_debugging.zh.md) / [Local Source Debugging](development/source_debugging.en.md)
 - [磁盘日志](development/logging.zh.md) / [Disk logs](development/logging.en.md)
 - [依赖治理](development/dependencies.zh.md) / [Dependency Governance](development/dependencies.en.md)
+- [当前依赖来源与替换条件](development/dependency_audit.zh.md)
+- [阅读诊断与性能排查](development/reader_diagnostics.md)
+- [Windows WebView 代理排障](development/windows_webview_proxy.md)
+- [发布流程与当前验收](development/release_readiness.md)
 
 ## 分发和发布
 
@@ -36,9 +40,7 @@ English index: [README.en.md](README.en.md)
 - [Windows 分发](distribution/windows.zh.md) / [Windows Distribution](distribution/windows.en.md)
 - [鸿蒙测试版安装与升级](distribution/harmonyos-reader.zh.md) / [HarmonyOS Beta Installation](distribution/harmonyos-reader.en.md)
 - [鸿蒙随版构建](development/harmonyos_releases.zh.md) / [HarmonyOS Release Builds](development/harmonyos_releases.en.md)
-- [鸿蒙统一主线实施记录](development/harmonyos_mainline_20261107.zh.md)：同一提交的多平台构建、来源门禁与分支归档。
 - [Linux 安装与分发](distribution/linux.zh.md) / [Linux Installation and Distribution](distribution/linux.en.md)
-- [HarmonyOS 实验签装与升级验证](distribution/harmonyos.zh.md) / [HarmonyOS Experimental Sideload Checks](distribution/harmonyos.en.md)：仅诊断探针，不是阅读器发行版。
 
 ## 用户和命令行
 
@@ -54,18 +56,10 @@ English index: [README.en.md](README.en.md)
 
 ## 实验和任务跟踪
 
-- [测试整理实施方案（2026-11-13）](experiments/test_reorganization_plan_20261113.zh.md)：测试范围、分批顺序、平台执行保障、删除标准、验收和回滚。
-- [测试整理基线与实施记录](experiments/test_reorganization_baseline_20261113.zh.md)：原始覆盖率、实际 CI 耗时、执行缺口及逐批决策。
-- [测试整理结果与验收](experiments/test_reorganization_result_20261113.zh.md)：准确物理规模、完整用例与覆盖率、正常 CI 成本和阶段退出条件。
-- [测试整理平台与后续验收](experiments/test_reorganization_platform_acceptance_20261113.zh.md)：实际平台与原生入口、编译／设备证据边界、开放问题建议及环境失败记录。
-- [HarmonyOS 历史实验记录](experiments/harmonyos.zh.md)：完整阅读器 HAP 构建与设备反馈；当前源码与构建工具已统一到主线。
-- [Android TV Alpha 历史实验记录（已进入主线）](experiments/android_tv.zh.md)
-- [漫画源安装任务交互设计](experiments/source_installation_tasks.zh.md)
-- [漫画源与源仓库管理设计](experiments/source_repositories.zh.md)
 - [图片增强实验](experiments/image_enhancement.zh.md)
 - [去混淆像素复制优化](experiments/image_descrambling.zh.md)
-- [WebDAV 阅读卡顿分阶段排查](experiments/webdav_reader_performance.zh.md)
 - [AVIF 格式识别与解码评估](experiments/avif_decoder.zh.md)
+- [图片 HTTP/3 回退与原生探针](experiments/http3_image_fallback.zh.md)
 
 ## 维护原则
 
@@ -74,3 +68,5 @@ English index: [README.en.md](README.en.md)
 - 中文文档是默认入口；当中英文内容无法完全同步时，应优先保证中文版本完整准确。
 - `experiments/` 文档用于记录判断、风险和任务，不在功能稳定前写进 README 的功能宣传。
 - 源相关文档只描述扩展接口和运行时契约，不提供、推荐、维护或验证任何第三方漫画源。
+
+已完成过程与原始比对从 [v1.18.4-rc.3 文档树](https://github.com/CyrilPeng/Venera-Next/tree/v1.18.4-rc.3/doc)检索。长期规则维护在当前指南；新研究保留用途、复现方法和退出条件。

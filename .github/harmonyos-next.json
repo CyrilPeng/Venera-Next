@@ -3,6 +3,8 @@
   "source_mode": "release_commit",
   "first_release_build": 245,
   "release_enabled": true,
+  "distribution": "bundled",
+  "channel": "harmonyos",
   "guide_delivery": "repository",
-  "runtime_acceptance": "stable_required"
+  "runtime_acceptance": "optional"
 }

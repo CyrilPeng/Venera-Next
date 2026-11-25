@@ -10,41 +10,43 @@ PR checks use the exact Actions merge-candidate SHA; pushes and dispatches use t
 
 The mainline candidate workflow listens to relevant source, dependency, tool and release-configuration changes and reuses `harmonyos-release.yml`. Separate SDK directories, the controlled OH lock, native cross-compilation, strict analysis, host regressions, a real API 26 HAP, asset checks and native export audits remain mandatory. Only generated projects and downloaded overlays are patched; official Flutter, shared Pub caches and the root lock are unchanged.
 
-## Frozen Build 244 and Required Distribution
+## Stable Bundled Releases and Historical Policies
 
 Build 244 retains the schema 1 `.github/harmonyos-release.json`, immutable Git inputs and historical assets. The `harmonyos-frozen-244` archive tag keeps its source reachable; `harmonyos-branch-final-245` preserves the final two-branch candidate. Development continues only on `main`. Legacy schema 2 parsing remains available for historical verification; current mainline uses schema 3.
 
-On 2026-11-07 the maintainer explicitly required HarmonyOS in every subsequent release. Mainline now sets `release_enabled: true`. Every prerelease and stable release must rebuild the unsigned ARM64 beta HAP from the same commit and include every HarmonyOS asset required by that commit's configuration. Disabling the switch fails the tag metadata gate before the full builds; publishing only the other platforms is not allowed.
+Starting with `v1.18.5+254`, HarmonyOS is distributed in the same stable Releases as the other platforms. Schema 3 sets `distribution: bundled`, `channel: harmonyos` and `release_enabled: true`. `main.yml` calls `harmonyos-release.yml` from the exact release tag to build the unsigned ARM64 HAP and verification files. Public Release attachments remain available, and in-app update checks recognize the matching HAP and manifest. PR and manual branch runs produce previews only.
 
-The switch authorizes unsigned beta distribution after source, build and asset review. It does not claim device signing, upgrade or feature acceptance. The manifest retains `signed: false` and `runtime_verified: false`, and the installation guides describe the actual verification limits. Release verification rejects schema 2/3 previews and assets without a verified tag context. Archive tags do not match the `v*` release trigger.
+Current mainline explicitly sets `runtime_acceptance: optional`. Both stable and prerelease versions may publish without a device report; a missing report does not retain the entire Release as a draft. Removing the Beta classification retains `signed: false` and `runtime_verified: false`, with mandatory source, version, native-library and package-digest checks. Supplied invalid or failed reports still block publication.
 
-Canonical committed Git blobs identify runtime source and all eight project packages. The seven managed native libraries, PNG/7z exports, third-party NOTICE and all application assets remain audited. Applicable QuickJS fixes are pinned to `f5a1f20`; see the historical [dependency implementation](official_dependency_implementation_20261107.zh.md).
+Historical `v1.18.4` retains `independent_beta`; older configurations without `distribution` default to bundled distribution. Recovery reads the original commit policy, including `required` and `stable_required`. Configurations without `channel` retain the original `harmonyos-beta` context and `full_reader_experiment` metadata. The new `harmonyos` channel requires schema 3 with explicit bundled distribution and uses `full_reader` metadata. Unknown values, legacy schemas claiming the new channel and mismatched sources are rejected. Archive tags do not match the `v*` release trigger.
+
+Canonical committed Git blobs identify runtime source and all eight project packages. The seven managed native libraries, PNG/7z exports, third-party NOTICE and all application assets remain audited. Applicable QuickJS fixes are pinned to `f5a1f20`; see the [current dependency decisions](dependency_audit.en.md) for sources and replacement conditions.
 
 ## Versions and Assets
 
-The current `v1.18.4-rc.3` uses build **252** and includes current-page brightness, favorites refresh and search Esc fixes, plus schema-2 reader slow-frame reports. The HAP is rebuilt from the exact new tag alongside the standard platforms, retaining its bundle and launcher name. Its three assets, both tag-specific installation guides and `runtime_acceptance: stable_required` remain required; `signed: false` and `runtime_verified: false` retain the distinction between build verification and device acceptance. Original-device paging, cropping and cover feedback remains tracked in the respective issues. See the [third candidate release preparation](release_readiness.md#v1184-third-prerelease-2026-11-16) for the complete scope.
+The current `v1.18.5` uses build **254**, delivering German/Japanese, translation fixes, Windows startup diagnostics and reader image-save targeting, with HarmonyOS restored to bundled distribution. All platforms rebuild from the exact stable tag. HarmonyOS keeps its existing bundle, launcher name and signing method. See [current versions and acceptance](release_readiness.md#当前公开版本) for device feedback and known limitations.
 
 The caller's Git commit, version, build number, run ID and changelog digest are validated. Only the owned generated project receives the caller's version and changelog; the source checkout is unchanged. Native versions have three numeric components, while Dart versions retain RC suffixes. Build numbers follow mainline monotonically. The first public mainline release with a HAP is `v1.18.3-rc.3`, build **248**; RC1/RC2 retain their built tags and Actions records and have no public Release. Schema 3 permits builds from 245 onward; build 244 retains its historical source for verification only. Existing releases such as `v1.18.2` are not backfilled.
 
 Stable `v1.18.3` uses build **249** and rebuilds alongside the other platforms from the same stable release commit; accepted candidate artifacts are not renamed into stable packages. The stable release still includes the unsigned Beta HAP and four companions. HarmonyOS device signing, reading, real-data upgrades and signing renewal remain explicit follow-up acceptance.
 
-Starting with the next release, the mainline schema-3 configuration uses `guide_delivery: repository` and requires three HarmonyOS release assets:
+The mainline schema-3 configuration uses `guide_delivery: repository`. The `harmonyos-release` artifact requires three files, all uploaded to the same Release during publication:
 
 - `VeneraNext-VERSION-harmonyos-arm64-unsigned.hap`
 - `harmonyos-manifest.json`
 - `harmonyos-SHA256SUMS`
 
-The Chinese and English installation guides live at `doc/distribution/harmonyos-reader.*.md`. README links are relative, and generated release notes link to the guides at the exact release tag. Both guides must exist and be nonempty in the source commit. Checksums are generated for each HAP, so `harmonyos-SHA256SUMS` remains a release asset.
+The Chinese and English installation guides live at `doc/distribution/harmonyos-reader.*.md`. All four READMEs link to public Releases; release notes pin installation links to the exact tag. Both guides must exist and be nonempty in the HAP source. `harmonyos-SHA256SUMS` is generated for the original HAP and remains in the same artifact and public Release.
 
 Historical configurations without `guide_delivery` still require those three files plus `harmonyos-install.zh.md` and `harmonyos-install.en.md`, with guide contents checked against the original commit. Published versions such as `v1.18.3` retain their five assets and tags; the new policy does not rewrite historical assets. Unknown policy values are rejected.
 
-The bundle is `com.github.cyrilpeng.veneranext.harmony`, with label `VeneraNext (HarmonyOS Beta)` and minimum/target API 26. Checks inspect the actual `module.json`, AArch64 ELF libraries and exact hashes, complete Dart/asset source inventory, and embedded versions. Guides come from the exact build commit. Keep unsigned/beta labeling explicit; successful compilation is not device upgrade or certificate-renewal acceptance.
+The bundle is `com.github.cyrilpeng.veneranext.harmony`, with launcher name `VeneraNext` in every language and minimum/target API 26. Checks inspect the actual `module.json`, AArch64 ELF libraries and exact hashes, complete Dart/asset source inventory, and embedded versions. Guides come from the exact build commit. Download instructions state unsigned status and known platform limitations; device upgrade and certificate-renewal results are recorded only from actual feedback.
 
 ## Publication Gates and Build-Only Verification
 
 GitHub's release-by-tag endpoint returns published releases only. Draft verification searches the authenticated, fully paginated release list for exactly one matching tag and fetches its current assets by numeric release ID. Missing or ambiguous drafts, changed IDs/tags and unexpected states stop publication. Published verification uses the public tag endpoint, and creation explicitly targets the caller's source SHA. RC2 uploaded all 26 assets as a draft, but the old lookup received HTTP 404; RC3 reruns the complete release path with the corrected lookup.
 
-The full workflow's `Release` requires Quality, the existing platform Build and HarmonyOS. Missing, damaged, stale or mismatched HAP assets must never use `continue-on-error`. Create or reuse a draft, then verify every required HarmonyOS asset through the GitHub API: names, sizes, upload state and SHA-256. The version's device-acceptance policy below must also pass before publication. Recheck assets and any acceptance report afterward. Investigate failures rather than silently omitting HarmonyOS.
+The current full workflow's `Release` requires successful metadata, Quality, Security, every standard-platform Build, package-receipt aggregation and HarmonyOS. All draft/public package names, sizes, upload states and SHA-256 digests are checked before and after publication. Missing libraries, damaged HAP contents, stale source or wrong digests fail verification. Only historical independent-distribution policies permit an explicitly skipped HarmonyOS job and reject its files from that standard Release.
 
 The publishing job checks out the two source trees into sibling `release-source/` and `harmonyos-source/` directories. Generated notes and packages live alongside them in `release_notes.md` and `outputs/`. Scripts run from `release-source/`; generated inputs remain outside both source directories, which still reject untracked and uncommitted inputs.
 
@@ -61,7 +63,9 @@ Platform scripts and SDK baselines live in `tool/harmonyos/README.md` on mainlin
 
 ## Device Acceptance for the Exact HAP
 
-Starting with `v1.18.4-rc.1+250`, the schema-3 configuration uses `runtime_acceptance: stable_required`. Prereleases may be published for device testing after all source, build and asset checks pass. Without a report, device acceptance remains pending. Stable releases require an accepted report before publication. Any report attached to a prerelease is also validated strictly; invalid or failed reports cannot be ignored. Historical `required` policies still require reports for both channels, and historical tags without the field keep their original behavior. Unknown values are rejected and published packages are not rewritten.
+Current `optional` treats a device report as an optional acceptance record. Bundled stable and prerelease versions may publish without it; production delivery and draft recovery share this rule and explicitly state that device acceptance remains pending. Any attached report still undergoes strict checks of uploader, exact HAP, version, source, digest and every test result. Invalid or failed reports stop publication. Only the report's status as a publication prerequisite is optional; its contents cannot fabricate passing acceptance.
+
+The optional report below records actual feedback for the exact HAP. Historical `stable_required` policies starting at `v1.18.4-rc.1+250` allow prereleases without a report while stable releases containing a HAP require acceptance. Historical `required` applies to both channels. Independently distributed `v1.18.4` does not attach HarmonyOS reports to its standard Release. Tags without the report field keep their original behavior; published packages are not rewritten.
 
 Build manifests retain `runtime_verified: false`; a separate `harmonyos-runtime-acceptance.json` records device acceptance rather than changing packaging or prerelease publication into a runtime claim.
 
@@ -81,13 +85,33 @@ After package verification, the HAP workflow produces a separate `harmonyos-runt
 
 Every check except the specified missing folder capability requires `pass` and an actual operation/result in `detail`. Supply the actual `device_model`, `os_version` and timezone-qualified `tested_at`. Exclude credentials, device identifiers, private comic names and signing material. Acceptance covers only the recorded device/OS; expand phone/tablet/system coverage separately.
 
-After testing and reviewing, a maintainer uploads the report to the exact version draft or public prerelease (replace example values). A stable report must identify the freshly rebuilt stable HAP; an RC report cannot be reused:
+A maintainer may download that run's `harmonyos-runtime-acceptance-template`, perform actual tests and upload the reviewed report to the exact draft or published version. Current reports are optional; historical mandatory policies require them according to the original commit. Replace example values, and identify that version's original HAP build rather than reusing an RC report:
 
 ```bash
 gh release upload vX.Y.Z /path/to/harmonyos-runtime-acceptance.json --repo CyrilPeng/Venera-Next
 gh run rerun RUN_ID --job RELEASE_JOB_ID --repo CyrilPeng/Venera-Next
 ```
 
-After adding a missing draft report, rerun only the original run's Release job. Reruns reuse the original build artifacts and verify names, sizes and SHA-256 for **all platform** packages. Replacement builds are rejected. The report is the sole permitted extra asset and must be uploaded by a human maintainer with write/maintain/admin permission. Validation checks uploader, original bytes/digest, exact source/HAP, all results and test time; invalid or failed reports stop publication even when pending acceptance is allowed. After adding a report to a public prerelease, run `verify-published` against its original packages rather than attempting draft publication again.
+For historical mandatory policies, add the missing draft report and rerun only the original run's Release job. An `optional` draft can recover without waiting for a report. Reruns reuse the original build artifacts and verify names, sizes and SHA-256 for **all platform** packages. Replacement builds are rejected. The report is the sole permitted extra asset; any uploaded report must come from a human maintainer with write/maintain/admin permission. Validation checks uploader, original bytes/digest, exact source/HAP, all results and test time; invalid or failed reports stop publication even under optional or pending-acceptance policies. After adding a report to a published version, run `verify-published` against its original packages rather than attempting draft publication again.
 
-Under `stable_required`, a prerelease without a report produces `ready=true` with an explicit pending-device-acceptance message. A stable release without a report produces `ready=false`, retains every draft package and skips publication/CDN steps. Historical `required` policies retain drafts for both channels when reports are missing. Accepted reports produce `ready=true`; any public report is checked again. Successful builds alone establish neither publication nor device acceptance. Complete draft acceptance and rerun within the Actions artifact retention period (currently 14 days). Keep original packages if artifacts expire; do not replace tested packages. No HarmonyOS device was connected for this change, so device acceptance remains incomplete.
+Historical bundled `stable_required` allows prereleases without a report and retains stable HAP releases as drafts until acceptance; historical `required` retains both channels as drafts. Accepted reports permit publication and are checked afterward; original packages cannot be replaced. Current HAP build artifacts are retained for 30 days, device templates and logs for 14 days, and public HAP and verification attachments remain in Releases. No HarmonyOS device was connected for this change; device results come only from existing and future actual feedback. See [long-term external comic directories](#long-term-external-comic-directories) for implementation requirements.
+
+## Long-Term External Comic Directories
+
+Directory selection currently supports copy-import. [Persistent external libraries #159](https://github.com/CyrilPeng/Venera-Next/issues/159) require the storage bridge and device acceptance. System API availability is distinct from an actual app grant, unsigned packaging or host tests.
+
+1. **Capability and grants:** query FolderSelection/FolderAuthorization on API 26 phones/tablets. Obtain a real Picker URI and mode, declare `ohos.permission.FILE_ACCESS_PERSIST`, and preserve recovery state for denial, failure, unsupported systems or revocation.
+2. **Persistence and activation:** use `fileShare.persistPermission` and cold-start `activatePermission`. Persist only granted modes; remote URIs are unsupported and uninstall clears grants. Store URI/mode separately from public diagnostics.
+3. **Storage bridge:** a URI is not an ordinary Dart path. Bridge enumeration, creation, read/write/seek, rename, delete and cross-isolate access for libraries, downloads, backup/export. Keep real handles through I/O cleanup and reject source/target aliases, identical objects or overlapping trees.
+4. **Migration/recovery:** use LocalStorageMigration/LocalStorageRelocation staging, copying and transactions. Verify read-only, space exhaustion, revoked grants, cancellation, interruption, Unicode and large files. Reselection can restore authorization. Keep the old library until the new one survives exit, cold restart and same-key upgrade.
+5. **Admission:** enable `DirectoryPicker.supportsPersistentDirectories` only after authorization, bridge, recovery and device requirements pass. `DirectorySelection.ownedCopy` and temporary sandbox copies prove only copy-import.
+
+References: [persistent permission guide](https://developer.huawei.com/consumer/en/doc/doccenter-capabilities/file-persistpermission) and [fileShare API](https://developer.huawei.com/consumer/en/doc/doccenter-references/api/js-apis-fileshare).
+
+## Historical Sources and Recovery
+
+The separate HarmonyOS branch entered main; subsequent platforms use one release commit. `harmonyos-frozen-244` retains source `3e1be1391ba784bb228803525696d38c208f471f` for frozen `1.18.3+244`. `harmonyos-branch-final-245` retains the last separate candidate `ca5f7ef98ec03872d087f0b691e40f0de0080939`. Restore original schemas, locks and assets for historical validation.
+
+The October 2026 tablet reports matched the `ef2904f` core probe, process restart and synthetic upgrade data (`reported_checks_pass`); they do not certify the complete reader, real storage recovery or renewal. Legacy upgrade tooling still reads the [Chinese](../distribution/harmonyos.zh.md) and [English probe guides](../distribution/harmonyos.en.md). Reader users follow the [current installation guide](../distribution/harmonyos-reader.en.md).
+
+Process records, device summaries, tree comparisons and bundle recovery evidence remain in the [RC3 documentation tree](https://github.com/CyrilPeng/Venera-Next/tree/v1.18.4-rc.3/doc). Mainline guides maintain current rules.

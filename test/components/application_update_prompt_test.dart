@@ -402,6 +402,29 @@ void main() {
     },
   );
 
+  testUpdateWidgets(
+    'rate limited update explains retry and a later check succeeds',
+    (tester) async {
+      await tester.pumpWidget(app(const AboutSettings()));
+      await tester.tap(find.text('Check'));
+      await waitFor(tester, () => adapter.entered.isCompleted);
+      adapter.complete({'message': 'API rate limit exceeded'}, status: 429);
+      adapter.released.complete();
+      await tester.pumpAndSettle();
+      expect(messages, [
+        'Failed to check for updates\nGitHub request limit reached. Please try again later.',
+      ]);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      adapter = ApplicationUpdateAdapter()..released.complete();
+      await tester.tap(find.text('Check'));
+      await waitFor(tester, () => adapter.entered.isCompleted);
+      adapter.complete({'tag_name': 'v2.0.0'});
+      await tester.pumpAndSettle();
+      expect(find.text('New version available'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final brightness in Brightness.values) {
     testUpdateWidgets(
       'TV update dialog identifies the correct APK in ${brightness.name}',
