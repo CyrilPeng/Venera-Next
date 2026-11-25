@@ -235,32 +235,30 @@ class _FollowUpdatesFolderDialogState
             ],
           ),
           actions: [
-            Expanded(
-              child: Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  settingsSaveStatus,
-                  if (_preparation != null && !savingSettings)
-                    TextButton(onPressed: _leave, child: Text('Cancel'.tl)),
-                  if (GlobalPreferenceStore(
-                        appdata.settings,
-                      ).read(FavoritePreferences.followUpdatesFolder) !=
-                      null)
-                    TextButton(
-                      onPressed: busy ? null : () => _confirm(null),
-                      child: Text('Disable'.tl),
-                    ),
-                  FilledButton(
-                    onPressed: busy || _selected == null
-                        ? null
-                        : () => _confirm(_selected),
-                    child: Text('Confirm'.tl),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                settingsSaveStatus,
+                if (_preparation != null && !savingSettings)
+                  TextButton(onPressed: _leave, child: Text('Cancel'.tl)),
+                if (GlobalPreferenceStore(
+                      appdata.settings,
+                    ).read(FavoritePreferences.followUpdatesFolder) !=
+                    null)
+                  TextButton(
+                    onPressed: busy ? null : () => _confirm(null),
+                    child: Text('Disable'.tl),
                   ),
-                ],
-              ),
+                FilledButton(
+                  onPressed: busy || _selected == null
+                      ? null
+                      : () => _confirm(_selected),
+                  child: Text('Confirm'.tl),
+                ),
+              ],
             ),
           ],
         ),

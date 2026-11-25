@@ -103,7 +103,7 @@ jobs:
       - name: 准备实际归档格式的脚本回归工具
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libarchive-tools
+          sudo apt-get install -y libarchive-tools fonts-noto-cjk
       - run: python3 -m unittest discover -s .github/scripts/tests -p "test_*.py"
       - name: 保存测试清单
         if: ${{ always() }}
@@ -140,6 +140,21 @@ jobs:
           fi
           dart format --output=none --set-exit-if-changed "${dart_files[@]}"
       - run: flutter analyze --no-pub --fatal-infos --fatal-warnings
+      - name: 验证德语日语的真实字体与组件布局
+        env:
+          UI_REGRESSION_QA_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
+          UI_REGRESSION_QA_DIRECTORY: build/test-audit/i18n-layout/captures
+        run: >-
+          python3 .github/scripts/run_flutter_tests.py --suite default
+          --output build/test-audit/i18n-layout test/foundation/translations_test.dart
+      - name: 保存多语种布局截图与测试记录
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: i18n-layout
+          path: build/test-audit/i18n-layout/
+          if-no-files-found: error
+          retention-days: 14
 
   flutter-fast:
     name: 快速 Flutter 回归

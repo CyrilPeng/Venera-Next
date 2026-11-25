@@ -40,7 +40,7 @@ void main() {
       'Sync archive WebDAV URL, username, password and remote path with app data.',
     ];
 
-    for (final locale in ['zh_CN', 'zh_TW']) {
+    for (final locale in translations.keys) {
       final map = Map<String, dynamic>.from(translations[locale] as Map);
       for (final key in keys) {
         expect(map, contains(key), reason: '$locale missing "$key"');

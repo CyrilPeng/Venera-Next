@@ -1,4 +1,5 @@
 import os
+import plistlib
 import re
 import shutil
 import subprocess
@@ -25,6 +26,19 @@ def step_script(name):
 
 
 class IosReleaseMetadataTests(unittest.TestCase):
+    def test_apple_supported_languages_match_the_app_registry(self):
+        registry = (ROOT / "lib/foundation/app_language.dart").read_text(encoding="utf-8")
+        preferences = re.findall(r"\b\w+\(\s*'([a-z]{2}-[A-Z]{2})'", registry)
+        self.assertTrue(preferences)
+        scripts = {"zh-CN": "zh-Hans", "zh-TW": "zh-Hant"}
+        expected = {scripts.get(value, value.split("-")[0]) for value in preferences}
+        for platform in ("ios", "macos"):
+            with self.subTest(platform=platform):
+                info = plistlib.loads((ROOT / platform / "Runner/Info.plist").read_bytes())
+                languages = info["CFBundleLocalizations"]
+                self.assertEqual(set(languages), expected)
+                self.assertEqual(len(languages), len(expected))
+
     def test_native_version_override_does_not_rewrite_bundled_pubspec(self):
         script = step_script("构建 iOS 应用")
         self.assertIn('--build-name "$IOS_VERSION"', script)

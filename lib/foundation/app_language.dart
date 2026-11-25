@@ -4,7 +4,9 @@ import 'dart:ui';
 enum AppLanguage {
   simplifiedChinese('zh-CN', '简体中文', Locale('zh', 'CN'), 'zh_CN'),
   traditionalChinese('zh-TW', '繁體中文', Locale('zh', 'TW'), 'zh_TW'),
-  english('en-US', 'English', Locale('en'), 'en_US');
+  english('en-US', 'English', Locale('en'), 'en_US'),
+  german('de-DE', 'Deutsch', Locale('de', 'DE'), 'de_DE'),
+  japanese('ja-JP', '日本語', Locale('ja', 'JP'), 'ja_JP');
 
   const AppLanguage(
     this.preference,

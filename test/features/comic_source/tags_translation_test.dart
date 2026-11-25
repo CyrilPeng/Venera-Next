@@ -13,6 +13,8 @@ void main() {
       ('zh-CN', '英语', '英语'),
       ('zh-TW', '英語', '英語'),
       ('en-US', '英语', 'language:english'),
+      ('de-DE', '英语', 'language:english'),
+      ('ja-JP', '英语', 'language:english'),
       ('system', '英语', 'language:english'),
       ('zh-TW', '英語', '英語'),
       ('zh-CN', '英语', '英语'),

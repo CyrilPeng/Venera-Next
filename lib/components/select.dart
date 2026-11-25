@@ -165,15 +165,15 @@ class Select extends StatelessWidget {
                   }
                 });
               },
-        // Dialogs measure intrinsic sizes, so keep this subtree measurable.
-        // Flex uses the field's width; LimitedBox only caps unbounded rows.
+        // Keep intrinsic dialog sizing measurable and reserve room for titles
+        // when a long label is used as a ListTile's trailing control.
         child: Row(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Flexible(
-              child: LimitedBox(
-                maxWidth: naturalLimit,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: naturalLimit),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     minWidth: math.max(0.0, (minWidth ?? 32) - 32),

@@ -357,8 +357,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     String? font;
     List<String>? fallback;
     if (App.isLinux || App.isWindows) {
+      final japanese = appLocale.languageCode == 'ja';
       font = 'Noto Sans CJK';
+      if (japanese) font = 'Noto Sans CJK JP';
       fallback = [
+        if (japanese) ...[
+          'Noto Sans JP',
+          'Yu Gothic UI',
+          'Yu Gothic',
+          'Meiryo',
+          'Hiragino Sans',
+          'HarmonyOS Sans',
+        ],
         'Segoe UI',
         'Noto Sans SC',
         'Noto Sans TC',

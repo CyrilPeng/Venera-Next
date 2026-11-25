@@ -22,7 +22,7 @@ Crashes, import/data defects and network failures need redacted logs; reader per
 
 ## Translation Contributions
 
-The app currently supports Simplified Chinese, Traditional Chinese and English. Submit corrections to existing translations directly as a PR, identifying the screen, source text and intended meaning. English source text is also the translation key, so changes must update both Chinese dictionaries. See [Translation Maintenance](doc/development/build.en.md#translation-maintenance) for files, placeholder rules, the glossary and audit commands.
+The app currently supports Simplified Chinese, Traditional Chinese, English, German and Japanese. Submit corrections to existing translations directly as a PR, identifying the screen, source text and intended meaning. English source text is also the translation key, so changes must update all language dictionaries. See [Translation Maintenance](doc/development/build.en.md#translation-maintenance) for files, placeholder rules, the glossary and audit commands.
 
 Propose a new language through the [feature request form](https://github.com/CyrilPeng/Venera-Next/issues/new?template=06-enhancement.yaml), or add information to an existing request for that language. Include the following in the use case and proposed solution:
 
@@ -31,7 +31,7 @@ Propose a new language through the [feature request form](https://github.com/Cyr
 - Whether you can translate, independently review or maintain the language, and the scope you can cover.
 - Public translations or terminology references, if available; state when references or reviewers are missing.
 
-Maintainers will choose an initial one or two languages based on demand and review capacity before accepting new dictionaries. Machine translation can provide a draft. A reviewer familiar with the language must check the affected data, consequences and actions in deletion, overwrite, backup/restore and error messages. Drafts may arrive in batches; language selection is enabled after dictionaries and acceptance checks are complete.
+German and Japanese are the first additions. Readers familiar with either language are welcome to provide native-language review and ongoing maintenance. Critical action meanings have been checked against the source text, but no community native-language reviewer has participated yet. Future languages will be selected based on demand and review capacity before accepting new dictionaries. Machine translation can provide a draft. A reviewer familiar with the language must check the affected data, consequences and actions in deletion, overwrite, backup/restore and error messages. Drafts may arrive in batches; language selection is enabled after dictionaries and acceptance checks are complete.
 
 Translation PRs identify the source commit, completed and reviewed scope, reviewers, and results for language switching, English fallback, phone/desktop layouts and large text. Build test packages through GitHub Actions from the corresponding commit and link the run; linguistic and layout feedback must refer to the same text revision. Comic-source script translations belong to their respective maintainers, and translating the app interface does not translate source-site content.
 

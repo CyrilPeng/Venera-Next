@@ -155,7 +155,7 @@ def text(data):
 
 
 def check_payload(read, names, prefix, root, context, *, font=False):
-    for name in ("pubspec.yaml", "CHANGELOG.md"):
+    for name in ("pubspec.yaml", "CHANGELOG.md", "assets/translation.json"):
         expected = text(git_blob(root, context["source_commit"], name))
         if name == "pubspec.yaml" and font:
             patch = text(git_blob(root, context["source_commit"], "patch/font.dart"))

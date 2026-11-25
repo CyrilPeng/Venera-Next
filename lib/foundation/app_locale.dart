@@ -34,7 +34,9 @@ AppLanguage resolveAppLanguage(String preference, List<Locale> systemLocales) {
           ? AppLanguage.traditionalChinese
           : AppLanguage.simplifiedChinese;
     }
-    if (locale.languageCode == 'en') return AppLanguage.english;
+    for (final language in AppLanguage.values) {
+      if (language.locale.languageCode == locale.languageCode) return language;
+    }
   }
   return AppLanguage.english;
 }
