@@ -64,7 +64,7 @@ class FullAppTests(unittest.TestCase):
         self.assertEqual(validate_context(context, '1' * 40, environment), context)
         repository_guides = context | {'guide_delivery': 'repository'}
         self.assertEqual(validate_context(repository_guides, '1' * 40, environment), repository_guides)
-        for policy in ('required', 'stable_required'):
+        for policy in ('optional', 'required', 'stable_required'):
             with self.subTest(runtime_acceptance=policy):
                 device_acceptance = repository_guides | {'runtime_acceptance': policy}
                 self.assertEqual(validate_context(device_acceptance, '1' * 40, environment), device_acceptance)

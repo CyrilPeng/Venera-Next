@@ -11,7 +11,7 @@
 分支候选构建只用于无发布预览。2026-11-06 审计发现的适用 QuickJS-NG 核心缺陷已在
 `f5a1f20` 中回移修复；Linux 64／32 位 ASan／UBSan 与 Windows 64／32 位 ASan
 均已通过，来源和边界见依赖的 CORE_PATCHES.md／JSON。旧 d07 的泛型 push 没有
-后来引入的优化缺陷。主线配置使用 `distribution: independent_beta` 并保留 `release_enabled: true`；完整平台构建
+后来引入的优化缺陷。主线配置使用 `distribution: independent_beta`、`runtime_acceptance: optional` 并保留 `release_enabled: true`；完整平台构建
 与签装、真机运行分别验证，宿主安全回归不作为鸿蒙运行验收。
 
 完整阅读器记录仓库内八个包的输入摘要；滚动列表已回归官方 pub.dev 0.3.8。
@@ -30,7 +30,7 @@ PNG／7z 由 `packages/venera_native` 的自编桥接和独立固定的官方核
 
 `ci_full_app.py` 在独立工程中执行严格分析、宿主回归、真实 ARM64 HAP 构建及 ELF／资产审计。当前 `guide_delivery: repository` 配置输出 `VeneraNext-版本-harmonyos-arm64-unsigned.hap`、`harmonyos-manifest.json` 和 `harmonyos-SHA256SUMS` 三项文件，放在同一运行的 `harmonyos-release` artifact；中英文指南保存在准确源码提交。独立 Beta 继续核对 Git 源码清单、包内版本、仓库指南及全部文件，任何 HAP 审核失败均阻止该候选通过。普通正式版按明确独立配置另行构建和核验全部普通资产。
 
-未声明 `distribution` 的历史配置默认随版，按原提交保留 HAP、伴随文件及真机报告门禁；未声明 `guide_delivery` 的配置仍输出并严格校验两份 `harmonyos-install.*.md`，保留原五附件格式。无发布上下文的手动构建仍附带 `install.*.md`。已发布的 `v1.18.3` 等附件保持原样。
+当前 `optional` 允许随版正式版和候选版在没有真机报告时发布或恢复草稿，仍保留未签名 Beta 标记及 `runtime_verified: false`；主动附上的报告继续严格检查准确 HAP、来源、上传者和测试结果。未声明 `distribution` 的历史配置默认随版，按原提交保留 HAP、伴随文件及原报告策略，历史 `required`／`stable_required` 不受当前可选策略影响；未声明 `guide_delivery` 的配置仍输出并严格校验两份 `harmonyos-install.*.md`，保留原五附件格式。无发布上下文的手动构建仍附带 `install.*.md`。已发布的 `v1.18.3` 等附件保持原样。
 
 CPF WebView 保留其 OHOS 实现，并从主线固定的官方 `0aaf7a0` 导出浏览器退出事件 Dart 接口与类型，补齐 Windows 专用代码的静态依赖。生成时先替换主线同名 Git／Windows 本地 overrides，再插入协调的 CPF path 组，拒绝重复 YAML key。覆盖层不改写应用代理逻辑、不生成退出事件；生成工程用于 HAP，Windows 发行使用主线自己的来源。复制的上游类型与生成文件保持原字节，原始和适配后的依赖树均记录摘要。
 

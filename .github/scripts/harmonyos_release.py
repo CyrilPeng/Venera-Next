@@ -29,7 +29,7 @@ LABEL_SOURCE = "tool/harmonyos/app_labels.py"
 APP_LABEL = "VeneraNext"
 BUNDLE = "com.github.cyrilpeng.veneranext.harmony"
 RUNTIME_REPORT = "harmonyos-runtime-acceptance.json"
-RUNTIME_ACCEPTANCE_POLICIES = ("required", "stable_required")
+RUNTIME_ACCEPTANCE_POLICIES = ("optional", "required", "stable_required")
 DISTRIBUTION_MODES = ("bundled", "independent_beta")
 RUNTIME_CHECKS = (
     "startup", "source_and_reading", "archive_import", "directory_import",
@@ -608,14 +608,19 @@ def check_runtime(expected, assets, *, allow_pending=False, published=False):
         check_remote_release(remote, expected, assets, published=published)
         print("Standard release verified; HarmonyOS remains an independent unsigned beta, without device acceptance claims.")
         return True
-    if runtime_acceptance_policy(expected) is None:
+    policy = runtime_acceptance_policy(expected)
+    if policy is None:
         return True
     remote = read_remote_release(expected["tag"], published=published)
     check_remote_release(remote, expected, assets, published=published)
     reports = [item for item in remote["assets"] if item.get("name") == RUNTIME_REPORT]
     if not reports:
         if not runtime_report_required(expected):
-            print("Release policy allows this prerelease for device testing; native-device acceptance remains pending.")
+            if policy == "optional":
+                print("Runtime acceptance report is optional; publication may proceed, "
+                      "and native-device acceptance remains pending.")
+            else:
+                print("Release policy allows this prerelease for device testing; native-device acceptance remains pending.")
             return True
         if allow_pending and not published:
             print("Device acceptance is pending. Keep this draft and its packages; upload the reviewed "

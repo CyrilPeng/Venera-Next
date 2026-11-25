@@ -454,6 +454,19 @@ class HarmonyReleaseTests(unittest.TestCase):
         self.assertEqual(manifest['build']['release']['runtime_acceptance'], 'stable_required')
         self.assertFalse(manifest['runtime_verified'])
 
+    def test_optional_runtime_policy_is_bound_to_the_committed_context_and_unsigned_hap(self):
+        fixture = self.fixture
+        fixture.unified_mainline(runtime_acceptance='optional')
+        expected = fixture.bundle()
+        self.assertEqual(expected['runtime_acceptance'], 'optional')
+        self.verify(expected)
+        manifest = json.loads((fixture.output / 'harmonyos-manifest.json').read_text())
+        self.assertEqual(manifest['build']['release']['runtime_acceptance'], 'optional')
+        self.assertFalse(manifest['runtime_verified'])
+        self.assertFalse(manifest['signed'])
+        template = release.runtime_template(manifest)
+        self.assertTrue(all(item['status'] == 'not_run' for item in template['checks'].values()))
+
     def test_release_only_changes_preserve_a_common_immutable_baseline(self):
         fixture = self.fixture
         context = fixture.context()
@@ -1050,6 +1063,24 @@ class HarmonyRuntimeAcceptanceTests(unittest.TestCase):
         self.assertFalse(self.manifest['runtime_verified'])
         self.assertFalse(self.manifest['signed'])
 
+    def test_optional_stable_and_prerelease_are_ready_without_a_report_in_drafts_and_public_releases(self):
+        for version in ('1.18.4', '1.18.4-rc.1'):
+            self.select_version(version, 'optional')
+            for published in (False, True):
+                remote = self.remote | {'draft': not published}
+                for allow_pending in (False, True):
+                    with self.subTest(version=version, published=published, allow_pending=allow_pending), \
+                            patch.object(release, 'read_remote_release', return_value=remote), \
+                            patch.object(release, 'gh') as github, contextlib.redirect_stdout(io.StringIO()) as output:
+                        self.assertTrue(release.check_runtime(self.expected, self.assets,
+                                                             allow_pending=allow_pending, published=published))
+                        release.check_draft_files(remote, self.expected, self.assets)
+                        self.assertIn('report is optional; publication may proceed', output.getvalue())
+                        self.assertIn('native-device acceptance remains pending', output.getvalue())
+                        github.assert_not_called()
+        self.assertFalse(self.manifest['runtime_verified'])
+        self.assertFalse(self.manifest['signed'])
+
     def test_stable_required_stable_and_legacy_required_prerelease_still_need_acceptance(self):
         for version, policy in (('1.18.4', 'stable_required'), ('1.18.4-rc.1', 'required')):
             self.select_version(version, policy)
@@ -1064,57 +1095,68 @@ class HarmonyRuntimeAcceptanceTests(unittest.TestCase):
                     self.assertRaisesRegex(ValueError, 'missing its required'):
                 release.check_runtime(self.expected, self.assets, allow_pending=True, published=True)
 
-    def test_prerelease_device_testing_policy_keeps_source_channel_and_asset_checks(self):
-        self.select_version('1.18.4-rc.1', 'stable_required')
-        invalid_releases = (
-            self.remote | {'tag_name': 'v1.18.3'},
-            self.remote | {'prerelease': False},
-            self.remote | {'assets': self.remote['assets'][1:]},
-            self.remote | {'assets': [self.remote['assets'][0] | {'digest': 'sha256:' + '0' * 64},
-                                     *self.remote['assets'][1:]]},
-        )
-        for remote in invalid_releases:
-            with self.subTest(remote=remote), patch.object(release, 'read_remote_release', return_value=remote), \
-                    self.assertRaises(ValueError):
-                release.check_runtime(self.expected, self.assets, allow_pending=True)
-        for change in ({'tagged': False}, {'preview': True}, {'runtime_acceptance': 'disabled'}):
-            with self.subTest(change=change), patch.object(release, 'read_remote_release', return_value=self.remote), \
-                    self.assertRaises(ValueError):
-                release.check_runtime(self.expected | change, self.assets, allow_pending=True)
+    def test_non_required_report_policies_keep_source_channel_and_asset_checks(self):
+        for version, policy in (('1.18.4', 'optional'), ('1.18.4-rc.1', 'optional'),
+                                ('1.18.4-rc.1', 'stable_required')):
+            self.select_version(version, policy)
+            invalid_releases = (
+                self.remote | {'tag_name': 'v1.18.3'},
+                self.remote | {'prerelease': not self.remote['prerelease']},
+                self.remote | {'assets': self.remote['assets'][1:]},
+                self.remote | {'assets': [self.remote['assets'][0] | {'digest': 'sha256:' + '0' * 64},
+                                         *self.remote['assets'][1:]]},
+            )
+            for remote in invalid_releases:
+                with self.subTest(version=version, policy=policy, remote=remote), \
+                        patch.object(release, 'read_remote_release', return_value=remote), self.assertRaises(ValueError):
+                    release.check_runtime(self.expected, self.assets, allow_pending=True)
+            for change in ({'tagged': False}, {'preview': True}, {'runtime_acceptance': 'disabled'}):
+                with self.subTest(version=version, policy=policy, change=change), \
+                        patch.object(release, 'read_remote_release', return_value=self.remote), self.assertRaises(ValueError):
+                    release.check_runtime(self.expected | change, self.assets, allow_pending=True)
 
-    def test_prerelease_validates_any_attached_report_and_rejects_wrong_or_failed_results(self):
-        self.select_version('1.18.4-rc.1', 'stable_required')
-        for published in (False, True):
-            for result in ('pass', 'wrong_hap', 'failed', 'not_run'):
-                report = copy.deepcopy(self.report)
-                if result == 'wrong_hap':
-                    report['hap_sha256'] = '0' * 64
-                elif result != 'pass':
-                    report['checks']['startup']['status'] = result
-                raw, asset = self.report_asset(report)
-                remote = self.remote | {'draft': not published, 'assets': [*self.remote['assets'], asset]}
-                with self.subTest(published=published, result=result), \
-                        patch.object(release, 'read_remote_release', return_value=remote), \
-                        patch.object(release, 'gh', side_effect=[json.dumps({'permission': 'write'}), raw]), \
+    def test_non_required_report_policies_validate_attached_reports_and_reject_wrong_or_failed_results(self):
+        for version, policy in (('1.18.4', 'optional'), ('1.18.4-rc.1', 'optional'),
+                                ('1.18.4-rc.1', 'stable_required')):
+            self.select_version(version, policy)
+            for published in (False, True):
+                for result in ('pass', 'wrong_source', 'wrong_hap', 'failed', 'not_run'):
+                    report = copy.deepcopy(self.report)
+                    if result == 'wrong_source':
+                        report['source_commit'] = 'b' * 40
+                    elif result == 'wrong_hap':
+                        report['hap_sha256'] = '0' * 64
+                    elif result != 'pass':
+                        report['checks']['startup']['status'] = result
+                    raw, asset = self.report_asset(report)
+                    remote = self.remote | {'draft': not published, 'assets': [*self.remote['assets'], asset]}
+                    with self.subTest(version=version, policy=policy, published=published, result=result), \
+                            patch.object(release, 'read_remote_release', return_value=remote), \
+                            patch.object(release, 'gh', side_effect=[json.dumps({'permission': 'write'}), raw]), \
+                            contextlib.redirect_stdout(io.StringIO()):
+                        if result == 'pass':
+                            self.assertTrue(release.check_runtime(self.expected, self.assets, published=published))
+                        else:
+                            with self.assertRaises(ValueError):
+                                release.check_runtime(self.expected, self.assets, allow_pending=True, published=published)
+
+    def test_non_required_report_policies_mark_cli_publication_ready_without_pending_draft_instructions(self):
+        for version, policy in (('1.18.4', 'optional'), ('1.18.4-rc.1', 'optional'),
+                                ('1.18.4-rc.1', 'stable_required')):
+            self.select_version(version, policy)
+            with self.subTest(version=version, policy=policy), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / 'github-output'
+                summary = Path(temporary) / 'summary.md'
+                argv = ['harmonyos_release.py', 'verify-runtime', '--source-root', str(ROOT), '--artifacts', 'unused',
+                        '--allow-pending', '--github-output', str(output)]
+                with patch.object(sys, 'argv', argv), patch.object(release, 'context', return_value=self.expected), \
+                        patch.object(release, 'verify_bundle', return_value=self.assets), \
+                        patch.object(release, 'read_remote_release', return_value=self.remote), \
+                        patch.dict(os.environ, {'GITHUB_STEP_SUMMARY': str(summary)}), \
                         contextlib.redirect_stdout(io.StringIO()):
-                    if result == 'pass':
-                        self.assertTrue(release.check_runtime(self.expected, self.assets, published=published))
-                    else:
-                        with self.assertRaises(ValueError):
-                            release.check_runtime(self.expected, self.assets, allow_pending=True, published=published)
-
-    def test_prerelease_cli_marks_publication_ready_when_device_acceptance_is_pending(self):
-        self.select_version('1.18.4-rc.1', 'stable_required')
-        with tempfile.TemporaryDirectory() as temporary:
-            output = Path(temporary) / 'github-output'
-            argv = ['harmonyos_release.py', 'verify-runtime', '--source-root', str(ROOT), '--artifacts', 'unused',
-                    '--allow-pending', '--github-output', str(output)]
-            with patch.object(sys, 'argv', argv), patch.object(release, 'context', return_value=self.expected), \
-                    patch.object(release, 'verify_bundle', return_value=self.assets), \
-                    patch.object(release, 'read_remote_release', return_value=self.remote), \
-                    contextlib.redirect_stdout(io.StringIO()):
-                release.main()
-            self.assertEqual(output.read_text(encoding='utf-8'), 'ready=true\n')
+                    release.main()
+                self.assertEqual(output.read_text(encoding='utf-8'), 'ready=true\n')
+                self.assertFalse(summary.exists())
 
     def test_a_template_cannot_claim_device_success_and_needs_a_real_build_manifest(self):
         template = release.runtime_template(self.manifest)
@@ -1182,18 +1224,33 @@ class HarmonyRuntimeAcceptanceTests(unittest.TestCase):
         self.report['checks']['startup']['detail'] = '真机冷启动通过，进入漫画列表。'
         raw, asset = self.report_asset()
         remote = self.remote | {'assets': [*self.remote['assets'], asset]}
-        for permission in ('admin', 'maintain', 'write', 'read', 'none'):
-            with self.subTest(permission=permission), patch.object(release, 'read_remote_release', return_value=remote), \
-                    patch.object(release, 'gh', side_effect=[json.dumps({'permission': permission}), raw]) as github, \
-                    contextlib.redirect_stdout(io.StringIO()):
-                if permission in {'admin', 'maintain', 'write'}:
-                    self.assertTrue(release.check_runtime(self.expected, self.assets))
-                    self.assertEqual(github.call_args_list[-1].args,
-                                     ('api', f'repos/{release.REPOSITORY}/releases/assets/456', '-H', 'Accept: application/octet-stream'))
-                else:
-                    with self.assertRaisesRegex(ValueError, 'repository maintainer'):
-                        release.check_runtime(self.expected, self.assets, allow_pending=True)
-                    self.assertEqual(github.call_count, 1)
+        for policy in ('optional', 'required'):
+            expected = self.expected | {'runtime_acceptance': policy}
+            for permission in ('admin', 'maintain', 'write', 'read', 'none'):
+                with self.subTest(policy=policy, permission=permission), \
+                        patch.object(release, 'read_remote_release', return_value=remote), \
+                        patch.object(release, 'gh', side_effect=[json.dumps({'permission': permission}), raw]) as github, \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    if permission in {'admin', 'maintain', 'write'}:
+                        self.assertTrue(release.check_runtime(expected, self.assets))
+                        self.assertEqual(github.call_args_list[-1].args,
+                                         ('api', f'repos/{release.REPOSITORY}/releases/assets/456', '-H', 'Accept: application/octet-stream'))
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'repository maintainer'):
+                            release.check_runtime(expected, self.assets, allow_pending=True)
+                        self.assertEqual(github.call_count, 1)
+
+    def test_optional_report_rejects_duplicate_and_untrusted_uploads(self):
+        self.select_version('1.18.4', 'optional')
+        _, asset = self.report_asset()
+        bad_reports = ([asset, asset], [asset | {'state': 'starter'}], [asset | {'size': 0}],
+                       [asset | {'uploader': {'login': 'github-actions[bot]', 'type': 'Bot'}}])
+        for reports in bad_reports:
+            remote = self.remote | {'assets': [*self.remote['assets'], *reports]}
+            with self.subTest(reports=reports), patch.object(release, 'read_remote_release', return_value=remote), \
+                    patch.object(release, 'gh') as github, self.assertRaises(ValueError):
+                release.check_runtime(self.expected, self.assets, allow_pending=True)
+            github.assert_not_called()
 
     def test_duplicate_malformed_changed_or_failed_reports_never_become_pending_success(self):
         raw, asset = self.report_asset()

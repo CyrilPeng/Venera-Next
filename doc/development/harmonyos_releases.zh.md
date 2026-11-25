@@ -16,7 +16,9 @@ PR 校验使用 Actions 的准确合并候选 SHA，push 和手动构建使用�
 
 从 `v1.18.4+253` 起，维护者采用独立 Beta 分发，schema 3 配置明确设置 `distribution: independent_beta`，保留 `release_enabled: true`。普通正式 Release 只包含其他平台，鸿蒙由 `harmonyos-release.yml` 从准确主线提交生成未签名 ARM64 HAP 和验证附件。独立分发不构成鸿蒙稳定版或真机验收通过。
 
-未声明 `distribution` 的历史配置默认 `bundled`，保留该提交的 HAP、伴随文件和设备验收门禁；显式 `bundled` 同样处理。恢复旧标签读取原提交策略，不用新策略豁免旧 HAP。未知值、旧 schema 冒用独立分发或来源不一致均拒绝。manifest 中的 `signed: false`、`runtime_verified: false` 继续准确记录验证范围；预览只作为 Actions Beta 产物，归档标签不会触发 `v*` 发布。
+当前主线显式设置 `runtime_acceptance: optional`。该策略与分发方式分别控制：以后采用 `distribution: bundled` 时，正式版和候选版都可在没有真机报告时发布，不因缺报告将整个 Release 留在草稿；鸿蒙仍标注为未签名 Beta，源码、版本、原生库和包体摘要核验继续强制执行。当前分发方式仍为 `independent_beta`。
+
+未声明 `distribution` 的历史配置默认 `bundled`，保留该提交的 HAP、伴随文件及 `runtime_acceptance` 规则；显式 `bundled` 使用同一套报告策略。恢复旧标签读取原提交策略，历史 `required`／`stable_required` 不受主线 `optional` 影响。未知值、旧 schema 冒用独立分发或来源不一致均拒绝。manifest 中的 `signed: false`、`runtime_verified: false` 继续准确记录验证范围；预览只作为 Actions Beta 产物，归档标签不会触发 `v*` 发布。
 
 源码及八个项目包摘要使用已提交的 canonical Git blob；七个受管原生库、PNG／7z 导出、第三方 NOTICE 和全部应用资产继续参与审计。适用的 QuickJS 核心修复固定到 `f5a1f20`，当前来源与替换条件见[依赖决策摘要](dependency_audit.zh.md)。
 
@@ -61,7 +63,9 @@ gh workflow run harmonyos-release.yml --ref main
 
 ## 准确 HAP 的真机验收
 
-独立 Beta 的设备验收单独进行，普通正式版不附 HAP 或设备报告，也不声称鸿蒙已完成验收。下面的报告规则继续用于准确 Beta 的设备测试和历史随版版本。历史 `v1.18.4-rc.1+250` 起的 `stable_required` 允许候选版无报告供测试，包含 HAP 的正式版仍必须有合格报告；任何已附报告严格验证。历史 `required` 要求两类版本均有报告，没有此字段的旧标签按原流程处理，不追改已发布包。
+当前 `optional` 将真机报告作为可选验收记录。随版正式版和候选版在缺报告时都可发布，发布与草稿恢复共用该规则，并明确记录真机验收仍待完成；主动附上的报告仍严格检查上传者、准确 HAP、版本、源码、摘要和全部测试结果，错误或失败报告会停止发布。可选的是报告的发布前置要求，报告内容不能冒充验收通过。
+
+独立 Beta 的设备验收单独进行，普通正式版不附 HAP 或设备报告，也不声称鸿蒙已完成验收。下面的报告格式继续用于准确 Beta 的设备测试及随版版本。历史 `v1.18.4-rc.1+250` 起的 `stable_required` 允许候选版无报告供测试，包含 HAP 的正式版仍必须有合格报告；历史 `required` 要求两类版本均有报告，没有此字段的旧标签按原流程处理，不追改已发布包。
 
 构建清单继续保留 `runtime_verified: false`；独立的 `harmonyos-runtime-acceptance.json` 记录实际设备验收，不能把构建通过或候选版公开改写成真机通过。
 
@@ -81,14 +85,14 @@ HAP 工作流在完整包审核后生成单独的 `harmonyos-runtime-acceptance-
 
 除上述目录能力缺失外，每项均须为 `pass`，并填写实际操作、结果或限制的 `detail`。填写实际 `device_model`、`os_version` 与带时区的 `tested_at`；不要填占位值，不包含账号、设备标识、私人书名或签名材料。报告只证明所列设备与系统，手机、平板和不同系统仍需逐步扩大验证范围。
 
-独立 Beta 下载该运行的 `harmonyos-runtime-acceptance-template`，完成测试后将审核报告与原始 HAP／manifest 一同保留，不上传到普通正式 Release。恢复历史随版版本时，维护者完成审核后上传到该版本的准确草稿或已公开候选版（示例中的版本和路径需替换；包含 HAP 的正式版报告必须绑定重新构建的 HAP，不能沿用 RC 报告）：
+独立 Beta 可下载该运行的 `harmonyos-runtime-acceptance-template`，完成测试后将审核报告与原始 HAP／manifest 一同保留，不上传到普通正式 Release。随版版本的维护者可将审核报告上传到准确草稿或已公开版本；历史强制策略则须按原提交补齐报告（示例中的版本和路径需替换；正式版报告必须绑定该版本原始构建的 HAP，不能沿用 RC 报告）：
 
 ```bash
 gh release upload vX.Y.Z /path/to/harmonyos-runtime-acceptance.json --repo CyrilPeng/Venera-Next
 gh run rerun RUN_ID --job RELEASE_JOB_ID --repo CyrilPeng/Venera-Next
 ```
 
-草稿补齐报告后只重跑原 run 的 `Release` 任务，使用原构建 artifacts。草稿复用时核对**所有平台**包的名称、大小和 SHA-256，拒绝新编译或替换的包；验收报告是唯一允许额外上传的文件。报告须由具有 write／maintain／admin 权限的人类维护者上传，脚本复核上传者、文件大小与摘要、准确源码和 HAP、每项结果及测试时间。错误／失败报告直接停止发布，不能以“待验收”绕过。已公开候选版补充报告后对原包运行 `verify-published`，不把公开候选版重新当作草稿发布。
+历史强制策略的草稿补齐报告后只重跑原 run 的 `Release` 任务，使用原构建 artifacts。`optional` 草稿恢复无需等待报告。草稿复用时核对**所有平台**包的名称、大小和 SHA-256，拒绝新编译或替换的包；验收报告是唯一允许额外上传的文件。已上传报告须由具有 write／maintain／admin 权限的人类维护者提供，脚本复核上传者、文件大小与摘要、准确源码和 HAP、每项结果及测试时间。错误／失败报告直接停止发布，不能以可选或“待验收”绕过。已公开版本补充报告后对原包运行 `verify-published`，不重新当作草稿发布。
 
 历史随版 `stable_required` 的候选版无报告时可公开并说明待验收，包含 HAP 的正式版无报告时保留草稿；旧 `required` 两类版本均保留草稿。合格报告通过后公开并再次验证，原包不能替换。独立模式的普通正式版在来源和全部普通资产验证后可公开，输出明确说明鸿蒙独立 Beta 无设备验收声明。Actions artifacts 保留 14 天，审核前另存准确原包与报告。本轮未连接鸿蒙真机，设备验收仍未完成；长期外部目录见[实施条件](#长期外部漫画目录)。
 

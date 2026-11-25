@@ -30,7 +30,7 @@ def validate_context(value, source_commit, environ):
                    for key in hashes)
             or (unified and (value["source_mode"] != "release_commit" or value["source_commit"] != value["release_commit"]))
             or ("guide_delivery" in value and value["guide_delivery"] != "repository")
-            or ("runtime_acceptance" in value and value["runtime_acceptance"] not in ("required", "stable_required"))
+            or ("runtime_acceptance" in value and value["runtime_acceptance"] not in ("optional", "required", "stable_required"))
             or ("distribution" in value and value["distribution"] not in ("bundled", "independent_beta"))
             or value["source_commit"] != source_commit
             or value["release_commit"] != environ.get("GITHUB_SHA", value["release_commit"])

@@ -5,5 +5,5 @@
   "release_enabled": true,
   "distribution": "independent_beta",
   "guide_delivery": "repository",
-  "runtime_acceptance": "stable_required"
+  "runtime_acceptance": "optional"
 }

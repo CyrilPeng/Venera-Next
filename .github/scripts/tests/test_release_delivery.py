@@ -1,4 +1,6 @@
+import contextlib
 import copy
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -114,6 +116,56 @@ class ReleaseDeliveryTests(unittest.TestCase):
                                     publish=True, security={})
             github.assert_called_once()
         self.assertEqual(json.loads(self.receipt.read_text())["state"], "published_verified")
+
+    def test_production_uses_the_real_runtime_policy_and_preserves_original_packages_without_a_report(self):
+        for version, policy, ready in (("1.18.4", "optional", True), ("1.18.4-rc.1", "optional", True),
+                                      ("1.18.4", "stable_required", False), ("1.18.4-rc.1", "required", False)):
+            context = self.context | {"version": version, "build": 250}
+            expected = {"schema": 3, "tagged": True, "preview": False, "source_mode": "release_commit",
+                        "distribution": "bundled", "source_commit": "a" * 40, "release_commit": "a" * 40,
+                        "tag": "v" + version, "version": version, "build": 250,
+                        "guide_delivery": "repository", "runtime_acceptance": policy}
+            paths = dict(self.paths)
+            names = delivery.harmony.asset_names(version, guide_delivery="repository").values()
+            for name in names:
+                paths[name] = self.root / name
+                paths[name].write_bytes(("Original compiler bytes " + name).encode())
+            records = delivery.assets.file_records(paths.values())
+            hap = {name: records[name] for name in names}
+            self.remote.update(tag_name=expected["tag"], body="Original notes", draft=True, prerelease="-" in version,
+                               assets=[{"id": 100 + index, "name": name, "state": "uploaded",
+                                        "size": record["bytes"], "digest": "sha256:" + record["sha256"]}
+                                       for index, (name, record) in enumerate(
+                                           delivery.assets.github_file_records(records).items())])
+            original_assets = copy.deepcopy(self.remote["assets"])
+            notes = self.root / "notes.md"
+            notes.write_text("Original notes")
+
+            def publish(*args):
+                self.assertEqual(args[:3], ("release", "edit", expected["tag"]))
+                self.assertIn("--latest=false" if "-" in version else "--latest=true", args)
+                self.remote["draft"] = False
+                return ""
+
+            with self.subTest(version=version, policy=policy), \
+                    patch.object(delivery, "production_inputs", return_value=(context, paths, records, expected, hap)), \
+                    patch.object(delivery, "find_release", side_effect=lambda tag: copy.deepcopy(self.remote)), \
+                    patch.object(delivery.harmony, "read_remote_release", side_effect=lambda *args, **kwargs: copy.deepcopy(self.remote)), \
+                    patch.object(delivery.harmony, "gh") as runtime_github, \
+                    patch.object(delivery, "check_report"), patch.object(delivery, "gh", side_effect=publish) as github, \
+                    contextlib.redirect_stdout(io.StringIO()):
+                delivery.prepare_production(self.root, self.root, self.root, self.manifest, notes, self.receipt,
+                                            {}, security={})
+                for _ in range(2):
+                    delivery.production(self.root, self.root, self.root, self.manifest, notes, self.receipt,
+                                        {}, publish=True, security={})
+                receipt = json.loads(self.receipt.read_text())
+                self.assertEqual(receipt["ready"], ready)
+                self.assertEqual(receipt["published"], ready)
+                self.assertEqual(receipt["state"], "published_verified" if ready else "acceptance_pending")
+                self.assertEqual(self.remote["assets"], original_assets)
+                self.assertEqual(github.call_count, 1 if ready else 0)
+                runtime_github.assert_not_called()
 
 
 if __name__ == "__main__":
