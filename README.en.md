@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="README.md">简体中文</a> | <strong>English</strong>
+  <a href="README.md">简体中文</a> | <strong>English</strong> | <a href="README.de.md">Deutsch</a> | <a href="README.ja.md">日本語</a>
 
   <br>
   <img src="assets/readme_logo.png" alt="VeneraNext" width="200" />
@@ -58,6 +58,8 @@
 This fork focuses on fewer interruptions and more reading: Waterfall mode scrolls across chapters without leaving the reader, long-pressing Favorite skips the folder picker, and nighttime and E-Ink devices get their own reading adjustments. Local import, offline downloads, reading statistics, and multi-device sync make finding comics, reading them, and following ongoing series easier.
 
 Venera's JavaScript extensions, local reading, search and categories, favorites, downloads, and source-dependent login, comments, and ratings remain available.
+
+The interface supports Simplified Chinese, Traditional Chinese, English, German and Japanese. Choose a language in **Settings → App → Language**. The default project README remains Chinese. German and Japanese are new in the development version and will be included in the next stable release.
 
 **Quick links:** [Install](#download-and-installation) · [Usage](#usage-guide) · [Write a source](doc/api/comic_source.en.md) · [JavaScript API](doc/api/js.en.md) · [Changelog](CHANGELOG.md)
 

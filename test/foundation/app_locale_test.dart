@@ -27,6 +27,8 @@ void main() {
       const Locale('zh', 'CN'),
       const Locale('zh', 'TW'),
       const Locale('en'),
+      const Locale('de', 'DE'),
+      const Locale('ja', 'JP'),
     ]);
     for (final language in AppLanguage.values) {
       appdata.settings['language'] = language.preference;
@@ -169,7 +171,7 @@ void main() {
         expected: const Locale('en'),
       ),
       (
-        name: 'non zh/en language falls back to English',
+        name: 'unsupported language falls back to English',
         system: [const Locale('fr', 'FR')],
         expected: const Locale('en'),
       ),
@@ -188,6 +190,50 @@ void main() {
         system: [const Locale('zh', 'HK'), const Locale('en', 'US')],
         expected: const Locale('zh', 'TW'),
       ),
+      (
+        name: 'de-AT: German regardless of region',
+        system: [const Locale('de', 'AT')],
+        expected: const Locale('de', 'DE'),
+      ),
+      (
+        name: 'de-CH: German regardless of region',
+        system: [const Locale('de', 'CH')],
+        expected: const Locale('de', 'DE'),
+      ),
+      (
+        name: 'German without region',
+        system: [const Locale('de')],
+        expected: const Locale('de', 'DE'),
+      ),
+      (
+        name: 'ja-JP: Japanese',
+        system: [const Locale('ja', 'JP')],
+        expected: const Locale('ja', 'JP'),
+      ),
+      (
+        name: 'Japanese without region',
+        system: [const Locale('ja')],
+        expected: const Locale('ja', 'JP'),
+      ),
+      (
+        name: 'first supported match wins after unsupported language',
+        system: [
+          const Locale('fr', 'FR'),
+          const Locale('ja', 'JP'),
+          const Locale('de', 'DE'),
+          const Locale('en'),
+        ],
+        expected: const Locale('ja', 'JP'),
+      ),
+      (
+        name: 'German before Chinese and Japanese',
+        system: [
+          const Locale('de', 'AT'),
+          const Locale('zh', 'TW'),
+          const Locale('ja'),
+        ],
+        expected: const Locale('de', 'DE'),
+      ),
     ];
 
     for (final testCase in cases) {
@@ -203,5 +249,17 @@ void main() {
         appLocale,
       );
     });
+
+    test(
+      'explicit German and Japanese override a different system language',
+      () {
+        for (final language in [AppLanguage.german, AppLanguage.japanese]) {
+          expect(
+            resolveAppLanguage(language.preference, const [Locale('zh', 'CN')]),
+            language,
+          );
+        }
+      },
+    );
   });
 }

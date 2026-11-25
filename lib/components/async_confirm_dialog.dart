@@ -119,77 +119,75 @@ Future<void> _showAsyncConfirmDialog({
                     ],
                   ).paddingHorizontal(16).paddingVertical(8),
                   actions: [
-                    Flexible(
-                      child: Wrap(
-                        alignment: WrapAlignment.end,
-                        runSpacing: 8,
-                        children: [
-                          TextButton(
-                            onPressed: saving ? null : dismiss,
-                            child: Text('Cancel'.tl),
-                          ),
-                          Semantics(
-                            button: true,
-                            enabled: !saving,
-                            label: saving ? 'Confirm'.tl : null,
-                            child: ExcludeSemantics(
-                              excluding: saving,
-                              child: Button.filled(
-                                color: btnColor,
-                                isLoading: saving,
-                                onPressed: () async {
-                                  if (saving) return;
-                                  if (confirmationFinished) {
-                                    dismiss();
-                                    return;
-                                  }
-                                  if (!canConfirm()) return;
-                                  final confirmation = WindowSelectionTask(
-                                    context,
-                                  );
-                                  setState(() {
-                                    saving = true;
-                                    error = null;
-                                  });
-                                  final ended = Completer<void>();
-                                  confirmationSettled = ended.future;
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      runSpacing: 8,
+                      children: [
+                        TextButton(
+                          onPressed: saving ? null : dismiss,
+                          child: Text('Cancel'.tl),
+                        ),
+                        Semantics(
+                          button: true,
+                          enabled: !saving,
+                          label: saving ? 'Confirm'.tl : null,
+                          child: ExcludeSemantics(
+                            excluding: saving,
+                            child: Button.filled(
+                              color: btnColor,
+                              isLoading: saving,
+                              onPressed: () async {
+                                if (saving) return;
+                                if (confirmationFinished) {
+                                  dismiss();
+                                  return;
+                                }
+                                if (!canConfirm()) return;
+                                final confirmation = WindowSelectionTask(
+                                  context,
+                                );
+                                setState(() {
+                                  saving = true;
+                                  error = null;
+                                });
+                                final ended = Completer<void>();
+                                confirmationSettled = ended.future;
+                                try {
+                                  await confirmation.run<void>((
+                                    operation,
+                                  ) async {
+                                    operation.checkActive();
+                                    await onConfirm();
+                                  }, reportFailureOnClose: true);
+                                  confirmationFinished = true;
+                                  if (canDismiss()) navigator.pop();
+                                } catch (failure, stack) {
+                                  if (failure is SelectionCancelled) return;
+                                  confirmationFinished =
+                                      confirmationFinished ||
+                                      failure is PersistenceFailure &&
+                                          failure.commitState !=
+                                              PersistenceCommitState
+                                                  .notCommitted;
+                                  showFailure(failure, stack);
+                                } finally {
+                                  saving = false;
                                   try {
-                                    await confirmation.run<void>((
-                                      operation,
-                                    ) async {
-                                      operation.checkActive();
-                                      await onConfirm();
-                                    }, reportFailureOnClose: true);
-                                    confirmationFinished = true;
-                                    if (canDismiss()) navigator.pop();
-                                  } catch (failure, stack) {
-                                    if (failure is SelectionCancelled) return;
-                                    confirmationFinished =
-                                        confirmationFinished ||
-                                        failure is PersistenceFailure &&
-                                            failure.commitState !=
-                                                PersistenceCommitState
-                                                    .notCommitted;
-                                    showFailure(failure, stack);
-                                  } finally {
-                                    saving = false;
-                                    try {
-                                      if (context.mounted && !finished) {
-                                        setState(() {});
-                                      }
-                                    } finally {
-                                      ended.complete();
+                                    if (context.mounted && !finished) {
+                                      setState(() {});
                                     }
+                                  } finally {
+                                    ended.complete();
                                   }
-                                },
-                                child: Text(
-                                  confirmationFinished ? 'OK'.tl : 'Confirm'.tl,
-                                ),
+                                }
+                              },
+                              child: Text(
+                                confirmationFinished ? 'OK'.tl : 'Confirm'.tl,
                               ),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

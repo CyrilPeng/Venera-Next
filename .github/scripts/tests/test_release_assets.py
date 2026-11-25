@@ -54,6 +54,12 @@ class ReleaseAssetTests(unittest.TestCase):
             "release.json": b'{"version":"1.2.3","build":42}',
             "pubspec.yaml": b"name: fixture\nversion: 1.2.3+42\n# fonts:\n",
             "CHANGELOG.md": b"# Changes\n\n## v1.2.3\n\nRelease.\n",
+            "assets/translation.json": json.dumps({
+                "zh_CN": {"Delete": "删除"},
+                "zh_TW": {"Delete": "刪除"},
+                "de_DE": {"Delete": "Löschen"},
+                "ja_JP": {"Delete": "削除"},
+            }, ensure_ascii=False).encode("utf-8"),
             assets.NOTICE_SOURCE: b"Reviewed native library notice\n",
             "patch/font.dart": ('"""' + assets.FONT_PATCH + '"""').encode(),
         }
@@ -76,6 +82,7 @@ class ReleaseAssetTests(unittest.TestCase):
         if font:
             pubspec = pubspec.replace(b"# fonts:", assets.FONT_PATCH.encode())
         files = {"pubspec.yaml": pubspec, "CHANGELOG.md": self.sources["CHANGELOG.md"],
+                 "assets/translation.json": self.sources["assets/translation.json"],
                  assets.NOTICE: self.sources[assets.NOTICE_SOURCE]}
         if font:
             files[assets.FONT_ASSET] = b"\0\1\0\0reviewed font fixture"
@@ -99,7 +106,8 @@ class ReleaseAssetTests(unittest.TestCase):
         assets.check_payload(original.__getitem__, set(original), "", self.root, self.context, font=True)
         windows_text = original | {assets.NOTICE: original[assets.NOTICE].replace(b"\n", b"\r\n")}
         assets.check_payload(windows_text.__getitem__, set(windows_text), "", self.root, self.context, font=True)
-        for name in ("pubspec.yaml", "CHANGELOG.md", assets.NOTICE, assets.FONT_ASSET, "FontManifest.json"):
+        for name in ("pubspec.yaml", "CHANGELOG.md", "assets/translation.json",
+                     assets.NOTICE, assets.FONT_ASSET, "FontManifest.json"):
             with self.subTest(name=name):
                 changed = original | {name: b"Invalid contents"}
                 with self.assertRaises((ValueError, KeyError)):
@@ -108,6 +116,12 @@ class ReleaseAssetTests(unittest.TestCase):
         del missing[assets.FONT_ASSET]
         with self.assertRaisesRegex(ValueError, "font asset"):
             assets.check_payload(missing.__getitem__, set(missing), "", self.root, self.context, font=True)
+        changed = original | {"assets/translation.json": json.dumps({
+            "zh_CN": {"Delete": "删除"}, "zh_TW": {"Delete": "刪除"},
+            "de_DE": {"Delete": "Löschen"},
+        }, ensure_ascii=False).encode("utf-8")}
+        with self.assertRaisesRegex(ValueError, "Embedded source file differs: assets/translation.json"):
+            assets.check_payload(changed.__getitem__, set(changed), "", self.root, self.context, font=True)
 
     def test_real_deb_container_checks_upgrade_directory_and_both_architectures(self):
         for architecture, machine in (("amd64", 62), ("arm64", 183)):

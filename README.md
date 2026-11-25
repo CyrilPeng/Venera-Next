@@ -1,5 +1,5 @@
 <div align="center">
-  <strong>简体中文</strong> | <a href="README.en.md">English</a>
+  <strong>简体中文</strong> | <a href="README.en.md">English</a> | <a href="README.de.md">Deutsch</a> | <a href="README.ja.md">日本語</a>
   <br>
   <br>
   <img src="assets/readme_logo.png" alt="VeneraNext" width="200" />
@@ -58,6 +58,8 @@
 本分支围绕“少一点打断，多一点阅读”打磨日常体验：瀑布流跨章连读不用退出，长按收藏省去选择收藏夹的步骤，夜间和墨水屏设备各有阅读设置。本地导入、离线下载、阅读统计与多设备同步，让找书、看漫画和追连载更方便。
 
 原项目的 JavaScript 漫画源扩展、本地阅读、搜索与分类、收藏下载，以及按源提供的登录、评论和评分能力继续保留。
+
+界面支持简体中文、繁体中文、英文、德语和日语，可在 **设置 → 应用 → 语言** 中切换。项目 README 默认仍为中文。德语和日语为开发版新增，将随下一个稳定版本提供。
 
 **快速入口：** [下载安装](#下载安装) · [使用说明](#使用说明) · [编写漫画源](doc/api/comic_source.zh.md) · [JavaScript API](doc/api/js.zh.md) · [更新日志](CHANGELOG.md)
 
