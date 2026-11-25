@@ -26,7 +26,7 @@ import 'package:venera_next/features/local_comics/import_export/import_export.da
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/translations.dart';
-import 'package:zip_flutter/zip_flutter.dart';
+import 'import_export/comic_archive_compressor.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 class LocalComicsPage extends StatefulWidget {
@@ -685,7 +685,7 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
           cachePath: App.cachePath,
           extension: ext,
           export: export,
-          compress: ZipFile.compressFolderAsync,
+          compress: compressComicArchive,
           save: (file, name) =>
               saveFile(operation: operation, file: file, filename: name),
           isCancelled: () => canceled || !task.active,

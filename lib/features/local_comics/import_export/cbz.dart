@@ -14,6 +14,7 @@ import 'package:zip_flutter/zip_flutter.dart';
 import '../local_storage_guard.dart';
 import 'comic_import_output.dart';
 import 'comic_export_service.dart';
+import 'comic_archive_compressor.dart';
 
 /// Comic Book Archive. Currently supports CBZ, ZIP and 7Z formats.
 abstract class CBZ {
@@ -132,17 +133,19 @@ abstract class CBZ {
   static Future<LocalComic> import(
     File file, {
     Future<void> Function(LocalComic comic)? registerComic,
+    Future<void> Function(File source, Directory workspace)? extract,
   }) => LocalComicStorageGuard.instance.runImport(
-    () => _import(file, registerComic: registerComic),
+    () => _import(file, registerComic: registerComic, extract: extract),
   );
 
   static Future<LocalComic> _import(
     File file, {
     Future<void> Function(LocalComic comic)? registerComic,
+    Future<void> Function(File source, Directory workspace)? extract,
   }) async {
     final workspace = Directory(App.cachePath).createTempSync('cbz_import_');
     try {
-      await extractArchive(file, workspace);
+      await (extract ?? extractArchive)(file, workspace);
       return await _importExtracted(file, workspace, registerComic);
     } finally {
       await workspace.deleteIgnoreError(recursive: true);
@@ -511,9 +514,8 @@ abstract class CBZ {
     return values.toSet().toList();
   }
 
-  static Future<void> _compress(String src, String dst) async {
-    await ZipFile.compressFolderAsync(src, dst, 4);
-  }
+  static Future<void> _compress(String src, String dst) =>
+      compressComicArchive(src, dst);
 }
 
 // ZipDecoder invokes this only for unflagged raw names and still gives valid

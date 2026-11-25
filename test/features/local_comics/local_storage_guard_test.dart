@@ -7,6 +7,35 @@ import 'package:venera_next/features/local_comics/local_import_lifecycle.dart';
 
 void main() {
   test(
+    'accepted collection children retain admission during application exit',
+    () async {
+      final guard = LocalComicStorageGuard();
+      final started = Completer<void>();
+      final gate = Completer<void>();
+      final importing = guard.runImport(() async {
+        started.complete();
+        await gate.future;
+        return guard.runImport(
+          () async => guard.write(() => 'child completed'),
+        );
+      });
+      await started.future;
+      final preparing = guard.prepareForExit();
+      try {
+        await expectLater(
+          guard.runImport(() async {}),
+          throwsA(isA<LocalComicStorageBusy>()),
+        );
+        gate.complete();
+        expect(await importing, 'child completed');
+      } finally {
+        if (!gate.isCompleted) gate.complete();
+        await importing;
+        (await preparing)();
+      }
+    },
+  );
+  test(
     'R2 unowned synchronous local writes cannot bypass an application snapshot',
     () async {
       final guard = LocalComicStorageGuard();

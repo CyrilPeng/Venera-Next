@@ -9,6 +9,9 @@ import 'package:venera_next/features/reader/gesture_request.dart';
 import 'package:venera_next/features/reader/image_favorite_swipe.dart';
 import 'package:venera_next/features/reader/reader_tap_scope.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
+import 'package:venera_next/features/reader/image_read.dart';
+import 'package:venera_next/features/reader/image_position.dart';
+import 'package:venera_next/features/reader/image_export.dart';
 import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/foundation/reader_settings.dart';
 
@@ -43,6 +46,18 @@ class _Viewport implements ReaderImageViewController {
   }
 
   @override
+  ReaderImageRead getImageReadByOffset(Offset point) => ReaderImageRead(
+    address: const ReaderImageAddress(
+      imageKey: 'image',
+      sourceKey: 'source',
+      comicId: 'book',
+      chapterId: 'chapter',
+    ),
+    imageNumber: 2,
+    readBytes: (_) => getImageByOffset(point),
+  );
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -67,6 +82,15 @@ class _Fixture {
       identity: original,
       isCurrent: () => identical(identity, original),
       viewport: viewport,
+      imageSelection: (image) => ReaderImageSelection(
+        imageKey: image.address.imageKey,
+        sourceKey: 'source',
+        comicId: image.address.comicId,
+        chapterId: image.address.chapterId,
+        title: 'Book',
+        chapter: 3,
+        imageNumber: image.imageNumber,
+      ),
       preferences: ReaderSettings.resolve(
         global: {
           'enableDoubleTapToZoom': doubleTap,

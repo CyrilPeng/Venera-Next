@@ -28,6 +28,17 @@ class LocalComicStorageGuard {
       AppDataOperations.instance.access(() => _runImport(action));
 
   Future<T> _runImport<T>(Future<T> Function() action) async {
+    final owner = Zone.current[_importOwnerKey];
+    if (owner != null) {
+      if (!_imports.contains(owner)) {
+        throw const LocalComicStorageBusy(
+          'Local storage reservation has ended.',
+        );
+      }
+      // A collection retains one admission while its individual CBZs drain,
+      // including when application exit has already closed new admission.
+      return action();
+    }
     _checkAdmission();
     final done = Completer<void>();
     _imports.add(done);

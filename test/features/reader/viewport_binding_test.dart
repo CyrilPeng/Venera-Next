@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
+import 'package:venera_next/features/reader/image_read.dart';
 
 class _Viewport implements ReaderImageViewController {
   @override
@@ -25,6 +26,9 @@ class _Viewport implements ReaderImageViewController {
   bool handleOnTap(Offset location) => false;
   @override
   Future<Uint8List?> getImageByOffset(Offset offset) async => null;
+
+  @override
+  ReaderImageRead? getImageReadByOffset(Offset offset) => null;
   @override
   int? getImageIndexByOffset(Offset offset) => null;
 }
