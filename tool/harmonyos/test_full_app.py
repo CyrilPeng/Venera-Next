@@ -15,12 +15,13 @@ from prepare_full_app import (EXTRA_LIBRARIES, FULL_CONFIG, ROOT, PROJECT_PACKAG
                               patch_sqlite_loader, patch_webview_native_profile,
                               patch_webview_environment_api)
 from prepare_probe import LIBRARIES
-from release_context import build_inputs, validate_context, validate_version
+from release_context import build_inputs, reader_purpose, validate_context, validate_version
 import prepare_full_app
 import full_native_build
 import ci_full_app
 from app_labels import APP_LABEL
 from test_app_labels import label_index, label_module
+import release_context
 
 
 def elf():
@@ -64,7 +65,7 @@ class FullAppTests(unittest.TestCase):
         self.assertEqual(validate_context(context, '1' * 40, environment), context)
         repository_guides = context | {'guide_delivery': 'repository'}
         self.assertEqual(validate_context(repository_guides, '1' * 40, environment), repository_guides)
-        for policy in ('required', 'stable_required'):
+        for policy in ('optional', 'required', 'stable_required'):
             with self.subTest(runtime_acceptance=policy):
                 device_acceptance = repository_guides | {'runtime_acceptance': policy}
                 self.assertEqual(validate_context(device_acceptance, '1' * 40, environment), device_acceptance)
@@ -72,6 +73,14 @@ class FullAppTests(unittest.TestCase):
             with self.subTest(distribution=mode):
                 distribution = repository_guides | {'distribution': mode}
                 self.assertEqual(validate_context(distribution, '1' * 40, environment), distribution)
+        official = repository_guides | {'distribution': 'bundled', 'channel': 'harmonyos',
+                                        'runtime_acceptance': 'optional'}
+        self.assertEqual(validate_context(official, '1' * 40, environment), official)
+        self.assertEqual(reader_purpose(official), 'full_reader')
+        self.assertEqual(reader_purpose(context), 'full_reader_experiment')
+        for change in ({'distribution': 'independent_beta'}, {'channel': 'stable'}, {'schema': 2}):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'source-bound'):
+                validate_context(official | change, '1' * 40, environment)
         for invalid in ('disabled', '', False, None):
             with self.subTest(distribution=invalid), self.assertRaisesRegex(ValueError, 'source-bound'):
                 validate_context(context | {'distribution': invalid}, '1' * 40, environment)
@@ -86,6 +95,39 @@ class FullAppTests(unittest.TestCase):
                        {'caller_build': 246}, {'caller_version': '1.18.2'}, {'schema': True}):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 validate_context(context | change, '1' * 40, environment)
+
+    def test_build_inputs_cannot_change_the_channel_of_the_committed_source_policy(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            changelog = '# Changes\n\n## v1.18.5\n\nRelease notes.\n'
+            (root / 'release.json').write_text('{"version": "1.18.5", "build": 254}', encoding='utf-8')
+            (root / 'CHANGELOG.md').write_text(changelog, encoding='utf-8')
+            policy = root / '.github/harmonyos-next.json'
+            policy.parent.mkdir()
+            policy.write_text('{"schema": 3, "source_mode": "release_commit", "first_release_build": 245, '
+                              '"release_enabled": true, "distribution": "bundled", "channel": "harmonyos", '
+                              '"runtime_acceptance": "optional"}', encoding='utf-8')
+            context = {'schema': 3, 'source_mode': 'release_commit', 'channel': 'harmonyos',
+                       'distribution': 'bundled', 'runtime_acceptance': 'optional',
+                       'source_commit': '1' * 40, 'release_commit': '1' * 40,
+                       'version': '1.18.5', 'build': 254, 'tag': 'v1.18.5', 'run_id': '123',
+                       'tagged': False, 'preview': True, 'caller_version': '1.18.5', 'caller_build': 254,
+                       'changelog': changelog, 'changelog_sha256': hashlib.sha256(changelog.encode()).hexdigest()}
+            path = root / 'context.json'
+            path.write_text(json.dumps(context), encoding='utf-8')
+            environment = {'HARMONYOS_RELEASE_CONTEXT': str(path), 'GITHUB_SHA': '1' * 40,
+                           'GITHUB_RUN_ID': '123', 'GITHUB_REF_TYPE': 'branch'}
+            with patch.object(release_context, 'ROOT', root), \
+                    patch.object(release_context.subprocess, 'check_output', return_value='1' * 40), \
+                    patch.dict(release_context.os.environ, environment):
+                self.assertEqual(build_inputs()['release']['channel'], 'harmonyos')
+                path.write_text(json.dumps(context | {'channel': 'harmonyos-beta'}), encoding='utf-8')
+                with self.assertRaisesRegex(ValueError, 'channel must match'):
+                    build_inputs()
+                legacy = json.loads(policy.read_text(encoding='utf-8'))
+                del legacy['channel']
+                policy.write_text(json.dumps(legacy), encoding='utf-8')
+                self.assertEqual(build_inputs()['release']['channel'], 'harmonyos-beta')
 
     def test_project_digest_ignores_build_outputs_and_detects_changed_or_missing_inputs(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -283,11 +325,13 @@ class FullAppTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 check_hosted_baseline(name, {**spec, 'sha256': '0' * 64}, lock)
 
-    def make_hap(self, root, *, metadata_change=None, app_change=None, omit=None, corrupt_library=False, extra=None):
+    def make_hap(self, root, *, metadata_change=None, app_change=None, omit=None, corrupt_library=False, extra=None,
+                 official=False):
         data = elf()
         checksum = hashlib.sha256(data).hexdigest()
         identity = build_inputs()
-        metadata = {'purpose': 'full_reader_experiment', 'reader_integrated': True,
+        context = {'channel': 'harmonyos'} if official else identity['release']
+        metadata = {'purpose': reader_purpose(context), 'release': context, 'reader_integrated': True,
                     'runtime_verified': False, 'signed': False, 'entrypoint': 'lib/main.dart',
                     'bundle_name': FULL_CONFIG['bundle_name'], 'version_name': identity['version_name'],
                     'hap_version_name': identity['hap_version_name'],
@@ -328,6 +372,21 @@ class FullAppTests(unittest.TestCase):
                 path, metadata, assets = self.make_hap(Path(temporary), omit=name)
                 with self.assertRaises(ValueError):
                     audit_full_hap(path, metadata, assets)
+
+    def test_official_reader_packaging_preserves_unsigned_unverified_and_library_guards(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path, metadata, assets = self.make_hap(Path(temporary), official=True)
+            audit_full_hap(path, metadata, assets)
+            self.assertEqual(metadata['purpose'], 'full_reader')
+            self.assertFalse(metadata['signed'])
+            self.assertFalse(metadata['runtime_verified'])
+            for change in ({'purpose': 'full_reader_experiment'}, {'signed': True}, {'runtime_verified': True}):
+                path, metadata, assets = self.make_hap(Path(temporary), official=True, metadata_change=change)
+                with self.subTest(change=change), self.assertRaises(ValueError):
+                    audit_full_hap(path, metadata | change, assets)
+            path, metadata, assets = self.make_hap(Path(temporary), official=True, corrupt_library=True)
+            with self.assertRaises(ValueError):
+                audit_full_hap(path, metadata, assets)
 
     def test_next_candidate_never_omits_the_reviewed_codec_notice(self):
         with tempfile.TemporaryDirectory() as temporary:

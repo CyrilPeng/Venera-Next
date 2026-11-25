@@ -32,7 +32,7 @@
   - [3.1 Android-Smartphones und -Tablets](#android-phones-and-tablets)
   - [3.2 Android TV](#android-tv)
   - [3.3 Windows](#windows)
-  - [3.4 HarmonyOS (Beta)](#harmonyos-beta)
+  - [3.4 HarmonyOS](#harmonyos)
   - [3.5 Linux](#linux)
   - [3.6 iOS](#ios)
   - [3.7 macOS](#macos)
@@ -53,13 +53,13 @@
 <a id="introduction"></a>
 ## 1. Einführung
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) führt die Entwicklung von [Venera](https://github.com/venera-app/venera) fort, einem mit Flutter entwickelten Comicreader für **Android, Android TV, Windows, Linux, iOS und macOS**. Eine **HarmonyOS-Beta** wird unabhängig davon verteilt.
+[VeneraNext](https://github.com/CyrilPeng/venera-next) führt die Entwicklung von [Venera](https://github.com/venera-app/venera) fort, einem mit Flutter entwickelten Comicreader für **Android, Android TV, Windows, Linux, iOS, macOS und HarmonyOS**.
 
 Dieser Fork macht das Lesen flüssiger: Im Wasserfallmodus geht es ohne Verlassen des Lesefensters über Kapitelgrenzen hinweg weiter. Langes Drücken auf Favorisieren überspringt die Ordnerauswahl; für nächtliches Lesen und E-Ink-Geräte gibt es eigene Anpassungen. Lokaler Import, Offline-Downloads, Lesestatistiken und geräteübergreifende Synchronisation erleichtern das Finden und Lesen von Comics sowie das Verfolgen laufender Serien.
 
 JavaScript-Erweiterungen, lokales Lesen, Suche und Kategorien, Favoriten und Downloads sowie die von Quellen bereitgestellten Anmeldungen, Kommentare und Bewertungen bleiben verfügbar.
 
-Die App-Oberfläche unterstützt vereinfachtes und traditionelles Chinesisch, Englisch, Deutsch und Japanisch. Die Auswahl steht unter **Einstellungen → App → Sprache**. Die Projektstartseite bleibt standardmäßig auf Chinesisch. Deutsch und Japanisch sind neu in der Entwicklungsversion; die stabile Version erhält sie mit dem nächsten Release.
+Die App-Oberfläche unterstützt vereinfachtes und traditionelles Chinesisch, Englisch, Deutsch und Japanisch. Die Auswahl steht unter **Einstellungen → App → Sprache**. Die Projektstartseite bleibt standardmäßig auf Chinesisch. Deutsch und Japanisch sind ab `v1.18.5` in stabilen Releases enthalten.
 
 **Direktzugriff:** [Installation](#download-and-installation) · [Bedienung](#usage-guide) · [Eine Quelle schreiben](doc/api/comic_source.en.md) · [JavaScript-API](doc/api/js.en.md) · [Änderungsprotokoll](CHANGELOG.md)
 
@@ -176,15 +176,16 @@ Alternativ stehen `VeneraNext-xxx-windows-installer.exe` und das portable ZIP in
 Einzelheiten zu Installer, portabler Version und winget stehen unter [Windows-Verteilung](doc/distribution/windows.en.md) (Englisch).
 
 <a id="harmonyos-beta"></a>
-### 3.4 HarmonyOS (Beta)
+<a id="harmonyos"></a>
+### 3.4 HarmonyOS
 
-Das Artefakt `harmonyos-release` aus einem erfolgreichen Lauf des [HarmonyOS-Beta-Workflows](https://github.com/CyrilPeng/Venera-Next/actions/workflows/harmonyos-release.yml) herunterladen. Seit `v1.18.4` wird die unsignierte HarmonyOS-Beta unabhängig verteilt; reguläre stabile Releases enthalten kein HAP. Anhänge älterer Releases bleiben verfügbar:
+Das HarmonyOS-Paket unter Assets der [neuesten stabilen Veröffentlichung](https://github.com/CyrilPeng/Venera-Next/releases/latest) herunterladen. Ab `v1.18.5` wird HarmonyOS mit derselben Version wie die anderen Plattformen über Releases veröffentlicht. Öffentliche Anhänge lassen sich ohne GitHub-Anmeldung direkt herunterladen:
 
 | Datei | Beschreibung | Empfohlen für |
 |---|---|---|
-| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | Unsignierte ARM64-Beta | HarmonyOS-Smartphones und -Tablets mit API-26-Unterstützung |
+| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | Unsigniertes ARM64-Paket | HarmonyOS-Smartphones und -Tablets mit API-26-Unterstützung |
 
-Manifest, Quellcommit und SHA-256 desselben Laufs prüfen, anschließend selbst signieren und installieren. Für Updates den bisherigen Signaturschlüssel behalten; die App nicht deinstallieren und keine Daten löschen. Die Abnahme auf HarmonyOS-Geräten steht noch aus. Anleitung und Einschränkungen stehen in der [HarmonyOS-Beta-Installationsanleitung](doc/distribution/harmonyos-reader.en.md) (Englisch).
+Dieselbe Veröffentlichung enthält `harmonyos-manifest.json` und `harmonyos-SHA256SUMS`. Diese prüfen, anschließend das HAP selbst signieren und installieren. Die Updateprüfung in der App öffnet eine Veröffentlichung mit dem passenden HAP. Für Updates den bisherigen Signaturschlüssel behalten. Anleitung und bekannte Plattformgrenzen stehen in der [HarmonyOS-Installationsanleitung](doc/distribution/harmonyos-reader.en.md) (Englisch).
 
 <a id="linux"></a>
 ### 3.5 Linux
@@ -360,7 +361,7 @@ In den Leseeinstellungen vertikales fortlaufendes Lesen oder Wasserfall wählen 
 ## 8. Ressourcen für Entwickler
 
 - [Build und Entwicklung](doc/development/build.en.md): Flutter/Rust, gesperrte Abhängigkeiten, Tests und Releases (Englisch).
-- [Unabhängige HarmonyOS-Beta-Builds](doc/development/harmonyos_releases.en.md): exakter Hauptzweig-Quellstand, unabhängiges SDK, unsigniertes HAP und Geräteabnahme (Englisch).
+- [HarmonyOS-Builds und Releases](doc/development/harmonyos_releases.en.md): gemeinsame Quellversion, unabhängiges SDK, unsigniertes HAP und optionale Geräteberichte (Englisch).
 - [Mitwirken](CONTRIBUTING.en.md) · [Abhängigkeitsverwaltung](doc/development/dependencies.en.md) (Englisch).
 - [Windows-Verteilung](doc/distribution/windows.en.md) · [Headless-Modus](doc/user/headless.en.md) (Englisch).
 - [Sicherheitsrichtlinie](SECURITY.md) · [Verhaltenskodex](CODE_OF_CONDUCT.md) · [Dokumentationsindex](doc/README.en.md). Die weiterführende Dokumentation liegt derzeit auf Chinesisch oder Englisch vor.

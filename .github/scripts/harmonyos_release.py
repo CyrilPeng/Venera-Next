@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bind an unsigned HarmonyOS beta to its exact mainline or frozen source."""
+"""Bind an unsigned HarmonyOS package to its exact mainline or frozen source."""
 
 import argparse
 from datetime import datetime, timedelta, timezone
@@ -29,7 +29,7 @@ LABEL_SOURCE = "tool/harmonyos/app_labels.py"
 APP_LABEL = "VeneraNext"
 BUNDLE = "com.github.cyrilpeng.veneranext.harmony"
 RUNTIME_REPORT = "harmonyos-runtime-acceptance.json"
-RUNTIME_ACCEPTANCE_POLICIES = ("required", "stable_required")
+RUNTIME_ACCEPTANCE_POLICIES = ("optional", "required", "stable_required")
 DISTRIBUTION_MODES = ("bundled", "independent_beta")
 RUNTIME_CHECKS = (
     "startup", "source_and_reading", "archive_import", "directory_import",
@@ -75,6 +75,8 @@ def load_pin(root, *, next_candidate=False):
         fields.add("runtime_acceptance")
     if unified and "distribution" in value:
         fields.add("distribution")
+    if unified and "channel" in value:
+        fields.add("channel")
     if (set(value) != fields
             or type(value["schema"]) is not int
             or value["schema"] not in ((2, 3) if next_candidate else (1,))
@@ -82,6 +84,7 @@ def load_pin(root, *, next_candidate=False):
             or ("guide_delivery" in value and value["guide_delivery"] != "repository")
             or ("runtime_acceptance" in value and value["runtime_acceptance"] not in RUNTIME_ACCEPTANCE_POLICIES)
             or ("distribution" in value and value["distribution"] not in DISTRIBUTION_MODES)
+            or ("channel" in value and (value["channel"] != "harmonyos" or value.get("distribution") != "bundled"))
             or (not unified and any(not isinstance(value[key], str) or not SHA.fullmatch(value[key])
                                     for key in ("source_commit", "main_baseline")))
             or type(value["first_release_build"]) is not int
@@ -107,7 +110,7 @@ def select_pin(root, *, preview_next=False):
 
 def check_distribution(pin, *, tagged):
     if tagged and pin["schema"] >= 2 and not pin["release_enabled"]:
-        raise ValueError("The reviewed next candidate is preview only; explicitly enable unsigned beta distribution after source, build and asset review")
+        raise ValueError("The reviewed next candidate is preview only; explicitly enable unsigned HAP distribution after source, build and asset review")
 
 
 def bundles_harmonyos(value):
@@ -202,7 +205,7 @@ def context(root, source, environ, *, preview_next=False):
         raise ValueError("Release tag does not identify the checked-out commit")
     if environ.get("GITHUB_SHA", release_commit) != release_commit:
         raise ValueError("Checkout is not the caller's exact release commit")
-    value = {"schema": pin["schema"], "channel": "harmonyos-beta", "source_commit": source_commit,
+    value = {"schema": pin["schema"], "channel": pin.get("channel", "harmonyos-beta"), "source_commit": source_commit,
              "release_commit": release_commit,
             "version": version, "build": build, "tag": "v" + version,
             "run_id": environ.get("GITHUB_RUN_ID", "local"), "tagged": tagged,
@@ -290,7 +293,8 @@ def verify_bundle(directory, expected, source):
             or report.get("commit") != expected["source_commit"] or report.get("hap") != hap.name
             or report.get("bytes") != hap.stat().st_size or report.get("sha256") != sha256(hap.read_bytes())
             or metadata.get("release") != release or metadata.get("source_commit") != expected["source_commit"]
-            or metadata.get("purpose") != "full_reader_experiment" or metadata.get("entrypoint") != "lib/main.dart"
+            or metadata.get("purpose") != ("full_reader" if expected.get("channel") == "harmonyos" else "full_reader_experiment")
+            or metadata.get("entrypoint") != "lib/main.dart"
             or metadata.get("signed") is not False or metadata.get("runtime_verified") is not False
             or metadata.get("reader_integrated") is not True):
         raise ValueError("HAP is not an audited build of this source/release/run")
@@ -608,14 +612,19 @@ def check_runtime(expected, assets, *, allow_pending=False, published=False):
         check_remote_release(remote, expected, assets, published=published)
         print("Standard release verified; HarmonyOS remains an independent unsigned beta, without device acceptance claims.")
         return True
-    if runtime_acceptance_policy(expected) is None:
+    policy = runtime_acceptance_policy(expected)
+    if policy is None:
         return True
     remote = read_remote_release(expected["tag"], published=published)
     check_remote_release(remote, expected, assets, published=published)
     reports = [item for item in remote["assets"] if item.get("name") == RUNTIME_REPORT]
     if not reports:
         if not runtime_report_required(expected):
-            print("Release policy allows this prerelease for device testing; native-device acceptance remains pending.")
+            if policy == "optional":
+                print("Runtime acceptance report is optional; publication may proceed, "
+                      "and native-device acceptance remains pending.")
+            else:
+                print("Release policy allows this prerelease for device testing; native-device acceptance remains pending.")
             return True
         if allow_pending and not published:
             print("Device acceptance is pending. Keep this draft and its packages; upload the reviewed "

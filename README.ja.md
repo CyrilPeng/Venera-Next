@@ -32,7 +32,7 @@
   - [3.1 Android スマートフォン・タブレット](#android-phones-and-tablets)
   - [3.2 Android TV](#android-tv)
   - [3.3 Windows](#windows)
-  - [3.4 HarmonyOS（ベータ版）](#harmonyos-beta)
+  - [3.4 HarmonyOS](#harmonyos)
   - [3.5 Linux](#linux)
   - [3.6 iOS](#ios)
   - [3.7 macOS](#macos)
@@ -53,13 +53,13 @@
 <a id="introduction"></a>
 ## 1. はじめに
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) は、Flutter 製漫画リーダー [Venera](https://github.com/venera-app/venera) の開発を引き継ぐプロジェクトです。**Android、Android TV、Windows、Linux、iOS、macOS** に対応し、**HarmonyOS ベータ版**は独立して配布しています。
+[VeneraNext](https://github.com/CyrilPeng/venera-next) は、Flutter 製漫画リーダー [Venera](https://github.com/venera-app/venera) の開発を引き継ぐプロジェクトです。**Android、Android TV、Windows、Linux、iOS、macOS、HarmonyOS** に対応しています。
 
 このフォークでは、読書を中断する操作を減らしています。ウォーターフォールモードなら読書画面を離れずに章をまたいで読み進められ、お気に入りボタンの長押しでフォルダー選択を省略できます。夜間や電子ペーパー端末向けの調整も用意しました。ローカルのインポート、オフラインダウンロード、読書統計、端末間の同期により、漫画を探す・読む・更新を追う操作を使いやすくしています。
 
 Venera の JavaScript 拡張、ローカル読書、検索とカテゴリー、お気に入り、ダウンロードに加え、ソースが提供するログイン・コメント・評価も引き続き利用できます。
 
-アプリの画面は簡体字中国語、繁体字中国語、英語、ドイツ語、日本語に対応します。**「設定 → アプリ → 言語」**で選択できます。プロジェクトのデフォルト README は引き続き中国語です。ドイツ語と日本語は開発版で追加した機能で、次の安定版リリースから利用できます。
+アプリの画面は簡体字中国語、繁体字中国語、英語、ドイツ語、日本語に対応します。**「設定 → アプリ → 言語」**で選択できます。プロジェクトのデフォルト README は引き続き中国語です。ドイツ語と日本語は `v1.18.5` から安定版に含まれます。
 
 **クイックリンク：** [インストール](#download-and-installation) · [使い方](#usage-guide) · [ソースの作成](doc/api/comic_source.en.md) · [JavaScript API](doc/api/js.en.md) · [変更履歴](CHANGELOG.md)
 
@@ -176,15 +176,16 @@ winget upgrade --id CyrilPeng.VeneraNext --exact
 インストーラー、ポータブル版、winget の詳細は [Windows の配布](doc/distribution/windows.en.md)（英語）を参照してください。
 
 <a id="harmonyos-beta"></a>
-### 3.4 HarmonyOS（ベータ版）
+<a id="harmonyos"></a>
+### 3.4 HarmonyOS
 
-[HarmonyOS ベータ版ワークフロー](https://github.com/CyrilPeng/Venera-Next/actions/workflows/harmonyos-release.yml)の成功した実行から `harmonyos-release` アーティファクトをダウンロードしてください。`v1.18.4` 以降、未署名の HarmonyOS ベータ版は独立して配布し、通常の安定版リリースには HAP を含めません。過去のリリース添付ファイルは引き続き利用できます。
+[最新の安定版リリース](https://github.com/CyrilPeng/Venera-Next/releases/latest)の Assets から HarmonyOS パッケージをダウンロードしてください。`v1.18.5` から、他のプラットフォームと同じバージョンを Releases で公開します。公開添付ファイルは GitHub にログインせずに直接ダウンロードできます。
 
 | ファイル | 説明 | 対象端末 |
 |---|---|---|
-| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | 未署名 ARM64 ベータ版 | API 26 の要件を満たす HarmonyOS スマートフォン・タブレット |
+| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | 未署名 ARM64 パッケージ | API 26 の要件を満たす HarmonyOS スマートフォン・タブレット |
 
-同じ実行のマニフェスト、ソースのコミット、SHA-256 を確認してから、自分で署名してサイドロードしてください。更新時には元の署名鍵を使い、アンインストールやデータ消去は行わないでください。HarmonyOS 実機での受け入れ確認はまだ完了していません。手順と制限は [HarmonyOS ベータ版のインストールガイド](doc/distribution/harmonyos-reader.en.md)（英語）を参照してください。
+同じリリースの `harmonyos-manifest.json` と `harmonyos-SHA256SUMS` を確認してから、自分で署名してサイドロードしてください。アプリ内の更新確認は、対応する HAP を含むリリースを開きます。更新時には元の署名鍵を使ってください。手順と既知の制限は [HarmonyOS のインストールガイド](doc/distribution/harmonyos-reader.en.md)（英語）を参照してください。
 
 <a id="linux"></a>
 ### 3.5 Linux
@@ -360,7 +361,7 @@ CBZ のエクスポート、スキャンによるダウンロードの復元、�
 ## 8. 開発者向け情報
 
 - [ビルドと開発](doc/development/build.en.md)：Flutter/Rust、固定された依存関係、テスト、リリース（英語）。
-- [HarmonyOS の独立ベータビルド](doc/development/harmonyos_releases.en.md)：正確な主ブランチのソース、独立 SDK、未署名 HAP、実機での受け入れ確認（英語）。
+- [HarmonyOS のビルドとリリース](doc/development/harmonyos_releases.en.md)：他のプラットフォームと同じソース、独立 SDK、未署名 HAP、任意の実機レポート（英語）。
 - [貢献ガイド](CONTRIBUTING.en.md) · [依存関係の管理](doc/development/dependencies.en.md)（英語）。
 - [Windows の配布](doc/distribution/windows.en.md) · [ヘッドレスモード](doc/user/headless.en.md)（英語）。
 - [セキュリティ方針](SECURITY.md) · [行動規範](CODE_OF_CONDUCT.md) · [ドキュメント一覧](doc/README.en.md)。詳細資料は現在、中国語または英語で提供しています。
