@@ -1,9 +1,21 @@
 {
   "schemaVersion": 2,
-  "sponsors": [],
+  "sponsors": [
+    {
+      "name": "xrh0905",
+      "tier": 30,
+      "kind": "monthly"
+    }
+  ],
   "sections": {
     "featured": [],
-    "current": [],
+    "current": [
+      {
+        "name": "xrh0905",
+        "tier": 30,
+        "kind": "monthly"
+      }
+    ],
     "historical": []
   }
 }

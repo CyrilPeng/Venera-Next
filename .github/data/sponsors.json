@@ -1,4 +1,13 @@
 {
   "schemaVersion": 1,
-  "sponsors": []
+  "sponsors": [
+    {
+      "name": "xrh0905",
+      "tier": 30,
+      "status": "active",
+      "kind": "monthly",
+      "startedAt": "2026-11-25",
+      "monthlyAmount": 30
+    }
+  ]
 }
