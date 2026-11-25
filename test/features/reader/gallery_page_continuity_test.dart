@@ -9,12 +9,98 @@ import 'package:photo_view/src/photo_view_wrappers.dart';
 import 'package:venera_next/features/reader/display_image_provider.dart';
 import 'package:venera_next/features/reader/gallery_data.dart';
 import 'package:venera_next/features/reader/gallery_view.dart';
+import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/page_layout.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
 import 'package:venera_next/foundation/image_work.dart';
+import 'package:venera_next/foundation/image_provider/reader_image.dart';
 
 void main() {
+  for (final direction in ['ltr', 'rtl', 'vertical']) {
+    testWidgets('accepted $direction target decodes before it is mounted', (
+      tester,
+    ) async {
+      final fixture = _Fixture(direction, preloadCount: 1, pageCount: 4);
+      try {
+        await fixture.mount(tester);
+        final target = ReaderImageProvider(
+          fixture.data.images[2],
+          null,
+          'continuity',
+          'one',
+          1,
+        );
+        final cache = PaintingBinding.instance.imageCache;
+        expect(cache.statusForKey(target).keepAlive, isFalse);
+        expect(fixture.navigation.toPage(3), isTrue);
+        await tester.pump();
+        expect(fixture.navigation.state.page, 1);
+        expect(fixture.gallery.controller.page, closeTo(2, .001));
+        expect(fixture.wrapper(3), findsNothing);
+        await fixture.decode(
+          tester,
+          () => cache.statusForKey(target).keepAlive,
+        );
+        expect(fixture.wrapper(3), findsNothing);
+        await tester.pumpAndSettle();
+        expect(fixture.navigation.state.page, 3);
+        expect(fixture.paintedImage(3)?.image, isNotNull);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await fixture.dispose(tester);
+      }
+    });
+  }
+
+  for (final forward in [true, false]) {
+    testWidgets(
+      'half-page drag release continues without a position jump: $forward',
+      (tester) async {
+        final fixture = _Fixture('ltr');
+        try {
+          await fixture.mount(tester);
+          if (!forward) await fixture.turnWithoutDiscardingFrame(tester, 2);
+          final initial = fixture.gallery.controller.position.pixels;
+          final gesture = await tester.startGesture(
+            tester.getCenter(find.byType(ReaderGalleryView)),
+          );
+          // The first movement resolves the PageView/PhotoView gesture arena.
+          await gesture.moveBy(Offset(forward ? -24 : 24, 0));
+          await tester.pump(const Duration(milliseconds: 20));
+          await gesture.moveBy(
+            Offset((forward ? -1 : 1) * fixture.size.width * .55, 0),
+          );
+          await tester.pump(const Duration(milliseconds: 120));
+          final dragged = fixture.gallery.controller.position.pixels;
+          expect(
+            (dragged - initial).abs(),
+            greaterThan(fixture.size.width * .4),
+          );
+          await gesture.up();
+          expect(
+            fixture.gallery.controller.position.pixels,
+            closeTo(dragged, .5),
+          );
+          await tester.pump(const Duration(milliseconds: 8));
+          expect(
+            (fixture.gallery.controller.position.pixels - dragged).abs(),
+            lessThan(fixture.size.width / 4),
+          );
+          await fixture.decode(
+            tester,
+            () => fixture.paintedImage(forward ? 2 : 1)?.image != null,
+          );
+          await tester.pumpAndSettle();
+          expect(fixture.navigation.state.page, forward ? 2 : 1);
+          expect(tester.takeException(), isNull);
+        } finally {
+          await fixture.dispose(tester);
+        }
+      },
+    );
+  }
+
   testWidgets(
     'unchanged gallery preloads are shared and resume after exit holds',
     (tester) async {
@@ -36,10 +122,28 @@ void main() {
           await tester.pump();
         }
         expect(starts, before);
+        final neighbour = ReaderImageProvider(
+          fixture.data.images[1],
+          null,
+          'continuity',
+          'one',
+          1,
+        );
+        final cache = PaintingBinding.instance.imageCache;
+        await fixture.decode(
+          tester,
+          () => cache.statusForKey(neighbour).keepAlive,
+        );
+        expect(cache.evict(neighbour, includeLive: false), isTrue);
         final release = fixture.work.holdForExit();
         fixture.gallery.cache(1);
         release();
-        await fixture.decode(tester, () => fixture.gallery.autoReadingReady);
+        await fixture.decode(
+          tester,
+          () =>
+              fixture.gallery.autoReadingReady &&
+              cache.statusForKey(neighbour).keepAlive,
+        );
         for (var i = 0; i < 12; i++) {
           await tester.runAsync(() => pumpEventQueue());
           await tester.pump();
@@ -58,6 +162,50 @@ void main() {
   );
 
   for (final direction in ['ltr', 'rtl', 'vertical']) {
+    for (final imagesPerPage in [1, 2]) {
+      testWidgets(
+        'rapid $direction handoff settles and reports selection with $imagesPerPage images',
+        (tester) async {
+          final fixture = _Fixture(direction, imagesPerPage: imagesPerPage);
+          try {
+            await fixture.mount(tester);
+            for (final target in [2, 1, 2, 1]) {
+              fixture.reports.clear();
+              fixture.progressUpdates = 0;
+              expect(fixture.navigation.toPage(target), isTrue);
+              await tester.pump();
+              await tester.pump(const Duration(milliseconds: 16));
+              expect(fixture.navigation.state.isAnimating, isTrue);
+              expect(fixture.navigation.toPage(target), isTrue);
+              expect(fixture.navigation.state.pendingPage, isNull);
+              expect(fixture.navigation.state.page, target);
+              expect(fixture.gallery.controller.page, closeTo(target, .001));
+              await fixture.decode(
+                tester,
+                () => List.generate(
+                  imagesPerPage,
+                  (offset) =>
+                      fixture
+                          .paintedImage(
+                            (target - 1) * imagesPerPage + offset + 1,
+                          )
+                          ?.image !=
+                      null,
+                ).every((ready) => ready),
+              );
+              await tester.pumpAndSettle();
+              expect(fixture.navigation.state.page, target);
+              expect(fixture.gallery.controller.page, closeTo(target, .001));
+              expect(fixture.reports, contains((false, true)));
+              expect(fixture.progressUpdates, 1);
+            }
+            expect(tester.takeException(), isNull);
+          } finally {
+            await fixture.dispose(tester);
+          }
+        },
+      );
+    }
     testWidgets(
       'interrupted $direction turn resets the retained page in place',
       (tester) async {
@@ -129,9 +277,18 @@ void main() {
 }
 
 class _Fixture {
-  _Fixture(this.direction, {this.preloadCount = 0});
+  _Fixture(
+    this.direction, {
+    this.preloadCount = 0,
+    this.imagesPerPage = 1,
+    this.pageCount = 2,
+  });
   final String direction;
   final int preloadCount;
+  final int imagesPerPage;
+  final int pageCount;
+  int progressUpdates = 0;
+  final reports = <(bool, bool)>[];
   final directory = Directory.systemTemp.createTempSync('gallery-continuity-');
   final work = ImageWork();
   final viewport = ReaderViewportBinding();
@@ -145,17 +302,21 @@ class _Fixture {
     animationEnabled: () => true,
     viewport: () => viewport.current,
     onChanged: () {},
-    onPageChanged: () {},
+    onPageChanged: () => progressUpdates++,
     onError: (error, stack) => fail('$error\n$stack'),
   );
   GalleryModeState get gallery => key.currentState!;
 
   Finder wrapper(int page) => find.byWidgetPredicate(
     (widget) =>
-        widget is ImageWrapper &&
-        widget.imageProvider is ReaderDisplayImageProvider &&
-        (widget.imageProvider as ReaderDisplayImageProvider).imageKey ==
-            data.images[page - 1],
+        (widget is ImageWrapper &&
+            widget.imageProvider is ReaderDisplayImageProvider &&
+            (widget.imageProvider as ReaderDisplayImageProvider).imageKey ==
+                data.images[page - 1]) ||
+        (widget is ComicImage &&
+            widget.image is ReaderDisplayImageProvider &&
+            (widget.image as ReaderDisplayImageProvider).imageKey ==
+                data.images[page - 1]),
   );
 
   RawImage? paintedImage(int page) {
@@ -178,7 +339,7 @@ class _Fixture {
 
   Future<void> mount(WidgetTester tester) async {
     final images = <String>[];
-    for (var page = 1; page <= 2; page++) {
+    for (var page = 1; page <= pageCount * imagesPerPage; page++) {
       final pixels = img.Image(width: 60, height: 90)
         ..clear(
           page == 1 ? img.ColorRgb8(30, 100, 180) : img.ColorRgb8(180, 60, 30),
@@ -190,8 +351,8 @@ class _Fixture {
     navigation.replaceChapterImages(images);
     data = ReaderGalleryData(
       content: navigation.content,
-      layout: const ReaderPageLayout(
-        imagesPerPage: 1,
+      layout: ReaderPageLayout(
+        imagesPerPage: imagesPerPage,
         singleImageOnFirstPage: false,
       ),
       vertical: direction == 'vertical',
@@ -223,7 +384,8 @@ class _Fixture {
             navigation: navigation,
             onViewportChanged: viewport.update,
             onReady: () {},
-            onPageReported: (_, _) {},
+            onPageReported: (comments, refresh) =>
+                reports.add((comments, refresh)),
             onChapterChanged: () {},
             onCollectImage: () {},
             readerSize: () => size,

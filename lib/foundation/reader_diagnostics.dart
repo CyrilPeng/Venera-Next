@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer' show Timeline;
 import 'dart:math' as math;
+import 'dart:ui' show FramePhase;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
@@ -21,6 +22,16 @@ enum ReaderDiagnosticStage {
 
 enum ReaderDiagnosticStop { timeout, review, background, interrupted, disposed }
 
+enum ReaderDiagnosticNavigation {
+  volumePrevious,
+  volumeNext,
+  animationStart,
+  animationEnd,
+  jumpToPage,
+  pageSelected,
+  viewport,
+}
+
 /// An opt-in, in-memory capture. Its input API accepts no private text.
 /// Durations are elapsed waits, not CPU time or proof of UI-thread blocking.
 class ReaderDiagnostics extends ChangeNotifier {
@@ -31,7 +42,13 @@ class ReaderDiagnostics extends ChangeNotifier {
     this.maxEvents = 480,
     this.maxFrames = 6000,
     this.maxImages = 256,
-  }) : assert(maxEvents > 0 && maxFrames > 0 && maxImages > 0),
+    this.maxNavigationEvents = 480,
+  }) : assert(
+         maxEvents > 0 &&
+             maxFrames > 0 &&
+             maxImages > 0 &&
+             maxNavigationEvents > 0,
+       ),
        _nowMicros = nowMicros ?? (() => Timeline.now),
        _attachTimings =
            attachTimings ??
@@ -44,15 +61,25 @@ class ReaderDiagnostics extends ChangeNotifier {
 
   static const captureDuration = Duration(seconds: 45);
   static const maxReportCharacters = 60000;
-  final int maxEvents, maxFrames, maxImages;
+  static const frameSampleColumns = [
+    'receivedAtUs',
+    'uiUs',
+    'rasterUs',
+    'totalSpanUs',
+    'vsyncStartUs',
+    'buildStartUs',
+  ];
+  final int maxEvents, maxFrames, maxImages, maxNavigationEvents;
   final int Function() _nowMicros;
   final void Function(TimingsCallback) _attachTimings, _detachTimings;
   final _events = ListQueue<Map<String, Object>>();
   final _frames = ListQueue<List<int>>();
+  final _navigationEvents = ListQueue<Map<String, Object>>();
   final _imageIds = <int, int>{};
   Timer? _timer;
   int _generation = 0, _startedAt = 0, _duration = 0;
   int _droppedEvents = 0, _droppedFrames = 0, _ignoredImages = 0;
+  int _droppedNavigationEvents = 0;
   int _inFlight = 0, _inFlightAtStop = 0;
   bool _recording = false, _hasCapture = false, _disposed = false;
   double _frameBudgetUs = 1000000 / 60;
@@ -63,6 +90,7 @@ class ReaderDiagnostics extends ChangeNotifier {
 
   bool get isRecording => _recording;
   bool get hasCapture => _hasCapture;
+  int? get captureGeneration => _recording ? _generation : null;
   int get _elapsed => math.max(0, _nowMicros() - _startedAt);
 
   void _notifyChanged() {
@@ -88,6 +116,8 @@ class ReaderDiagnostics extends ChangeNotifier {
   static Map<String, int> _cacheSnapshot() {
     final cache = PaintingBinding.instance.imageCache;
     return {
+      'maximumBytes': cache.maximumSizeBytes,
+      'maximumImages': cache.maximumSize,
       'decodedBytes': cache.currentSizeBytes,
       'keepAliveImages': cache.currentSize,
       'liveImages': cache.liveImageCount,
@@ -154,9 +184,11 @@ class ReaderDiagnostics extends ChangeNotifier {
     _hasCapture = false;
     _events.clear();
     _frames.clear();
+    _navigationEvents.clear();
     _imageIds.clear();
     _droppedEvents = _droppedFrames = _ignoredImages = _inFlight =
         _inFlightAtStop = 0;
+    _droppedNavigationEvents = 0;
     _duration = 0;
     _stopReason = null;
     _configuration = {};
@@ -213,18 +245,65 @@ class ReaderDiagnostics extends ChangeNotifier {
     _events.add(event);
   }
 
+  void recordNavigation(
+    ReaderDiagnosticNavigation event, {
+    required int page,
+    int? targetPage,
+    int? chapter,
+    double? viewportPage,
+    bool? scrolling,
+  }) {
+    if (!_acceptSample()) return;
+    if (_navigationEvents.length == maxNavigationEvents) {
+      _navigationEvents.removeFirst();
+      _droppedNavigationEvents++;
+    }
+    _navigationEvents.add({
+      'atUs': _elapsed,
+      'event': event.name,
+      'page': page,
+      'targetPage': ?targetPage,
+      'chapter': ?chapter,
+      if (viewportPage != null && viewportPage.isFinite)
+        'viewportPage': viewportPage,
+      'scrolling': ?scrolling,
+    });
+  }
+
+  /// Pair animation completion with the capture in which it began. An old
+  /// Future must not append an end marker to a replacement capture.
+  ReaderDiagnosticPageTurn? beginPageTurn({
+    required int page,
+    required int targetPage,
+    required int chapter,
+    double? viewportPage,
+  }) {
+    if (!_acceptSample()) return null;
+    recordNavigation(
+      ReaderDiagnosticNavigation.animationStart,
+      page: page,
+      targetPage: targetPage,
+      chapter: chapter,
+      viewportPage: viewportPage,
+    );
+    return ReaderDiagnosticPageTurn._(this, _generation, targetPage, chapter);
+  }
+
   void _recordFrames(List<FrameTiming> timings) {
     if (!_acceptSample()) return;
+    final receivedAt = _elapsed;
     for (final frame in timings) {
       if (_frames.length == maxFrames) {
         _frames.removeFirst();
         _droppedFrames++;
       }
       _frames.add([
-        _elapsed,
+        receivedAt,
         frame.buildDuration.inMicroseconds,
         frame.rasterDuration.inMicroseconds,
         frame.totalSpan.inMicroseconds,
+        frame.timestampInMicroseconds(FramePhase.vsyncStart) - _startedAt,
+        frame.timestampInMicroseconds(FramePhase.buildStart) - _startedAt,
       ]);
     }
   }
@@ -240,7 +319,9 @@ class ReaderDiagnostics extends ChangeNotifier {
     };
   }
 
-  String exportJson() {
+  /// Preview/copy is bounded for issue comments. Explicit file export retains
+  /// every sample still in the bounded capture buffers and does not prune them.
+  String exportJson({bool complete = false}) {
     final slow =
         _frames
             .where(
@@ -251,12 +332,14 @@ class ReaderDiagnostics extends ChangeNotifier {
             (a, b) => math.max(b[1], b[2]).compareTo(math.max(a[1], a[2])),
           );
     final events = _events.toList();
+    final frameSamples = _frames.toList();
+    final navigationEvents = _navigationEvents.toList();
     final data = <String, Object?>{
-      'schema': 1,
+      'schema': 3,
       'privacy':
           'No comic content, titles, paths, URLs, accounts, scripts, or error text.',
       'measurement':
-          'Elapsed waits are not CPU time or UI-thread blocking. Source reads include encoded cache and source callbacks. Processing wait measures only custom image processing. Frame samples are not measured FPS.',
+          'Elapsed waits are not CPU time or UI-thread blocking. Source reads include encoded cache and source callbacks. Processing wait measures only custom image processing. Frame samples are not measured FPS. receivedAtUs is the batched callback receipt time, not the frame time. vsyncStartUs and buildStartUs are engine timestamps relative to capture start; negative values precede capture.',
       'configuration': _configuration,
       'durationUs': _recording ? _elapsed : _duration,
       'stopReason': _stopReason?.name,
@@ -265,13 +348,19 @@ class ReaderDiagnostics extends ChangeNotifier {
         'events': maxEvents,
         'frames': maxFrames,
         'images': maxImages,
+        'navigationEvents': maxNavigationEvents,
         'reportCharacters': maxReportCharacters,
       },
       'droppedEvents': _droppedEvents,
       'droppedFrames': _droppedFrames,
+      'droppedNavigationEvents': _droppedNavigationEvents,
       'ignoredImageLookups': _ignoredImages,
       'retainedEventCount': _events.length,
       'omittedEventsForCopy': 0,
+      'retainedFrameCount': _frames.length,
+      'omittedFrameSamplesForCopy': 0,
+      'retainedNavigationEventCount': _navigationEvents.length,
+      'omittedNavigationEventsForCopy': 0,
       'inFlightStagesAtStop': _inFlightAtStop,
       'globalImageCacheBefore': _cacheBefore,
       'globalImageCacheAfter': _cacheAfter,
@@ -281,8 +370,11 @@ class ReaderDiagnostics extends ChangeNotifier {
         'frameBudgetUs': _frameBudgetUs.round(),
         'overBudget': slow.length,
         'slowest': slow.take(40).toList(),
-        'slowestColumns': ['receivedAtUs', 'uiUs', 'rasterUs', 'totalSpanUs'],
+        'slowestColumns': frameSampleColumns,
       },
+      'frameSamples': frameSamples,
+      'frameSampleColumns': frameSampleColumns,
+      'navigationEvents': navigationEvents,
       'retainedStageSamples': {
         for (final stage in ReaderDiagnosticStage.values)
           stage.name: _summary(
@@ -293,19 +385,47 @@ class ReaderDiagnostics extends ChangeNotifier {
       },
       'imageEvents': events,
     };
-    var omitted = 0;
+    var omitted = 0, omittedFrames = 0, omittedNavigation = 0;
+    const encoder = JsonEncoder.withIndent('  ');
     while (true) {
       data['omittedEventsForCopy'] = omitted;
-      final report = const JsonEncoder.withIndent('  ').convert(data);
-      if (report.length <= maxReportCharacters || events.isEmpty) return report;
-      // Keep copies within an issue comment; preserve the newest event details.
-      final remove = math.max(
-        1,
-        ((report.length - maxReportCharacters) * events.length / report.length)
-            .ceil(),
+      data['omittedFrameSamplesForCopy'] = omittedFrames;
+      data['omittedNavigationEventsForCopy'] = omittedNavigation;
+      final report = encoder.convert(data);
+      if (complete || report.length <= maxReportCharacters) return report;
+      // Trim the largest detail buffer first, preserving newest samples and
+      // complete summaries. Explicit file export takes the branch above.
+      final sizes = [
+        encoder.convert(events).length,
+        encoder.convert(frameSamples).length,
+        encoder.convert(navigationEvents).length,
+      ];
+      final largest = sizes.indexOf(sizes.reduce(math.max));
+      final List<Object> samples = switch (largest) {
+        0 => events,
+        1 => frameSamples,
+        _ => navigationEvents,
+      };
+      if (samples.isEmpty) return report;
+      final remove = math.min(
+        samples.length,
+        math.max(
+          1,
+          ((report.length - maxReportCharacters) *
+                  samples.length /
+                  sizes[largest])
+              .ceil(),
+        ),
       );
-      events.removeRange(0, remove);
-      omitted += remove;
+      samples.removeRange(0, remove);
+      switch (largest) {
+        case 0:
+          omitted += remove;
+        case 1:
+          omittedFrames += remove;
+        case 2:
+          omittedNavigation += remove;
+      }
     }
   }
 
@@ -315,6 +435,32 @@ class ReaderDiagnostics extends ChangeNotifier {
     stop(ReaderDiagnosticStop.disposed);
     clear(notify: false);
     super.dispose();
+  }
+}
+
+class ReaderDiagnosticPageTurn {
+  ReaderDiagnosticPageTurn._(
+    this._owner,
+    this._generation,
+    this._targetPage,
+    this._chapter,
+  );
+  final ReaderDiagnostics _owner;
+  final int _generation, _targetPage, _chapter;
+  bool _finished = false;
+
+  void finish({required int page, double? viewportPage, bool? scrolling}) {
+    if (_finished) return;
+    _finished = true;
+    if (_generation != _owner._generation) return;
+    _owner.recordNavigation(
+      ReaderDiagnosticNavigation.animationEnd,
+      page: page,
+      targetPage: _targetPage,
+      chapter: _chapter,
+      viewportPage: viewportPage,
+      scrolling: scrolling,
+    );
   }
 }
 

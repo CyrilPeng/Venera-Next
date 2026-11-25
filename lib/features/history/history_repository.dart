@@ -115,6 +115,34 @@ class HistoryRepository {
     return historyFromRow(res.first);
   }
 
+  /// Read only completion coordinates in bounded batches, preserving typed
+  /// identities even in legacy tables with several sources sharing an id.
+  Set<(String, int)> completedAmong(Iterable<(String, int)> identities) {
+    final requested = identities.toSet();
+    final ids = requested.map((key) => key.$1).toSet().toList();
+    final completed = <(String, int)>{};
+    const batchSize = 400;
+    for (var start = 0; start < ids.length; start += batchSize) {
+      final batch = ids.skip(start).take(batchSize).toList();
+      final rows = db.select(
+        'select id, type, page, max_page from $_table '
+        'where id in (${List.filled(batch.length, '?').join(',')});',
+        batch,
+      );
+      final seen = <(String, int)>{};
+      for (final row in rows) {
+        final key = (row['id'] as String, row['type'] as int);
+        if (requested.contains(key) &&
+            seen.add(key) &&
+            row['max_page'] != null &&
+            row['page'] == row['max_page']) {
+          completed.add(key);
+        }
+      }
+    }
+    return completed;
+  }
+
   void deleteWhere(bool Function(String id, int type) shouldDelete) =>
       runSqliteTransaction(db, () {
         final idAndTypes = db.select("""

@@ -4,24 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
 
 void main() {
-  test('a completed replacement releases an unfinished animation', () async {
-    final controller = _Controller();
-    final reader = _navigation(controller);
-    reader.toPage(150);
-    reader.toPage(200);
-    controller.animations[1].complete();
-    await pumpEventQueue();
-    expect(reader.state.isAnimating, isFalse);
-    reader.toPage(250);
-    controller.animations[0].complete();
-    await pumpEventQueue();
-    expect(reader.state.isAnimating, isTrue);
-    controller.animations[2].complete();
-    await pumpEventQueue();
-    expect(reader.state.isAnimating, isFalse);
-    reader.dispose();
-  });
-
   test(
     'direct navigation cancels animation state and preserves destination',
     () async {

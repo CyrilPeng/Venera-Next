@@ -12,7 +12,7 @@
       "packages": {
         "flutter_qjs": "."
       },
-      "audit": "doc/development/remaining_git_audit_20261106.json",
+      "audit": "doc/development/dependency_audit.zh.md",
       "official_review": {
         "stable_version": "0.3.7",
         "commit": "12a393bd22529753935705b2a8f5db636e93d37f",
@@ -42,7 +42,7 @@
         "flutter_inappwebview_platform_interface": "flutter_inappwebview_platform_interface",
         "flutter_inappwebview_web": "flutter_inappwebview_web"
       },
-      "audit": "doc/development/remaining_git_audit_20261106.json",
+      "audit": "doc/development/dependency_audit.zh.md",
       "upstream": "https://github.com/pichillilorenzo/flutter_inappwebview",
       "official_review": {
         "stable_version": "6.1.5",

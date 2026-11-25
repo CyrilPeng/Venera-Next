@@ -32,8 +32,12 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE_PATH = ROOT / ".github" / "data" / "sponsors.json"
 JSON_OUTPUT_PATH = ROOT / "sponsors.json"
 MARKDOWN_OUTPUT_PATH = ROOT / "SPONSORS.md"
-README_PATH = ROOT / "README.md"
-README_EN_PATH = ROOT / "README.en.md"
+README_LABELS = {
+    ROOT / "README.md": "置顶赞助",
+    ROOT / "README.en.md": "Featured sponsors",
+    ROOT / "README.de.md": "Hervorgehobene Sponsoren",
+    ROOT / "README.ja.md": "注目のスポンサー",
+}
 
 README_START = "<!-- featured-sponsors:start -->"
 README_END = "<!-- featured-sponsors:end -->"
@@ -406,18 +410,15 @@ def replace_marked_block(content: str, replacement: str) -> str:
 
 def generated_outputs() -> dict[Path, str]:
     sections = build_sections(load_source())
-    readme = replace_marked_block(
-        _read_text(README_PATH), render_readme_featured(sections)
-    )
-    readme_en = replace_marked_block(
-        _read_text(README_EN_PATH),
-        render_readme_featured(sections, "Featured sponsors"),
-    )
     return {
         JSON_OUTPUT_PATH: render_public_json(sections),
         MARKDOWN_OUTPUT_PATH: render_sponsors_markdown(sections),
-        README_PATH: readme,
-        README_EN_PATH: readme_en,
+        **{
+            path: replace_marked_block(
+                _read_text(path), render_readme_featured(sections, label)
+            )
+            for path, label in README_LABELS.items()
+        },
     }
 
 

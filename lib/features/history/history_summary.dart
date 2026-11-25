@@ -26,6 +26,7 @@ class HistorySummary extends StatefulWidget {
 }
 
 class _HistorySummaryState extends State<HistorySummary> {
+  final _heroIds = ComicCoverHeroIds();
   late Listenable _changes;
   List<History> _history = const [];
   int _count = 0;
@@ -53,6 +54,7 @@ class _HistorySummaryState extends State<HistorySummary> {
     final recent = owner.getRecent();
     final count = owner.count();
     _history = recent;
+    _heroIds.retain(recent);
     _count = count;
   }
 
@@ -114,18 +116,19 @@ class _HistorySummaryState extends State<HistorySummary> {
                     scrollDirection: Axis.horizontal,
                     itemCount: history.length,
                     itemBuilder: (context, index) {
-                      final heroID = history[index].id.hashCode;
+                      final comic = history[index];
+                      final heroID = _heroIds.forComic(comic);
                       return SimpleComicTile(
-                        comic: history[index],
+                        comic: comic,
                         heroID: heroID,
                         gaplessPlayback: true,
                         onTap: () {
                           context.to(
                             () => ComicPage(
-                              id: history[index].id,
-                              sourceKey: history[index].type.sourceKey,
-                              cover: history[index].cover,
-                              title: history[index].title,
+                              id: comic.id,
+                              sourceKey: comic.sourceKey,
+                              cover: comic.cover,
+                              title: comic.title,
                               heroID: heroID,
                             ),
                           );

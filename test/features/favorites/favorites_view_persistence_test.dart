@@ -157,6 +157,70 @@ void main() {
 
   for (final size in [const Size(375, 800), const Size(1024, 600)]) {
     testWidgets(
+      'folder switches keep pane bounds stable during saves at width ${size.width}',
+      (tester) async {
+        final root = await _prepare(tester);
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(_host(const FavoritesPage()));
+        await _saveFolderSelection(tester, 'A');
+        await tester.pumpAndSettle();
+        final bounds = _favoritesPaneBounds(tester);
+        final sidebarState = tester.state(find.byType(FavoritesFolderSidebar));
+        final owner = tester.state<SettingsSaveState>(
+          find.byType(FavoritesPage),
+        );
+        final select = tester
+            .widget<FavoritesFolderSidebar>(find.byType(FavoritesFolderSidebar))
+            .onFolderSelected;
+        final release = Completer<void>();
+        final exclusive = AppDataOperations.instance.run(() => release.future);
+        addTearDown(() async {
+          if (!release.isCompleted) release.complete();
+          await _flush(
+            tester,
+            Future.wait([exclusive, owner.waitForSettingsSave()]),
+          );
+        });
+
+        select(false, 'B');
+        await tester.pump();
+        expect(owner.savingSettings, isTrue);
+        expect(_visibleFolder(tester), 'B');
+        expect(_favoritesPaneBounds(tester), bounds);
+        await tester.pump(const Duration(milliseconds: 401));
+        expect(
+          _favoritesPaneBounds(tester),
+          bounds,
+          reason: 'A delayed preference save must not move either pane',
+        );
+
+        select(false, 'A');
+        select(false, 'B');
+        await tester.pump();
+        expect(_favoritesPaneBounds(tester), bounds);
+        expect(
+          tester.state(find.byType(FavoritesFolderSidebar)),
+          same(sidebarState),
+        );
+        release.complete();
+        await _flush(
+          tester,
+          Future.wait([exclusive, owner.waitForSettingsSave()]),
+        );
+        await tester.pumpAndSettle();
+        expect(_favoritesPaneBounds(tester), bounds);
+        expect(_saved(root)['favoriteFolder'], {
+          'name': 'B',
+          'isNetwork': false,
+        });
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
       'nested app back returns to the real parent and persists at width ${size.width}',
       (tester) async {
         final root = await _prepare(tester);
@@ -489,6 +553,49 @@ void main() {
     }
   }
 
+  testWidgets(
+    'folder selection save failure retains the original selection for retry',
+    (tester) async {
+      final root = await _prepare(tester);
+      await tester.pumpWidget(_host(const FavoritesPage()));
+      await _saveFolderSelection(tester, 'A');
+      await tester.pumpAndSettle();
+      final blocked = Directory('${root.path}/implicitData.json.tmp')
+        ..createSync();
+      addTearDown(() {
+        if (blocked.existsSync()) blocked.deleteSync();
+      });
+      final owner = tester.state<SettingsSaveState>(find.byType(FavoritesPage));
+      tester
+          .widget<FavoritesFolderSidebar>(find.byType(FavoritesFolderSidebar))
+          .onFolderSelected(false, 'B');
+      await tester.pump();
+      Object? failure;
+      await _flush(
+        tester,
+        owner.waitForSettingsSave().catchError((Object error) {
+          failure = error;
+        }),
+      );
+      await tester.pumpAndSettle();
+      expect(failure, isA<FileSystemException>());
+      expect(owner.hasSettingsSaveError, isTrue);
+      expect(_visibleFolder(tester), 'B');
+      expect(_saved(root)['favoriteFolder'], {'name': 'A', 'isNetwork': false});
+      expect(find.widgetWithText(TextButton, 'Retry'), findsOneWidget);
+
+      blocked.deleteSync();
+      await tester.tap(find.widgetWithText(TextButton, 'Retry'));
+      await tester.pump();
+      await _flush(tester, owner.waitForSettingsSave());
+      await tester.pumpAndSettle();
+      expect(owner.hasSettingsSaveError, isFalse);
+      expect(find.widgetWithText(TextButton, 'Retry'), findsNothing);
+      expect(_saved(root)['favoriteFolder'], {'name': 'B', 'isNetwork': false});
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('All selection survives restart without real folders', (
     tester,
   ) async {
@@ -786,6 +893,11 @@ void main() {
 
 String _visibleFolder(WidgetTester tester) =>
     tester.widget<LocalFavoritesPage>(find.byType(LocalFavoritesPage)).folder;
+
+(Rect, Rect) _favoritesPaneBounds(WidgetTester tester) => (
+  tester.getRect(find.byType(LocalFavoritesPage)),
+  tester.getRect(find.byType(FavoritesFolderSidebar)),
+);
 
 Future<void> _createChildForNavigation(WidgetTester tester) => tester.runAsync(
   () async {

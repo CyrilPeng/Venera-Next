@@ -2,7 +2,7 @@
 
 中文：[漫画源与源仓库](source_repositories.zh.md)
 
-This guide describes the unified import, multiple repositories, and background tasks on the current main branch. They remain [unreleased in CHANGELOG](../../CHANGELOG.md#未发布). Version 1.16.0 uses the earlier script URL/file import and single-catalog entry points, without this unified preview interface.
+Unified import, multiple repositories and background installation tasks shipped in v1.17.0. This guide describes the current workflow; use versioned documentation for v1.16.0 and earlier interfaces.
 
 The Comic Source page has two tabs: **Installed** and **Source repositories**. A source is a script that connects the reader to a comic service. A repository is a catalog of source scripts. You can save multiple repositories.
 

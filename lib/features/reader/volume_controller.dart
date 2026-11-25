@@ -27,6 +27,7 @@ class ReaderVolumeController {
     required this.nextChapter,
     required this.previousChapter,
     required this.onError,
+    this.onInput,
   });
 
   final ReaderVolumeConnection Function(void Function(Object?) onEvent) connect;
@@ -35,6 +36,7 @@ class ReaderVolumeController {
   final void Function() nextChapter;
   final void Function() previousChapter;
   final void Function(Object, StackTrace) onError;
+  final void Function(bool forward)? onInput;
   ReaderVolumeConnection? _connection;
   Future<void> _queue = Future.value();
   Future<void>? _closing;
@@ -98,8 +100,10 @@ class ReaderVolumeController {
       if (!_ready || !_isCurrent(generation)) return;
       try {
         if (event == 1) {
+          onInput?.call(false);
           if (!previousPage()) previousChapter();
         } else if (event == 2) {
+          onInput?.call(true);
           if (!nextPage()) nextChapter();
         }
       } catch (error, stack) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_profile.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/reader_preferences.dart';
 import 'reader_page.dart';
 import 'scaffold.dart';
 import 'shell_data.dart';
@@ -22,6 +23,8 @@ class ReaderShellHost extends StatelessWidget {
       onRemoteKey: reader.onTvKeyEvent,
       onCancelRemoteKeys: () =>
           reader.imageViewController?.cancelKeyboardInput(),
+      readBrightnessSettings: reader.readBrightnessSettings,
+      brightnessChanges: appdata.settings,
       data: ReaderShellData(
         comicId: reader.cid,
         sourceKey: reader.type.sourceKey,
@@ -35,7 +38,10 @@ class ReaderShellHost extends StatelessWidget {
         animating: reader.isPageAnimating,
         onCommentsPage: reader.isOnChapterCommentsPage,
         swipeToCollect:
-            appdata.settings.globalReaderSettings.quickCollectImage == 'Swipe',
+            ReaderPreferences.quickCollectImage.normalize(
+              appdata.settings['quickCollectImage'],
+            ) ==
+            'Swipe',
         preferences: reader.preferences,
         automaticReading: reader.autoReading.status,
       ),

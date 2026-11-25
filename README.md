@@ -1,5 +1,5 @@
 <div align="center">
-  <strong>简体中文</strong> | <a href="README.en.md">English</a>
+  <strong>简体中文</strong> | <a href="README.en.md">English</a> | <a href="README.de.md">Deutsch</a> | <a href="README.ja.md">日本語</a>
   <br>
   <br>
   <img src="assets/readme_logo.png" alt="VeneraNext" width="200" />
@@ -32,7 +32,7 @@
   - [3.1 Android 手机与平板](#android-手机与平板)
   - [3.2 Android TV](#android-tv)
   - [3.3 Windows](#windows)
-  - [3.4 HarmonyOS（测试版）](#harmonyos测试版)
+  - [3.4 HarmonyOS](#harmonyos)
   - [3.5 Linux](#linux)
   - [3.6 iOS](#ios)
   - [3.7 macOS](#macos)
@@ -53,11 +53,13 @@
 <a id="项目介绍"></a>
 ## 1. 项目介绍
 
-[VeneraNext](https://github.com/CyrilPeng/venera-next) 是基于 [Venera](https://github.com/venera-app/venera) 持续开发的 Flutter 漫画阅读器，支持 **Android、Android TV、Windows、Linux、iOS 和 macOS**，另提供 **HarmonyOS 测试版**。
+[VeneraNext](https://github.com/CyrilPeng/venera-next) 是基于 [Venera](https://github.com/venera-app/venera) 持续开发的 Flutter 漫画阅读器，支持 **Android、Android TV、Windows、Linux、iOS、macOS 和 HarmonyOS**。
 
 本分支围绕“少一点打断，多一点阅读”打磨日常体验：瀑布流跨章连读不用退出，长按收藏省去选择收藏夹的步骤，夜间和墨水屏设备各有阅读设置。本地导入、离线下载、阅读统计与多设备同步，让找书、看漫画和追连载更方便。
 
 原项目的 JavaScript 漫画源扩展、本地阅读、搜索与分类、收藏下载，以及按源提供的登录、评论和评分能力继续保留。
+
+界面支持简体中文、繁体中文、英文、德语和日语，可在 **设置 → 应用 → 语言** 中切换。项目 README 默认仍为中文。德语和日语从 `v1.18.5` 起随正式版提供。
 
 **快速入口：** [下载安装](#下载安装) · [使用说明](#使用说明) · [编写漫画源](doc/api/comic_source.zh.md) · [JavaScript API](doc/api/js.zh.md) · [更新日志](CHANGELOG.md)
 
@@ -172,15 +174,16 @@ winget upgrade --id CyrilPeng.VeneraNext --exact
 Windows 安装器、便携包和 winget manifest 维护说明见 [doc/distribution/windows.zh.md](doc/distribution/windows.zh.md)。
 
 <a id="harmonyos测试版"></a>
-### 3.4 HarmonyOS（测试版）
+<a id="harmonyos"></a>
+### 3.4 HarmonyOS
 
-从 [发布页](https://github.com/CyrilPeng/Venera-Next/releases) 下载鸿蒙安装包。自 `v1.18.3-rc.3` 起，每次候选版和正式版发布均提供同版本的鸿蒙测试版：
+从[最新正式 Release](https://github.com/CyrilPeng/Venera-Next/releases/latest) 的 Assets 下载鸿蒙安装包。自 `v1.18.5` 起，鸿蒙与其他平台使用同一版本、随 Releases 发布，公开附件可直接下载，无需登录 GitHub：
 
 | 文件名 | 说明 | 适用场景 |
 |---|---|---|
-| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | 未签名 ARM64 测试版 | 满足 API 26 要求的鸿蒙手机与平板 |
+| `VeneraNext-xxx-harmonyos-arm64-unsigned.hap` | 未签名 ARM64 安装包 | 满足 API 26 要求的鸿蒙手机与平板 |
 
-需自行签名侧载；升级时沿用原签名密钥，不卸载或清空数据。安装步骤与功能限制见 [鸿蒙测试版安装指南](doc/distribution/harmonyos-reader.zh.md)。
+同一发布页提供 `harmonyos-manifest.json` 和 `harmonyos-SHA256SUMS`，核对后自行签名侧载；应用内更新检查会跳转到包含匹配 HAP 的发布页。升级时沿用原签名密钥。安装步骤和已知平台限制见[鸿蒙安装指南](doc/distribution/harmonyos-reader.zh.md)。
 
 <a id="linux"></a>
 ### 3.5 Linux
@@ -232,7 +235,7 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 - **预加载**：在“设置 → 阅读器”调整预加载图片数量，提前准备后面的图片，减少翻页等待；多加载一些也会占用更多流量和内存。
 - **继续阅读**：进度记录章节与页码，瀑布流记录实际正在读的章节；详情页的正序/倒序只影响章节列表显示。
 - **独立阅读设置**：可以为当前设备或某本漫画启用独立设置，不必每次重新调整。
-- **主线待发布**：阅读工具栏可锁定菜单，锁定后靠边小锁解锁，翻页／滚动／缩放继续可用。纵向连续与瀑布流新增默认关闭的「裁剪左右白边」，关闭可恢复完整显示，原图与下载／导出不变，见[左右边距与裁剪说明](doc/user/reader_width.zh.md)。
+- **v1.18.4**：阅读工具栏可锁定菜单，锁定后靠边小锁解锁，翻页／滚动／缩放继续可用。纵向连续与瀑布流提供默认关闭的「裁剪左右白边」，关闭可恢复完整显示，原图与下载／导出不变，见[左右边距与裁剪说明](doc/user/reader_width.zh.md)。
 
 | 单页阅读模式 | 拆分双页模式 |
 |---|---|
@@ -255,7 +258,7 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 <a id="收藏稍后阅读与追更"></a>
 ### 5.4 收藏、稍后阅读与追更
 
-`v1.18.4-rc.1` 已提供「多选漫画」入口（宽屏工具栏／窄屏更多菜单）和「子目录排序」。主线待发布改进将全选／反选／取消选择放到有足够空间的顶栏，支持桌面 Esc 退出多选和搜索；详情收藏目录使用整个可用高度，新建文件夹固定在顶栏右侧。详见[收藏目录与批量管理](doc/user/favorite_folders.zh.md)。
+`v1.18.4` 提供「多选漫画」入口（宽屏工具栏／窄屏更多菜单）和「子目录排序」。全选／反选／取消选择显示在有足够空间的顶栏，支持桌面 Esc 退出多选和搜索；详情收藏目录使用整个可用高度，新建文件夹固定在顶栏右侧。详见[收藏目录与批量管理](doc/user/favorite_folders.zh.md)。
 
 - **收藏**：点详情页“收藏”打开面板，可选择本地收藏夹，或收藏到源站账号（视扩展支持）。收藏页支持列表与封面画廊切换（自动或 2–6 列）。
 - **快捷收藏**：在详情页长按“收藏”，直接加入指定的本地收藏夹，默认是“追更”。在“设置 → 本地收藏 → 快速收藏”更换目标。
@@ -302,9 +305,9 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 <a id="关键词屏蔽"></a>
 ### 5.8 关键词屏蔽
 
-在「设置 → 探索」分别管理漫画和评论关键词。主线待发布版本增加「包含文字」「独立词」「标签完全匹配」及每条规则的大小写设置，可用示例试匹配，也可点击漫画列表的隐藏数量查看原因并编辑规则。短缩写如 `BL` 推荐使用「独立词」，避免误伤 `black`；旧规则保留原行为。
+在「设置 → 探索」分别管理漫画和评论关键词。`v1.18.4` 提供「包含文字」「独立词」「标签完全匹配」及每条规则的大小写设置，可用示例试匹配，也可点击漫画列表的隐藏数量查看原因并编辑规则。短缩写如 `BL` 推荐使用「独立词」，避免误伤 `black`；旧规则保留原行为。
 
-功能范围、匹配示例和备份兼容说明见[关键词屏蔽与命中原因](doc/user/keyword_blocking.zh.md)。当前稳定版 `v1.18.3` 尚未提供这些新入口。
+功能范围、匹配示例和备份兼容说明见[关键词屏蔽与命中原因](doc/user/keyword_blocking.zh.md)。
 
 <a id="漫画源开发"></a>
 ## 6. 漫画源开发
@@ -356,7 +359,7 @@ Linux 安装包基于 Ubuntu 22.04 构建，glibc 基线为 2.35。当前稳定�
 ## 8. 开发者入口
 
 - [构建与开发](doc/development/build.zh.md)：Flutter/Rust 环境、依赖锁定、测试和发布。
-- [鸿蒙随版构建](doc/development/harmonyos_releases.zh.md)：固定分支来源、独立 SDK、未签名 HAP 与发布门禁。
+- [鸿蒙构建与发布](doc/development/harmonyos_releases.zh.md)：同提交随版发布、独立 SDK、未签名 HAP 与可选设备报告。
 - [贡献指南](CONTRIBUTING.md) · [依赖治理](doc/development/dependencies.zh.md)。
 - [Windows 分发维护](doc/distribution/windows.zh.md) · [无头命令模式](doc/user/headless.zh.md)。
 - [安全政策](SECURITY.md) · [行为准则](CODE_OF_CONDUCT.md) · [完整文档索引](doc/README.md)。

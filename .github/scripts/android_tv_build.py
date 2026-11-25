@@ -215,29 +215,34 @@ def verify_apks(metadata, sdk, github_output=None):
     print(json.dumps(catalog, indent=2))
 
 
+def verify_release_flavor(paths, catalog, metadata):
+    if not isinstance(catalog, dict):
+        raise ValueError("Invalid Android catalog")
+    identity = dict(catalog)
+    records = identity.pop("apks", None)
+    if identity != metadata:
+        raise ValueError("Release provenance mismatch in Android catalog")
+    if not isinstance(records, list) or len(records) != len(ABI_CODES):
+        raise ValueError("Incomplete APK catalog")
+    if any(not isinstance(record, dict) for record in records):
+        raise ValueError("Invalid APK records")
+    if {record.get("abi") for record in records} != set(ABI_CODES):
+        raise ValueError("Missing or duplicate ABI in Android catalog")
+    for record in records:
+        abi = record["abi"]
+        apk = paths[apk_filename(metadata, abi)]
+        if record != apk_record(apk, metadata, abi, [SIGNER_SHA256]):
+            raise ValueError(f"Release APK does not match verified catalog: {apk}")
+
+
 def verify_release(directory, pubspec, environ):
     expected = set()
     for flavor in ("mobile", "tv"):
         metadata = build_metadata(flavor, pubspec, environ)
-        catalog_path = directory / f"android-{flavor}-manifest.json"
-        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
-        if not isinstance(catalog, dict):
-            raise ValueError(f"Invalid Android catalog in {catalog_path}")
-        records = catalog.pop("apks", None)
-        if catalog != metadata:
-            raise ValueError(f"Release provenance mismatch in {catalog_path}")
-        if not isinstance(records, list) or len(records) != len(ABI_CODES):
-            raise ValueError(f"Incomplete APK catalog in {catalog_path}")
-        if any(not isinstance(record, dict) for record in records):
-            raise ValueError(f"Invalid APK records in {catalog_path}")
-        if {record.get("abi") for record in records} != set(ABI_CODES):
-            raise ValueError(f"Missing or duplicate ABI in {catalog_path}")
-        for record in records:
-            abi = record["abi"]
-            apk = directory / apk_filename(metadata, abi)
-            expected.add(apk)
-            if record != apk_record(apk, metadata, abi, [SIGNER_SHA256]):
-                raise ValueError(f"Release APK does not match verified catalog: {apk}")
+        catalog = json.loads((directory / f"android-{flavor}-manifest.json").read_text(encoding="utf-8"))
+        paths = {apk_filename(metadata, abi): directory / apk_filename(metadata, abi) for abi in ABI_CODES}
+        verify_release_flavor(paths, catalog, metadata)
+        expected.update(paths.values())
     if set(directory.glob("*.apk")) != expected:
         raise ValueError("Release must contain exactly four mobile and four TV APKs")
     print("Verified all eight mobile/TV APKs, release provenance and signing continuity")

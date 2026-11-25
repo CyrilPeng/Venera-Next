@@ -1,3 +1,5 @@
+import 'dart:isolate';
+
 import 'package:venera_saf/venera_saf.dart';
 import 'package:path/path.dart' as path;
 import 'package:uuid/uuid.dart';
@@ -11,12 +13,28 @@ class ComicDirectoryCopyRequest {
     required List<String> directories,
     required this.destination,
     Map<String, String> metadata = const {},
+    this.progressPort,
   }) : directories = List.unmodifiable(directories),
        metadata = Map.unmodifiable(metadata);
 
   final List<String> directories;
   final String destination;
   final Map<String, String> metadata;
+  final SendPort? progressPort;
+}
+
+class ComicDirectoryCopyProgress {
+  const ComicDirectoryCopyProgress({
+    required this.sourcePath,
+    required this.stage,
+    required this.processed,
+    required this.total,
+  });
+
+  final String sourcePath;
+  final ComicCopyStage stage;
+  final int processed;
+  final int total;
 }
 
 class ComicDirectoryCopyResult {
@@ -55,13 +73,39 @@ class ComicDirectoryCopyFailure extends OperationFailure {
 /// Isolate entry used by directory imports, including SAF-backed sources.
 Future<ComicDirectoryCopyResult> copyComicDirectories(
   ComicDirectoryCopyRequest request,
-) => overrideIO(
-  () => ComicDirectoryCopier().copy(
-    request.directories,
-    Directory(request.destination),
-    metadata: request.metadata,
-  ),
-);
+) async {
+  final watch = Stopwatch()..start();
+  String? lastSource;
+  ComicCopyStage? lastStage;
+  void report(ComicDirectoryCopyProgress progress) {
+    final port = request.progressPort;
+    if (port == null) return;
+    if (progress.sourcePath != lastSource ||
+        progress.stage != lastStage ||
+        progress.processed == 0 ||
+        progress.processed == progress.total ||
+        watch.elapsedMilliseconds >= 100) {
+      lastSource = progress.sourcePath;
+      lastStage = progress.stage;
+      watch.reset();
+      port.send(progress);
+    }
+  }
+
+  try {
+    return await overrideIO(
+      () => ComicDirectoryCopier().copy(
+        request.directories,
+        Directory(request.destination),
+        metadata: request.metadata,
+        onProgress: request.progressPort == null ? null : report,
+      ),
+    );
+  } finally {
+    // Drain this port before the caller advances to database registration.
+    request.progressPort?.send(null);
+  }
+}
 
 /// Owns only newly reserved output. Existing paths are never moved or reused,
 /// including empty directories and earlier results of the same import batch.
@@ -76,6 +120,7 @@ class ComicDirectoryCopier {
     List<String> sources,
     Directory root, {
     Map<String, String> metadata = const {},
+    void Function(ComicDirectoryCopyProgress)? onProgress,
   }) async {
     final copies = <String, String>{};
     final failures = <String, ComicDirectoryCopyFailure>{};
@@ -91,12 +136,24 @@ class ComicDirectoryCopier {
           );
         }
         output = _reserveDirectory(root, source.name);
+        void report(ComicCopyStage stage, int processed, int total) {
+          onProgress?.call(
+            ComicDirectoryCopyProgress(
+              sourcePath: sourcePath,
+              stage: stage,
+              processed: processed,
+              total: total,
+            ),
+          );
+        }
+
         final record = await ComicCopyRecord.prepare(
           output,
           source: source,
           metadata: metadata[sourcePath],
+          onProgress: onProgress == null ? null : report,
         );
-        await record.resume();
+        await record.resume(onProgress: onProgress == null ? null : report);
         copies[sourcePath] = output.path;
       } catch (error, stack) {
         Object? cleanupError;

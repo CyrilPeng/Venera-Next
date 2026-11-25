@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bind an unsigned HarmonyOS beta to its exact mainline or frozen source."""
+"""Bind an unsigned HarmonyOS package to its exact mainline or frozen source."""
 
 import argparse
 from datetime import datetime, timedelta, timezone
@@ -12,6 +12,9 @@ import re
 import struct
 import subprocess
 import zipfile
+
+from release_assets import file_records as release_file_records
+from release_assets import github_file_records as github_release_file_records
 
 
 REPOSITORY = "CyrilPeng/Venera-Next"
@@ -26,7 +29,8 @@ LABEL_SOURCE = "tool/harmonyos/app_labels.py"
 APP_LABEL = "VeneraNext"
 BUNDLE = "com.github.cyrilpeng.veneranext.harmony"
 RUNTIME_REPORT = "harmonyos-runtime-acceptance.json"
-RUNTIME_ACCEPTANCE_POLICIES = ("required", "stable_required")
+RUNTIME_ACCEPTANCE_POLICIES = ("optional", "required", "stable_required")
+DISTRIBUTION_MODES = ("bundled", "independent_beta")
 RUNTIME_CHECKS = (
     "startup", "source_and_reading", "archive_import", "directory_import",
     "download", "backup_export_import", "same_key_upgrade", "cold_restart_reading",
@@ -69,12 +73,18 @@ def load_pin(root, *, next_candidate=False):
         fields.add("guide_delivery")
     if unified and "runtime_acceptance" in value:
         fields.add("runtime_acceptance")
+    if unified and "distribution" in value:
+        fields.add("distribution")
+    if unified and "channel" in value:
+        fields.add("channel")
     if (set(value) != fields
             or type(value["schema"]) is not int
             or value["schema"] not in ((2, 3) if next_candidate else (1,))
             or (unified and value["source_mode"] != "release_commit")
             or ("guide_delivery" in value and value["guide_delivery"] != "repository")
             or ("runtime_acceptance" in value and value["runtime_acceptance"] not in RUNTIME_ACCEPTANCE_POLICIES)
+            or ("distribution" in value and value["distribution"] not in DISTRIBUTION_MODES)
+            or ("channel" in value and (value["channel"] != "harmonyos" or value.get("distribution") != "bundled"))
             or (not unified and any(not isinstance(value[key], str) or not SHA.fullmatch(value[key])
                                     for key in ("source_commit", "main_baseline")))
             or type(value["first_release_build"]) is not int
@@ -100,7 +110,16 @@ def select_pin(root, *, preview_next=False):
 
 def check_distribution(pin, *, tagged):
     if tagged and pin["schema"] >= 2 and not pin["release_enabled"]:
-        raise ValueError("The reviewed next candidate is preview only; explicitly enable unsigned beta distribution after source, build and asset review")
+        raise ValueError("The reviewed next candidate is preview only; explicitly enable unsigned HAP distribution after source, build and asset review")
+
+
+def bundles_harmonyos(value):
+    mode = value.get("distribution", "bundled")
+    if (mode not in DISTRIBUTION_MODES or (
+            mode == "independent_beta" and (
+                value.get("schema") != 3 or value.get("source_mode") != "release_commit"))):
+        raise ValueError("Invalid HarmonyOS distribution mode")
+    return mode == "bundled"
 
 
 def is_release_only(name):
@@ -186,7 +205,7 @@ def context(root, source, environ, *, preview_next=False):
         raise ValueError("Release tag does not identify the checked-out commit")
     if environ.get("GITHUB_SHA", release_commit) != release_commit:
         raise ValueError("Checkout is not the caller's exact release commit")
-    value = {"schema": pin["schema"], "channel": "harmonyos-beta", "source_commit": source_commit,
+    value = {"schema": pin["schema"], "channel": pin.get("channel", "harmonyos-beta"), "source_commit": source_commit,
              "release_commit": release_commit,
             "version": version, "build": build, "tag": "v" + version,
             "run_id": environ.get("GITHUB_RUN_ID", "local"), "tagged": tagged,
@@ -197,6 +216,8 @@ def context(root, source, environ, *, preview_next=False):
             value["guide_delivery"] = pin["guide_delivery"]
         if "runtime_acceptance" in pin:
             value["runtime_acceptance"] = pin["runtime_acceptance"]
+        if "distribution" in pin:
+            value["distribution"] = pin["distribution"]
     else:
         value["main_baseline"] = pin["main_baseline"]
     if next_candidate:
@@ -272,7 +293,8 @@ def verify_bundle(directory, expected, source):
             or report.get("commit") != expected["source_commit"] or report.get("hap") != hap.name
             or report.get("bytes") != hap.stat().st_size or report.get("sha256") != sha256(hap.read_bytes())
             or metadata.get("release") != release or metadata.get("source_commit") != expected["source_commit"]
-            or metadata.get("purpose") != "full_reader_experiment" or metadata.get("entrypoint") != "lib/main.dart"
+            or metadata.get("purpose") != ("full_reader" if expected.get("channel") == "harmonyos" else "full_reader_experiment")
+            or metadata.get("entrypoint") != "lib/main.dart"
             or metadata.get("signed") is not False or metadata.get("runtime_verified") is not False
             or metadata.get("reader_integrated") is not True):
         raise ValueError("HAP is not an audited build of this source/release/run")
@@ -385,18 +407,26 @@ def runtime_acceptance_policy(expected):
 
 def runtime_report_required(expected):
     policy = runtime_acceptance_policy(expected)
-    return policy == "required" or (policy == "stable_required" and "-" not in expected["version"])
+    return bundles_harmonyos(expected) and (
+        policy == "required" or (policy == "stable_required" and "-" not in expected["version"]))
+
+
+def harmonyos_asset(name):
+    return name.lower().endswith(".hap") or "harmonyos" in name.lower()
 
 
 def check_remote_release(release, expected, assets, *, published):
     check_publish_context(expected)
-    policy = runtime_acceptance_policy(expected)
+    bundled = bundles_harmonyos(expected)
+    policy = runtime_acceptance_policy(expected) if bundled else None
     if (release.get("tag_name") != expected["tag"] or release.get("draft") is not (not published)
             or release.get("prerelease") is not ("-" in expected["version"])):
         raise ValueError("Wrong release tag/state/channel")
     remote = release.get("assets", [])
     if not isinstance(remote, list) or any(not isinstance(item, dict) for item in remote):
         raise ValueError("Invalid remote release asset inventory")
+    if not bundled and (assets or release.get("target_commitish") != expected["release_commit"]):
+        raise ValueError("Independent beta must not be bundled into a standard release or change its source")
     reports = [item for item in remote if item.get("name") == RUNTIME_REPORT]
     if reports and (policy is None or len(reports) != 1):
         raise ValueError("Unexpected or duplicated HarmonyOS runtime acceptance report")
@@ -405,7 +435,7 @@ def check_remote_release(release, expected, assets, *, published):
     harmony_names = [item.get("name", "") for item in remote
                      if isinstance(item.get("name"), str)
                      and item["name"] != RUNTIME_REPORT
-                     and (item["name"].lower().endswith(".hap") or "harmonyos" in item["name"].lower())]
+                     and harmonyos_asset(item["name"])]
     if set(harmony_names) != set(assets) or len(harmony_names) != len(assets):
         raise ValueError("Unexpected or duplicated HarmonyOS release assets")
     for name, record in assets.items():
@@ -449,35 +479,12 @@ def read_remote_release(tag, *, published, allow_missing=False):
     return remote
 
 
-def release_file_records(files):
-    records = {}
-    for path in files:
-        if not path.is_file() or path.is_symlink() or path.name in records or path.stat().st_size <= 0:
-            raise ValueError("Missing, duplicate, linked or empty release file: " + path.name)
-        digest = hashlib.sha256()
-        with path.open("rb") as stream:
-            for block in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(block)
-        records[path.name] = {"bytes": path.stat().st_size, "sha256": digest.hexdigest()}
-    if not records:
-        raise ValueError("No release files supplied")
-    return records
-
-
-def github_release_file_records(files):
-    """Map GitHub's tilde normalization without accepting ambiguous assets."""
-    records = {}
-    for name, record in files.items():
-        remote_name = name.replace("~", ".")
-        if remote_name in records:
-            raise ValueError("Release filenames collide after GitHub normalization: " + remote_name)
-        records[remote_name] = record
-    return records
-
-
 def check_draft_files(remote, expected, files):
-    policy = runtime_acceptance_policy(expected)
+    bundled = bundles_harmonyos(expected)
+    policy = runtime_acceptance_policy(expected) if bundled else None
     files = github_release_file_records(files)
+    if not bundled and any(harmonyos_asset(name) for name in files):
+        raise ValueError("Independent HarmonyOS beta files cannot enter a standard release")
     assets = remote.get("assets")
     if not isinstance(assets, list) or any(not isinstance(item, dict) for item in assets):
         raise ValueError("Invalid draft asset inventory")
@@ -502,6 +509,8 @@ def prepare_draft(expected, files, notes):
         raise ValueError("Missing or empty release notes")
     records = release_file_records(files)
     github_release_file_records(records)
+    if not bundles_harmonyos(expected) and any(harmonyos_asset(name) for name in records):
+        raise ValueError("Independent HarmonyOS beta files cannot enter a standard release")
     remote = read_remote_release(expected["tag"], published=False, allow_missing=True)
     if remote is None:
         arguments = ["release", "create", expected["tag"], *(str(path) for path in files),
@@ -516,6 +525,29 @@ def prepare_draft(expected, files, notes):
         raise ValueError("Wrong release draft identity/channel")
     check_draft_files(remote, expected, records)
     print("Verified every draft package against the original build; existing packages were preserved")
+
+
+def publication_assets(directory, expected, source):
+    if bundles_harmonyos(expected):
+        return verify_bundle(directory, expected, source)
+    if directory.exists() and (
+            directory.is_symlink() or not directory.is_dir() or any(directory.iterdir())):
+        raise ValueError("Independent HarmonyOS beta assets must remain outside the standard release")
+    return {}
+
+
+def verify_standard_release_files(directory, expected, remote):
+    if bundles_harmonyos(expected):
+        return
+    parent = directory.parent
+    if not parent.is_dir() or parent.is_symlink():
+        raise ValueError("Missing standard release packages")
+    suffixes = {".ipa", ".dmg", ".apk", ".zip", ".exe", ".deb", ".rpm", ".zst", ".AppImage"}
+    files = [path for path in sorted(parent.iterdir())
+             if path.suffix in suffixes or (
+                 path.name.startswith("android-") and path.name.endswith("-manifest.json"))
+             or path.name == "release-verification.json"]
+    check_draft_files(remote, expected, release_file_records(files))
 
 
 def runtime_template(manifest):
@@ -575,14 +607,24 @@ def validate_runtime_report(report, expected, assets, *, now=None):
 
 
 def check_runtime(expected, assets, *, allow_pending=False, published=False):
-    if runtime_acceptance_policy(expected) is None:
+    if not bundles_harmonyos(expected):
+        remote = read_remote_release(expected["tag"], published=published)
+        check_remote_release(remote, expected, assets, published=published)
+        print("Standard release verified; HarmonyOS remains an independent unsigned beta, without device acceptance claims.")
+        return True
+    policy = runtime_acceptance_policy(expected)
+    if policy is None:
         return True
     remote = read_remote_release(expected["tag"], published=published)
     check_remote_release(remote, expected, assets, published=published)
     reports = [item for item in remote["assets"] if item.get("name") == RUNTIME_REPORT]
     if not reports:
         if not runtime_report_required(expected):
-            print("Release policy allows this prerelease for device testing; native-device acceptance remains pending.")
+            if policy == "optional":
+                print("Runtime acceptance report is optional; publication may proceed, "
+                      "and native-device acceptance remains pending.")
+            else:
+                print("Release policy allows this prerelease for device testing; native-device acceptance remains pending.")
             return True
         if allow_pending and not published:
             print("Device acceptance is pending. Keep this draft and its packages; upload the reviewed "
@@ -642,6 +684,7 @@ def main():
         if args.github_output:
             with args.github_output.open("a", encoding="utf-8") as output:
                 output.write(f"source_commit={selected_source_commit(args.root, pin)}\n")
+                output.write(f"bundled_release={str(bundles_harmonyos(pin)).lower()}\n")
         print(json.dumps(pin | {"source_commit": selected_source_commit(args.root, pin)}))
         return
     if args.source_root is None:
@@ -656,13 +699,18 @@ def main():
         return
     if args.artifacts is None:
         parser.error("--artifacts is required")
-    assets = verify_bundle(args.artifacts, expected, args.source_root)
+    assets = (verify_bundle(args.artifacts, expected, args.source_root) if args.action == "verify"
+              else publication_assets(args.artifacts, expected, args.source_root))
     if args.action == "prepare-draft":
         if not args.release_files or args.notes_file is None:
             parser.error("--release-files and --notes-file are required")
         prepare_draft(expected, args.release_files, args.notes_file)
         return
     if args.action == "verify-runtime":
+        if not bundles_harmonyos(expected):
+            remote = read_remote_release(expected["tag"], published=False)
+            check_remote_release(remote, expected, assets, published=False)
+            verify_standard_release_files(args.artifacts, expected, remote)
         ready = check_runtime(expected, assets, allow_pending=args.allow_pending)
         if args.github_output:
             with args.github_output.open("a", encoding="utf-8") as output:
@@ -679,9 +727,10 @@ def main():
         published = args.action == "verify-published"
         release = read_remote_release(expected["tag"], published=published)
         check_remote_release(release, expected, assets, published=published)
+        verify_standard_release_files(args.artifacts, expected, release)
         if published:
             check_runtime(expected, assets, published=True)
-    print(f"Verified HarmonyOS source, version, native libraries and all {len(assets)} release assets")
+    print(f"Verified release source and assets; HarmonyOS bundled: {bundles_harmonyos(expected)}")
 
 
 if __name__ == "__main__":

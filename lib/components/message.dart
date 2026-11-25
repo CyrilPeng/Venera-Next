@@ -8,7 +8,6 @@ import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
-import 'appbar.dart';
 import 'button.dart';
 import 'window_selection_task.dart';
 
@@ -342,6 +341,7 @@ class LoadingDialogController {
     if (closed) {
       return;
     }
+    _progress = value;
     _serProgress?.call(value);
   }
 
@@ -349,6 +349,7 @@ class LoadingDialogController {
     if (closed) {
       return;
     }
+    _message = message;
     _setMessage?.call(message);
   }
 }
@@ -497,29 +498,46 @@ class ContentDialog extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           title != null
-              ? Appbar(
-                  leading: IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Close'.tl,
-                    onPressed: dismissible
-                        ? () {
-                            if (NavigationAdmission.allows(context) &&
-                                ModalRoute.of(context)?.isCurrent != false) {
-                              Navigator.of(context).maybePop();
-                            }
-                          }
-                        : null,
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
                   ),
-                  title: Text(title!),
-                  backgroundColor: Colors.transparent,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Close'.tl,
+                        onPressed: dismissible
+                            ? () {
+                                if (NavigationAdmission.allows(context) &&
+                                    ModalRoute.of(context)?.isCurrent !=
+                                        false) {
+                                  Navigator.of(context).maybePop();
+                                }
+                              }
+                            : null,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          title!,
+                          style: const TextStyle(fontSize: 20),
+                        ),
+                      ),
+                    ],
+                  ),
                 )
               : const SizedBox.shrink(),
           this.content,
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          OverflowBar(
+            alignment: MainAxisAlignment.end,
+            overflowAlignment: OverflowBarAlignment.end,
+            spacing: 8,
+            overflowSpacing: 8,
             children: actions,
-          ).paddingRight(12),
+          ).paddingHorizontal(12),
           const SizedBox(height: 16),
         ],
       ),

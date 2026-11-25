@@ -5,6 +5,7 @@ import 'package:venera_next/foundation/global_preference_store.dart';
 import 'package:venera_next/foundation/keyword_filter.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/services.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/gesture.dart';
@@ -22,12 +23,14 @@ import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
 
 import 'comic_tile.dart';
+import 'cover_hero_ids.dart';
 import 'keyword_hidden_notice.dart';
 
 class SliverGridComics extends StatefulWidget {
   const SliverGridComics({
     super.key,
     required this.comics,
+    this.visibleComics,
     this.onLastItemBuild,
     this.badgeBuilder,
     this.menuBuilder,
@@ -39,6 +42,10 @@ class SliverGridComics extends StatefulWidget {
   });
 
   final List<Comic> comics;
+
+  /// A caller-owned filtering result. Its owner refreshes it when metadata or
+  /// rules change. Keep [comics] for the hidden count and reason dialog.
+  final List<Comic>? visibleComics;
 
   final Map<Comic, bool>? selections;
 
@@ -63,26 +70,46 @@ class _SliverGridComicsState extends State<SliverGridComics> {
   List<Comic> comics = [];
   List<int> heroIDs = [];
   List<Comic> _inputSnapshot = [];
+  late var _filter = KeywordFilter.fromSettings(appdata.settings);
+  late var _presentation = _readPresentation();
+  bool _tickerEnabled = true;
+  final _parentRoutes = <ModalRoute<dynamic>>[];
 
-  static int _nextHeroID = 0;
+  Object _readPresentation() {
+    final preferences = GlobalPreferenceStore(appdata.settings);
+    final favorite = comicFavoriteDisplayState();
+    return (
+      preferences.read(DiscoveryPreferences.comicDisplayMode),
+      preferences.read(DiscoveryPreferences.comicTileScale),
+      preferences.read(DiscoveryPreferences.showFavoriteStatusOnTile),
+      preferences.read(DiscoveryPreferences.showHistoryStatusOnTile),
+      preferences.read(DiscoveryPreferences.showDetailedReadingProgress),
+      preferences.read(DiscoveryPreferences.showUpdateStatusOnTile),
+      preferences.read(FavoritePreferences.onClickFavorite),
+      appdata.settings['language'],
+      favorite.isGallery,
+      favorite.galleryColumns,
+    );
+  }
 
   void _refreshComics() {
-    _inputSnapshot = List.of(widget.comics);
+    _inputSnapshot = List.of(widget.visibleComics ?? widget.comics);
     final previousIDs = <(String, String), Queue<int>>{};
     for (var i = 0; i < comics.length; i++) {
       (previousIDs[(comics[i].sourceKey, comics[i].id)] ??= Queue<int>()).add(
         heroIDs[i],
       );
     }
-    final filter = KeywordFilter.fromSettings(appdata.settings);
-    comics = widget.comics
-        .where((comic) => isBlocked(comic, filter: filter) == null)
-        .toList();
+    comics = widget.visibleComics != null
+        ? _inputSnapshot
+        : widget.comics
+              .where((comic) => isBlocked(comic, filter: _filter) == null)
+              .toList();
     heroIDs = [
       for (final comic in comics)
         switch (previousIDs[(comic.sourceKey, comic.id)]) {
           final ids? when ids.isNotEmpty => ids.removeFirst(),
-          _ => _nextHeroID++,
+          _ => ComicCoverHeroIds.allocate(),
         },
     ];
   }
@@ -92,10 +119,15 @@ class _SliverGridComicsState extends State<SliverGridComics> {
     super.didUpdateWidget(oldWidget);
     // Equality on Comic only compares identity, so replacement metadata must
     // refresh too. Keep a snapshot to detect callers mutating the input list.
-    if (widget.comics.length != _inputSnapshot.length ||
-        Iterable<int>.generate(widget.comics.length).any(
-          (index) => !identical(widget.comics[index], _inputSnapshot[index]),
-        )) {
+    final input = widget.visibleComics ?? widget.comics;
+    if ((oldWidget.visibleComics == null) != (widget.visibleComics == null) ||
+        input.length != _inputSnapshot.length ||
+        Iterable<int>.generate(
+          input.length,
+        ).any((index) => !identical(input[index], _inputSnapshot[index]))) {
+      if (widget.visibleComics == null) {
+        _filter = KeywordFilter.fromSettings(appdata.settings);
+      }
       _refreshComics();
     }
   }
@@ -103,21 +135,57 @@ class _SliverGridComicsState extends State<SliverGridComics> {
   @override
   void initState() {
     _refreshComics();
-    addComicWidgetStateListener(update);
+    _presentation = _readPresentation();
+    addComicWidgetStateListener(_onComicStatusChanged);
     appdata.settings.addListener(_onSettingsChanged);
     super.initState();
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Becoming visible rebuilds the cards with the latest badge state.
+    _tickerEnabled = TickerMode.valuesOf(context).enabled;
+    _parentRoutes.clear();
+    var route = ModalRoute.of(context);
+    while (route != null && !_parentRoutes.contains(route)) {
+      _parentRoutes.add(route);
+      final navigatorContext = route.navigator?.context;
+      route = navigatorContext == null ? null : ModalRoute.of(navigatorContext);
+    }
+  }
+
+  @override
   void dispose() {
-    removeComicWidgetStateListener(update);
+    removeComicWidgetStateListener(_onComicStatusChanged);
     appdata.settings.removeListener(_onSettingsChanged);
     super.dispose();
   }
 
   void _onSettingsChanged() {
-    if (mounted) {
-      update();
+    if (!mounted) return;
+    final filter = widget.visibleComics == null
+        ? KeywordFilter.fromSettings(appdata.settings)
+        : _filter;
+    final presentation = _readPresentation();
+    final rulesChanged = !listEquals(filter.rules, _filter.rules);
+    if (!rulesChanged && presentation == _presentation) return;
+    setState(() {
+      _presentation = presentation;
+      if (rulesChanged) {
+        _filter = filter;
+        _refreshComics();
+      }
+    });
+  }
+
+  void _onComicStatusChanged() {
+    // Favorite/history badges change independently of list membership. The
+    // caller supplies replacement metadata through didUpdateWidget.
+    if (mounted &&
+        _tickerEnabled &&
+        _parentRoutes.every((route) => route.isCurrent)) {
+      setState(() {});
     }
   }
 
@@ -254,13 +322,14 @@ class _SliverGridComics extends StatelessWidget {
 
 /// return the first blocked keyword, or null if not blocked
 String? isBlocked(Comic item, {KeywordFilter? filter}) {
-  return (filter ?? KeywordFilter.fromSettings(appdata.settings))
-      .firstComicMatch(
-        title: item.title,
-        subtitle: item.subtitle,
-        description: item.description,
-        tags: item.tags ?? const [],
-      );
+  final current = filter ?? KeywordFilter.fromSettings(appdata.settings);
+  if (current.rules.isEmpty) return null;
+  return current.firstComicMatch(
+    title: item.title,
+    subtitle: item.subtitle,
+    description: item.description,
+    tags: item.tags ?? const [],
+  );
 }
 
 class ComicList extends StatefulWidget {

@@ -244,25 +244,17 @@ class _KeywordRuleEditorState extends SettingsSaveState<KeywordRuleEditor> {
           'Delete the keyword rule "@a"?'.tlParams({'a': original.keyword}),
         ).paddingHorizontal(16),
         actions: [
-          Flexible(
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              runSpacing: 8,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text('Cancel'.tl),
-                ),
-                FilledButton(
-                  key: const ValueKey('keyword-rule-delete-confirm'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                  ),
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: Text('Delete'.tl),
-                ),
-              ],
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Cancel'.tl),
+          ),
+          FilledButton(
+            key: const ValueKey('keyword-rule-delete-confirm'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Delete'.tl),
           ),
         ],
       ),
@@ -442,29 +434,19 @@ class _KeywordRuleEditorState extends SettingsSaveState<KeywordRuleEditor> {
         ),
       ),
       actions: [
-        Flexible(
-          child: Wrap(
-            alignment: WrapAlignment.end,
-            runSpacing: 8,
-            children: [
-              settingsSaveStatus,
-              if (widget.initialRule != null)
-                TextButton(
-                  key: const ValueKey('keyword-rule-delete'),
-                  onPressed: _editable ? _confirmDelete : null,
-                  child: Text(
-                    'Delete'.tl,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              FilledButton(
-                onPressed: _editable ? _save : null,
-                child: Text(widget.initialRule == null ? 'Add'.tl : 'Save'.tl),
-              ),
-            ],
+        settingsSaveStatus,
+        if (widget.initialRule != null)
+          TextButton(
+            key: const ValueKey('keyword-rule-delete'),
+            onPressed: _editable ? _confirmDelete : null,
+            child: Text(
+              'Delete'.tl,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           ),
+        FilledButton(
+          onPressed: _editable ? _save : null,
+          child: Text(widget.initialRule == null ? 'Add'.tl : 'Save'.tl),
         ),
       ],
     ),

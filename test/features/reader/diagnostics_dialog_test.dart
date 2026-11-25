@@ -1,12 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/reader/diagnostics_dialog.dart';
 import 'package:venera_next/foundation/reader_diagnostics.dart';
+import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
+import 'package:venera_next/components/window_selection_task.dart';
 
 void main() {
+  setUpAll(() => App.cachePath = Directory.systemTemp.path);
   late ReaderDiagnostics diagnostics;
   setUp(
     () => diagnostics = ReaderDiagnostics(
@@ -33,6 +40,7 @@ void main() {
     Brightness brightness = Brightness.light,
     double textScale = 1,
     void Function(bool?)? result,
+    SelectionTaskRegistry? registry,
   }) => MaterialApp(
     theme: ThemeData(brightness: brightness),
     builder: (context, child) => MediaQuery(
@@ -40,7 +48,9 @@ void main() {
         textScaler: TextScaler.linear(textScale),
         disableAnimations: true,
       ),
-      child: child!,
+      child: registry == null
+          ? child!
+          : SelectionTasksScope(registry: registry, child: child!),
     ),
     home: Builder(
       builder: (context) => Scaffold(
@@ -124,6 +134,97 @@ void main() {
       );
     }
   }
+
+  testWidgets(
+    'explicit file save preserves normal frames omitted from the copy preview',
+    (tester) async {
+      final root = Directory.systemTemp.createTempSync('reader-full-report-');
+      final previousCache = App.cachePath;
+      App.cachePath = (Directory('${root.path}/cache')..createSync()).path;
+      final registry = SelectionTaskRegistry();
+      final destination = File('${root.path}/reader-diagnostics.json');
+      late Completer<void> entered;
+      late Completer<String?> reply;
+      await tester.runAsync(() async {
+        entered = Completer<void>();
+        reply = Completer<String?>();
+      });
+      const selector = MethodChannel('plugins.flutter.io/file_selector');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(selector, (_) {
+        if (!entered.isCompleted) entered.complete();
+        return reply.future;
+      });
+      addTearDown(() async {
+        messenger.setMockMethodCallHandler(selector, null);
+        if (!reply.isCompleted) reply.complete(null);
+        await tester.runAsync(
+          () => registry.closeAndWait().timeout(const Duration(seconds: 10)),
+        );
+        App.cachePath = previousCache;
+        root.deleteSync(recursive: true);
+      });
+      TimingsCallback? frames;
+      diagnostics.dispose();
+      diagnostics = ReaderDiagnostics(
+        nowMicros: () => 1000,
+        attachTimings: (callback) => frames = callback,
+        detachTimings: (_) {},
+      );
+      diagnostics.start(
+        mode: ReaderDiagnosticMode.paged,
+        processingEnabled: false,
+        appVersion: '1.18.4-rc.3+252',
+        refreshRate: 120,
+      );
+      frames!(
+        List.generate(
+          1500,
+          (i) => FrameTiming(
+            vsyncStart: 1000 + i * 8333,
+            buildStart: 1100 + i * 8333,
+            buildFinish: 2100 + i * 8333,
+            rasterStart: 2100 + i * 8333,
+            rasterFinish: 3100 + i * 8333,
+            rasterFinishWallTime: 3100 + i * 8333,
+          ),
+        ),
+      );
+      diagnostics.stop(ReaderDiagnosticStop.review);
+      expect(
+        jsonDecode(diagnostics.exportJson())['omittedFrameSamplesForCopy'],
+        greaterThan(0),
+      );
+      await tester.pumpWidget(host(registry: registry));
+      await tester.tap(find.text('Open diagnostics'));
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Save full report'));
+        await entered.future.timeout(const Duration(seconds: 10));
+      });
+      await tester.pump();
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Clear report'))
+            .onPressed,
+        isNull,
+      );
+      reply.complete(destination.path);
+      await tester.runAsync(() async {
+        for (var i = 0; i < 100 && !destination.existsSync(); i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        expect(destination.existsSync(), isTrue);
+        final saved = jsonDecode(destination.readAsStringSync());
+        expect(saved['frameSamples'], hasLength(1500));
+        expect(saved['omittedFrameSamplesForCopy'], 0);
+        expect(saved['retainedFrameSamples']['slowest'], isEmpty);
+      });
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets(
     'copy failure remains actionable without exposing platform error text',

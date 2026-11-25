@@ -1,0 +1,43 @@
+name: 下载同一次构建的发布输入
+description: 共用安装包、平台回执、安全报告及鸿蒙资产的下载规则
+inputs:
+  directory:
+    description: 独立于源码 checkout 的目标目录
+    required: true
+  receipts:
+    description: 下载待汇总的平台核验回执
+    default: 'false'
+  verification:
+    description: 下载已经汇总的核验清单
+    default: 'true'
+  bundled-harmonyos:
+    description: 原提交是否要求随版鸿蒙
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v8
+      with:
+        pattern: '{macos_build,ios_build,windows_build,deb_build,arch_build,deb_arm64_build,apk-*,tv-apk-*,android-*-manifest,linux_extra_*}'
+        path: ${{ inputs.directory }}
+        merge-multiple: true
+    - uses: actions/download-artifact@v8
+      if: inputs.receipts == 'true'
+      with:
+        pattern: release-receipt-*
+        path: ${{ inputs.directory }}/receipts
+        merge-multiple: true
+    - uses: actions/download-artifact@v8
+      with:
+        name: rust-dependency-audit
+        path: ${{ inputs.directory }}/security
+    - uses: actions/download-artifact@v8
+      if: inputs.verification == 'true'
+      with:
+        name: release-verification
+        path: ${{ inputs.directory }}
+    - uses: actions/download-artifact@v8
+      if: inputs.bundled-harmonyos == 'true'
+      with:
+        name: harmonyos-release
+        path: ${{ inputs.directory }}/harmonyos

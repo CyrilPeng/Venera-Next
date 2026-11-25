@@ -38,6 +38,7 @@ class KeywordFilter {
     rules.map((rule) => rule.keyword),
   );
   late final _compiled = rules.map(_CompiledRule.new).toList(growable: false);
+  late final _comicIndex = _ComicRuleIndex(rules);
 
   bool blocksComment(String content) => commentMatch(content) != null;
 
@@ -69,13 +70,46 @@ class KeywordFilter {
     required String description,
     Iterable<String> tags = const [],
   }) {
+    // Direct matching is cheaper for small snapshots. Large snapshots share
+    // literal scans and tag lookups, especially when most rules do not match.
+    if (rules.length < 16) {
+      return _linearComicMatch(
+        title: title,
+        subtitle: subtitle,
+        description: description,
+        tags: tags,
+      );
+    }
+    final firstText = _compiled.first.comicTextMatch(
+      title,
+      subtitle,
+      description,
+    );
+    if (firstText != null) return firstText;
+    final tag = _comicIndex.tagMatch(tags);
+    if (tag?.index == 0) return tag!.match;
+    if (!_comicIndex.mayMatchText(title, subtitle, description)) {
+      return tag?.match;
+    }
+    // The combined patterns only reject nonmatches. The original matcher
+    // still decides boundaries, offsets and field order for the winning rule.
+    for (var i = 1; i < _compiled.length; i++) {
+      final rule = _compiled[i];
+      final match = rule.comicTextMatch(title, subtitle, description);
+      if (match != null) return match;
+      if (i == tag?.index) return tag!.match;
+    }
+    return null;
+  }
+
+  KeywordMatch? _linearComicMatch({
+    required String title,
+    required String? subtitle,
+    required String description,
+    required Iterable<String> tags,
+  }) {
     for (final rule in _compiled) {
-      final match =
-          rule.textMatch(title, KeywordMatchField.title) ??
-          (subtitle == null
-              ? null
-              : rule.textMatch(subtitle, KeywordMatchField.subtitle)) ??
-          rule.textMatch(description, KeywordMatchField.description);
+      final match = rule.comicTextMatch(title, subtitle, description);
       if (match != null) return match;
       for (final tag in tags) {
         final match = rule.tagMatch(tag);
@@ -83,6 +117,108 @@ class KeywordFilter {
       }
     }
     return null;
+  }
+}
+
+class _ComicRuleIndex {
+  _ComicRuleIndex(this.rules) {
+    final textWords = {true: <String>{}, false: <String>{}};
+    for (var i = 0; i < rules.length; i++) {
+      final rule = rules[i];
+      final tags = rule.caseSensitive ? _sensitiveTags : _insensitiveTags;
+      final keyword = rule.caseSensitive
+          ? rule.keyword
+          : rule.keyword.toLowerCase();
+      // All modes retain exact tag matching, including legacy empty strings.
+      tags.putIfAbsent(keyword, () => i);
+      if (rule.mode != KeywordMatchMode.exactTag &&
+          (rule.keyword.isNotEmpty || rule.mode == KeywordMatchMode.contains)) {
+        textWords[rule.caseSensitive]!.add(rule.keyword);
+      }
+    }
+    _textPatterns = [];
+    for (final entry in textWords.entries) {
+      final words = entry.value.toList(growable: false);
+      // Large Unicode-folding alternations can become expensive in the VM.
+      // Bound those groups while keeping sensitive literal scans shared.
+      final batchSize = entry.key ? words.length : 32;
+      for (var start = 0; start < words.length; start += batchSize) {
+        final end = start + batchSize < words.length
+            ? start + batchSize
+            : words.length;
+        _textPatterns.add(
+          RegExp(
+            '(?:${words.getRange(start, end).map(RegExp.escape).join('|')})',
+            caseSensitive: entry.key,
+            // Sensitive indexOf matches UTF-16 units; insensitive rules use
+            // Unicode regex folding. Keep each original policy here too.
+            unicode: !entry.key,
+          ),
+        );
+      }
+    }
+  }
+
+  final List<KeywordRule> rules;
+  final _sensitiveTags = <String, int>{};
+  final _insensitiveTags = <String, int>{};
+  late final List<RegExp> _textPatterns;
+
+  bool mayMatchText(String title, String? subtitle, String description) =>
+      _textPatterns.any(
+        (pattern) =>
+            pattern.hasMatch(title) ||
+            (subtitle != null && pattern.hasMatch(subtitle)) ||
+            pattern.hasMatch(description),
+      );
+
+  int? _tagRule(String value) {
+    final sensitive = _sensitiveTags[value];
+    final insensitive = _insensitiveTags.isEmpty
+        ? null
+        : _insensitiveTags[value.toLowerCase()];
+    if (sensitive == null) return insensitive;
+    if (insensitive == null || sensitive < insensitive) return sensitive;
+    return insensitive;
+  }
+
+  ({int index, KeywordMatch match})? tagMatch(Iterable<String> tags) {
+    ({int index, KeywordMatch match})? best;
+    for (final tag in tags) {
+      final whole = _tagRule(tag);
+      if (whole != null && (best == null || whole < best.index)) {
+        best = (
+          index: whole,
+          match: KeywordMatch(
+            rule: rules[whole],
+            field: KeywordMatchField.tag,
+            text: tag,
+            start: 0,
+            end: tag.length,
+          ),
+        );
+      }
+      final colon = tag.indexOf(':');
+      if (colon >= 0) {
+        final nextColon = tag.indexOf(':', colon + 1);
+        final end = nextColon < 0 ? tag.length : nextColon;
+        final part = _tagRule(tag.substring(colon + 1, end));
+        if (part != null && (best == null || part < best.index)) {
+          best = (
+            index: part,
+            match: KeywordMatch(
+              rule: rules[part],
+              field: KeywordMatchField.tag,
+              text: tag,
+              start: colon + 1,
+              end: end,
+            ),
+          );
+        }
+      }
+      if (best?.index == 0) return best;
+    }
+    return best;
   }
 }
 
@@ -96,6 +232,17 @@ class _CompiledRule {
     unicode: true,
   );
   static final _wordCharacter = RegExp(r'[\p{L}\p{N}\p{M}]', unicode: true);
+
+  KeywordMatch? comicTextMatch(
+    String title,
+    String? subtitle,
+    String description,
+  ) =>
+      textMatch(title, KeywordMatchField.title) ??
+      (subtitle == null
+          ? null
+          : textMatch(subtitle, KeywordMatchField.subtitle)) ??
+      textMatch(description, KeywordMatchField.description);
 
   KeywordMatch? textMatch(String text, KeywordMatchField field) {
     if (rule.mode == KeywordMatchMode.exactTag) return null;

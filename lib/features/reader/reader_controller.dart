@@ -56,6 +56,7 @@ class ReaderController {
     required this.animationEnabled,
     required this.viewport,
     required this.onChanged,
+    this.onPageNavigationChanged,
     required this.onPageChanged,
     required this.onError,
   });
@@ -65,6 +66,7 @@ class ReaderController {
   final bool Function() animationEnabled;
   final ReaderNavigationViewport? Function() viewport;
   final void Function() onChanged;
+  final void Function()? onPageNavigationChanged;
   final void Function() onPageChanged;
   final void Function(Object, StackTrace) onError;
 
@@ -251,6 +253,8 @@ class ReaderController {
     _snapshot = null;
   }
 
+  void _notifyPageNavigation() => (onPageNavigationChanged ?? onChanged)();
+
   bool toPage(int page, {bool animated = true}) {
     if (_disposed) return false;
     final view = viewport();
@@ -260,18 +264,21 @@ class ReaderController {
     if (page == _page && page != 1 && page != count && _pendingPage == null) {
       return false;
     }
+    // Finish an active turn with a jump so repeated keys do not restart the
+    // transition before the requested page has been selected.
+    final hasAnimation = animated && _pendingPage == null && animationEnabled();
     resetAnimation();
-    if (animated && animationEnabled()) {
+    if (hasAnimation) {
       _pendingPage = page;
       _snapshot = null;
       final generation = _generation;
-      onChanged();
+      _notifyPageNavigation();
       if (_disposed || generation != _generation) return true;
       void finish() {
         if (_disposed || generation != _generation) return;
         _pendingPage = null;
         _snapshot = null;
-        onChanged();
+        _notifyPageNavigation();
       }
 
       unawaited(
@@ -286,7 +293,7 @@ class ReaderController {
     } else {
       setPage(page);
       if (_disposed) return true;
-      onChanged();
+      _notifyPageNavigation();
       if (!_disposed) view.toPage(page);
     }
     return true;

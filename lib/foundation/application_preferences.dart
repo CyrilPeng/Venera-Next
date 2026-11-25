@@ -1,12 +1,12 @@
+import 'app_language.dart';
 import 'preferences.dart';
 
 abstract final class AppPreferences {
-  static const language = ChoicePreference('language', 'system', [
+  static final language = ChoicePreference(
+    'language',
     'system',
-    'zh-CN',
-    'zh-TW',
-    'en-US',
-  ]);
+    AppLanguage.preferenceIds,
+  );
   static const checkUpdateOnStart = BoolPreference('checkUpdateOnStart', false);
   // The editor range is not a storage limit: older settings may retain history
   // longer. 100 million days fit DateTime/Duration without integer overflow.
@@ -36,14 +36,14 @@ abstract final class AppPreferences {
     'reverseChapterOrder',
     false,
   );
-  static const all = <Preference<Object>>[
+  static final all = List<Preference<Object>>.unmodifiable([
     language,
     checkUpdateOnStart,
     historyRetentionDays,
     cacheSize,
     authorizationRequired,
     reverseChapterOrder,
-  ];
+  ]);
 }
 
 abstract final class NetworkPreferences {

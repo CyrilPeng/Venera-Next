@@ -250,6 +250,7 @@ class HistoryManager with ChangeNotifier {
   Future<void> _asyncHistoryQueue = Future.value();
   int _pendingWrites = 0;
 
+  /// Includes completion reads that share the ordered connection lifetime.
   bool get hasPendingWrites => _pendingWrites != 0;
 
   /// Submit a detached progress snapshot to the ordered mutation queue.
@@ -544,6 +545,53 @@ class HistoryManager with ChangeNotifier {
 
   History? find(String id, ComicType type) =>
       _historyCache.find(id, type.value);
+
+  Set<(String, int)> completedAmong(Iterable<(String, int)> identities) =>
+      _repository.completedAmong(identities);
+
+  /// Read completion after earlier writes, on an owned background connection.
+  /// The access remains live until that connection closes; replacement drains
+  /// it through the same queue as history writes. Reopening retires old results.
+  Future<Set<(String, int)>> completedAmongAsync(
+    Iterable<(String, int)> identities,
+  ) {
+    final requested = identities.toList(growable: false);
+    final generation = _generation;
+    final path = isInitialized ? _dbPath : null;
+    return _enqueueAsyncWrite(() {
+      void checkConnection() {
+        if (path == null || !isInitialized || generation != _generation) {
+          throw StateError(
+            'History completion read belongs to a closed connection',
+          );
+        }
+      }
+
+      checkConnection();
+      return () async {
+        checkConnection();
+        final completed = await _readCompletedAmong(path!, requested);
+        checkConnection();
+        return completed;
+      };
+    });
+  }
+
+  static Future<Set<(String, int)>> _readCompletedAmong(
+    String path,
+    List<(String, int)> identities,
+  ) => Isolate.run(() {
+    final db = sqlite3.open(path, mode: OpenMode.readOnly);
+    try {
+      db.execute('PRAGMA busy_timeout = 5000;');
+      return runSqliteTransaction(
+        db,
+        () => HistoryRepository(db).completedAmong(identities),
+      );
+    } finally {
+      db.dispose();
+    }
+  });
 
   List<History> getAll() => _repository.getAll();
   List<History> getRecent() => _repository.getRecent();

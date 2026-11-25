@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/display_image_provider.dart';
+import 'package:venera_next/features/reader/image_precache.dart';
 import 'package:venera_next/features/reader/white_border_crop.dart';
 import 'package:venera_next/foundation/image_provider/reader_image.dart';
 import 'package:venera_next/foundation/image_work.dart';
@@ -85,8 +86,8 @@ class _GatedImage extends Fake implements ui.Image {
 }
 
 class _Provider extends ReaderImageProvider {
-  _Provider(img.Image page)
-    : bytes = img.encodePng(page),
+  _Provider(img.Image page, {bool jpeg = false})
+    : bytes = jpeg ? img.encodeJpg(page, quality: 100) : img.encodePng(page),
       super('crop-${_next++}', null, 'comic', 'chapter', 1);
   static int _next = 0;
   Uint8List bytes;
@@ -190,12 +191,20 @@ Widget _view(
   ),
 );
 
-void _cleanup(WidgetTester tester, ReaderWhiteBorderCrop crop, ImageWork work) {
+void _cleanup(
+  WidgetTester tester,
+  ReaderWhiteBorderCrop crop,
+  ImageWork work, {
+  ReaderImagePrecache? precache,
+}) {
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox());
     crop.dispose();
     var closed = false;
-    final closing = work.dispose().then((_) => closed = true);
+    final closing = Future.wait([
+      if (precache != null) precache.dispose(),
+      work.dispose(),
+    ]).then((_) => closed = true);
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
     await tester.pump();
@@ -207,6 +216,60 @@ void _cleanup(WidgetTester tester, ReaderWhiteBorderCrop crop, ImageWork work) {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('PNG/JPEG pages crop after precaching and lazy scrolling', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(164, 400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final sources = [
+      for (var i = 0; i < 8; i++)
+        _Provider(_page(width: 128, left: 16, right: 16), jpeg: i.isOdd),
+    ];
+    final work = ImageWork();
+    final crop = ReaderWhiteBorderCrop(work);
+    final precache = ReaderImagePrecache(work: work);
+    _cleanup(tester, crop, work, precache: precache);
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    precache.replace(sources.skip(1), ImageConfiguration.empty);
+    await _waitUntil(
+      tester,
+      () => sources
+          .skip(1)
+          .every(
+            (source) => PaintingBinding.instance.imageCache
+                .statusForKey(source)
+                .keepAlive,
+          ),
+    );
+    await tester.pump();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ListView.builder(
+          itemCount: sources.length,
+          cacheExtent: 0,
+          itemBuilder: (_, index) => ComicImage(
+            key: ValueKey('crop-page-$index'),
+            image: ReaderDisplayImageProvider(sources[index], work),
+            whiteBorderCrop: crop,
+            width: double.infinity,
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < sources.length; i++) {
+      final page = find.byKey(ValueKey('crop-page-$i'));
+      await tester.scrollUntilVisible(page, 180);
+      await _waitUntil(
+        tester,
+        () => (tester.getSize(page).height - 262.4).abs() < 0.01,
+      );
+      expect(sources[i].loads, 1);
+    }
+    expect(tester.takeException(), isNull);
+  });
 
   test(
     'images beyond the readback budget remain full without retaining pixels',
@@ -334,11 +397,13 @@ void main() {
     'a single edge text pixel or pale panel stops that edge at every row',
     () {
       for (final row in [0, 79, 159]) {
-        final page = _page();
-        page.setPixelRgba(2, row, 0, 0, 0, 255);
-        expect(_insets(page), (0, 10));
-        page.setPixelRgba(2, row, 252, 252, 252, 255);
-        expect(_insets(page), (0, 10));
+        for (final column in [0, 2]) {
+          for (final shade in [0, 94, 202, 248, 252]) {
+            final page = _page();
+            page.setPixelRgba(column, row, shade, shade, shade, 255);
+            expect(_insets(page), (0, 10));
+          }
+        }
       }
     },
   );

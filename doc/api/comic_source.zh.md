@@ -4,7 +4,7 @@
 
 本文以当前仓库中的 [JS 运行时](../../assets/init.js)、[源解析器](../../lib/features/comic_source/parser.dart) 和[数据模型](../../lib/features/comic_source/models.dart)为准，说明怎样编写、调试和发布一个源。示例只使用虚构地址，不是可用的漫画源或源推荐。
 
-VeneraNext 保留 Venera 的扩展接口；不同版本的管理界面和运行时细节可能有差异。多仓库、统一“添加来源”和新的重载流程目前属于主分支未发布功能，稳定版 v1.16.0 仍使用原有导入界面。
+VeneraNext 保留 Venera 的扩展接口；不同版本的管理界面和运行时细节可能有差异。多仓库、统一“添加来源”和新的重载流程已随 v1.17.0 发布；旧版本入口以对应标签文档为准。
 
 ## 阅读路线
 
@@ -246,7 +246,7 @@ onImageLoad: (imageKey, comicId, epId) => ({
 
 ### 账号
 
-未发布主分支会等待 `login`、`logout` 和 `loginWithWebview.onLoginSuccess` 返回的 Promise 真正完成，忽略并释放普通返回值；失败应抛错或拒绝 Promise。登录 UI 等待凭据保存，认证成功后的文件保存重试不会重新认证。网页登录捕获 Cookie/localStorage 后再保存并等待成功回调，保存重试复用该次捕获；替换或卸载后的旧实例不能继续修改新源。
+当前版本会等待 `login`、`logout` 和 `loginWithWebview.onLoginSuccess` 返回的 Promise 真正完成，忽略并释放普通返回值；失败应抛错或拒绝 Promise。登录 UI 等待凭据保存，认证成功后的文件保存重试不会重新认证。网页登录捕获 Cookie/localStorage 后再保存并等待成功回调，保存重试复用该次捕获；替换或卸载后的旧实例不能继续修改新源。
 
 `account` 可按需包含：
 

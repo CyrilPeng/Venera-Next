@@ -43,6 +43,7 @@ import 'components/message.dart';
 import 'components/window_frame.dart';
 import 'components/window_selection_task.dart';
 import 'foundation/app.dart';
+import 'foundation/app_language.dart';
 import 'foundation/app_profile.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'foundation/app_locale.dart';
@@ -356,8 +357,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     String? font;
     List<String>? fallback;
     if (App.isLinux || App.isWindows) {
+      final japanese = appLocale.languageCode == 'ja';
       font = 'Noto Sans CJK';
+      if (japanese) font = 'Noto Sans CJK JP';
       fallback = [
+        if (japanese) ...[
+          'Noto Sans JP',
+          'Yu Gothic UI',
+          'Yu Gothic',
+          'Meiryo',
+          'Hiragino Sans',
+          'HarmonyOS Sans',
+        ],
         'Segoe UI',
         'Noto Sans SC',
         'Noto Sans TC',
@@ -460,13 +471,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           localizationsDelegates: [
             GlobalMaterialLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
           ],
           locale: appLocale,
-          supportedLocales: const [
-            Locale('zh', 'CN'),
-            Locale('zh', 'TW'),
-            Locale('en'),
-          ],
+          supportedLocales: AppLanguage.supportedLocales,
           builder: (context, widget) {
             ErrorWidget.builder = (details) {
               Log.error(

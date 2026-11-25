@@ -441,9 +441,7 @@ class _ReaderSettingsState extends SettingsSaveState<ReaderSettings> {
           SliverAnimatedVisibility(
             visible: _usesMode((mode) => mode.startsWith('gallery')),
             child: SliderSetting.reader(
-              title:
-                  "The number of pic in screen for landscape (Only Gallery Mode)"
-                      .tl,
+              title: "Images per screen in landscape (Gallery mode only)".tl,
               preference: ReaderPreferences.readerScreenPicNumberForLandscape,
               onChanged: () {
                 setState(() {});
@@ -459,9 +457,7 @@ class _ReaderSettingsState extends SettingsSaveState<ReaderSettings> {
           SliverAnimatedVisibility(
             visible: _usesMode((mode) => mode.startsWith('gallery')),
             child: SliderSetting.reader(
-              title:
-                  "The number of pic in screen for portrait (Only Gallery Mode)"
-                      .tl,
+              title: "Images per screen in portrait (Gallery mode only)".tl,
               preference: ReaderPreferences.readerScreenPicNumberForPortrait,
               onChanged: () {
                 widget.onChanged?.call("readerScreenPicNumberForPortrait");

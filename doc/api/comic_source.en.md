@@ -4,7 +4,7 @@
 
 This guide follows the repository's [JS runtime](../../assets/init.js), [source parser](../../lib/features/comic_source/parser.dart), and [data models](../../lib/features/comic_source/models.dart). Examples use fictional addresses and are not working comic services or source recommendations.
 
-VeneraNext retains Venera's extension interfaces. Management screens and runtime details vary by version: multiple repositories, unified Add source, and the new reload workflow are currently unreleased main-branch features. Stable v1.16.0 uses the previous import interface.
+VeneraNext retains Venera's extension interfaces. Management screens and runtime details vary by version: multiple repositories, unified Add source and the new reload workflow shipped in v1.17.0. Use versioned documentation for earlier interfaces.
 
 ## Reading path
 
@@ -247,7 +247,7 @@ Let the app download, cache, and preload images. Do not download an entire comic
 
 ### Accounts
 
-Unreleased main waits for the actual Promise returned by `login`, `logout`, and `loginWithWebview.onLoginSuccess`, discarding ordinary return values. Throw or reject to signal failure. Login UI waits for credential persistence; retrying a file save after authentication does not authenticate again. Web login captures cookies/localStorage, persists them and awaits its success callback; save retries reuse that capture. Retired instances cannot modify a replacement source.
+The current version waits for the actual Promise returned by `login`, `logout`, and `loginWithWebview.onLoginSuccess`, discarding ordinary return values. Throw or reject to signal failure. Login UI waits for credential persistence; retrying a file save after authentication does not authenticate again. Web login captures cookies/localStorage, persists them and awaits its success callback; save retries reuse that capture. Retired instances cannot modify a replacement source.
 
 Optional members of `account`:
 

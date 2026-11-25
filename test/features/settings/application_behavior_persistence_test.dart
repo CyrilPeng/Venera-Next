@@ -252,7 +252,14 @@ void main() {
         final select = find.descendant(of: tile, matching: find.byType(Select));
         await tester.tap(select.evaluate().isEmpty ? tile : select);
         await tester.pumpAndSettle();
-        for (final label in ['System', '简体中文', '繁體中文', 'English']) {
+        for (final label in [
+          'System',
+          '简体中文',
+          '繁體中文',
+          'English',
+          'Deutsch',
+          '日本語',
+        ]) {
           expect(
             find.widgetWithText(PopupMenuItem<String>, label),
             findsOneWidget,
