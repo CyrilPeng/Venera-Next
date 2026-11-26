@@ -288,7 +288,12 @@ def validate(title: str, body: str, *, comments: list[str] | None = None) -> Val
             missing.append(label)
     if not category.enhancement and has_information(fields.get(VERSION, "")):
         version = fields[VERSION]
-        if not re.search(r"\bv?\d+\.\d+\.\d+\b|\b(?:commit|revision)\s*[:：]?\s*[0-9a-f]{7,40}\b", version, re.IGNORECASE):
+        # \b treats CJK as word characters; reject only adjacent ASCII word characters instead.
+        if not re.search(
+            r"(?<![0-9A-Za-z_])(?:v?\d+\.\d+\.\d+|(?:commit|revision)\s*[:：]?\s*[0-9a-f]{7,40})(?![0-9A-Za-z_])",
+            version,
+            re.IGNORECASE,
+        ):
             missing.append(f"{VERSION}：填写具体版本／构建号；自编译包填写 commit。")
     platforms = {part.strip() for part in fields.get(PLATFORM, "").split(",")}
     platform_labels = frozenset()

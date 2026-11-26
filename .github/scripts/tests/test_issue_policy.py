@@ -94,6 +94,16 @@ class PolicyValidationTests(unittest.TestCase):
                 self.assertTrue(policy.validate("明确症状", body_for("data", {policy.VERSION: version})).valid)
         self.assertFalse(policy.validate("明确症状", body_for("data", {policy.VERSION: "stable release"})).valid)
 
+    def test_versions_adjacent_to_chinese_text_are_supported(self):
+        for version in ("1.18.2手机版", "版本1.18.2", "关于页显示V1.18.2", "v1.18.2安卓版", "commit 4337ed6自编译"):
+            with self.subTest(version=version):
+                result = policy.validate("明确症状", body_for("data", {policy.VERSION: version}))
+                self.assertTrue(result.valid, result.missing)
+        # Versions and commits glued to ASCII letters are still not accepted.
+        for version in ("commit effaceable", "build1.18.2手机版", "版本1.18.2beta"):
+            with self.subTest(version=version):
+                self.assertFalse(policy.validate("明确症状", body_for("data", {policy.VERSION: version})).valid)
+
     def test_multiple_actual_platforms_are_accepted(self):
         self.assertTrue(policy.validate("跨平台症状", body_for("data", {policy.PLATFORM: "Android TV, Windows"})).valid)
         self.assertFalse(policy.validate("跨平台症状", body_for("data", {policy.PLATFORM: "所有支持的平台 / All supported platforms"})).valid)
