@@ -71,7 +71,10 @@ class _ReadLaterSummaryState extends State<ReadLaterSummary> {
     return ListenableBuilder(
       listenable: Listenable.merge([manager, appdata.settings]),
       builder: (context, _) {
-        final comics = manager.getReadLaterComics(limit: 10);
+        final comics = comicsVisibleByKeyword(
+          manager.getReadLaterComics(limit: 10),
+          ComicKeywordScope.personal,
+        );
         _heroIds.retain(comics);
         final folder = manager.readLaterFolder;
         final count = folder == null ? 0 : manager.count(folder);
@@ -98,7 +101,7 @@ class _ReadLaterSummaryState extends State<ReadLaterSummary> {
                       ? null
                       : () => context.to(() => const ReadLaterPage()),
                 ),
-                if (comics.isEmpty)
+                if (count == 0)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     child: Text(
@@ -106,7 +109,7 @@ class _ReadLaterSummaryState extends State<ReadLaterSummary> {
                           .tl,
                     ),
                   )
-                else
+                else if (comics.isNotEmpty)
                   SizedBox(
                     height: 152,
                     child: ListView.builder(
@@ -165,6 +168,7 @@ class ReadLaterPage extends StatelessWidget {
               else
                 SliverGridComics(
                   comics: comics,
+                  keywordScope: ComicKeywordScope.personal,
                   useFavoriteDisplaySettings: true,
                   menuBuilder: (comic) => [
                     MenuEntry(

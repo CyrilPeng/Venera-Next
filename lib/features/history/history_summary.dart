@@ -4,6 +4,7 @@ import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/summary_header.dart';
 import 'package:venera_next/features/comic_details/comic_details.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
+import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/widget_utils.dart';
@@ -82,10 +83,15 @@ class _HistorySummaryState extends State<HistorySummary> {
   @override
   Widget build(BuildContext context) {
     final ready = widget.manager?.isInitialized == true;
-    return _buildSummary(
-      context,
-      ready ? _history : const [],
-      ready ? _count : 0,
+    return ListenableBuilder(
+      listenable: appdata.settings,
+      builder: (context, _) => _buildSummary(
+        context,
+        ready
+            ? comicsVisibleByKeyword(_history, ComicKeywordScope.personal)
+            : const [],
+        ready ? _count : 0,
+      ),
     );
   }
 

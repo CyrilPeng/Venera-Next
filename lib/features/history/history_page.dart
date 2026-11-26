@@ -3,6 +3,7 @@ import 'package:venera_next/features/history/history_scope.dart';
 import 'dart:async';
 import 'package:venera_next/foundation/log.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/button.dart';
 import 'package:venera_next/components/flyout.dart';
@@ -11,6 +12,7 @@ import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/scroll.dart';
 import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
+import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/history/history.dart';
@@ -32,12 +34,14 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   void initState() {
     _manager.addListener(onUpdate);
+    appdata.settings.addListener(_onSettingsChanged);
     super.initState();
   }
 
   @override
   void dispose() {
     _manager.removeListener(onUpdate);
+    appdata.settings.removeListener(_onSettingsChanged);
     _cancelRefresh?.call();
     super.dispose();
   }
@@ -45,16 +49,31 @@ class _HistoryPageState extends State<HistoryPage> {
   void onUpdate() {
     setState(() {
       comics = _manager.getAll();
-      if (multiSelectMode) {
-        selectedComics.removeWhere((comic, _) => !comics.contains(comic));
-        if (selectedComics.isEmpty) {
-          multiSelectMode = false;
-        }
-      }
+      _updateVisibility(
+        comicsVisibleByKeyword(comics, ComicKeywordScope.personal),
+      );
     });
   }
 
+  void _onSettingsChanged() {
+    final next = comicsVisibleByKeyword(comics, ComicKeywordScope.personal);
+    if (!listEquals(next, _visibleComics)) {
+      setState(() => _updateVisibility(next));
+    }
+  }
+
+  void _updateVisibility(List<History> next) {
+    _visibleComics = next;
+    if (selectedComics.isEmpty) return;
+    selectedComics.removeWhere((comic, _) => !next.contains(comic));
+    if (selectedComics.isEmpty) multiSelectMode = false;
+  }
+
   late var comics = _manager.getAll();
+  late var _visibleComics = comicsVisibleByKeyword(
+    comics,
+    ComicKeywordScope.personal,
+  );
   var controller = FlyoutController();
 
   bool multiSelectMode = false;
@@ -62,7 +81,7 @@ class _HistoryPageState extends State<HistoryPage> {
 
   void selectAll() {
     setState(() {
-      selectedComics = comics.asMap().map((k, v) => MapEntry(v, true));
+      selectedComics = {for (final comic in _visibleComics) comic: true};
     });
   }
 
@@ -74,10 +93,10 @@ class _HistoryPageState extends State<HistoryPage> {
 
   void invertSelection() {
     setState(() {
-      comics.asMap().forEach((k, v) {
-        selectedComics[v] = !selectedComics.putIfAbsent(v, () => false);
-      });
-      selectedComics.removeWhere((k, v) => !v);
+      selectedComics = {
+        for (final comic in _visibleComics)
+          if (!selectedComics.containsKey(comic)) comic: true,
+      };
     });
   }
 
@@ -310,6 +329,8 @@ class _HistoryPageState extends State<HistoryPage> {
             ),
             SliverGridComics(
               comics: comics,
+              visibleComics: _visibleComics,
+              keywordScope: ComicKeywordScope.personal,
               selections: selectedComics,
               onLongPressed: null,
               onTap: multiSelectMode

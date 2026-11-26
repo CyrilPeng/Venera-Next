@@ -109,6 +109,7 @@ void main() {
             'android://primary:Pictures';
         appdata.settings['blockedWords'] = ['bl'];
         appdata.settings['blockedWordRules'] = {'bl': 'wholeWord:insensitive'};
+        appdata.settings['filterPersonalComicLists'] = true;
         appdata.settings['disableSyncFields'] = 'language, blockedWords';
         final pending = await SourceTransactionJournal.begin(
           dataPath: App.dataPath,
@@ -141,6 +142,7 @@ void main() {
         );
         expect(_settings(complete)['language'], 'zh-CN');
         expect(_settings(complete)['blockedWords'], ['bl']);
+        expect(_settings(complete)['filterPersonalComicLists'], isTrue);
         expect(_settings(complete)['blockedWordRules'], {
           'bl': 'wholeWord:insensitive',
         });

@@ -2,11 +2,11 @@
 
 [简体中文](keyword_blocking.zh.md)
 
-> These features are available for testing in `v1.18.4-rc.1+250`. The current stable release, `v1.18.3+249`, still uses the original keyword matching and does not include match modes, trial matching, or editing from the reasons dialog.
-
 ## 1. Add or edit a rule
 
 Open **Settings → Explore → Keyword blocking** to add a rule, or click an existing keyword to edit it. **Comment keyword blocking** on the same page manages a separate list.
+
+Comic keywords apply to search, discovery, and recommendations by default. Favorites (including source favorites), history, local comics, Read later, and Follow Updates show all entries by default, including on the home screen. Turn on **Also filter personal comic lists** in **Keyword blocking** to hide matching comics there too. Turning the setting off restores the hidden entries to view.
 
 Each rule has a keyword, a matching method, and an **Ignore case** switch. New rules ignore case by default. When you enter 1–3 English letters, the editor recommends **Whole word**. You can choose another method; typing more text then keeps your choice.
 

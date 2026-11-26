@@ -1,5 +1,7 @@
 import 'package:venera_next/foundation/keyword_settings_store.dart';
 import 'package:venera_next/foundation/keyword_filter.dart';
+import 'package:venera_next/foundation/application_preferences.dart';
+import 'setting_components.dart';
 import 'package:flutter/material.dart';
 import 'package:venera_next/components/keyword_match_preview.dart';
 import 'package:venera_next/components/keyword_rule_labels.dart';
@@ -101,9 +103,18 @@ class _KeywordBlockingSettingsState
           ),
         ],
         body: ListView.builder(
-          itemCount: rules.length,
+          itemCount: rules.length + (widget.comments ? 0 : 1),
           itemBuilder: (context, index) {
-            final rule = rules[index];
+            if (!widget.comments && index == 0) {
+              return SwitchSetting.preference(
+                title: 'Also filter personal comic lists'.tl,
+                subtitle:
+                    'Apply keyword rules to favorites, history, local comics, read later and follow updates.'
+                        .tl,
+                preference: KeywordPreferences.filterPersonalLists,
+              );
+            }
+            final rule = rules[index - (widget.comments ? 0 : 1)];
             return ListTile(
               title: Text(
                 rule.keyword.isEmpty ? 'Empty keyword'.tl : rule.keyword,
