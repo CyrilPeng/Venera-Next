@@ -183,6 +183,7 @@ Future<_Library> _prepare(WidgetTester tester) async {
   appdata.implicitData = {};
   appdata.settings['language'] = 'en-US';
   appdata.settings['blockedWords'] = <String>[];
+  appdata.settings['filterPersonalComicLists'] = true;
   appdata.settings['comicDisplayMode'] = 'detailed';
   tester.view.physicalSize = const Size(375, 812);
   tester.view.devicePixelRatio = 1;
@@ -314,6 +315,29 @@ void main() {
       );
     }
   }
+
+  testWidgets(
+    'imported comics remain visible by default with active keywords',
+    (tester) async {
+      final library = await _prepare(tester);
+      await tester.runAsync(() => library.import('local', _names));
+      appdata.settings['blockedWords'] = <String>['black'];
+      appdata.settings['filterPersonalComicLists'] = false;
+      await _show(tester);
+      expect(find.byType(ComicTile), findsNWidgets(2));
+      expect(find.text('Hidden by keyword filters: 1 comics'), findsNothing);
+      await _selectFirst(tester);
+      await tester.tap(find.byTooltip('Select All'));
+      await tester.pumpAndSettle();
+      expect(_selection(tester), hasLength(2));
+      expect(library.manager.count, 2);
+      appdata.settings['filterPersonalComicLists'] = true;
+      await tester.pumpAndSettle();
+      expect(_selection(tester), hasLength(1));
+      expect(find.text('Hidden by keyword filters: 1 comics'), findsOneWidget);
+      expect(library.manager.count, 2);
+    },
+  );
 
   for (final action in ['Select All', 'Invert Selection']) {
     testWidgets('bulk action only selects visible archives: $action', (

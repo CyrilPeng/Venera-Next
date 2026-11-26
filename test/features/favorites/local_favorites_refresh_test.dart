@@ -232,6 +232,7 @@ Future<_Fixture> _prepare(
   appdata.settings['language'] = 'en-US';
   appdata.settings[FavoritePreferences.newFavoriteAddTo.key] = 'start';
   appdata.settings['blockedWords'] = <String>[];
+  appdata.settings['filterPersonalComicLists'] = true;
   appdata.settings[KeywordPreferences.comics.key] = <String>[];
   appdata.settings['showFavoriteStatusOnTile'] = false;
   appdata.settings['showHistoryStatusOnTile'] = false;
@@ -940,6 +941,38 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'opting in while favorites are covered reconciles the visible selection',
+    (tester) async {
+      final fixture = await _prepare(tester, 3);
+      appdata.settings[KeywordPreferences.comics.key] = <String>['Existing 1'];
+      appdata.settings[KeywordPreferences.filterPersonalLists.key] = false;
+      await tester.pumpWidget(fixture.host());
+      await _settle(tester);
+      await tester.tap(find.byTooltip('Select comics'));
+      await tester.pumpAndSettle();
+      await _chooseAction(tester, 'Select All');
+      expect(find.text('Selected 3 comics'), findsOneWidget);
+
+      final navigator = fixture.navigator.currentState!;
+      unawaited(
+        navigator.push<void>(
+          MaterialPageRoute(
+            builder: (_) => const Scaffold(body: Text('Covering page')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      appdata.settings[KeywordPreferences.filterPersonalLists.key] = true;
+      navigator.pop();
+      await _settle(tester);
+
+      expect(find.text('Selected 2 comics'), findsOneWidget);
+      expect(find.text('Hidden by keyword filters: 1 comics'), findsOneWidget);
+      expect(fixture.manager.getFolderComics('B'), hasLength(3));
+    },
+  );
 
   testWidgets('long-press range selection skips hidden comics', (tester) async {
     final fixture = await _prepare(tester, 3);

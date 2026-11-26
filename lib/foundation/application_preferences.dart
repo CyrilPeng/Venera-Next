@@ -176,6 +176,10 @@ abstract final class KeywordPreferences {
   static const comments = StringListPreference('blockedCommentWords');
   static const comicRules = StringMapPreference('blockedWordRules');
   static const commentRules = StringMapPreference('blockedCommentWordRules');
+  static const filterPersonalLists = BoolPreference(
+    'filterPersonalComicLists',
+    false,
+  );
   // Keep legacy lists independently readable by existing consumers/backups.
   static const all = [comics, comments];
   static const ruleOptions = [comicRules, commentRules];
@@ -273,6 +277,7 @@ Map<String, Object?> get applicationPreferenceDefaults => {
     ...DiscoveryPreferences.all,
     ...KeywordPreferences.all,
     ...KeywordPreferences.ruleOptions,
+    KeywordPreferences.filterPersonalLists,
     ...FavoritePreferences.all,
     ...ImageProcessingPreferences.all,
     ...ImageSavePreferences.all,

@@ -151,6 +151,10 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   String? _gridFolder;
   Widget? _comicGrid;
   late var _keywordFilter = KeywordFilter.fromSettings(appdata.settings);
+  late bool _filterPersonalLists = comicKeywordFilteringEnabled(
+    appdata.settings,
+    ComicKeywordScope.personal,
+  );
   late var _blockDisplayMode = appdata.settings['comicDisplayMode'];
   final _blockedCache = Map<FavoriteItem, bool>.identity();
 
@@ -229,7 +233,9 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
       return _visibleCache!;
     }
     _visibleInput = displayed;
-    if (_keywordFilter.rules.isEmpty) return _visibleCache = displayed;
+    if (!_filterPersonalLists || _keywordFilter.rules.isEmpty) {
+      return _visibleCache = displayed;
+    }
     final visible = displayed
         .where(
           (comic) => !_blockedCache.putIfAbsent(
@@ -270,15 +276,20 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
   void _onSettingsChanged() {
     final filter = KeywordFilter.fromSettings(appdata.settings);
     final displayMode = appdata.settings['comicDisplayMode'];
-    if (_canReadObservedFolder &&
-        (!listEquals(filter.rules, _keywordFilter.rules) ||
-            displayMode != _blockDisplayMode)) {
+    final filterPersonalLists = comicKeywordFilteringEnabled(
+      appdata.settings,
+      ComicKeywordScope.personal,
+    );
+    if (!listEquals(filter.rules, _keywordFilter.rules) ||
+        displayMode != _blockDisplayMode ||
+        filterPersonalLists != _filterPersonalLists) {
       _keywordFilter = filter;
+      _filterPersonalLists = filterPersonalLists;
       _blockDisplayMode = displayMode;
       _blockedCache.clear();
       _visibleCache = null;
       _visibleInput = null;
-      if (_canRefresh) setState(_reconcileSelection);
+      if (_canReadObservedFolder && _canRefresh) setState(_reconcileSelection);
     }
   }
 
@@ -1458,6 +1469,7 @@ class _LocalFavoritesPageState extends State<LocalFavoritesPage> {
           _comicGrid ??= SliverGridComics(
             comics: displayedComics,
             visibleComics: visibleComics,
+            keywordScope: ComicKeywordScope.personal,
             showHiddenCount: true,
             selections: _gridSelection,
             useFavoriteDisplaySettings: true,

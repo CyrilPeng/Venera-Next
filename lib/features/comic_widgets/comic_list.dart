@@ -26,6 +26,9 @@ import 'comic_tile.dart';
 import 'cover_hero_ids.dart';
 import 'keyword_hidden_notice.dart';
 
+export 'package:venera_next/foundation/keyword_filter.dart'
+    show ComicKeywordScope;
+
 class SliverGridComics extends StatefulWidget {
   const SliverGridComics({
     super.key,
@@ -39,6 +42,7 @@ class SliverGridComics extends StatefulWidget {
     this.selections,
     this.useFavoriteDisplaySettings = false,
     this.showHiddenCount = true,
+    this.keywordScope = ComicKeywordScope.discovery,
   });
 
   final List<Comic> comics;
@@ -61,6 +65,7 @@ class SliverGridComics extends StatefulWidget {
 
   final bool useFavoriteDisplaySettings;
   final bool showHiddenCount;
+  final ComicKeywordScope keywordScope;
 
   @override
   State<SliverGridComics> createState() => _SliverGridComicsState();
@@ -71,6 +76,7 @@ class _SliverGridComicsState extends State<SliverGridComics> {
   List<int> heroIDs = [];
   List<Comic> _inputSnapshot = [];
   late var _filter = KeywordFilter.fromSettings(appdata.settings);
+  late bool _keywordFilteringEnabled;
   late var _presentation = _readPresentation();
   bool _tickerEnabled = true;
   final _parentRoutes = <ModalRoute<dynamic>>[];
@@ -93,6 +99,10 @@ class _SliverGridComicsState extends State<SliverGridComics> {
   }
 
   void _refreshComics() {
+    _keywordFilteringEnabled = comicKeywordFilteringEnabled(
+      appdata.settings,
+      widget.keywordScope,
+    );
     _inputSnapshot = List.of(widget.visibleComics ?? widget.comics);
     final previousIDs = <(String, String), Queue<int>>{};
     for (var i = 0; i < comics.length; i++) {
@@ -102,9 +112,11 @@ class _SliverGridComicsState extends State<SliverGridComics> {
     }
     comics = widget.visibleComics != null
         ? _inputSnapshot
-        : widget.comics
-              .where((comic) => isBlocked(comic, filter: _filter) == null)
-              .toList();
+        : comicsVisibleByKeyword(
+            _inputSnapshot,
+            widget.keywordScope,
+            filter: _filter,
+          );
     heroIDs = [
       for (final comic in comics)
         switch (previousIDs[(comic.sourceKey, comic.id)]) {
@@ -120,7 +132,8 @@ class _SliverGridComicsState extends State<SliverGridComics> {
     // Equality on Comic only compares identity, so replacement metadata must
     // refresh too. Keep a snapshot to detect callers mutating the input list.
     final input = widget.visibleComics ?? widget.comics;
-    if ((oldWidget.visibleComics == null) != (widget.visibleComics == null) ||
+    if (oldWidget.keywordScope != widget.keywordScope ||
+        (oldWidget.visibleComics == null) != (widget.visibleComics == null) ||
         input.length != _inputSnapshot.length ||
         Iterable<int>.generate(
           input.length,
@@ -169,10 +182,16 @@ class _SliverGridComicsState extends State<SliverGridComics> {
         : _filter;
     final presentation = _readPresentation();
     final rulesChanged = !listEquals(filter.rules, _filter.rules);
-    if (!rulesChanged && presentation == _presentation) return;
+    final filteringChanged =
+        widget.visibleComics == null &&
+        _keywordFilteringEnabled !=
+            comicKeywordFilteringEnabled(appdata.settings, widget.keywordScope);
+    if (!rulesChanged && !filteringChanged && presentation == _presentation) {
+      return;
+    }
     setState(() {
       _presentation = presentation;
-      if (rulesChanged) {
+      if (rulesChanged || filteringChanged) {
         _filter = filter;
         _refreshComics();
       }
@@ -321,6 +340,19 @@ class _SliverGridComics extends StatelessWidget {
 }
 
 /// return the first blocked keyword, or null if not blocked
+List<T> comicsVisibleByKeyword<T extends Comic>(
+  List<T> comics,
+  ComicKeywordScope scope, {
+  KeywordFilter? filter,
+}) {
+  if (!comicKeywordFilteringEnabled(appdata.settings, scope)) return comics;
+  final rules = filter ?? KeywordFilter.fromSettings(appdata.settings);
+  if (rules.rules.isEmpty) return comics;
+  return comics
+      .where((comic) => isBlocked(comic, filter: rules) == null)
+      .toList();
+}
+
 String? isBlocked(Comic item, {KeywordFilter? filter}) {
   final current = filter ?? KeywordFilter.fromSettings(appdata.settings);
   if (current.rules.isEmpty) return null;
@@ -346,6 +378,7 @@ class ComicList extends StatefulWidget {
     this.reloadHandlerCallback,
     this.enablePageStorage = false,
     this.useFavoriteDisplaySettings = false,
+    this.keywordScope = ComicKeywordScope.discovery,
   });
 
   final Future<Res<List<Comic>>> Function(int page)? loadPage;
@@ -369,6 +402,7 @@ class ComicList extends StatefulWidget {
   final bool enablePageStorage;
 
   final bool useFavoriteDisplaySettings;
+  final ComicKeywordScope keywordScope;
 
   @override
   State<ComicList> createState() => ComicListState();
@@ -717,6 +751,7 @@ class ComicListState extends State<ComicList> {
         if (_maxPage != 1) _buildSliverPageSelector(),
         SliverGridComics(
           comics: _data[_page] ?? const [],
+          keywordScope: widget.keywordScope,
           menuBuilder: widget.menuBuilder,
           useFavoriteDisplaySettings: widget.useFavoriteDisplaySettings,
         ),
@@ -763,6 +798,7 @@ class ComicListState extends State<ComicList> {
         if (widget.leadingSliver != null) widget.leadingSliver!,
         SliverGridComics(
           comics: _data.values.expand((element) => element).toList(),
+          keywordScope: widget.keywordScope,
           menuBuilder: widget.menuBuilder,
           useFavoriteDisplaySettings: widget.useFavoriteDisplaySettings,
           onLastItemBuild: () {

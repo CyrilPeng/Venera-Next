@@ -40,6 +40,12 @@ class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
   FollowUpdatesRuntime? _runtime;
   HistoryManager? _history;
 
+  @override
+  void initState() {
+    super.initState();
+    appdata.settings.addListener(_progressChanged);
+  }
+
   void _progressChanged() {
     if (mounted) setState(() {});
   }
@@ -117,6 +123,7 @@ class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
 
   @override
   void dispose() {
+    appdata.settings.removeListener(_progressChanged);
     _history?.removeListener(_progressChanged);
     _runtime?.changes.removeListener(updateCount);
     super.dispose();
@@ -124,6 +131,10 @@ class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final visible = comicsVisibleByKeyword(
+      previewComics,
+      ComicKeywordScope.personal,
+    );
     return SliverToBoxAdapter(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -170,14 +181,14 @@ class _FollowUpdatesWidgetState extends SettingsSaveState<FollowUpdatesWidget> {
                   ],
                 ),
               ).paddingHorizontal(16),
-              if (previewComics.isNotEmpty)
+              if (visible.isNotEmpty)
                 SizedBox(
                   height: 136,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    itemCount: previewComics.length,
+                    itemCount: visible.length,
                     itemBuilder: (context, index) {
-                      final comic = previewComics[index];
+                      final comic = visible[index];
                       final heroID = _heroIds.forComic(comic);
                       return SimpleComicTile(
                         comic: comic,
@@ -440,7 +451,10 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
             ).paddingHorizontal(16).paddingVertical(4),
           ),
         if (updatedComics.isNotEmpty)
-          SliverGridComics(comics: updatedComics)
+          SliverGridComics(
+            comics: updatedComics,
+            keywordScope: ComicKeywordScope.personal,
+          )
         else
           SliverToBoxAdapter(
             child: Row(
@@ -494,7 +508,10 @@ class _FollowUpdatesPageState extends State<FollowUpdatesPage> {
             ),
           ),
         ),
-        SliverGridComics(comics: allComics),
+        SliverGridComics(
+          comics: allComics,
+          keywordScope: ComicKeywordScope.personal,
+        ),
       ],
     );
   }

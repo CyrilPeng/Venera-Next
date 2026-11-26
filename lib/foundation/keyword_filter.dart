@@ -5,6 +5,17 @@ import 'reader_preference_settings.dart';
 
 export 'keyword_rule.dart';
 
+enum ComicKeywordScope { discovery, personal }
+
+bool comicKeywordFilteringEnabled(
+  ReaderPreferenceSettings settings,
+  ComicKeywordScope scope,
+) =>
+    scope == ComicKeywordScope.discovery ||
+    GlobalPreferenceStore(
+      settings,
+    ).read(KeywordPreferences.filterPersonalLists);
+
 /// Immutable matching snapshots shared by lists, comments and rule previews.
 /// User text is always literal; no user-supplied regular expression is run.
 class KeywordFilter {

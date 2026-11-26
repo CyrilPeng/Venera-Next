@@ -109,6 +109,7 @@ class _NormalFavoritePageState extends State<_NormalFavoritePage> {
     final data = widget.data;
     return ComicList(
       key: comicListKey,
+      keywordScope: ComicKeywordScope.personal,
       leadingSliver: SliverAppbar(
         style: context.width < changePoint
             ? AppbarStyle.shadow
@@ -534,6 +535,7 @@ class _FavoriteFolder extends StatelessWidget {
   Widget build(BuildContext context) {
     return ComicList(
       key: comicListKey,
+      keywordScope: ComicKeywordScope.personal,
       enablePageStorage: true,
       leadingSliver: SliverAppbar(
         title: Text(title),

@@ -83,6 +83,32 @@ void _mockWindow() {
 
 void main() {
   App.dataPath = Directory.systemTemp.path;
+
+  testWidgets(
+    'only comic keyword settings offer persistent personal filtering',
+    (tester) async {
+      final root = _prepare();
+      appdata.settings[KeywordPreferences.filterPersonalLists.key] = null;
+      const label = 'Also filter personal comic lists';
+      await tester.pumpWidget(_host(const KeywordBlockingSettings()));
+      final toggle = find.descendant(
+        of: find.widgetWithText(ListTile, label),
+        matching: find.byType(Switch),
+      );
+      expect(tester.widget<Switch>(toggle).value, isFalse);
+      await tester.tap(toggle);
+      await _flush(tester, appdata.saveData(false));
+      expect(_saved(root)[KeywordPreferences.filterPersonalLists.key], isTrue);
+
+      await tester.pumpWidget(
+        _host(const KeywordBlockingSettings(comments: true)),
+      );
+      expect(find.text(label), findsNothing);
+      expect(find.text('comment'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   testWidgets(
     'favorite display save survives removal and holds the window open',
     (tester) async {

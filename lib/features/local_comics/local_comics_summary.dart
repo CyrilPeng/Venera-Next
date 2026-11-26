@@ -16,6 +16,7 @@ import 'package:venera_next/features/comic_widgets/comic_widgets.dart';
 import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/routing/local_reading.dart';
@@ -54,17 +55,22 @@ class _LocalComicsSummaryState extends State<LocalComicsSummary> {
     local = LocalManager().getRecent();
     count = LocalManager().count;
     LocalManager().addListener(onLocalComicsChange);
+    appdata.settings.addListener(_onSettingsChanged);
     super.initState();
   }
+
+  void _onSettingsChanged() => setState(() {});
 
   @override
   void dispose() {
     LocalManager().removeListener(onLocalComicsChange);
+    appdata.settings.removeListener(_onSettingsChanged);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final visible = comicsVisibleByKeyword(local, ComicKeywordScope.personal);
     return SliverToBoxAdapter(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -106,14 +112,14 @@ class _LocalComicsSummaryState extends State<LocalComicsSummary> {
                   ],
                 ),
               ).paddingHorizontal(16),
-              if (local.isNotEmpty)
+              if (visible.isNotEmpty)
                 SizedBox(
                   height: 136,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    itemCount: local.length,
+                    itemCount: visible.length,
                     itemBuilder: (context, index) {
-                      final comic = local[index];
+                      final comic = visible[index];
                       final imported = comic.comicType == ComicType.local;
                       final heroID = imported ? null : _heroIds.forComic(comic);
                       return SimpleComicTile(
