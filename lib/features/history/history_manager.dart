@@ -34,6 +34,35 @@ typedef HistoryDurationStorageWriter =
       int durationMs,
     );
 
+/// Writes from one reader, bound to the connection and history it opened.
+class ReaderHistory {
+  ReaderHistory._(this._manager, this.item)
+    : _key = (item.id, item.type.value),
+      _generation = _manager.connectionGeneration;
+
+  final HistoryManager _manager;
+  final History item;
+  final (String, int) _key;
+  final int _generation;
+  bool _retired = false;
+
+  bool get _isCurrent =>
+      !_retired && _generation == _manager.connectionGeneration;
+
+  Future<void> Function() stageProgress() => _manager._stageProgress(this);
+
+  Future<void> addDuration(Duration duration) =>
+      _manager.addReadDuration(item, duration, shouldWrite: () => _isCurrent);
+
+  void release() {
+    _retired = true;
+    _manager._readers.remove(this);
+    if (identical(_manager._readerProgress[_key]?.reader, this)) {
+      _manager._readerProgress.remove(_key);
+    }
+  }
+}
+
 class HistoryManager with ChangeNotifier {
   static HistoryManager? _cache;
 
@@ -254,8 +283,37 @@ class HistoryManager with ChangeNotifier {
   bool get hasPendingWrites => _pendingWrites != 0;
 
   /// Submit a detached progress snapshot to the ordered mutation queue.
-  Future<void> addHistory(History newItem) =>
-      _writeHistory(newItem, replaceMetadata: false);
+  Future<void> addHistory(History newItem, {bool Function()? shouldWrite}) =>
+      _writeHistory(newItem, replaceMetadata: false, shouldWrite: shouldWrite);
+
+  final _readers = <ReaderHistory>{};
+  final _readerProgress =
+      <(String, int), ({ReaderHistory reader, History snapshot})>{};
+
+  ReaderHistory openReaderHistory(History item) {
+    final reader = ReaderHistory._(this, item.copy());
+    _readers.add(reader);
+    return reader;
+  }
+
+  /// Publish the latest coordinates for reopening before the write finishes.
+  /// Check ownership again in the storage queue, including on a manual retry.
+  Future<void> Function() _stageProgress(ReaderHistory reader) {
+    if (!reader._isCurrent) return () async {};
+    final snapshot = reader.item.copy();
+    final key = reader._key;
+    _readerProgress[key] = (reader: reader, snapshot: snapshot);
+    bool isLatest() =>
+        reader._isCurrent &&
+        identical(_readerProgress[key]?.snapshot, snapshot);
+    return () async {
+      if (!isLatest()) return;
+      await addHistory(snapshot, shouldWrite: isLatest);
+      if (isLatest()) {
+        _readerProgress.remove(key);
+      }
+    };
+  }
 
   Future<void> importHistory(History newItem) =>
       _writeHistory(newItem, replaceMetadata: true);
@@ -266,7 +324,9 @@ class HistoryManager with ChangeNotifier {
   Future<void> importStorage(
     void Function(String databasePath) write, {
     required void Function() onCommitted,
+    Iterable<(String, int)> deletedHistory = const [],
   }) {
+    final deleted = deletedHistory.toSet();
     return _enqueueAsyncWrite(() {
       if (!isInitialized) {
         throw StateError('History database is closed');
@@ -278,6 +338,11 @@ class HistoryManager with ChangeNotifier {
           throw StateError('History import belongs to a closed connection');
         }
         write(path);
+        if (deleted.isNotEmpty) {
+          _retireReaders(
+            _readers.where((reader) => deleted.contains(reader._key)),
+          );
+        }
         _historyCache.refresh(invalidateRecords: true);
         _operations.publish(onCommitted);
         notifyListeners();
@@ -285,13 +350,19 @@ class HistoryManager with ChangeNotifier {
     });
   }
 
-  Future<void> _writeHistory(History newItem, {required bool replaceMetadata}) {
+  Future<void> _writeHistory(
+    History newItem, {
+    required bool replaceMetadata,
+    bool Function()? shouldWrite,
+  }) {
     final snapshot = newItem.copy();
     return _enqueueAsyncWrite(() {
+      if (shouldWrite?.call() == false) return () async {};
       if (_database == null) throw StateError('History database is closed');
       final path = _dbPath;
       final generation = _generation;
       return () async {
+        if (shouldWrite?.call() == false) return;
         await _addHistoryAsync(path, snapshot, replaceMetadata);
         if (isInitialized && generation == _generation) {
           _cachePersistedHistory(snapshot.id, snapshot.type.value);
@@ -337,11 +408,16 @@ class HistoryManager with ChangeNotifier {
   }
 
   /// Atomically adds foreground reading time without replacing progress data.
-  Future<void> addReadDuration(History item, Duration duration) {
+  Future<void> addReadDuration(
+    History item,
+    Duration duration, {
+    bool Function()? shouldWrite,
+  }) {
     final durationMs = duration.inMilliseconds;
-    if (durationMs <= 0) return Future.value();
+    if (durationMs <= 0 || shouldWrite?.call() == false) return Future.value();
     final snapshot = item.copy();
     return _enqueueAsyncWrite(() {
+      if (shouldWrite?.call() == false) return () async {};
       if (!isInitialized) {
         throw PersistenceFailure(
           commitState: PersistenceCommitState.notCommitted,
@@ -352,6 +428,7 @@ class HistoryManager with ChangeNotifier {
       final path = _dbPath;
       final generation = _generation;
       return () async {
+        if (shouldWrite?.call() == false) return;
         PersistenceFailure? committedFailure;
         try {
           await _writeDuration(path, snapshot, durationMs);
@@ -475,13 +552,24 @@ class HistoryManager with ChangeNotifier {
     }
   });
 
-  Future<void> _delete(void Function(HistoryRepository) mutate) {
+  void _retireReaders(Iterable<ReaderHistory> readers) {
+    for (final reader in readers.toList()) {
+      reader.release();
+    }
+  }
+
+  Future<void> _delete(
+    void Function(HistoryRepository) mutate,
+    bool Function(ReaderHistory) matches,
+  ) {
     return _enqueueAsyncWrite(() {
       if (_database == null) throw StateError('History database is closed');
       final path = _dbPath;
       final generation = _generation;
       return () async {
+        final retiring = _readers.where(matches).toList();
         await _mutateDatabase(path, mutate);
+        _retireReaders(retiring);
         if (isInitialized && generation == _generation) {
           updateCache();
           notifyListeners();
@@ -490,7 +578,8 @@ class HistoryManager with ChangeNotifier {
     });
   }
 
-  Future<void> clearHistory() => _delete((repository) => repository.clear());
+  Future<void> clearHistory() =>
+      _delete((repository) => repository.clear(), (_) => true);
 
   HistoryRetentionChange createRetentionChange(int days) {
     final generation = _generation;
@@ -520,8 +609,10 @@ class HistoryManager with ChangeNotifier {
   }
 
   // Keep the isolate callback outside the edit factory's captured manager scope.
-  Future<void> _clearHistoryBefore(int cutoff) =>
-      _delete((repository) => repository.clearBefore(cutoff));
+  Future<void> _clearHistoryBefore(int cutoff) => _delete(
+    (repository) => repository.clearBefore(cutoff),
+    (reader) => reader.item.time.millisecondsSinceEpoch < cutoff,
+  );
 
   Future<void> clearUnfavoritedHistory({LocalFavoritesManager? manager}) {
     // The user's deletion decision uses the favorite identities at submission.
@@ -533,17 +624,23 @@ class HistoryManager with ChangeNotifier {
     return _delete(
       (repository) =>
           repository.deleteWhere((id, type) => !favorites.contains((id, type))),
+      (reader) => !favorites.contains(reader._key),
     );
   }
 
   Future<void> remove(String id, ComicType type) {
     final value = type.value;
-    return _delete((repository) => repository.remove(id, value));
+    return _delete(
+      (repository) => repository.remove(id, value),
+      (reader) => reader._key == (id, value),
+    );
   }
 
   void updateCache() => _historyCache.refresh();
 
+  // Reopening during an in-flight write must not read a locked database.
   History? find(String id, ComicType type) =>
+      _readerProgress[(id, type.value)]?.snapshot.copy() ??
       _historyCache.find(id, type.value);
 
   Set<(String, int)> completedAmong(Iterable<(String, int)> identities) =>
@@ -602,6 +699,7 @@ class HistoryManager with ChangeNotifier {
 
   void close() {
     ++_generation;
+    _retireReaders(_readers);
     isInitialized = false;
     _initialization = null;
     _historyCache.clear();

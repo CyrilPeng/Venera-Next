@@ -61,6 +61,74 @@ void main() {
       });
 
       test(
+        'a detached progress retry preserves newer progress and other comics',
+        () async {
+          final firstComic = _history('first-comic');
+          await manager.addHistory(firstComic);
+          final older = manager.openReaderHistory(firstComic);
+          older.item.page = 3;
+          final olderWrite = older.stageProgress();
+          final resumed = manager.find(firstComic.id, firstComic.type)!;
+          expect(resumed.page, 3);
+          expect(manager.getAll().single.page, 2);
+          resumed.page = 5;
+          expect(manager.find(firstComic.id, firstComic.type)!.page, 3);
+          final newerWrite = manager.openReaderHistory(resumed).stageProgress();
+          final other = manager.openReaderHistory(_history('second-comic'));
+          other.item.page = 8;
+          final otherWrite = other.stageProgress();
+          await Future.wait([newerWrite(), otherWrite()]);
+          await olderWrite();
+          expect(
+            {for (final item in manager.getAll()) item.id: item.page},
+            {'first-comic': 5, 'second-comic': 8},
+          );
+        },
+      );
+
+      test('reopening reads pending progress even while SQLite is locked', () {
+        final comic = _history('pending-during-lock');
+        final reader = manager.openReaderHistory(comic);
+        reader.item.page = 6;
+        reader.stageProgress();
+        final connection = sqlite3.open('${directory.path}/history.db');
+        try {
+          connection.execute('BEGIN EXCLUSIVE');
+          expect(manager.find(comic.id, comic.type)!.page, 6);
+        } finally {
+          connection.dispose();
+          reader.release();
+        }
+      });
+
+      test('deletion and replacement retire detached reader writes', () async {
+        final comic = _history('deleted-during-save');
+        await manager.addHistory(comic);
+        final retired = manager.openReaderHistory(comic);
+        retired.item.page = 3;
+        final save = retired.stageProgress();
+        final deletion = manager.remove(comic.id, comic.type);
+        await Future.wait([
+          deletion,
+          save(),
+          retired.addDuration(const Duration(seconds: 3)),
+        ]);
+        expect(manager.find(comic.id, comic.type), isNull);
+
+        final preRestore = manager.openReaderHistory(comic);
+        preRestore.item.page = 9;
+        final oldSave = preRestore.stageProgress();
+        manager.close();
+        await manager.init();
+        await manager.importHistory(comic.copy()..page = 7);
+        await oldSave();
+        await preRestore.addDuration(const Duration(seconds: 3));
+        final restored = manager.find(comic.id, comic.type)!;
+        expect(restored.page, 7);
+        expect(restored.readDurationMs, 0);
+      });
+
+      test(
         'external imports preserve queue order, failure recovery and connection ownership',
         () async {
           final original = _history('queued-import');

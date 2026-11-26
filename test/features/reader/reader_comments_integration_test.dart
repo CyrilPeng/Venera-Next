@@ -18,7 +18,7 @@ void main() {
   setUpReaderIntegration();
 
   testWidgets(
-    'embedded comments exit waits for reader save and retains failed route',
+    'embedded comments exit returns home and exposes background save errors',
     (tester) async {
       final fixture = await ReaderIntegrationFixture.create(tester);
       final source = ReaderFixtureCommentSource();
@@ -38,28 +38,29 @@ void main() {
         expect(exit, findsOneWidget);
         fixture.history.onProgress = (_) => saving.future;
         await tester.tap(exit);
-        await tester.pump();
-        expect(fixture.readerKey.currentState, same(reader));
-        saving.completeError(StateError('Comments exit save failed'));
-        // Recovery can restart native image work. Wait for the exit outcome
-        // while allowing its real I/O and codec futures to complete.
-        await pumpReaderUntil(
-          tester,
-          () => find
-              .text('Unable to close. Please try again.')
-              .evaluate()
-              .isNotEmpty,
-        );
-        expect(fixture.readerKey.currentState, same(reader));
-        expect(find.text('Unable to close. Please try again.'), findsOneWidget);
-        fixture.history.onProgress = null;
-        await tester.tap(exit);
         await pumpReaderUntil(
           tester,
           () => fixture.readerKey.currentState == null,
         );
+        expect(find.text('Library home'), findsOneWidget);
+        final page = fixture.history.progress.last.page;
+        saving.completeError(StateError('Comments exit save failed'));
+        final failed = find.byTooltip('Reading progress save failed');
+        await pumpReaderUntil(tester, () => failed.evaluate().isNotEmpty);
+        await tester.tap(failed);
         await tester.pumpAndSettle();
-        expect(fixture.readerKey.currentState, isNull);
+        expect(
+          find.textContaining('Comments exit save failed'),
+          findsOneWidget,
+        );
+        fixture.history.onProgress = null;
+        await tester.tap(find.text('Retry'));
+        await pumpReaderUntil(
+          tester,
+          () => failed.evaluate().isEmpty && fixture.notifications > 0,
+        );
+        expect(fixture.history.progress.last.page, page);
+        expect(find.text('Library home'), findsOneWidget);
         expect(tester.takeException(), isNull);
       } finally {
         if (!saving.isCompleted) saving.complete();

@@ -88,6 +88,8 @@ class ReadingSessionTracker {
   bool _disposed = false;
 
   bool get isRunning => _startedAt != null;
+  bool get hasRetryableWrite =>
+      _failedDurations.any((period) => period.canRetry);
 
   void start() {
     if (_disposed || isRunning) return;

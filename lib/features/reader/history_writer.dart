@@ -47,14 +47,15 @@ class ReaderProgressFailure implements FailureDetails {
 /// regardless of the order in which their futures complete.
 class ReaderHistoryWriter {
   ReaderHistoryWriter({
-    required Future<void> Function() write,
+    Future<void> Function()? write,
     required void Function(Object, StackTrace) onError,
     Duration delay = const Duration(seconds: 1),
   }) : _write = write,
        _onError = onError,
        _delay = delay;
 
-  final Future<void> Function() _write;
+  final Future<void> Function()? _write;
+  Future<void> Function()? _latestWrite;
   final void Function(Object, StackTrace) _onError;
   final Duration _delay;
   Timer? _timer;
@@ -67,8 +68,9 @@ class ReaderHistoryWriter {
   Future<void>? _flushing;
   Future<void>? _closing;
 
-  void schedule() {
+  void schedule({Future<void> Function()? write}) {
     if (_disposed) return;
+    _latestWrite = write;
     _timer?.cancel();
     _timer = Timer(_delay, () {
       _timer = null;
@@ -83,7 +85,7 @@ class ReaderHistoryWriter {
     // another flush or dispose, which must already include this write.
     _pending.add(completed.future);
     unawaited(
-      Future<void>.sync(_write).then(
+      Future<void>.sync(_latestWrite ?? _write!).then(
         (_) {
           if (revision > _savedRevision) _savedRevision = revision;
           _failures.removeWhere((revision, _) => revision <= _savedRevision);
@@ -134,6 +136,21 @@ class ReaderHistoryWriter {
   /// or a newer successful save; they cannot cause an unbounded retry loop.
   Future<void> flush() {
     if (_closing != null) return _closing!;
+    return _startFlush();
+  }
+
+  bool get hasRetryableWrite => _failures.isNotEmpty;
+
+  Future<void> retryClosedWrite() {
+    final closing = _closing;
+    if (closing == null) return flush();
+    return _closing = closing.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) => _startFlush(),
+    );
+  }
+
+  Future<void> _startFlush() {
     if (_flushing != null) return _flushing!;
     final completed = Completer<void>();
     _flushing = completed.future;

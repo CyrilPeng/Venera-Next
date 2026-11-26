@@ -3,10 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
-import 'package:venera_next/features/reader/reader_session.dart';
 import 'package:venera_next/features/reader/exit_guard.dart';
-import 'package:venera_next/features/reader/history_writer.dart';
-import 'package:venera_next/features/reader/window_controller.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
@@ -339,7 +336,7 @@ void main() {
   );
 
   testWidgets(
-    'reader exit waits for platform failure and preserves independent save failure',
+    'reader exit still reports a platform restoration failure before leaving',
     (tester) async {
       final fixture = await ReaderIntegrationFixture.create(tester);
       final platform = ReaderPlatformEffectsProbe()..install();
@@ -348,12 +345,6 @@ void main() {
         appdata.settings['showSystemStatusBar'] = false;
         await fixture.mount(tester, pushed: true, withWindow: false);
         final reader = fixture.readerKey.currentState!;
-        final progressError = StateError('progress preparation failed');
-        final progressStack = StackTrace.fromString(
-          'progress preparation stack',
-        );
-        fixture.history.onProgress = (_) =>
-            Future.error(progressError, progressStack);
         reader.toPage(2, animated: false);
         platform.onBars = (visible) =>
             visible ? restoring.future : Future.value();
@@ -376,23 +367,8 @@ void main() {
         restoring.completeError(StateError('platform preparation failed'));
         await pumpReaderUntil(tester, () => finished);
         await preparation;
-        expect(failure, isA<ReaderWindowFailure>());
-        final reading =
-            (failure as ReaderWindowFailure).failures
-                    .singleWhere(
-                      (entry) => entry.operation == 'reading preparation',
-                    )
-                    .error
-                as ReaderSessionFailure;
-        expect(
-          (reading.failures.single.error as ReaderProgressFailure).cause,
-          same(progressError),
-        );
-        expect(
-          reading.failures.single.stackTrace.toString(),
-          progressStack.toString(),
-        );
         expect(failure.toString(), contains('platform preparation failed'));
+        expect(fixture.readerKey.currentState, same(reader));
         expect(reader.controller.isDisposed, isFalse);
         expect(tester.takeException(), isNull);
       } finally {

@@ -744,14 +744,19 @@ class ControlledReaderHistory extends HistoryManager {
   Future<void> Function(Duration)? onDuration;
 
   @override
-  Future<void> addHistory(History history) {
+  Future<void> addHistory(History history, {bool Function()? shouldWrite}) {
     final snapshot = history.copy();
     progress.add(snapshot);
     return onProgress?.call(snapshot) ?? Future.value();
   }
 
   @override
-  Future<void> addReadDuration(History history, Duration duration) async {
+  Future<void> addReadDuration(
+    History history,
+    Duration duration, {
+    bool Function()? shouldWrite,
+  }) async {
+    if (shouldWrite?.call() == false) return;
     durations.add(duration);
     await onDuration?.call(duration);
   }

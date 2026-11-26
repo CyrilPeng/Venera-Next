@@ -50,21 +50,25 @@ class _ManagedLocalComicRelatedData implements LocalComicRelatedData {
     var removed = <String, List<(String, int)>>{};
     // Serialize with accepted reading writes; all SQL and publication finish
     // before the next history writer runs. Never adopt a reopened favorites DB.
-    await _history.importStorage((historyPath) {
-      validate();
-      if (_favorites.databasePath != favoritesPath ||
-          _favorites.connectionGeneration != generation) {
-        throw StateError('Favorites storage changed during deletion');
-      }
-      removed = deleteLocalComicRecords(
-        localDatabase: localDatabase,
-        favoritesPath: favoritesPath,
-        historyPath: historyPath,
-        favoriteFolders: _favorites.folderNames,
-        comics: comics,
-        onCommit: markCommitted,
-        validate: validate,
-      );
-    }, onCommitted: () => _favorites.refreshDeletedFavorites(removed));
+    await _history.importStorage(
+      (historyPath) {
+        validate();
+        if (_favorites.databasePath != favoritesPath ||
+            _favorites.connectionGeneration != generation) {
+          throw StateError('Favorites storage changed during deletion');
+        }
+        removed = deleteLocalComicRecords(
+          localDatabase: localDatabase,
+          favoritesPath: favoritesPath,
+          historyPath: historyPath,
+          favoriteFolders: _favorites.folderNames,
+          comics: comics,
+          onCommit: markCommitted,
+          validate: validate,
+        );
+      },
+      onCommitted: () => _favorites.refreshDeletedFavorites(removed),
+      deletedHistory: comics.map((comic) => (comic.id, comic.comicType.value)),
+    );
   }
 }

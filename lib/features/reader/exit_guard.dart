@@ -14,6 +14,8 @@ class ReaderExitGuard extends StatefulWidget {
     required this.onError,
     required this.child,
     this.onBackRequested,
+    this.onPopped,
+    this.waitingDelay = Duration.zero,
     super.key,
   });
 
@@ -21,6 +23,8 @@ class ReaderExitGuard extends StatefulWidget {
   final void Function() Function() holdForLeave;
   final void Function(Object error, StackTrace stackTrace) onError;
   final Widget child;
+  final VoidCallback? onPopped;
+  final Duration waitingDelay;
 
   /// A visible menu may consume back before the save-and-leave transaction.
   final bool Function()? onBackRequested;
@@ -38,6 +42,8 @@ class ReaderExitGuardState extends State<ReaderExitGuard> {
   FocusNode? _previousFocus;
   bool _closing = false;
   bool _popped = false;
+  bool _showWaiting = false;
+  Timer? _waitingTimer;
 
   bool _allowsNavigation() =>
       mounted && !_closing && NavigationAdmission.allows(context);
@@ -74,7 +80,17 @@ class ReaderExitGuardState extends State<ReaderExitGuard> {
         : null;
     _contentFocus.descendantsAreFocusable = false;
     _waitingFocus.requestFocus();
-    setState(() => _closing = true);
+    setState(() {
+      _closing = true;
+      _showWaiting = widget.waitingDelay == Duration.zero;
+    });
+    if (!_showWaiting) {
+      _waitingTimer = Timer(widget.waitingDelay, () {
+        if (mounted && _closing && !_popped) {
+          setState(() => _showWaiting = true);
+        }
+      });
+    }
     for (final pointer in _pointers.toList()) {
       GestureBinding.instance.cancelPointer(pointer);
     }
@@ -135,7 +151,10 @@ class ReaderExitGuardState extends State<ReaderExitGuard> {
           navigator.mounted &&
           NavigationAdmission.allows(context)) {
         navigator.pop();
-        if (mounted) _popped = !route.isCurrent;
+        if (mounted) {
+          _popped = !route.isCurrent;
+          if (_popped) widget.onPopped?.call();
+        }
       }
     } catch (error, stack) {
       if (!prepared && mounted && identical(_attempt, attempt)) {
@@ -148,6 +167,8 @@ class ReaderExitGuardState extends State<ReaderExitGuard> {
   }
 
   void _finishAttempt(_ExitAttempt attempt, ModalRoute<dynamic> route) {
+    _waitingTimer?.cancel();
+    _waitingTimer = null;
     if (!mounted || !_popped) {
       try {
         attempt.release();
@@ -172,6 +193,7 @@ class ReaderExitGuardState extends State<ReaderExitGuard> {
 
   @override
   void dispose() {
+    _waitingTimer?.cancel();
     final attempt = _attempt;
     if (attempt != null) {
       attempt.detached = true;
@@ -214,7 +236,7 @@ class ReaderExitGuardState extends State<ReaderExitGuard> {
                   ),
                 ),
               ),
-              if (_closing && !_popped)
+              if (_closing && !_popped && _showWaiting)
                 Positioned.fill(
                   child: BlockSemantics(
                     child: FocusScope(
