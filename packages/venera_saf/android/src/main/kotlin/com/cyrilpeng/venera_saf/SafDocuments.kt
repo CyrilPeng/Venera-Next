@@ -17,10 +17,12 @@ import android.webkit.MimeTypeMap
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.FileNotFoundException
+import java.io.File
 import java.io.IOException
 import java.util.Locale
 
 internal class SafFailure(val code: Int, message: String) : IOException(message)
+internal class SafSaveDirectoryUnavailable(cause: Exception) : IOException("Image save directory is unavailable", cause)
 
 internal object SafDocuments {
     private const val PREFIX = "android://"
@@ -161,6 +163,58 @@ internal object SafDocuments {
     private fun mime(name: String): String = MimeTypeMap.getSingleton()
         .getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase(Locale.ROOT))
         ?: "application/octet-stream"
+
+    fun saveNewFile(directory: String, sourcePath: String, filename: String): String {
+        validName(filename)
+        val source = File(sourcePath)
+        if (!source.isFile) throw SafFailure(2, "Image source does not exist")
+        val (root, parent, before) = try {
+            val root = grant(validPath(directory))
+            requireAccess(root, write = true)
+            val parent = required(root, directory)
+            if (!parent.directory) throw SafFailure(20, "Image destination is not a directory")
+            if (parent.flags and Document.FLAG_DIR_SUPPORTS_CREATE == 0) throw SafFailure(95, "Provider cannot create files here")
+            Triple(root, parent, children(root, parent))
+        } catch (error: Exception) {
+            throw SafSaveDirectoryUnavailable(error)
+        }
+        val dot = filename.lastIndexOf('.').takeIf { it > 0 } ?: filename.length
+        val stem = filename.substring(0, dot)
+        val extension = filename.substring(dot)
+        val occupied = before.map { it.name.lowercase(Locale.ROOT) }.toSet()
+        val name = (0 until 1000).asSequence().map {
+            if (it == 0) filename else "$stem ($it)$extension"
+        }.firstOrNull { it.lowercase(Locale.ROOT) !in occupied }
+            ?: throw SafFailure(17, "Too many files with this image name")
+        val created = DocumentsContract.createDocument(io, parent.uri, mime(name), name)
+            ?: throw SafFailure(5, "Provider did not create the image")
+        // Never truncate or clean up a URI that existed before this create.
+        val document = node(root, created) ?: throw SafFailure(5, "Created image is unavailable")
+        val owned = document.id != parent.id && before.none { it.id == document.id }
+        if (!owned) throw SafFailure(17, "Provider returned an existing document")
+        try {
+            validName(document.name)
+            if (document.directory || before.any { it.id == document.id || it.name == document.name } ||
+                children(root, parent).count { it.name == document.name } != 1) {
+                throw SafFailure(17, "Provider returned a conflicting image name")
+            }
+            val expected = source.length()
+            val descriptor = io.openFileDescriptor(created, "w")
+                ?: throw SafFailure(5, "Provider did not open the image")
+            ParcelFileDescriptor.AutoCloseOutputStream(descriptor).use { output ->
+                val written = source.inputStream().use { it.copyTo(output) }
+                output.flush()
+                if (written != expected) throw SafFailure(5, "Incomplete image save")
+                descriptor.checkError()
+            }
+            val size = node(root, created)?.size
+            if (size != null && size >= 0 && size != expected) throw SafFailure(5, "Incomplete image save")
+            return "$directory/${document.name}"
+        } catch (error: Exception) {
+            try { DocumentsContract.deleteDocument(io, created) } catch (cleanup: Exception) { error.addSuppressed(cleanup) }
+            throw error
+        }
+    }
 
     private fun create(grant: Grant, path: String, directory: Boolean, recursive: Boolean): Node {
         requireAccess(grant, write = true)

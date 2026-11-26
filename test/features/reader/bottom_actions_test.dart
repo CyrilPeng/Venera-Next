@@ -149,6 +149,7 @@ void main() {
     ),
     onChapters: chapters ? () => calls.add('chapters') : null,
     onSave: () => calls.add('save'),
+    onSaveAs: () => calls.add('saveAs'),
     onShare: () => calls.add('share'),
   );
 
@@ -548,6 +549,28 @@ void main() {
       expect(find.byIcon(Icons.pause_circle_outline), findsOneWidget);
     },
   );
+
+  testWidgets('image save tap and hold dispatch separate actions', (
+    tester,
+  ) async {
+    final calls = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Wrap(children: actions(context, calls)),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byIcon(Icons.download));
+    await tester.pump();
+    expect(calls, ['save']);
+    calls.clear();
+    await tester.longPress(find.byIcon(Icons.download));
+    await tester.pump();
+    expect(calls, ['saveAs']);
+  });
 
   testWidgets('icon actions keep tooltip semantics and keyboard activation', (
     tester,

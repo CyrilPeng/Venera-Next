@@ -637,6 +637,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
         ),
         onChapters: widget.data.hasChapters ? openChapterDrawer : null,
         onSave: saveCurrentImage,
+        onSaveAs: saveCurrentImageAs,
         onShare: share,
       );
     }
@@ -736,6 +737,8 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
       );
 
   void saveCurrentImage() => unawaited(_imageExporter.export(sharing: false));
+  void saveCurrentImageAs() =>
+      unawaited(_imageExporter.export(sharing: false, chooseLocation: true));
   void share() => unawaited(_imageExporter.export(sharing: true));
 
   void openSetting() {

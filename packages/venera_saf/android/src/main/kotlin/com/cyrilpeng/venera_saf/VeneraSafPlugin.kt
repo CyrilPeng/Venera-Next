@@ -5,6 +5,10 @@ package com.cyrilpeng.venera_saf
 import android.app.Activity
 import android.content.Intent
 import android.provider.DocumentsContract
+import android.os.Handler
+import android.os.Looper
+import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -22,10 +26,13 @@ class VeneraSafPlugin : FlutterPlugin, ActivityAware,
     private var channel: MethodChannel? = null
     private var activity: ActivityPluginBinding? = null
     private var picker: MethodChannel.Result? = null
+    private var writer: ExecutorService? = null
+    private val main = Handler(Looper.getMainLooper())
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         SafDocuments.configure(binding.applicationContext)
         NativeBridge.initialize(SafDocuments::class.java)
+        writer = Executors.newSingleThreadExecutor()
         channel = MethodChannel(binding.binaryMessenger, "venera/saf").also {
             it.setMethodCallHandler(this)
         }
@@ -35,9 +42,31 @@ class VeneraSafPlugin : FlutterPlugin, ActivityAware,
         finishPickerError("Plugin detached")
         channel?.setMethodCallHandler(null)
         channel = null
+        writer?.shutdown() // Already accepted saves retain their completion.
+        writer = null
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        if (call.method == "saveNewFile") {
+            val directory = call.argument<String>("directory")
+            val source = call.argument<String>("source")
+            val filename = call.argument<String>("filename")
+            val executor = writer
+            if (directory == null || source == null || filename == null || executor == null) {
+                result.error("invalid_save", "Invalid image save request", null)
+                return
+            }
+            executor.execute {
+                try {
+                    val saved = SafDocuments.saveNewFile(directory, source, filename)
+                    main.post { result.success(saved) }
+                } catch (error: Exception) {
+                    val code = if (error is SafSaveDirectoryUnavailable) "directory_unavailable" else "save_failed"
+                    main.post { result.error(code, error.toString(), null) }
+                }
+            }
+            return
+        }
         if (call.method != "pickDirectory") { result.notImplemented(); return }
         val host = activity?.activity
         if (host == null) { result.error("activity_unavailable", "No activity is attached", null); return }

@@ -105,6 +105,8 @@ void main() {
           'hotkey': {'modifiers': 3, 'keyCode': 72},
         };
         appdata.settings['tvLowMemoryMode'] = false;
+        appdata.settings['readerImageSaveDirectory'] =
+            'android://primary:Pictures';
         appdata.settings['blockedWords'] = ['bl'];
         appdata.settings['blockedWordRules'] = {'bl': 'wholeWord:insensitive'};
         appdata.settings['disableSyncFields'] = 'language, blockedWords';
@@ -144,6 +146,10 @@ void main() {
         });
         expect(_settings(complete).containsKey('windowsWindowHotkey'), isFalse);
         expect(_settings(complete).containsKey('tvLowMemoryMode'), isFalse);
+        expect(
+          _settings(complete).containsKey('readerImageSaveDirectory'),
+          isFalse,
+        );
         expect(
           utf8.decode(complete.findFile('comic_source/example.js')!.content),
           '// source',

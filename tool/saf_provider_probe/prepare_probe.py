@@ -1,6 +1,7 @@
 """Build and run isolated, minified Android document-provider regressions."""
 
 import argparse
+import base64
 import json
 import os
 from pathlib import Path
@@ -144,6 +145,23 @@ android {
     return consumer, provider
 
 
+def read_report(logs):
+    parts = []
+    position = 0
+    for line in logs.splitlines():
+        if line.startswith("VENERA_SAF_PROBE_RESULT "):
+            _, start, chunk = line.split(" ", 2)
+            if int(start) != position:
+                raise RuntimeError("Provider probe report is missing a chunk")
+            parts.append(chunk)
+            position += len(chunk)
+        elif line.startswith("VENERA_SAF_PROBE_COMPLETE "):
+            if int(line.split()[1]) != position:
+                raise RuntimeError("Provider probe report was truncated")
+            return json.loads(base64.b64decode("".join(parts), validate=True))
+    return None
+
+
 def execute(output, sdk, serial):
     if not serial or not serial.startswith("emulator-"):
         raise ValueError("Pass an explicit task emulator serial; physical devices are excluded")
@@ -164,10 +182,8 @@ def execute(output, sdk, serial):
             pid = run(command + ["shell", "pidof", CLIENT], capture=True)
             logs = run(command + ["logcat", "-d", "-v", "raw", "--pid=" + pid], capture=True) if pid else ""
             write(output / (phase + ".log"), logs)
-            lines = [line.partition("VENERA_SAF_PROBE_RESULT ")[2] for line in logs.splitlines()
-                     if "VENERA_SAF_PROBE_RESULT " in line]
-            if lines:
-                report = json.loads(lines[-1])
+            report = read_report(logs)
+            if report is not None:
                 reports.append(report)
                 write(output / "provider-probe.json", json.dumps(reports, ensure_ascii=False, indent=2) + "\n")
                 if report.get("ok") is not True or report.get("phase") != phase:

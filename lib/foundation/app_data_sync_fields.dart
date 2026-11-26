@@ -17,7 +17,11 @@ const appDataLocalFields = {
 };
 
 /// Device policies must not travel in portable backups or WebDAV uploads.
-const appDataDeviceOnlyFields = {'windowsWindowHotkey', 'tvLowMemoryMode'};
+const appDataDeviceOnlyFields = {
+  'windowsWindowHotkey',
+  'tvLowMemoryMode',
+  'readerImageSaveDirectory',
+};
 
 const appDataOptionalArchiveFields = {'backupWebdav', 'backupWebdavPath'};
 
