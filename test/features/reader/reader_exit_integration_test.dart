@@ -539,10 +539,10 @@ void main() {
     'toolbar returns before a slow write and offers a retry on the previous page',
     (tester) async {
       final fixture = await ReaderIntegrationFixture.create(tester);
+      final saving = Completer<void>();
       try {
         await fixture.mount(tester, pushed: true);
         final reader = fixture.readerKey.currentState!;
-        final saving = Completer<void>();
         fixture.history.onProgress = (_) => saving.future;
         reader.setPage(2);
         tester
@@ -590,10 +590,10 @@ void main() {
         expect(fixture.exits, 0);
         expect(tester.takeException(), isNull);
       } finally {
+        if (!saving.isCompleted) saving.complete();
         await fixture.dispose(tester);
       }
     },
-    skip: !Platform.isWindows,
   );
 
   testWidgets(
@@ -648,17 +648,16 @@ void main() {
         await fixture.dispose(tester);
       }
     },
-    skip: !Platform.isWindows,
   );
 
   testWidgets(
     'native window close after leaving the reader joins the background save',
     (tester) async {
       final fixture = await ReaderIntegrationFixture.create(tester);
+      final saving = Completer<void>();
       try {
         await fixture.mount(tester, pushed: true);
         final reader = fixture.readerKey.currentState!;
-        final saving = Completer<void>();
         fixture.history.onProgress = (_) => saving.future;
         reader.setPage(2);
         fixture.closeWindow(tester);
@@ -683,10 +682,10 @@ void main() {
         expect(fixture.exits, 1);
         expect(tester.takeException(), isNull);
       } finally {
+        if (!saving.isCompleted) saving.complete();
         await fixture.dispose(tester);
       }
     },
-    skip: !Platform.isWindows,
   );
 
   testWidgets(
@@ -773,7 +772,6 @@ void main() {
         await fixture.dispose(tester);
       }
     },
-    skip: !Platform.isWindows,
   );
 
   testWidgets(
