@@ -166,9 +166,6 @@
       {
         "path": "test/features/reader/reader_exit_integration_test.dart",
         "cases": [
-          "native window close waits for the current reader save before leaving its route",
-          "reader offers explicit leave after an uncertain duration save without replaying it",
-          "reader toolbar retains a failed save, then saves newer progress before pop",
           "root reader drains progress arriving after its exit task; late failure=false",
           "root reader drains progress arriving after its exit task; late failure=true",
           "root reader freezes before old saves drain and resumes after a later exit failure"
@@ -566,9 +563,6 @@
       {
         "path": "test/features/reader/reader_exit_integration_test.dart",
         "cases": [
-          "native window close waits for the current reader save before leaving its route",
-          "reader offers explicit leave after an uncertain duration save without replaying it",
-          "reader toolbar retains a failed save, then saves newer progress before pop",
           "root reader drains progress arriving after its exit task; late failure=false",
           "root reader drains progress arriving after its exit task; late failure=true",
           "root reader freezes before old saves drain and resumes after a later exit failure"

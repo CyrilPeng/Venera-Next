@@ -456,7 +456,11 @@ class _TestReaderState extends ReaderState {
 class _TestHistory extends HistoryManager {
   _TestHistory() : super.create();
   @override
-  Future<void> addReadDuration(History history, Duration duration) async {}
+  Future<void> addReadDuration(
+    History history,
+    Duration duration, {
+    bool Function()? shouldWrite,
+  }) async {}
 }
 
 LocalFavoritesManager? _favoritesOwner;

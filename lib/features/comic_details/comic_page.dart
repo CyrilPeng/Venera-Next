@@ -121,7 +121,8 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
 
   @override
   void onReadEnd() {
-    history ??= HistoryScope.read(
+    if (!mounted) return;
+    history = HistoryScope.read(
       context,
     ).find(widget.id, ComicType(widget.sourceKey.hashCode));
     update();

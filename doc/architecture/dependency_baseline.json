@@ -639,6 +639,7 @@
     "features/reader/platform_effects.dart",
     "features/reader/progress_bar.dart",
     "features/reader/reader.dart",
+    "features/reader/reader_exit_save.dart",
     "features/reader/reader_page.dart",
     "features/reader/reader_session_scope.dart",
     "features/reader/reader_tap_scope.dart",

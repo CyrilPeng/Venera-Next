@@ -36,18 +36,21 @@ class ReaderSession {
     required void Function(bool paused) pauseAutoReading,
     required FutureOr<void> Function() onClosed,
     required bool foreground,
+    void Function()? releaseStorage,
     ImageWork? imageWork,
   }) : _durations = durations,
        _progress = progress,
        _pauseAutoReading = pauseAutoReading,
        _onClosed = onClosed,
+       _releaseStorage = releaseStorage,
        _foreground = foreground,
        _imageWork = imageWork ?? ImageWork();
 
   final ReadingSessionTracker _durations;
   final ReaderHistoryWriter _progress;
-  final void Function(bool) _pauseAutoReading;
+  void Function(bool)? _pauseAutoReading;
   final FutureOr<void> Function() _onClosed;
+  final void Function()? _releaseStorage;
   final ImageWork _imageWork;
   bool _foreground;
   bool _contentReady = false;
@@ -73,7 +76,7 @@ class ReaderSession {
     if (_disposed) return;
     if (_foreground != foreground) _revision++;
     _foreground = foreground;
-    _pauseAutoReading(!foreground || _holds.isNotEmpty);
+    _pauseAutoReading?.call(!foreground || _holds.isNotEmpty);
     _updateDuration();
   }
 
@@ -85,12 +88,12 @@ class ReaderSession {
     }
   }
 
-  void scheduleProgress() {
+  void scheduleProgress({Future<void> Function()? write}) {
     if (_disposed) return;
     _revision++;
     // Accepted content/animation completions can still arrive while held.
     // Retain their latest snapshot for the next drain instead of dropping it.
-    _progress.schedule();
+    _progress.schedule(write: write);
   }
 
   /// Synchronously stop reading time before a host starts waiting on another
@@ -103,7 +106,7 @@ class ReaderSession {
     if (_durations.isRunning) _revision++;
     _updateDuration();
     try {
-      _pauseAutoReading(true);
+      _pauseAutoReading?.call(true);
     } catch (error, stack) {
       _holds.remove(hold);
       final failures =
@@ -155,7 +158,7 @@ class ReaderSession {
     if (restoreAutoReading) {
       observe(
         'resume auto reading',
-        () => _pauseAutoReading(!_foreground || _holds.isNotEmpty),
+        () => _pauseAutoReading?.call(!_foreground || _holds.isNotEmpty),
       );
     }
     observe('resume duration', _updateDuration);
@@ -217,8 +220,48 @@ class ReaderSession {
     return completion.future;
   }
 
+  Future<void Function()> prepareRouteExit() async {
+    final release = holdForExit();
+    try {
+      final releaseImages = await _imageWork.prepareForExit();
+      releaseImages();
+      return release;
+    } catch (_) {
+      release();
+      rethrow;
+    }
+  }
+
+  bool canRetryAfterExit(Object error) =>
+      _progress.hasRetryableWrite ||
+      _durations.hasRetryableWrite ||
+      (error is ReaderSessionFailure &&
+          error.failures.any((failure) => failure.operation == 'notification'));
+
+  void releaseStorage() => _releaseStorage?.call();
+
+  Future<void> retryAfterExit() {
+    final closing = _closing;
+    if (closing == null) throw StateError('Reader session is still open');
+    return _closing = closing.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace _) async {
+        await _drain(
+          finalize: true,
+          retrySaving: true,
+          previousImageFailures: error is ReaderSessionFailure
+              ? error.failures
+                    .where((failure) => failure.operation == 'image operations')
+                    .toList()
+              : const [],
+        );
+      },
+    );
+  }
+
   Future<int> _drain({
     required bool finalize,
+    bool retrySaving = false,
     List<({String operation, Object error, StackTrace stackTrace})>
         previousImageFailures =
         const [],
@@ -267,8 +310,16 @@ class ReaderSession {
       failures.clear();
       await Future.wait([
         images,
-        observe('progress', finalize ? _progress.dispose : _progress.flush),
-        observe('duration', finalize ? _durations.dispose : _durations.flush),
+        observe(
+          'progress',
+          retrySaving
+              ? _progress.retryClosedWrite
+              : (finalize ? _progress.dispose : _progress.flush),
+        ),
+        observe(
+          'duration',
+          finalize && !retrySaving ? _durations.dispose : _durations.flush,
+        ),
       ]);
       failures.addAll(imageFailures);
       // A content completion can schedule progress after its writer drained
@@ -286,6 +337,7 @@ class ReaderSession {
       }
       if (_revision != revision) continue;
       if (failures.isNotEmpty) throw ReaderSessionFailure(failures);
+      if (finalize) releaseStorage();
       return revision;
     }
   }
@@ -296,6 +348,7 @@ class ReaderSession {
     if (_closing != null) return _closing!;
     if (_durations.isRunning) _revision++;
     _disposed = true;
+    _pauseAutoReading = null;
     unawaited(_durations.pause());
     // Freeze image operations synchronously even when a preparation is still
     // saving. _drain will join this same close once that preparation settles.

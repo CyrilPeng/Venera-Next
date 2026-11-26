@@ -18,6 +18,7 @@ import 'package:venera_next/features/reader/reader_page.dart';
 import 'package:venera_next/features/reader/reader_session.dart';
 import 'package:venera_next/features/reader/scaffold.dart';
 import 'package:venera_next/features/reader/brightness.dart';
+import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/app_data_operations.dart';
@@ -535,13 +536,13 @@ void main() {
   }
 
   testWidgets(
-    'reader toolbar retains a failed save, then saves newer progress before pop',
+    'toolbar returns before a slow write and offers a retry on the previous page',
     (tester) async {
       final fixture = await ReaderIntegrationFixture.create(tester);
+      final saving = Completer<void>();
       try {
         await fixture.mount(tester, pushed: true);
         final reader = fixture.readerKey.currentState!;
-        final saving = Completer<void>();
         fixture.history.onProgress = (_) => saving.future;
         reader.setPage(2);
         tester
@@ -550,85 +551,186 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 200));
         await tester.tap(find.byType(BackButton));
-        await tester.pump();
-        expect(find.text('Saving...'), findsOneWidget);
-        expect(fixture.readerKey.currentState, same(reader));
-        expect(appNavigation.rootNavigatorKey.currentState!.canPop(), isTrue);
-        expect(fixture.history.progress.last.page, 2);
-        saving.completeError(StateError('progress disk failure'));
-        // Recovery can restart native image work. Wait for the exit outcome
-        // while allowing its real I/O and codec futures to complete.
-        await pumpReaderUntil(
-          tester,
-          () => find
-              .text('Unable to close. Please try again.')
-              .evaluate()
-              .isNotEmpty,
-        );
-        expect(fixture.readerKey.currentState, same(reader));
-        expect(find.text('Saving...'), findsNothing);
-        expect(find.text('Unable to close. Please try again.'), findsOneWidget);
-
-        fixture.history.onProgress = null;
-        reader.setPage(3);
-        await tester.tap(find.byType(BackButton));
         await pumpReaderUntil(
           tester,
           () => fixture.readerKey.currentState == null,
         );
+        expect(find.text('Library home'), findsOneWidget);
+        expect(find.text('Saving...'), findsNothing);
+        expect(fixture.history.progress.last.page, 2);
+        expect(fixture.notifications, 0);
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is CircularProgressIndicator &&
+                widget.semanticsLabel == 'Saving reading progress',
+          ),
+          findsOneWidget,
+        );
+
+        saving.completeError(StateError('progress disk failure'));
+        final failed = find.byTooltip('Reading progress save failed');
+        await pumpReaderUntil(tester, () => failed.evaluate().isNotEmpty);
+        await tester.tap(failed);
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('progress disk failure', findRichText: true),
+          findsOneWidget,
+        );
+        final durations = fixture.history.durations.length;
+        fixture.history.onProgress = null;
+        await tester.tap(find.text('Retry'));
         await tester.pumpAndSettle();
         expect(fixture.readerKey.currentState, isNull);
         expect(find.text('Library home'), findsOneWidget);
-        expect(fixture.history.progress.last.page, 3);
+        expect(fixture.history.progress.last.page, 2);
+        expect(fixture.history.durations, hasLength(durations));
+        expect(failed, findsNothing);
         expect(fixture.exits, 0);
         expect(tester.takeException(), isNull);
       } finally {
+        if (!saving.isCompleted) saving.complete();
         await fixture.dispose(tester);
       }
     },
-    skip: !Platform.isWindows,
   );
 
   testWidgets(
-    'native window close waits for the current reader save before leaving its route',
+    'fast reopen uses the pending source page before the old write settles',
     (tester) async {
       final fixture = await ReaderIntegrationFixture.create(tester);
+      final oldWrite = Completer<void>();
+      try {
+        await fixture.mount(tester, pushed: true);
+        final original = fixture.readerKey.currentState!;
+        original.setPage(2);
+        fixture.history.onProgress = (_) => oldWrite.future;
+        unawaited(original.requestExit());
+        await pumpReaderUntil(
+          tester,
+          () => fixture.readerKey.currentState == null,
+        );
+
+        final pending = fixture.history.find('book', ComicType.local)!;
+        expect(pending.page, 2);
+        final reopenedKey = GlobalKey<ReaderState>();
+        unawaited(
+          appNavigation.rootNavigatorKey.currentState!.push<void>(
+            MaterialPageRoute(
+              builder: (_) => FixtureReader(
+                key: reopenedKey,
+                onClosed: () {},
+                savedHistory: pending,
+                initialPage: pending.page,
+                initialChapter: pending.ep,
+              ),
+            ),
+          ),
+        );
+        await pumpReaderUntil(
+          tester,
+          () => reopenedKey.currentState?.isLoading == false,
+        );
+        final reopened = reopenedKey.currentState!;
+        expect(reopened.page, 2);
+        reopened.setPage(3);
+        fixture.history.onProgress = null;
+        oldWrite.complete();
+        unawaited(reopened.requestExit());
+        await pumpReaderUntil(tester, () => reopenedKey.currentState == null);
+        await tester.pumpAndSettle();
+        expect(fixture.history.progress.last.page, 3);
+        expect(find.byTooltip('Reading progress save failed'), findsNothing);
+        expect(tester.takeException(), isNull);
+      } finally {
+        if (!oldWrite.isCompleted) oldWrite.complete();
+        await fixture.dispose(tester);
+      }
+    },
+  );
+
+  testWidgets(
+    'native window close after leaving the reader joins the background save',
+    (tester) async {
+      final fixture = await ReaderIntegrationFixture.create(tester);
+      final saving = Completer<void>();
       try {
         await fixture.mount(tester, pushed: true);
         final reader = fixture.readerKey.currentState!;
-        final saving = Completer<void>();
         fixture.history.onProgress = (_) => saving.future;
         reader.setPage(2);
         fixture.closeWindow(tester);
         fixture.closeWindow(tester);
-        await tester.pump();
-        expect(find.text('Saving...'), findsOneWidget);
+        await pumpReaderUntil(
+          tester,
+          () => fixture.readerKey.currentState == null,
+        );
+        expect(find.text('Saving...'), findsNothing);
         expect(find.text('Closing...'), findsNothing);
-        expect(fixture.readerKey.currentState, same(reader));
         expect(fixture.exits, 0);
         final acceptedWrites = fixture.history.progress.length;
+        fixture.closeWindow(tester);
         await tester.pump(const Duration(seconds: 3));
         expect(fixture.history.progress.length, acceptedWrites);
-        expect(fixture.readerKey.currentState, same(reader));
+        expect(fixture.exits, 0);
         saving.complete();
         await tester.pumpAndSettle();
         expect(fixture.readerKey.currentState, isNull);
         expect(find.text('Library home'), findsOneWidget);
         expect(fixture.history.progress.last.page, 2);
-        expect(fixture.exits, 0);
-        fixture.closeWindow(tester);
-        await tester.pumpAndSettle();
         expect(fixture.exits, 1);
         expect(tester.takeException(), isNull);
       } finally {
+        if (!saving.isCompleted) saving.complete();
         await fixture.dispose(tester);
       }
     },
-    skip: !Platform.isWindows,
   );
 
   testWidgets(
-    'reader offers explicit leave after an uncertain duration save without replaying it',
+    'application shutdown joins the detached reader with no window frame',
+    (tester) async {
+      final fixture = await ReaderIntegrationFixture.create(tester);
+      var coreCloses = 0;
+      final host = await readerFixtureHost(() => coreCloses++);
+      final saving = Completer<void>();
+      try {
+        await fixture.mount(
+          tester,
+          pushed: true,
+          withWindow: false,
+          registry: host.selections,
+        );
+        fixture.history.onProgress = (_) => saving.future;
+        final reader = fixture.readerKey.currentState!;
+        reader.setPage(2);
+        unawaited(reader.requestExit());
+        await pumpReaderUntil(
+          tester,
+          () => fixture.readerKey.currentState == null,
+        );
+
+        var closed = false;
+        final closing = host.close().then((_) => closed = true);
+        await tester.pump();
+        expect(coreCloses, 0);
+        expect(fixture.history.progress.last.page, 2);
+        saving.complete();
+        await pumpReaderUntil(tester, () => closed);
+        await closing;
+        expect(coreCloses, 1);
+        expect(tester.takeException(), isNull);
+      } finally {
+        if (!saving.isCompleted) saving.complete();
+        await fixture.dispose(tester);
+        await host.sync.closeAndWait();
+      }
+    },
+  );
+
+  testWidgets(
+    'uncertain duration shows a dismissible alert and cannot be replayed',
     (tester) async {
       final fixture = await ReaderIntegrationFixture.create(tester);
       try {
@@ -646,23 +748,30 @@ void main() {
         final exiting = reader.requestExit();
         await tester.pumpAndSettle();
         await exiting;
-        expect(fixture.readerKey.currentState, same(reader));
-        expect(find.text('Leave without saving'), findsOneWidget);
-        expect(failedAttempts, 1);
-        // Further reading can be persisted, but the uncertain earlier segment
-        // remains observable and must never be replayed during final disposal.
-        await tester.tap(find.text('Leave without saving'));
-        await tester.pumpAndSettle();
         expect(fixture.readerKey.currentState, isNull);
         expect(find.text('Library home'), findsOneWidget);
         expect(failedAttempts, 1);
-        expect(tester.takeException(), isA<ReaderSessionFailure>());
-        expect(fixture.exits, 0);
+        final failed = find.byTooltip('Reading progress save failed');
+        await tester.tap(failed);
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('duration result is unknown', findRichText: true),
+          findsOneWidget,
+        );
+        expect(find.text('Retry'), findsNothing);
+        await tester.tap(find.text('Dismiss this alert'));
+        await tester.pumpAndSettle();
+        expect(failedAttempts, 1);
+        expect(failed, findsNothing);
+        fixture.closeWindow(tester);
+        await tester.pumpAndSettle();
+        expect(failedAttempts, 1);
+        expect(fixture.exits, 1);
+        expect(tester.takeException(), isNull);
       } finally {
         await fixture.dispose(tester);
       }
     },
-    skip: !Platform.isWindows,
   );
 
   testWidgets(

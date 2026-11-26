@@ -852,7 +852,16 @@ class _ReaderHarness extends Reader {
           'two': 'Two',
           'three': 'Three',
         }),
-        history: _History(),
+        history: History.fromMap({
+          'id': 'comic',
+          'type': ComicType.local.value,
+          'time': 1000,
+          'title': 'Comic',
+          'subtitle': '',
+          'cover': '',
+          'ep': 2,
+          'page': 5,
+        }),
         initialChapter: 2,
         initialPage: 5,
       );
@@ -983,8 +992,6 @@ class _Controller extends Fake implements ReaderImageViewController {
   @override
   bool toChapter(int chapter, {bool toLastPage = false}) => false;
 }
-
-class _History extends Fake implements History {}
 
 LocalFavoritesManager? _favoritesOwner;
 LocalFavoritesManager _favoritesForView() =>

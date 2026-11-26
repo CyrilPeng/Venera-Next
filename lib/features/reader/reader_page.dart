@@ -30,6 +30,7 @@ import 'diagnostics_dialog.dart';
 import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/features/reader/history_writer.dart';
 import 'package:venera_next/features/reader/exit_guard.dart';
+import 'package:venera_next/features/reader/reader_exit_save.dart';
 import 'package:venera_next/features/reader/reader_controller.dart';
 import 'package:venera_next/features/reader/reader_viewport.dart';
 import 'package:venera_next/features/reader/page_order_migration.dart';
@@ -1028,6 +1029,7 @@ class ReaderState extends State<Reader>
   }
 
   late final ReaderSession _session;
+  late final ReaderHistory _readerHistory;
   SelectionTaskRegistry? _sessionRegistry;
   void Function()? _releaseSessionHost;
   Future<void>? _sessionClosing;
@@ -1053,14 +1055,19 @@ class ReaderState extends State<Reader>
     });
   }
 
-  Future<void> _closeSession() {
+  Future<void> _closeSession({bool background = false}) {
     if (_sessionClosing case final closing?) return closing;
-    _freezeSession();
+    if (!background) _freezeSession();
     final closing = _sessionClosing = _session.dispose();
     _exitFrame?.removeCloseStartListener(_holdWindowSession);
     _exitFrame?.removeCloseFailureListener(_resumeWindowSession);
     _exitFrame?.removeExitTask(_prepareWindowSession);
-    _exitFrame?.trackExitTask(closing);
+    if (background) {
+      _releaseSessionHost?.call();
+      _releaseSessionHost = null;
+    } else {
+      _exitFrame?.trackExitTask(closing);
+    }
     _resumeWindowSession();
     unawaited(
       closing.then<void>(
@@ -1449,9 +1456,10 @@ class ReaderState extends State<Reader>
     mode = ReaderMode.fromKey(
       appdata.settings.readerSettings(cid, type.sourceKey).readerMode,
     );
-    history = widget.history;
-    final historyManager = HistoryScope.read(context);
-    final durationHistory = widget.history;
+    final readerHistory = _readerHistory = HistoryScope.read(
+      context,
+    ).openReaderHistory(widget.history);
+    history = readerHistory.item;
     _sessionRegistry = context
         .getInheritedWidgetOfExactType<SelectionTasksScope>()
         ?.registry;
@@ -1465,8 +1473,7 @@ class ReaderState extends State<Reader>
     _session = ReaderSession(
       imageWork: imageWork,
       durations: ReadingSessionTracker(
-        onDuration: (duration) =>
-            historyManager.addReadDuration(durationHistory, duration),
+        onDuration: readerHistory.addDuration,
         onError: (error, stack) => Log.error(
           'Reader',
           'Failed to save reading duration: $error',
@@ -1474,10 +1481,6 @@ class ReaderState extends State<Reader>
         ),
       ),
       progress: ReaderHistoryWriter(
-        write: () async {
-          final item = history;
-          if (item != null) await historyManager.addHistory(item);
-        },
         onError: (error, stack) => Log.error(
           'Reader',
           'Failed to save reading progress: $error',
@@ -1493,6 +1496,7 @@ class ReaderState extends State<Reader>
       onClosed: () {
         if (admitted) onClosed();
       },
+      releaseStorage: readerHistory.release,
       foreground: lifecycle == null || lifecycle == AppLifecycleState.resumed,
     );
     _bindSessionOwner();
@@ -1747,7 +1751,7 @@ class ReaderState extends State<Reader>
 
     await Future.wait([
       attempt('reading preparation', () async {
-        release = await _session.prepareForExit();
+        release = await _session.prepareRouteExit();
         await _updateVolume();
       }),
       if (effects != null) attempt('platform restoration', () => effects.ready),
@@ -1767,6 +1771,26 @@ class ReaderState extends State<Reader>
       effects?.release();
       release?.call();
     };
+  }
+
+  void _saveAfterPop() {
+    if (_sessionClosing != null) return;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final overlay =
+        context
+            .findAncestorStateOfType<OverlayWidgetState>()
+            ?.overlayKey
+            .currentState ??
+        navigator.overlay;
+    if (overlay == null) return;
+    ReaderExitSave(
+      title: widget.name,
+      overlay: overlay,
+      navigator: navigator,
+      window: _exitFrame,
+      registry: _sessionRegistry,
+      session: _session,
+    ).start(() => _closeSession(background: true));
   }
 
   ReaderPlatformEffectsBinding? _platformEffects;
@@ -1944,6 +1968,7 @@ class ReaderState extends State<Reader>
     _layoutAttempt?.task.cancel();
     _layoutAttempt = null;
     WidgetsBinding.instance.removeObserver(this);
+    if (_sessionClosing != null) _freezeSession();
     unawaited(_closeSession());
     autoReading.dispose();
     focusNode.dispose();
@@ -1987,6 +2012,8 @@ class ReaderState extends State<Reader>
         return true;
       },
       prepare: _prepareReaderExit,
+      onPopped: _saveAfterPop,
+      waitingDelay: const Duration(milliseconds: 200),
       holdForLeave: _session.holdForExit,
       onError: (error, stack) {
         Log.error('Reader', 'Failed to save before leaving: $error', stack);
@@ -2064,7 +2091,12 @@ class ReaderState extends State<Reader>
   void updateHistory() {
     // Initial layout and orientation can update the viewport before images
     // arrive. Keep the saved image index intact until loading/migration ends.
-    if (_sessionFrozen || isLoading || images == null) return;
+    if (_sessionFrozen ||
+        _sessionClosing != null ||
+        isLoading ||
+        images == null) {
+      return;
+    }
     if (history != null) {
       applyReaderHistoryProgress(
         history: history!,
@@ -2075,7 +2107,7 @@ class ReaderState extends State<Reader>
         layout: pageLayout,
         time: DateTime.now(),
       );
-      _session.scheduleProgress();
+      _session.scheduleProgress(write: _readerHistory.stageProgress());
       // A content/animation completion can arrive after the reader's own exit
       // task returned while another owner is still preparing. Register the
       // fresh drain so the window joins it before proceeding or restoring UI.

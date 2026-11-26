@@ -28,6 +28,7 @@ import 'package:venera_next/features/reader/images_host.dart';
 import 'package:venera_next/routing/app_navigation.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/comic_type.dart';
+import 'package:venera_next/foundation/image_work.dart';
 import 'package:venera_next/network/request_scope.dart';
 
 import 'support/reader_integration_fixture.dart';
@@ -157,6 +158,7 @@ void main() {
             () => !appNavigation.rootNavigatorKey.currentState!.canPop(),
           );
           await exit;
+          await pumpReaderUntil(tester, () => !history.hasPendingWrites);
           await tester.pumpAndSettle();
           expect(observer.routes, hasLength(1));
           expect(find.byType(Reader), findsNothing);
@@ -283,6 +285,7 @@ void main() {
             final saved = readerResumeHistory(
               page: savedPage,
               maxPage: imageCount,
+              group: group,
             );
             final read = savedPage == 2 && group == null && !mode.isGallery
                 ? ReaderLocalReadGate(
@@ -343,10 +346,14 @@ void main() {
               }
               expect(reader.chapter, 1);
               expect(reader.page, savedPage);
-              expect(reader.history, same(saved));
+              expect(reader.history, isNot(same(saved)));
+              expect(reader.history?.page, savedPage);
+              expect(reader.history?.maxPage, imageCount);
+              expect(reader.history?.group, group);
+              expect(reader.history?.readEpisode, contains('1'));
               expect(saved.page, savedPage);
-              expect(saved.maxPage, imageCount);
-              expect(saved.group, isNull);
+              expect(saved.group, group);
+              expect(saved.readEpisode, isEmpty);
               expect(tester.takeException(), isNull);
             } finally {
               read?.release();
@@ -418,8 +425,11 @@ void main() {
           expect(reader.chapter, group == 1 ? 1 : 2);
           expect(reader.eid, 'one');
           expect(reader.page, 2);
-          expect(saved.ep, 1);
-          expect(saved.group, group == 1 ? 1 : 2);
+          expect(reader.history?.ep, 1);
+          expect(reader.history?.group, group == 1 ? 1 : 2);
+          expect(reader.history?.page, 2);
+          expect(saved.ep, group == null ? 2 : 1);
+          expect(saved.group, group);
           expect(saved.page, 2);
           expect(tester.takeException(), isNull);
         } finally {
@@ -798,10 +808,10 @@ void main() {
   }
 
   testWidgets(
-    'floating action cannot navigate during reader save and can resume after failure',
+    'floating action cannot navigate during reader exit preparation and can resume after failure',
     (tester) async {
       final fixture = await ReaderIntegrationFixture.create(tester);
-      final saving = Completer<void>();
+      ImageWorkTask? cleanup;
       try {
         appdata.settings['readerMode'] = ReaderMode.continuousTopToBottom.key;
         await fixture.mount(
@@ -816,7 +826,7 @@ void main() {
         report(1);
         await tester.pumpAndSettle();
         final old = reader.chapterNavigation.action!;
-        fixture.history.onProgress = (_) => saving.future;
+        cleanup = reader.imageWork.start()!;
         var exitFinished = false;
         final exiting = reader.requestExit().whenComplete(() {
           exitFinished = true;
@@ -826,14 +836,18 @@ void main() {
         report(1);
         expect(reader.chapter, 1);
         expect(reader.chapterNavigation.action, isNull);
-        saving.completeError(StateError('Save rejected'));
+        cleanup.recordFailure(
+          StateError('Cleanup rejected'),
+          StackTrace.current,
+        );
+        cleanup.finish();
         await pumpReaderUntil(tester, () => exitFinished);
         await exiting;
         await tester.pumpAndSettle();
         report(1);
         expect(reader.chapterNavigation.action, isNotNull);
       } finally {
-        if (!saving.isCompleted) saving.complete();
+        cleanup?.finish();
         await fixture.dispose(tester);
       }
     },
