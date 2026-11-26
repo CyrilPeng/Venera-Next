@@ -25,6 +25,14 @@ Future<void> rejects(FutureOr<void> Function() operation, [String? message]) asy
   }
   throw StateError('An invalid provider operation was accepted');
 }
+Future<void> rejectsSave(Future<String> Function() operation, [String? message]) async {
+  try { await operation(); } on PlatformException catch (error) {
+    check(error.code == 'save_failed', 'Unexpected save error: $error');
+    if (message != null) check(error.message?.contains(message) == true, 'Unexpected save error: $error');
+    return;
+  }
+  throw StateError('An invalid image save was accepted');
+}
 Future<Map> stats() async => (await control.invokeMethod<Map>('stats'))!;
 Future<Map> balanced() async {
   for (var i = 0; i < 100; i++) {
@@ -88,11 +96,11 @@ Future<Map<String, Object?>> probe() async {
             check((await File(saved).readAsBytes()).join(',') == '255,216,1,2,255,217', 'Saved image bytes changed');
           }
           await File('$rootPath/original-image.jpg').writeAsBytes([8]);
-          await rejects(() => root.saveNewFile(source: image, filename: 'reuse-existing.jpg'));
+          await rejectsSave(() => root.saveNewFile(source: image, filename: 'reuse-existing.jpg'), 'Provider returned an existing document');
           check((await File('$rootPath/original-image.jpg').readAsBytes()).join(',') == '8', 'Provider-returned existing URI was written or deleted');
-          await rejects(() => root.saveNewFile(source: image, filename: 'save-broken.jpg'));
+          await rejectsSave(() => root.saveNewFile(source: image, filename: 'save-broken.jpg'));
           check(!await File('$rootPath/save-broken.jpg').exists(), 'Failed image output was retained as a saved file');
-          await rejects(() => root.saveNewFile(source: image, filename: 'remote-error'));
+          await rejectsSave(() => root.saveNewFile(source: image, filename: 'remote-error'));
           check(!await File('$rootPath/remote-error').exists(), 'Remote image error was reported as success');
           await balanced();
           passed('unique image saves, exact bytes, provider ownership and failed-output cleanup');
@@ -196,7 +204,13 @@ void main() {
     try { report = await probe().timeout(const Duration(seconds: 60)); }
     catch (error, stack) { report = {'ok': false, 'error': error.toString(), 'stack': stack.toString(), 'steps': steps}; }
     final text = jsonEncode(report);
-    print('VENERA_SAF_PROBE_RESULT $text');
+    final payload = base64Encode(utf8.encode(text));
+    const chunkSize = 512;
+    for (var start = 0; start < payload.length; start += chunkSize) {
+      final end = (start + chunkSize).clamp(0, payload.length);
+      print('VENERA_SAF_PROBE_RESULT $start ${payload.substring(start, end)}');
+    }
+    print('VENERA_SAF_PROBE_COMPLETE ${payload.length}');
     result.complete(text);
   });
 }

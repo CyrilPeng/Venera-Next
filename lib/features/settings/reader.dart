@@ -161,7 +161,6 @@ class _ReaderSettingsState extends SettingsSaveState<ReaderSettings> {
         slivers: [
           SliverAppbar(title: Text("Reading".tl)),
           settingsSaveStatus.toSliver(),
-          const ReaderImageSaveSetting().toSliver(),
           if (AppProfile.current.isTv)
             SwitchSetting.preference(
               title: 'TV low-memory mode'.tl,
@@ -736,6 +735,7 @@ class _ReaderSettingsState extends SettingsSaveState<ReaderSettings> {
               useDeviceSettings: useDeviceSpecificSettings,
             ),
           ),
+          const ReaderImageSaveSetting().toSliver(),
         ],
       ),
     );
