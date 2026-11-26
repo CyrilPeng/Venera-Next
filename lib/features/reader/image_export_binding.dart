@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:venera_next/components/file_save_task.dart';
+import 'image_save.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
 import 'package:venera_next/foundation/image_work.dart';
@@ -33,10 +33,19 @@ class ReaderImageExportBinding {
            return bytes;
          },
          save: (image) async {
-           await saveFileForWindow(
+           await saveReaderImageForWindow(
              context,
              data: image.bytes,
              filename: image.filename,
+             checkStop: image.checkStop,
+           );
+         },
+         saveAs: (image) async {
+           await saveReaderImageForWindow(
+             context,
+             data: image.bytes,
+             filename: image.filename,
+             chooseLocation: true,
              checkStop: image.checkStop,
            );
          },
@@ -55,8 +64,8 @@ class ReaderImageExportBinding {
 
   final ReaderImageExporter _exporter;
 
-  Future<void> export({required bool sharing}) =>
-      _exporter.export(sharing: sharing);
+  Future<void> export({required bool sharing, bool chooseLocation = false}) =>
+      _exporter.export(sharing: sharing, chooseLocation: chooseLocation);
 
   Future<void> dispose() => _exporter.dispose();
 }

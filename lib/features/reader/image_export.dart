@@ -96,6 +96,7 @@ class ReaderImageExporter {
     required this.select,
     required this.read,
     required this.save,
+    this.saveAs,
     required this.share,
     required this.onError,
     this.cancelSelection,
@@ -104,13 +105,17 @@ class ReaderImageExporter {
   final Future<ReaderImageSelection?> Function() select;
   final Future<Uint8List> Function(ReaderImageSelection) read;
   final FutureOr<void> Function(ReaderImageExport) save;
+  final FutureOr<void> Function(ReaderImageExport)? saveAs;
   final FutureOr<void> Function(ReaderImageExport) share;
   final void Function(Object, StackTrace) onError;
   final void Function()? cancelSelection;
   final _tasks = <ImageWorkTask>{};
   bool _disposed = false;
 
-  Future<void> export({required bool sharing}) async {
+  Future<void> export({
+    required bool sharing,
+    bool chooseLocation = false,
+  }) async {
     if (_disposed) return;
     final request = work.start(cancelSelection: cancelSelection);
     if (request == null) return;
@@ -127,7 +132,11 @@ class ReaderImageExporter {
       );
       // Wait for the plugin's acknowledgment; on Windows this does not mean
       // the external receiver has finished reading the shared file.
-      await (sharing ? share(result) : save(result));
+      await (sharing
+          ? share(result)
+          : chooseLocation && saveAs != null
+          ? saveAs!(result)
+          : save(result));
     } catch (error, stack) {
       if (error is! ImageWorkTaskCancelled) {
         if (request.isCancelled || _disposed) {

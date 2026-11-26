@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'platform_effects_controller.dart';
@@ -33,6 +34,7 @@ List<Widget> buildReaderBottomActions(
   required ReaderAutomaticReadingAction automaticReading,
   VoidCallback? onChapters,
   required VoidCallback onSave,
+  VoidCallback? onSaveAs,
   required VoidCallback onShare,
 }) {
   return [
@@ -139,7 +141,18 @@ List<Widget> buildReaderBottomActions(
       ),
     Tooltip(
       message: "Save Image".tl,
-      child: IconButton(icon: const Icon(Icons.download), onPressed: onSave),
+      child: Semantics(
+        customSemanticsActions: {
+          CustomSemanticsAction(label: 'Save image as'.tl): ?onSaveAs,
+        },
+        child: GestureDetector(
+          onLongPress: onSaveAs,
+          child: IconButton(
+            icon: const Icon(Icons.download),
+            onPressed: onSave,
+          ),
+        ),
+      ),
     ),
     Tooltip(
       message: App.isHarmonyOS

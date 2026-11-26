@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:venera_next/components/file_save_task.dart';
+import 'image_save.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/context.dart';
@@ -496,10 +496,25 @@ class ReaderGestureDetectorState extends State<ReaderGestureDetector>
             text: 'Save Image'.tl,
             onClick: () => unawaited(
               _useImage(request, image, selection, (image) async {
-                await saveFileForWindow(
+                await saveReaderImageForWindow(
                   context,
                   filename: image.filename,
                   data: image.bytes,
+                );
+              }),
+            ),
+          ),
+        if (request.canUseImage)
+          MenuEntry(
+            icon: Icons.save_as_outlined,
+            text: 'Save image as'.tl,
+            onClick: () => unawaited(
+              _useImage(request, image, selection, (image) async {
+                await saveReaderImageForWindow(
+                  context,
+                  filename: image.filename,
+                  data: image.bytes,
+                  chooseLocation: true,
                 );
               }),
             ),

@@ -27,14 +27,14 @@
     {
       "path": "android/src/main/kotlin/com/cyrilpeng/venera_saf/SafDocuments.kt",
       "origin": "project",
-      "sha256": "4ea2cfb9f7e8c7f1afd7cf7a96ed4a35eddcf16b33d5818af637379de7c65812",
-      "local_sha256": "4ea2cfb9f7e8c7f1afd7cf7a96ed4a35eddcf16b33d5818af637379de7c65812"
+      "sha256": "bd808f2d5b06b2e2d3dbaabbc0558fd07309ba2b43dbcb7111902442b9accbac",
+      "local_sha256": "bd808f2d5b06b2e2d3dbaabbc0558fd07309ba2b43dbcb7111902442b9accbac"
     },
     {
       "path": "android/src/main/kotlin/com/cyrilpeng/venera_saf/VeneraSafPlugin.kt",
       "origin": "project",
-      "sha256": "62ca76323379caf21bdffc286227070241742c35ecb505caded223aa4feb9d01",
-      "local_sha256": "62ca76323379caf21bdffc286227070241742c35ecb505caded223aa4feb9d01"
+      "sha256": "54fd482c8d1bf41421d3717e580a435d6b3e5bd17b520291bfe3c569e6c6105e",
+      "local_sha256": "54fd482c8d1bf41421d3717e580a435d6b3e5bd17b520291bfe3c569e6c6105e"
     },
     {
       "path": "lib/src/backend.dart",
@@ -45,8 +45,8 @@
     {
       "path": "lib/src/entities.dart",
       "origin": "project",
-      "sha256": "e0a61175a4ee3e6248fbb6d6748e79e79fe4772197ebf2043dbc8397036ae463",
-      "local_sha256": "e0a61175a4ee3e6248fbb6d6748e79e79fe4772197ebf2043dbc8397036ae463"
+      "sha256": "5b5d46cd4bd0a33edcfb8c2237db1f60092e006b2adb174acaa5a33cd9758c74",
+      "local_sha256": "5b5d46cd4bd0a33edcfb8c2237db1f60092e006b2adb174acaa5a33cd9758c74"
     },
     {
       "path": "lib/src/native_backend.dart",
@@ -87,8 +87,8 @@
     {
       "path": "LOCAL_PATCHES.md",
       "origin": "project",
-      "sha256": "909847faf299857e00b35f8aac8f51510841b5095a095832d61503cca623ef98",
-      "local_sha256": "909847faf299857e00b35f8aac8f51510841b5095a095832d61503cca623ef98"
+      "sha256": "86fc8fcd30c62d8b8d659a6c99d0a57d616ee5784b58f3549a60fd28041c435c",
+      "local_sha256": "86fc8fcd30c62d8b8d659a6c99d0a57d616ee5784b58f3549a60fd28041c435c"
     },
     {
       "path": "notices/VENERA_SAF_NOTICES.txt",

@@ -138,6 +138,7 @@ open class ProbeDocumentsProvider : DocumentsProvider() {
     override fun createDocument(parentDocumentId: String, mimeType: String, displayName: String): String {
         require(displayName.isNotEmpty() && displayName != "." && displayName != ".." && !displayName.contains('/'))
         val parent = file(parentDocumentId)
+        if (displayName == "reuse-existing.jpg") return id(root(parentDocumentId), File(parent, "original-image.jpg"))
         val result = File(parent, if (displayName.endsWith(".wrong")) "$displayName.changed" else displayName)
         if (mimeType == Document.MIME_TYPE_DIR) {
             if (!result.mkdir()) throw IOException("Cannot create probe directory")
@@ -157,6 +158,7 @@ open class ProbeDocumentsProvider : DocumentsProvider() {
     }
     override fun openDocument(documentId: String, mode: String, signal: CancellationSignal?): ParcelFileDescriptor {
         val source = file(documentId)
+        if (source.name == "save-broken.jpg") throw IOException("synthetic image output failure")
         if (source.name == "remote-error") {
             val pipe = ParcelFileDescriptor.createReliablePipe()
             pipe[1].closeWithError("synthetic provider close error")

@@ -1072,7 +1072,17 @@
     "Start new 45-second capture": "开始新的 45 秒采集",
     "Unable to copy report.": "无法复制报告，请重试。",
     "Delete rule": "删除规则",
-    "Delete the keyword rule \"@a\"?": "确定删除关键词规则「@a」吗？"
+    "Delete the keyword rule \"@a\"?": "确定删除关键词规则「@a」吗？",
+    "Image save directory": "图片保存目录",
+    "Ask every time": "每次询问",
+    "Choose folder": "选择文件夹",
+    "The folder is saved on this device. Hold the image save button to save elsewhere.": "目录只保存在本机。长按图片保存按钮可临时选择其他位置。",
+    "Unable to select an image save directory": "无法选择图片保存目录",
+    "Image saved to @a": "图片已保存到 @a",
+    "Unable to save image": "无法保存图片",
+    "Image save directory unavailable": "图片保存目录不可用",
+    "The folder was removed or access was lost. Choose another folder to save this image.": "目录已移除或访问权限已失效。请选择其他文件夹保存这张图片。",
+    "Save image as": "图片另存为"
   },
   "zh_TW": {
     "Crop white side borders": "自動裁切左右白邊",
@@ -2147,7 +2157,17 @@
     "Start new 45-second capture": "開始新的 45 秒採集",
     "Unable to copy report.": "無法複製報告，請重試。",
     "Delete rule": "刪除規則",
-    "Delete the keyword rule \"@a\"?": "確定刪除關鍵字規則「@a」嗎？"
+    "Delete the keyword rule \"@a\"?": "確定刪除關鍵字規則「@a」嗎？",
+    "Image save directory": "圖片儲存目錄",
+    "Ask every time": "每次詢問",
+    "Choose folder": "選擇資料夾",
+    "The folder is saved on this device. Hold the image save button to save elsewhere.": "目錄只儲存在本機。長按圖片儲存按鈕可暫時選擇其他位置。",
+    "Unable to select an image save directory": "無法選擇圖片儲存目錄",
+    "Image saved to @a": "圖片已儲存至 @a",
+    "Unable to save image": "無法儲存圖片",
+    "Image save directory unavailable": "圖片儲存目錄無法使用",
+    "The folder was removed or access was lost. Choose another folder to save this image.": "目錄已移除或存取權限已失效。請選擇其他資料夾儲存這張圖片。",
+    "Save image as": "圖片另存為"
   },
   "de_DE": {
     "Crop white side borders": "Weiße Seitenränder beschneiden",
@@ -3222,7 +3242,17 @@
     "No cover": "Kein Cover",
     "Covers are shown. Tap a cover to open its details.": "Cover werden angezeigt. Tippe auf ein Cover, um die Details zu öffnen.",
     "Delete rule": "Regel löschen",
-    "Delete the keyword rule \"@a\"?": "Die Schlüsselwortregel „@a“ löschen?"
+    "Delete the keyword rule \"@a\"?": "Die Schlüsselwortregel „@a“ löschen?",
+    "Image save directory": "Ordner für gespeicherte Bilder",
+    "Ask every time": "Jedes Mal fragen",
+    "Choose folder": "Ordner auswählen",
+    "The folder is saved on this device. Hold the image save button to save elsewhere.": "Der Ordner wird auf diesem Gerät gespeichert. Halten Sie die Speichertaste gedrückt, um einen anderen Ort zu wählen.",
+    "Unable to select an image save directory": "Der Ordner für Bilder konnte nicht ausgewählt werden",
+    "Image saved to @a": "Bild gespeichert unter @a",
+    "Unable to save image": "Bild konnte nicht gespeichert werden",
+    "Image save directory unavailable": "Der Bildordner ist nicht verfügbar",
+    "The folder was removed or access was lost. Choose another folder to save this image.": "Der Ordner wurde entfernt oder der Zugriff ging verloren. Wählen Sie einen anderen Ordner für dieses Bild.",
+    "Save image as": "Bild speichern unter"
   },
   "ja_JP": {
     "Crop white side borders": "左右の白い余白を切り取る",
@@ -4297,6 +4327,16 @@
     "No cover": "表紙なし",
     "Covers are shown. Tap a cover to open its details.": "表紙を表示しています。表紙をタップすると詳細を開きます。",
     "Delete rule": "ルールを削除",
-    "Delete the keyword rule \"@a\"?": "キーワードルール「@a」を削除しますか？"
+    "Delete the keyword rule \"@a\"?": "キーワードルール「@a」を削除しますか？",
+    "Image save directory": "画像の保存先フォルダー",
+    "Ask every time": "毎回確認する",
+    "Choose folder": "フォルダーを選択",
+    "The folder is saved on this device. Hold the image save button to save elsewhere.": "保存先はこの端末に保存されます。画像の保存ボタンを長押しすると、別の場所を選択できます。",
+    "Unable to select an image save directory": "画像の保存先フォルダーを選択できません",
+    "Image saved to @a": "画像を @a に保存しました",
+    "Unable to save image": "画像を保存できません",
+    "Image save directory unavailable": "画像の保存先フォルダーを使用できません",
+    "The folder was removed or access was lost. Choose another folder to save this image.": "フォルダーが削除されたか、アクセス権が失われました。この画像を保存する別のフォルダーを選択してください。",
+    "Save image as": "画像に名前を付けて保存"
   }
 }

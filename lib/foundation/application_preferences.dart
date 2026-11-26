@@ -259,6 +259,12 @@ async function processImage(image, cid, eid, page, sourceKey) {
 }
 ''';
 
+abstract final class ImageSavePreferences {
+  /// A device-local path or persisted Android document-tree reference.
+  static const directory = NullableStringPreference('readerImageSaveDirectory');
+  static const all = <Preference<Object?>>[directory];
+}
+
 Map<String, Object?> get applicationPreferenceDefaults => {
   for (final preference in [
     ...AppPreferences.all,
@@ -269,6 +275,7 @@ Map<String, Object?> get applicationPreferenceDefaults => {
     ...KeywordPreferences.ruleOptions,
     ...FavoritePreferences.all,
     ...ImageProcessingPreferences.all,
+    ...ImageSavePreferences.all,
   ])
     preference.key: preference.storageDefault,
 };

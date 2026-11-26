@@ -40,6 +40,15 @@ truncate or flush operations retain their native IO error.
 
 ## Descriptor ownership and workers
 
+Reader image export adds `saveNewFile`: it resolves the persisted directory
+grant, chooses an unoccupied display name, and opens the URI returned by
+`createDocument` directly. A returned existing identity is rejected before
+writing or cleanup. The native executor keeps accepted source consumers alive
+until write/flush/provider close completes; detached plugins drain accepted
+jobs. New output failures clean up only confirmed newly created identities.
+Real provider probes cover Unicode, concurrent collisions, existing-URI reuse,
+failed opens, remote errors and balanced provider close callbacks.
+
 The original Java `ParcelFileDescriptor` stays alive through file close, so a
 cloud provider's commit/close lifecycle is not shortened by FD duplication.
 Native `read`/`write`/64-bit seek/length/truncate/flush use the descriptor directly;

@@ -73,6 +73,31 @@ Future<Map<String, Object?>> probe() async {
         await append.close();
         passed('Unicode metadata, typed views, create and append');
 
+        final imageCache = await Directory.systemTemp.createTemp('saved-image-probe-');
+        try {
+          final image = File('${imageCache.path}/source.jpg');
+          await image.writeAsBytes([255, 216, 1, 2, 255, 217]);
+          final originalImage = File('$rootPath/漫画_EP2_P7.jpg');
+          await originalImage.writeAsBytes([9]);
+          final savedImages = await Future.wait([
+            for (var i = 0; i < 3; i++) root.saveNewFile(source: image, filename: '漫画_EP2_P7.jpg'),
+          ]);
+          check(savedImages.toSet().length == 3, 'Concurrent image saves reused a document');
+          check((await originalImage.readAsBytes()).join(',') == '9', 'Image save truncated an existing image');
+          for (final saved in savedImages) {
+            check((await File(saved).readAsBytes()).join(',') == '255,216,1,2,255,217', 'Saved image bytes changed');
+          }
+          await File('$rootPath/original-image.jpg').writeAsBytes([8]);
+          await rejects(() => root.saveNewFile(source: image, filename: 'reuse-existing.jpg'));
+          check((await File('$rootPath/original-image.jpg').readAsBytes()).join(',') == '8', 'Provider-returned existing URI was written or deleted');
+          await rejects(() => root.saveNewFile(source: image, filename: 'save-broken.jpg'));
+          check(!await File('$rootPath/save-broken.jpg').exists(), 'Failed image output was retained as a saved file');
+          await rejects(() => root.saveNewFile(source: image, filename: 'remote-error'));
+          check(!await File('$rootPath/remote-error').exists(), 'Remote image error was reported as success');
+          await balanced();
+          passed('unique image saves, exact bytes, provider ownership and failed-output cleanup');
+        } finally { await imageCache.delete(recursive: true); }
+
         final before = await balanced();
         final raf = await file.open(mode: FileMode.write);
         await raf.writeFrom([9, 4, 5, 6, 8], 1, 4);

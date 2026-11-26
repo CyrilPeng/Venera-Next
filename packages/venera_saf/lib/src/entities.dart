@@ -75,6 +75,16 @@ class AndroidDirectory extends _SafEntity implements Directory {
     return path == null ? null : AndroidDirectory._(path);
   }
 
+  /// Create and write a new document, choosing a free display name. The native
+  /// operation opens its returned URI directly and joins provider close.
+  Future<String> saveNewFile({
+    required File source,
+    required String filename,
+  }) async => (await const MethodChannel('venera/saf').invokeMethod<String>(
+    'saveNewFile',
+    {'directory': path, 'source': source.path, 'filename': filename},
+  ))!;
+
   @override
   Directory get absolute => this;
   @override

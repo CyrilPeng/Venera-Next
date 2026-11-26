@@ -542,6 +542,25 @@ void main() {
   });
 
   test(
+    'image save directory stays on its original device during import',
+    () async {
+      appdata.settings['readerImageSaveDirectory'] = '/this/device/pictures';
+      await appdata.syncData({
+        'settings': {'readerImageSaveDirectory': 'android://other:Pictures'},
+        'searchHistory': <String>[],
+      });
+      expect(
+        appdata.settings['readerImageSaveDirectory'],
+        '/this/device/pictures',
+      );
+      expect(
+        read()['settings']['readerImageSaveDirectory'],
+        '/this/device/pictures',
+      );
+    },
+  );
+
+  test(
     'listeners cannot borrow edit access to bypass waiting replacement',
     () async {
       final entered = Completer<void>();

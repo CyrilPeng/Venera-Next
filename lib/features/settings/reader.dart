@@ -12,6 +12,7 @@ import 'package:venera_next/features/reader/brightness.dart';
 import 'package:venera_next/features/settings/setting_components.dart';
 import 'package:venera_next/features/settings/reader_mode.dart';
 import 'package:venera_next/features/settings/reader_brightness.dart';
+import 'reader_image_save.dart';
 import 'package:venera_next/components/settings_save_state.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_profile.dart';
@@ -160,6 +161,7 @@ class _ReaderSettingsState extends SettingsSaveState<ReaderSettings> {
         slivers: [
           SliverAppbar(title: Text("Reading".tl)),
           settingsSaveStatus.toSliver(),
+          const ReaderImageSaveSetting().toSliver(),
           if (AppProfile.current.isTv)
             SwitchSetting.preference(
               title: 'TV low-memory mode'.tl,
