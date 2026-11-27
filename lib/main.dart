@@ -253,6 +253,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _interactiveBindings.windowHotkey?.removeListener(_hotkeyChanged);
     appNavigation.registerForceRebuild(null);
+    appNavigation.clearPendingNavigation();
+    _releaseAuthLock?.call();
+    _releaseAuthLock = null;
     hideContentOverlay?.remove();
     hideContentOverlay = null;
     unawaited(
@@ -264,6 +267,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   bool isAuthPageActive = false;
+
+  VoidCallback? _releaseAuthLock;
 
   OverlayEntry? hideContentOverlay;
 
@@ -311,14 +316,23 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         !isAuthPageActive &&
         !IO.isSelectingFiles) {
       isAuthPageActive = true;
-      appNavigation.rootContext.to(
-        () => AuthPage(
-          onSuccessfulAuth: () {
-            appNavigation.rootContext.pop();
-            isAuthPageActive = false;
-          },
-        ),
-      );
+      final releaseAuthLock = appNavigation.acquireAuthLock();
+      _releaseAuthLock = releaseAuthLock;
+      appNavigation.rootContext
+          .to(
+            () => AuthPage(
+              onSuccessfulAuth: () {
+                appNavigation.rootContext.pop();
+                isAuthPageActive = false;
+              },
+            ),
+          )
+          .whenComplete(() {
+            releaseAuthLock();
+            if (identical(_releaseAuthLock, releaseAuthLock)) {
+              _releaseAuthLock = null;
+            }
+          });
     }
     super.didChangeAppLifecycleState(state);
   }
