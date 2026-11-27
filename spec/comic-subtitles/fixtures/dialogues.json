@@ -1,0 +1,51 @@
+{
+  "pages": [
+    {
+      "image": "ridge.png", "size": [192, 256],
+      "sha256": "3bc5dd8e9f5a420e4812e629664205c455e457382b72936c892bcd1482f8a8cd",
+      "sourceLanguage": "ja",
+      "dialogues": [
+        {
+          "id": "ridge-foot", "area": [52, 32, 139, 119], "direction": "vertical-rl",
+          "observations": [{"text": "山の", "box": [103, 40, 129, 94]}, {"text": "下", "box": [64, 51, 90, 77]}],
+          "texts": {"ja": "山の下", "zh": "山脚下"}, "reviewed": ["zh"]
+        }
+      ]
+    },
+    {
+      "image": "gate.png", "size": [384, 192],
+      "sha256": "b6c8c0431f3f4bdd7fbfb1bdc1bbb08ed150d58b6e1cd4d77824262c5c1ecabd",
+      "sourceLanguage": "ja",
+      "dialogues": [
+        {
+          "id": "gate-entry", "area": [136, 46, 248, 108], "direction": "horizontal-tb",
+          "observations": [{"text": "入口", "box": [164, 66, 220, 92]}],
+          "texts": {"ja": "入口", "zh": "入口处"}, "reviewed": []
+        }
+      ]
+    },
+    {
+      "image": "dawn.png", "size": [192, 768],
+      "sha256": "098901e3cd3c5bfe16e7eefebcd0dff72e0b5cab47e57c2274611dbe69b05271",
+      "sourceLanguage": "zh",
+      "dialogues": [
+        {
+          "id": "dawn-pass", "area": [44, 62, 130, 108], "direction": "horizontal-tb",
+          "observations": [{"text": "山口", "box": [59, 72, 112, 98]}],
+          "texts": {"zh": "山口"}, "reviewed": []
+        },
+        {
+          "id": "dawn-sunrise", "area": [50, 642, 150, 706], "direction": "horizontal-tb",
+          "observations": [{"text": "日出", "box": [74, 659, 128, 685]}],
+          "texts": {"zh": "日出"}, "reviewed": []
+        }
+      ]
+    }
+  ],
+  "searchCases": [
+    {"query": "山の下", "page": 1, "id": "ridge-foot", "area": [52, 32, 139, 119]},
+    {"query": "脚下", "page": 1, "id": "ridge-foot", "area": [52, 32, 139, 119]},
+    {"query": "入口", "page": 2, "id": "gate-entry", "area": [136, 46, 248, 108]},
+    {"query": "日出", "page": 3, "id": "dawn-sunrise", "area": [50, 642, 150, 706]}
+  ]
+}

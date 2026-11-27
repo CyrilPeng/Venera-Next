@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ACBF xmlns="http://www.acbf.info/xml/acbf/1.1">
+  <meta-data>
+    <book-info>
+      <author><nickname>Comic subtitle fixtures</nickname></author>
+      <book-title>山路 / Mountain Path</book-title>
+      <genre>other</genre>
+      <coverpage><image href="#ridge.png"/></coverpage>
+      <languages><text-layer lang="ja" show="true"/><text-layer lang="zh" show="true"/></languages>
+    </book-info>
+  </meta-data>
+  <body>
+    <page>
+      <image href="#ridge.png"/>
+      <text-layer lang="ja"><text-area points="52,32 139,32 139,119 52,119"><p>山の下</p></text-area></text-layer>
+      <text-layer lang="zh"><text-area points="52,32 139,32 139,119 52,119"><p>山脚下</p></text-area></text-layer>
+    </page>
+    <page>
+      <image href="#gate.png"/>
+      <text-layer lang="ja"><text-area points="136,46 248,46 248,108 136,108"><p>入口</p></text-area></text-layer>
+      <text-layer lang="zh"><text-area points="136,46 248,46 248,108 136,108"><p>入口处</p></text-area></text-layer>
+    </page>
+    <page>
+      <image href="#dawn.png"/>
+      <text-layer lang="zh">
+        <text-area points="44,62 130,62 130,108 44,108"><p>山口</p></text-area>
+        <text-area points="50,642 150,642 150,706 50,706"><p>日出</p></text-area>
+      </text-layer>
+    </page>
+  </body>
+  <data>
+    <binary id="ridge.png" content-type="image/png">iVBORw0KGgoAAAANSUhEUgAAAMAAAAEAAQAAAADNOESqAAADlklEQVR42u2Zv27UQBDGv11M7oTCkQIkipPOFUI0RDRcF5eU0FOkpLw3wCUSTegQDSl4AB7BQBMoILyBJU7iJJqTEyEbzC2Fdz0ze14px98oOjd38e/GO57dnZlvowy6L42/D1B23x4FLSLV7e/+v3B3DU4nMMpeiQcK98sDt3zs50e3il57Fu+dxW0JzEsHNhIBFm5MqFyAOm39nAhQ0QuMBWDvGYs7xwQ2BZgR2DhZrA7pzrnVwj7zwT77afpHpnZG7p25tftK6RUtdo4Wvzl41H5bAKjiS/MlC5MGLHQGjEzHGG6ZLw/+IATuh8DlEOif2qmddYBNAHgWsPjxOF6OLgDUbwKrvcJ2NygO424wTctu0I8DXpnQC1I+80CZBsCQZkuCK8i7wYXgPqfl6IFvgUe5LLYMonWBXIOOqzLGGPPctFfd3PjlMbbZXj+ZxVW2rgXYJHAsuwwCssvoETgQIKLtuie7jKzdbLLLUHdbpzL5HrcceOvtrZvKfumV0mLgdTitxVL7vl6ipwF8DYEvK6fXPJTC32XddRBPEADxbqh4zUPFaxyotems20Kh9sEibZTpwAffs0ZT9HzQtEQRjelAObE7NvWATpod225GB+Zls2PbLsuB6dDqAv9R/YEt535zl/VsOR97YCtKAaStymhBqrMmh9UeiJXV6gNPFQF5o7J68FXRpJmDyB8DY5vDUimXgGGTw7TMPgoYNDlMyUeVQM++g8yJBRClpkN5RYC2DY5UXjmArHFI5sQ+oPLaOchABmBS8VynKdmOC97EapJ0w4g3X5r+GOQ8aVuLBED/gCdtTcXA7LnoMIsUQBTzOqGpLmmhRjWdv6ikcWLMCuSRK44PjTGfWYGcg8nbmj0qApO3AwZyLsb7DDhRPqWYNGCLVzQbk8oYY0aNU4uRMcYsdsgr+86LXYqJ5m2uFeN5C1ybW/GYVG03YMyn5uNDO0bNvbWR02wKkLl22AHXk99jNVHzY4lrCa0TLarkI1oamscQN2idaCGULibtjzXzpnUvc2BLSgCVO5B6EmBigYkho5g4iwQQUSwtoG6loJjIMaYUE82CC9whAagBnG+93SavNU/jbiaj1MvtNUswWuormjEBCpbPBZiykxwB3BJG4oE9dsLJAQXzugSku7YAVW2Qt73AKWcVqudFCLwIgacBQN56gKlECHe5t8LdKtR+FGfocGANgMgorHamr/7nvyB+AikDONSRitcpAAAAAElFTkSuQmCC</binary>
+    <binary id="gate.png" content-type="image/png">iVBORw0KGgoAAAANSUhEUgAAAYAAAADAAQAAAAAlk4nKAAAEZklEQVR42u2av2/bRhTH350YUUBjx0NRF4YAacxkePCgLUQnjxk6ZvDoUf0LevkLqqFDt2jI0Cno6JGbBSSD0aEzCxBB0mZw1KAQDYkvA+/Hu+OR0gFJk7bkYlP05+7x++7evfcshhB2cfj3A7AK+/NR8AwRC9N1/l+QtQM6oAM6oAP+EeAt09dgJ2Bmfi12AfAH1Ncq2QG4nZrf4+sdgEKQm8sdgCW9Ge4AvKE3X+0AWGb3dgDm1mOxFXASg3T7DJb0bLtJpW3E+YdffBv79uQz2A+39u3XXdTogM8cWAMUjAUAf7cUHN5PYwCGm4AZIhH4DjwNBFioSpiF+iEJBW4CgXIe6ulVqEoHgZ5e8cAZlmUgEMWBQBYJZFEAcNa8mLzDbKYsizHAJCZgGvQOHODhVuCN/fl4K/BbaNS4CgV+DARwLMKA8ps0DFg/zsKAAqRJffv5KzcKcp0aNm3jP/1ADpMGIE+8wEJlnD03ZXyeeYEZ7DfMMLvwATiGgTePnOP4kQ8oE51OpnaOWSb7PmAtVIh34nCyFl8ID1CYEH9u55iFE/u5ztBZ5kkLN7AEdu0BcgDl6i/p4z8gd2oCrtygI7b1jjksAI7s+gIREUeIeCXLmO9NSYP3cIS4Ih884coNurjo06LpBMfOEcmVGwBkxGbfkbIshQSAz2smrRAR38pZybKNcY2ItO56UkW+Iq5OcwAAuEdj3roHAKc1k5aNp3kBAHBcA/LG03wJZG4DLBpP8xwAoJ+4QKWkLwxUQ2UOgFUk9UXsaqgLByirKT27Wg71yAHWoqGOVEPtOYAsmz2HsxzqrrABWa+WDW6wFOdaO1tuu/Qle4hr7SxXn1M3WHU1J10Ac97hL9QNQPcQN9qRCHN76jQUDi1AakccWjyz3ECt5UY74uplbLkBoDengO5eaFfnUULdQMfitG2gD+ezXuY0Qk4pkJMcvTL9RI5oOhDHFFDa6ZBUJtK63OxuQYLASHdWzM/f0d795QMTl7R2Ohd6rYQ3IUpLzol2Ory+lMIjSVEuDGC0U4tyIYMXGcrsoUIHMFRvU46k+TSo3ph3IN2bSszyXDqR9qPUHuJUOyD+PXLSNWUuJ25Q/+Mp1Pp8R/PAhxqYue2kX9X6tALVRAFUu8rVLwAqmRYUOFIA1S427mJTa269hzhxg3S1nHJizQ0gVzy3e3kCAG5TaUJp5TFyxXOricZTo/6hNbd2ErfOZZaZTRAJp494KoGBa9JTNdvSBo59ufcNAPykol3uVLTCA0zImr5c2M/6qQcYkjU9nDlFQuYB9gHeKW323Az/Zw8wAPhLL2i3IB16ACSrvdZF3PMAkYCzxqL6rqgDPMWT5rR7XgdYVjaX0mxqEiyTrayw+brSCRZx9euWUuDIU5ZNXrYAhx5guGgBoqQOHMxagF5WBzbjtnpmWgcGrbXTt3XgTmvFtF8H2htUsQjsYPXTQIBdh/bILkOB+6HAQdd67IBPB0TI4ON+54T9H7/K8x6/JvH7wmHoNAAAAABJRU5ErkJggg==</binary>
+    <binary id="dawn.png" content-type="image/png">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</binary>
+  </data>
+</ACBF>
