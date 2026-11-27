@@ -69,6 +69,7 @@ class ReaderScaffold extends StatefulWidget {
     this.readBrightnessSettings,
     this.brightnessChanges,
     this.onDiagnostics,
+    this.onSubtitles,
     this.onRemoteKey,
     this.onCancelRemoteKeys,
   });
@@ -96,6 +97,7 @@ class ReaderScaffold extends StatefulWidget {
   final ReaderChapterNavigationAction? chapterNavigation;
   final Widget child;
   final VoidCallback? onDiagnostics;
+  final VoidCallback? onSubtitles;
   final ValueChanged<KeyEvent>? onRemoteKey;
   final VoidCallback? onCancelRemoteKeys;
 
@@ -445,6 +447,7 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
       showComments,
       widget.imageWork,
       widget.onDiagnostics != null,
+      widget.onSubtitles != null,
       appLocale,
     );
     if (_topBar != null && _topBarInputs == inputs) return _topBar!;
@@ -454,6 +457,12 @@ class ReaderScaffoldState extends State<ReaderScaffold> {
       chapterTitle: widget.data.chapterTitle,
       onBack: () => unawaited(widget.onExit()),
       actions: [
+        if (widget.onSubtitles != null)
+          IconButton(
+            tooltip: 'Chapter subtitles'.tl,
+            icon: const Icon(Icons.subtitles_outlined),
+            onPressed: () => widget.onSubtitles?.call(),
+          ),
         if (widget.onDiagnostics != null &&
             widget.imageWork.diagnostics != null)
           ListenableBuilder(

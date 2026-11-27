@@ -3,6 +3,9 @@ import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/app_profile.dart';
 import 'package:venera_next/foundation/appdata.dart';
 import 'package:venera_next/foundation/reader_preferences.dart';
+import 'package:venera_next/foundation/comic_type.dart';
+import 'subtitles/mount_dialog.dart';
+import 'subtitles/store.dart';
 import 'reader_page.dart';
 import 'scaffold.dart';
 import 'shell_data.dart';
@@ -48,6 +51,31 @@ class ReaderShellHost extends StatelessWidget {
       progress: reader.createProgressRequest(),
       onExit: reader.requestExit,
       onDiagnostics: () => reader.openDiagnostics(),
+      onSubtitles:
+          reader.type == ComicType.local &&
+              reader.images != null &&
+              reader.preferences.read(ReaderPreferences.externalSubtitles)
+          ? () {
+              final book = reader.cid,
+                  chapter = reader.eid,
+                  path = App.dataPath;
+              showDialog<bool>(
+                context: context,
+                builder: (_) => SubtitleMountDialog(
+                  store: SubtitleStore('$path/comic-subtitles.db'),
+                  book: book,
+                  chapter: chapter,
+                  images: List.of(reader.images ?? const []),
+                  isCurrent: () =>
+                      reader.mounted &&
+                      reader.type == ComicType.local &&
+                      reader.cid == book &&
+                      reader.eid == chapter &&
+                      App.dataPath == path,
+                ),
+              );
+            }
+          : null,
       onFullscreen: App.isDesktop ? reader.fullscreen : null,
       onToggleAutomaticReading: reader.toggleAutomaticReading,
       acquireSidebarPause: reader.acquireAutomaticReadingPause,

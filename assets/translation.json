@@ -1,5 +1,12 @@
 {
   "zh_CN": {
+    "External comic subtitles (experimental)": "外挂漫画字幕（实验）",
+    "Chapter subtitles": "本章字幕",
+    "Select ACBF": "选择 ACBF 字幕",
+    "Add page manifest": "载入页面清单",
+    "Choose original page": "核对并选择原图",
+    "Page not found": "未找到对应原图",
+    "Detach subtitles": "撤下字幕",
     "Crop white side borders": "自动裁剪左右白边",
     "Only changes Continuous and Waterfall display. Original images are kept.": "仅调整连续阅读和瀑布流的显示，保留完整原图。",
     "Lock reader menu": "锁定阅读菜单",
@@ -1090,6 +1097,13 @@
     "Save image as": "图片另存为"
   },
   "zh_TW": {
+    "External comic subtitles (experimental)": "外掛漫畫字幕（實驗）",
+    "Chapter subtitles": "本章字幕",
+    "Select ACBF": "選擇 ACBF 字幕",
+    "Add page manifest": "載入頁面清單",
+    "Choose original page": "核對並選擇原圖",
+    "Page not found": "找不到對應原圖",
+    "Detach subtitles": "移除字幕",
     "Crop white side borders": "自動裁切左右白邊",
     "Only changes Continuous and Waterfall display. Original images are kept.": "僅調整連續閱讀和瀑布流的顯示，保留完整原圖。",
     "Lock reader menu": "鎖定閱讀選單",
@@ -2180,6 +2194,13 @@
     "Save image as": "圖片另存為"
   },
   "de_DE": {
+    "External comic subtitles (experimental)": "Externe Comic-Untertitel (experimentell)",
+    "Chapter subtitles": "Kapiteluntertitel",
+    "Select ACBF": "ACBF auswählen",
+    "Add page manifest": "Seitenmanifest laden",
+    "Choose original page": "Originalseite prüfen und auswählen",
+    "Page not found": "Originalseite nicht gefunden",
+    "Detach subtitles": "Untertitel ablösen",
     "Crop white side borders": "Weiße Seitenränder beschneiden",
     "Only changes Continuous and Waterfall display. Original images are kept.": "Ändert nur die Anzeige im fortlaufenden und im Wasserfallmodus. Originalbilder bleiben erhalten.",
     "Lock reader menu": "Lesemenü sperren",
@@ -3270,6 +3291,13 @@
     "Save image as": "Bild speichern unter"
   },
   "ja_JP": {
+    "External comic subtitles (experimental)": "外部漫画字幕（試験機能）",
+    "Chapter subtitles": "この章の字幕",
+    "Select ACBF": "ACBF 字幕を選択",
+    "Add page manifest": "ページ情報を読み込む",
+    "Choose original page": "元のページを確認して選択",
+    "Page not found": "元のページが見つかりません",
+    "Detach subtitles": "字幕を取り外す",
     "Crop white side borders": "左右の白い余白を切り取る",
     "Only changes Continuous and Waterfall display. Original images are kept.": "連続モードとウォーターフォールモードの表示のみ変更します。元の画像は保持されます。",
     "Lock reader menu": "読書メニューをロック",

@@ -1,7 +1,7 @@
 {
   "pages": [
     {
-      "image": "ridge.png", "size": [192, 256],
+      "id": "ridge", "image": "ridge.png", "size": [192, 256],
       "sha256": "3bc5dd8e9f5a420e4812e629664205c455e457382b72936c892bcd1482f8a8cd",
       "sourceLanguage": "ja",
       "dialogues": [
@@ -13,7 +13,7 @@
       ]
     },
     {
-      "image": "gate.png", "size": [384, 192],
+      "id": "gate", "image": "gate.png", "size": [384, 192],
       "sha256": "b6c8c0431f3f4bdd7fbfb1bdc1bbb08ed150d58b6e1cd4d77824262c5c1ecabd",
       "sourceLanguage": "ja",
       "dialogues": [
@@ -25,7 +25,7 @@
       ]
     },
     {
-      "image": "dawn.png", "size": [192, 768],
+      "id": "dawn", "image": "dawn.png", "size": [192, 768],
       "sha256": "098901e3cd3c5bfe16e7eefebcd0dff72e0b5cab47e57c2274611dbe69b05271",
       "sourceLanguage": "zh",
       "dialogues": [

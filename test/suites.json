@@ -239,6 +239,13 @@
   ],
   "external": [
     {
+      "id": "comic-subtitle-examples",
+      "include": ["spec/comic-subtitles/check_examples.py"],
+      "kind": "script-behavior",
+      "entry": "python spec/comic-subtitles/check_examples.py",
+      "ci": ".github/workflows/analyze.yml / analyze"
+    },
+    {
       "id": "python-ci",
       "include": [
         ".github/scripts/tests/test_*.py"

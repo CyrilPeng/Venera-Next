@@ -53,6 +53,16 @@ def portable_files(cases, original, images):
         ref.set('href', names[ref.attrib['href'].removeprefix('#')])
     files = {name: images[key] for key, name in names.items()}
     files['book.acbf'] = xml.tostring(root, encoding='utf-8', xml_declaration=True)
+    bindings = []
+    for page in cases['pages']:
+        layers = {}
+        for dialogue in page['dialogues']:
+            for language in dialogue['texts']:
+                layers.setdefault(language, []).append(dialogue['id'])
+        bindings.append({**{key: page[key] for key in ('id', 'size', 'sha256', 'sourceLanguage')}, 'layers': layers})
+    manifest = {'profile': 'venera-subtitles-experiment-1',
+                'acbfSha256': hashlib.sha256(files['book.acbf']).hexdigest(), 'pages': bindings}
+    files['book.pages.json'] = json.dumps(manifest, ensure_ascii=False, indent=2).encode('utf-8')
     return files
 
 
@@ -151,6 +161,13 @@ class SubtitleExamples(unittest.TestCase):
                          [(0, 46, 56, 108), (136, 238, 192, 300)])
         self.assertEqual(split_highlights(area, gate['size'], right_first=False),
                          [(136, 46, 192, 108), (0, 238, 56, 300)])
+
+    def test_experimental_page_manifest(self):
+        files = portable_files(self.cases, self.original, self.images)
+        manifest = json.loads(files['book.pages.json'])
+        self.assertEqual(manifest['acbfSha256'], hashlib.sha256(files['book.acbf']).hexdigest())
+        self.assertEqual(manifest['pages'][1]['layers'], {'ja': ['gate-entry'], 'zh': ['gate-entry']})
+        self.assertEqual(manifest['pages'][2]['sha256'], hashlib.sha256(files['003.png']).hexdigest())
 
 
 if __name__ == '__main__':
