@@ -77,6 +77,25 @@ Future<void> _dismissRootOverlays({bool Function()? isActive}) async {
   }
 }
 
+Future<void> _openLinkedComic({
+  required String id,
+  required String sourceKey,
+  bool Function()? isActive,
+  Widget Function(String id, String sourceKey)? comicPageBuilder,
+}) async {
+  if (isActive?.call() == false || appNavigation.isAuthActive) return;
+  await _dismissRootOverlays(isActive: isActive);
+  if (isActive?.call() == false || appNavigation.isAuthActive) return;
+  final mainContext = appNavigation.mainNavigatorKey?.currentContext;
+  if (mainContext == null || !mainContext.mounted) return;
+  final builder = comicPageBuilder;
+  mainContext.to(() {
+    return builder != null
+        ? builder(id, sourceKey)
+        : ComicPage(id: id, sourceKey: sourceKey);
+  });
+}
+
 Future<bool> handleAppLink(
   Uri uri, {
   bool Function()? isActive,
@@ -88,14 +107,28 @@ Future<bool> handleAppLink(
       if (source.linkHandler!.domains.contains(uri.host)) {
         var id = source.linkHandler!.linkToId(uri.toString());
         if (id != null) {
-          if (appNavigation.mainNavigatorKey == null) {
-            await Future.delayed(const Duration(milliseconds: 200));
+          if (!appNavigation.isReadyForNavigation) {
+            appNavigation.deferUntilReady(
+              () => _openLinkedComic(
+                id: id,
+                sourceKey: source.key,
+                isActive: isActive,
+                comicPageBuilder: comicPageBuilder,
+              ),
+              isActive: isActive,
+              onError: (error, stack) => Log.error('App links', error, stack),
+            );
+            return true;
           }
-          if (isActive?.call() == false) return false;
+          appNavigation.clearPendingNavigation();
           await _dismissRootOverlays(isActive: isActive);
-          if (isActive?.call() == false) return false;
+          if (isActive?.call() == false || appNavigation.isAuthActive) {
+            return false;
+          }
+          final mainContext = appNavigation.mainNavigatorKey?.currentContext;
+          if (mainContext == null || !mainContext.mounted) return false;
           final builder = comicPageBuilder;
-          appNavigation.mainNavigatorKey?.currentContext?.to(() {
+          mainContext.to(() {
             return builder != null
                 ? builder(id, source.key)
                 : ComicPage(id: id, sourceKey: source.key);

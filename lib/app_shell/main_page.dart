@@ -46,6 +46,14 @@ class _MainPageState extends State<MainPage> {
     super.initState();
   }
 
+  @override
+  void dispose() {
+    if (identical(appNavigation.mainNavigatorKey, _navigatorKey)) {
+      appNavigation.mainNavigatorKey = null;
+    }
+    super.dispose();
+  }
+
   final _pages = [
     const HomePage(),
     const FavoritesPage(key: PageStorageKey('favorites')),

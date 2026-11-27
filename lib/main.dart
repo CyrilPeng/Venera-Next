@@ -253,6 +253,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _interactiveBindings.windowHotkey?.removeListener(_hotkeyChanged);
     appNavigation.registerForceRebuild(null);
+    appNavigation.clearPendingNavigation();
     _releaseAuthLock?.call();
     _releaseAuthLock = null;
     hideContentOverlay?.remove();
