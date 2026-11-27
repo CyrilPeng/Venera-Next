@@ -13,6 +13,7 @@ import 'package:venera_next/components/appbar.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/image_save_binding.dart';
 import 'package:venera_next/components/image.dart';
+import 'package:venera_next/components/comic_cover.dart';
 import 'package:venera_next/components/layout.dart';
 import 'package:venera_next/components/loading.dart';
 import 'package:venera_next/components/menu.dart';
@@ -27,6 +28,7 @@ import 'package:venera_next/features/comic_details/thumbnails.dart';
 import 'package:venera_next/foundation/app_locale.dart';
 import 'package:venera_next/features/comic_source/comic_source.dart';
 import 'package:venera_next/foundation/comic_type.dart';
+import 'package:venera_next/foundation/comic_cover.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/features/history/history.dart';
@@ -118,6 +120,41 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
   var scrollController = ScrollController();
 
   bool showFAB = false;
+  RequestScope? _coverRefreshScope;
+
+  Future<void> _refreshCover() async {
+    final manager = ComicCoverManager.instance;
+    final actionContext = context;
+    if (manager == null ||
+        _coverRefreshScope != null ||
+        !isComicActive(comic)) {
+      return;
+    }
+    final target = comic;
+    final scope = _coverRefreshScope = RequestScope();
+    setState(() {});
+    try {
+      await manager.refresh(
+        ComicCoverIdentity(widget.sourceKey, widget.id),
+        target.cover,
+        parent: scope,
+      );
+      if (actionContext.mounted && isComicActive(target)) {
+        actionContext.showMessage(message: 'Refresh Success'.tl);
+      }
+    } catch (error, stack) {
+      if (error is! RequestCancelled && !scope.isCancelled) {
+        Log.error('Cover refresh', error, stack);
+        if (actionContext.mounted && isComicActive(target)) {
+          actionContext.showMessage(message: 'Refresh Failed'.tl);
+        }
+      }
+    } finally {
+      scope.dispose();
+      if (identical(_coverRefreshScope, scope)) _coverRefreshScope = null;
+      if (mounted) setState(() {});
+    }
+  }
 
   @override
   void onReadEnd() {
@@ -181,6 +218,7 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
 
   @override
   void dispose() {
+    _coverRefreshScope?.cancel();
     scrollController.removeListener(onScroll);
     scrollController.dispose();
     super.dispose();
@@ -337,8 +375,22 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
       ),
       actions: [
         IconButton(
-          onPressed: showMoreActions,
-          icon: const Icon(Icons.more_horiz),
+          onPressed: _coverRefreshScope != null
+              ? null
+              : () => showMoreActions(
+                  refreshCover:
+                      widget.sourceKey == 'local' ||
+                          ComicCoverManager.instance == null
+                      ? null
+                      : _refreshCover,
+                ),
+          icon: _coverRefreshScope == null
+              ? const Icon(Icons.more_horiz)
+              : const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
         ),
       ],
     );
@@ -372,14 +424,17 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
                 clipBehavior: Clip.antiAlias,
                 child: _cover == null
                     ? const SizedBox()
-                    : AnimatedImage(
-                        image: CachedImageProvider(
-                          _cover!,
-                          sourceKey: comic.sourceKey,
-                          cid: comic.id,
+                    : ComicCoverImage(
+                        sourceKey: widget.sourceKey,
+                        id: widget.id,
+                        url: _cover!,
+                        image: _coverProvider!,
+                        builder: (image) => AnimatedImage(
+                          image: image,
+                          width: double.infinity,
+                          height: double.infinity,
+                          gaplessPlayback: true,
                         ),
-                        width: double.infinity,
-                        height: double.infinity,
                       ),
               ),
             ),
@@ -834,17 +889,16 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
     if (cover == null) {
       return;
     }
-    final imageProvider = CachedImageProvider(
-      cover,
-      sourceKey: comic.sourceKey,
-      cid: comic.id,
-    );
+    final imageProvider = _coverProvider!;
 
     context.to(
       () => ComicCoverViewer(
         imageProvider: imageProvider,
         title: comic.title,
         heroTag: "cover${widget.heroID}",
+        sourceKey: widget.sourceKey,
+        id: widget.id,
+        cover: cover,
       ),
     );
   }
@@ -852,11 +906,15 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
   void _saveCover(BuildContext context) {
     final cover = _cover;
     if (cover == null) return;
-    final provider = CachedImageProvider(
-      cover,
-      sourceKey: comic.sourceKey,
-      cid: comic.id,
-    );
+    final manager = ComicCoverManager.instance;
+    final identity = ComicCoverIdentity(widget.sourceKey, widget.id);
+    final provider =
+        validatedComicCoverProvider(
+          manager,
+          identity,
+          manager?.snapshotFor(identity),
+        ) ??
+        _coverProvider!;
     unawaited(
       _saves.save(
         read: (scope) => readImageProvider(provider, scope: scope),
@@ -866,13 +924,21 @@ class _ComicPageState extends LoadingState<ComicPage, ComicDetails>
   }
 
   String? get _cover {
-    final cover = widget.cover?.trim().isNotEmpty == true
-        ? widget.cover
-        : comic.cover;
+    final cover = comic.cover.trim().isNotEmpty ? comic.cover : widget.cover;
     if (cover == null || cover.trim().isEmpty) {
       return null;
     }
     return cover;
+  }
+
+  CachedImageProvider? get _coverProvider {
+    final cover = _cover;
+    if (cover == null) return null;
+    return CachedImageProvider(
+      cover,
+      sourceKey: widget.sourceKey,
+      cid: widget.id,
+    );
   }
 }
 

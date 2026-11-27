@@ -421,12 +421,18 @@ abstract mixin class ComicPageActions {
     );
   }
 
-  void showMoreActions() {
+  void showMoreActions({VoidCallback? refreshCover}) {
     final target = comic;
     contextMenus.show(
       context,
       Offset(context.width - 16, context.padding.top),
       [
+        if (refreshCover != null)
+          MenuEntry(
+            icon: Icons.refresh,
+            text: 'Refresh cover'.tl,
+            onClick: refreshCover,
+          ),
         MenuEntry(
           icon: Icons.copy,
           text: "Copy Title".tl,

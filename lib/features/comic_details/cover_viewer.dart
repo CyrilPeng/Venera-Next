@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:venera_next/components/effects.dart';
 import 'package:venera_next/components/image_save_binding.dart';
+import 'package:venera_next/components/comic_cover.dart';
 import 'package:venera_next/foundation/context.dart';
 import 'package:venera_next/foundation/image_provider/read_image.dart';
 import 'package:venera_next/foundation/image_save_work.dart';
@@ -18,11 +19,17 @@ class ComicCoverViewer extends StatefulWidget {
     required this.imageProvider,
     required this.title,
     required this.heroTag,
+    this.sourceKey,
+    this.id,
+    this.cover,
   });
 
   final ImageProvider imageProvider;
   final String title;
   final String heroTag;
+  final String? sourceKey;
+  final String? id;
+  final String? cover;
 
   @override
   State<ComicCoverViewer> createState() => _ComicCoverViewerState();
@@ -30,6 +37,7 @@ class ComicCoverViewer extends StatefulWidget {
 
 class _ComicCoverViewerState extends State<ComicCoverViewer> {
   bool isAppBarShow = true;
+  ImageProvider? _displayProvider;
 
   late final _saves = ImageSaveWork(
     deliver: (bytes, filename, checkStop) => saveFileForWindow(
@@ -55,32 +63,18 @@ class _ComicCoverViewerState extends State<ComicCoverViewer> {
           body: Stack(
             children: [
               Positioned.fill(
-                child: PhotoView(
-                  imageProvider: widget.imageProvider,
-                  minScale: PhotoViewComputedScale.contained * 1.0,
-                  maxScale: PhotoViewComputedScale.covered * 3.0,
-                  backgroundDecoration: BoxDecoration(
-                    color: context.colorScheme.surface,
-                  ),
-                  loadingBuilder: (context, event) => Center(
-                    child: SizedBox(
-                      width: 24.0,
-                      height: 24.0,
-                      child: CircularProgressIndicator(
-                        value: event == null || event.expectedTotalBytes == null
-                            ? null
-                            : event.cumulativeBytesLoaded /
-                                  event.expectedTotalBytes!,
+                child:
+                    widget.sourceKey == null ||
+                        widget.id == null ||
+                        widget.cover == null
+                    ? _buildPhoto(widget.imageProvider)
+                    : ComicCoverImage(
+                        sourceKey: widget.sourceKey!,
+                        id: widget.id!,
+                        url: widget.cover!,
+                        image: widget.imageProvider,
+                        builder: _buildPhoto,
                       ),
-                    ),
-                  ),
-                  onTapUp: (context, details, controllerValue) {
-                    setState(() {
-                      isAppBarShow = !isAppBarShow;
-                    });
-                  },
-                  heroAttributes: PhotoViewHeroAttributes(tag: widget.heroTag),
-                ),
               ),
               AnimatedPositioned(
                 top: isAppBarShow ? 0 : -(context.padding.top + 52),
@@ -93,6 +87,33 @@ class _ComicCoverViewerState extends State<ComicCoverViewer> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPhoto(ImageProvider image) {
+    _displayProvider = image;
+    return PhotoView(
+      imageProvider: image,
+      minScale: PhotoViewComputedScale.contained * 1.0,
+      maxScale: PhotoViewComputedScale.covered * 3.0,
+      backgroundDecoration: BoxDecoration(color: context.colorScheme.surface),
+      loadingBuilder: (context, event) => Center(
+        child: SizedBox(
+          width: 24.0,
+          height: 24.0,
+          child: CircularProgressIndicator(
+            value: event == null || event.expectedTotalBytes == null
+                ? null
+                : event.cumulativeBytesLoaded / event.expectedTotalBytes!,
+          ),
+        ),
+      ),
+      onTapUp: (context, details, controllerValue) {
+        setState(() {
+          isAppBarShow = !isAppBarShow;
+        });
+      },
+      heroAttributes: PhotoViewHeroAttributes(tag: widget.heroTag),
     );
   }
 
@@ -140,7 +161,7 @@ class _ComicCoverViewerState extends State<ComicCoverViewer> {
   }
 
   void _saveCover() {
-    final provider = widget.imageProvider;
+    final provider = _displayProvider ?? widget.imageProvider;
     final name = 'cover_${widget.title}';
     unawaited(
       _saves.save(

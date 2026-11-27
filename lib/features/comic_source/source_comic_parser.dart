@@ -1,15 +1,16 @@
-import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:convert';
 
 import 'package:venera_next/foundation/log.dart';
+import 'package:venera_next/foundation/operation_failure.dart';
 import 'package:venera_next/foundation/res.dart';
+import 'package:venera_next/network/request_scope.dart';
 
+import 'comic_metadata.dart';
 import 'models.dart';
 import 'normalization.dart';
 import 'source.dart';
-import 'types.dart';
-
 import 'source_parser_context.dart';
+import 'types.dart';
 
 class SourceComicParser {
   const SourceComicParser(this.context);
@@ -18,6 +19,12 @@ class SourceComicParser {
   LoadComicFunc? parseLoadComicFunc() {
     return (id) async {
       try {
+        Future<void> Function(String)? publish;
+        try {
+          publish = captureComicMetadataPublication(context.key, id);
+        } catch (error, stack) {
+          Log.error('Cover metadata', error, stack);
+        }
         final details = await context.runReadCodeToCompletion<ComicDetails>(
           """
           ${context.sourceExpression}.comic.loadInfo(${jsonEncode(id)})
@@ -36,6 +43,17 @@ class SourceComicParser {
             return ComicDetails.fromJson(normalized);
           },
         );
+        if (publish != null) {
+          try {
+            await publish(details.cover);
+          } on RequestCancelled {
+            // A newer read or a closed storage owner retired this publication.
+          } catch (error, stack) {
+            // An optional local publication must not turn a successful source
+            // read into an unavailable comic. Its owned write has already ended.
+            Log.error('Cover metadata', error, stack);
+          }
+        }
         return Res(details);
       } catch (e, s) {
         Log.error("Network", "$e\n$s");

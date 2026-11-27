@@ -47,6 +47,8 @@ Future<void> init(CoreBootstrap core) async {
     ),
     tileStateResolver: _resolveComicTileState,
     tileImageProviderResolver: _resolveComicTileImageProvider,
+    coverRefreshResolver: (comic) =>
+        comic is! LocalComic && comic.sourceKey != 'local',
     addStateListener: (listener) {
       HistoryManager().addListener(listener);
       LocalFavoritesManager().addListener(listener);

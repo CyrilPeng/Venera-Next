@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import 'json_response.dart';
+import 'request_scope.dart';
 
 class NetworkCache {
   final Uri uri;
@@ -121,7 +122,8 @@ class NetworkCacheInterceptor extends Interceptor {
     if (options.method != 'GET') {
       return handler.next(options);
     }
-    final cacheTime = options.headers.remove('cache-time');
+    var cacheTime = options.headers.remove('cache-time');
+    if (RequestScope.current?.bypassCache == true) cacheTime = 'no';
     // URL/header caching cannot represent a GET payload, including a stream
     // that a speculative HEAD must never consume.
     if (options.data != null) return handler.next(options);

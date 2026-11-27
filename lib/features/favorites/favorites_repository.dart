@@ -392,6 +392,22 @@ class FavoritesRepository {
     );
   }
 
+  bool updateCoverIfCurrent(
+    String folder,
+    String id,
+    int type,
+    String previousCover,
+    String time,
+    String cover,
+  ) {
+    db.execute(
+      'UPDATE ${_table(folder)} SET cover_path = ? '
+      'WHERE id = ? AND type = ? AND cover_path = ? AND time = ? AND cover_path <> ?;',
+      [cover, id, type, previousCover, time, cover],
+    );
+    return db.updatedRows > 0;
+  }
+
   /// Metadata and tracking time are one logical commit. An unchanged time
   /// preserves an unread update flag from a previous check.
   bool applyFollowUpdate(

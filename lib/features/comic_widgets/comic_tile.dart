@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:venera_next/components/gesture.dart';
 import 'package:venera_next/components/image.dart';
+import 'package:venera_next/components/comic_cover.dart';
 import 'package:venera_next/components/menu.dart';
 import 'package:venera_next/components/message.dart';
 import 'package:venera_next/components/select.dart';
@@ -37,6 +38,7 @@ typedef AddComicFavoriteHandler =
     Future<void> Function(BuildContext context, List<Comic> comics);
 typedef ComicTileStateResolver = ComicTileState Function(Comic comic);
 typedef ComicTileImageProviderResolver = ImageProvider? Function(Comic comic);
+typedef ComicCoverRefreshResolver = bool Function(Comic comic);
 typedef ComicWidgetListenerRegistrar = void Function(VoidCallback listener);
 typedef ComicFavoriteDisplayStateResolver =
     ComicFavoriteDisplayState Function();
@@ -80,6 +82,7 @@ ComicPageBuilder? _comicPageBuilder;
 AddComicFavoriteHandler? _addComicFavoriteHandler;
 ComicTileStateResolver? _comicTileStateResolver;
 ComicTileImageProviderResolver? _comicTileImageProviderResolver;
+ComicCoverRefreshResolver? _comicCoverRefreshResolver;
 ComicWidgetListenerRegistrar? _addComicWidgetStateListener;
 ComicWidgetListenerRegistrar? _removeComicWidgetStateListener;
 ComicFavoriteDisplayStateResolver? _comicFavoriteDisplayStateResolver;
@@ -90,6 +93,7 @@ void configureComicWidgets({
   AddComicFavoriteHandler? addFavorite,
   ComicTileStateResolver? tileStateResolver,
   ComicTileImageProviderResolver? tileImageProviderResolver,
+  ComicCoverRefreshResolver? coverRefreshResolver,
   ComicWidgetListenerRegistrar? addStateListener,
   ComicWidgetListenerRegistrar? removeStateListener,
   ComicFavoriteDisplayStateResolver? favoriteDisplayStateResolver,
@@ -99,6 +103,7 @@ void configureComicWidgets({
   _addComicFavoriteHandler = addFavorite;
   _comicTileStateResolver = tileStateResolver;
   _comicTileImageProviderResolver = tileImageProviderResolver;
+  _comicCoverRefreshResolver = coverRefreshResolver;
   _addComicWidgetStateListener = addStateListener;
   _removeComicWidgetStateListener = removeStateListener;
   _comicFavoriteDisplayStateResolver = favoriteDisplayStateResolver;
@@ -466,12 +471,20 @@ class ComicTile extends StatelessWidget {
     if (provider == null) {
       return const SizedBox();
     }
-    return AnimatedImage(
+    return ComicCoverImage(
+      sourceKey: comic.sourceKey,
+      id: comic.id,
+      url: comic.cover,
       image: provider,
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      onError: onError,
+      enabled: _comicCoverRefreshResolver?.call(comic) ?? true,
+      builder: (image) => AnimatedImage(
+        image: image,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        gaplessPlayback: true,
+        onError: onError,
+      ),
     );
   }
 
@@ -1309,13 +1322,20 @@ class SimpleComicTile extends StatelessWidget {
 
     Widget child = image == null
         ? const SizedBox()
-        : AnimatedImage(
+        : ComicCoverImage(
+            sourceKey: comic.sourceKey,
+            id: comic.id,
+            url: comic.cover,
             image: image,
-            width: double.infinity,
-            height: double.infinity,
-            fit: BoxFit.cover,
-            filterQuality: FilterQuality.medium,
-            gaplessPlayback: gaplessPlayback,
+            enabled: _comicCoverRefreshResolver?.call(comic) ?? true,
+            builder: (provider) => AnimatedImage(
+              image: provider,
+              width: double.infinity,
+              height: double.infinity,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
+              gaplessPlayback: gaplessPlayback || !identical(provider, image),
+            ),
           );
 
     child = Container(

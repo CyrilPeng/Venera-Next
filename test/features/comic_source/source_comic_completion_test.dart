@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:venera_next/features/comic_source/models.dart';
 import 'package:venera_next/features/comic_source/source_comic_parser.dart';
+import 'package:venera_next/features/comic_source/comic_metadata.dart';
 import 'package:venera_next/features/comic_source/source_parser_context.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/js_engine.dart';
@@ -35,6 +36,7 @@ void main() {
         callbacks = JsCallbackScope();
       });
       tearDown(() {
+        configureComicMetadataPublication();
         expect(engine.debugOwnedReferenceCount, 0);
         callbacks.dispose();
         engine.dispose();
@@ -55,6 +57,46 @@ void main() {
           ),
         );
       }
+
+      test(
+        'cover publication captures identity before reading and runs after native results are released',
+        () async {
+          final events = <String>[];
+          configureComicMetadataPublication((source, id) {
+            events.add('capture:$source:$id');
+            return (cover) async {
+              expect(engine.debugOwnedReferenceCount, 0);
+              events.add('publish:$cover');
+            };
+          });
+          install(
+            'return {title: "Book", cover: "https://fixture.invalid/new.png", tags: {}, extra: () => 42};',
+          );
+          final result = await parser.parseLoadComicFunc()!('original-id');
+          expect(result.error, false);
+          expect(events, [
+            'capture:$_key:original-id',
+            'publish:https://fixture.invalid/new.png',
+          ]);
+        },
+      );
+
+      test(
+        'a local cover publication failure preserves the successful source result',
+        () async {
+          configureComicMetadataPublication(
+            (_, _) =>
+                (_) async => throw StateError('local persistence failed'),
+          );
+          install(
+            'return {title: "Available", cover: "https://fixture.invalid/new.png", tags: {}};',
+          );
+          final result = await parser.parseLoadComicFunc()!('book');
+          expect(result.error, false);
+          expect(result.data.title, 'Available');
+          expect(engine.debugOwnedReferenceCount, 0);
+        },
+      );
 
       test(
         'models detach nested collections before unused JS references are released',

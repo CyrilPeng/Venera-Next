@@ -1,10 +1,13 @@
 import 'package:venera_next/foundation/operation_failure.dart';
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_qjs/flutter_qjs.dart';
 import 'package:venera_next/foundation/cache_manager.dart';
+import 'package:venera_next/foundation/cover_cache_record.dart';
 import 'package:venera_next/foundation/consts.dart';
 import 'package:venera_next/foundation/image_processing.dart';
 
@@ -318,6 +321,187 @@ abstract class ImageDownloader {
 
   static final _requests = SharedImageRequests<ImageDownloadProgress>();
 
+  /// One complete validation attempt. Its caller owns the request scope and
+  /// commits validated bytes; cached-first image streams remain unchanged.
+  static Future<ThumbnailRefreshResult> refreshThumbnail(
+    String url,
+    String sourceKey,
+    String cid,
+    RequestScope scope, {
+    ThumbnailValidators? validators,
+    Uint8List? cachedBytes,
+    bool force = false,
+    ImageHttpClient Function(BaseOptions)? createClient,
+  }) => _refreshThumbnail(
+    url,
+    sourceKey,
+    cid,
+    scope,
+    validators: validators,
+    cachedBytes: cachedBytes,
+    force: force,
+    createClient: createClient,
+    resolveCover: true,
+  );
+
+  static Future<ThumbnailRefreshResult> _refreshThumbnail(
+    String url,
+    String sourceKey,
+    String cid,
+    RequestScope scope, {
+    required ThumbnailValidators? validators,
+    required Uint8List? cachedBytes,
+    required bool force,
+    required ImageHttpClient Function(BaseOptions)? createClient,
+    required bool resolveCover,
+  }) async {
+    scope.check();
+    final configs = await _resolveImageConfig(
+      () async =>
+          await _thumbnailLoadingConfigResolver?.call(sourceKey, url) ?? {},
+      scope,
+    );
+    final owner = ImageLoadingConfigOwner(configs);
+    Object? failure;
+    StackTrace? failureStack;
+    try {
+      scope.check();
+      var requestUrl = (configs['url'] as String?) ?? url;
+      if (requestUrl.startsWith('cover.')) {
+        if (!resolveCover) {
+          throw OperationFailure.message('Comic cover not found');
+        }
+        final resolved = await _thumbnailCoverResolver?.call(sourceKey, cid);
+        scope.check();
+        if (resolved == null || resolved == url) {
+          throw OperationFailure.message('Comic cover not found');
+        }
+        return await _refreshThumbnail(
+          resolved,
+          sourceKey,
+          cid,
+          scope,
+          validators: validators,
+          cachedBytes: cachedBytes,
+          force: force,
+          createClient: createClient,
+          resolveCover: false,
+        );
+      }
+      if (requestUrl.startsWith('//')) requestUrl = 'https:$requestUrl';
+      final headers = Map<String, dynamic>.from(configs['headers'] ?? {});
+      if (!headers.keys.any((key) => key.toLowerCase() == 'user-agent')) {
+        headers['user-agent'] = webUA;
+      }
+      final method = ((configs['method'] as String?) ?? 'GET').toUpperCase();
+      final headerKeys = headers.keys.toList()..sort();
+      final requestKey = sha256
+          .convert(
+            utf8.encode(
+              jsonEncode([
+                requestUrl,
+                method,
+                for (final key in headerKeys)
+                  [key.toLowerCase(), headers[key].toString()],
+              ]),
+            ),
+          )
+          .toString();
+      final canValidate =
+          !force &&
+          method == 'GET' &&
+          configs['data'] == null &&
+          cachedBytes != null &&
+          cachedBytes.isNotEmpty &&
+          validators?.requestKey == requestKey;
+      if (canValidate) {
+        if (validators!.etag != null) {
+          headers['If-None-Match'] = validators.etag;
+        }
+        if (validators.lastModified != null) {
+          headers['If-Modified-Since'] = validators.lastModified;
+        }
+      }
+      headers['cache-time'] = 'no';
+      final options = BaseOptions(
+        headers: headers,
+        method: method,
+        responseType: ResponseType.stream,
+        validateStatus: (status) =>
+            status != null &&
+            ((status >= 200 && status < 300) || (status == 304 && canValidate)),
+      );
+      final http =
+          (createClient ??
+          (options) => ImageHttpClient(AppDio.forImages(options)))(options);
+      final result = await http.run<ThumbnailRefreshResult>((dio) async* {
+        final response = await dio.request<ResponseBody>(
+          requestUrl,
+          data: configs['data'],
+          cancelToken: scope.cancelToken,
+        );
+        scope.check();
+        final body = response.data?.stream;
+        if (body == null) {
+          throw OperationFailure.message('Error: Empty response body.');
+        }
+        if (response.statusCode == 304) {
+          await body.drain<void>();
+          scope.check();
+          yield ThumbnailRefreshResult(
+            bytes: cachedBytes!,
+            validators: ThumbnailValidators(
+              requestKey: requestKey,
+              etag: response.headers.value('etag') ?? validators!.etag,
+              lastModified:
+                  response.headers.value('last-modified') ??
+                  validators!.lastModified,
+            ),
+            notModified: true,
+          );
+          return;
+        }
+        final buffer = BytesBuilder();
+        await for (final chunk in body) {
+          scope.check();
+          buffer.add(chunk);
+        }
+        var bytes = buffer.takeBytes();
+        if (configs['onResponse'] is JSInvokable) {
+          bytes = Uint8List.fromList(
+            await _applyImageResponseCallback(
+              configs['onResponse'] as JSInvokable,
+              bytes,
+              owner,
+            ),
+          );
+        }
+        scope.check();
+        if (bytes.isEmpty) {
+          throw OperationFailure.message('Error: Empty response body.');
+        }
+        yield ThumbnailRefreshResult(
+          bytes: bytes,
+          validators: ThumbnailValidators(
+            requestKey: requestKey,
+            etag: response.headers.value('etag'),
+            lastModified: response.headers.value('last-modified'),
+          ),
+          notModified: false,
+        );
+      }).single;
+      scope.check();
+      return result;
+    } catch (error, stack) {
+      final result = _imageFailure(error, stack, scope, owner);
+      failure = result.error;
+      failureStack = result.stack;
+      Error.throwWithStackTrace(result.error, result.stack);
+    } finally {
+      owner.dispose(cause: failure, stackTrace: failureStack);
+    }
+  }
+
   /// Cancel and join shared, independent and retired image downloads.
   static Future<void> cancelAllLoadingImages() => _requests.cancelAll();
 
@@ -545,6 +729,17 @@ abstract class ImageDownloader {
       rethrow;
     }
   }
+}
+
+class ThumbnailRefreshResult {
+  const ThumbnailRefreshResult({
+    required this.bytes,
+    required this.validators,
+    required this.notModified,
+  });
+  final Uint8List bytes;
+  final ThumbnailValidators validators;
+  final bool notModified;
 }
 
 class ImageDownloadProgress {

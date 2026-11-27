@@ -1,4 +1,5 @@
 import 'cache_scan.dart';
+import 'cover_cache_record.dart';
 import 'log.dart';
 
 import 'package:crypto/crypto.dart';
@@ -75,6 +76,17 @@ class CacheManager {
         expires INTEGER NOT NULL,
         type TEXT
       )
+      ''');
+      database.execute('''
+        CREATE TABLE IF NOT EXISTS cover_validation (
+          identity TEXT PRIMARY KEY NOT NULL,
+          url TEXT NOT NULL,
+          cache_key TEXT NOT NULL,
+          checked_at INTEGER NOT NULL,
+          request_key TEXT NOT NULL,
+          etag TEXT,
+          last_modified TEXT
+        );
       ''');
       _db = database;
     } catch (_) {
@@ -289,6 +301,59 @@ class CacheManager {
   /// Delete cache by key.
   Future<void> delete(String key) => _enqueue(() => _delete(key));
 
+  Future<CoverCacheRecord?> readCoverRecord(String identity) =>
+      _enqueue(() async {
+        final row = _db.select(
+          'SELECT * FROM cover_validation WHERE identity = ?;',
+          [identity],
+        ).firstOrNull;
+        if (row == null) return null;
+        return CoverCacheRecord(
+          url: row['url'] as String,
+          cacheKey: row['cache_key'] as String,
+          checkedAt: DateTime.fromMillisecondsSinceEpoch(
+            row['checked_at'] as int,
+            isUtc: true,
+          ),
+          validators: ThumbnailValidators(
+            requestKey: row['request_key'] as String,
+            etag: row['etag'] as String?,
+            lastModified: row['last_modified'] as String?,
+          ),
+        );
+      });
+
+  Future<void> writeCoverRecord(
+    String identity,
+    CoverCacheRecord record, {
+    void Function()? checkActive,
+  }) => _enqueue(() async {
+    checkActive?.call();
+    _db.execute(
+      '''
+          INSERT OR REPLACE INTO cover_validation
+            (identity, url, cache_key, checked_at, request_key, etag, last_modified)
+          VALUES (?, ?, ?, ?, ?, ?, ?);
+        ''',
+      [
+        identity,
+        record.url,
+        record.cacheKey,
+        record.checkedAt.millisecondsSinceEpoch,
+        record.validators.requestKey,
+        record.validators.etag,
+        record.validators.lastModified,
+      ],
+    );
+    // These are disposable validation receipts, not library metadata.
+    _db.execute('''
+          DELETE FROM cover_validation WHERE identity IN (
+            SELECT identity FROM cover_validation
+            ORDER BY checked_at DESC LIMIT -1 OFFSET 4096
+          );
+        ''');
+  });
+
   Future<void> _delete(String key) async {
     var res = _db.select(
       '''
@@ -328,6 +393,7 @@ class CacheManager {
     _db.execute('''
       DELETE FROM cache
     ''');
+    _db.execute('DELETE FROM cover_validation;');
     _currentSize = 0;
   }
 }
