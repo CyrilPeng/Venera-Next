@@ -3,6 +3,7 @@ import 'dart:async' show Completer, Future, FutureOr, StreamController;
 import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:venera_next/foundation/cache_manager.dart';
 import 'package:venera_next/foundation/file_system.dart';
 import 'package:venera_next/network/images.dart';
 import 'package:venera_next/network/image_stream.dart';
@@ -19,6 +20,8 @@ class CachedImageProvider extends BaseImageProvider<CachedImageProvider> {
     this.sourceKey,
     this.cid,
     this.fallback,
+    this.cacheKey,
+    this.onVersionMissing,
   });
 
   final String url;
@@ -28,6 +31,11 @@ class CachedImageProvider extends BaseImageProvider<CachedImageProvider> {
   final String? sourceKey;
 
   final String? cid;
+
+  /// Refreshed covers use an immutable content version. A late ordinary image
+  /// download cannot overwrite this version's disk or Flutter cache entry.
+  final String? cacheKey;
+  final VoidCallback? onVersionMissing;
 
   final FutureOr<Uint8List?> Function()? fallback;
 
@@ -82,8 +90,24 @@ class CachedImageProvider extends BaseImageProvider<CachedImageProvider> {
     StreamController<ImageChunkEvent> chunkEvents,
     void Function() checkStop,
   ) async {
-    try {
+    checkStop();
+    if (cacheKey case final key?) {
+      final file = await CacheManager().findCache(key);
       checkStop();
+      if (file != null) {
+        try {
+          final bytes = await file.readAsBytes();
+          checkStop();
+          return bytes;
+        } on FileSystemException {
+          // Eviction can finish between finding the file and opening it.
+        }
+      }
+      checkStop();
+      onVersionMissing?.call();
+      throw OperationFailure.message('Cover cache version is unavailable');
+    }
+    try {
       if (url.startsWith("file://")) {
         final file = createLocalFile(url.substring(7));
         final bytes = await file.readAsBytes();
@@ -126,7 +150,11 @@ class CachedImageProvider extends BaseImageProvider<CachedImageProvider> {
   }
 
   @override
-  String get key => url + (sourceKey ?? "") + (cid ?? "");
+  String get key =>
+      url +
+      (sourceKey ?? "") +
+      (cid ?? "") +
+      (cacheKey == null ? '' : '@$cacheKey');
 }
 
 class _AsyncSemaphore {

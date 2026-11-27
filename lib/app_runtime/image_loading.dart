@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:venera_next/foundation/image_provider/base_image_provider.dart';
+import 'package:venera_next/foundation/comic_cover.dart';
 import 'package:venera_next/network/images.dart';
 
 /// Stop producers and requests together, then join their actual cleanup. On
@@ -8,6 +9,7 @@ import 'package:venera_next/network/images.dart';
 Future<void Function()> prepareImageLoadingForExit({
   Future<void Function()> Function()? prepareProviders,
   Future<void Function()> Function()? prepareRequests,
+  Future<void Function()> Function()? prepareCovers,
 }) async {
   final releases = <String, void Function()>{};
   final failures = <({String stage, Object error, StackTrace stack})>[];
@@ -25,6 +27,11 @@ Future<void Function()> prepareImageLoadingForExit({
   await Future.wait([
     prepare('providers', prepareProviders ?? BaseImageProvider.prepareForExit),
     prepare('requests', prepareRequests ?? ImageDownloader.prepareForExit),
+    if (prepareCovers != null || ComicCoverManager.instance != null)
+      prepare(
+        'covers',
+        prepareCovers ?? ComicCoverManager.instance!.prepareForExit,
+      ),
   ]);
   var released = false;
   void release() {
@@ -32,7 +39,7 @@ Future<void Function()> prepareImageLoadingForExit({
     released = true;
     final recoveryFailures =
         <({String stage, Object error, StackTrace stack})>[];
-    for (final stage in ['requests', 'providers']) {
+    for (final stage in ['requests', 'providers', 'covers']) {
       try {
         releases[stage]?.call();
       } catch (error, stack) {

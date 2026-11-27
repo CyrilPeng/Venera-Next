@@ -295,6 +295,48 @@ class LocalFavoritesManager with ChangeNotifier {
 
   int get connectionGeneration => _connectionGeneration;
 
+  /// Captured references survive a folder rename, but never adopt a recreated
+  /// folder, a new favorite or a database restored while the request was open.
+  Future<void> Function(String, void Function()) captureCoverUpdate(
+    String id,
+    ComicType type,
+  ) {
+    final generation = _connectionGeneration;
+    final tree = _repository.folderTree();
+    final references = [
+      for (final name in find(id, type))
+        if (_repository.findComic(name, id, type.value) case final item?)
+          (
+            folderId: tree.named(name)!.id,
+            cover: item.coverPath,
+            time: item.time,
+          ),
+    ];
+    return (cover, checkActive) => _mutate(() {
+      _checkSourceGeneration(generation);
+      checkActive();
+      var changed = false;
+      _commitFavoriteTransaction(() {
+        final currentTree = _repository.folderTree();
+        for (final reference in references) {
+          final folder = currentTree.identified(reference.folderId);
+          if (folder == null) continue;
+          changed =
+              _repository.updateCoverIfCurrent(
+                folder.name,
+                id,
+                type.value,
+                reference.cover,
+                reference.time,
+                cover,
+              ) ||
+              changed;
+        }
+      });
+      if (changed) notifyListeners();
+    });
+  }
+
   void _checkSourceGeneration(int generation) {
     if (generation != _connectionGeneration) {
       throw StateError(

@@ -10,7 +10,12 @@ class RequestCancelled extends OperationFailure {
 
 /// Cooperative lifetime for a source call, its retries and HTTP requests.
 class RequestScope {
-  RequestScope({RequestScope? parent, Duration? timeout}) : _parent = parent {
+  RequestScope({
+    RequestScope? parent,
+    Duration? timeout,
+    bool bypassCache = false,
+  }) : _parent = parent,
+       bypassCache = bypassCache || (parent?.bypassCache ?? false) {
     parent?._children.add(this);
     if (parent?.isCancelled == true) cancel(parent!._reason);
     if (timeout != null && !isCancelled) {
@@ -24,6 +29,7 @@ class RequestScope {
   static final Object _zoneKey = Object();
   static RequestScope? get current => Zone.current[_zoneKey] as RequestScope?;
   final RequestScope? _parent;
+  final bool bypassCache;
   final _children = <RequestScope>{};
   final _cancellationAliases = <String>{};
   final _cancelled = Completer<void>();

@@ -26,6 +26,7 @@ import 'package:venera_next/features/sync/legacy_auto_sync_migration.dart';
 
 import 'core_bootstrap.dart';
 import 'cache_settings.dart';
+import 'comic_covers.dart';
 import 'core_infrastructure.dart';
 import 'webdav_library.dart';
 
@@ -222,6 +223,8 @@ CoreBootstrap createCoreBootstrap({
       await _checkOldConfigs();
       final cache = CacheManager();
       registerProducer('cache', cache.dispose);
+      final covers = initializeComicCovers(cache);
+      registerProducer('comic covers', () => closeComicCovers(covers));
       final cacheSettings = CacheSettingsBinding(appdata.settings, cache);
       registerProducer('cache settings', cacheSettings.dispose);
       // The cache owns and drains this scan; UI startup need not await it.

@@ -486,17 +486,22 @@ class HistoryManager with ChangeNotifier {
 
   /// Capture this before starting a metadata request. Late responses cannot
   /// target a reopened database or follow mutation of the caller's identity.
-  HistoryMetadataUpdater metadataUpdaterFor(History item) {
+  HistoryMetadataUpdater metadataUpdaterFor(
+    History item, {
+    void Function()? checkActive,
+  }) {
     final id = item.id;
     final type = item.type.value;
     final generation = _generation;
     final path = isInitialized ? _dbPath : null;
     return ({String? title, String? subtitle, String? cover}) {
+      checkActive?.call();
       if (path == null || !isInitialized || generation != _generation) {
         return Future.value(false);
       }
       return _enqueueAsyncWrite(
         () => () async {
+          checkActive?.call();
           if (!isInitialized || generation != _generation) return false;
           final changed = await _updateMetadataAsync(
             path,
