@@ -73,6 +73,9 @@ def validate_manifest(xml, metadata, abi):
     )
     if main is None or main.get(ANDROID + "exported") != "true":
         raise ValueError("MainActivity must use the original namespace and be exported")
+    # apkanalyzer decodes the compiled launchMode enum as integer 2.
+    if main.get(ANDROID + "launchMode") not in ("singleTask", "2", "0x2"):
+        raise ValueError("MainActivity must use singleTask launchMode")
     leanback = "android.intent.category.LEANBACK_LAUNCHER"
     tv_entries = [
         (activity, intent)

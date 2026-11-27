@@ -60,6 +60,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onNewIntent(intent: Intent) {
+        setIntent(intent)
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_SEND) {
             if (intent.type == "text/plain") {

@@ -9,6 +9,7 @@ import tempfile
 import textwrap
 import unittest
 from unittest.mock import patch
+import xml.etree.ElementTree as ET
 import zipfile
 
 
@@ -48,7 +49,8 @@ def manifest(metadata, abi="universal"):
         f'package="{metadata["package"]}" android:versionName="{metadata["base_version"]}" '
         f'android:versionCode="{code}">{features}'
         f'<application android:label="{label}" {banner}>'
-        f'<activity android:name="{MODULE.PACKAGE}.MainActivity" android:exported="true" {orientation}>'
+        f'<activity android:name="{MODULE.PACKAGE}.MainActivity" android:exported="true" '
+        f'android:launchMode="singleTask" {orientation}>'
         f'{intent}</activity></application></manifest>'
     )
 
@@ -148,6 +150,53 @@ class AndroidTvBuildTest(unittest.TestCase):
         for value in ("1", "portrait", "-1", "sensorLandscape"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 MODULE.validate_manifest(xml.replace('screenOrientation="landscape"', f'screenOrientation="{value}"'), metadata, "universal")
+
+    def test_single_task_launch_mode_is_enforced_for_mobile_and_tv(self):
+        for flavor in ("mobile", "tv"):
+            metadata = self.metadata(flavor)
+            xml = manifest(metadata)
+            for value in ("singleTask", "2", "0x2"):
+                with self.subTest(flavor=flavor, accepted=value):
+                    MODULE.validate_manifest(
+                        xml.replace('android:launchMode="singleTask"', f'android:launchMode="{value}"'),
+                        metadata,
+                        "universal",
+                    )
+            for value in ("singleTop", "standard", "singleInstance", "0", "1", "3"):
+                with self.subTest(flavor=flavor, rejected=value), self.assertRaises(ValueError):
+                    MODULE.validate_manifest(
+                        xml.replace('android:launchMode="singleTask"', f'android:launchMode="{value}"'),
+                        metadata,
+                        "universal",
+                    )
+            with self.subTest(flavor=flavor, rejected="missing"), self.assertRaises(ValueError):
+                MODULE.validate_manifest(
+                    xml.replace('android:launchMode="singleTask"', ""),
+                    metadata,
+                    "universal",
+                )
+
+    def test_source_manifest_declares_single_task_and_disables_flutter_deeplinking(self):
+        source = Path(__file__).resolve().parents[3] / "android/app/src/main/AndroidManifest.xml"
+        root = ET.fromstring(source.read_text(encoding="utf-8"))
+        application = root.find("application")
+        self.assertIsNotNone(application)
+        main = next(
+            (
+                activity
+                for activity in application.findall("activity")
+                if activity.get(MODULE.ANDROID + "name") in (".MainActivity", MODULE.PACKAGE + ".MainActivity")
+            ),
+            None,
+        )
+        self.assertIsNotNone(main)
+        self.assertEqual(main.get(MODULE.ANDROID + "launchMode"), "singleTask")
+        self.assertEqual(main.get(MODULE.ANDROID + "taskAffinity"), "")
+        metadata = {
+            item.get(MODULE.ANDROID + "name"): item.get(MODULE.ANDROID + "value")
+            for item in main.findall("meta-data")
+        }
+        self.assertEqual(metadata.get("flutter_deeplinking_enabled"), "false")
 
     def test_mobile_manifest_rejects_tv_launcher_and_banner(self):
         metadata = self.metadata("mobile")
