@@ -9,6 +9,22 @@ class _AppNavigation {
 
   GlobalKey<NavigatorState>? mainNavigatorKey;
 
+  int _authLockCount = 0;
+
+  bool get isAuthActive => _authLockCount > 0;
+
+  /// Marks an active authentication lock on the root navigator until the
+  /// returned idempotent callback is invoked.
+  VoidCallback acquireAuthLock() {
+    _authLockCount++;
+    var released = false;
+    return () {
+      if (released) return;
+      released = true;
+      _authLockCount--;
+    };
+  }
+
   BuildContext get rootContext => rootNavigatorKey.currentContext!;
 
   void rootPop() {

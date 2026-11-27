@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:venera_next/foundation/translations.dart';
 import 'package:venera_next/foundation/harmonyos.dart';
+import 'package:venera_next/routing/app_navigation.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key, this.onSuccessfulAuth});
@@ -15,8 +16,11 @@ class AuthPage extends StatefulWidget {
 }
 
 class _AuthPageState extends State<AuthPage> {
+  VoidCallback? _releaseAuthLock;
+
   @override
   void initState() {
+    _releaseAuthLock = appNavigation.acquireAuthLock();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!HarmonyOS.isCurrent &&
           SchedulerBinding.instance.lifecycleState !=
@@ -25,6 +29,13 @@ class _AuthPageState extends State<AuthPage> {
       }
     });
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _releaseAuthLock?.call();
+    _releaseAuthLock = null;
+    super.dispose();
   }
 
   @override
