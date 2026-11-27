@@ -100,6 +100,12 @@ abstract final class AppearancePreferences {
   static const all = <Preference<Object>>[themeMode, color];
 }
 
+abstract final class HomePreferences {
+  static const moduleOrder = StringListPreference('homeModuleOrder');
+  static const hiddenModules = StringListPreference('hiddenHomeModules');
+  static const all = <Preference<Object>>[moduleOrder, hiddenModules];
+}
+
 abstract final class DiscoveryPreferences {
   static const comicDisplayMode = ChoicePreference(
     'comicDisplayMode',
@@ -274,6 +280,7 @@ Map<String, Object?> get applicationPreferenceDefaults => {
     ...AppPreferences.all,
     ...NetworkPreferences.all,
     ...AppearancePreferences.all,
+    ...HomePreferences.all,
     ...DiscoveryPreferences.all,
     ...KeywordPreferences.all,
     ...KeywordPreferences.ruleOptions,
