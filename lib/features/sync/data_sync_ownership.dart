@@ -1,7 +1,14 @@
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:sqlite3/open.dart' as sqlite_library;
 import 'package:sqlite3/sqlite3.dart';
+// sqlite3 2.9.4 exposes no public way to replace its Dart finalizer. Keep this
+// workaround limited to private lease connections with no hooks or live SQL
+// statements; their native close must also run when an engine isolate exits.
+// ignore: implementation_imports
+import 'package:sqlite3/src/implementation/finalizer.dart' as sqlite_finalizer;
 
 import 'data_sync_commit.dart';
 
@@ -14,11 +21,12 @@ abstract interface class DataSyncOwnership {
 
 /// A dedicated SQLite transaction arbitrates across connections, isolates and
 /// processes. No timeout/age/pid inference and no deletion of the lock file.
-class SqliteDataSyncOwnership implements DataSyncOwnership {
+class SqliteDataSyncOwnership implements DataSyncOwnership, Finalizable {
   SqliteDataSyncOwnership(
     this.dataPath, {
     Database Function(String)? openDatabase,
   }) : _openDatabase = openDatabase ?? sqlite3.open,
+       _useNativeFinalizer = openDatabase == null,
        _fileName = fileName;
 
   /// The core holds a distinct lease from startup recovery through final store
@@ -28,6 +36,7 @@ class SqliteDataSyncOwnership implements DataSyncOwnership {
     this.dataPath, {
     Database Function(String)? openDatabase,
   }) : _openDatabase = openDatabase ?? sqlite3.open,
+       _useNativeFinalizer = openDatabase == null,
        _fileName = applicationDataFileName;
 
   static const fileName = '.data-sync-owner.sqlite';
@@ -36,8 +45,10 @@ class SqliteDataSyncOwnership implements DataSyncOwnership {
       'CREATE TABLE sync_owner (id INTEGER PRIMARY KEY CHECK(id = 1))';
   final String Function() dataPath;
   final Database Function(String) _openDatabase;
+  final bool _useNativeFinalizer;
   final String _fileName;
   Database? _database;
+  NativeFinalizer? _databaseFinalizer;
   String? _root;
   bool _acquired = false;
   bool _retired = false;
@@ -68,6 +79,14 @@ class SqliteDataSyncOwnership implements DataSyncOwnership {
     final db = _database = _openDatabase(path);
     _root = root;
     try {
+      if (_useNativeFinalizer) {
+        final finalizer = _databaseFinalizer = _ownershipDatabaseFinalizer;
+        finalizer.attach(this, db.handle.cast<Void>(), detach: db);
+        // Both finalizers must never close the same handle. The owner keeps the
+        // database reachable while live, and native finalization now covers
+        // abrupt isolate exit where Dart finally/finalizer callbacks cannot run.
+        sqlite_finalizer.disposeFinalizer.detach(db);
+      }
       db.execute('PRAGMA busy_timeout = 0;');
       db.execute('PRAGMA journal_mode = DELETE;');
       db.execute('BEGIN EXCLUSIVE;');
@@ -119,7 +138,17 @@ class SqliteDataSyncOwnership implements DataSyncOwnership {
     if (database == null) return;
     // Closing rolls back and releases the transaction. Do not unlock early or
     // forget the connection when its close reports failure.
-    database.dispose();
+    final finalizer = _databaseFinalizer;
+    // Detach before explicit close so isolate shutdown cannot close a freed
+    // handle again. A reported failure still owns that handle and its cleanup.
+    finalizer?.detach(database);
+    try {
+      database.dispose();
+    } catch (_) {
+      finalizer?.attach(this, database.handle.cast<Void>(), detach: database);
+      rethrow;
+    }
+    _databaseFinalizer = null;
     _database = null;
     _root = null;
     _acquired = false;
@@ -131,3 +160,13 @@ class SqliteDataSyncOwnership implements DataSyncOwnership {
     _closeConnection();
   }
 }
+
+// Native finalization ignores the integer return value of close_v2. Dedicated
+// connections have no Dart hooks or outstanding statements, so it can safely
+// roll back and release their transaction on a native finalizer thread.
+final _ownershipDatabaseFinalizer = NativeFinalizer(
+  sqlite_library.open
+      .openSqlite()
+      .lookup<NativeFunction<Int32 Function(Pointer<Void>)>>('sqlite3_close_v2')
+      .cast(),
+);

@@ -215,6 +215,40 @@ void main() {
 
   for (final application in [false, true]) {
     test(
+      'terminated isolate releases ownership without deleting data (application=$application)',
+      () async {
+        final data = sqlite3.open('${root.path}/history.db');
+        data.execute(
+          "CREATE TABLE history (comic TEXT, page INTEGER); "
+          "INSERT INTO history VALUES ('保留阅读进度', 42);",
+        );
+        data.dispose();
+        final before = File('${root.path}/history.db').readAsBytesSync();
+        final child = await Process.run(dartExecutable(), [
+          '--packages=${p.absolute('.dart_tool/package_config.json')}',
+          'test/fixtures/data_sync_ownership_isolate_probe.dart',
+          root.path,
+          if (application) 'application',
+        ]);
+        expect(child.exitCode, 0, reason: '${child.stderr}\n${child.stdout}');
+        expect(child.stdout.toString().trim(), 'reacquired');
+        expect(child.stderr, isEmpty);
+        expect(File('${root.path}/history.db').readAsBytesSync(), before);
+        expect(
+          File(
+            p.join(
+              root.path,
+              application
+                  ? SqliteDataSyncOwnership.applicationDataFileName
+                  : SqliteDataSyncOwnership.fileName,
+            ),
+          ).existsSync(),
+          isTrue,
+        );
+      },
+    );
+
+    test(
       'independent VM excludes contenders and process death releases ownership (application=$application)',
       () async {
         final child = await Process.start(dartExecutable(), [
