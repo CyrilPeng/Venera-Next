@@ -2,7 +2,7 @@
 
 [0.1 候选约定](PROFILE-0.1.md) 增加完整校对稿、同语多译本和译文分框向量。[版本记录](VERSIONS.md) 随目录一同迁移。运行 `python check_examples.py` 可在独立目录验证两个版本的样例。
 
-本目录可单独复制给字幕工具或阅读器作者，所有路径均相对于本目录。`fixtures/dialogues.json` 是手工校对的参考输入与预期结果，`fixtures/three-pages.acbf` 是可独立打开的 ACBF 1.1 对照文件。交换格式仍处于选型阶段。PNG、笔画、对白和标注均为本实验原创，现阶段沿用宿主仓库的 GPL-3.0 许可。
+本目录可单独复制给字幕工具或阅读器作者，所有路径均相对于本目录。`fixtures/dialogues.json` 是手工校对的参考输入与预期结果，`fixtures/three-pages.acbf` 是可独立打开的 ACBF 1.1 对照文件。0.1 候选采用 ACBF 和配套清单。PNG、笔画、对白和标注均为本实验原创，现阶段沿用宿主仓库的 GPL-3.0 许可。
 
 ## 离线复现
 
@@ -11,6 +11,7 @@
 ```shell
 python check_examples.py
 python check_examples.py --export-dir mountain-path-example
+python validate.py fixtures/editorial.acbf fixtures/editorial.pages.json --images mountain-path-example
 ```
 
 导出目录还包含原型清单 `book.pages.json`。在本地漫画的阅读设置启用「外挂漫画字幕（实验）」，打开该章顶部的「本章字幕」，选择 `book.acbf`，再载入这份清单并保存。清单用最终 ACBF 字节的 SHA-256 绑定修订，逐页给出稳定 ID、正向尺寸、原图摘要、原文语言及各语言区域对应的对白 ID。相对文件名只作为人工核对的提示。内嵌资源的首轮样例支持 PNG。
@@ -31,13 +32,15 @@ python check_examples.py --export-dir mountain-path-example
 | 正文图像 | 独立示例通过 `#id` 引用内嵌 PNG，导出包改用相对文件名 `001.png` 至 `003.png`。 | 对照稿中的 SHA-256 能定位改名原图。重复内容得多个候选，同名同尺寸替换得零个候选，需提示复核。 |
 | 对白身份与校对记录 | 对白 ID、识别小框、人工校对状态和原文书写方向在此基础映射中都会丢失。 | 分别评估兼容约定、外置清单或独立表示。每一种候选均需提供相同的往返结果和损失清单。 |
 
-检查器用六项离线检查覆盖 PNG 尺寸与指纹、基础表示往返、四类字段丢失、子串搜索定位、CBZ 重打包与版本歧义、切片高亮。它只处理仓内已知样本。真实 OCR 质量、其他阅读器的绘制、长条滚动和设备功耗在应用原型阶段验证。
+第三条命令会报告 1 页、1 个对白、4 个语言区域。检查自己的修订时，将两个字幕路径和原图目录替换成实际文件。`--images` 可省略。失败时检查器会输出原因，并以非零状态退出。五个反例在 [invalid-cases.json](fixtures/invalid-cases.json) 中列出对正例的修改及预期错误，覆盖未知能力、错误修订、译框数量、原始识别框引用和拆并关系。
 
 **校验来源**　自制 ACBF 使用上游提交 `e033e004e2897fe20ad09cbd649a8ba1d6b38d09` 的 `acbf-1.1.xsd` 核验，XSD 的 SHA-256 为 `154e997a600143adf205bfcad427ef6e6fa4a6fcfce10cece4d58a0b64c2ac32`。需要复核结构的维护者可用本地 XML Schema 校验器加载此固定版本。常规样例检查可完全离线运行。[上游 XSD](https://github.com/ACBF-Advanced-Comic-Book-Format/ACBF/blob/e033e004e2897fe20ad09cbd649a8ba1d6b38d09/XML%20Schema/acbf-1.1.xsd)
 
 ## English quick start
 
 Copy this directory and run `python check_examples.py` using Python 3.10+ and its standard library. Use `--export-dir mountain-path-example` to create a new directory with the three PNGs, a detached ACBF document and a CBZ containing the same document. All images and dialogue were created for this experiment. The host repository's GPL-3.0 license applies at this stage.
+
+Run `python validate.py book.acbf book.pages.json --images path/to/chapter` to validate a 0.1 publication and check its original image digests. The machine-readable failure vectors specify the path to modify, its replacement value and the expected diagnostic.
 
 The editorial fixture and expected search targets are in [dialogues.json](fixtures/dialogues.json). The independent ACBF 1.1 example includes the original images. [Open the ACBF sample](fixtures/three-pages.acbf)
 

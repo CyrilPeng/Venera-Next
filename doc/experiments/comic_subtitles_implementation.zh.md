@@ -4,7 +4,7 @@
 
 第一个可交给读者的版本，要能在断网的 Android 手机上给本地漫画挂载字幕，按原文或译文找到一句话，并把对应气泡滚入视口。先用已经校对的《山路》验证这一段体验。接入真实 OCR 后，再用同一套阅读验收判断问题出在识字、翻译、页面绑定还是绘制。[设计草案](comic_subtitles.zh.md) · [三页样例及预期结果](../../spec/comic-subtitles/README.md)
 
-在仓库根目录运行 `python spec/comic-subtitles/check_examples.py` 可复现七项离线检查，涵盖 ACBF 往返、实验清单与拆页几何。阶段 1 已接入阅读设置和本地章节菜单，绑定和替换回归见[阶段 1 测试](../../test/features/reader/subtitle_mount_test.dart)。设备验收记录随测试包更新。
+在仓库根目录运行 `python spec/comic-subtitles/check_examples.py` 可复现九项离线检查，涵盖 ACBF 往返、两版清单、拆页几何及五个反例。设备验收记录随测试包更新。[阶段 1 挂载回归](../../test/features/reader/subtitle_mount_test.dart)
 
 | 阶段 | 从哪里开始 | 交付物与通过条件 |
 | --- | --- | --- |

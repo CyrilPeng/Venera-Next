@@ -10,6 +10,8 @@ import zipfile
 from copy import deepcopy
 from pathlib import Path
 
+from validate import validate
+
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures'
 NAMESPACE = 'http://www.acbf.info/xml/acbf/1.1'
@@ -110,6 +112,19 @@ class SubtitleExamples(unittest.TestCase):
         edited, = page['editorial']['dialogues']
         self.assertEqual(edited['translations']['en-x-poetic'][0]['text'], 'Beneath the peak')
         self.assertEqual(page['editorial']['lineage'][0]['new'], [edited['id']])
+
+    def test_portable_validator_and_invalid_vectors(self):
+        data = (FIXTURES / 'editorial.acbf').read_bytes()
+        manifest = (FIXTURES / 'editorial.pages.json').read_bytes()
+        self.assertEqual(validate(data, manifest), dict(pages=1, dialogues=1, regions=4))
+        for case in json.loads((FIXTURES / 'invalid-cases.json').read_text(encoding='utf-8')):
+            broken = json.loads(manifest)
+            parent = broken
+            for part in case['path'][:-1]:
+                parent = parent[part]
+            parent[case['path'][-1]] = case['value']
+            with self.subTest(case=case), self.assertRaisesRegex(ValueError, case['error']):
+                validate(data, json.dumps(broken).encode())
 
     def test_page_identity(self):
         for page in self.pages:
