@@ -28,9 +28,11 @@ def prepare():
     with zipfile.ZipFile(buffer, 'w') as archive:
         for name, content in sorted(portable_files(*read_examples()).items()):
             archive.writestr(zipfile.ZipInfo(name), content)
-    defines = {'SUBTITLE_TRIAL_CBZ': base64.b64encode(buffer.getvalue()).decode('ascii'),
-               'SUBTITLE_TRIAL_REVISION': command('git', 'rev-parse', 'HEAD')}
-    (OUTPUT / 'defines.json').write_text(json.dumps(defines), encoding='utf-8')
+    sample = json.dumps(base64.b64encode(buffer.getvalue()).decode('ascii'))
+    revision = json.dumps(command('git', 'rev-parse', 'HEAD'))
+    (OUTPUT / 'main.dart').write_text(
+        "import '../../tool/comic_subtitles/device_trial.dart' as trial;\n"
+        f"Future<void> main() => trial.runTrial({sample}, {revision});\n", encoding='utf-8')
 
 
 def android(serial):

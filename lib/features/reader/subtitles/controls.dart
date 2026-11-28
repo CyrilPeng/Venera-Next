@@ -51,10 +51,11 @@ class ReaderSubtitleControls extends StatelessWidget {
 
   Future<void> _open(BuildContext context) async {
     final book = reader.cid, chapter = reader.eid, path = App.dataPath;
+    final messenger = ScaffoldMessenger.maybeOf(context);
     final images = List<String>.of(reader.images ?? const []);
     bool current() =>
-        context.mounted &&
         reader.mounted &&
+        reader.type == ComicType.local &&
         reader.cid == book &&
         App.dataPath == path;
     display.startNavigation();
@@ -91,11 +92,15 @@ class ReaderSubtitleControls extends StatelessWidget {
       final shell = reader.scaffoldKey.currentState;
       if (shell?.isOpen == true) shell!.openOrClose();
       if (reader.eid != hit.chapter && !reader.toChapter(number)) return;
+      var reached = reader.eid == hit.chapter;
       final deadline = Stopwatch()..start();
       while (current() &&
           display.acceptsNavigation(navigation) &&
           deadline.elapsed < const Duration(seconds: 10)) {
-        if (reader.eid != chapter && reader.eid != hit.chapter) return;
+        if (reader.eid != hit.chapter && (reached || reader.eid != chapter)) {
+          return;
+        }
+        reached |= reader.eid == hit.chapter;
         if (reader.eid == hit.chapter &&
             !reader.controller.content.isLoading &&
             reader.imageViewController != null &&
@@ -110,10 +115,10 @@ class ReaderSubtitleControls extends StatelessWidget {
         }
         await Future<void>.delayed(const Duration(milliseconds: 32));
       }
-      if (context.mounted && display.acceptsNavigation(navigation)) {
-        ScaffoldMessenger.maybeOf(
-          context,
-        )?.showSnackBar(SnackBar(content: Text('Page not found'.tl)));
+      if (current() &&
+          display.acceptsNavigation(navigation) &&
+          messenger?.mounted == true) {
+        messenger!.showSnackBar(SnackBar(content: Text('Page not found'.tl)));
       }
     } finally {
       release();

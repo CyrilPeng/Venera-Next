@@ -192,9 +192,7 @@ Future<Map<String, Object>> measure(
   }
 }
 
-Future<void> main() async {
-  const seed = String.fromEnvironment('SUBTITLE_TRIAL_CBZ');
-  const revision = String.fromEnvironment('SUBTITLE_TRIAL_REVISION');
+Future<void> runTrial(String seed, String revision) async {
   if (seed.isEmpty || revision.isEmpty) {
     throw StateError('Use the subtitle trial workflow and its sample');
   }

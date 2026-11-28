@@ -27,7 +27,7 @@ jobs:
           cache: true
       - run: flutter pub get --enforce-lockfile
       - run: python tool/comic_subtitles/run_trial.py prepare
-      - run: flutter build windows --release --no-pub --target tool/comic_subtitles/device_trial.dart --dart-define-from-file=build/subtitle-trial/defines.json
+      - run: flutter build windows --release --no-pub --target build/subtitle-trial/main.dart
       - run: python tool/comic_subtitles/run_trial.py windows
       - uses: actions/upload-artifact@v7
         if: always()
@@ -58,7 +58,7 @@ jobs:
           printf '%s\n' 'storePassword=android' 'keyPassword=android' 'keyAlias=trial' 'storeFile=../trial.keystore' > android/key.properties
       - run: flutter pub get --enforce-lockfile
       - run: python3 tool/comic_subtitles/run_trial.py prepare
-      - run: flutter build apk --release --flavor mobile --no-pub --target tool/comic_subtitles/device_trial.dart --dart-define-from-file=build/subtitle-trial/defines.json
+      - run: flutter build apk --release --flavor mobile --no-pub --target build/subtitle-trial/main.dart
       - run: python3 tool/comic_subtitles/run_trial.py select-apk
       - uses: actions/upload-artifact@v7
         with:
