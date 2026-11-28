@@ -36,3 +36,11 @@ py -3.11 -m venv .venv
 2. 可将 JSON 交给译者。每份回包为一个对象，含原 `batch`、`target`、`items`，每项保留原 `id` 和整数 `revision`，将 `text` 改为译文。用 `receive reply.json` 收回一个批次。也可以运行 `send 批次ID --endpoint 服务URL --model 模型名` 查看接收方与请求全文。再次运行并加 `--allow-endpoint 服务URL` 即发送这一批。接口采用 Chat Completions，可选密钥来自本机 `SUBTITLE_TRANSLATION_KEY`。
 3. 打开 `editor`，选中对白并点「审校选中对白的译文」，或用 `approve 页码 对白ID 批次ID --text "审校后的译文"`。只有当前原文修订的已确认译文进入阅读层。
 4. 缺句、重复、未知和过期 ID 会列在回包报告中。再次 `prepare en 新文件.json` 仅准备待补译内容，`--redo` 生成新候选。`show 页码` 可查看此前各次确认。增加其他目标语言后用 `export 新修订目录` 发布。
+
+## 重新编辑与 CBZ
+
+`pack chapter.cbz` 逐页复制原图并将 0.1 字幕放进归档。`pack clean.cbz --plain` 导出纯图片。建立新工程时使用 `python tool/comic_subtitles/author.py restored.json import chapter.cbz`。只有外挂文件时，把原图目录或 CBZ 作为输入并加 `--revision 字幕目录`。同语的不同译本可用 `en`、`en-x-poetic` 区分。发布清单包含原始识别框、校对文本、已确认的翻译修订和拆并记录，发送前可直接查看 JSON。
+
+在应用内导入此单章 CBZ 后，从「本章字幕」点「载入归档内的字幕」并保存。在同一面板可将已核验的整章导出为带字幕 CBZ。书库的普通 CBZ 导出入口用于分享原图。
+
+双向验证命令为 `python tool/comic_subtitles/interop.py`，运行前需安装 Pillow 并在项目根目录运行 `flutter pub get`。单独维护的格式正文与离线样例见[规范目录](../../spec/comic-subtitles/README.md)。

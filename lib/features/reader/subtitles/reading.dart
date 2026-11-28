@@ -20,11 +20,23 @@ class ChapterSubtitleIndex {
       final file = binding.selected;
       if (file == null) continue;
       byFile[file.path] = binding.page;
+      final grouped = <(String, String), (SubtitleArea, StringBuffer)>{};
       for (final area in binding.page.areas) {
         languages.add(area.language);
+        final group = grouped.putIfAbsent((
+          area.dialogue,
+          area.language,
+        ), () => (area, StringBuffer()));
+        group.$2.write(area.text);
+      }
+      for (final (area, content) in grouped.values) {
+        final joined = content.toString();
+        final hitArea = joined == area.text
+            ? area
+            : SubtitleArea(area.dialogue, area.language, joined, area.bounds);
         _entries.add((
-          SubtitleHit(chapter, file, binding.page, area),
-          subtitleSearchText(area.text),
+          SubtitleHit(chapter, file, binding.page, hitArea),
+          subtitleSearchText(joined),
         ));
       }
     }

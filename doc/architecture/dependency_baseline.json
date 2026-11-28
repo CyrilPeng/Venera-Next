@@ -909,6 +909,7 @@
     "features/reader/image_picker.dart",
     "features/reader/image_position.dart",
     "features/reader/subtitles/binding.dart",
+    "features/reader/subtitles/archive.dart",
     "features/reader/subtitles/document.dart",
     "features/reader/subtitles/reading.dart",
     "features/reader/subtitles/store.dart",

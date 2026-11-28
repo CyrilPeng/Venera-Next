@@ -117,6 +117,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - run: flutter pub get --enforce-lockfile
+      - name: 验证漫画字幕 Python 与 Dart 双向交换
+        run: /usr/bin/python3 tool/comic_subtitles/interop.py
       - name: 准备并验证独立代码审查工具
         working-directory: tool/code_audit
         run: |

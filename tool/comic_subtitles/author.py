@@ -7,7 +7,7 @@ import zipfile
 from importlib.metadata import version
 from pathlib import Path
 
-from exchange import publish
+from exchange import import_revision, pack, publish
 from project import (ChapterSource, apply_edit, atomic_json, create_project, page_at, project_lock,
                      read_json, recognize, require)
 from translation import approve, prepare, provider_payload, receive, send
@@ -20,6 +20,12 @@ def arguments():
     init = commands.add_parser('init')
     init.add_argument('source', type=Path, help='chapter image directory or CBZ')
     init.add_argument('--language', required=True)
+    adopt = commands.add_parser('import', help='reopen a published editorial revision as a new project')
+    adopt.add_argument('source', type=Path, help='chapter directory or CBZ containing originals')
+    adopt.add_argument('--revision', type=Path, help='detached subtitle directory, otherwise use the embedded pair')
+    cbz = commands.add_parser('pack', help='flatten a chapter and write a new CBZ')
+    cbz.add_argument('destination', type=Path)
+    cbz.add_argument('--plain', action='store_true')
     ocr = commands.add_parser('ocr', help='process pending/failed pages, checkpoint each page')
     ocr.add_argument('--page', type=int)
     show = commands.add_parser('show', help='inspect page and dialogue IDs')
@@ -53,10 +59,11 @@ def arguments():
 
 def run(args):
     with project_lock(args.project):
-        if args.command == 'init':
+        if args.command in ('init', 'import'):
             require(not args.project.exists(), 'Project already exists')
             with ChapterSource(args.source) as source:
-                atomic_json(args.project, create_project(source, args.language))
+                project = create_project(source, args.language) if args.command == 'init' else import_revision(source, args.revision)
+                atomic_json(args.project, project)
             return 0
         project = read_json(args.project)
         require(project.get('version') == 1, 'Unknown author project version')
@@ -84,6 +91,8 @@ def run(args):
             open_editor(project, args.project)
         elif args.command == 'export':
             publish(project, args.directory)
+        elif args.command == 'pack':
+            pack(project, args.destination, args.plain)
         elif args.command == 'prepare':
             require(not args.output.exists(), 'Choose a new request file')
             batches = prepare(project, args.target, number=args.page, redo=args.redo,

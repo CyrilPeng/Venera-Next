@@ -2,9 +2,12 @@ import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:venera_next/foundation/file_interaction.dart';
+import 'package:venera_next/foundation/app.dart';
+import 'package:venera_next/foundation/selection_operation.dart';
 import 'package:venera_next/foundation/translations.dart';
 
 import 'binding.dart';
+import 'archive.dart';
 import 'document.dart';
 import 'store.dart';
 
@@ -64,14 +67,22 @@ class _SubtitleMountDialogState extends State<SubtitleMountDialog> {
   List<SubtitleBinding> _bindings = [];
   bool _busy = true;
   String? _error;
+  Directory? _archiveDirectory;
 
   @override
   void initState() {
     super.initState();
     _files = scanSubtitleChapter(widget.images);
     _run(() async {
-      await _files;
+      final files = await _files;
       if (!mounted) return;
+      if (files.isNotEmpty) {
+        final directory = File(files.first.path).parent;
+        if (File('${directory.path}/book.pages.json').existsSync() &&
+            File('${directory.path}/book.acbf').existsSync()) {
+          _archiveDirectory = directory;
+        }
+      }
       final current = widget.store.read(widget.book, widget.chapter);
       _originalToken = current?.token;
       if (current != null) await _prepare(current);
@@ -111,6 +122,32 @@ class _SubtitleMountDialogState extends State<SubtitleMountDialog> {
         manifest ? content : null,
         manifest ? previous!.choices : {},
         null,
+      ),
+    );
+  });
+
+  Future<void> _export() => _run(() async {
+    final revision = _revision!;
+    final bindings = _bindings;
+    final chapter = await _files;
+    if (chapter.length != widget.images.length) {
+      throw const FormatException('An original chapter image is missing');
+    }
+    await SelectionOperation().run(
+      (operation) => operation.useTemporaryDirectory(
+        cacheDirectory: Directory(App.cachePath),
+        consume: (workspace) async {
+          final file = await Isolate.run(
+            () => writeSubtitleArchive(workspace, revision, bindings, chapter),
+          );
+          if (mounted && widget.isCurrent()) {
+            await saveFile(
+              operation: operation,
+              file: file,
+              filename: 'chapter.cbz',
+            );
+          }
+        },
       ),
     );
   });
@@ -213,6 +250,27 @@ class _SubtitleMountDialogState extends State<SubtitleMountDialog> {
                 TextButton(
                   onPressed: _busy ? null : () => _pick(true),
                   child: Text('Add page manifest'.tl),
+                ),
+              if (_archiveDirectory != null)
+                TextButton(
+                  onPressed: _busy
+                      ? null
+                      : () => _run(() async {
+                          final revision = await readArchivedSubtitles(
+                            _archiveDirectory!,
+                          );
+                          if (revision != null && mounted) {
+                            await _prepare(revision);
+                          }
+                        }),
+                  child: Text('Load archived subtitles'.tl),
+                ),
+              if (_revision?.manifest != null &&
+                  _bindings.isNotEmpty &&
+                  _bindings.every((binding) => binding.selected != null))
+                TextButton(
+                  onPressed: _busy ? null : _export,
+                  child: Text('Export chapter with subtitles'.tl),
                 ),
             ],
           ),
