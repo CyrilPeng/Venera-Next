@@ -28,7 +28,7 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - run: python tool/comic_subtitles/run_trial.py prepare
       - run: flutter precache --windows
-      - run: flutter assemble --no-version-check --output=build -dTargetPlatform=windows-x64 -dBuildMode=release -dTargetFile=build/subtitle-trial/main.dart --ExtraGenSnapshotOptions=--no-strip release_bundle_windows-x64_assets
+      - run: flutter assemble --no-version-check --output=build -dTargetPlatform=windows-x64 -dBuildMode=release '-dTargetFile=build/subtitle-trial/main.dart' --ExtraGenSnapshotOptions=--no-strip release_bundle_windows-x64_assets
       - run: python tool/comic_subtitles/diagnose_windows.py
       - uses: actions/upload-artifact@v7
         with:
