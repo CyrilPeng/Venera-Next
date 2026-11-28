@@ -7,6 +7,7 @@ from tkinter import messagebox, simpledialog, ttk
 from PIL import ImageTk
 
 from project import ChapterSource, apply_edit, atomic_json, verified_image
+from translation import approve
 
 
 def open_editor(project, project_path):
@@ -122,6 +123,28 @@ def open_editor(project, project_path):
         except (ValueError, OSError) as error:
             messagebox.showerror('校对', str(error), parent=root)
 
+    def review_translation():
+        positions = listing.curselection()
+        if len(positions) != 1:
+            return
+        item = page()['dialogues'][positions[0]]
+        pending = [(lang, record) for lang, history in item.get('translations', {}).items() for record in history
+                   if not record['approved'] and record['sourceRevision'] == item['revision']]
+        if not pending:
+            messagebox.showinfo('译文审校', '当前原文没有待确认译文。', parent=root)
+        for lang, record in pending:
+            content = simpledialog.askstring('确认译文 · ' + lang, item['text'], initialvalue=record['candidate'], parent=root)
+            if content is None:
+                continue
+            candidate = deepcopy(project)
+            try:
+                approve(candidate, page_number + 1, item['id'], record['batch'], content)
+                atomic_json(project_path, candidate)
+                project.update(candidate)
+            except (ValueError, OSError) as error:
+                messagebox.showerror('译文审校', str(error), parent=root)
+                return
+
     canvas.bind('<ButtonPress-1>', drag_start)
     canvas.bind('<ButtonRelease-1>', drag_end)
     ttk.Button(header, text='上一页', command=lambda: move_page(-1)).pack(side='left')
@@ -130,5 +153,6 @@ def open_editor(project, project_path):
     for label, action in [('校对原文', 'edit'), ('新增对白', 'add'), ('合并选中', 'merge'),
                           ('拆分对白', 'split'), ('上移', 'up'), ('下移', 'down')]:
         ttk.Button(side, text=label, command=lambda selected=action: edit(selected)).pack(fill='x')
+    ttk.Button(side, text='审校选中对白的译文', command=review_translation).pack(fill='x')
     refresh()
     root.mainloop()

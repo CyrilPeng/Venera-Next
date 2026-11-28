@@ -6,6 +6,7 @@ import xml.etree.ElementTree as xml
 from pathlib import Path
 
 from project import digest, json_bytes, require
+from translation import current_translation
 
 
 NS = 'http://www.acbf.info/xml/acbf/1.1'
@@ -50,6 +51,18 @@ def encode(project):
                 add_area(layer, item['area'], item['text'])
                 keys.append(item['id'])
             total += len(keys)
+            translations = {}
+            for item in page['dialogues']:
+                for target in item.get('translations', {}):
+                    record = current_translation(item, target)
+                    if record is None:
+                        continue
+                    if target not in translations:
+                        translations[target] = child(node, 'text-layer', lang=target)
+                        layers[target] = []
+                    add_area(translations[target], item['area'], record['text'])
+                    layers[target].append(item['id'])
+                    total += 1
         bindings.append({**{key: page[key] for key in ('id', 'size', 'sha256', 'sourceLanguage')}, 'layers': layers})
     acbf = xml.tostring(root, encoding='utf-8', xml_declaration=True)
     manifest = json_bytes(dict(profile=PROFILE, acbfSha256=digest(acbf), pages=bindings))

@@ -27,3 +27,12 @@ py -3.11 -m venv .venv
 `order` 的 `ids` 列出全页读序。`split` 的 `id` 为原对白，`parts` 逐项提供 `text` 与 `[左,上,右,下]` 的 `area`。`add` 同样接受文字和区域。混合语言章可用 `{"op":"language","language":"zh"}` 调整单页原文语言。
 
 每次 `export` 使用新目录，发布完整的 `book.acbf` 和 `book.pages.json` 后再切换手机上的挂载。修订目录可独立发送，作者继续在本机工程中校对。
+
+## 翻译与审校
+
+以下命令均接在 `python tool/comic_subtitles/author.py my-chapter.json` 后。
+
+1. `prepare en requests.json` 按页和读序准备英文稿，每批最多 24 句。`--page 2` 指定单页，`--glossary terms.json` 附加作品术语表，内容如 `{"山道":"mountain path"}`。
+2. 可将 JSON 交给译者。每份回包为一个对象，含原 `batch`、`target`、`items`，每项保留原 `id` 和整数 `revision`，将 `text` 改为译文。用 `receive reply.json` 收回一个批次。也可以运行 `send 批次ID --endpoint 服务URL --model 模型名` 查看接收方与请求全文。再次运行并加 `--allow-endpoint 服务URL` 即发送这一批。接口采用 Chat Completions，可选密钥来自本机 `SUBTITLE_TRANSLATION_KEY`。
+3. 打开 `editor`，选中对白并点「审校选中对白的译文」，或用 `approve 页码 对白ID 批次ID --text "审校后的译文"`。只有当前原文修订的已确认译文进入阅读层。
+4. 缺句、重复、未知和过期 ID 会列在回包报告中。再次 `prepare en 新文件.json` 仅准备待补译内容，`--redo` 生成新候选。`show 页码` 可查看此前各次确认。增加其他目标语言后用 `export 新修订目录` 发布。

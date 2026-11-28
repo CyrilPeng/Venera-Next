@@ -10,6 +10,7 @@ from pathlib import Path
 from exchange import publish
 from project import (ChapterSource, apply_edit, atomic_json, create_project, page_at, project_lock,
                      read_json, recognize, require)
+from translation import approve, prepare, provider_payload, receive, send
 
 
 def arguments():
@@ -29,6 +30,24 @@ def arguments():
     commands.add_parser('editor', help='open the desktop correction window')
     export = commands.add_parser('export')
     export.add_argument('directory', type=Path, help='new publication directory')
+    batch = commands.add_parser('prepare', help='write text-only translation batches for a language')
+    batch.add_argument('target')
+    batch.add_argument('output', type=Path)
+    batch.add_argument('--page', type=int)
+    batch.add_argument('--glossary', type=Path)
+    batch.add_argument('--redo', action='store_true')
+    reply = commands.add_parser('receive', help='import one batch reply as review candidates')
+    reply.add_argument('reply', type=Path)
+    review = commands.add_parser('approve', help='confirm one translation, optionally correcting its text')
+    review.add_argument('page', type=int)
+    review.add_argument('dialogue')
+    review.add_argument('batch')
+    review.add_argument('--text')
+    remote = commands.add_parser('send', help='preview or send one batch to a chat completions endpoint')
+    remote.add_argument('batch')
+    remote.add_argument('--endpoint', required=True)
+    remote.add_argument('--model', required=True)
+    remote.add_argument('--allow-endpoint', help='authorize this exact URL after reviewing the preview')
     return parser.parse_args()
 
 
@@ -65,6 +84,31 @@ def run(args):
             open_editor(project, args.project)
         elif args.command == 'export':
             publish(project, args.directory)
+        elif args.command == 'prepare':
+            require(not args.output.exists(), 'Choose a new request file')
+            batches = prepare(project, args.target, number=args.page, redo=args.redo,
+                              glossary=read_json(args.glossary) if args.glossary else None)
+            atomic_json(args.project, project)
+            atomic_json(args.output, batches)
+            print(len(batches), 'batches')
+        elif args.command == 'approve':
+            approve(project, args.page, args.dialogue, args.batch, args.text)
+            atomic_json(args.project, project)
+        elif args.command in ('send', 'receive'):
+            if args.command == 'send':
+                batch = project.get('batches', {}).get(args.batch)
+                require(batch is not None, 'Unknown batch')
+                if args.allow_endpoint is None:
+                    print(args.endpoint, json.dumps(provider_payload(batch, args.model), ensure_ascii=False, indent=2))
+                    return 0
+                reply, elapsed = send(batch, args.endpoint, args.model, args.allow_endpoint)
+                batch['elapsedMs'] = elapsed
+            else:
+                reply = read_json(args.reply)
+            report = receive(project, reply)
+            atomic_json(args.project, project)
+            print(json.dumps(report))
+            return int(bool(report['issues']))
     return 0
 
 
