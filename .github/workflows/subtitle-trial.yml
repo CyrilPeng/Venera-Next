@@ -29,21 +29,30 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - run: python tool/comic_subtitles/run_trial.py prepare
       - run: flutter build windows --release --no-pub --target build/subtitle-trial/main.dart
-      - name: 为试用进程保留原生故障现场
-        shell: pwsh
-        run: |
-          $key = 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\VeneraNext.exe'
-          New-Item $key -Force | Out-Null
-          New-ItemProperty $key -Name DumpFolder -Value (Resolve-Path build/subtitle-trial).Path -PropertyType ExpandString -Force | Out-Null
-          New-ItemProperty $key -Name DumpType -Value 1 -PropertyType DWord -Force | Out-Null
       - run: python tool/comic_subtitles/run_trial.py windows
-      - name: 记录 Windows 故障模块
-        if: failure()
+        id: trial
+      - name: 复查 Windows 原生退出
+        if: failure() && steps.trial.outcome == 'failure'
         shell: pwsh
         run: |
-          Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1001; StartTime=(Get-Date).AddMinutes(-5)} -ErrorAction SilentlyContinue |
-            Where-Object Message -match 'VeneraNext' | Format-List TimeCreated,Message |
-            Out-File build/subtitle-trial/windows-events.log -Encoding utf8
+          $out = (Resolve-Path build/subtitle-trial).Path
+          $crashLog = Join-Path $env:LOCALAPPDATA 'com.github.cyrilpeng\VeneraNext\logs\windows-startup-crash.log'
+          if (Test-Path $crashLog) { Copy-Item -LiteralPath $crashLog -Destination $out }
+          $zip = Join-Path $env:RUNNER_TEMP 'procdump.zip'
+          Invoke-WebRequest https://download.sysinternals.com/files/Procdump.zip -OutFile $zip
+          $dir = Join-Path $env:RUNNER_TEMP 'procdump'
+          Expand-Archive $zip $dir
+          $debugger = Join-Path $dir 'procdump64.exe'
+          $signature = Get-AuthenticodeSignature $debugger
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+            throw 'Unexpected ProcDump signature'
+          }
+          $env:SUBTITLE_TRIAL_OUTPUT = Join-Path $out 'diagnostic-report.json'
+          Push-Location build/windows/x64/runner/Release
+          try {
+            & $debugger -accepteula -nobanner -e -mm -x $out .\VeneraNext.exe 2>&1 |
+              Out-File (Join-Path $out 'diagnostic.log') -Encoding utf8
+          } finally { Pop-Location }
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -51,8 +60,15 @@ jobs:
           path: |
             build/subtitle-trial/report.json
             build/subtitle-trial/trial.log
-            build/subtitle-trial/windows-events.log
+            build/subtitle-trial/windows-startup-crash.log
+            build/subtitle-trial/diagnostic*
             build/subtitle-trial/*.dmp
+      - uses: actions/upload-artifact@v7
+        if: failure() && steps.trial.outcome == 'failure'
+        with:
+          name: subtitle-trial-windows-runtime
+          path: build/windows/x64/runner/Release/
+          retention-days: 2
 
   android-build:
     runs-on: ubuntu-22.04

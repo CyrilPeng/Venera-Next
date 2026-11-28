@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:venera_next/features/comic_source/models.dart';
 import 'package:venera_next/features/local_comics/local.dart';
+import 'package:venera_next/features/reader/comic_image.dart';
 import 'package:venera_next/features/reader/subtitles/document.dart';
 import 'package:venera_next/features/reader/subtitles/overlay.dart';
 import 'package:venera_next/features/reader/subtitles/store.dart';
@@ -16,6 +18,46 @@ import 'support/reader_integration_fixture.dart';
 
 void main() {
   setUpReaderIntegration();
+  testWidgets(
+    'TV directional controls open and dismiss chapter subtitles from the reader',
+    (tester) async {
+      final fixture = await ReaderIntegrationFixture.create(tester);
+      try {
+        appdata.settings['externalSubtitles'] = true;
+        await fixture.mount(tester, pushed: false, tvNavigation: true);
+        final reader = fixture.readerKey.currentState!;
+        Future<void> press(LogicalKeyboardKey key) async {
+          await tester.sendKeyEvent(key);
+          await tester.pumpAndSettle();
+        }
+
+        if (!reader.scaffoldKey.currentState!.isOpen) {
+          await press(LogicalKeyboardKey.select);
+        }
+        expect(reader.scaffoldKey.currentState!.isOpen, isTrue);
+        await press(LogicalKeyboardKey.arrowUp);
+        bool onSubtitles() =>
+            FocusManager.instance.primaryFocus?.context
+                ?.findAncestorWidgetOfExactType<IconButton>()
+                ?.tooltip ==
+            'Chapter subtitles';
+        for (var step = 0; step < 8 && !onSubtitles(); step++) {
+          await press(LogicalKeyboardKey.arrowRight);
+        }
+        expect(onSubtitles(), isTrue);
+        await press(LogicalKeyboardKey.select);
+        expect(
+          find.widgetWithText(AlertDialog, 'Chapter subtitles'),
+          findsOneWidget,
+        );
+        await press(LogicalKeyboardKey.escape);
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(reader.page, 1);
+      } finally {
+        await fixture.dispose(tester);
+      }
+    },
+  );
   testWidgets(
     'search from an unsubtitled chapter waits for the target chapter and highlights its dialogue',
     (tester) async {
@@ -116,6 +158,37 @@ void main() {
           tester,
           () => find.text('山脚下').evaluate().isNotEmpty,
         );
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        for (final size in [const Size(720, 560), const Size(1040, 680)]) {
+          tester.view.physicalSize = size;
+          await tester.pumpAndSettle();
+          final subtitle = find.text('山脚下');
+          final image = find.descendant(
+            of: find.ancestor(of: subtitle, matching: find.byType(ComicImage)),
+            matching: find.byType(RawImage),
+          );
+          final box = tester.renderObject<RenderBox>(image);
+          final painted = tester
+              .widget<RawImage>(image)
+              .alignment
+              .resolve(TextDirection.ltr)
+              .inscribe(
+                applyBoxFit(
+                  BoxFit.contain,
+                  const Size(192, 256),
+                  box.size,
+                ).destination,
+                Offset.zero & box.size,
+              );
+          // Centre of the fixture's source rectangle [52, 32, 139, 119].
+          final expected =
+              painted.topLeft +
+              Offset(painted.width * 95.5 / 192, painted.height * 75.5 / 256);
+          final actual = box.globalToLocal(tester.getCenter(subtitle));
+          expect((actual - expected).distance, lessThan(1));
+        }
         final reader = fixture.readerKey.currentState!;
         if (!reader.scaffoldKey.currentState!.isOpen) {
           reader.scaffoldKey.currentState!.openOrClose();

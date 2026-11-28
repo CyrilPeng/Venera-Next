@@ -143,6 +143,7 @@
         "test/features/favorites/favorite_hierarchy_tv_test.dart",
         "test/features/favorites/favorite_hierarchy_management_test.dart",
         "test/features/reader/tv_input_test.dart",
+        "test/features/reader/subtitle_reader_integration_test.dart",
         "test/foundation/tv_reader_policy_test.dart",
         "test/foundation/application_update_service_test.dart"
       ],

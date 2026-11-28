@@ -208,7 +208,9 @@ Future<Map<String, Object>> measure(
   } finally {
     sampler.cancel();
     SchedulerBinding.instance.removeTimingsCallback(record);
-    if (route.isActive) navigator.removeRoute(route);
+    if (route.isCurrent && key.currentState != null) {
+      await key.currentState!.requestExit();
+    }
     await until(() => key.currentState == null, 'reader disposal');
   }
 }
@@ -227,7 +229,7 @@ Future<void> runTrial(String seed, String revision) async {
       () => appNavigation.rootNavigatorKey.currentState != null,
       'application startup',
     );
-    final file = File('${App.cachePath}/subtitle-trial.cbz');
+    final file = File('${App.cachePath}/subtitle-trial-$pid.cbz');
     final data = base64Decode(seed);
     await file.writeAsBytes(data);
     report['sampleSha256'] = sha256.convert(data).toString();
