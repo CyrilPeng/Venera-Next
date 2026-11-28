@@ -1,0 +1,15 @@
+{
+  "profile":"comic-subtitles/0.1", "requires":["editorial-1"], "workId":"mountain-path",
+  "acbfSha256":"bc9a10abdc141934177636e2ab5e721ad3abb9c33c4aa3ba05f706667b9f16de",
+  "pages":[{
+    "id":"ridge", "size":[192,256], "sha256":"3bc5dd8e9f5a420e4812e629664205c455e457382b72936c892bcd1482f8a8cd",
+    "sourceLanguage":"ja", "layers":{"ja":["foot"],"en":["foot","foot"],"en-x-poetic":["foot"]},
+    "editorial":{
+      "observations":[{"id":"right","text":"山","quad":[[103,40],[129,40],[129,94],[103,94]],"confidence":0.92,"direction":"vertical-rl"}],
+      "dialogues":[{"id":"foot","area":[52,32,139,119],"text":"山の下","direction":"vertical-rl","reviewed":true,"revision":2,"observations":["right"],
+        "sourceHistory":[{"revision":1,"text":"山下","reviewed":false}],
+        "translations":{"en":[{"batch":"t1","sourceRevision":2,"approved":true,"text":"Mountain foot"}],"en-x-poetic":[{"batch":"t2","sourceRevision":2,"approved":true,"text":"Beneath the peak"}]}}],
+      "lineage":[{"operation":"merge","old":[{"id":"old-r","revision":1,"text":"山","area":[103,40,129,94],"direction":"vertical-rl","observations":["right"],"reviewed":false},{"id":"old-l","revision":1,"text":"下","area":[64,51,90,77],"direction":"vertical-rl","observations":[],"reviewed":true}],"new":["foot"]}]
+    }
+  }]
+}

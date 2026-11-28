@@ -97,6 +97,20 @@ class SubtitleExamples(unittest.TestCase):
         self.cases, self.original, self.images = read_examples()
         self.pages = self.cases['pages']
 
+    def test_editorial_candidate_vector(self):
+        data = (FIXTURES / 'editorial.acbf').read_bytes()
+        manifest = json.loads((FIXTURES / 'editorial.pages.json').read_bytes())
+        self.assertEqual(manifest['acbfSha256'], hashlib.sha256(data).hexdigest())
+        page, = manifest['pages']
+        self.assertEqual(page['sha256'], self.pages[0]['sha256'])
+        layers = xml.fromstring(data).findall(f'{PREFIX}body/{PREFIX}page/{PREFIX}text-layer')
+        for layer in layers:
+            self.assertEqual(page['layers'][layer.get('lang')], ['foot'] * len(layer))
+        self.assertEqual(''.join(node.text for node in layers[1].iter(PREFIX + 'p')), 'Mountain foot')
+        edited, = page['editorial']['dialogues']
+        self.assertEqual(edited['translations']['en-x-poetic'][0]['text'], 'Beneath the peak')
+        self.assertEqual(page['editorial']['lineage'][0]['new'], [edited['id']])
+
     def test_page_identity(self):
         for page in self.pages:
             data = self.images[page['image']]

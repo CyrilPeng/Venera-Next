@@ -1,5 +1,7 @@
 # 漫画外挂字幕互通样例 · Comic subtitle interoperability examples
 
+[0.1 候选约定](PROFILE-0.1.md) 增加完整校对稿、同语多译本和译文分框向量。[版本记录](VERSIONS.md) 随目录一同迁移。运行 `python check_examples.py` 可在独立目录验证两个版本的样例。
+
 本目录可单独复制给字幕工具或阅读器作者，所有路径均相对于本目录。`fixtures/dialogues.json` 是手工校对的参考输入与预期结果，`fixtures/three-pages.acbf` 是可独立打开的 ACBF 1.1 对照文件。交换格式仍处于选型阶段。PNG、笔画、对白和标注均为本实验原创，现阶段沿用宿主仓库的 GPL-3.0 许可。
 
 ## 离线复现
