@@ -369,7 +369,7 @@ def prepare_project(args):
     if not (project / ".venera-harmonyos-owned").exists():
         raise ValueError("Missing generated-project ownership marker")
     records = verify_dependencies()
-    for name in ("lib", "assets", "test"):
+    for name in ("lib", "assets", "test", "spec/comic-subtitles/fixtures"):
         destination = require_within(project / name, project)
         if destination.exists():
             shutil.rmtree(destination)

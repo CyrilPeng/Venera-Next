@@ -99,6 +99,18 @@ class SubtitleExamples(unittest.TestCase):
         self.cases, self.original, self.images = read_examples()
         self.pages = self.cases['pages']
 
+    def test_reviewed_ocr_chapter(self):
+        with zipfile.ZipFile(FIXTURES / 'mountain-path-0.1.cbz') as archive:
+            acbf, manifest = archive.read('book.acbf'), archive.read('book.pages.json')
+            self.assertEqual(validate(acbf, manifest), dict(pages=3, dialogues=4, regions=10))
+            nodes = xml.fromstring(acbf).findall(f'{PREFIX}body/{PREFIX}page/{PREFIX}image')
+            published = json.loads(manifest)['pages']
+            for expected, node, page in zip(self.pages, nodes, published, strict=True):
+                data = archive.read(node.get('href'))
+                self.assertEqual(data, self.images[expected['image']])
+                self.assertEqual(hashlib.sha256(data).hexdigest(), page['sha256'])
+            self.assertEqual(published[0]['editorial']['dialogues'][0]['text'], '山の下')
+
     def test_editorial_candidate_vector(self):
         data = (FIXTURES / 'editorial.acbf').read_bytes()
         manifest = json.loads((FIXTURES / 'editorial.pages.json').read_bytes())

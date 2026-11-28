@@ -21,6 +21,7 @@ import 'package:venera_next/features/reader/subtitles/overlay.dart';
 import 'package:venera_next/features/reader/subtitles/store.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/foundation/appdata.dart';
+import 'package:venera_next/foundation/log.dart';
 import 'package:venera_next/main.dart' as application;
 import 'package:venera_next/routing/app_navigation.dart';
 
@@ -35,6 +36,7 @@ Iterable<Element> elements(Element? root) sync* {
 }
 
 Future<void> until(bool Function() ready, String stage) async {
+  debugPrintSynchronously('Subtitle trial: $stage');
   final timer = Stopwatch()..start();
   while (!ready()) {
     if (timer.elapsed > const Duration(seconds: 30)) {
@@ -88,6 +90,7 @@ Future<Map<String, Object>> measure(
     const Duration(milliseconds: 32),
     (_) => peak = math.max(peak, ProcessInfo.currentRss),
   );
+  final logStart = DateTime.now();
   final clock = Stopwatch()..start();
   unawaited(navigator.push(route));
   try {
@@ -152,6 +155,15 @@ Future<Map<String, Object>> measure(
         key.currentContext as Element?,
       ).map((node) => node.widget).whereType<SubtitleScope>().first;
       final index = scope.notifier!.indexes['0']!;
+      scope.notifier!.configure(true, 'zh');
+      final original = index.search('山の下', 'zh').single;
+      for (final edition in [('脚下', 'zh'), ('Mountain foot', 'en')]) {
+        final translated = index.search(edition.$1, edition.$2).single;
+        if (translated.area.dialogue != original.area.dialogue ||
+            translated.file.number != 1) {
+          throw StateError('Translation points to another dialogue');
+        }
+      }
       final hit = index.search('日出', 'zh').single;
       key.currentState!.toPage(
         key.currentState!.pageLayout.pageForImage(hit.file.number),
@@ -183,6 +195,15 @@ Future<Map<String, Object>> measure(
       'scrollFrames': samples.length,
       'scrollP95Us': samples[(samples.length * .95).ceil() - 1],
       'peakRssBytes': peak,
+      'appHttpRequests': Log.logs
+          .where(
+            (item) =>
+                !item.time.isBefore(logStart) &&
+                item.title == 'Network' &&
+                item.level == LogLevel.info &&
+                RegExp(r'^[A-Z]+ ').hasMatch(item.content),
+          )
+          .length,
     };
   } finally {
     sampler.cancel();
@@ -210,10 +231,12 @@ Future<void> runTrial(String seed, String revision) async {
     final data = base64Decode(seed);
     await file.writeAsBytes(data);
     report['sampleSha256'] = sha256.convert(data).toString();
+    debugPrintSynchronously('Subtitle trial: import CBZ');
     final comic = await CBZ.import(
       file,
       registerComic: (comic) => LocalManager().add(comic, comic.id),
     );
+    debugPrintSynchronously('Subtitle trial: bind original pages');
     final urls = await LocalManager().getImages(comic.id, comic.comicType, 1);
     final files = await fingerprintSubtitleImages(urls);
     final subtitle = (await readArchivedSubtitles(
@@ -234,6 +257,9 @@ Future<void> runTrial(String seed, String revision) async {
     report['rounds'] = rounds;
     for (var round = 1; round <= 3; round++) {
       for (final enabled in (round.isEven ? [true, false] : [false, true])) {
+        debugPrintSynchronously(
+          'Subtitle trial: round $round, subtitles $enabled',
+        );
         rounds.add(await measure(comic, enabled, round));
       }
     }
@@ -253,6 +279,20 @@ Future<void> runTrial(String seed, String revision) async {
   if (destination != null) {
     File(destination).writeAsStringSync(output, flush: true);
   }
-  debugPrintSynchronously('SUBTITLE_TRIAL_RESULT $output');
+  if (Platform.isAndroid) {
+    // The Flutter Android logger truncates long entries before logcat sees them.
+    final encoded = base64Encode(utf8.encode(output));
+    const width = 480;
+    for (var offset = 0; offset < encoded.length; offset += width) {
+      final part = encoded.substring(
+        offset,
+        math.min(offset + width, encoded.length),
+      );
+      debugPrintSynchronously('SUBTITLE_TRIAL_PART ${offset ~/ width} $part');
+    }
+    debugPrintSynchronously(
+      'SUBTITLE_TRIAL_END ${(encoded.length / width).ceil()}',
+    );
+  }
   exit(report['passed'] == true ? 0 : 1);
 }
