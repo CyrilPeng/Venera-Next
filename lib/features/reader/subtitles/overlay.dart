@@ -167,10 +167,24 @@ class PageSubtitleLayer extends StatelessWidget {
     }
     unawaited(display.ensure(chapter));
     final page = display.indexes[chapter]?.byFile[imageKey.substring(7)];
-    if (page == null || (!display.visible && display.focus == null)) {
+    if (page == null) {
       return const SizedBox.shrink();
     }
+    final focus = display.focus;
+    final pageHit = focus?.chapter == chapter && focus?.page.id == page.id
+        ? focus
+        : null;
+    if (!display.visible && pageHit == null) return const SizedBox.shrink();
     final language = subtitleLanguage(page, display.language);
+    final focusedDialogue = pageHit?.area.dialogue;
+    final focusLanguage =
+        pageHit != null &&
+            !page.areas.any(
+              (area) =>
+                  area.dialogue == focusedDialogue && area.language == language,
+            )
+        ? pageHit.area.language
+        : language;
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
@@ -183,24 +197,10 @@ class PageSubtitleLayer extends StatelessWidget {
             ? crop
             : alignment.inscribe(fitted.source * scale, crop);
         final pieces = <Widget>[];
-        final hit = display.focus;
-        bool anchored = false;
+        var anchorHit = pageHit;
         for (final area in page.areas) {
-          final matching =
-              hit != null &&
-              hit.chapter == chapter &&
-              hit.page.id == page.id &&
-              hit.area.dialogue == area.dialogue;
-          if (area.language != language &&
-              !(matching &&
-                  area.language == hit.area.language &&
-                  !page.areas.any(
-                    (item) =>
-                        item.dialogue == area.dialogue &&
-                        item.language == language,
-                  ))) {
-            continue;
-          }
+          final matching = area.dialogue == focusedDialogue;
+          if (area.language != (matching ? focusLanguage : language)) continue;
           if (!display.visible && !matching) continue;
           final rects = projectSubtitleArea(
             area: area.bounds,
@@ -212,16 +212,16 @@ class PageSubtitleLayer extends StatelessWidget {
             invert: invert,
           );
           for (final rect in rects) {
-            final anchor = matching && !anchored;
-            anchored |= anchor;
+            final revealHit = matching ? anchorHit : null;
+            if (revealHit != null) anchorHit = null;
             pieces.add(
               Positioned.fromRect(
                 rect: rect,
                 child: Builder(
                   builder: (context) {
-                    if (anchor) {
+                    if (revealHit != null) {
                       WidgetsBinding.instance.addPostFrameCallback(
-                        (_) => display.reveal(context, hit),
+                        (_) => display.reveal(context, revealHit),
                       );
                     }
                     final marker =

@@ -22,6 +22,18 @@ const _page = SubtitlePage(
   768,
 );
 const _file = (path: 'dawn.png', digest: 'sample', number: 3);
+const _layer = PageSubtitleLayer(
+  chapter: 'one',
+  imageKey: 'file://dawn.png',
+  original: Size(192, 768),
+  decoded: Size(192, 768),
+  crop: Rect.fromLTWH(0, 0, 192, 768),
+  fit: BoxFit.contain,
+  alignment: Alignment.center,
+  split: false,
+  invert: false,
+  scale: 1,
+);
 ChapterSubtitleIndex _index() => ChapterSubtitleIndex('one', [
   const SubtitleBinding(_page, [_file], _file),
 ]);
@@ -110,18 +122,7 @@ void main() {
                     child: const SizedBox(
                       width: 192,
                       height: 768,
-                      child: PageSubtitleLayer(
-                        chapter: 'one',
-                        imageKey: 'file://dawn.png',
-                        original: Size(192, 768),
-                        decoded: Size(192, 768),
-                        crop: Rect.fromLTWH(0, 0, 192, 768),
-                        fit: BoxFit.contain,
-                        alignment: Alignment.center,
-                        split: false,
-                        invert: false,
-                        scale: 1,
-                      ),
+                      child: _layer,
                     ),
                   ),
                 ),
@@ -147,6 +148,42 @@ void main() {
       scroll.dispose();
     },
   );
+
+  testWidgets('only the focused untranslated dialogue shows its source', (
+    tester,
+  ) async {
+    final page = SubtitlePage(
+      'dawn',
+      _page.image,
+      null,
+      'ja',
+      [..._page.areas, const SubtitleArea('pass', 'ja', '峠', _region)],
+      192,
+      768,
+    );
+    final index = ChapterSubtitleIndex('one', [
+      SubtitleBinding(page, [_file], _file),
+    ]);
+    final display = SubtitleDisplay((_) async => index)..configure(true, 'en');
+    await display.ensure('one');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SubtitleScope(notifier: display, child: _layer),
+      ),
+    );
+    expect(find.text('Sunrise'), findsOneWidget);
+    expect(find.text('峠'), findsNothing);
+    final hit = index.search('峠', 'en').single;
+    display.highlight(hit);
+    await tester.pump();
+    expect(find.text('峠'), findsOneWidget);
+    expect(find.text('Sunrise'), findsOneWidget);
+    display.highlight(SubtitleHit('other', _file, page, hit.area));
+    await tester.pump();
+    expect(find.text('峠'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    display.dispose();
+  });
 
   test(
     'discarding a revision invalidates a pending index and navigation',

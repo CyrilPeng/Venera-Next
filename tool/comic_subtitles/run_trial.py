@@ -2,6 +2,7 @@
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import subprocess
@@ -42,6 +43,33 @@ def android_report(log):
                 raise ValueError('Incomplete Android trial report')
             return json.loads(base64.b64decode(''.join(parts), validate=True))
     return None
+
+
+def validate_report(report, revision, sample, *, offline_android):
+    if report.get('revision') != revision or report.get('passed') is not True:
+        raise ValueError(f'Reader trial did not pass on {revision}: {report.get("error", "wrong or incomplete report")}')
+    if report.get('sampleSha256') != hashlib.sha256(sample.read_bytes()).hexdigest():
+        raise ValueError('The reader used a different trial CBZ')
+    with zipfile.ZipFile(sample) as archive:
+        pages = json.loads(archive.read('book.pages.json'))['pages']
+    if report.get('pageSha256') != [page['sha256'] for page in pages]:
+        raise ValueError('The original page hashes or page order differ from the trial chapter')
+    if offline_android and report.get('airplaneMode') is not True:
+        raise ValueError('Missing Android airplane mode confirmation')
+    rounds = report.get('rounds')
+    states = (False, True, True, False, False, True)
+    if not isinstance(rounds, list) or len(rounds) != len(states):
+        raise ValueError('Expected six alternating reader measurements')
+    for index, (measurement, enabled) in enumerate(zip(rounds, states)):
+        if (not isinstance(measurement, dict) or type(measurement.get('round')) is not int
+                or measurement['round'] != index // 2 + 1 or measurement.get('enabled') is not enabled):
+            raise ValueError(f'Unexpected round or subtitle setting at measurement {index + 1}')
+        for metric in ('firstImageUs', 'scrollFrames', 'scrollP95Us', 'peakRssBytes'):
+            if type(measurement.get(metric)) is not int or measurement[metric] <= 0:
+                raise ValueError(f'Invalid {metric} at measurement {index + 1}')
+        requests = measurement.get('appHttpRequests')
+        if type(requests) is not int or requests < 0 or (offline_android and requests):
+            raise ValueError(f'Unexpected HTTP request count at measurement {index + 1}: {requests}')
 
 
 def android(serial, memory_mib):
@@ -107,8 +135,7 @@ def main():
             subprocess.run([exe], cwd=exe.parent, env={**os.environ, 'SUBTITLE_TRIAL_OUTPUT': str(path)},
                            stdout=log, stderr=subprocess.STDOUT, timeout=180, check=True)
         report = json.loads(path.read_bytes())
-    if report.get('revision') != command('git', 'rev-parse', 'HEAD') or not report.get('passed'):
-        raise RuntimeError(report)
+    validate_report(report, command('git', 'rev-parse', 'HEAD'), SAMPLE, offline_android=args.action == 'android')
     print(json.dumps(report, indent=2))
 
 

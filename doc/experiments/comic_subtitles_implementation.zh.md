@@ -27,7 +27,7 @@
 
 ## 2 · 在离线手机上读到并找到一句话
 
-阶段 2 的候选版本提供字幕开关、语言选择与本书搜索。组件回归用 200 像素的视口验证长条页底部气泡实际进入视口，原图导出与导航另跑现有回归。Android 飞行模式及低内存设备的数据待测试包实测。[阅读回归](../../test/features/reader/subtitle_reading_test.dart)
+阶段 2 的候选版本提供字幕开关、语言选择与本书搜索。组件回归在 200 像素高的视口验证长条页底部气泡进入视口。两档内存的 Android 模拟器已用飞行模式复核搜句、定位和原图摘要，实体手机待试读。[阅读回归](../../test/features/reader/subtitle_reading_test.dart) · [设备数据](comic_subtitles_trial.zh.md)
 
 阅读层按“章＋原图页”取对白。坐标统一到应用 EXIF 方向后的完整原图，复用实际绘制的裁边、拆片、缩放和平移变换。先绘制原图，再更新可见字幕。读者可切换原图与译文，复杂背景或窄切片上可点标记查看完整文字。保存、复制原图继续使用阅读器的原图导出入口。[原图身份与切片](../../lib/features/reader/image_position.dart) · [绘制](../../lib/features/reader/comic_image.dart) · [原图导出](../../lib/features/reader/image_export.dart)
 
