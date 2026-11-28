@@ -104,7 +104,9 @@ jobs:
       - name: 准备实际归档格式的脚本回归工具
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libarchive-tools fonts-noto-cjk
+          sudo apt-get install -y libarchive-tools fonts-noto-cjk python3-pil
+      - name: 验证桌面字幕作者工具
+        run: /usr/bin/python3 -m unittest discover -s tool/comic_subtitles
       - run: python3 -m unittest discover -s .github/scripts/tests -p "test_*.py"
       - name: 保存测试清单
         if: ${{ always() }}

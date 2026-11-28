@@ -246,6 +246,13 @@
       "ci": ".github/workflows/analyze.yml / analyze"
     },
     {
+      "id": "comic-subtitle-author",
+      "include": ["tool/comic_subtitles/test_*.py"],
+      "kind": "script-behavior",
+      "entry": "python -m unittest discover -s tool/comic_subtitles",
+      "ci": ".github/workflows/analyze.yml / analyze"
+    },
+    {
       "id": "python-ci",
       "include": [
         ".github/scripts/tests/test_*.py"

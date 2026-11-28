@@ -42,6 +42,8 @@
 
 ## 3 · 桌面识字与人工校对
 
+Windows 实测使用 Python 3.11.18、RapidOCR 1.4.4、ONNX Runtime 1.32.0、包内 ch_PP-OCRv4 det/rec 权重和两条 CPU 推理线程。三页原创《山路》从 CBZ 直接识别，用时分别为 776、684、1295 ms（每页含读取与解码，模型初始化另计）。识别的五个区域依次为「山／下」「入口」「山口／日出」。对照四句校对稿，漏识一个「の」，两个竖列需要合并，额外错并和倒序各零处。已经在本机工程修正「山の下」，对「入口」做一次拆分再合并，导出含四句原文的双文件修订。人工操作耗时与 Android 真机检索待试用者记录。[作者工具及命令](../../tool/comic_subtitles/README.md)
+
 先在 Windows 作者工具中接一个本地 PP-OCR 适配器，按图片目录或 CBZ 中的章节建任务。每页保存原图尺寸、处理图到原图的变换、识别小框、方向、置信度与原始文字。作者能预览叠框、合并竖列、拆开相邻气泡、调整读序并修改校对文本。“屏译”的相册分段保存了整段与小框，其页面记录也保留两套尺寸，可据此设计适配输入。[屏译分段](https://github.com/ciddwd/overlay-translator/blob/64a7aa2c9605c88dd35bdeea42ab5c0f1c18ce5e/app/src/main/java/com/gameocr/app/gallery/GalleryTranslationModels.kt#L48) · [页面尺寸](https://github.com/ciddwd/overlay-translator/blob/64a7aa2c9605c88dd35bdeea42ab5c0f1c18ce5e/app/src/main/java/com/gameocr/app/gallery/GalleryTranslationDatabase.kt#L66)
 
 **验收**　用可授权的真实样章记录模型版本、每页耗时、错并／错拆与读序错误数、人工校对用时。修正一处错字、合并和拆分各一次，导出后在阶段 2 的手机包上检索。无字页标记“未检出”，引擎失败页可单页重试。处理中途退出再打开，能从已保存页继续。发布过的对白改字沿用原 ID，合并或拆分时保留旧 ID 到新 ID 的对应。
