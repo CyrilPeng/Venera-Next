@@ -17,6 +17,8 @@ py -3.11 -m venv .venv
 
 也可以用 `edit 1 operations.json` 一次应用一页的操作，文件内容为 JSON 数组。`show 1` 可查实际 ID。
 
+在已校对的页上运行 `ocr --page 1 --redo` 可生成一次新的识字候选。窗口中选中原对白及候选，点击「采用识字候选」并确认后，修改会沿用原 ID 和原区域。未选对白时可采用候选作为新增对白。`show 1` 可查看本次重识别的模型、耗时、原始框或失败原因。
+
 ```json
 [
   {"op":"edit","id":"原对白ID","text":"山の","direction":"vertical-rl"},

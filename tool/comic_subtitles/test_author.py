@@ -11,7 +11,7 @@ from PIL import Image
 
 from exchange import TAG, publish
 from project import (ChapterSource, apply_edit, atomic_json, create_project, digest, page_at,
-                     read_json, recognize, verified_image)
+                     read_json, recognize, recognize_candidate, verified_image)
 
 
 class AuthorTest(unittest.TestCase):
@@ -85,6 +85,23 @@ class AuthorTest(unittest.TestCase):
         self.assertEqual(self.page['lineage'][1]['old'][0]['id'], merged['id'])
         self.assertEqual(self.page['lineage'][1]['new'], [item['id'] for item in self.page['dialogues']])
         self.assertEqual(len(self.page['observations']), 2)
+
+    def test_recognition_rerun_only_changes_the_reviewed_source_on_acceptance(self):
+        recognize(self.page, self.source, self.engine, 'fixture')
+        original = self.page['dialogues'][0]
+        apply_edit(self.page, dict(op='edit', id=original['id'], text='山の'))
+        initial_id, initial_area = original['id'], original['area']
+        failed = recognize_candidate(self.page, self.source, mock.Mock(side_effect=RuntimeError('model')), 'v2')
+        self.assertEqual((failed['status'], self.page['status'], original['text']), ('failed', 'edited', '山の'))
+        proposed = recognize_candidate(self.page, self.source, self.engine, 'v2')
+        suggestion = proposed['dialogues'][0]
+        self.assertEqual((original['text'], original['revision'], len(self.page['observations'])), ('山の', 2, 2))
+        apply_edit(self.page, dict(op='accept-ocr', candidate=suggestion['id'], id=initial_id))
+        self.assertEqual((original['text'], original['id'], original['area']), ('山', initial_id, initial_area))
+        self.assertEqual(original['sourceHistory'][-1]['text'], '山の')
+        self.assertEqual(len(self.page['observations']), 3)
+        with self.assertRaises(ValueError):
+            apply_edit(self.page, dict(op='accept-ocr', candidate=suggestion['id'], id=initial_id))
 
     def test_detached_publication(self):
         dest = self.root / 'r1'

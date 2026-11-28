@@ -30,6 +30,8 @@ def open_editor(project, project_path):
     listing = tk.Listbox(side, selectmode='extended', exportselection=False, width=42)
     listing.pack(fill='both', expand=True)
     ttk.Label(side, text='拖框调整区域，按 Ctrl 多选可合并。拆分时依读序拖两个框。', wraplength=320).pack()
+    proposals = ttk.Combobox(side, state='readonly')
+    proposals.pack(fill='x')
 
     def page():
         return project['pages'][page_number]
@@ -54,6 +56,11 @@ def open_editor(project, project_path):
             canvas.create_rectangle(*scaled, outline='#47d6ff', width=2)
             canvas.create_text(*scaled[:2], anchor='nw', text=str(position), fill='#0580a5')
             listing.insert('end', f'{position}. {item["text"]}')
+        candidates = page().get('ocrCandidate', {}).get('dialogues', [])
+        proposals['values'] = [f'{position}. {item["text"]} · {item["area"]}' for position, item in enumerate(candidates, 1)]
+        proposals.set('')
+        if candidates:
+            proposals.current(0)
         status.set(f'{page_number + 1} / {len(project["pages"])} · {page()["image"]} · {page()["status"]}')
 
     def move_page(delta):
@@ -80,7 +87,16 @@ def open_editor(project, project_path):
     def edit(action):
         selected = [page()['dialogues'][index] for index in listing.curselection()]
         operation = dict(op=action)
-        if action in ('up', 'down') and len(selected) == 1:
+        if action == 'accept-ocr' and proposals.current() >= 0 and len(selected) <= 1:
+            suggestion = page()['ocrCandidate']['dialogues'][proposals.current()]
+            prompt = '当前原文：' + selected[0]['text'] if selected else '新增对白'
+            content = simpledialog.askstring('采用识字候选', prompt, initialvalue=suggestion['text'], parent=root)
+            if not content:
+                return
+            operation.update(candidate=suggestion['id'], text=content)
+            if selected:
+                operation['id'] = selected[0]['id']
+        elif action in ('up', 'down') and len(selected) == 1:
             keys = [item['id'] for item in page()['dialogues']]
             index = keys.index(selected[0]['id'])
             other = index + (-1 if action == 'up' else 1)
@@ -150,7 +166,7 @@ def open_editor(project, project_path):
     ttk.Button(header, text='上一页', command=lambda: move_page(-1)).pack(side='left')
     ttk.Button(header, text='下一页', command=lambda: move_page(1)).pack(side='left')
     ttk.Label(header, textvariable=status).pack(side='left')
-    for label, action in [('校对原文', 'edit'), ('新增对白', 'add'), ('合并选中', 'merge'),
+    for label, action in [('采用识字候选', 'accept-ocr'), ('校对原文', 'edit'), ('新增对白', 'add'), ('合并选中', 'merge'),
                           ('拆分对白', 'split'), ('上移', 'up'), ('下移', 'down')]:
         ttk.Button(side, text=label, command=lambda selected=action: edit(selected)).pack(fill='x')
     ttk.Button(side, text='审校选中对白的译文', command=review_translation).pack(fill='x')

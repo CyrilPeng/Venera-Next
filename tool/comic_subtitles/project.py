@@ -220,10 +220,37 @@ def find_dialogue(page, key):
     return matches[0]
 
 
+def recognize_candidate(page, source, engine, engine_name):
+    require(page['status'] in ('empty', 'recognized', 'edited'), 'Run the initial OCR first')
+    candidate = {field: page[field] for field in ('image', 'size', 'sha256')}
+    recognize(candidate, source, engine, engine_name)
+    page['ocrCandidate'] = candidate
+    return candidate
+
+
+def accept_candidate(page, op):
+    result = page.get('ocrCandidate')
+    require(result is not None and result['status'] == 'recognized', 'No recognized candidates on this page')
+    suggested = find_dialogue(result, op['candidate'])
+    content = text(op.get('text', suggested['text']))
+    if op.get('id'):
+        target = find_dialogue(page, op['id'])
+        apply_edit(page, dict(op='edit', id=target['id'], text=content))
+    else:
+        target = new_dialogue(content, suggested['area'], [], suggested['direction'], True)
+        page['dialogues'].append(target)
+    selected = set(suggested['observations'])
+    page['observations'].extend(raw for raw in result['observations'] if raw['id'] in selected)
+    target['observations'].extend(suggested['observations'])
+    result['dialogues'].remove(suggested)
+
+
 def apply_edit(page, op):
     items, action = page['dialogues'], op['op']
     require(page['status'] in ('empty', 'recognized', 'edited'), 'Recognize this page before editing')
-    if action == 'language':
+    if action == 'accept-ocr':
+        accept_candidate(page, op)
+    elif action == 'language':
         require(not any(item.get('translations') for item in items), 'Change the language before translation')
         page['sourceLanguage'] = language(op['language'])
     elif action == 'add':

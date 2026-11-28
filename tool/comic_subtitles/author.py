@@ -9,7 +9,7 @@ from pathlib import Path
 
 from exchange import import_revision, pack, publish
 from project import (ChapterSource, apply_edit, atomic_json, create_project, page_at, project_lock,
-                     read_json, recognize, require)
+                     read_json, recognize, recognize_candidate, require)
 from translation import approve, prepare, provider_payload, receive, send
 
 
@@ -28,6 +28,7 @@ def arguments():
     cbz.add_argument('--plain', action='store_true')
     ocr = commands.add_parser('ocr', help='process pending/failed pages, checkpoint each page')
     ocr.add_argument('--page', type=int)
+    ocr.add_argument('--redo', action='store_true', help='recognize one edited page into a separate candidate')
     show = commands.add_parser('show', help='inspect page and dialogue IDs')
     show.add_argument('page', type=int)
     edit = commands.add_parser('edit', help='apply editorial operations atomically')
@@ -70,16 +71,23 @@ def run(args):
         if args.command == 'ocr':
             from rapidocr_onnxruntime import RapidOCR
             pages = [page_at(project, args.page)] if args.page is not None else project['pages']
-            pending = [page for page in pages if page['status'] in ('pending', 'failed')]
+            require(not args.redo or args.page is not None, 'Choose one page for OCR comparison')
+            pending = pages if args.redo else [page for page in pages if page['status'] in ('pending', 'failed')]
+            failed = False
             if pending:
                 engine = RapidOCR(intra_op_num_threads=2, inter_op_num_threads=1)
                 name = 'rapidocr-onnxruntime/' + version('rapidocr-onnxruntime') + ' PP-OCRv4/ch'
                 with ChapterSource(project['source']) as source:
                     for page in pending:
-                        recognize(page, source, engine, name)
+                        if args.redo:
+                            result = recognize_candidate(page, source, engine, name)
+                        else:
+                            recognize(page, source, engine, name)
+                            result = page
                         atomic_json(args.project, project)
-                        print(page['id'], page['status'], len(page['observations']), page['elapsedMs'], 'ms', flush=True)
-            return int(any(page['status'] == 'failed' for page in pages))
+                        failed |= result['status'] == 'failed'
+                        print(page['id'], result['status'], len(result.get('observations', [])), result['elapsedMs'], 'ms', flush=True)
+            return int(failed)
         if args.command == 'show':
             print(json.dumps(page_at(project, args.page), ensure_ascii=False, indent=2))
         elif args.command == 'edit':
