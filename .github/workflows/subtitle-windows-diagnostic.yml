@@ -1,0 +1,46 @@
+name: Windows 字幕发布模式复查
+on:
+  push:
+    branches: [test/subtitle-windows-diagnostics]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  reader:
+    runs-on: windows-2025
+    timeout-minutes: 24
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: 'true'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: subtitle-trial-windows-runtime
+          path: build/windows/x64/runner/Release
+          run-id: 46107129082
+          github-token: ${{ github.token }}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: pubspec.yaml
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: python tool/comic_subtitles/run_trial.py prepare
+      - run: flutter precache --windows
+      - run: flutter assemble --no-version-check --output=build -dTargetPlatform=windows-x64 -dBuildMode=release -dTargetFile=build/subtitle-trial/main.dart --ExtraGenSnapshotOptions=--no-strip release_bundle_windows-x64_assets
+      - run: python tool/comic_subtitles/diagnose_windows.py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-aot-symbols
+          path: build/windows/app.so
+          retention-days: 2
+      - run: Copy-Item build/windows/app.so build/windows/x64/runner/Release/data/app.so -Force
+      - run: python tool/comic_subtitles/run_trial.py windows
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-reader-result
+          path: |
+            build/subtitle-trial/trial.log
+            build/subtitle-trial/report.json
