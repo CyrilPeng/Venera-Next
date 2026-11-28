@@ -175,6 +175,7 @@ class SubtitleDocument {
       _require(binding == null || ids is Map, 'Missing language bindings');
       final languages = <String>{}, localIds = <String>{};
       final areas = <SubtitleArea>[];
+      final geometry = <String, List<int>>{};
       for (final layer in _children(node, 'text-layer')) {
         final language = _identifier(layer.getAttribute('lang'));
         _require(languages.add(language), 'Duplicate language layer');
@@ -187,7 +188,8 @@ class SubtitleDocument {
           'Language regions do not match the manifest',
         );
         for (final (position, region) in regions.indexed) {
-          final bounds = _bounds(region.getAttribute('points'), width, height);
+          final points = region.getAttribute('points');
+          final bounds = _bounds(points, width, height);
           final text = _children(
             region,
             'p',
@@ -200,7 +202,28 @@ class SubtitleDocument {
               ? '$id-$language-${position + 1}'
               : _identifier(keys[position]);
           localIds.add(key);
+          if (keys == null) {
+            (geometry[points!.trim().split(RegExp(r'\s+')).join(' ')] ??= [])
+                .add(areas.length);
+          }
           areas.add(SubtitleArea(key, language, text, bounds));
+        }
+      }
+      for (final group in geometry.values) {
+        if (group.length < 2 ||
+            group.map((index) => areas[index].language).toSet().length !=
+                group.length) {
+          continue;
+        }
+        final key = areas[group.first].dialogue;
+        for (final index in group.skip(1)) {
+          final area = areas[index];
+          areas[index] = SubtitleArea(
+            key,
+            area.language,
+            area.text,
+            area.bounds,
+          );
         }
       }
       _require(

@@ -1,5 +1,8 @@
 {
   "zh_CN": {
+    "Automatic": "自动",
+    "Show subtitles": "显示字幕",
+    "Manage subtitles": "管理本章字幕",
     "External comic subtitles (experimental)": "外挂漫画字幕（实验）",
     "Chapter subtitles": "本章字幕",
     "Select ACBF": "选择 ACBF 字幕",
@@ -1097,6 +1100,9 @@
     "Save image as": "图片另存为"
   },
   "zh_TW": {
+    "Automatic": "自動",
+    "Show subtitles": "顯示字幕",
+    "Manage subtitles": "管理本章字幕",
     "External comic subtitles (experimental)": "外掛漫畫字幕（實驗）",
     "Chapter subtitles": "本章字幕",
     "Select ACBF": "選擇 ACBF 字幕",
@@ -2194,6 +2200,9 @@
     "Save image as": "圖片另存為"
   },
   "de_DE": {
+    "Automatic": "Automatisch",
+    "Show subtitles": "Untertitel anzeigen",
+    "Manage subtitles": "Kapiteluntertitel verwalten",
     "External comic subtitles (experimental)": "Externe Comic-Untertitel (experimentell)",
     "Chapter subtitles": "Kapiteluntertitel",
     "Select ACBF": "ACBF auswählen",
@@ -3291,6 +3300,9 @@
     "Save image as": "Bild speichern unter"
   },
   "ja_JP": {
+    "Automatic": "自動",
+    "Show subtitles": "字幕を表示",
+    "Manage subtitles": "この章の字幕を管理",
     "External comic subtitles (experimental)": "外部漫画字幕（試験機能）",
     "Chapter subtitles": "この章の字幕",
     "Select ACBF": "ACBF 字幕を選択",

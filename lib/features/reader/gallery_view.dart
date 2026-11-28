@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'subtitles/overlay.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -210,7 +211,7 @@ class GalleryModeState extends State<ReaderGalleryView>
       return result(AutoReadingImageState.blocked);
     }
     final (start, end) = getPageImagesRange(page);
-    if (end - start == 1) {
+    if (end - start == 1 && !imageStates.containsValue(start)) {
       final observed = data.showImageDimensions || data.observeImageReadiness;
       return result(
         observed
@@ -540,7 +541,17 @@ class GalleryModeState extends State<ReaderGalleryView>
         }
       },
       builder: (context, controller) {
-        if (data.layout.imagesPerPage == 1 || images.length == 1) {
+        final hasSubtitles =
+            SubtitleScope.of(
+              context,
+            )?.indexes[data.chapterId]?.byFile.isNotEmpty ==
+            true;
+        final subtitleDisplay = SubtitleScope.of(context);
+        if (subtitleDisplay != null) {
+          unawaited(subtitleDisplay.ensure(data.chapterId));
+        }
+        if (!hasSubtitles &&
+            (data.layout.imagesPerPage == 1 || images.length == 1)) {
           final image = _displayImage(data.images[images[0]]);
           Widget photo([VoidCallback? reload]) => PhotoView(
             backgroundDecoration: decoration,
@@ -624,6 +635,10 @@ class GalleryModeState extends State<ReaderGalleryView>
       imageWidgets = [
         Expanded(
           child: ComicImage(
+            subtitleImage: (
+              chapter: data.chapterId,
+              imageKey: data.images[images[0]],
+            ),
             width: double.infinity,
             height: double.infinity,
             image: _displayImage(data.images[images[0]]),
@@ -638,6 +653,10 @@ class GalleryModeState extends State<ReaderGalleryView>
         ),
         Expanded(
           child: ComicImage(
+            subtitleImage: (
+              chapter: data.chapterId,
+              imageKey: data.images[images[1]],
+            ),
             width: double.infinity,
             height: double.infinity,
             image: _displayImage(data.images[images[1]]),
@@ -656,6 +675,10 @@ class GalleryModeState extends State<ReaderGalleryView>
         ImageProvider imageProvider = _displayImage(data.images[imageIndex]);
         return Expanded(
           child: ComicImage(
+            subtitleImage: (
+              chapter: data.chapterId,
+              imageKey: data.images[imageIndex],
+            ),
             image: imageProvider,
             showImageDimensions: data.showImageDimensions,
             fit: BoxFit.contain,
