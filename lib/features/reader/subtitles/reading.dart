@@ -20,9 +20,11 @@ class ChapterSubtitleIndex {
       final file = binding.selected;
       if (file == null) continue;
       byFile[file.path] = binding.page;
+      final pageLanguages = _languagesByPage[binding.page] = <String>{};
       final grouped = <(String, String), (SubtitleArea, StringBuffer)>{};
       for (final area in binding.page.areas) {
         languages.add(area.language);
+        pageLanguages.add(area.language);
         final group = grouped.putIfAbsent((
           area.dialogue,
           area.language,
@@ -44,14 +46,24 @@ class ChapterSubtitleIndex {
   final String chapter;
   final byFile = <String, SubtitlePage>{};
   final languages = <String>{};
+  final _languagesByPage = <SubtitlePage, Set<String>>{};
   final _entries = <(SubtitleHit, String)>[];
 
   Iterable<SubtitleHit> search(String query, String? language) sync* {
     final needle = subtitleSearchText(query);
     if (needle.isEmpty) return;
     final seen = <String>{};
+    SubtitlePage? previous;
+    String? visible;
     for (final (hit, text) in _entries) {
-      final visible = subtitleLanguage(hit.page, language);
+      if (!identical(previous, hit.page)) {
+        previous = hit.page;
+        visible = subtitleLanguage(
+          hit.page,
+          language,
+          _languagesByPage[hit.page],
+        );
+      }
       if (hit.area.language != hit.page.sourceLanguage &&
           hit.area.language != visible) {
         continue;
@@ -61,10 +73,16 @@ class ChapterSubtitleIndex {
   }
 }
 
-String? subtitleLanguage(SubtitlePage page, String? requested) {
-  if (requested != null &&
-      page.areas.any((area) => area.language == requested)) {
-    return requested;
+String? subtitleLanguage(
+  SubtitlePage page,
+  String? requested, [
+  Set<String>? available,
+]) {
+  if (requested != null) {
+    final present =
+        available?.contains(requested) ??
+        page.areas.any((area) => area.language == requested);
+    return present ? requested : page.sourceLanguage;
   }
   return page.areas
           .where((area) => area.language != page.sourceLanguage)

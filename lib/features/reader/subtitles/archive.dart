@@ -47,7 +47,22 @@ Future<File> writeSubtitleArchive(
         throw const FormatException('Invalid page extension');
       }
       final name = '${(index + 1).toString().padLeft(4, '0')}$ext';
-      final staged = await original.copy(path.join(workspace.path, name));
+      final staged = File(path.join(workspace.path, name));
+      final input = await original.open();
+      try {
+        final output = await staged.open(mode: FileMode.write);
+        try {
+          while (true) {
+            final chunk = await input.read(256 << 10);
+            if (chunk.isEmpty) break;
+            await output.writeFrom(chunk);
+          }
+        } finally {
+          await output.close();
+        }
+      } finally {
+        await input.close();
+      }
       if ((await sha256.bind(staged.openRead()).first).toString() !=
           page.digest) {
         throw const FormatException('Original page bytes changed');

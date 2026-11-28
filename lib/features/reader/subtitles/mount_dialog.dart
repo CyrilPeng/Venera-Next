@@ -138,7 +138,10 @@ class _SubtitleMountDialogState extends State<SubtitleMountDialog> {
         cacheDirectory: Directory(App.cachePath),
         consume: (workspace) async {
           final file = await Isolate.run(
-            () => writeSubtitleArchive(workspace, revision, bindings, chapter),
+            () => overrideIO(
+              () =>
+                  writeSubtitleArchive(workspace, revision, bindings, chapter),
+            ),
           );
           if (mounted && widget.isCurrent()) {
             await saveFile(

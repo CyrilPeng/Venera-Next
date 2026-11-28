@@ -42,6 +42,8 @@ void main() {
       expect(index.search('の日', 'en').single.area.dialogue, 'sunrise');
       expect(index.search('ＳＵＮ', 'en').single.area.language, 'en');
       expect(index.search('sun', 'zh'), isEmpty);
+      expect(index.search('入口日出', 'de'), isEmpty);
+      expect(index.search('の日', 'de').single.area.language, 'ja');
       expect(index.search(' ', 'en'), isEmpty);
       expect(
         ChapterSubtitleIndex('one', [

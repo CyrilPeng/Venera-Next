@@ -19,7 +19,7 @@ Future<ChapterSubtitleIndex> loadReadingSubtitles(
   String book,
   String chapter,
 ) async {
-  final revision = store.read(book, chapter);
+  final revision = await Isolate.run(() => store.read(book, chapter));
   if (revision == null) return ChapterSubtitleIndex(chapter, []);
   final files = await LocalManager().getImages(book, ComicType.local, chapter);
   final indexed = await scanSubtitleChapter(files);

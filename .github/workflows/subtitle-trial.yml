@@ -1,0 +1,100 @@
+name: 漫画字幕设备试用
+on:
+  workflow_dispatch:
+  push:
+    branches: [test/comic-subtitles]
+    paths:
+      - '.github/workflows/subtitle-trial.yml'
+      - 'tool/comic_subtitles/device_trial.dart'
+      - 'tool/comic_subtitles/run_trial.py'
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: 'true'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: pubspec.yaml
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: python tool/comic_subtitles/run_trial.py prepare
+      - run: flutter build windows --release --no-pub --target tool/comic_subtitles/device_trial.dart --dart-define-from-file=build/subtitle-trial/defines.json
+      - run: python tool/comic_subtitles/run_trial.py windows
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: subtitle-trial-windows
+          path: |
+            build/subtitle-trial/report.json
+            build/subtitle-trial/trial.log
+
+  android-build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: pubspec.yaml
+          cache: true
+      - uses: actions/setup-java@v6
+        with:
+          distribution: oracle
+          java-version: '17'
+          cache: gradle
+      - run: python3 .github/scripts/prepare_rust_toolchain.py --target aarch64-linux-android --target armv7-linux-androideabi --target x86_64-linux-android
+      - name: 准备试用包签名
+        run: |
+          keytool -genkeypair -noprompt -keystore android/trial.keystore -storepass android -keypass android -alias trial -dname 'CN=Subtitle Trial' -keyalg RSA -validity 10
+          printf '%s\n' 'storePassword=android' 'keyPassword=android' 'keyAlias=trial' 'storeFile=../trial.keystore' > android/key.properties
+      - run: flutter pub get --enforce-lockfile
+      - run: python3 tool/comic_subtitles/run_trial.py prepare
+      - run: flutter build apk --release --flavor mobile --no-pub --target tool/comic_subtitles/device_trial.dart --dart-define-from-file=build/subtitle-trial/defines.json
+      - run: python3 tool/comic_subtitles/run_trial.py select-apk
+      - uses: actions/upload-artifact@v7
+        with:
+          name: subtitle-trial-emulator-apk
+          path: build/subtitle-trial/trial.apk
+          retention-days: 1
+
+  android-offline:
+    needs: android-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        memory: [1536, 3072]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: subtitle-trial-emulator-apk
+          path: build/subtitle-trial
+      - run: sudo chmod a+rw /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          ram-size: ${{ matrix.memory }}M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save
+          script: python3 tool/comic_subtitles/run_trial.py android
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: subtitle-trial-android-${{ matrix.memory }}
+          path: |
+            build/subtitle-trial/report.json
+            build/subtitle-trial/device.txt
+            build/subtitle-trial/trial.log
