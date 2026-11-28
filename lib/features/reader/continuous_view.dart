@@ -1078,6 +1078,10 @@ class ContinuousModeState extends State<ReaderContinuousView>
 
     var comicImage = SizeChangedLayoutNotifier(
       child: ComicImage(
+        subtitleImage: (
+          chapter: imageRef.position.chapterId,
+          imageKey: imageRef.imageKey,
+        ),
         filterQuality: FilterQuality.medium,
         image: ReaderDisplayImageProvider(image, widget.imageWork),
         width: width,

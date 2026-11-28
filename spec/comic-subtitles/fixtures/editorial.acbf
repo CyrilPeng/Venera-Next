@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ACBF xmlns="http://www.acbf.info/xml/acbf/1.1">
+  <meta-data><book-info><author><nickname>Mountain Path</nickname></author><book-title>山路</book-title><genre>other</genre><coverpage><image href="001.png"/></coverpage></book-info></meta-data>
+  <body><page><image href="001.png"/>
+    <text-layer lang="ja"><text-area points="52,32 139,32 139,119 52,119"><p>山の下</p></text-area></text-layer>
+    <text-layer lang="en"><text-area points="52,32 139,32 139,70 52,70"><p>Mountain </p></text-area><text-area points="52,70 139,70 139,119 52,119"><p>foot</p></text-area></text-layer>
+    <text-layer lang="en-x-poetic"><text-area points="52,32 139,32 139,119 52,119"><p>Beneath the peak</p></text-area></text-layer>
+  </page></body>
+</ACBF>

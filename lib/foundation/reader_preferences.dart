@@ -225,6 +225,7 @@ abstract final class ReaderPreferences {
     false,
   );
   static const splitDualPage = BoolPreference('splitDualPage', false);
+  static const externalSubtitles = BoolPreference('externalSubtitles', false);
   static const cropWhiteBorders = BoolPreference('cropWhiteBorders', false);
   static const splitDualPageInvert = BoolPreference(
     'splitDualPageInvert',
@@ -273,6 +274,7 @@ abstract final class ReaderPreferences {
     showChapterComments,
     showChapterCommentsAtEnd,
     splitDualPage,
+    externalSubtitles,
     cropWhiteBorders,
     splitDualPageInvert,
   ];

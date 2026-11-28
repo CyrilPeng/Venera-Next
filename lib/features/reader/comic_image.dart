@@ -12,6 +12,7 @@ import 'package:venera_next/foundation/translations.dart';
 import 'image_dimensions.dart';
 import 'auto_reading.dart';
 import 'white_border_crop.dart';
+import 'subtitles/overlay.dart';
 
 class ComicImage extends StatefulWidget {
   /// Modified from flutter Image
@@ -35,6 +36,7 @@ class ComicImage extends StatefulWidget {
     this.filterQuality = FilterQuality.medium,
     this.isAntiAlias = false,
     this.splitWideImage = false,
+    this.subtitleImage,
     this.splitWideImageInvert = false,
     this.showImageDimensions = false,
     this.whiteBorderCrop,
@@ -81,6 +83,7 @@ class ComicImage extends StatefulWidget {
   final bool isAntiAlias;
 
   final bool splitWideImage;
+  final ({String chapter, String imageKey})? subtitleImage;
 
   final bool splitWideImageInvert;
   final bool showImageDimensions;
@@ -598,6 +601,31 @@ class ComicImageState extends State<ComicImage> with WidgetsBindingObserver {
                   filterQuality: widget.filterQuality,
                 );
 
+          final subtitle = widget.subtitleImage;
+          if (subtitle != null && SubtitleScope.of(context) != null) {
+            result = Stack(
+              fit: StackFit.passthrough,
+              children: [
+                result,
+                Positioned.fill(
+                  child: PageSubtitleLayer(
+                    chapter: subtitle.chapter,
+                    imageKey: subtitle.imageKey,
+                    original: decodedOriginalSize(_imageStream, _imageInfo!),
+                    decoded: imageSize,
+                    crop: sourceRect,
+                    fit: widget.fit ?? BoxFit.scaleDown,
+                    alignment: widget.alignment.resolve(
+                      Directionality.maybeOf(context),
+                    ),
+                    split: shouldSplit,
+                    invert: widget.splitWideImageInvert,
+                    scale: _imageInfo!.scale,
+                  ),
+                ),
+              ],
+            );
+          }
           if (!widget.excludeFromSemantics) {
             result = Semantics(
               container: widget.semanticLabel != null,

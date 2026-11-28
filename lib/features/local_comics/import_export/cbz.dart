@@ -274,6 +274,16 @@ abstract class CBZ {
           }
         }
       }
+      if (cpMap == null) {
+        final subtitle = File(FilePath.join(cache.path, 'book.acbf'));
+        final manifest = File(FilePath.join(cache.path, 'book.pages.json'));
+        if (subtitle.existsSync() &&
+            manifest.existsSync() &&
+            subtitle.lengthSync() + manifest.lengthSync() <= 16 << 20) {
+          await subtitle.copyMem(FilePath.join(dest.path, 'book.acbf'));
+          await manifest.copyMem(FilePath.join(dest.path, 'book.pages.json'));
+        }
+      }
       var comic = LocalComic(
         id: LocalManager().findValidId(ComicType.local),
         title: metaData.title,

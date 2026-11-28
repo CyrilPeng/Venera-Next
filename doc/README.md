@@ -56,6 +56,7 @@ English index: [README.en.md](README.en.md)
 
 ## 实验和任务跟踪
 
+- [漫画 OCR 翻译与外挂字幕方案](experiments/comic_subtitles.zh.md) · [分阶段实施与验收](experiments/comic_subtitles_implementation.zh.md)
 - [图片增强实验](experiments/image_enhancement.zh.md)
 - [去混淆像素复制优化](experiments/image_descrambling.zh.md)
 - [AVIF 格式识别与解码评估](experiments/avif_decoder.zh.md)

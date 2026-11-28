@@ -73,6 +73,7 @@ dependencies:
   image: ^4.12.0
   pdfrx: ^2.4.7
   xml: ^6.6.1
+  unorm_dart: ^0.3.4
 
 dev_dependencies:
   flutter_test:

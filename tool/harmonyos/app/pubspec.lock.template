@@ -1033,6 +1033,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  unorm_dart:
+    dependency: "direct main"
+    description:
+      name: unorm_dart
+      sha256: aed23e9145c2998dfeafc2a0aa6d8d4a44e97427a826db80b587a2d6688f69a8
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.4"
   upower:
     dependency: transitive
     description:

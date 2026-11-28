@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:venera_next/components/message.dart';
+import 'package:venera_next/components/tv_navigation.dart';
 import 'package:venera_next/components/window_frame.dart';
 import 'package:venera_next/components/window_selection_task.dart';
 import 'package:venera_next/app_runtime/application_host.dart';
@@ -394,6 +395,7 @@ class ReaderIntegrationFixture {
     ReaderWindowCoordinator? windowCoordinator,
     double textScale = 1,
     bool reducedMotion = false,
+    bool tvNavigation = false,
     Brightness brightness = Brightness.light,
     void Function(WindowFrameController)? beforeReaderMount,
     ComicChapters? chapters = readerIntegrationChapters,
@@ -469,6 +471,9 @@ class ReaderIntegrationFixture {
               ),
               child: content,
             );
+            if (tvNavigation) {
+              content = TvNavigation(enabled: true, child: content);
+            }
             if (registries != null) {
               return ValueListenableBuilder<SelectionTaskRegistry>(
                 valueListenable: registries,

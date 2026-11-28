@@ -9,6 +9,12 @@ import 'package:venera_next/features/favorites/favorites_manager.dart';
 import 'package:venera_next/foundation/comic_type.dart';
 import 'package:venera_next/features/local_comics/local.dart';
 import 'package:venera_next/features/local_comics/local_storage_guard.dart';
+import 'package:venera_next/features/reader/subtitles/archive.dart';
+import 'package:venera_next/features/reader/subtitles/binding.dart';
+import 'package:venera_next/features/reader/subtitles/document.dart';
+import 'package:venera_next/features/reader/subtitles/reading.dart';
+import 'package:venera_next/features/reader/subtitles/store.dart';
+import 'package:xml/xml.dart';
 import 'package:venera_next/foundation/app.dart';
 import 'package:venera_next/features/sync/sync.dart';
 import 'package:venera_next/foundation/file_system.dart';
@@ -31,6 +37,72 @@ void main() {
     LocalManager.current?.dispose();
     root.deleteSync(recursive: true);
   });
+
+  test(
+    'chapter archive rebinds split translation and preserves unsubtitled originals',
+    () async {
+      final fixtures = Directory('spec/comic-subtitles/fixtures');
+      final embedded = XmlDocument.parse(
+        File('${fixtures.path}/three-pages.acbf').readAsStringSync(),
+      );
+      final binaries = embedded
+          .findAllElements('binary', namespace: subtitleNamespace)
+          .toList();
+      final originals = [
+        for (final binary in [binaries[1], binaries[0]])
+          base64Decode(binary.innerText),
+      ];
+      final files = [
+        for (final (index, data) in originals.indexed)
+          File('${root.path}/source-$index.png')..writeAsBytesSync(data),
+      ];
+      final chapter = await fingerprintSubtitleImages([
+        for (final file in files) 'file://${file.path}',
+      ]);
+      final revision = SubtitleRevision(
+        File('${fixtures.path}/editorial.acbf').readAsBytesSync(),
+        File('${fixtures.path}/editorial.pages.json').readAsBytesSync(),
+        {},
+        null,
+      );
+      final output = await writeSubtitleArchive(
+        Directory('${root.path}/staging')..createSync(),
+        revision,
+        bindSubtitlePages(revision.parse(), chapter, {}),
+        chapter,
+      );
+      final imported = await CBZ.import(
+        output,
+        registerComic: (comic) => manager.add(comic, comic.id),
+      );
+      final urls = await manager.getImages(imported.id, ComicType.local, 1);
+      final restored = await fingerprintSubtitleImages(urls);
+      expect(
+        restored.map((file) => file.digest),
+        chapter.map((file) => file.digest),
+      );
+      final sidecars = (await readArchivedSubtitles(
+        File(restored.first.path).parent,
+      ))!;
+      final document = sidecars.parse();
+      expect(document.pages.single.image, '0002.png');
+      final hits = ChapterSubtitleIndex(
+        '0',
+        bindSubtitlePages(document, restored, {}),
+      );
+      expect(hits.search('Mountain foot', 'en').single.file.number, 2);
+      expect(hits.search('peak', 'en-x-poetic').single.area.dialogue, 'foot');
+      final invalid = jsonDecode(utf8.decode(sidecars.manifest!)) as Map;
+      invalid['requires'] = ['future'];
+      expect(
+        () => SubtitleDocument.parse(
+          sidecars.acbf,
+          manifest: utf8.encode(jsonEncode(invalid)),
+        ),
+        throwsFormatException,
+      );
+    },
+  );
 
   File book(String name, {int? chapterEnd, bool nested = false}) {
     final contents = archive.Archive();

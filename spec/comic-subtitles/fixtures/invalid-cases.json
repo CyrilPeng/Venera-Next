@@ -1,0 +1,7 @@
+[
+  {"path":["requires",0],"value":"alternate-geometry","error":"unknown required capability"},
+  {"path":["acbfSha256"],"value":"wrong-revision","error":"ACBF revision differs"},
+  {"path":["pages",0,"layers","en"],"value":["foot"],"error":"region count differs"},
+  {"path":["pages",0,"editorial","dialogues",0,"observations"],"value":["unknown"],"error":"invalid editorial dialogue"},
+  {"path":["pages",0,"editorial","lineage",0,"new"],"value":["absent"],"error":"lineage references missing dialogue"}
+]

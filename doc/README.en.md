@@ -56,6 +56,7 @@ Source developers can follow the [authoring guide](api/comic_source.en.md) → [
 
 ## Experiments
 
+- [Comic OCR translation and external subtitles (Chinese)](experiments/comic_subtitles.zh.md) · [Implementation stages and acceptance criteria (Chinese)](experiments/comic_subtitles_implementation.zh.md)
 - [图片增强实验](experiments/image_enhancement.zh.md)
 - [去混淆像素复制优化](experiments/image_descrambling.zh.md)
 - [AVIF 格式识别与解码评估](experiments/avif_decoder.zh.md)
